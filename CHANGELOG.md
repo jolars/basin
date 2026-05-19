@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/jolars/basin/compare/v0.1.0...v0.2.0) (2026-05-19)
+
+### Breaking changes
+- bump MSRV to 1.91.1 and unwind CRAN-related dep pins ([`2a64a51`](https://github.com/jolars/basin/commit/2a64a518d55db9b106fa2b2d08729462725da175))
+
+### Features
+- add `ndarray-blas` feature ([`b424d9c`](https://github.com/jolars/basin/commit/b424d9c9cba0dd11b900c252464a20bba7bde395))
+- add `parallel` feature ([`7919632`](https://github.com/jolars/basin/commit/79196320d669d80a16581a03fdbea1917e6821a5))
+- implement L-BFGS (unbounded) ([`4df3dbb`](https://github.com/jolars/basin/commit/4df3dbb1296ffdc55d786addc08842226d3cd905))
+
+### Performance Improvements
+- **nlls:** cache r and J across iterations in GN, LM, TRF ([`aef1197`](https://github.com/jolars/basin/commit/aef11970d2fe24beabd5b63f93fd3f4633829049))
 ## [0.1.0](https://github.com/jolars/basin/compare/v0.0.1...v0.1.0) (2026-05-19)
 
 ### Breaking changes
