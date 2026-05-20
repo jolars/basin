@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/jolars/basin/compare/v0.2.0...v0.3.0) (2026-05-20)
+
+### Breaking changes
+- **nlls:** damp Levenberg-Marquardt with Marquardt diagonal scaling ([`fdde644`](https://github.com/jolars/basin/commit/fdde64488cc788052f2016959657a86e5e142ba4)), closes [#6](https://github.com/jolars/basin/issues/6)
+
+### Features
+- add competitor-bench crate for comparisons ([`bbacbf6`](https://github.com/jolars/basin/commit/bbacbf6d12aa486a3eac521b34a6f47f5cd5a66b))
+- **nlls:** add MINPACK ftol/xtol convergence tests to Levenberg-Marquardt ([`2bad473`](https://github.com/jolars/basin/commit/2bad473685f87d0a6b472e546689a1ea567819ca)), closes [#8](https://github.com/jolars/basin/issues/8)
+- **termination:** add RelativeGradientTolerance framework criterion ([`70b5cb6`](https://github.com/jolars/basin/commit/70b5cb6f6c9e12f6c07ace6c256e583167cbd7ab))
+- **nlls:** add MINPACK gtol (relative gradient) test to Levenberg-Marquardt ([`5a60145`](https://github.com/jolars/basin/commit/5a601451ea4c41b4a1eee2424cb5d58766962fbc))
+
+### Bug Fixes
+- **nlls:** damp Levenberg-Marquardt with Marquardt diagonal scaling ([`fdde644`](https://github.com/jolars/basin/commit/fdde64488cc788052f2016959657a86e5e142ba4)), closes [#6](https://github.com/jolars/basin/issues/6)
+
+### Performance Improvements
+- **nlls:** reuse JᵀJ and Jᵀr across rejected Levenberg-Marquardt steps ([`deb9bae`](https://github.com/jolars/basin/commit/deb9bae565397b928062db836e517f852446639c))
 ## [0.2.0](https://github.com/jolars/basin/compare/v0.1.0...v0.2.0) (2026-05-19)
 
 ### Breaking changes
