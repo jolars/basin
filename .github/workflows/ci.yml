@@ -85,7 +85,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: snippets
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
