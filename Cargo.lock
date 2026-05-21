@@ -96,7 +96,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "basin"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "faer",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "basin-wasm"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "basin",
  "console_error_panic_hook",
@@ -244,7 +244,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "competitor-bench"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "argmin",
  "argmin-math",

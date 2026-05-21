@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/jolars/basin/compare/v0.3.0...v0.4.0) (2026-05-21)
+
+### Features
+- add per-coordinate initial step-size to CMA-ES (with_stds) ([`fb97d0a`](https://github.com/jolars/basin/commit/fb97d0afd8d6c389cd747ab7ea0942cc4838dc77))
+- add numerical gradients/hessians/jacobians ([`bef3fdc`](https://github.com/jolars/basin/commit/bef3fdcd2dd5b5350faafbe510fa75de8a895993))
+- add Polyak momentum to GD solver ([`9b9ab93`](https://github.com/jolars/basin/commit/9b9ab9351e6814e9310cd4970918855d7ce5a8f9))
+- **web:** restructure into landing + docs + visualizer site ([`727de34`](https://github.com/jolars/basin/commit/727de34e4afc51431003b171b850ae74dfc0efcb))
 ## [0.3.0](https://github.com/jolars/basin/compare/v0.2.0...v0.3.0) (2026-05-20)
 
 ### Breaking changes
