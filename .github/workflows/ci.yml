@@ -15,7 +15,7 @@ jobs:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install rustfmt
         run: rustup component add rustfmt
       - run: cargo fmt --all -- --check
@@ -24,7 +24,7 @@ jobs:
     name: clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install clippy
         run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
@@ -46,7 +46,7 @@ jobs:
           - features: faer
             flags: "--features faer"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.features }}
@@ -69,7 +69,7 @@ jobs:
           - features: faer
             flags: "--features faer"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Add wasm target
         run: rustup target add wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
@@ -81,7 +81,7 @@ jobs:
     name: playground snippets compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
         with:
           key: snippets
