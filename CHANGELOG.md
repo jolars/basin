@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/jolars/basin/compare/v0.4.0...v0.5.0) (2026-05-26)
+
+### Breaking changes
+- make barrier/augmented-Lagrangian methods inner-solver-agnostic ([`5a4f369`](https://github.com/jolars/basin/commit/5a4f369773ff3828fe14853deaf2982b9630ad2f))
+- rename BoxConstrained → BoxConstraints ([`7d60b0f`](https://github.com/jolars/basin/commit/7d60b0ffdf42cc655a2df8b60ddd1f08467cdc2e))
+
+### Features
+- add `MatVec` + `MatTransposeVec` to vec, ndarray backends ([`320173f`](https://github.com/jolars/basin/commit/320173f5bf0ae0389163a3586dcdfde01f6e0509))
+- make barrier/augmented-Lagrangian methods inner-solver-agnostic ([`5a4f369`](https://github.com/jolars/basin/commit/5a4f369773ff3828fe14853deaf2982b9630ad2f))
+- add linear equality constraints (Ax = b) and augmented Lagrangian method ([`aa038bc`](https://github.com/jolars/basin/commit/aa038bcff613d173dae584e437fa38151ee2cbf9))
+- add linear inequality constraints (Ax ≤ b) and log-barrier method ([`c7f2e24`](https://github.com/jolars/basin/commit/c7f2e24f493a7d8ae3c92016e747761ce8c67f67))
+- **web:** live contour beside the playground code (phase 2) ([`8a21eda`](https://github.com/jolars/basin/commit/8a21edabadc86ed89c114e79f54cbe855dbd263c))
+- **web:** add interactive code-gen playground to landing page ([`29f10b2`](https://github.com/jolars/basin/commit/29f10b2e65bae65e3ce60983fb05c5206d99419b))
 ## [0.4.0](https://github.com/jolars/basin/compare/v0.3.0...v0.4.0) (2026-05-21)
 
 ### Features
