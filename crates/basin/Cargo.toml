@@ -58,7 +58,7 @@ problems = []
 
 [dependencies]
 nalgebra = { version = "0.34", optional = true }
-nalgebra-sparse = { version = "0.11", optional = true }
+nalgebra-sparse = { version = "0.12", optional = true }
 # Pure-Rust (no BLAS feature) so it stays wasm-compatible per the WASM hard
 # constraint in AGENTS.md.
 ndarray = { version = "0.17", optional = true, default-features = false }
