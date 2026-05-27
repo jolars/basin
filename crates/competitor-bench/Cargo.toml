@@ -27,7 +27,7 @@ publish = false
 [dependencies]
 basin = { path = "../basin", features = ["nalgebra", "faer", "problems"] }
 levenberg-marquardt = "0.15"
-nalgebra = "0.34"
+nalgebra = "0.35"
 faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }
 # argmin on its default `Vec<f64>` backend. default-features keeps the
 # `vec` math impls (via argmin-math) and `rand`; we don't enable any
