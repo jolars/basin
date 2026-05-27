@@ -18,7 +18,7 @@
 # support natively, so GD / Nelder-Mead run on identical param types.
 [package]
 name = "competitor-bench"
-version = "0.5.0"
+version = "0.6.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

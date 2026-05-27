@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.0](https://github.com/jolars/basin/compare/v0.5.0...v0.6.0) (2026-05-27)
+
+### Features
+- **backends:** support CmaEs in Vec backend ([`02ad27c`](https://github.com/jolars/basin/commit/02ad27c70e2adb629553be89d25da111e696d240))
+- **backends:** add ndarray support for LBFGS ([`58a298f`](https://github.com/jolars/basin/commit/58a298f5c7a7941e3f57207e1246c22b62a196ee))
+- **backends:** add Vec support for the BFGS solver ([`cf5f5ba`](https://github.com/jolars/basin/commit/cf5f5ba909f22082e6beab038154096da260610f))
 ## [0.5.0](https://github.com/jolars/basin/compare/v0.4.0...v0.5.0) (2026-05-26)
 
 ### Breaking changes
