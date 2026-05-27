@@ -29,7 +29,7 @@
     "tailwindcss": "^4.0.0",
     "tslib": "^2.6.0",
     "tsx": "^4.22.3",
-    "typescript": "^5.4.0",
+    "typescript": "^6.0.3",
     "unplugin-icons": "^23.0.1",
     "vite": "^8.0.10",
     "vite-plugin-wasm": "^3.4.0"
