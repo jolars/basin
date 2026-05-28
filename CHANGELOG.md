@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.7.0](https://github.com/jolars/basin/compare/v0.6.0...v0.7.0) (2026-05-28)
+
+### Features
+- **backends:** add support for ndarray in CmaEs solvers ([`3ad8bfb`](https://github.com/jolars/basin/commit/3ad8bfb6c887a49ee0e60f39f850d1ffbfffc211))
 ## [0.6.0](https://github.com/jolars/basin/compare/v0.5.0...v0.6.0) (2026-05-27)
 
 ### Features
