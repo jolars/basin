@@ -60,31 +60,42 @@ impl<F> Scalar for F where
 }
 
 /// In-place `self ← self + scalar · other`. Backend-generic vector update.
-pub trait ScaledAdd<S> {
+///
+/// The scalar type defaults to `f64` so the legacy `ScaledAdd<f64>` bound
+/// keeps working unchanged while individual backends start to broaden into
+/// other `F: Scalar`.
+pub trait ScaledAdd<S = f64> {
     /// Add `scalar · other` into `self` in place.
     fn scaled_add(&mut self, scalar: S, other: &Self);
 }
 
 /// `‖x‖₂² = Σ xᵢ²`. Avoids the `sqrt` cost when the squared form is
 /// what's actually needed (most quadratic-cost convergence checks).
-pub trait NormSquared {
-    /// Compute `Σ xᵢ²` as `f64`.
-    fn norm_squared(&self) -> f64;
+///
+/// `F` defaults to `f64` so existing `V: NormSquared` bounds keep
+/// resolving to the `f64` impl unchanged.
+pub trait NormSquared<F = f64> {
+    /// Compute `Σ xᵢ²` as `F`.
+    fn norm_squared(&self) -> F;
 }
 
 /// `‖x‖_∞ = maxᵢ |xᵢ|`. Used by first-order optimality stopping rules
 /// (e.g. `‖∇f‖_∞ ≤ tol`).
-pub trait NormInfinity {
-    /// Compute `maxᵢ |xᵢ|` as `f64`.
-    fn norm_infinity(&self) -> f64;
+///
+/// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
+pub trait NormInfinity<F = f64> {
+    /// Compute `maxᵢ |xᵢ|` as `F`.
+    fn norm_infinity(&self) -> F;
 }
 
 /// Inner product of two same-shaped values. Used by line searches that take
 /// an explicit search direction (Armijo and curvature checks both need
 /// `gᵀd`). Generalizes `NormSquared`: `x.norm_squared() == x.dot(x)`.
-pub trait Dot {
-    /// Compute `Σᵢ self[i] · other[i]` as `f64`.
-    fn dot(&self, other: &Self) -> f64;
+///
+/// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
+pub trait Dot<F = f64> {
+    /// Compute `Σᵢ self[i] · other[i]` as `F`.
+    fn dot(&self, other: &Self) -> F;
 }
 
 /// In-place negation. Lets solvers compute `direction = -gradient` in a
@@ -103,9 +114,11 @@ pub trait NegInPlace {
 /// `ScaledAdd<f64>` already covers `self ← self + s · other`; the
 /// borrow checker forbids `self.scaled_add(s, &self)`, so an honest
 /// in-place scale needs its own trait.
-pub trait ScaleInPlace {
+///
+/// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
+pub trait ScaleInPlace<F = f64> {
     /// Multiply every component of `self` by `scalar` in place.
-    fn scale_in_place(&mut self, scalar: f64);
+    fn scale_in_place(&mut self, scalar: F);
 }
 
 /// Number of components in a 1-D vector. Used by CMA-ES to derive the
@@ -168,10 +181,12 @@ pub trait ComponentDivAssign {
 /// (lmder, `mode = 1`); flooring zeros to `1` reproduces that, so a
 /// fully-insensitive parameter simply stays put instead of failing the
 /// Cholesky.
-pub trait FloorZerosInPlace {
+///
+/// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
+pub trait FloorZerosInPlace<F = f64> {
     /// Replace every entry `≤ 0` with `value`; leave positive entries
     /// unchanged.
-    fn floor_zeros_in_place(&mut self, value: f64);
+    fn floor_zeros_in_place(&mut self, value: F);
 }
 
 /// Per-component scalar read/write on a 1-D vector backend. The minimal
@@ -185,15 +200,17 @@ pub trait FloorZerosInPlace {
 /// `IndexMut` traits — the same defensive convention as
 /// [`VectorLen::vec_len`].
 ///
+/// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
+///
 /// # Contract
 ///
 /// - **Caller must:** pass `i < self.vec_len()`. Backends index directly and
 ///   panic on out-of-bounds, matching the underlying `Index` impls.
-pub trait VectorIndex {
-    /// Read component `i` as `f64`.
-    fn get_scalar(&self, i: usize) -> f64;
+pub trait VectorIndex<F = f64> {
+    /// Read component `i` as `F`.
+    fn get_scalar(&self, i: usize) -> F;
     /// Write `value` into component `i`.
-    fn set_scalar(&mut self, i: usize, value: f64);
+    fn set_scalar(&mut self, i: usize, value: F);
 }
 
 mod cl_scaling;

@@ -1,6 +1,7 @@
 use rand::{Rng, RngExt};
-use rand_distr::{Distribution, StandardNormal};
+use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
 
+use super::Scalar;
 use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
@@ -12,35 +13,35 @@ use super::{
     VectorLen,
 };
 
-impl ScaledAdd<f64> for Vec<f64> {
-    fn scaled_add(&mut self, scalar: f64, other: &Self) {
+impl<F: Scalar> ScaledAdd<F> for Vec<F> {
+    fn scaled_add(&mut self, scalar: F, other: &Self) {
         assert_eq!(self.len(), other.len(), "scaled_add: length mismatch");
         for (x, y) in self.iter_mut().zip(other.iter()) {
-            *x += scalar * y;
+            *x = *x + scalar * *y;
         }
     }
 }
 
-impl NormSquared for Vec<f64> {
-    fn norm_squared(&self) -> f64 {
-        self.iter().map(|x| x * x).sum()
+impl<F: Scalar> NormSquared<F> for Vec<F> {
+    fn norm_squared(&self) -> F {
+        self.iter().map(|x| *x * *x).sum()
     }
 }
 
-impl NormInfinity for Vec<f64> {
-    fn norm_infinity(&self) -> f64 {
-        self.iter().map(|x| x.abs()).fold(0.0, f64::max)
+impl<F: Scalar> NormInfinity<F> for Vec<F> {
+    fn norm_infinity(&self) -> F {
+        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
     }
 }
 
-impl Dot for Vec<f64> {
-    fn dot(&self, other: &Self) -> f64 {
+impl<F: Scalar> Dot<F> for Vec<F> {
+    fn dot(&self, other: &Self) -> F {
         assert_eq!(self.len(), other.len(), "dot: length mismatch");
-        self.iter().zip(other.iter()).map(|(a, b)| a * b).sum()
+        self.iter().zip(other.iter()).map(|(a, b)| *a * *b).sum()
     }
 }
 
-impl NegInPlace for Vec<f64> {
+impl<F: Scalar> NegInPlace for Vec<F> {
     fn neg_in_place(&mut self) {
         for x in self.iter_mut() {
             *x = -*x;
@@ -48,15 +49,15 @@ impl NegInPlace for Vec<f64> {
     }
 }
 
-impl ScaleInPlace for Vec<f64> {
-    fn scale_in_place(&mut self, scalar: f64) {
+impl<F: Scalar> ScaleInPlace<F> for Vec<F> {
+    fn scale_in_place(&mut self, scalar: F) {
         for x in self.iter_mut() {
-            *x *= scalar;
+            *x = *x * scalar;
         }
     }
 }
 
-impl ComponentMulAssign for Vec<f64> {
+impl<F: Scalar> ComponentMulAssign for Vec<F> {
     fn component_mul_assign(&mut self, other: &Self) {
         assert_eq!(
             self.len(),
@@ -64,12 +65,12 @@ impl ComponentMulAssign for Vec<f64> {
             "component_mul_assign: length mismatch"
         );
         for (x, y) in self.iter_mut().zip(other.iter()) {
-            *x *= *y;
+            *x = *x * *y;
         }
     }
 }
 
-impl ComponentMaxAssign for Vec<f64> {
+impl<F: Scalar> ComponentMaxAssign for Vec<F> {
     fn component_max_assign(&mut self, other: &Self) {
         assert_eq!(
             self.len(),
@@ -82,17 +83,17 @@ impl ComponentMaxAssign for Vec<f64> {
     }
 }
 
-impl FloorZerosInPlace for Vec<f64> {
-    fn floor_zeros_in_place(&mut self, value: f64) {
+impl<F: Scalar> FloorZerosInPlace<F> for Vec<F> {
+    fn floor_zeros_in_place(&mut self, value: F) {
         for x in self.iter_mut() {
-            if *x <= 0.0 {
+            if *x <= F::zero() {
                 *x = value;
             }
         }
     }
 }
 
-impl ComponentDivAssign for Vec<f64> {
+impl<F: Scalar> ComponentDivAssign for Vec<F> {
     fn component_div_assign(&mut self, other: &Self) {
         assert_eq!(
             self.len(),
@@ -100,27 +101,30 @@ impl ComponentDivAssign for Vec<f64> {
             "component_div_assign: length mismatch"
         );
         for (x, y) in self.iter_mut().zip(other.iter()) {
-            *x /= *y;
+            *x = *x / *y;
         }
     }
 }
 
-impl VectorLen for Vec<f64> {
+impl<F: Scalar> VectorLen for Vec<F> {
     fn vec_len(&self) -> usize {
         self.len()
     }
 }
 
-impl VectorIndex for Vec<f64> {
-    fn get_scalar(&self, i: usize) -> f64 {
+impl<F: Scalar> VectorIndex<F> for Vec<F> {
+    fn get_scalar(&self, i: usize) -> F {
         self[i]
     }
-    fn set_scalar(&mut self, i: usize, value: f64) {
+    fn set_scalar(&mut self, i: usize, value: F) {
         self[i] = value;
     }
 }
 
-impl SampleStandardNormal for Vec<f64> {
+impl<F: Scalar> SampleStandardNormal for Vec<F>
+where
+    StandardNormal: Distribution<F>,
+{
     fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
         let n = template.len();
         let mut out = Self::with_capacity(n);
@@ -131,7 +135,7 @@ impl SampleStandardNormal for Vec<f64> {
     }
 }
 
-impl SampleUniformBox for Vec<f64> {
+impl<F: Scalar + SampleUniform> SampleUniformBox for Vec<F> {
     fn sample_uniform_box<R: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut R) -> Self {
         assert_eq!(
             lower.len(),
@@ -147,7 +151,7 @@ impl SampleUniformBox for Vec<f64> {
     }
 }
 
-impl ClampInPlace for Vec<f64> {
+impl<F: Scalar> ClampInPlace for Vec<F> {
     fn clamp_in_place(&mut self, lower: &Self, upper: &Self) {
         assert_eq!(
             self.len(),
@@ -160,7 +164,9 @@ impl ClampInPlace for Vec<f64> {
             "clamp_in_place: upper length mismatch"
         );
         for ((x, &lo), &hi) in self.iter_mut().zip(lower.iter()).zip(upper.iter()) {
-            *x = x.clamp(lo, hi);
+            // `Float` has no `clamp`; `max(lo).min(hi)` matches the
+            // `f64::clamp` result on finite, ordered bounds.
+            *x = (*x).max(lo).min(hi);
         }
     }
 }
