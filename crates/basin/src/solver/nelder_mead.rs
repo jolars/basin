@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{ClampInPlace, ScaledAdd};
+use crate::core::math::{ClampInPlace, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicSimplexState;
@@ -29,9 +29,9 @@ use crate::core::termination::TerminationReason;
 /// # Backends
 ///
 /// Backend-generic — works with any `V` implementing
-/// [`ScaledAdd<f64>`](crate::core::math::ScaledAdd) + `Clone`, paired
-/// with a [`BasicSimplexState<V>`]. That covers `Vec<f64>`,
-/// `nalgebra::DVector<f64>` (feature `nalgebra`),
+/// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) + `Clone`, paired
+/// with a [`BasicSimplexState<V, F>`]. With the default `F = f64` that
+/// covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
 /// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
 /// (feature `faer`). The projected variant additionally requires
 /// [`ClampInPlace`] on `V`, which every shipped backend implements.
@@ -66,10 +66,10 @@ use crate::core::termination::TerminationReason;
 /// .unwrap();
 /// assert!(result.cost() < 1e-6);
 /// ```
-pub struct NelderMead<Mode = Unbounded> {
-    config: ParamConfig,
+pub struct NelderMead<Mode = Unbounded, F = f64> {
+    config: ParamConfig<F>,
     /// Resolved parameters; populated by `init` once the dimension is known.
-    params: Option<Params>,
+    params: Option<Params<F>>,
     /// Type-state marker; carries the mode at the type level only.
     _mode: PhantomData<fn() -> Mode>,
 }
@@ -110,21 +110,21 @@ pub struct Unbounded;
 pub struct Projected;
 
 #[derive(Clone, Copy)]
-struct Params {
-    alpha: f64,
-    beta: f64,
-    gamma: f64,
-    delta: f64,
+struct Params<F> {
+    alpha: F,
+    beta: F,
+    gamma: F,
+    delta: F,
 }
 
 #[derive(Clone, Copy)]
-enum ParamConfig {
+enum ParamConfig<F> {
     Standard,
     Adaptive,
-    Fixed(Params),
+    Fixed(Params<F>),
 }
 
-impl NelderMead<Unbounded> {
+impl<F: Scalar> NelderMead<Unbounded, F> {
     /// Standard parameters (Nelder & Mead 1965): α=1, β=2, γ=0.5, δ=0.5.
     pub fn standard() -> Self {
         Self {
@@ -149,11 +149,11 @@ impl NelderMead<Unbounded> {
     /// Nelder-Mead with explicit reflection / expansion / contraction /
     /// shrink coefficients (`α`, `β`, `γ`, `δ`). Panics if any coefficient
     /// is outside its admissible range.
-    pub fn with_params(alpha: f64, beta: f64, gamma: f64, delta: f64) -> Self {
-        assert!(alpha > 0.0, "α must be > 0");
-        assert!(beta > 1.0, "β must be > 1");
-        assert!(gamma > 0.0 && gamma < 1.0, "γ must be in (0, 1)");
-        assert!(delta > 0.0 && delta < 1.0, "δ must be in (0, 1)");
+    pub fn with_params(alpha: F, beta: F, gamma: F, delta: F) -> Self {
+        assert!(alpha > F::zero(), "α must be > 0");
+        assert!(beta > F::one(), "β must be > 1");
+        assert!(gamma > F::zero() && gamma < F::one(), "γ must be in (0, 1)");
+        assert!(delta > F::zero() && delta < F::one(), "δ must be in (0, 1)");
         Self {
             config: ParamConfig::Fixed(Params {
                 alpha,
@@ -172,7 +172,7 @@ impl NelderMead<Unbounded> {
     /// to implement [`BoxConstraints`] and projects every trial vertex
     /// element-wise into `[lower, upper]`. See the type-level rustdoc on
     /// [`Projected`] for the algorithm contract and limitations.
-    pub fn projected(self) -> NelderMead<Projected> {
+    pub fn projected(self) -> NelderMead<Projected, F> {
         NelderMead {
             config: self.config,
             params: self.params,
@@ -181,23 +181,27 @@ impl NelderMead<Unbounded> {
     }
 }
 
-impl<Mode> NelderMead<Mode> {
-    fn resolve(config: ParamConfig, n: usize) -> Params {
+impl<Mode, F: Scalar> NelderMead<Mode, F> {
+    fn resolve(config: ParamConfig<F>, n: usize) -> Params<F> {
         assert!(n >= 1, "NelderMead requires at least a 1-D problem");
         match config {
-            ParamConfig::Standard => Params {
-                alpha: 1.0,
-                beta: 2.0,
-                gamma: 0.5,
-                delta: 0.5,
-            },
-            ParamConfig::Adaptive => {
-                let n = n as f64;
+            ParamConfig::Standard => {
+                let half = F::from_f64(0.5).unwrap();
                 Params {
-                    alpha: 1.0,
-                    beta: 1.0 + 2.0 / n,
-                    gamma: 0.75 - 1.0 / (2.0 * n),
-                    delta: 1.0 - 1.0 / n,
+                    alpha: F::one(),
+                    beta: F::from_f64(2.0).unwrap(),
+                    gamma: half,
+                    delta: half,
+                }
+            }
+            ParamConfig::Adaptive => {
+                let n = F::from_usize(n).unwrap();
+                let two = F::from_f64(2.0).unwrap();
+                Params {
+                    alpha: F::one(),
+                    beta: F::one() + two / n,
+                    gamma: F::from_f64(0.75).unwrap() - F::one() / (two * n),
+                    delta: F::one() - F::one() / n,
                 }
             }
             ParamConfig::Fixed(p) => p,
@@ -208,7 +212,11 @@ impl<Mode> NelderMead<Mode> {
 /// Build `(1 - t) * a + t * b` from two vectors and a scalar interpolant.
 /// Works for any `t ∈ ℝ` — values outside `[0, 1]` extrapolate, which is
 /// what reflection needs.
-fn affine<V: Clone + ScaledAdd<f64>>(a: &V, b: &V, t: f64) -> V {
+fn affine<V, F>(a: &V, b: &V, t: F) -> V
+where
+    V: Clone + ScaledAdd<F>,
+    F: Scalar,
+{
     let mut out = a.clone();
     out.scaled_add(-t, a);
     out.scaled_add(t, b);
@@ -216,10 +224,14 @@ fn affine<V: Clone + ScaledAdd<f64>>(a: &V, b: &V, t: f64) -> V {
 }
 
 /// Centroid of `vertices` (mean of all entries).
-fn centroid<V: Clone + ScaledAdd<f64>>(vertices: &[V]) -> V {
-    let inv = 1.0 / vertices.len() as f64;
+fn centroid<V, F>(vertices: &[V]) -> V
+where
+    V: Clone + ScaledAdd<F>,
+    F: Scalar,
+{
+    let inv = F::from_usize(vertices.len()).unwrap().recip();
     let mut c = vertices[0].clone();
-    c.scaled_add(inv - 1.0, &vertices[0]);
+    c.scaled_add(inv - F::one(), &vertices[0]);
     for v in &vertices[1..] {
         c.scaled_add(inv, v);
     }
@@ -228,7 +240,7 @@ fn centroid<V: Clone + ScaledAdd<f64>>(vertices: &[V]) -> V {
 
 /// Sort `vertices` and `costs` jointly by ascending cost. NaN costs sort
 /// last so a single bad evaluation can't drag itself to the front.
-fn sort_simplex<V>(vertices: &mut [V], costs: &mut [f64]) {
+fn sort_simplex<V, F: PartialOrd>(vertices: &mut [V], costs: &mut [F]) {
     let n = vertices.len();
     let mut idx: Vec<usize> = (0..n).collect();
     idx.sort_by(|&i, &j| {
@@ -263,12 +275,13 @@ fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
 /// Evaluate every vertex's cost and sort the simplex ascending. Shared
 /// between the `Unbounded` and `Projected` `Solver::init` paths after
 /// any projection of the initial vertices.
-fn init_costs_and_sort<P, V>(
+fn init_costs_and_sort<P, V, F>(
     problem: &mut Problem<P>,
-    state: &mut BasicSimplexState<V>,
+    state: &mut BasicSimplexState<V, F>,
 ) -> Result<(), P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
 {
     for (v, c) in state.vertices.iter().zip(state.costs.iter_mut()) {
         *c = problem.cost(v)?;
@@ -283,16 +296,18 @@ where
 /// impl passes one that clamps into `[lower, upper]`. Vertices are
 /// sorted (best at index 0) on entry; the invariant is restored before
 /// returning. The simplex has `n + 1` vertices in `n`-D.
-fn next_iter_inner<P, V, F>(
+#[allow(clippy::type_complexity)]
+fn next_iter_inner<P, V, F, Proj>(
     problem: &mut Problem<P>,
-    mut state: BasicSimplexState<V>,
-    p: Params,
-    project: &F,
-) -> Result<(BasicSimplexState<V>, Option<TerminationReason>), P::Error>
+    mut state: BasicSimplexState<V, F>,
+    p: Params<F>,
+    project: &Proj,
+) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + ScaledAdd<f64>,
-    F: Fn(&mut V),
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    V: Clone + ScaledAdd<F>,
+    Proj: Fn(&mut V),
 {
     let m = state.vertices.len();
     let n = m - 1;
@@ -355,16 +370,17 @@ where
     Ok((state, None))
 }
 
-fn shrink_inner<P, V, F>(
+fn shrink_inner<P, V, F, Proj>(
     problem: &mut Problem<P>,
-    state: &mut BasicSimplexState<V>,
-    delta: f64,
-    project: &F,
+    state: &mut BasicSimplexState<V, F>,
+    delta: F,
+    project: &Proj,
 ) -> Result<(), P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + ScaledAdd<f64>,
-    F: Fn(&mut V),
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    V: Clone + ScaledAdd<F>,
+    Proj: Fn(&mut V),
 {
     // Best vertex is fixed at index 0; shrink every other vertex toward it.
     // Split-borrow lets us read x[0] while mutating x[i].
@@ -379,18 +395,19 @@ where
     Ok(())
 }
 
-impl<P, V> Solver<P, BasicSimplexState<V>> for NelderMead<Unbounded>
+impl<P, V, F> Solver<P, BasicSimplexState<V, F>> for NelderMead<Unbounded, F>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + ScaledAdd<f64>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    V: Clone + ScaledAdd<F>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicSimplexState<V>,
-    ) -> Result<BasicSimplexState<V>, Self::Error> {
+        mut state: BasicSimplexState<V, F>,
+    ) -> Result<BasicSimplexState<V, F>, Self::Error> {
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
         init_costs_and_sort(problem, &mut state)?;
@@ -400,8 +417,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicSimplexState<V>,
-    ) -> Result<(BasicSimplexState<V>, Option<TerminationReason>), Self::Error> {
+        state: BasicSimplexState<V, F>,
+    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error> {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
@@ -409,18 +426,19 @@ where
     }
 }
 
-impl<P, V> Solver<P, BasicSimplexState<V>> for NelderMead<Projected>
+impl<P, V, F> Solver<P, BasicSimplexState<V, F>> for NelderMead<Projected, F>
 where
-    P: CostFunction<Param = V, Output = f64> + BoxConstraints,
-    V: Clone + ScaledAdd<f64> + ClampInPlace,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + BoxConstraints,
+    V: Clone + ScaledAdd<F> + ClampInPlace,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicSimplexState<V>,
-    ) -> Result<BasicSimplexState<V>, Self::Error> {
+        mut state: BasicSimplexState<V, F>,
+    ) -> Result<BasicSimplexState<V, F>, Self::Error> {
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
         // Project every initial vertex once so iter-0 termination
@@ -439,8 +457,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicSimplexState<V>,
-    ) -> Result<(BasicSimplexState<V>, Option<TerminationReason>), Self::Error> {
+        state: BasicSimplexState<V, F>,
+    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error> {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
