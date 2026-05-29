@@ -20,6 +20,9 @@ pub mod cma_es;
 /// Levenberg-Marquardt. For L-BFGS-B inner with consistent bound
 /// handling, see [`bounded_cma_inject`].
 pub mod cma_inject;
+/// Differential Evolution (DE/rand/1/bin) — Storn-Price 1997 global
+/// optimizer on a feasible box, fully backend-generic.
+pub mod de;
 /// Pure Gauss-Newton solver for nonlinear least squares.
 pub mod gauss_newton;
 /// Steepest-descent solver with a pluggable line search and optional
@@ -58,6 +61,7 @@ pub use bounded_cma_inject::BoundedCmaInject;
 pub use brent::Brent;
 pub use cma_es::CmaEs;
 pub use cma_inject::{ClosureInner, CmaInject, MemeticInner};
+pub use de::De;
 pub use gauss_newton::GaussNewton;
 pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;

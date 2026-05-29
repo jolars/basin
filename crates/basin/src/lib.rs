@@ -96,6 +96,6 @@ pub use crate::solver::lbfgs::{LBFGS, LBFGSB};
 pub use crate::solver::BFGS;
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent, ClosureInner,
-    CmaEs, CmaInject, GaussNewton, GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState,
+    CmaEs, CmaInject, De, GaussNewton, GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState,
     MemeticInner, NelderMead, ProjectedGradientDescent, RandomSearch, Ssga, Trf,
 };
