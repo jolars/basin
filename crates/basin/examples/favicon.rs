@@ -36,7 +36,7 @@
 
 use std::fmt::Write as _;
 
-use basin::{BasicState, CostFunction, Gradient, GradientDescent, Solver, State};
+use basin::{BasicState, CostFunction, Gradient, GradientDescent, Problem, Solver, State};
 
 // ---------------------------------------------------------------------------
 // config
@@ -308,12 +308,13 @@ impl Gradient for Bowl {
 /// `Solver` loop, capturing every iterate then decimating.
 fn trace_river() -> Vec<[f64; 2]> {
     let mut solver = GradientDescent::new(RIVER_ALPHA).with_momentum(RIVER_BETA);
+    let mut problem = Problem::new(Bowl);
     let mut state = solver
-        .init(&Bowl, BasicState::new(RIVER_START.to_vec()))
+        .init(&mut problem, BasicState::new(RIVER_START.to_vec()))
         .unwrap();
     let mut full = vec![[state.param()[0], state.param()[1]]];
     for _ in 0..RIVER_ITERS {
-        let (next, stop) = solver.next_iter(&Bowl, state).unwrap();
+        let (next, stop) = solver.next_iter(&mut problem, state).unwrap();
         state = next;
         full.push([state.param()[0], state.param()[1]]);
         if stop.is_some() {

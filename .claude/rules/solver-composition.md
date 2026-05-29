@@ -10,22 +10,39 @@ paths:
 
 Some solvers run another solver as a sub-step (memetic CMA-ES + LM, basin
 hopping, barrier / augmented-Lagrangian, multi-start polish, …). The
-composition primitive is `run_loop(&problem, state, &mut solver, &mut
+composition primitive is `run_loop(&mut problem, state, &mut solver, &mut
 criteria, max_iter)` in `src/core/executor.rs`; the builder-style adapter
 `InnerExecutor<S, So>` in `src/core/inner.rs` wraps it for the common case
 where an outer solver stores a pre-configured inner and reuses it across
-outer iters.
+outer iters. Both take `&mut Problem<P>` — the counting wrapper — never a
+raw `&P`.
 
 ## Three contracts every outer solver must follow
 
-1. **Eval aggregation.** After each `inner.run(&problem, inner_state)`, roll
-   the inner's `cost_evals()` into the outer state via
-   `increment_cost_evals(...)` (and `gradient_evals()` via
-   `increment_gradient_evals(...)` when both inner and outer are
-   `GradientState`). Skipping this silently corrupts `MaxCostEvals` budgets
-   and the public `result.cost_evals()` read. The contract is spelled out on
-   `Solver::next_iter`'s rustdoc; `crates/basin/tests/inner_executor.rs`
-   asserts it.
+1. **Eval aggregation.** Two shapes, picked by *what problem the inner sees*:
+
+   - **Same-problem inner** (e.g. `CmaInject`, `BoundedCmaInject`,
+     `MaLsChCma`): the outer passes its own `&mut Problem<P>` straight to
+     the inner. Inner cost / gradient / residual / Jacobian / Hessian calls
+     bump the *same* `EvalCounts` as the outer's own calls, so aggregation
+     happens transparently. No explicit roll-up. The outer state's
+     `CountsMirror` impl decides how those counts map onto its
+     `cost_evals` (and `gradient_evals`, if it carries one).
+
+   - **Adapter-problem inner** (e.g. `BarrierMethod` / `LogBarrier`,
+     `AugmentedLagrangianMethod` / `AugmentedLagrangian`): the outer
+     constructs a *fresh* `Problem::new(adapter)` around its adapter type,
+     runs the inner against it via `run_loop(&mut inner_wrapper, …)`, then
+     folds the inner wrapper's counts back into the outer's wrapper via
+     `outer.counts_mut().add(inner.counts())`. (Copy `*inner.counts()` to a
+     local first if the adapter still borrows `problem.inner()` — the
+     borrow checker won't let you reborrow `problem` mutably otherwise.)
+
+   Skipping the roll-up in the adapter case silently corrupts
+   `MaxCostEvals` budgets and the public `result.cost_evals()` read.
+   Same-problem inners never need it because the wrapper is shared. The
+   contract is spelled out on `Solver::next_iter`'s rustdoc;
+   `crates/basin/tests/inner_executor.rs` asserts it.
 
 2. **Inner termination criteria must be stateless across calls.** An
    `InnerExecutor` keeps its `Vec<Box<dyn TerminationCriterion<S>>>` for its
@@ -50,8 +67,32 @@ outer iters.
 Reach for `InnerExecutor` when the outer wants to expose `inner_max_iter` /
 `inner.terminate_on(...)` to its users via builder methods that mirror the
 framework. Reach for raw `run_loop` when the outer needs to reconstruct
-criteria each call (statefulness escape hatch) or wants per-call criteria
-passed through a different surface.
+criteria each call (statefulness escape hatch), wants per-call criteria
+passed through a different surface, or runs an adapter-problem inner — since
+that case constructs a fresh `Problem::new(adapter)` per outer iter rather
+than reusing the outer's wrapper.
+
+## Per-run state counts via `CountsMirror`
+
+`run_loop` snapshots the wrapper at entry and the executor mirrors the
+*delta* (wrapper-at-now minus the entry baseline) onto the inner state's
+`cost_evals` / `gradient_evals` via `CountsMirror`. So the inner state
+always reflects per-run work, not cumulative-across-calls work — nested
+`run_loop` calls against the same wrapper see clean per-call counters.
+Each shipped state has its own mirror rule:
+
+- Gradient states (`BasicState`, `QuasiNewtonState`, `LbfgsState`):
+  `cost_evals = cost + residual`,
+  `gradient_evals = gradient + jacobian + hessian` (the NLLS convention
+  preserved — residual rolls into cost, Jacobian/Hessian into gradient).
+- Derivative-free states (`BasicSimplexState`, `BasicPopulationState`,
+  `MaLsChState`): `cost_evals = total_work()` — every kind of work folded
+  in. This is what makes a CMA-ES outer with an L-BFGS inner just *work*:
+  the inner's gradient evals show up in the outer's `cost_evals` honestly,
+  with no manual cross-type fold.
+
+User-defined state types plugging into `Executor` must impl `CountsMirror`;
+it is `pub` for exactly that reason.
 
 ## Seeding an inner's state: `WarmStart` (+ `MemeticInner`)
 
@@ -64,15 +105,17 @@ inner's state, not just drive it — and inners carry different state shapes
   default scale).
 - `MemeticInner<V>: WarmStart<V>` (`src/solver/cma_inject.rs`) extends it with
   `seed_scaled(x, σ)` (defaults to `seed`; only Nelder-Mead's σ-scaled simplex
-  overrides it) and `work_units` for CMA-injection eval aggregation.
+  overrides it). The vestigial `work_units` method still exists but is now
+  unused by the shipped composed solvers — the `total_work()` fold on
+  derivative-free outer states replaces it; deprecate when convenient.
 
 Two consumer families validate the split: the barrier / AL methods bound `So:
-WarmStart<V>` with `So::State: GradientState` (gradient inners only — they read
-`cost_evals`/`gradient_evals` directly, so they don't need `work_units`, and
-the `GradientState` bound excludes the only σ-sensitive inner, Nelder-Mead, so
-the σ-free `seed` is exactly right); CMA-injection (`CmaInject` /
-`BoundedCmaInject`) bound `I: MemeticInner<V>` and call `seed_scaled`. This
-split resolved the "dummy-σ wrinkle" — barrier / AL never pass a meaningless σ.
+WarmStart<V>` with `So::State: GradientState + CountsMirror` (gradient inners
+only — the `GradientState` bound excludes the only σ-sensitive inner,
+Nelder-Mead, so the σ-free `seed` is exactly right); CMA-injection (`CmaInject`
+/ `BoundedCmaInject`) bound `I: MemeticInner<V>` with `I::State: CountsMirror`
+and call `seed_scaled`. This split resolved the "dummy-σ wrinkle" — barrier /
+AL never pass a meaningless σ.
 
 ## Don't grow a `Composed<Outer, Inner>` type until ≥2 concrete consumers want it
 

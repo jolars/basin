@@ -40,8 +40,8 @@ use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use argmin::solver::quasinewton::LBFGS as ArgminLBFGS;
 use basin::problems::{rosenbrock, rosenbrock_gradient, Rosenbrock};
 use basin::{
-    BasicSimplexState, BasicState, Executor, GradientDescent, IntoInitialSimplex, LbfgsState,
-    MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome, LBFGSB,
+    BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent, IntoInitialSimplex,
+    LbfgsState, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome, LBFGSB,
 };
 use competitor_bench::ArgminProblem;
 
@@ -70,7 +70,7 @@ fn start() -> Vec<f64> {
 /// at iter 0 and after every completed iteration.
 fn basin_trace<P, S, So>(exec: Executor<P, S, So>) -> Vec<(u128, f64)>
 where
-    S: BasinState<Float = f64>,
+    S: BasinState<Float = f64> + CountsMirror,
     So: Solver<P, S>,
     So::Error: std::fmt::Debug,
 {

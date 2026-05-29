@@ -32,8 +32,9 @@
 //! point exits immediately with the corresponding reason rather than
 //! taking one redundant step.
 
+use crate::core::problem::{EvalCounts, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::State;
+use crate::core::state::{CountsMirror, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 
 /// Outcome of an optimisation run.
@@ -118,7 +119,7 @@ pub enum StepOutcome {
 /// };
 /// ```
 pub struct Stepper<P, S, So> {
-    problem: P,
+    problem: Problem<P>,
     // `Option<S>` because `Solver::next_iter` consumes the state by
     // value. Take it out, hand it to the solver, put the returned state
     // back. The slot is `Some` whenever a caller can observe it (between
@@ -133,7 +134,7 @@ pub struct Stepper<P, S, So> {
 
 impl<P, S, So> Stepper<P, S, So>
 where
-    S: State,
+    S: State + CountsMirror,
     So: Solver<P, S>,
 {
     /// Read-only access to the current state, between steps.
@@ -141,6 +142,20 @@ where
         self.state
             .as_ref()
             .expect("state slot is Some between steps")
+    }
+
+    /// Wrapper-side evaluation counters. These are authoritative —
+    /// solvers can only call into the user's problem through the
+    /// wrapper, so every cost / gradient / residual / Jacobian /
+    /// Hessian call is reflected here. The state mirror under
+    /// [`state`](Self::state) is refreshed after every successful
+    /// [`Solver::init`] /
+    /// [`Solver::next_iter`];
+    /// on the typed-`Err` path the state slot is dropped (see
+    /// [`step`](Self::step)) but `counts` is still readable here for
+    /// diagnostics.
+    pub fn counts(&self) -> &EvalCounts {
+        self.problem.counts()
     }
 
     /// Termination reason if the stepper has stopped, else `None`.
@@ -168,7 +183,8 @@ where
             return Ok(StepOutcome::Stopped(reason));
         }
         let outcome = step_once(
-            &self.problem,
+            &mut self.problem,
+            &EvalCounts::default(),
             &mut self.state,
             &mut self.solver,
             &mut self.criteria,
@@ -202,8 +218,15 @@ where
 /// Single-iteration core, shared by [`Stepper::step`] (owned) and
 /// [`run_loop`] (borrowed). Reads the current state via `state_slot`,
 /// checks termination, and either returns `Stopped` (slot left
-/// untouched) or hands the state to `solver.next_iter`, increments the
-/// iteration counter, and puts the returned state back in `state_slot`.
+/// untouched) or hands the state to `solver.next_iter`, mirrors the
+/// wrapper's counter delta (relative to `baseline`) onto the state,
+/// increments the iteration counter, and puts the returned state back.
+///
+/// The `baseline` captures the wrapper count at the start of the
+/// containing run so the state mirror always reflects *per-run* work:
+/// for [`Stepper::step`] / [`Executor::run`] it is
+/// [`EvalCounts::default`] (fresh wrapper), for nested
+/// [`run_loop`] calls it is the wrapper count at run-loop entry.
 ///
 /// Returns `Err` when [`Solver::next_iter`] does. The state slot is
 /// untouched on `Err` (the previous iterate is still readable).
@@ -211,14 +234,15 @@ where
 /// Invariant: `state_slot` is `Some` on entry and `Some` on return
 /// (including on the `Err` path).
 fn step_once<P, S, So>(
-    problem: &P,
+    problem: &mut Problem<P>,
+    baseline: &EvalCounts,
     state_slot: &mut Option<S>,
     solver: &mut So,
     criteria: &mut [Box<dyn TerminationCriterion<S>>],
     max_iter: u64,
 ) -> Result<StepOutcome, So::Error>
 where
-    S: State,
+    S: State + CountsMirror,
     So: Solver<P, S>,
 {
     {
@@ -248,10 +272,13 @@ where
             // put back. Mid-iter hard-aborts therefore leave the slot
             // empty and the stepper consumes itself — this is the
             // intentional shape: typed Err is terminal, the typical
-            // caller bubbles it out and drops the stepper.
+            // caller bubbles it out and drops the stepper. The wrapper's
+            // own counts are still authoritative on the Err path; see
+            // [`Stepper::counts`].
             return Err(e);
         }
     };
+    next.mirror(&problem.counts().delta_since(baseline));
     if let Some(reason) = mid_iter_reason {
         *state_slot = Some(next);
         return Ok(StepOutcome::Stopped(reason));
@@ -261,12 +288,25 @@ where
     Ok(StepOutcome::Continue)
 }
 
-/// Drive a solver to completion against a borrowed problem.
+/// Drive a solver to completion against a shared [`Problem`] wrapper.
 ///
 /// `Executor` is a thin owning wrapper over this. Composed solvers
-/// (e.g. CG inside CMA, NM inside DE) call `run_loop` directly so they
-/// can run an inner solver against the outer's `&P` without taking
-/// ownership of the problem.
+/// (e.g. CG inside CMA, NM inside DE) call `run_loop` directly so the
+/// inner solver shares the outer's wrapper — inner cost / gradient
+/// calls bump the same [`EvalCounts`] as outer calls, so the eval
+/// aggregation contract (`AGENTS.md` "Solver composition" rule 1) is
+/// satisfied automatically for same-problem inners. For composed
+/// solvers driving an inner against an **adapter problem** (e.g.
+/// [`LogBarrier`](crate::core::barrier::LogBarrier)), construct a
+/// fresh `Problem::new(adapter)`, pass `&mut` into `run_loop`, then
+/// fold the inner wrapper's [`EvalCounts`] back into the outer's via
+/// [`EvalCounts::add`] on [`Problem::counts_mut`].
+///
+/// The inner state's [`State::cost_evals`] (mirrored via
+/// [`CountsMirror`]) reflects only *per-run* work — `run_loop` takes
+/// a baseline snapshot of [`Problem::counts`] at entry, and the state
+/// mirror computes the delta against that. Nested `run_loop` calls
+/// against the same wrapper therefore see clean per-call counters.
 ///
 /// Semantics match `Executor::run`: `init` is called once, then on each
 /// iteration framework `criteria` are checked in insertion order before
@@ -276,20 +316,23 @@ where
 /// in that case the iteration counter is left untouched so the final
 /// `state.iter()` still reflects the last fully completed iteration.
 pub fn run_loop<P, S, So>(
-    problem: &P,
+    problem: &mut Problem<P>,
     state: S,
     solver: &mut So,
     criteria: &mut [Box<dyn TerminationCriterion<S>>],
     max_iter: u64,
 ) -> Result<OptimizationResult<S>, So::Error>
 where
-    S: State,
+    S: State + CountsMirror,
     So: Solver<P, S>,
 {
-    let state = solver.init(problem, state)?;
+    let baseline = *problem.counts();
+    let mut state = solver.init(problem, state)?;
+    // Mirror init's work onto the state before any termination check.
+    state.mirror(&problem.counts().delta_since(&baseline));
     let mut slot = Some(state);
     let reason = loop {
-        match step_once(problem, &mut slot, solver, criteria, max_iter)? {
+        match step_once(problem, &baseline, &mut slot, solver, criteria, max_iter)? {
             StepOutcome::Continue => continue,
             StepOutcome::Stopped(reason) => break reason,
         }
@@ -348,7 +391,7 @@ pub struct Executor<P, S, So> {
 
 impl<P, S, So> Executor<P, S, So>
 where
-    S: State,
+    S: State + CountsMirror,
     So: Solver<P, S>,
 {
     /// Build an executor from a problem, solver, and initial state. The
@@ -398,7 +441,11 @@ where
             max_iter,
             criteria,
         } = self;
-        let state = solver.init(&problem, state)?;
+        let mut problem = Problem::new(problem);
+        let mut state = solver.init(&mut problem, state)?;
+        // Mirror init's work onto the state before any termination
+        // check. Baseline is zero — this is a fresh top-level wrapper.
+        state.mirror(problem.counts());
         Ok(Stepper {
             problem,
             state: Some(state),

@@ -1,6 +1,6 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{ClampInPlace, NegInPlace, ScaledAdd};
-use crate::core::problem::{CostFunction, Gradient};
+use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
@@ -152,24 +152,24 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<BasicState<V>, Self::Error> {
         // Project an infeasible start once so iter-0 termination checks
         // see a feasible iterate. Subsequent iterations preserve
         // feasibility by construction.
-        state.param.clamp_in_place(problem.lower(), problem.upper());
+        state
+            .param
+            .clamp_in_place(problem.inner().lower(), problem.inner().upper());
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
         let grad = state
@@ -181,18 +181,16 @@ where
             .expect("cost not set: Solver::init must run before next_iter");
         let mut direction = grad.clone();
         direction.neg_in_place();
-        let step = self
+        let alpha = self
             .line_search
             .next(problem, &state.param, prev_cost, &grad, &direction)?;
-        state.cost_evals += step.cost_evals;
-        state.gradient_evals += step.gradient_evals;
-        state.param.scaled_add(step.alpha, &direction);
-        state.param.clamp_in_place(problem.lower(), problem.upper());
+        state.param.scaled_add(alpha, &direction);
+        state
+            .param
+            .clamp_in_place(problem.inner().lower(), problem.inner().upper());
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok((state, None))
     }
 }

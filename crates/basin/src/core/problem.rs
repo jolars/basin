@@ -508,3 +508,335 @@ pub trait Hessian: Gradient {
         Ok((cost, grad, self.hessian(param)?))
     }
 }
+
+/// Per-kind evaluation counters carried by [`Problem`].
+///
+/// One field per problem-trait method family. The
+/// [`Executor`](crate::core::executor::Executor) mirrors these onto the
+/// solver `State` after every successful
+/// [`Solver::next_iter`](crate::core::solver::Solver::next_iter) /
+/// [`Solver::init`](crate::core::solver::Solver::init), with the per-state
+/// rule defined by the state's [`CountsMirror`](crate::core::state::CountsMirror)
+/// impl. The wrapper itself is authoritative; the state mirror is the
+/// "available-everywhere" view that termination criteria and
+/// [`OptimizationResult`](crate::core::executor::OptimizationResult) read.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EvalCounts {
+    /// [`CostFunction::cost`] calls (including the cost side of fused
+    /// [`Gradient::cost_and_gradient`] / [`Hessian::cost_and_gradient_and_hessian`]).
+    pub cost_evals: u64,
+    /// [`Gradient::gradient`] calls (including the gradient side of fused
+    /// calls).
+    pub gradient_evals: u64,
+    /// [`Residual::residual`] calls (including the residual side of fused
+    /// [`Jacobian::residual_and_jacobian`]).
+    pub residual_evals: u64,
+    /// [`Jacobian::jacobian`] calls (including the Jacobian side of fused
+    /// calls).
+    pub jacobian_evals: u64,
+    /// [`Hessian::hessian`] calls (including the Hessian side of fused
+    /// calls).
+    pub hessian_evals: u64,
+}
+
+impl EvalCounts {
+    /// Sum across every counter. Used for state-mirror rules that fold all
+    /// problem work into a single `state.cost_evals` (derivative-free outer
+    /// states; see [`CountsMirror`](crate::core::state::CountsMirror)).
+    pub fn total_work(&self) -> u64 {
+        self.cost_evals
+            + self.gradient_evals
+            + self.residual_evals
+            + self.jacobian_evals
+            + self.hessian_evals
+    }
+
+    /// Componentwise `self − base`. Used by
+    /// [`run_loop`](crate::core::executor::run_loop) to compute the
+    /// per-run delta when an outer solver passes its wrapper to an inner.
+    pub fn delta_since(&self, base: &EvalCounts) -> EvalCounts {
+        EvalCounts {
+            cost_evals: self.cost_evals - base.cost_evals,
+            gradient_evals: self.gradient_evals - base.gradient_evals,
+            residual_evals: self.residual_evals - base.residual_evals,
+            jacobian_evals: self.jacobian_evals - base.jacobian_evals,
+            hessian_evals: self.hessian_evals - base.hessian_evals,
+        }
+    }
+
+    /// Componentwise `self + other`. Used by composed solvers that drive an
+    /// inner against a *different* problem type (an adapter like
+    /// [`LogBarrier`](crate::core::barrier::LogBarrier) or
+    /// [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian))
+    /// — they construct a fresh inner [`Problem`] and merge its counts back
+    /// into the outer's wrapper after [`run_loop`](crate::core::executor::run_loop).
+    pub fn add(&mut self, other: &EvalCounts) {
+        self.cost_evals += other.cost_evals;
+        self.gradient_evals += other.gradient_evals;
+        self.residual_evals += other.residual_evals;
+        self.jacobian_evals += other.jacobian_evals;
+        self.hessian_evals += other.hessian_evals;
+    }
+}
+
+/// Counting wrapper that solvers receive instead of `&P` directly.
+///
+/// Every problem-trait method on [`Problem`] bumps the relevant
+/// [`EvalCounts`] field before delegating to the inner problem, so
+/// solvers can't accidentally lose a count: forgetting to count becomes
+/// a compile error (the inner is private; the only way to evaluate the
+/// problem is through the wrapper). The
+/// [`Executor`](crate::core::executor::Executor) wraps the user's
+/// problem once in [`Executor::new`](crate::core::executor::Executor::new)
+/// and mirrors [`counts`](Self::counts) onto the solver `State` after
+/// every successful
+/// [`Solver::init`](crate::core::solver::Solver::init) /
+/// [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
+///
+/// # Composition
+///
+/// Outer solvers that drive an inner solver receive their own
+/// `&mut Problem<P>` in `next_iter`. Two shapes are supported:
+///
+/// - **Same-problem inner** (e.g.
+///   [`CmaInject`](crate::solver::CmaInject)): the outer passes its own
+///   `&mut Problem<P>` straight through to the inner via
+///   [`run_loop`](crate::core::executor::run_loop). Inner counts flow
+///   into the outer's wrapper transparently; no explicit roll-up. Inner
+///   `state` counts reflect per-run work (snapshot-relative, computed by
+///   [`run_loop`](crate::core::executor::run_loop)).
+/// - **Adapter-problem inner** (e.g.
+///   [`BarrierMethod`](crate::solver::BarrierMethod) /
+///   [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)):
+///   the outer constructs a fresh `Problem::new(adapter)` around its
+///   adapter type, runs the inner against it, then folds the inner's
+///   counts back into the outer's wrapper via
+///   [`EvalCounts::add`].
+///
+/// # Error path
+///
+/// Counters bump **before** the delegated inner call. A mid-call `Err`
+/// therefore still leaves the wrapper count incremented — the wrapper is
+/// authoritative even on the hard-abort path, where the state mirror may
+/// be stale. Observers can read the true count via
+/// [`counts`](Self::counts) regardless.
+pub struct Problem<P> {
+    inner: P,
+    counts: EvalCounts,
+}
+
+impl<P> Problem<P> {
+    /// Wrap `inner` with fresh zero counters.
+    pub fn new(inner: P) -> Self {
+        Self {
+            inner,
+            counts: EvalCounts::default(),
+        }
+    }
+
+    /// Read-only access to the wrapped problem. Used by composed solvers
+    /// to build adapter problems (`LogBarrier::new(wrapper.inner(), μ)`,
+    /// `AugmentedLagrangian::new(wrapper.inner(), …)`) and by callers that
+    /// need to read non-evaluation methods (e.g.
+    /// [`BoxConstraints::lower`](crate::core::constraint::BoxConstraints::lower)).
+    pub fn inner(&self) -> &P {
+        &self.inner
+    }
+
+    /// Current evaluation counters. The wrapper is authoritative;
+    /// observers can read counts here even on `Err` paths where the
+    /// state mirror has not refreshed.
+    pub fn counts(&self) -> &EvalCounts {
+        &self.counts
+    }
+
+    /// Mutable access to the wrapper's counters. Used by composed solvers
+    /// that drive an inner against an *adapter problem*: after
+    /// [`run_loop`](crate::core::executor::run_loop) returns the inner
+    /// wrapper, the outer calls
+    /// `outer.counts_mut().add(inner.counts())` to fold the inner's
+    /// per-run work into its own.
+    pub fn counts_mut(&mut self) -> &mut EvalCounts {
+        &mut self.counts
+    }
+
+    /// Consume the wrapper and return the inner problem.
+    pub fn into_inner(self) -> P {
+        self.inner
+    }
+}
+
+impl<P: CostFunction> Problem<P> {
+    /// Counted [`CostFunction::cost`].
+    pub fn cost(&mut self, param: &P::Param) -> Result<P::Output, P::Error> {
+        self.counts.cost_evals += 1;
+        self.inner.cost(param)
+    }
+}
+
+impl<P: Gradient> Problem<P> {
+    /// Counted [`Gradient::gradient`].
+    pub fn gradient(&mut self, param: &P::Param) -> Result<P::Gradient, P::Error> {
+        self.counts.gradient_evals += 1;
+        self.inner.gradient(param)
+    }
+
+    /// Counted [`Gradient::cost_and_gradient`]: bumps both
+    /// [`EvalCounts::cost_evals`] and
+    /// [`EvalCounts::gradient_evals`] in one place, so the
+    /// "one fused call counts as one of each" rule lives in exactly one
+    /// spot.
+    pub fn cost_and_gradient(
+        &mut self,
+        param: &P::Param,
+    ) -> Result<(P::Output, P::Gradient), P::Error> {
+        self.counts.cost_evals += 1;
+        self.counts.gradient_evals += 1;
+        self.inner.cost_and_gradient(param)
+    }
+}
+
+impl<P: Residual> Problem<P> {
+    /// Counted [`Residual::residual`].
+    pub fn residual(
+        &mut self,
+        param: &P::Param,
+    ) -> Result<<P as Residual>::Output, <P as Residual>::Error> {
+        self.counts.residual_evals += 1;
+        self.inner.residual(param)
+    }
+}
+
+impl<P: Jacobian> Problem<P> {
+    /// Counted [`Jacobian::jacobian`].
+    pub fn jacobian(&mut self, param: &P::Param) -> Result<P::Jacobian, <P as Residual>::Error> {
+        self.counts.jacobian_evals += 1;
+        self.inner.jacobian(param)
+    }
+
+    /// Counted [`Jacobian::residual_and_jacobian`]: bumps both
+    /// [`EvalCounts::residual_evals`] and
+    /// [`EvalCounts::jacobian_evals`].
+    pub fn residual_and_jacobian(
+        &mut self,
+        param: &P::Param,
+    ) -> Result<(<P as Residual>::Output, P::Jacobian), <P as Residual>::Error> {
+        self.counts.residual_evals += 1;
+        self.counts.jacobian_evals += 1;
+        self.inner.residual_and_jacobian(param)
+    }
+}
+
+impl<P: Hessian> Problem<P> {
+    /// Counted [`Hessian::hessian`].
+    pub fn hessian(&mut self, param: &P::Param) -> Result<P::Hessian, <P as CostFunction>::Error> {
+        self.counts.hessian_evals += 1;
+        self.inner.hessian(param)
+    }
+
+    /// Counted [`Hessian::cost_and_gradient_and_hessian`]: bumps
+    /// [`EvalCounts::cost_evals`],
+    /// [`EvalCounts::gradient_evals`], and
+    /// [`EvalCounts::hessian_evals`].
+    #[allow(clippy::type_complexity)]
+    pub fn cost_and_gradient_and_hessian(
+        &mut self,
+        param: &P::Param,
+    ) -> Result<
+        (
+            <P as CostFunction>::Output,
+            <P as Gradient>::Gradient,
+            P::Hessian,
+        ),
+        <P as CostFunction>::Error,
+    > {
+        self.counts.cost_evals += 1;
+        self.counts.gradient_evals += 1;
+        self.counts.hessian_evals += 1;
+        self.inner.cost_and_gradient_and_hessian(param)
+    }
+}
+
+#[cfg(test)]
+mod problem_wrapper_tests {
+    use super::*;
+
+    struct Sphere;
+    impl CostFunction for Sphere {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = std::convert::Infallible;
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+            Ok(x.iter().map(|xi| xi * xi).sum())
+        }
+    }
+    impl Gradient for Sphere {
+        type Gradient = Vec<f64>;
+        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+            Ok(x.iter().map(|xi| 2.0 * xi).collect())
+        }
+    }
+
+    #[test]
+    fn counts_cost_calls() {
+        let mut p = Problem::new(Sphere);
+        let _ = p.cost(&vec![1.0, 2.0]).unwrap();
+        let _ = p.cost(&vec![0.0, 0.0]).unwrap();
+        assert_eq!(p.counts().cost_evals, 2);
+        assert_eq!(p.counts().gradient_evals, 0);
+    }
+
+    #[test]
+    fn counts_gradient_calls() {
+        let mut p = Problem::new(Sphere);
+        let _ = p.gradient(&vec![1.0, 2.0]).unwrap();
+        assert_eq!(p.counts().cost_evals, 0);
+        assert_eq!(p.counts().gradient_evals, 1);
+    }
+
+    #[test]
+    fn fused_counts_as_one_of_each() {
+        let mut p = Problem::new(Sphere);
+        let _ = p.cost_and_gradient(&vec![1.0, 2.0]).unwrap();
+        assert_eq!(p.counts().cost_evals, 1);
+        assert_eq!(p.counts().gradient_evals, 1);
+    }
+
+    #[test]
+    fn delta_since_subtracts_componentwise() {
+        let mut p = Problem::new(Sphere);
+        let _ = p.cost(&vec![1.0]);
+        let base = *p.counts();
+        let _ = p.cost_and_gradient(&vec![1.0]).unwrap();
+        let _ = p.gradient(&vec![1.0]).unwrap();
+        let delta = p.counts().delta_since(&base);
+        assert_eq!(delta.cost_evals, 1);
+        assert_eq!(delta.gradient_evals, 2);
+    }
+
+    #[test]
+    fn total_work_sums_all_kinds() {
+        let mut p = Problem::new(Sphere);
+        let _ = p.cost(&vec![1.0]).unwrap();
+        let _ = p.gradient(&vec![1.0]).unwrap();
+        assert_eq!(p.counts().total_work(), 2);
+    }
+
+    #[test]
+    fn add_merges_componentwise() {
+        let mut a = EvalCounts {
+            cost_evals: 3,
+            gradient_evals: 1,
+            ..EvalCounts::default()
+        };
+        let b = EvalCounts {
+            cost_evals: 2,
+            jacobian_evals: 5,
+            ..EvalCounts::default()
+        };
+        a.add(&b);
+        assert_eq!(a.cost_evals, 5);
+        assert_eq!(a.gradient_evals, 1);
+        assert_eq!(a.jacobian_evals, 5);
+    }
+}

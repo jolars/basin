@@ -1,5 +1,5 @@
 use crate::core::constraint::BoxConstraints;
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
@@ -89,11 +89,11 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<f64>,
     ) -> Result<BasicState<f64>, Self::Error> {
-        let a = *problem.lower();
-        let b = *problem.upper();
+        let a = *problem.inner().lower();
+        let b = *problem.inner().upper();
         assert!(
             a.is_finite() && b.is_finite() && a < b,
             "Brent requires a finite, ordered bracket: lower < upper"
@@ -120,13 +120,12 @@ where
         });
         state.param = x;
         state.cost = Some(fx);
-        state.cost_evals += 1;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<f64>,
     ) -> Result<(BasicState<f64>, Option<TerminationReason>), Self::Error> {
         let s = self.inner.as_mut().expect("Brent::init must run first");
@@ -208,7 +207,6 @@ where
 
         state.param = s.x;
         state.cost = Some(s.fx);
-        state.cost_evals += 1;
         Ok((state, None))
     }
 

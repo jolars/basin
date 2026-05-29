@@ -4,7 +4,7 @@ use crate::core::math::{
     Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity, NegInPlace, NormSquared, ScaleInPlace,
     ScaledAdd, VectorLen,
 };
-use crate::core::problem::{CostFunction, Gradient};
+use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::QuasiNewtonState;
 use crate::core::termination::TerminationReason;
@@ -131,20 +131,18 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: QuasiNewtonState<V, M>,
     ) -> Result<QuasiNewtonState<V, M>, Self::Error> {
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: QuasiNewtonState<V, M>,
     ) -> Result<(QuasiNewtonState<V, M>, Option<TerminationReason>), Self::Error> {
         let g = state
@@ -160,18 +158,16 @@ where
         let mut direction = state.inverse_hessian.matvec(&g);
         direction.neg_in_place();
 
-        let step = self
+        let alpha = self
             .line_search
             .next(problem, &state.param, cost_old, &g, &direction)?;
-        state.cost_evals += step.cost_evals;
-        state.gradient_evals += step.gradient_evals;
 
         // Line search bailed (α = 0): direction wasn't descent, or we're
         // at numerical convergence. Restore gradient/cost so the state
         // stays consistent and report it as a mid-iter termination so the
         // executor halts immediately. NaN routes here too
         // (`NaN > 0.0` is false).
-        if !(step.alpha.is_finite() && step.alpha > 0.0) {
+        if !(alpha.is_finite() && alpha > 0.0) {
             state.gradient = Some(g);
             state.cost = Some(cost_old);
             return Ok((state, Some(TerminationReason::SolverConverged)));
@@ -179,15 +175,13 @@ where
 
         // s = α d, x ← x + s.
         let mut s = direction;
-        s.scale_in_place(step.alpha);
+        s.scale_in_place(alpha);
         state.param.scaled_add(1.0, &s);
 
         // Fused cost+grad at the new iterate — one fused call gives both
         // values consumed below (BFGS update reads g_new; state caches
         // cost_new at the bottom of the iter).
         let (cost_new, g_new) = problem.cost_and_gradient(&state.param)?;
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
 
         // y = g_new − g.
         let mut y = g_new.clone();

@@ -1,5 +1,5 @@
 use basin::problems::Rosenbrock;
-use basin::{BasicState, Executor, GradientDescent, Solver};
+use basin::{BasicState, Executor, GradientDescent, Problem, Solver};
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
@@ -24,22 +24,16 @@ fn main() {
         100_000,
         || {
             let mut solver = GradientDescent::new(0.001);
+            let mut problem = Problem::new(Rosenbrock::<Vec<f64>>::default());
             // `Solver::init` populates cost + gradient at the initial param,
             // matching the contract `next_iter` expects (gradient cached
             // from the previous iter or from init).
             let state = solver
-                .init(
-                    &Rosenbrock::<Vec<f64>>::default(),
-                    BasicState::new(vec![-1.2, 1.0]),
-                )
+                .init(&mut problem, BasicState::new(vec![-1.2, 1.0]))
                 .unwrap();
-            (solver, state)
+            (solver, problem, state)
         },
-        |(mut solver, state)| {
-            solver
-                .next_iter(&Rosenbrock::<Vec<f64>>::default(), state)
-                .unwrap()
-        },
+        |(mut solver, mut problem, state)| solver.next_iter(&mut problem, state).unwrap(),
     );
 
     bench(

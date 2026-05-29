@@ -1,7 +1,7 @@
 use crate::core::math::{
     GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity, NormSquared, ScaledAdd,
 };
-use crate::core::problem::{Jacobian, Residual};
+use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
@@ -125,7 +125,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<BasicState<V>, Self::Error> {
         // Seed cost so iter-0 termination criteria see a populated
@@ -133,8 +133,6 @@ where
         // `next_iter` doesn't re-evaluate them at the same point.
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
         state.cost = Some(0.5 * r.norm_squared());
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         self.r_cache = Some(r);
         self.j_cache = Some(j);
         Ok(state)
@@ -142,22 +140,16 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
         let r = match self.r_cache.take() {
             Some(r) => r,
-            None => {
-                state.cost_evals += 1;
-                problem.residual(&state.param)?
-            }
+            None => problem.residual(&state.param)?,
         };
         let j = match self.j_cache.take() {
             Some(j) => j,
-            None => {
-                state.gradient_evals += 1;
-                problem.jacobian(&state.param)?
-            }
+            None => problem.jacobian(&state.param)?,
         };
 
         // g = Jᵀr is the gradient of ½‖r‖². First-order optimality
@@ -194,7 +186,6 @@ where
         state.param.scaled_add(1.0, &delta);
         let r_new = problem.residual(&state.param)?;
         state.cost = Some(0.5 * r_new.norm_squared());
-        state.cost_evals += 1;
         self.r_cache = Some(r_new);
         self.j_cache = None;
 

@@ -19,6 +19,7 @@ pub mod lbfgs;
 pub use lbfgs::LbfgsState;
 
 use crate::core::math::{MatrixIdentity, VectorLen};
+use crate::core::problem::EvalCounts;
 
 /// Minimum information the executor and generic termination criteria
 /// need to read from a solver's iterate.
@@ -60,10 +61,17 @@ pub trait State {
     /// Diverges from `iter()` whenever a single iteration evaluates the
     /// cost more than once (line searches, Nelder-Mead shrinks, etc.) —
     /// this is what users actually budget against.
+    ///
+    /// Populated by the
+    /// [`Executor`](crate::core::executor::Executor) from the wrapper's
+    /// `EvalCounts` after every
+    /// successful
+    /// [`Solver::init`](crate::core::solver::Solver::init) /
+    /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter) —
+    /// the per-state mapping is defined by the state's
+    /// [`CountsMirror`] impl. Solvers never write to this counter
+    /// directly; the wrapper's counts are authoritative.
     fn cost_evals(&self) -> u64;
-    /// Increase the cost-eval counter by `by`. Solvers call this whenever
-    /// they invoke the problem's cost function.
-    fn increment_cost_evals(&mut self, by: u64);
     /// Current iterate. Stable between
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
     /// calls; safe to read at any iteration including iter 0.
@@ -105,10 +113,55 @@ pub trait GradientState: State {
     /// Cumulative count of gradient evaluations performed so far. Lives
     /// on `GradientState` rather than `State` so derivative-free states
     /// don't carry a counter they can never increment.
+    ///
+    /// Populated by the
+    /// [`Executor`](crate::core::executor::Executor) from the wrapper's
+    /// `EvalCounts`; see
+    /// [`State::cost_evals`] for the broader rule and
+    /// [`CountsMirror`] for the per-state mapping.
     fn gradient_evals(&self) -> u64;
-    /// Increase the gradient-eval counter by `by`. Solvers call this
-    /// whenever they invoke the problem's gradient function.
-    fn increment_gradient_evals(&mut self, by: u64);
+}
+
+/// Bridge from the wrapper's
+/// `EvalCounts` to the state's
+/// [`State::cost_evals`] / [`GradientState::gradient_evals`] counters.
+/// The [`Executor`](crate::core::executor::Executor) calls
+/// [`mirror`](Self::mirror) after every successful
+/// [`Solver::init`](crate::core::solver::Solver::init) /
+/// [`Solver::next_iter`](crate::core::solver::Solver::next_iter),
+/// passing the per-run delta of the wrapper's counts so the state
+/// reflects work-since-this-run-started (rather than cumulative across
+/// nested [`run_loop`](crate::core::executor::run_loop) calls).
+///
+/// Public (rather than crate-private) so user-defined state types can
+/// be plugged into the [`Executor`](crate::core::executor::Executor) —
+/// the trait must be impl'able outside basin. Most users won't need
+/// this: the shipped state types (`BasicState`, `QuasiNewtonState`,
+/// `LbfgsState`, `BasicSimplexState`, `BasicPopulationState`) already
+/// implement it.
+///
+/// # Per-state mapping
+///
+/// - **[`BasicState`] / [`QuasiNewtonState`] / [`LbfgsState`]** (carry
+///   both cost and gradient counters):
+///   `cost_evals = cost + residual`,
+///   `gradient_evals = gradient + jacobian + hessian`.
+///   The residual / Jacobian / Hessian counters fold into the
+///   cost / gradient slots, preserving today's NLLS convention where
+///   residual calls counted against `cost_evals` and Jacobian calls
+///   against `gradient_evals` on `BasicState`.
+/// - **[`BasicSimplexState`] / [`BasicPopulationState`] / `MaLsChState`**
+///   (derivative-free outer, no `gradient_evals` field):
+///   `cost_evals = total_work` (every kind folded in). Lets a CMA-ES
+///   outer running e.g. an L-BFGS inner have `state.cost_evals`
+///   reflect total computational work, replacing today's `work_units`
+///   manual cross-type fold.
+pub trait CountsMirror: State {
+    /// Overwrite the state's counters from the per-run wrapper delta.
+    /// Called by the executor after every successful
+    /// [`Solver::init`](crate::core::solver::Solver::init) /
+    /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
+    fn mirror(&mut self, delta: &EvalCounts);
 }
 
 /// States built around a simplex of `n + 1` vertices and parallel costs.
@@ -214,10 +267,6 @@ impl<P> State for BasicState<P> {
         self.cost_evals
     }
 
-    fn increment_cost_evals(&mut self, by: u64) {
-        self.cost_evals += by;
-    }
-
     fn param(&self) -> &P {
         &self.param
     }
@@ -249,9 +298,16 @@ impl<P> GradientState for BasicState<P> {
     fn gradient_evals(&self) -> u64 {
         self.gradient_evals
     }
+}
 
-    fn increment_gradient_evals(&mut self, by: u64) {
-        self.gradient_evals += by;
+impl<P> CountsMirror for BasicState<P> {
+    fn mirror(&mut self, delta: &EvalCounts) {
+        // NLLS convention preserved: residual calls fold into the cost
+        // counter, Jacobian / Hessian into gradient. (Today's
+        // Gauss-Newton / LM / TRF impls manually bumped cost_evals on
+        // residual() and gradient_evals on jacobian().)
+        self.cost_evals = delta.cost_evals + delta.residual_evals;
+        self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
     }
 }
 
@@ -404,16 +460,22 @@ impl<V> State for BasicSimplexState<V> {
         self.cost_evals
     }
 
-    fn increment_cost_evals(&mut self, by: u64) {
-        self.cost_evals += by;
-    }
-
     fn param(&self) -> &V {
         &self.vertices[0]
     }
 
     fn cost(&self) -> f64 {
         self.costs[0]
+    }
+}
+
+impl<V> CountsMirror for BasicSimplexState<V> {
+    fn mirror(&mut self, delta: &EvalCounts) {
+        // Derivative-free state: any work folds into the single
+        // `cost_evals` counter (a simplex solver only calls `cost`
+        // today; the generalization matters when a future composed
+        // outer drives a gradient-based inner against this state).
+        self.cost_evals = delta.total_work();
     }
 }
 
@@ -494,10 +556,6 @@ impl<V, M> State for QuasiNewtonState<V, M> {
         self.cost_evals
     }
 
-    fn increment_cost_evals(&mut self, by: u64) {
-        self.cost_evals += by;
-    }
-
     fn param(&self) -> &V {
         &self.param
     }
@@ -524,9 +582,12 @@ impl<V, M> GradientState for QuasiNewtonState<V, M> {
     fn gradient_evals(&self) -> u64 {
         self.gradient_evals
     }
+}
 
-    fn increment_gradient_evals(&mut self, by: u64) {
-        self.gradient_evals += by;
+impl<V, M> CountsMirror for QuasiNewtonState<V, M> {
+    fn mirror(&mut self, delta: &EvalCounts) {
+        self.cost_evals = delta.cost_evals + delta.residual_evals;
+        self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
     }
 }
 
@@ -606,16 +667,23 @@ impl<V> State for BasicPopulationState<V> {
         self.cost_evals
     }
 
-    fn increment_cost_evals(&mut self, by: u64) {
-        self.cost_evals += by;
-    }
-
     fn param(&self) -> &V {
         &self.candidates[0]
     }
 
     fn cost(&self) -> f64 {
         self.costs[0]
+    }
+}
+
+impl<V> CountsMirror for BasicPopulationState<V> {
+    fn mirror(&mut self, delta: &EvalCounts) {
+        // Derivative-free outer: any kind of work (e.g. an L-BFGS
+        // inner's gradient calls inside a CMA-injection wrapper) folds
+        // into the single `cost_evals` counter so `state.cost_evals`
+        // reflects total work — replacing today's manual `work_units`
+        // cross-type fold.
+        self.cost_evals = delta.total_work();
     }
 }
 

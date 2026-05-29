@@ -1,6 +1,6 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{NormSquared, SampleUniformBox, ScaledAdd, VectorLen};
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::BasicPopulationState;
@@ -419,11 +419,11 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<BasicPopulationState<V>, Self::Error> {
-        let lo = problem.lower();
-        let hi = problem.upper();
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
         // Always reseed the population from the solver's RNG so the
         // trajectory is reproducible regardless of which
@@ -432,12 +432,11 @@ where
         state.candidates.clear();
         state.costs.clear();
         for _ in 0..self.pop_size {
-            let x = V::sample_uniform_box(lo, hi, &mut rng);
+            let x = V::sample_uniform_box(&lo, &hi, &mut rng);
             let c = problem.cost(&x)?;
             state.candidates.push(x);
             state.costs.push(c);
         }
-        state.cost_evals += self.pop_size as u64;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         self.rng = Some(rng);
         Ok(state)
@@ -445,15 +444,15 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         let rng = self
             .rng
             .as_mut()
             .expect("Ssga::init must run before next_iter");
-        let lo = problem.lower();
-        let hi = problem.upper();
 
         for _ in 0..self.offspring_per_step {
             let (p1, p2) = nam_select(&state.candidates, self.nam_pool, rng);
@@ -461,20 +460,19 @@ where
                 &state.candidates[p1],
                 &state.candidates[p2],
                 self.blx_alpha,
-                lo,
-                hi,
+                &lo,
+                &hi,
                 rng,
             );
             bga_mutate_in_place(
                 &mut child,
-                lo,
-                hi,
+                &lo,
+                &hi,
                 self.mutation_prob,
                 self.bga_range_fraction,
                 rng,
             );
             let c_child = problem.cost(&child)?;
-            state.cost_evals += 1;
             replace_worst_if_better(&mut state.candidates, &mut state.costs, child, c_child);
         }
 

@@ -6,7 +6,7 @@ use crate::core::math::{
     MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, ScaleInPlace, ScaledAdd,
     SymmetricEigen, VectorLen,
 };
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::BasicPopulationState;
@@ -458,7 +458,7 @@ where
 /// out-of-box LM/L-BFGS-B refinement (e.g. landing at the unconstrained
 /// minimum) skip the penalty and pollute `state.costs`.
 pub(crate) fn evaluate_with_penalty<P, V>(
-    problem: &P,
+    problem: &mut Problem<P>,
     x: &V,
     lower: &V,
     upper: &V,
@@ -609,7 +609,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<BasicPopulationState<V>, Self::Error> {
         // Idempotent: a paused BoundedCmaEs re-entered via `run_loop`
@@ -645,7 +645,9 @@ where
         // user sees `state.param()` which is a sample drawn from N(m, σ²C),
         // and (b) it shaves a few generations off the initial recovery
         // when the user passes an out-of-box starting mean.
-        w.m.clamp_in_place(problem.lower(), problem.upper());
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
+        w.m.clamp_in_place(&lo, &hi);
 
         // First generation: x_k = m + σ B (D ⊙ z_k). Isotropic default keeps
         // the fast path x_k = m + σ z_k (bit-identical when B = I, D = 1);
@@ -665,19 +667,11 @@ where
             } else {
                 x_k.scaled_add(w.sigma, &z_k);
             }
-            let (raw, pen) = evaluate_with_penalty(
-                problem,
-                &x_k,
-                problem.lower(),
-                problem.upper(),
-                &w.gamma,
-                w.n,
-            )?;
+            let (raw, pen) = evaluate_with_penalty(problem, &x_k, &lo, &hi, &w.gamma, w.n)?;
             state.candidates.push(x_k);
             state.costs.push(pen);
             w.raw_costs.push(raw);
         }
-        state.cost_evals += w.lambda as u64;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
         self.state = Some(w);
@@ -686,7 +680,7 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
         let w = self
@@ -793,13 +787,15 @@ where
         // the post-recombination state, before the new generation is
         // sampled. Consumes `w.raw_costs` (previous generation's raw
         // fitness, in sample order — γ-update only needs the IQR).
-        update_gamma(w, problem);
+        update_gamma(w, problem.inner());
 
         // Sample the new generation: x_k = m + σ B (D ⊙ z_k); evaluate
         // at the repaired point, accumulate raw and penalized costs.
         state.candidates.clear();
         state.costs.clear();
         w.raw_costs.clear();
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         for _k in 0..w.lambda {
             let z_k = V::sample_standard_normal(&w.m, &mut w.rng);
             let mut bd_z = z_k;
@@ -807,19 +803,11 @@ where
             let bd_z = w.b.matvec(&bd_z);
             let mut x_k = w.m.clone();
             x_k.scaled_add(w.sigma, &bd_z);
-            let (raw, pen) = evaluate_with_penalty(
-                problem,
-                &x_k,
-                problem.lower(),
-                problem.upper(),
-                &w.gamma,
-                w.n,
-            )?;
+            let (raw, pen) = evaluate_with_penalty(problem, &x_k, &lo, &hi, &w.gamma, w.n)?;
             state.candidates.push(x_k);
             state.costs.push(pen);
             w.raw_costs.push(raw);
         }
-        state.cost_evals += w.lambda as u64;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
         Ok((state, None))

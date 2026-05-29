@@ -2,7 +2,7 @@ use crate::core::math::{
     ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NormSquared,
     RankOneUpdate, SampleStandardNormal, ScaleInPlace, ScaledAdd, SymmetricEigen, VectorLen,
 };
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::BasicPopulationState;
@@ -563,7 +563,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<BasicPopulationState<V>, Self::Error> {
         // Idempotent: if a previous init already seeded the internal
@@ -619,7 +619,6 @@ where
             state.candidates.push(x_k);
             state.costs.push(cost);
         }
-        state.cost_evals += w.lambda as u64;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
         self.state = Some(w);
@@ -628,7 +627,7 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
         let w = self
@@ -757,7 +756,6 @@ where
             state.candidates.push(x_k);
             state.costs.push(cost);
         }
-        state.cost_evals += w.lambda as u64;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
         Ok((state, None))

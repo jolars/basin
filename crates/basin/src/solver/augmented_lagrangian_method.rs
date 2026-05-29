@@ -5,9 +5,9 @@ use crate::core::constraint::LinearEqualityConstraints;
 use crate::core::executor::run_loop;
 use crate::core::inner::WarmStart;
 use crate::core::math::{Dot, MatTransposeVec, MatVec, NormSquared, ScaleInPlace, ScaledAdd};
-use crate::core::problem::{CostFunction, Gradient};
+use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicState, GradientState, State};
+use crate::core::state::{BasicState, CountsMirror, GradientState, State};
 use crate::core::termination::{
     GradientTolerance, MaxIter, TerminationCriterion, TerminationReason,
 };
@@ -94,14 +94,19 @@ use crate::core::termination::{
 /// # Composition
 ///
 /// Internally drives the inner solver via
-/// [`run_loop`] with a **fresh** criteria
-/// vector each outer iteration (`MaxIter` + `GradientTolerance` on the
-/// augmented Lagrangian). Building criteria per call — rather than storing an
+/// [`run_loop`] against a **fresh** inner
+/// `Problem` wrapper each outer iteration
+/// (the inner is an *adapter-problem* composition — the augmented Lagrangian
+/// is a distinct type from the outer problem) with a fresh criteria vector
+/// (`MaxIter` + `GradientTolerance` on the augmented Lagrangian). Building
+/// criteria per call — rather than storing an
 /// [`InnerExecutor`](crate::core::inner::InnerExecutor) — sidesteps the
 /// `MaxTime` cross-call statelessness caveat (see `AGENTS.md` "Solver
-/// composition"). Inner cost/gradient evaluations accumulate onto the outer
-/// state via [`increment_cost_evals`](State::increment_cost_evals) /
-/// [`increment_gradient_evals`](GradientState::increment_gradient_evals).
+/// composition"). After each inner solve, the inner wrapper's
+/// [`EvalCounts`](crate::core::problem::EvalCounts) is folded into the
+/// outer's wrapper via
+/// [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
+/// [`Problem::counts_mut`](crate::core::problem::Problem::counts_mut).
 ///
 /// # Examples
 ///
@@ -244,13 +249,13 @@ where
     V: ScaledAdd<f64> + Dot + NormSquared + ScaleInPlace + Clone,
     So: WarmStart<V>
         + for<'a> Solver<AugmentedLagrangian<'a, P, V>, So::State, Error = <P as CostFunction>::Error>,
-    So::State: GradientState<Param = V>,
+    So::State: GradientState<Param = V> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<BasicState<V>, Self::Error> {
         self.rho = self.rho0;
@@ -261,7 +266,7 @@ where
         // — backend-generic with no "zeros_like" in the math layer. No
         // feasibility precondition: the augmented Lagrangian tolerates an
         // infeasible x₀.
-        let mut lambda = problem.b().clone();
+        let mut lambda = problem.inner().b().clone();
         lambda.scale_in_place(0.0);
         self.lambda = Some(lambda);
 
@@ -270,41 +275,41 @@ where
         let (cost, grad) = problem.cost_and_gradient(state.param())?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
         // *separate* inner state seeded (warm-started) at the current
         // iterate. Fresh criteria each call satisfies the statelessness
-        // contract. The adapter borrows `self.lambda`; the inner solver
-        // borrows `self.inner_solver` — disjoint fields, so both borrows
-        // coexist for the `run_loop` call.
+        // contract.
         let lambda = self.lambda.as_ref().expect("init populates lambda");
-        let al = AugmentedLagrangian::new(problem, lambda, self.rho);
+        let mut al_wrapper =
+            Problem::new(AugmentedLagrangian::new(problem.inner(), lambda, self.rho));
         let mut criteria: Vec<Box<dyn TerminationCriterion<So::State>>> = vec![
             Box::new(MaxIter(self.inner_max_iter)),
             Box::new(GradientTolerance(self.inner_grad_tol)),
         ];
         let inner_state = self.inner_solver.seed(state.param());
         let result = run_loop(
-            &al,
+            &mut al_wrapper,
             inner_state,
             &mut self.inner_solver,
             &mut criteria,
             self.inner_max_iter,
         )?;
 
-        // Eval aggregation (composition contract): roll the inner's counts
-        // into the outer state regardless of how the inner stopped.
-        state.increment_cost_evals(result.state.cost_evals());
-        state.increment_gradient_evals(result.state.gradient_evals());
+        // Eval aggregation (adapter-problem composition): fold the inner
+        // wrapper's per-call counts back into the outer's wrapper. Copy out
+        // before borrowing the outer mutably so the AL adapter's `&P` borrow
+        // (still held by `al_wrapper`) doesn't collide with the
+        // `counts_mut` reborrow.
+        let inner_counts = *al_wrapper.counts();
+        problem.counts_mut().add(&inner_counts);
 
         if result.reason.is_failure() {
             return Ok((state, Some(TerminationReason::SolverFailed)));
@@ -316,12 +321,10 @@ where
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
 
         // Constraint residual c = A x − b at the new iterate.
-        let mut c = problem.a().matvec(&state.param);
-        c.scaled_add(-1.0, problem.b());
+        let mut c = problem.inner().a().matvec(&state.param);
+        c.scaled_add(-1.0, problem.inner().b());
         self.c_norm_prev = self.c_norm;
         self.c_norm = c.norm_squared().sqrt();
 

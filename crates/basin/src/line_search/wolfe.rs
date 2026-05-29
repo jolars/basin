@@ -1,6 +1,6 @@
 use crate::core::math::{Dot, ScaledAdd};
-use crate::core::problem::{CostFunction, Gradient};
-use crate::line_search::{LineSearch, LineSearchResult};
+use crate::core::problem::{CostFunction, Gradient, Problem};
+use crate::line_search::LineSearch;
 
 /// Strong Wolfe line search via bracketing + bisection-based zoom.
 ///
@@ -95,12 +95,12 @@ where
 
     fn next(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         param: &V,
         cost: f64,
         gradient: &V,
         direction: &V,
-    ) -> Result<LineSearchResult, Self::Error> {
+    ) -> Result<f64, Self::Error> {
         let phi0 = cost;
         let phi0_prime = gradient.dot(direction);
 
@@ -108,15 +108,8 @@ where
         // NaN), bail with α = 0 rather than looping forever. Written
         // positively so NaN routes here too — `NaN < 0.0` is false.
         if phi0_prime >= 0.0 || phi0_prime.is_nan() {
-            return Ok(LineSearchResult {
-                alpha: 0.0,
-                cost_evals: 0,
-                gradient_evals: 0,
-            });
+            return Ok(0.0);
         }
-
-        let mut cost_evals = 0u64;
-        let mut gradient_evals = 0u64;
 
         let mut alpha_prev = 0.0;
         let mut phi_prev = phi0;
@@ -126,36 +119,21 @@ where
             let mut trial = param.clone();
             trial.scaled_add(alpha, direction);
             let phi = problem.cost(&trial)?;
-            cost_evals += 1;
 
             // Armijo failed OR φ stopped decreasing → minimum is in
             // (alpha_prev, alpha). Hand to zoom.
             if phi > phi0 + self.c1 * alpha * phi0_prime || (i > 0 && phi >= phi_prev) {
                 return self.zoom(
-                    problem,
-                    param,
-                    direction,
-                    phi0,
-                    phi0_prime,
-                    alpha_prev,
-                    phi_prev,
-                    alpha,
-                    cost_evals,
-                    gradient_evals,
+                    problem, param, direction, phi0, phi0_prime, alpha_prev, phi_prev, alpha,
                 );
             }
 
             let g_trial = problem.gradient(&trial)?;
-            gradient_evals += 1;
             let phi_prime = g_trial.dot(direction);
 
             // Strong curvature satisfied → accept.
             if phi_prime.abs() <= -self.c2 * phi0_prime {
-                return Ok(LineSearchResult {
-                    alpha,
-                    cost_evals,
-                    gradient_evals,
-                });
+                return Ok(alpha);
             }
 
             // Slope flipped sign → minimum is in (alpha, alpha_prev). Note
@@ -163,16 +141,7 @@ where
             // assumed inside zoom (matches N&W).
             if phi_prime >= 0.0 {
                 return self.zoom(
-                    problem,
-                    param,
-                    direction,
-                    phi0,
-                    phi0_prime,
-                    alpha,
-                    phi,
-                    alpha_prev,
-                    cost_evals,
-                    gradient_evals,
+                    problem, param, direction, phi0, phi0_prime, alpha, phi, alpha_prev,
                 );
             }
 
@@ -184,11 +153,7 @@ where
             if next_alpha == alpha {
                 // Cannot expand further. Best we can do is return current
                 // α — Armijo is satisfied here even if curvature isn't.
-                return Ok(LineSearchResult {
-                    alpha,
-                    cost_evals,
-                    gradient_evals,
-                });
+                return Ok(alpha);
             }
             alpha = next_alpha;
         }
@@ -197,11 +162,7 @@ where
         // last α (Armijo held there). Caller (BFGS) treats this like any
         // other α — the curvature condition guard will detect the failure
         // and skip the H update if needed.
-        Ok(LineSearchResult {
-            alpha,
-            cost_evals,
-            gradient_evals,
-        })
+        Ok(alpha)
     }
 }
 
@@ -212,7 +173,7 @@ impl Wolfe {
     #[allow(clippy::too_many_arguments)]
     fn zoom<P, V>(
         &self,
-        problem: &P,
+        problem: &mut Problem<P>,
         param: &V,
         direction: &V,
         phi0: f64,
@@ -220,9 +181,7 @@ impl Wolfe {
         mut alpha_lo: f64,
         mut phi_lo: f64,
         mut alpha_hi: f64,
-        mut cost_evals: u64,
-        mut gradient_evals: u64,
-    ) -> Result<LineSearchResult, P::Error>
+    ) -> Result<f64, P::Error>
     where
         P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
         V: ScaledAdd<f64> + Dot + Clone,
@@ -235,21 +194,15 @@ impl Wolfe {
             let mut trial = param.clone();
             trial.scaled_add(alpha_j, direction);
             let phi_j = problem.cost(&trial)?;
-            cost_evals += 1;
 
             if phi_j > phi0 + self.c1 * alpha_j * phi0_prime || phi_j >= phi_lo {
                 alpha_hi = alpha_j;
             } else {
                 let g_j = problem.gradient(&trial)?;
-                gradient_evals += 1;
                 let phi_j_prime = g_j.dot(direction);
 
                 if phi_j_prime.abs() <= -self.c2 * phi0_prime {
-                    return Ok(LineSearchResult {
-                        alpha: alpha_j,
-                        cost_evals,
-                        gradient_evals,
-                    });
+                    return Ok(alpha_j);
                 }
 
                 if phi_j_prime * (alpha_hi - alpha_lo) >= 0.0 {
@@ -265,11 +218,7 @@ impl Wolfe {
             }
         }
 
-        Ok(LineSearchResult {
-            alpha: alpha_lo,
-            cost_evals,
-            gradient_evals,
-        })
+        Ok(alpha_lo)
     }
 }
 
@@ -299,30 +248,31 @@ mod tests {
 
     #[test]
     fn satisfies_strong_wolfe_on_quadratic() {
-        let p = Quadratic;
+        let mut p = Problem::new(Quadratic);
         let x = vec![0.0];
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap();
         let d = vec![-g[0]]; // = +6, descent direction since g[0] = -6
         let mut ls = Wolfe::new();
-        let r = LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &p, &x, f0, &g, &d).unwrap();
+        let alpha =
+            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
 
-        assert!(r.alpha > 0.0);
+        assert!(alpha > 0.0);
 
         // Verify Armijo and strong curvature at the returned α.
         let c1 = 1e-4;
         let c2 = 0.9;
         let mut x_new = x.clone();
-        x_new[0] += r.alpha * d[0];
+        x_new[0] += alpha * d[0];
         let f_new = p.cost(&x_new).unwrap();
         let g_new = p.gradient(&x_new).unwrap();
         let g0_dot_d = g[0] * d[0];
         let gnew_dot_d = g_new[0] * d[0];
 
         assert!(
-            f_new <= f0 + c1 * r.alpha * g0_dot_d + 1e-12,
+            f_new <= f0 + c1 * alpha * g0_dot_d + 1e-12,
             "Armijo failed: f_new={f_new}, threshold={}",
-            f0 + c1 * r.alpha * g0_dot_d,
+            f0 + c1 * alpha * g0_dot_d,
         );
         assert!(
             gnew_dot_d.abs() <= -c2 * g0_dot_d + 1e-12,
@@ -337,20 +287,20 @@ mod tests {
         // For a 1D quadratic with minimum at x_min=3, starting at x=0 with
         // d = -g = 6, the exact line minimum is α* = 0.5. Wolfe should land
         // close to it with strong curvature.
-        let p = Quadratic;
+        let mut p = Problem::new(Quadratic);
         let x = vec![0.0];
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap();
         let d = vec![6.0];
         let mut ls = Wolfe::new();
-        let r = LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &p, &x, f0, &g, &d).unwrap();
+        let alpha =
+            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
 
         // Strong curvature with c2=0.9 admits a wide range; just check we
         // ended up reasonably close to the line minimum.
         assert!(
-            (r.alpha - 0.5).abs() < 0.5,
-            "expected α near 0.5, got {}",
-            r.alpha
+            (alpha - 0.5).abs() < 0.5,
+            "expected α near 0.5, got {alpha}",
         );
     }
 }

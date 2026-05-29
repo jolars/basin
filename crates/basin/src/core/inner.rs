@@ -15,8 +15,9 @@
 //! routing) every outer solver must follow.
 
 use crate::core::executor::{run_loop, OptimizationResult};
+use crate::core::problem::Problem;
 use crate::core::solver::Solver;
-use crate::core::state::State;
+use crate::core::state::{CountsMirror, State};
 use crate::core::termination::TerminationCriterion;
 
 /// Construct a fresh inner-solver [`State`] seeded at a point.
@@ -116,7 +117,7 @@ pub struct InnerExecutor<S, So> {
     max_iter: u64,
 }
 
-impl<S: State, So> InnerExecutor<S, So> {
+impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// Build an inner executor around `solver`. Default `max_iter` is
     /// 1000, mirroring [`Executor::new`](crate::core::executor::Executor::new).
     pub fn new(solver: So) -> Self {
@@ -158,15 +159,29 @@ impl<S: State, So> InnerExecutor<S, So> {
         &self.solver
     }
 
-    /// Drive the inner solver against `&problem` from `state`, returning
+    /// Drive the inner solver against `problem` from `state`, returning
     /// the final inner state and termination reason. Reusable: call once
     /// per outer iter.
+    ///
+    /// The inner state's [`State::cost_evals`] reflects only per-run
+    /// work (snapshot-relative against the wrapper count at entry), not
+    /// cumulative across calls. The wrapper itself accumulates
+    /// monotonically — for same-problem composition the outer reads
+    /// its own [`Problem::counts`] after `run` to see total work; for
+    /// adapter-problem composition the outer builds a fresh inner
+    /// `Problem` and folds counts via
+    /// [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
+    /// [`Problem::counts_mut`] after `run` returns.
     ///
     /// Internally exactly
     /// [`run_loop`] — `init` is called
     /// on every invocation, so the inner solver sees a fresh setup pass
     /// each time (e.g. seeding cost/gradient at the new starting point).
-    pub fn run<P>(&mut self, problem: &P, state: S) -> Result<OptimizationResult<S>, So::Error>
+    pub fn run<P>(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: S,
+    ) -> Result<OptimizationResult<S>, So::Error>
     where
         So: Solver<P, S>,
     {

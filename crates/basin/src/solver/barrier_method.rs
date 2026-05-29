@@ -8,9 +8,9 @@ use crate::core::inner::WarmStart;
 use crate::core::math::{
     MatTransposeVec, MatVec, NegInPlace, NormSquared, ScaledAdd, VectorIndex, VectorLen,
 };
-use crate::core::problem::{CostFunction, Gradient};
+use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicState, GradientState, State};
+use crate::core::state::{BasicState, CountsMirror, GradientState, State};
 use crate::core::termination::{
     GradientTolerance, MaxIter, TerminationCriterion, TerminationReason,
 };
@@ -256,22 +256,22 @@ where
     V: ScaledAdd<f64> + NegInPlace + VectorIndex + VectorLen + NormSquared + Clone,
     So: WarmStart<V>
         + for<'a> Solver<LogBarrier<'a, P>, So::State, Error = <P as CostFunction>::Error>,
-    So::State: GradientState<Param = V>,
+    So::State: GradientState<Param = V> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<BasicState<V>, Self::Error> {
         self.mu = self.mu0;
         self.gap = f64::INFINITY;
 
         // Feasibility at x₀: slack s = b − A x₀ must be strictly positive.
-        let mut slack = problem.a().matvec(state.param());
+        let mut slack = problem.inner().a().matvec(state.param());
         slack.neg_in_place();
-        slack.scaled_add(1.0, problem.b());
+        slack.scaled_add(1.0, problem.inner().b());
         self.infeasible = (0..slack.vec_len()).any(|i| slack.get_scalar(i) <= 0.0);
 
         // Seed the *true* objective so framework criteria and the public
@@ -279,14 +279,12 @@ where
         let (cost, grad) = problem.cost_and_gradient(state.param())?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
         if self.infeasible {
@@ -299,24 +297,27 @@ where
         // inner state — rather than threading the outer one — keeps the
         // inner solver's iteration counter from polluting the outer's.
         // Fresh criteria each call satisfies the statelessness contract.
-        let barrier = LogBarrier::new(problem, self.mu);
+        let mut barrier_wrapper = Problem::new(LogBarrier::new(problem.inner(), self.mu));
         let mut criteria: Vec<Box<dyn TerminationCriterion<So::State>>> = vec![
             Box::new(MaxIter(self.inner_max_iter)),
             Box::new(GradientTolerance(self.inner_grad_tol)),
         ];
         let inner_state = self.inner_solver.seed(state.param());
         let result = run_loop(
-            &barrier,
+            &mut barrier_wrapper,
             inner_state,
             &mut self.inner_solver,
             &mut criteria,
             self.inner_max_iter,
         )?;
 
-        // Eval aggregation (composition contract): roll the inner's counts
-        // into the outer state regardless of how the inner stopped.
-        state.increment_cost_evals(result.state.cost_evals());
-        state.increment_gradient_evals(result.state.gradient_evals());
+        // Eval aggregation (adapter-problem composition): fold the inner
+        // wrapper's per-call counts back into the outer's wrapper. Copy out
+        // before borrowing the outer mutably so the LogBarrier's `&P` borrow
+        // (still held by `barrier_wrapper`) doesn't collide with the
+        // `counts_mut` reborrow.
+        let inner_counts = *barrier_wrapper.counts();
+        problem.counts_mut().add(&inner_counts);
 
         if result.reason.is_failure() {
             return Ok((state, Some(TerminationReason::SolverFailed)));
@@ -328,11 +329,9 @@ where
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
 
         // Record the duality gap for this μ, then shrink for the next solve.
-        self.gap = problem.b().vec_len() as f64 * self.mu;
+        self.gap = problem.inner().b().vec_len() as f64 * self.mu;
         self.mu /= self.reduction;
         Ok((state, None))
     }

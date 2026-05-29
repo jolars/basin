@@ -1,7 +1,7 @@
 use basin::{
     Backtracking, BasicSimplexState, BasicState, CostFunction, CostTolerance, Executor, Gradient,
     GradientDescent, GradientState, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter,
-    MaxTime, NelderMead, NoImprovement, ParamTolerance, RelativeCostTolerance,
+    MaxTime, NelderMead, NoImprovement, ParamTolerance, Problem, RelativeCostTolerance,
     RelativeGradientTolerance, RelativeParamTolerance, Solver, State, TargetCost,
     TerminationCriterion, TerminationReason,
 };
@@ -429,7 +429,7 @@ impl Solver<Quadratic, BasicState<Vec<f64>>> for AlwaysConverged {
     type Error = std::convert::Infallible;
     fn next_iter(
         &mut self,
-        _problem: &Quadratic,
+        _problem: &mut Problem<Quadratic>,
         state: BasicState<Vec<f64>>,
     ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error> {
         Ok((state, None))
@@ -462,7 +462,7 @@ impl Solver<Quadratic, BasicState<Vec<f64>>> for FailsOnSecondCall {
     type Error = std::convert::Infallible;
     fn next_iter(
         &mut self,
-        _problem: &Quadratic,
+        _problem: &mut Problem<Quadratic>,
         state: BasicState<Vec<f64>>,
     ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error> {
         Ok({

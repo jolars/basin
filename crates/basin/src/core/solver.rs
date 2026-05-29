@@ -4,6 +4,7 @@
 //! [`executor`](crate::core::executor) module for the canonical iteration
 //! ordering.
 
+use crate::core::problem::Problem;
 use crate::core::state::State;
 use crate::core::termination::TerminationReason;
 
@@ -34,6 +35,21 @@ use crate::core::termination::TerminationReason;
 ///   [`next_iter`](Self::next_iter)'s `Option<TerminationReason>`
 ///   return rather than panicking; and use [`terminate`](Self::terminate)
 ///   only for clean convergence tests on the current state.
+///
+/// # Eval counting
+///
+/// Solvers do **not** maintain eval counters by hand. Every cost /
+/// gradient / residual / Jacobian / Hessian call goes through the
+/// [`Problem`] wrapper, which bumps
+/// [`EvalCounts`](crate::core::problem::EvalCounts) on the wrapper
+/// before delegating to the user's problem. The
+/// [`Executor`](crate::core::executor::Executor) mirrors those counts
+/// onto the state's [`State::cost_evals`] /
+/// [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals)
+/// after every successful [`init`](Self::init) /
+/// [`next_iter`](Self::next_iter); see
+/// [`CountsMirror`](crate::core::state::CountsMirror) for the per-state
+/// mapping.
 ///
 /// # Error type
 ///
@@ -66,12 +82,10 @@ pub trait Solver<P, S: State> {
     ///   [`executor`](crate::core::executor) module docs), so an
     ///   already-optimal initial point must be detectable from the state
     ///   `init` returns.
-    /// - **Implementor must:** count work it does here against the
-    ///   eval counters (`state.cost_evals`, `state.gradient_evals`).
     /// - **Implementor may:** return `Err` to abort the run before the
     ///   first iteration; the error bubbles out of
     ///   [`Executor::run`](crate::core::executor::Executor::run).
-    fn init(&mut self, _problem: &P, state: S) -> Result<S, Self::Error> {
+    fn init(&mut self, _problem: &mut Problem<P>, state: S) -> Result<S, Self::Error> {
         Ok(state)
     }
 
@@ -92,29 +106,28 @@ pub trait Solver<P, S: State> {
     ///   stops immediately when `Some(_)` is returned and the
     ///   iteration counter is *not* incremented, so
     ///   `state.iter()` reflects the last *fully completed* iteration.
-    /// - **Implementor must:** count every cost / gradient call against
-    ///   the corresponding eval counter on the state.
     /// - **Implementor may:** return `Err` to *hard-abort* the run; the
     ///   error bubbles out of
     ///   [`Executor::run`](crate::core::executor::Executor::run). Distinct
     ///   from the `Option<TerminationReason>` channel: that's a clean
     ///   stop, `Err` is "the user's problem said abort."
-    /// - **Implementor must (composition):** when running an inner solver
-    ///   via [`InnerExecutor`](crate::core::inner::InnerExecutor) or
-    ///   [`run_loop`](crate::core::executor::run_loop), roll the inner
-    ///   result's
-    ///   [`State::cost_evals`]
-    ///   into the outer state via
-    ///   [`State::increment_cost_evals`]
-    ///   (and the gradient analogue when both inner and outer are
-    ///   [`GradientState`](crate::core::state::GradientState)).
-    ///   `MaxCostEvals` budgets and the public `result.cost_evals()`
-    ///   read are wrong otherwise. See `AGENTS.md` "Solver composition"
-    ///   for the full contract (eval aggregation, criteria
-    ///   statelessness, failure routing).
+    /// - **Implementor must (composition, adapter-problem inner only):**
+    ///   when running an inner solver against an *adapter problem*
+    ///   (e.g. [`LogBarrier`](crate::core::barrier::LogBarrier),
+    ///   [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian))
+    ///   — i.e. a freshly constructed inner [`Problem`] — fold the
+    ///   inner wrapper's
+    ///   [`EvalCounts`](crate::core::problem::EvalCounts) back into the
+    ///   outer's via
+    ///   [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
+    ///   [`Problem::counts_mut`]. When the inner shares the outer's
+    ///   wrapper (same problem type, passed via `&mut`), counts flow
+    ///   through automatically and no roll-up is needed. See
+    ///   `AGENTS.md` "Solver composition" for the failure-routing and
+    ///   criteria-statelessness contracts that still apply uniformly.
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: S,
     ) -> Result<(S, Option<TerminationReason>), Self::Error>;
 

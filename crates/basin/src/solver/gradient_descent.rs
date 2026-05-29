@@ -1,6 +1,6 @@
 use crate::core::inner::WarmStart;
 use crate::core::math::{NegInPlace, ScaleInPlace, ScaledAdd};
-use crate::core::problem::{CostFunction, Gradient};
+use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
@@ -136,7 +136,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<BasicState<V>, Self::Error> {
         // Start momentum from rest, even if this solver instance is reused
@@ -148,14 +148,12 @@ where
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
         let grad = state
@@ -167,16 +165,14 @@ where
             .expect("cost not set: Solver::init must run before next_iter");
         let mut direction = grad.clone();
         direction.neg_in_place();
-        let step = self
+        let alpha = self
             .line_search
             .next(problem, &state.param, prev_cost, &grad, &direction)?;
-        state.cost_evals += step.cost_evals;
-        state.gradient_evals += step.gradient_evals;
 
         if self.beta == 0.0 {
             // No momentum: the original allocation-free steepest-descent
             // step, bit-identical to the pre-momentum implementation.
-            state.param.scaled_add(step.alpha, &direction);
+            state.param.scaled_add(alpha, &direction);
         } else {
             // Heavy ball: v ← β·v + αₖ·direction (direction = −∇f), then
             // x ← x + v. With v₀ = 0 the first step is just αₖ·direction,
@@ -184,11 +180,11 @@ where
             let velocity = match self.velocity.take() {
                 Some(mut v) => {
                     v.scale_in_place(self.beta);
-                    v.scaled_add(step.alpha, &direction);
+                    v.scaled_add(alpha, &direction);
                     v
                 }
                 None => {
-                    direction.scale_in_place(step.alpha);
+                    direction.scale_in_place(alpha);
                     direction
                 }
             };
@@ -199,8 +195,6 @@ where
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok((state, None))
     }
 }
@@ -275,8 +269,9 @@ mod tests {
         // β = 0 with v₀ = 0: first iterate is x − α·∇f, unaffected by the
         // momentum branch. f = Σx², ∇f = 2x, so x₁ = 1 − 0.1·2 = 0.8.
         let mut solver = GradientDescent::new(0.1).with_momentum(0.0);
-        let state = solver.init(&Quadratic, BasicState::new(vec![1.0])).unwrap();
-        let (state, reason) = solver.next_iter(&Quadratic, state).unwrap();
+        let mut p = Problem::new(Quadratic);
+        let state = solver.init(&mut p, BasicState::new(vec![1.0])).unwrap();
+        let (state, reason) = solver.next_iter(&mut p, state).unwrap();
         assert!(reason.is_none());
         assert!((state.param()[0] - 0.8).abs() < 1e-12);
     }
@@ -324,11 +319,10 @@ mod tests {
         let mut solver = GradientDescent::new(0.05).with_momentum(0.8);
 
         let run = |solver: &mut GradientDescent<Constant, Vec<f64>>| {
-            let mut state = solver
-                .init(&Quadratic, BasicState::new(start.clone()))
-                .unwrap();
+            let mut p = Problem::new(Quadratic);
+            let mut state = solver.init(&mut p, BasicState::new(start.clone())).unwrap();
             for _ in 0..10 {
-                let (next, _) = solver.next_iter(&Quadratic, state).unwrap();
+                let (next, _) = solver.next_iter(&mut p, state).unwrap();
                 state = next;
             }
             state.param().clone()

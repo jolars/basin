@@ -7,10 +7,10 @@ use crate::core::math::{
     RankOneUpdate, SampleStandardNormal, SampleUniformBox, ScaleInPlace, ScaledAdd, SymmetricEigen,
     VectorLen,
 };
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, EvalCounts, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicPopulationState, PopulationState, State};
+use crate::core::state::{BasicPopulationState, CountsMirror, PopulationState, State};
 use crate::core::termination::{MaxCostEvals, TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::CmaEs;
 use crate::solver::ssga::{
@@ -73,14 +73,21 @@ impl<V, M> State for MaLsChState<V, M> {
     fn cost_evals(&self) -> u64 {
         self.cost_evals
     }
-    fn increment_cost_evals(&mut self, by: u64) {
-        self.cost_evals += by;
-    }
     fn param(&self) -> &V {
         &self.candidates[0]
     }
     fn cost(&self) -> f64 {
         self.costs[0]
+    }
+}
+
+impl<V, M> CountsMirror for MaLsChState<V, M> {
+    fn mirror(&mut self, delta: &EvalCounts) {
+        // Same derivative-free convention as `BasicPopulationState`:
+        // total work folds into `cost_evals` so a gradient-based inner
+        // (a future LM/L-BFGS chain operator) bumps the same counter
+        // as the SSGA phase's `cost` calls.
+        self.cost_evals = delta.total_work();
     }
 }
 
@@ -463,11 +470,11 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: MaLsChState<V, M>,
     ) -> Result<MaLsChState<V, M>, Self::Error> {
-        let lo = problem.lower();
-        let hi = problem.upper();
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
 
         // Sample the initial population uniformly in the box.
@@ -477,7 +484,7 @@ where
         state.last_ls_cost.clear();
         state.ls_application_count.clear();
         for _ in 0..self.pop_size {
-            let x = V::sample_uniform_box(lo, hi, &mut rng);
+            let x = V::sample_uniform_box(&lo, &hi, &mut rng);
             let c = problem.cost(&x)?;
             state.candidates.push(x);
             state.costs.push(c);
@@ -485,7 +492,6 @@ where
             state.last_ls_cost.push(f64::INFINITY);
             state.ls_application_count.push(0);
         }
-        state.cost_evals += self.pop_size as u64;
         sort_parallel_arrays(&mut state);
 
         self.rng = Some(rng);
@@ -494,39 +500,41 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: MaLsChState<V, M>,
     ) -> Result<(MaLsChState<V, M>, Option<TerminationReason>), Self::Error> {
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         let rng = self
             .rng
             .as_mut()
             .expect("MaLsChCma::init must run before next_iter");
-        let lo = problem.lower();
-        let hi = problem.upper();
         let nfrec = self.nfrec.unwrap_or(self.ls_intensity);
 
         // -- Phase 1: SSGA for nfrec evaluations. --
-        let evals_at_phase_start = state.cost_evals;
-        while state.cost_evals - evals_at_phase_start < nfrec {
+        // Budget the SSGA phase against the wrapper's authoritative
+        // counters so a same-problem inner run earlier on this iteration
+        // (none today, but the contract is uniform) wouldn't double-count.
+        let phase_start_counts = *problem.counts();
+        while problem.counts().cost_evals - phase_start_counts.cost_evals < nfrec {
             let (p1, p2) = nam_select(&state.candidates, self.nam_pool, rng);
             let mut child = blx_alpha_crossover(
                 &state.candidates[p1],
                 &state.candidates[p2],
                 self.blx_alpha,
-                lo,
-                hi,
+                &lo,
+                &hi,
                 rng,
             );
             bga_mutate_in_place(
                 &mut child,
-                lo,
-                hi,
+                &lo,
+                &hi,
                 self.mutation_prob,
                 self.bga_range_fraction,
                 rng,
             );
             let c_child = problem.cost(&child)?;
-            state.cost_evals += 1;
             if let Some(replaced_idx) =
                 replace_worst_if_better(&mut state.candidates, &mut state.costs, child, c_child)
             {
@@ -559,10 +567,14 @@ where
         let (mut cma, inner_state) = match state.cma_chains[c_ls].take() {
             Some((cma, inner_state)) => {
                 let mut s = inner_state;
-                // Local budget: MaxCostEvals(ls_intensity) is checked
-                // against `state.cost_evals()`, which is reset here so
-                // each chain segment gets a fresh I_str budget.
-                s.cost_evals = 0;
+                // Local budget reset. `run_loop` already snapshots the
+                // wrapper at entry so the inner state's `cost_evals`
+                // measures per-segment work — but the iteration counter
+                // is the inner's responsibility and the `MaxCostEvals`
+                // criterion in Phase 4 reads `state.cost_evals()`,
+                // which is the wrapper-mirrored per-run value. Reset
+                // `iter` so the chain restarts at iter 0; the
+                // `run_loop` baseline takes care of the eval counter.
                 s.iter = 0;
                 (cma, s)
             }
@@ -597,12 +609,12 @@ where
             vec![Box::new(MaxCostEvals(self.ls_intensity))];
         let inner_result = run_loop(problem, inner_state, &mut cma, &mut criteria, u64::MAX)?;
 
-        // -- Phase 5: aggregate, route failures, write back. --
-        // Rule 1: eval aggregation.
-        state.cost_evals += inner_result.state.cost_evals();
-        // Rule 3: failure routing. `SolverFailed` is the only failure
-        // reason; other reasons (MaxCostEvals from our budget,
-        // SolverConverged from CMA's TolX) are clean stops the outer
+        // -- Phase 5: route failures, write back. --
+        // Same-problem composition: inner evals already flowed through the
+        // outer wrapper, so the `MaLsChState` mirror sees them via
+        // `delta.total_work()`. `SolverFailed` is the only failure
+        // reason; other reasons (`MaxCostEvals` from our budget,
+        // `SolverConverged` from CMA's TolX) are clean stops the outer
         // consumes.
         if inner_result.reason.is_failure() {
             // Leave the chain dropped so a future pick would restart.

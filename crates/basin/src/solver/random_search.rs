@@ -1,6 +1,6 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::SampleUniformBox;
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::BasicPopulationState;
@@ -190,11 +190,11 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<BasicPopulationState<V>, Self::Error> {
-        let lo = problem.lower();
-        let hi = problem.upper();
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         // The state can arrive with a caller-supplied initial population
         // (`from_population`) or empty (`with_size`). The solver always
         // owns the *first* generation here: clear and resample so the
@@ -206,19 +206,18 @@ where
         state.candidates.clear();
         state.costs.clear();
         for _ in 0..self.lambda {
-            let x = V::sample_uniform_box(lo, hi, &mut self.rng);
+            let x = V::sample_uniform_box(&lo, &hi, &mut self.rng);
             let c = problem.cost(&x)?;
             state.candidates.push(x);
             state.costs.push(c);
         }
-        state.cost_evals += self.lambda as u64;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicPopulationState<V>,
     ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
         // Snapshot the elite before resampling — this is what makes
@@ -226,19 +225,18 @@ where
         let elite_x = state.candidates[0].clone();
         let elite_c = state.costs[0];
 
-        let lo = problem.lower();
-        let hi = problem.upper();
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         state.candidates.clear();
         state.costs.clear();
         state.candidates.push(elite_x);
         state.costs.push(elite_c);
         for _ in 0..self.lambda {
-            let x = V::sample_uniform_box(lo, hi, &mut self.rng);
+            let x = V::sample_uniform_box(&lo, &hi, &mut self.rng);
             let c = problem.cost(&x)?;
             state.candidates.push(x);
             state.costs.push(c);
         }
-        state.cost_evals += self.lambda as u64;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         // Drop the worst back down to λ. Sort puts the elite first
         // when it's still the best, so truncation never drops it.

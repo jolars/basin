@@ -11,7 +11,8 @@
 //! index modulo `m_capacity`.
 
 use crate::core::math::Dot;
-use crate::core::state::{GradientState, State};
+use crate::core::problem::EvalCounts;
+use crate::core::state::{CountsMirror, GradientState, State};
 
 /// Solver state for L-BFGS-B (and the unbounded L-BFGS solver, when
 /// it lands).
@@ -293,9 +294,6 @@ impl<V> State for LbfgsState<V> {
     fn cost_evals(&self) -> u64 {
         self.cost_evals
     }
-    fn increment_cost_evals(&mut self, by: u64) {
-        self.cost_evals += by;
-    }
     fn param(&self) -> &V {
         &self.param
     }
@@ -319,8 +317,12 @@ impl<V> GradientState for LbfgsState<V> {
     fn gradient_evals(&self) -> u64 {
         self.gradient_evals
     }
-    fn increment_gradient_evals(&mut self, by: u64) {
-        self.gradient_evals += by;
+}
+
+impl<V> CountsMirror for LbfgsState<V> {
+    fn mirror(&mut self, delta: &EvalCounts) {
+        self.cost_evals = delta.cost_evals + delta.residual_evals;
+        self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
     }
 }
 

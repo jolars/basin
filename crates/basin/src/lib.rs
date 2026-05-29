@@ -76,12 +76,14 @@ pub use crate::core::numdiff::{
     forward_difference_gradient, forward_difference_hessian, forward_difference_jacobian,
     FiniteDiff, Method,
 };
-pub use crate::core::problem::{CostFunction, Gradient, Hessian, Jacobian, Residual};
+pub use crate::core::problem::{
+    CostFunction, EvalCounts, Gradient, Hessian, Jacobian, Problem, Residual,
+};
 pub use crate::core::solver::Solver;
 pub use crate::core::state::QuasiNewtonState;
 pub use crate::core::state::{
-    BasicPopulationState, BasicSimplexState, BasicState, GradientState, IntoInitialSimplex,
-    LbfgsState, PopulationState, SimplexState, State,
+    BasicPopulationState, BasicSimplexState, BasicState, CountsMirror, GradientState,
+    IntoInitialSimplex, LbfgsState, PopulationState, SimplexState, State,
 };
 pub use crate::core::termination::{
     CostTolerance, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter, MaxTime,
@@ -89,9 +91,7 @@ pub use crate::core::termination::{
     RelativeGradientTolerance, RelativeParamTolerance, SimplexTolerance, TargetCost,
     TerminationCriterion, TerminationReason,
 };
-pub use crate::line_search::{
-    Backtracking, Constant, LineSearch, LineSearchResult, MoreThuente, Wolfe,
-};
+pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
 pub use crate::solver::lbfgs::{LBFGS, LBFGSB};
 pub use crate::solver::BFGS;
 pub use crate::solver::{

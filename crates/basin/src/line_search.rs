@@ -12,11 +12,23 @@ pub use backtracking::Backtracking;
 pub use more_thuente::MoreThuente;
 pub use wolfe::Wolfe;
 
+use crate::core::problem::Problem;
+
 /// Compute a step size `α` along a caller-supplied descent direction `d`.
 ///
 /// Convention: `direction` is a *descent* direction (`gᵀd < 0`); the caller
 /// applies `x_new = x + α d`. Solvers that descend along `−∇f` (e.g. plain
 /// gradient descent) compute `d = −∇f` themselves and pass it in.
+///
+/// # Eval counting
+///
+/// Line searches receive `&mut Problem<P>` so every probe (`problem.cost(x)`,
+/// `problem.cost_and_gradient(x)`) bumps the wrapper's
+/// [`EvalCounts`](crate::core::problem::EvalCounts) automatically. There is
+/// no count returned out-of-band — callers read counts off the wrapper if
+/// they need them (the [`Executor`](crate::Executor) mirrors them onto the
+/// state after the enclosing
+/// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)).
 ///
 /// # Error type
 ///
@@ -30,29 +42,18 @@ pub trait LineSearch<P, V> {
     /// Hard-abort error type, mirroring the underlying problem's `Error`.
     type Error;
 
-    /// Returns an `α` plus the number of cost / gradient evaluations spent
-    /// finding it (callers add these to the state's counters). Returns
-    /// `Err` if any inner `problem.cost` / `problem.gradient` call does.
+    /// Returns the chosen step size `α`. Counts are tracked on the
+    /// wrapper via every `problem.cost` / `problem.cost_and_gradient`
+    /// probe inside the search. Returns `Err` if any inner problem call
+    /// hard-aborts.
     fn next(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         param: &V,
         cost: f64,
         gradient: &V,
         direction: &V,
-    ) -> Result<LineSearchResult, Self::Error>;
-}
-
-/// Outcome of a [`LineSearch::next`] call: the chosen step plus how much
-/// of the executor's evaluation budget was spent finding it.
-#[derive(Debug, Clone, Copy)]
-pub struct LineSearchResult {
-    /// The chosen step size.
-    pub alpha: f64,
-    /// Cost evaluations the line search consumed.
-    pub cost_evals: u64,
-    /// Gradient evaluations the line search consumed.
-    pub gradient_evals: u64,
+    ) -> Result<f64, Self::Error>;
 }
 
 /// Constant step size — returns the wrapped `α` regardless of input.
@@ -74,16 +75,12 @@ impl<P: crate::core::problem::CostFunction, V> LineSearch<P, V> for Constant {
 
     fn next(
         &mut self,
-        _problem: &P,
+        _problem: &mut Problem<P>,
         _param: &V,
         _cost: f64,
         _gradient: &V,
         _direction: &V,
-    ) -> Result<LineSearchResult, Self::Error> {
-        Ok(LineSearchResult {
-            alpha: self.0,
-            cost_evals: 0,
-            gradient_evals: 0,
-        })
+    ) -> Result<f64, Self::Error> {
+        Ok(self.0)
     }
 }

@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{ClampInPlace, ScaledAdd};
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicSimplexState;
 use crate::core::termination::TerminationReason;
@@ -263,14 +263,16 @@ fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
 /// Evaluate every vertex's cost and sort the simplex ascending. Shared
 /// between the `Unbounded` and `Projected` `Solver::init` paths after
 /// any projection of the initial vertices.
-fn init_costs_and_sort<P, V>(problem: &P, state: &mut BasicSimplexState<V>) -> Result<(), P::Error>
+fn init_costs_and_sort<P, V>(
+    problem: &mut Problem<P>,
+    state: &mut BasicSimplexState<V>,
+) -> Result<(), P::Error>
 where
     P: CostFunction<Param = V, Output = f64>,
 {
     for (v, c) in state.vertices.iter().zip(state.costs.iter_mut()) {
         *c = problem.cost(v)?;
     }
-    state.cost_evals += state.vertices.len() as u64;
     sort_simplex(&mut state.vertices, &mut state.costs);
     Ok(())
 }
@@ -282,7 +284,7 @@ where
 /// sorted (best at index 0) on entry; the invariant is restored before
 /// returning. The simplex has `n + 1` vertices in `n`-D.
 fn next_iter_inner<P, V, F>(
-    problem: &P,
+    problem: &mut Problem<P>,
     mut state: BasicSimplexState<V>,
     p: Params,
     project: &F,
@@ -306,7 +308,6 @@ where
     let mut x_r = affine(&x_bar, &state.vertices[worst], -p.alpha);
     project(&mut x_r);
     let fr = problem.cost(&x_r)?;
-    state.cost_evals += 1;
 
     if f1 <= fr && fr < fn_ {
         // Accept reflection.
@@ -317,7 +318,6 @@ where
         let mut x_e = affine(&x_bar, &x_r, p.beta);
         project(&mut x_e);
         let fe = problem.cost(&x_e)?;
-        state.cost_evals += 1;
         if fe < fr {
             state.vertices[worst] = x_e;
             state.costs[worst] = fe;
@@ -331,7 +331,6 @@ where
         let mut x_oc = affine(&x_bar, &x_r, p.gamma);
         project(&mut x_oc);
         let foc = problem.cost(&x_oc)?;
-        state.cost_evals += 1;
         if foc <= fr {
             state.vertices[worst] = x_oc;
             state.costs[worst] = foc;
@@ -344,7 +343,6 @@ where
         let mut x_ic = affine(&x_bar, &state.vertices[worst], p.gamma);
         project(&mut x_ic);
         let fic = problem.cost(&x_ic)?;
-        state.cost_evals += 1;
         if fic < fnp1 {
             state.vertices[worst] = x_ic;
             state.costs[worst] = fic;
@@ -358,7 +356,7 @@ where
 }
 
 fn shrink_inner<P, V, F>(
-    problem: &P,
+    problem: &mut Problem<P>,
     state: &mut BasicSimplexState<V>,
     delta: f64,
     project: &F,
@@ -372,14 +370,12 @@ where
     // Split-borrow lets us read x[0] while mutating x[i].
     let (best_slice, rest) = state.vertices.split_at_mut(1);
     let best = &best_slice[0];
-    let n_shrunk = rest.len() as u64;
     for (v, c) in rest.iter_mut().zip(&mut state.costs[1..]) {
         let mut new_v = affine(best, v, delta);
         project(&mut new_v);
         *v = new_v;
         *c = problem.cost(v)?;
     }
-    state.cost_evals += n_shrunk;
     Ok(())
 }
 
@@ -392,7 +388,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicSimplexState<V>,
     ) -> Result<BasicSimplexState<V>, Self::Error> {
         let n = state.vertices.len() - 1;
@@ -403,7 +399,7 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: BasicSimplexState<V>,
     ) -> Result<(BasicSimplexState<V>, Option<TerminationReason>), Self::Error> {
         let p = self
@@ -422,7 +418,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicSimplexState<V>,
     ) -> Result<BasicSimplexState<V>, Self::Error> {
         let n = state.vertices.len() - 1;
@@ -431,10 +427,10 @@ where
         // checks see a feasible simplex (mirrors
         // ProjectedGradientDescent::init's project-an-infeasible-start
         // pattern).
-        let lo = problem.lower();
-        let hi = problem.upper();
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
         for v in state.vertices.iter_mut() {
-            v.clamp_in_place(lo, hi);
+            v.clamp_in_place(&lo, &hi);
         }
         init_costs_and_sort(problem, &mut state)?;
         Ok(state)
@@ -442,14 +438,14 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: BasicSimplexState<V>,
     ) -> Result<(BasicSimplexState<V>, Option<TerminationReason>), Self::Error> {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
-        let lo = problem.lower();
-        let hi = problem.upper();
-        next_iter_inner(problem, state, p, &|v: &mut V| v.clamp_in_place(lo, hi))
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
+        next_iter_inner(problem, state, p, &|v: &mut V| v.clamp_in_place(&lo, &hi))
     }
 }

@@ -1,6 +1,6 @@
 use crate::core::math::{Dot, ScaledAdd};
-use crate::core::problem::{CostFunction, Gradient};
-use crate::line_search::{LineSearch, LineSearchResult};
+use crate::core::problem::{CostFunction, Gradient, Problem};
+use crate::line_search::LineSearch;
 
 /// Moré–Thuente line search — port of MINPACK-2's `dcsrch` + `dcstep`.
 ///
@@ -142,12 +142,12 @@ where
 
     fn next(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         param: &V,
         cost: f64,
         gradient: &V,
         direction: &V,
-    ) -> Result<LineSearchResult, Self::Error> {
+    ) -> Result<f64, Self::Error> {
         let finit = cost;
         let ginit = gradient.dot(direction);
 
@@ -155,18 +155,10 @@ where
         // Defensive: catch ascent direction or non-finite slope. The
         // `!is_finite()` guard routes NaN here too.
         if !ginit.is_finite() || ginit >= 0.0 {
-            return Ok(LineSearchResult {
-                alpha: 0.0,
-                cost_evals: 0,
-                gradient_evals: 0,
-            });
+            return Ok(0.0);
         }
         if !(self.alpha_init >= self.stpmin && self.alpha_init <= self.stpmax) {
-            return Ok(LineSearchResult {
-                alpha: 0.0,
-                cost_evals: 0,
-                gradient_evals: 0,
-            });
+            return Ok(0.0);
         }
 
         // Initialization (Fortran lines 3514–3541).
@@ -187,17 +179,12 @@ where
 
         let mut stp = self.alpha_init;
 
-        let mut cost_evals: u64 = 0;
-        let mut gradient_evals: u64 = 0;
-
         for _ in 0..self.maxfev {
             // Evaluate f(stp), g(stp) — Fortran `task = 'FG'` callback.
             let mut trial = param.clone();
             trial.scaled_add(stp, direction);
             let f = problem.cost(&trial)?;
-            cost_evals += 1;
             let g_full = problem.gradient(&trial)?;
-            gradient_evals += 1;
             let g = g_full.dot(direction);
 
             // Stage transition (Fortran lines 3572–3574).
@@ -220,11 +207,7 @@ where
             let converged = f <= ftest && g.abs() <= self.gtol * (-ginit);
 
             if warn_rounding || warn_xtol || warn_stpmax || warn_stpmin || converged {
-                return Ok(LineSearchResult {
-                    alpha: stp,
-                    cost_evals,
-                    gradient_evals,
-                });
+                return Ok(stp);
             }
 
             // Step update via `dcstep`, with optional modified-function
@@ -306,11 +289,7 @@ where
 
         // maxfev exhausted: return current best step (Armijo holds
         // at stx by invariant of dcstep, so this is a usable step).
-        Ok(LineSearchResult {
-            alpha: stx,
-            cost_evals,
-            gradient_evals,
-        })
+        Ok(stx)
     }
 }
 
@@ -525,26 +504,26 @@ mod tests {
 
     #[test]
     fn satisfies_strong_wolfe_on_quadratic() {
-        let p = Quadratic;
+        let mut p = Problem::new(Quadratic);
         let x = vec![0.0];
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap();
         let d = vec![-g[0]]; // = +6
         let mut ls = MoreThuente::new();
-        let r = LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &p, &x, f0, &g, &d).unwrap();
+        let alpha =
+            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
 
-        assert!(r.alpha > 0.0);
+        assert!(alpha > 0.0);
 
         let mut x_new = x.clone();
-        x_new[0] += r.alpha * d[0];
+        x_new[0] += alpha * d[0];
         let f_new = p.cost(&x_new).unwrap();
         let g_new = p.gradient(&x_new).unwrap();
         let g0_dot_d = g[0] * d[0];
         let gnew_dot_d = g_new[0] * d[0];
 
-        // Armijo and strong curvature at returned α (with the MT defaults).
         assert!(
-            f_new <= f0 + ls.ftol * r.alpha * g0_dot_d + 1e-12,
+            f_new <= f0 + ls.ftol * alpha * g0_dot_d + 1e-12,
             "Armijo failed",
         );
         assert!(
@@ -555,77 +534,69 @@ mod tests {
 
     #[test]
     fn unit_step_accepted_when_quadratic_minimum_within_initial_step() {
-        // 1D quadratic min at x=3, start x=0, d=6. Line min at α* = 0.5.
-        // MT should land close to α = 0.5.
-        let p = Quadratic;
+        let mut p = Problem::new(Quadratic);
         let x = vec![0.0];
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap();
         let d = vec![6.0];
         let mut ls = MoreThuente::new();
-        let r = LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &p, &x, f0, &g, &d).unwrap();
+        let alpha =
+            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
 
-        // gtol = 0.9 admits a wide range; check a sane proximity.
         assert!(
-            (r.alpha - 0.5).abs() < 0.5,
-            "expected α near 0.5, got {}",
-            r.alpha
+            (alpha - 0.5).abs() < 0.5,
+            "expected α near 0.5, got {alpha}",
         );
-        // Verify Armijo holds at returned α.
         let mut x_new = x.clone();
-        x_new[0] += r.alpha * d[0];
+        x_new[0] += alpha * d[0];
         let f_new = p.cost(&x_new).unwrap();
-        assert!(f_new <= f0 + ls.ftol * r.alpha * (g[0] * d[0]) + 1e-12);
+        assert!(f_new <= f0 + ls.ftol * alpha * (g[0] * d[0]) + 1e-12);
     }
 
     #[test]
     fn ascent_direction_returns_zero_step() {
-        let p = Quadratic;
+        let mut p = Problem::new(Quadratic);
         let x = vec![0.0];
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap(); // g = -6 at x=0
+        let baseline = *p.counts();
         let d = vec![g[0]]; // d = -6 → gᵀd = +36 > 0 (ascent)
         let mut ls = MoreThuente::new();
-        let r = LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &p, &x, f0, &g, &d).unwrap();
+        let alpha =
+            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
 
-        assert_eq!(r.alpha, 0.0);
-        assert_eq!(r.cost_evals, 0);
-        assert_eq!(r.gradient_evals, 0);
+        assert_eq!(alpha, 0.0);
+        // Early-bail path makes no probes.
+        assert_eq!(p.counts().cost_evals, baseline.cost_evals);
+        assert_eq!(p.counts().gradient_evals, baseline.gradient_evals);
     }
 
     #[test]
     fn cubic_satisfies_wolfe_on_nontrivial_function() {
-        // Cubic f(x) = (x-2)^3 - 3(x-2): local min at x=3, max at x=1.
-        // Start at x=5, descend along d=-1. The descent slope is
-        // f'(5) · d = 24 · (-1) = -24. Moré–Thuente should return an
-        // α satisfying both Wolfe conditions — *not necessarily* the
-        // line minimum.
-        let p = Cubic;
+        let mut p = Problem::new(Cubic);
         let x = vec![5.0];
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap();
         let d = vec![-1.0];
         let mut ls = MoreThuente::new().alpha_init(3.0);
-        let r = LineSearch::<Cubic, Vec<f64>>::next(&mut ls, &p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Cubic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
 
-        assert!(r.alpha > 0.0);
+        assert!(alpha > 0.0);
         let mut x_new = x.clone();
-        x_new[0] += r.alpha * d[0];
+        x_new[0] += alpha * d[0];
         let f_new = p.cost(&x_new).unwrap();
         let g_new = p.gradient(&x_new).unwrap();
         let g0_dot_d = g[0] * d[0];
         let gnew_dot_d = g_new[0] * d[0];
 
         assert!(
-            f_new <= f0 + ls.ftol * r.alpha * g0_dot_d + 1e-12,
-            "Armijo failed at α={}: f_new={f_new}, threshold={}",
-            r.alpha,
-            f0 + ls.ftol * r.alpha * g0_dot_d,
+            f_new <= f0 + ls.ftol * alpha * g0_dot_d + 1e-12,
+            "Armijo failed at α={alpha}: f_new={f_new}, threshold={}",
+            f0 + ls.ftol * alpha * g0_dot_d,
         );
         assert!(
             gnew_dot_d.abs() <= -ls.gtol * g0_dot_d + 1e-12,
-            "Strong curvature failed at α={}: |g·d|={}, threshold={}",
-            r.alpha,
+            "Strong curvature failed at α={alpha}: |g·d|={}, threshold={}",
             gnew_dot_d.abs(),
             -ls.gtol * g0_dot_d,
         );
@@ -633,21 +604,15 @@ mod tests {
 
     #[test]
     fn respects_stpmax_when_minimum_is_beyond() {
-        // 1D quadratic min at x=3, start x=0, d=6 — line min α* = 0.5.
-        // Cap stpmax = 0.1: MT should return α near 0.1 with the
-        // `WARNING: STP = STPMAX` warning (treated as success here).
-        let p = Quadratic;
+        let mut p = Problem::new(Quadratic);
         let x = vec![0.0];
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap();
         let d = vec![6.0];
         let mut ls = MoreThuente::new().stpmax(0.1).alpha_init(0.1);
-        let r = LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &p, &x, f0, &g, &d).unwrap();
+        let alpha =
+            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
 
-        assert!(
-            (r.alpha - 0.1).abs() < 1e-12,
-            "expected α=0.1, got {}",
-            r.alpha
-        );
+        assert!((alpha - 0.1).abs() < 1e-12, "expected α=0.1, got {alpha}",);
     }
 }

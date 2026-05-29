@@ -44,7 +44,7 @@ use core::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{Dot, ScaledAdd};
-use crate::core::problem::{CostFunction, Gradient};
+use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::lbfgs::{LbfgsState, LbfgsbWork};
 use crate::core::termination::TerminationReason;
@@ -343,7 +343,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: LbfgsState<V>,
     ) -> Result<LbfgsState<V>, Self::Error> {
         let n = state.param.as_float_slice().len();
@@ -355,8 +355,8 @@ where
         // `lbfgsb.f:1004`).
         active_init(
             state.param.as_float_slice_mut(),
-            problem.lower().as_float_slice(),
-            problem.upper().as_float_slice(),
+            problem.inner().lower().as_float_slice(),
+            problem.inner().upper().as_float_slice(),
             &mut work.iwhere,
             &mut work.cnstnd,
             &mut work.boxed,
@@ -365,15 +365,13 @@ where
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         state.work = Some(work);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: LbfgsState<V>,
     ) -> Result<(LbfgsState<V>, Option<TerminationReason>), Self::Error> {
         // Take the gradient and cost cached at the current `param`;
@@ -410,8 +408,8 @@ where
             let sbgnrm = projected_gradient_norm(
                 state.param.as_float_slice(),
                 g_v.as_float_slice(),
-                problem.lower().as_float_slice(),
-                problem.upper().as_float_slice(),
+                problem.inner().lower().as_float_slice(),
+                problem.inner().upper().as_float_slice(),
             );
 
             // Built-in convergence: emit `SolverConverged` when the
@@ -445,8 +443,8 @@ where
                 let wy_cols: Vec<&[f64]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
                 let cauchy_res = cauchy(
                     state.param.as_float_slice(),
-                    problem.lower().as_float_slice(),
-                    problem.upper().as_float_slice(),
+                    problem.inner().lower().as_float_slice(),
+                    problem.inner().upper().as_float_slice(),
                     g_v.as_float_slice(),
                     &ws_cols,
                     &wy_cols,
@@ -566,8 +564,8 @@ where
                     state.param.as_float_slice(),
                     g_v.as_float_slice(),
                     &work.index[0..nfree],
-                    problem.lower().as_float_slice(),
-                    problem.upper().as_float_slice(),
+                    problem.inner().lower().as_float_slice(),
+                    problem.inner().upper().as_float_slice(),
                     &ws_cols,
                     &wy_cols,
                     &work.wn,
@@ -605,8 +603,8 @@ where
                 } else {
                     feasible_step_cap(
                         state.param.as_float_slice(),
-                        problem.lower().as_float_slice(),
-                        problem.upper().as_float_slice(),
+                        problem.inner().lower().as_float_slice(),
+                        problem.inner().upper().as_float_slice(),
                         &work.d,
                     )
                 }
@@ -645,13 +643,10 @@ where
             // tight-bound problems may need a constraint-aware
             // wrapper down the road.
             let _ = (alpha_init, stpmx);
-            let ls_result = self
+            let stp = self
                 .line_search
                 .next(problem, &state.param, f_old, &g_v, &d_v)?;
-            state.cost_evals += ls_result.cost_evals;
-            state.gradient_evals += ls_result.gradient_evals;
 
-            let stp = ls_result.alpha;
             if !(stp.is_finite() && stp > 0.0) {
                 // Line search bailed. If col == 0, abnormal
                 // termination — there's no compact-form state to
@@ -677,8 +672,6 @@ where
             // discards the final trial's values; cleanest workaround
             // is one fused cost+grad eval per iter.)
             let (f_new, g_new) = problem.cost_and_gradient(&state.param)?;
-            state.cost_evals += 1;
-            state.gradient_evals += 1;
 
             // -------------------------------------------------------
             // Phase F — limited-memory update. Curvature check
@@ -762,7 +755,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: LbfgsState<V>,
     ) -> Result<LbfgsState<V>, Self::Error> {
         // Cache cost and gradient at the initial iterate. `state.work`
@@ -771,14 +764,12 @@ where
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: LbfgsState<V>,
     ) -> Result<(LbfgsState<V>, Option<TerminationReason>), Self::Error> {
         let g_v = state
@@ -860,13 +851,10 @@ where
             (0..n).map(|i| g_slice[i] * d_slice[i]).sum()
         };
 
-        let ls_result = self
+        let stp = self
             .line_search
             .next(problem, &state.param, f_old, &g_v, &d_v)?;
-        state.cost_evals += ls_result.cost_evals;
-        state.gradient_evals += ls_result.gradient_evals;
 
-        let stp = ls_result.alpha;
         if !(stp.is_finite() && stp > 0.0) {
             // Line search bailed. Restore cached cost / gradient so
             // the caller's final state is consistent with the last
@@ -879,8 +867,6 @@ where
         // x ← x + stp · d.
         state.param.scaled_add(stp, &d_v);
         let (f_new, g_new) = problem.cost_and_gradient(&state.param)?;
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
 
         // Curvature-conditioned limited-memory update. Matches Fortran
         // `dr ≤ epsmch · |ddum|` with `dr = y·s` and `ddum = −gdold·stp`.

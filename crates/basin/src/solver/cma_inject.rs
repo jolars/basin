@@ -4,11 +4,11 @@ use crate::core::math::{
     ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NormSquared,
     RankOneUpdate, SampleStandardNormal, ScaleInPlace, ScaledAdd, SymmetricEigen, VectorLen,
 };
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{
-    BasicPopulationState, BasicSimplexState, BasicState, GradientState, IntoInitialSimplex,
-    LbfgsState, State,
+    BasicPopulationState, BasicSimplexState, BasicState, CountsMirror, GradientState,
+    IntoInitialSimplex, LbfgsState, State,
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{sort_population_ascending, CmaEs};
@@ -116,12 +116,12 @@ where
 {
     type Error = I::Error;
 
-    fn init(&mut self, problem: &P, state: S) -> Result<S, Self::Error> {
+    fn init(&mut self, problem: &mut Problem<P>, state: S) -> Result<S, Self::Error> {
         self.inner.init(problem, state)
     }
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: S,
     ) -> Result<(S, Option<TerminationReason>), Self::Error> {
         self.inner.next_iter(problem, state)
@@ -310,6 +310,7 @@ where
 impl<I, V, M> CmaInject<I, V, M>
 where
     I: MemeticInner<V>,
+    I::State: CountsMirror,
 {
     /// Wrap a configured [`CmaEs`] with `inner` as the local
     /// refinement step. Defaults: `k = 1` refinement per generation,
@@ -403,7 +404,7 @@ impl<P, I, V, M> Solver<P, BasicPopulationState<V>> for CmaInject<I, V, M>
 where
     P: CostFunction<Param = V, Output = f64>,
     I: MemeticInner<V> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
-    I::State: State<Param = V, Float = f64>,
+    I::State: State<Param = V, Float = f64> + CountsMirror,
     V: VectorLen
         + Clone
         + ScaledAdd<f64>
@@ -427,7 +428,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: BasicPopulationState<V>,
     ) -> Result<BasicPopulationState<V>, Self::Error> {
         // Hansen's preliminary experiments inject from iter 1 onward,
@@ -437,7 +438,7 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: BasicPopulationState<V>,
     ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
@@ -465,29 +466,28 @@ where
             //    (NM's σ-scaled simplex) track the current spread.
             let inner_state = self.inner.solver().seed_scaled(&state.candidates[i], sigma);
 
-            // 3. Drive the inner.
+            // 3. Drive the inner. Same-problem composition: inner shares
+            //    the outer wrapper, so its evals flow into the outer's
+            //    EvalCounts transparently and the BasicPopulationState
+            //    mirror picks them up via `total_work()`.
             let inner_result: OptimizationResult<I::State> =
                 self.inner.run(problem, inner_state)?;
 
-            // 4. Eval aggregation: roll inner total-work into outer
-            //    cost_evals via the trait (AGENTS.md "Solver
-            //    composition" rule 1).
-            state.cost_evals += self.inner.solver().work_units(&inner_result.state);
-
-            // 5. Failure routing: bubble SolverFailed only (rule 3).
+            // 4. Failure routing: bubble SolverFailed only (composition
+            //    contract).
             if inner_result.reason.is_failure() {
                 return Ok((state, Some(inner_result.reason)));
             }
 
-            // 6. Extract refined point.
+            // 5. Extract refined point.
             let x_refined = inner_result.state.param().clone();
 
-            // 7. y = (x_refined − m) / σ.
+            // 6. y = (x_refined − m) / σ.
             let mut y = x_refined;
             y.scaled_add(-1.0, &m);
             y.scale_in_place(1.0 / sigma);
 
-            // 8. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
             let inv_sqrt_norm = {
                 let w = self.cma.working().expect("working still populated");
                 let mut bt_y = w.b.mat_transpose_vec(&y);
@@ -495,7 +495,7 @@ where
                 bt_y.norm_squared().sqrt()
             };
 
-            // 9. Clipping factor α (Hansen 2011 eq. 4 + eq. 10).
+            // 8. Clipping factor α (Hansen 2011 eq. 4 + eq. 10).
             if inv_sqrt_norm > 0.0 {
                 let alpha = (c_y / inv_sqrt_norm).min(1.0);
                 if alpha < 1.0 {
@@ -503,14 +503,13 @@ where
                 }
             }
 
-            // 10. x_inj = m + σ · y_clipped.
+            // 9. x_inj = m + σ · y_clipped.
             let mut x_inj = m.clone();
             x_inj.scaled_add(sigma, &y);
 
-            // 11. Re-evaluate: clipping moves the point in original
+            // 10. Re-evaluate: clipping moves the point in original
             //     space, so the cost field has to match.
             let cost_new = problem.cost(&x_inj)?;
-            state.cost_evals += 1;
 
             state.candidates[i] = x_inj;
             state.costs[i] = cost_new;

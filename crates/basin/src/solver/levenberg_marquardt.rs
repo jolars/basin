@@ -3,7 +3,7 @@ use crate::core::math::{
     FloorZerosInPlace, GramMatrix, LinearSolveSpd, MatDiagonal, MatTransposeVec, NegInPlace,
     NormInfinity, NormSquared, ScaleInPlace, ScaledAdd,
 };
-use crate::core::problem::{Jacobian, Residual};
+use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
@@ -388,7 +388,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<BasicState<V>, Self::Error> {
         // Seed cost so iter-0 termination criteria see a populated
@@ -399,8 +399,6 @@ where
         // init/iter-0 boundary.
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
         state.cost = Some(0.5 * r.norm_squared());
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
 
         // A₀ = J(x₀)ᵀJ(x₀); its diagonal is D₀, the per-parameter
         // curvature. A column that's exactly zero at x₀ contributes 0
@@ -425,7 +423,7 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
         // `r` is at the current `state.param` after init (initial point)
@@ -434,10 +432,7 @@ where
         // cache miss, so `cost_evals` grows with *actual* invocations.
         let r = match self.r_cache.take() {
             Some(r) => r,
-            None => {
-                state.cost_evals += 1;
-                problem.residual(&state.param)?
-            }
+            None => problem.residual(&state.param)?,
         };
 
         // A = JᵀJ (Gram) and g = Jᵀr (the gradient of ½‖r‖²). On a
@@ -451,7 +446,6 @@ where
         let (a, g) = match (self.gram_cache.take(), self.jtr_cache.take()) {
             (Some(a), Some(g)) => (a, g),
             _ => {
-                state.gradient_evals += 1;
                 let j = problem.jacobian(&state.param)?;
                 (j.gram(), j.mat_transpose_vec(&r))
             }

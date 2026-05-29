@@ -3,7 +3,7 @@ use crate::core::math::{
     AddDiagonalVectorInPlace, BoxAffineScaling, Dot, GramMatrix, LinearSolveSpd, MatTransposeVec,
     MaxDiagonal, NegInPlace, NormSquared, ScaledAdd,
 };
-use crate::core::problem::{Jacobian, Residual};
+use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
@@ -264,20 +264,20 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<BasicState<V>, Self::Error> {
         // Project the starting iterate strictly into (lower, upper).
         // D is undefined where v_i = 0 (a finite face), so an
         // on-boundary or infeasible start is silently corrected.
-        state
-            .param
-            .project_strictly_inside(problem.lower(), problem.upper(), self.rstep);
+        state.param.project_strictly_inside(
+            problem.inner().lower(),
+            problem.inner().upper(),
+            self.rstep,
+        );
 
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
         state.cost = Some(0.5 * r.norm_squared());
-        state.cost_evals += 1;
-        state.gradient_evals += 1;
 
         // μ₀ = τ · max diag(JᵀJ + diag(c)). The C-correction is
         // typically small; the τ · max diag scaling matches Nielsen's
@@ -287,8 +287,8 @@ where
         let mut c_diag = state.param.clone();
         state.param.compute_cl_scaling(
             &g,
-            problem.lower(),
-            problem.upper(),
+            problem.inner().lower(),
+            problem.inner().upper(),
             &mut d_sq,
             &mut c_diag,
         );
@@ -305,7 +305,7 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: BasicState<V>,
     ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
         // Use cached `r` / `J` when available (set by init or by the
@@ -313,17 +313,11 @@ where
         // cache misses.
         let r = match self.r_cache.take() {
             Some(r) => r,
-            None => {
-                state.cost_evals += 1;
-                problem.residual(&state.param)?
-            }
+            None => problem.residual(&state.param)?,
         };
         let j = match self.j_cache.take() {
             Some(j) => j,
-            None => {
-                state.gradient_evals += 1;
-                problem.jacobian(&state.param)?
-            }
+            None => problem.jacobian(&state.param)?,
         };
 
         let g = j.mat_transpose_vec(&r);
@@ -335,8 +329,8 @@ where
         let mut c_diag = state.param.clone();
         state.param.compute_cl_scaling(
             &g,
-            problem.lower(),
-            problem.upper(),
+            problem.inner().lower(),
+            problem.inner().upper(),
             &mut d_sq,
             &mut c_diag,
         );
@@ -400,9 +394,10 @@ where
         // Step-back to the open feasible region. The unconstrained
         // Newton step h might land on or beyond a face; scale it down
         // by min(1, θ · τ_max) so the iterate stays strictly inside.
-        let tau_max = state
-            .param
-            .max_feasible_step(&h, problem.lower(), problem.upper());
+        let tau_max =
+            state
+                .param
+                .max_feasible_step(&h, problem.inner().lower(), problem.inner().upper());
         let alpha = if tau_max >= 1.0 {
             1.0
         } else {
@@ -413,7 +408,6 @@ where
         let mut x_trial = state.param.clone();
         x_trial.scaled_add(alpha, &h);
         let r_trial = problem.residual(&x_trial)?;
-        state.cost_evals += 1;
         let f_trial = 0.5 * r_trial.norm_squared();
 
         let prev_cost = state

@@ -13,8 +13,8 @@
 
 use basin::problems::Sphere;
 use basin::{
-    BasicPopulationState, BasicState, ClosureInner, CmaEs, CmaInject, Executor, Solver, State,
-    TerminationReason,
+    BasicPopulationState, BasicState, ClosureInner, CmaEs, CmaInject, Executor, Problem, Solver,
+    State, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -27,7 +27,7 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
     type Error = std::convert::Infallible;
     fn next_iter(
         &mut self,
-        _problem: &P,
+        _problem: &mut Problem<P>,
         state: S,
     ) -> Result<(S, Option<TerminationReason>), Self::Error> {
         Ok((state, Some(TerminationReason::SolverFailed)))

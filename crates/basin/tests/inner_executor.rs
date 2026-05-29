@@ -2,10 +2,12 @@
 //!
 //! Defines a private outer solver `PerVertexRefine<G>` that holds k
 //! parallel iterates and refines each one with an inner GD per outer
-//! iter. Exercises the three composition contracts documented in
+//! iter. Exercises the composition contracts documented in
 //! `AGENTS.md` "Solver composition":
 //!
-//!   1. Eval-counter aggregation (inner cost evals roll into outer).
+//!   1. Eval-counter aggregation. Inner cost evals flow through the
+//!      shared `Problem<P>` wrapper automatically; the outer state's
+//!      `CountsMirror` impl picks them up via the executor.
 //!   2. Criteria statelessness across calls (the `InnerExecutor`'s
 //!      single criteria vec is reused on every inner run).
 //!   3. Failure routing (a failing inner bubbles `SolverFailed` via the
@@ -15,13 +17,13 @@
 //! The outer state is a custom `MultiStartState` rather than
 //! `BasicSimplexState` because `BasicSimplexState`'s vertex/cost fields
 //! are `pub(crate)` — the integration test is outside the crate, so we
-//! show that composition works through the public `State` / `Solver`
-//! traits alone.
+//! show that composition works through the public `State` / `Solver` /
+//! `CountsMirror` traits alone.
 
 use basin::problems::Booth;
 use basin::{
-    Backtracking, BasicState, CostFunction, Executor, Gradient, GradientDescent, GradientTolerance,
-    InnerExecutor, Solver, State, TerminationReason,
+    Backtracking, BasicState, CostFunction, CountsMirror, EvalCounts, Executor, Gradient,
+    GradientDescent, GradientTolerance, InnerExecutor, Problem, Solver, State, TerminationReason,
 };
 
 /// Outer-solver state: `k` parallel iterates with parallel costs, kept
@@ -58,14 +60,18 @@ impl State for MultiStartState {
     fn cost_evals(&self) -> u64 {
         self.cost_evals
     }
-    fn increment_cost_evals(&mut self, by: u64) {
-        self.cost_evals += by;
-    }
     fn param(&self) -> &Vec<f64> {
         &self.iterates[0]
     }
     fn cost(&self) -> f64 {
         self.costs[0]
+    }
+}
+
+impl CountsMirror for MultiStartState {
+    fn mirror(&mut self, delta: &EvalCounts) {
+        // Derivative-free outer: fold every kind of work into `cost_evals`.
+        self.cost_evals = delta.total_work();
     }
 }
 
@@ -107,36 +113,33 @@ where
     type Error = P::Error;
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: MultiStartState,
     ) -> Result<MultiStartState, Self::Error> {
         for (v, c) in state.iterates.iter().zip(state.costs.iter_mut()) {
             *c = problem.cost(v)?;
         }
-        state.cost_evals += state.iterates.len() as u64;
         sort_by_cost(&mut state.iterates, &mut state.costs);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         mut state: MultiStartState,
     ) -> Result<(MultiStartState, Option<TerminationReason>), Self::Error> {
         let mut new_iterates: Vec<Vec<f64>> = Vec::with_capacity(state.iterates.len());
         let mut new_costs: Vec<f64> = Vec::with_capacity(state.iterates.len());
-        let mut aggregated_cost_evals: u64 = 0;
         let prev_iterates = std::mem::take(&mut state.iterates);
 
         for v in prev_iterates {
+            // Same-problem composition: the inner shares the outer's
+            // wrapper, so inner evals are accounted for automatically.
             let result = self.inner.run(problem, BasicState::new(v))?;
 
             // Failure routing (contract 3): bubble `SolverFailed` via
             // the outer's mid-iter return; consume everything else.
             if result.reason.is_failure() {
-                // Roll up partial work before bailing so cost_evals stays
-                // honest even on the failure path.
-                state.cost_evals += aggregated_cost_evals + result.state.cost_evals();
                 // Restore a non-empty `iterates` so `state.param()` /
                 // `state.cost()` don't panic on the outer reason read.
                 state.iterates = new_iterates;
@@ -148,15 +151,12 @@ where
                 return Ok((state, Some(result.reason)));
             }
 
-            // Eval aggregation (contract 1).
-            aggregated_cost_evals += result.state.cost_evals();
             new_costs.push(result.cost());
             new_iterates.push(result.param().clone());
         }
 
         state.iterates = new_iterates;
         state.costs = new_costs;
-        state.cost_evals += aggregated_cost_evals;
         sort_by_cost(&mut state.iterates, &mut state.costs);
         Ok((state, None))
     }
@@ -172,7 +172,7 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
     type Error = std::convert::Infallible;
     fn next_iter(
         &mut self,
-        _problem: &P,
+        _problem: &mut Problem<P>,
         state: S,
     ) -> Result<(S, Option<TerminationReason>), Self::Error> {
         Ok((state, Some(TerminationReason::SolverFailed)))
@@ -229,12 +229,13 @@ fn inner_executor_aggregates_cost_evals_into_outer() {
         .run()
         .unwrap();
 
-    // The outer's init seeds 3 cost evals (one per starting iterate).
-    // Each inner GD run does at least an `init` cost eval (1) plus some
-    // iteration work (line search + final cost) — so 3 starts × 2 outer
-    // iters × ≥2 evals/run gives a comfortable lower bound well above
-    // the bare init contribution. Loose because GD's exact eval count
-    // depends on backtracking line-search probes.
+    // The outer's init evaluates one cost per starting iterate (3 evals).
+    // Each inner GD run does at least an `init` fused cost+gradient
+    // (1 cost, 1 gradient) plus iteration work (line search + final
+    // cost). With 3 starts × 2 outer iters and the derivative-free
+    // mirror folding all work into cost_evals, the lower bound holds
+    // comfortably; loose because GD's exact eval count depends on the
+    // backtracking line-search probe schedule.
     let evals = result.state.cost_evals();
     assert!(
         evals >= 3 + 6,

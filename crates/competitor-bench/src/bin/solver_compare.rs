@@ -27,8 +27,8 @@ use std::time::{Duration, Instant};
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicPopulationState, BasicSimplexState, BasicState, CmaEs, DenseMatrix, Executor,
-    GradientDescent, LbfgsState, MoreThuente, NelderMead, QuasiNewtonState, Solver,
+    BasicPopulationState, BasicSimplexState, BasicState, CmaEs, CountsMirror, DenseMatrix,
+    Executor, GradientDescent, LbfgsState, MoreThuente, NelderMead, QuasiNewtonState, Solver,
     State as BasinState, StepOutcome, BFGS, LBFGSB,
 };
 
@@ -131,7 +131,7 @@ fn sample_start(p: &ProblemConfig, seed: u64) -> Vec<f64> {
 /// `(elapsed_ns, cost)` at iter 0 and after every completed iteration.
 fn basin_trace<P, S, So>(exec: Executor<P, S, So>, budget: Duration) -> Vec<(u128, f64)>
 where
-    S: BasinState<Float = f64>,
+    S: BasinState<Float = f64> + CountsMirror,
     So: Solver<P, S>,
     So::Error: std::fmt::Debug,
 {

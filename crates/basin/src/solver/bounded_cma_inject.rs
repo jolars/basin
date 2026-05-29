@@ -6,9 +6,9 @@ use crate::core::math::{
     MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, ScaleInPlace, ScaledAdd,
     SymmetricEigen, VectorLen,
 };
-use crate::core::problem::CostFunction;
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicPopulationState, State};
+use crate::core::state::{BasicPopulationState, CountsMirror, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::bounded_cma_es::{evaluate_with_penalty, BoundedCmaEs};
 use crate::solver::cma_es::sort_population_ascending;
@@ -70,6 +70,7 @@ where
 impl<I, V, M> BoundedCmaInject<I, V, M>
 where
     I: MemeticInner<V>,
+    I::State: CountsMirror,
 {
     /// Wrap a configured [`BoundedCmaEs`] with `inner` as the local
     /// refinement step. Defaults: `k = 1`, inner `max_iter = 50`,
@@ -149,7 +150,7 @@ impl<P, I, V, M> Solver<P, BasicPopulationState<V>> for BoundedCmaInject<I, V, M
 where
     P: CostFunction<Param = V, Output = f64> + BoxConstraints,
     I: MemeticInner<V> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
-    I::State: State<Param = V, Float = f64>,
+    I::State: State<Param = V, Float = f64> + CountsMirror,
     V: VectorLen
         + Clone
         + ScaledAdd<f64>
@@ -175,7 +176,7 @@ where
 
     fn init(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: BasicPopulationState<V>,
     ) -> Result<BasicPopulationState<V>, Self::Error> {
         self.cma.init(problem, state)
@@ -183,7 +184,7 @@ where
 
     fn next_iter(
         &mut self,
-        problem: &P,
+        problem: &mut Problem<P>,
         state: BasicPopulationState<V>,
     ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
         // 1. Standard BoundedCmaEs iteration first.
@@ -207,27 +208,26 @@ where
             // 2. Seed inner state via the trait.
             let inner_state = self.inner.solver().seed_scaled(&state.candidates[i], sigma);
 
-            // 3. Drive the inner solver.
+            // 3. Drive the inner solver. Same-problem composition: inner
+            //    shares the outer wrapper, so its evals flow into the
+            //    outer's EvalCounts transparently.
             let inner_result: OptimizationResult<I::State> =
                 self.inner.run(problem, inner_state)?;
 
-            // 4. Eval aggregation.
-            state.cost_evals += self.inner.solver().work_units(&inner_result.state);
-
-            // 5. Failure routing: bubble SolverFailed only.
+            // 4. Failure routing: bubble SolverFailed only.
             if inner_result.reason.is_failure() {
                 return Ok((state, Some(inner_result.reason)));
             }
 
-            // 6. Extract refined point.
+            // 5. Extract refined point.
             let x_refined = inner_result.state.param().clone();
 
-            // 7. y = (x_refined − m) / σ.
+            // 6. y = (x_refined − m) / σ.
             let mut y = x_refined;
             y.scaled_add(-1.0, &m);
             y.scale_in_place(1.0 / sigma);
 
-            // 8. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
             let inv_sqrt_norm = {
                 let w = self.cma.working().expect("working still populated");
                 let mut bt_y = w.b.mat_transpose_vec(&y);
@@ -235,7 +235,7 @@ where
                 bt_y.norm_squared().sqrt()
             };
 
-            // 9. Clipping (Hansen 2011 eq. 4 + eq. 10).
+            // 8. Clipping (Hansen 2011 eq. 4 + eq. 10).
             if inv_sqrt_norm > 0.0 {
                 let alpha = (c_y / inv_sqrt_norm).min(1.0);
                 if alpha < 1.0 {
@@ -243,11 +243,11 @@ where
                 }
             }
 
-            // 10. Reconstruct x_inj = m + σ · y_clipped.
+            // 9. Reconstruct x_inj = m + σ · y_clipped.
             let mut x_inj = m.clone();
             x_inj.scaled_add(sigma, &y);
 
-            // 11. Re-evaluate using the BoundPenalty so the injected
+            // 10. Re-evaluate using the BoundPenalty so the injected
             //     candidate ranks consistently with regular samples in
             //     `state.costs`. Raw cost would let an LM/L-BFGS-B
             //     refinement that landed outside the box skip the
@@ -256,19 +256,18 @@ where
             //     `bounded_cma_es.rs:next_iter`'s `evaluate_with_penalty`
             //     for regular samples; uses the same γ via
             //     `working().gamma`.
+            let lo = problem.inner().lower().clone();
+            let hi = problem.inner().upper().clone();
+            let gamma = self
+                .cma
+                .working()
+                .expect("working still populated")
+                .gamma
+                .clone();
             let cost_new = {
-                let w = self.cma.working().expect("working still populated");
-                let (_raw, pen) = evaluate_with_penalty(
-                    problem,
-                    &x_inj,
-                    problem.lower(),
-                    problem.upper(),
-                    &w.gamma,
-                    n,
-                )?;
+                let (_raw, pen) = evaluate_with_penalty(problem, &x_inj, &lo, &hi, &gamma, n)?;
                 pen
             };
-            state.cost_evals += 1;
 
             state.candidates[i] = x_inj;
             state.costs[i] = cost_new;
