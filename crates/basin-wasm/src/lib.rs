@@ -206,29 +206,29 @@ enum Inner {
 impl Inner {
     fn step(&mut self) -> StepOutcome {
         match self {
-            Inner::GdConstant(s) => s.step().unwrap(),
-            Inner::GdBacktracking(s) => s.step().unwrap(),
-            Inner::NelderMead(s) => s.step().unwrap(),
-            Inner::Lbfgs(s) => s.step().unwrap(),
+            Self::GdConstant(s) => s.step().unwrap(),
+            Self::GdBacktracking(s) => s.step().unwrap(),
+            Self::NelderMead(s) => s.step().unwrap(),
+            Self::Lbfgs(s) => s.step().unwrap(),
         }
     }
 
     fn xy(&self) -> (f64, f64) {
         let p: &Vec<f64> = match self {
-            Inner::GdConstant(s) => s.state().param(),
-            Inner::GdBacktracking(s) => s.state().param(),
-            Inner::NelderMead(s) => s.state().param(),
-            Inner::Lbfgs(s) => s.state().param(),
+            Self::GdConstant(s) => s.state().param(),
+            Self::GdBacktracking(s) => s.state().param(),
+            Self::NelderMead(s) => s.state().param(),
+            Self::Lbfgs(s) => s.state().param(),
         };
         (p[0], p[1])
     }
 
     fn cost(&self) -> f64 {
         match self {
-            Inner::GdConstant(s) => s.state().cost(),
-            Inner::GdBacktracking(s) => s.state().cost(),
-            Inner::NelderMead(s) => s.state().cost(),
-            Inner::Lbfgs(s) => s.state().cost(),
+            Self::GdConstant(s) => s.state().cost(),
+            Self::GdBacktracking(s) => s.state().cost(),
+            Self::NelderMead(s) => s.state().cost(),
+            Self::Lbfgs(s) => s.state().cost(),
         }
     }
 }
@@ -291,13 +291,13 @@ impl Run {
         opts: JsValue,
         max_iter: u32,
         stop_at_cost: f64,
-    ) -> Run {
+    ) -> Self {
         install_panic_hook();
         // serde_wasm_bindgen reaches into JS, so deserialization can't
         // happen in the native-testable core; do it here and hand a plain
         // Rust struct to `new_inner`.
         let opts: RunOptions = serde_wasm_bindgen::from_value(opts).unwrap_or_default();
-        Run::new_inner(problem, solver, x0, y0, opts, max_iter, stop_at_cost)
+        Self::new_inner(problem, solver, x0, y0, opts, max_iter, stop_at_cost)
     }
 
     /// Advance up to `n` iterations, recording the `(x, y)` and cost
@@ -376,7 +376,7 @@ impl Run {
         opts: RunOptions,
         max_iter: u32,
         stop_at_cost: f64,
-    ) -> Run {
+    ) -> Self {
         let p = Problem2D(problem);
         let initial = vec![x0, y0];
         let initial_cost = p.cost(&initial).unwrap();
@@ -427,7 +427,7 @@ impl Run {
                 Inner::Lbfgs(Box::new(stepper))
             }
         };
-        Run {
+        Self {
             inner,
             trajectory: vec![x0, y0],
             costs: vec![initial_cost],

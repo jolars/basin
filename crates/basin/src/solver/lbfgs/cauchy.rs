@@ -66,7 +66,7 @@ pub(crate) enum CauchyError {
 
 impl From<BmvError> for CauchyError {
     fn from(_: BmvError) -> Self {
-        CauchyError::SingularMiddleMatrix
+        Self::SingularMiddleMatrix
     }
 }
 

@@ -434,7 +434,7 @@ where
     /// Returns `Err` when [`Solver::init`] does (e.g. the problem's
     /// initial cost/gradient evaluation `Err`-ed).
     pub fn into_stepper(self) -> Result<Stepper<P, S, So>, So::Error> {
-        let Executor {
+        let Self {
             problem,
             state,
             mut solver,

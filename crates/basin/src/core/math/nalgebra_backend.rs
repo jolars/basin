@@ -83,7 +83,7 @@ impl SampleUniformBox for DVector<f64> {
             upper.len(),
             "sample_uniform_box: bounds length mismatch"
         );
-        DVector::from_fn(lower.len(), |i, _| rng.random_range(lower[i]..=upper[i]))
+        Self::from_fn(lower.len(), |i, _| rng.random_range(lower[i]..=upper[i]))
     }
 }
 
@@ -104,7 +104,7 @@ impl VectorIndex for DVector<f64> {
 
 impl SampleStandardNormal for DVector<f64> {
     fn sample_standard_normal<G: Rng + ?Sized>(template: &Self, rng: &mut G) -> Self {
-        DVector::from_fn(template.len(), |_, _| StandardNormal.sample(rng))
+        Self::from_fn(template.len(), |_, _| StandardNormal.sample(rng))
     }
 }
 
@@ -444,13 +444,13 @@ impl AddDiagonalVectorInPlace<DVector<f64>> for DMatrix<f64> {
 
 impl MatrixIdentity for DMatrix<f64> {
     fn identity(n: usize) -> Self {
-        DMatrix::identity(n, n)
+        Self::identity(n, n)
     }
 }
 
 impl MatrixFromDiagonal<DVector<f64>> for DMatrix<f64> {
     fn from_diagonal(diag: &DVector<f64>) -> Self {
-        DMatrix::from_diagonal(diag)
+        Self::from_diagonal(diag)
     }
 }
 

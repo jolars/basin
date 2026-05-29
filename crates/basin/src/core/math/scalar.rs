@@ -1,7 +1,7 @@
 use super::{Dot, NegInPlace, NormInfinity, NormSquared, ScaledAdd};
 
-impl ScaledAdd<f64> for f64 {
-    fn scaled_add(&mut self, scalar: f64, other: &Self) {
+impl ScaledAdd<Self> for f64 {
+    fn scaled_add(&mut self, scalar: Self, other: &Self) {
         *self += scalar * other;
     }
 }

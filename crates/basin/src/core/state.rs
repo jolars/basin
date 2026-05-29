@@ -354,8 +354,8 @@ pub trait IntoInitialSimplex<V> {
     fn into_initial_simplex(self, relative_step: f64) -> Vec<V>;
 }
 
-impl IntoInitialSimplex<Vec<f64>> for Vec<f64> {
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<Vec<f64>> {
+impl IntoInitialSimplex<Self> for Vec<f64> {
+    fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
         let n = self.len();
         let mut simplex = Vec::with_capacity(n + 1);
         simplex.push(self.clone());
@@ -373,8 +373,8 @@ impl IntoInitialSimplex<Vec<f64>> for Vec<f64> {
 }
 
 #[cfg(feature = "nalgebra")]
-impl IntoInitialSimplex<nalgebra::DVector<f64>> for nalgebra::DVector<f64> {
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<nalgebra::DVector<f64>> {
+impl IntoInitialSimplex<Self> for nalgebra::DVector<f64> {
+    fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
         let n = self.len();
         let mut simplex = Vec::with_capacity(n + 1);
         simplex.push(self.clone());
@@ -392,8 +392,8 @@ impl IntoInitialSimplex<nalgebra::DVector<f64>> for nalgebra::DVector<f64> {
 }
 
 #[cfg(feature = "faer")]
-impl IntoInitialSimplex<faer::Col<f64>> for faer::Col<f64> {
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<faer::Col<f64>> {
+impl IntoInitialSimplex<Self> for faer::Col<f64> {
+    fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
         let n = self.nrows();
         let mut simplex = Vec::with_capacity(n + 1);
         simplex.push(self.clone());

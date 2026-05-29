@@ -272,7 +272,7 @@ struct Palette {
 impl Palette {
     fn new(theme: Theme) -> Self {
         match theme {
-            Theme::Day => Palette {
+            Theme::Day => Self {
                 theme,
                 terrain: TERRAIN_RAMP.to_vec(),
                 water: WATER,
@@ -284,7 +284,7 @@ impl Palette {
                 orb: SUN,
                 orb_halo: SUN.lerp(PAPER, 0.55),
             },
-            Theme::Night => Palette {
+            Theme::Night => Self {
                 theme,
                 terrain: TERRAIN_RAMP.iter().map(|&c| moonlight(c)).collect(),
                 // Water is the hero (the river is optimiser output), so lift
@@ -353,7 +353,7 @@ impl Surface {
         }
         let hmin = vals.iter().copied().fold(f64::INFINITY, f64::min);
         let hmax = vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        Surface {
+        Self {
             hmin,
             hmax,
             water: WATER_LEVEL,
@@ -1208,7 +1208,7 @@ struct Rng(u64);
 
 impl Rng {
     fn new(seed: u64) -> Self {
-        Rng(seed)
+        Self(seed)
     }
 
     fn next_u64(&mut self) -> u64 {
@@ -1239,7 +1239,7 @@ struct Svg {
 
 impl Svg {
     fn new() -> Self {
-        Svg {
+        Self {
             body: String::new(),
             min_x: f64::INFINITY,
             min_y: f64::INFINITY,

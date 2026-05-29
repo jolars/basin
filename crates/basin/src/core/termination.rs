@@ -66,7 +66,7 @@ impl TerminationReason {
     /// as "result is fine, move on". See `AGENTS.md` "Solver
     /// composition" for the failure-routing contract.
     pub fn is_failure(&self) -> bool {
-        matches!(self, TerminationReason::SolverFailed)
+        matches!(self, Self::SolverFailed)
     }
 }
 

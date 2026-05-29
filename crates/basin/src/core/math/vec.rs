@@ -123,7 +123,7 @@ impl VectorIndex for Vec<f64> {
 impl SampleStandardNormal for Vec<f64> {
     fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
         let n = template.len();
-        let mut out = Vec::with_capacity(n);
+        let mut out = Self::with_capacity(n);
         for _ in 0..n {
             out.push(StandardNormal.sample(rng));
         }
@@ -139,7 +139,7 @@ impl SampleUniformBox for Vec<f64> {
             "sample_uniform_box: bounds length mismatch"
         );
         let n = lower.len();
-        let mut out = Vec::with_capacity(n);
+        let mut out = Self::with_capacity(n);
         for i in 0..n {
             out.push(rng.random_range(lower[i]..=upper[i]));
         }

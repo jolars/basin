@@ -239,7 +239,7 @@ impl LinearSolveSpd<Col<f64>> for SparseColMat<usize, f64> {
         // case; LltError::Generic covers OOM / index overflow, which
         // we surface as NotPositiveDefinite (the trait's only
         // backend-portable failure for this path).
-        let llt = SparseColMat::sp_cholesky(self, Side::Lower).map_err(|e| match e {
+        let llt = Self::sp_cholesky(self, Side::Lower).map_err(|e| match e {
             LltError::Numeric(_) => LinearSolveError::NotPositiveDefinite,
             LltError::Generic(_) => LinearSolveError::NotPositiveDefinite,
         })?;
@@ -258,7 +258,7 @@ impl LinearSolveLstsq<Col<f64>> for SparseColMat<usize, f64> {
             self.nrows(),
             b.nrows()
         );
-        let qr = SparseColMat::sp_qr(self).map_err(|_| LinearSolveError::Singular)?;
+        let qr = Self::sp_qr(self).map_err(|_| LinearSolveError::Singular)?;
         // High-level solve_lstsq allocates an m-row buffer, copies b
         // in, calls solve_lstsq_in_place, then truncates to n rows.
         Ok(qr.solve_lstsq(b))

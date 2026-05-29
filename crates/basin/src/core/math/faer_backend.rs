@@ -60,7 +60,7 @@ impl SampleUniformBox for Col<f64> {
             upper.nrows(),
             "sample_uniform_box: bounds length mismatch"
         );
-        Col::<f64>::from_fn(lower.nrows(), |i| rng.random_range(lower[i]..=upper[i]))
+        Self::from_fn(lower.nrows(), |i| rng.random_range(lower[i]..=upper[i]))
     }
 }
 
@@ -81,7 +81,7 @@ impl VectorIndex for Col<f64> {
 
 impl SampleStandardNormal for Col<f64> {
     fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
-        Col::<f64>::from_fn(template.nrows(), |_| StandardNormal.sample(rng))
+        Self::from_fn(template.nrows(), |_| StandardNormal.sample(rng))
     }
 }
 
@@ -291,7 +291,7 @@ impl MatTransposeVec<Col<f64>> for Mat<f64> {
 impl GramMatrix for Mat<f64> {
     fn gram(&self) -> Self {
         let n = self.ncols();
-        let mut g = Mat::<f64>::zeros(n, n);
+        let mut g = Self::zeros(n, n);
         matmul(
             g.as_mut(),
             Accum::Replace,
@@ -378,14 +378,14 @@ impl ScaleInPlace for Mat<f64> {
 
 impl MatrixIdentity for Mat<f64> {
     fn identity(n: usize) -> Self {
-        Mat::<f64>::identity(n, n)
+        Self::identity(n, n)
     }
 }
 
 impl MatrixFromDiagonal<Col<f64>> for Mat<f64> {
     fn from_diagonal(diag: &Col<f64>) -> Self {
         let n = diag.nrows();
-        Mat::from_fn(n, n, |i, j| if i == j { diag[i] } else { 0.0 })
+        Self::from_fn(n, n, |i, j| if i == j { diag[i] } else { 0.0 })
     }
 }
 
@@ -416,7 +416,7 @@ impl SymmetricEigen<Col<f64>> for Mat<f64> {
         let s_ref = eig.S();
         // Materialize both as fresh, owned types so the caller doesn't
         // hold a borrow into a transient eig wrapper.
-        let mut u_mat = Mat::<f64>::zeros(n, n);
+        let mut u_mat = Self::zeros(n, n);
         for j in 0..n {
             for i in 0..n {
                 u_mat[(i, j)] = u_ref[(i, j)];

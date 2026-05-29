@@ -170,14 +170,14 @@ struct Palette {
 impl Palette {
     fn new(theme: Theme) -> Self {
         match theme {
-            Theme::Day => Palette {
+            Theme::Day => Self {
                 terrain: TERRAIN_RAMP.to_vec(),
                 water: WATER,
                 tree_dark: TREE_DARK,
                 tree_lit: TREE_LIT,
                 trunk: TRUNK,
             },
-            Theme::Night => Palette {
+            Theme::Night => Self {
                 terrain: TERRAIN_RAMP.iter().map(|&c| moonlight(c)).collect(),
                 water: moonlight(WATER).lerp(MOON, 0.14),
                 tree_dark: moonlight(TREE_DARK),
@@ -239,7 +239,7 @@ impl Surface {
                 hmax = hmax.max(h);
             }
         }
-        Surface {
+        Self {
             hmin,
             hmax,
             water: WATER_LEVEL,
@@ -809,7 +809,7 @@ struct Svg {
 
 impl Svg {
     fn new() -> Self {
-        Svg {
+        Self {
             body: String::new(),
             min_x: f64::INFINITY,
             min_y: f64::INFINITY,
