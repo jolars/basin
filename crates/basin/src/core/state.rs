@@ -7,18 +7,21 @@
 //! simplex-based solvers like Nelder-Mead) so termination criteria can
 //! bound on the minimum capability they need (tenet 3 in `AGENTS.md`).
 //!
-//! `State::Float` is technically generic but every concrete state ships
-//! with `Float = f64`, and every shipped termination criterion that reads
-//! costs assumes `f64`. See the *Provisional choices* section of
-//! `AGENTS.md` — switching to `F: num_traits::Float` is planned but
-//! deferred until the first stochastic solver lands.
+//! `State::Float` is generic across the trait. The vector-tier-only states
+//! ([`BasicState`], [`BasicSimplexState`], [`BasicPopulationState`]) take an
+//! `F: Scalar` parameter that defaults to `f64`, so existing call sites
+//! resolve unchanged while opening the door to `f32`. [`QuasiNewtonState`]
+//! and [`LbfgsState`] stay locked to `f64` for now — they couple to the
+//! linalg tier (dense / L-BFGS-B working matrices), which is still f64-only.
+//! Every shipped termination criterion that reads costs also still assumes
+//! `f64`. See the *Provisional choices* section of `AGENTS.md`.
 
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
 
 pub use lbfgs::LbfgsState;
 
-use crate::core::math::{MatrixIdentity, VectorLen};
+use crate::core::math::{MatrixIdentity, Scalar, VectorLen};
 use crate::core::problem::EvalCounts;
 
 /// Minimum information the executor and generic termination criteria
@@ -227,16 +230,19 @@ pub trait PopulationState: State {
 /// Default state for single-iterate solvers (gradient descent,
 /// Gauss-Newton, …): one `param`, optional cached cost and gradient,
 /// plus iteration / evaluation counters.
-pub struct BasicState<P> {
+///
+/// The scalar `F` defaults to `f64` so existing `BasicState<P>` call
+/// sites resolve unchanged.
+pub struct BasicState<P, F = f64> {
     pub(crate) param: P,
-    pub(crate) cost: Option<f64>,
+    pub(crate) cost: Option<F>,
     pub(crate) gradient: Option<P>,
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
     pub(crate) gradient_evals: u64,
 }
 
-impl<P> BasicState<P> {
+impl<P, F> BasicState<P, F> {
     /// Build a state at the given starting point. Cost and gradient
     /// are filled in by [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(param: P) -> Self {
@@ -251,9 +257,9 @@ impl<P> BasicState<P> {
     }
 }
 
-impl<P> State for BasicState<P> {
+impl<P, F: Scalar> State for BasicState<P, F> {
     type Param = P;
-    type Float = f64;
+    type Float = F;
 
     fn iter(&self) -> u64 {
         self.iter
@@ -284,13 +290,13 @@ impl<P> State for BasicState<P> {
     /// ordering), so reads from inside criteria and from
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
     /// are safe.
-    fn cost(&self) -> f64 {
+    fn cost(&self) -> F {
         self.cost
             .expect("BasicState::cost read before Solver::init populated it")
     }
 }
 
-impl<P> GradientState for BasicState<P> {
+impl<P, F: Scalar> GradientState for BasicState<P, F> {
     fn gradient(&self) -> Option<&P> {
         self.gradient.as_ref()
     }
@@ -300,7 +306,10 @@ impl<P> GradientState for BasicState<P> {
     }
 }
 
-impl<P> CountsMirror for BasicState<P> {
+impl<P, F> CountsMirror for BasicState<P, F>
+where
+    BasicState<P, F>: State,
+{
     fn mirror(&mut self, delta: &EvalCounts) {
         // NLLS convention preserved: residual calls fold into the cost
         // counter, Jacobian / Hessian into gradient. (Today's
@@ -315,14 +324,17 @@ impl<P> CountsMirror for BasicState<P> {
 /// in parallel `Vec`s. The solver keeps both sorted by ascending cost at
 /// the start and end of every `next_iter`, so `param()` / `cost()` always
 /// return the current best vertex.
-pub struct BasicSimplexState<V> {
+///
+/// The scalar `F` defaults to `f64` so existing `BasicSimplexState<V>`
+/// call sites resolve unchanged.
+pub struct BasicSimplexState<V, F = f64> {
     pub(crate) vertices: Vec<V>,
-    pub(crate) costs: Vec<f64>,
+    pub(crate) costs: Vec<F>,
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
 }
 
-impl<V> BasicSimplexState<V> {
+impl<V, F: Scalar> BasicSimplexState<V, F> {
     /// Build from a pre-constructed simplex (advanced users / non-default
     /// initial geometries). For the common case of "I just have a starting
     /// point", prefer the backend-specific `BasicSimplexState::new`
@@ -335,7 +347,7 @@ impl<V> BasicSimplexState<V> {
         let n = vertices.len();
         Self {
             vertices,
-            costs: vec![f64::INFINITY; n],
+            costs: vec![F::infinity(); n],
             iter: 0,
             cost_evals: 0,
         }
@@ -429,7 +441,7 @@ impl IntoInitialSimplex<ndarray::Array1<f64>> for ndarray::Array1<f64> {
     }
 }
 
-impl<V> BasicSimplexState<V> {
+impl<V, F: Scalar> BasicSimplexState<V, F> {
     /// Build an FMINSEARCH/SciPy-style simplex around a starting point
     /// `x0`. Mirrors `BasicState::new` ergonomically — the solver infers
     /// dimension from the simplex during `init`.
@@ -444,9 +456,9 @@ impl<V> BasicSimplexState<V> {
     }
 }
 
-impl<V> State for BasicSimplexState<V> {
+impl<V, F: Scalar> State for BasicSimplexState<V, F> {
     type Param = V;
-    type Float = f64;
+    type Float = F;
 
     fn iter(&self) -> u64 {
         self.iter
@@ -464,12 +476,15 @@ impl<V> State for BasicSimplexState<V> {
         &self.vertices[0]
     }
 
-    fn cost(&self) -> f64 {
+    fn cost(&self) -> F {
         self.costs[0]
     }
 }
 
-impl<V> CountsMirror for BasicSimplexState<V> {
+impl<V, F> CountsMirror for BasicSimplexState<V, F>
+where
+    BasicSimplexState<V, F>: State,
+{
     fn mirror(&mut self, delta: &EvalCounts) {
         // Derivative-free state: any work folds into the single
         // `cost_evals` counter (a simplex solver only calls `cost`
@@ -479,12 +494,12 @@ impl<V> CountsMirror for BasicSimplexState<V> {
     }
 }
 
-impl<V> SimplexState for BasicSimplexState<V> {
+impl<V, F: Scalar> SimplexState for BasicSimplexState<V, F> {
     fn vertices(&self) -> &[V] {
         &self.vertices
     }
 
-    fn costs(&self) -> &[f64] {
+    fn costs(&self) -> &[F] {
         &self.costs
     }
 }
@@ -598,14 +613,17 @@ impl<V, M> CountsMirror for QuasiNewtonState<V, M> {
 ///
 /// Vehicle for [`RandomSearch`](crate::solver::RandomSearch); will be
 /// reused by CMA-ES (S8) without changes.
-pub struct BasicPopulationState<V> {
+///
+/// The scalar `F` defaults to `f64` so existing `BasicPopulationState<V>`
+/// call sites resolve unchanged.
+pub struct BasicPopulationState<V, F = f64> {
     pub(crate) candidates: Vec<V>,
-    pub(crate) costs: Vec<f64>,
+    pub(crate) costs: Vec<F>,
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
 }
 
-impl<V> BasicPopulationState<V> {
+impl<V, F: Scalar> BasicPopulationState<V, F> {
     /// Build from a pre-constructed population (advanced users; custom
     /// initial distributions). Costs are filled by the solver in
     /// [`Solver::init`](crate::core::solver::Solver::init).
@@ -622,7 +640,7 @@ impl<V> BasicPopulationState<V> {
         let n = candidates.len();
         Self {
             candidates,
-            costs: vec![f64::INFINITY; n],
+            costs: vec![F::infinity(); n],
             iter: 0,
             cost_evals: 0,
         }
@@ -651,9 +669,9 @@ impl<V> BasicPopulationState<V> {
     }
 }
 
-impl<V> State for BasicPopulationState<V> {
+impl<V, F: Scalar> State for BasicPopulationState<V, F> {
     type Param = V;
-    type Float = f64;
+    type Float = F;
 
     fn iter(&self) -> u64 {
         self.iter
@@ -671,12 +689,15 @@ impl<V> State for BasicPopulationState<V> {
         &self.candidates[0]
     }
 
-    fn cost(&self) -> f64 {
+    fn cost(&self) -> F {
         self.costs[0]
     }
 }
 
-impl<V> CountsMirror for BasicPopulationState<V> {
+impl<V, F> CountsMirror for BasicPopulationState<V, F>
+where
+    BasicPopulationState<V, F>: State,
+{
     fn mirror(&mut self, delta: &EvalCounts) {
         // Derivative-free outer: any kind of work (e.g. an L-BFGS
         // inner's gradient calls inside a CMA-injection wrapper) folds
@@ -686,12 +707,12 @@ impl<V> CountsMirror for BasicPopulationState<V> {
     }
 }
 
-impl<V> PopulationState for BasicPopulationState<V> {
+impl<V, F: Scalar> PopulationState for BasicPopulationState<V, F> {
     fn candidates(&self) -> &[V] {
         &self.candidates
     }
 
-    fn costs(&self) -> &[f64] {
+    fn costs(&self) -> &[F] {
         &self.costs
     }
 }
