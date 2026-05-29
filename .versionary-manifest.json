@@ -1,11 +1,11 @@
 {
   "manifest-version": 1,
-  "baseline-sha": "dea3304d55479ca55b669c351c5a3da1ce2660fe",
+  "baseline-sha": "7ee25a8ffb305eaddd03efae3e6d16b32eba1916",
   "release-targets": [
     {
       "path": ".",
-      "version": "0.7.0",
-      "tag": "v0.7.0"
+      "version": "0.8.0",
+      "tag": "v0.8.0"
     }
   ]
 }
