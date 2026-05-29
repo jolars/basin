@@ -21,6 +21,44 @@
 //!   backend too. The *solve* factorizations ([`LinearSolveSpd`],
 //!   [`LinearSolveLstsq`], [`GramMatrix`]) stay nalgebra/faer-only.
 
+/// Scalar element type for vectors and matrices in the math layer.
+///
+/// Bundles every bound the rest of the crate needs from a scalar so call sites
+/// can write `F: Scalar` instead of repeating the trait list. `f64` and `f32`
+/// both satisfy it; user code never needs to implement it directly (the
+/// blanket impl picks up any type that meets the bounds).
+///
+/// The constituent bounds:
+///
+/// - [`num_traits::Float`] — arithmetic, `epsilon`, `infinity`, `is_finite`,
+///   `sqrt`, `powf`, … plus `Copy` and `PartialOrd` transitively.
+/// - [`num_traits::FromPrimitive`] — `from_f64(...)` so tolerance defaults
+///   (`1e-4`, `1e-8`, …) can be expressed at any `F` without sprinkling
+///   `as` casts. Use [`F::from_f64(lit).unwrap()`](num_traits::FromPrimitive::from_f64)
+///   at the construction site of any literal that doesn't have a Float
+///   constructor of its own (e.g. `F::epsilon()` is fine as-is).
+/// - [`std::iter::Sum`] — for the natural `.iter().map(...).sum()` pattern
+///   used in raw test-problem functions (Sphere, Rosenbrock, …).
+/// - [`std::fmt::Debug`] — so solver / state structs can `#[derive(Debug)]`.
+/// - [`Default`] — matches `f64`'s `Default = 0.0` so generic states can
+///   `Option<F>::default()` cleanly.
+/// - `'static` — matches `f64`'s implicit `'static` so the bound doesn't
+///   force lifetime plumbing through every solver.
+pub trait Scalar:
+    num_traits::Float + num_traits::FromPrimitive + std::iter::Sum + std::fmt::Debug + Default + 'static
+{
+}
+
+impl<F> Scalar for F where
+    F: num_traits::Float
+        + num_traits::FromPrimitive
+        + std::iter::Sum
+        + std::fmt::Debug
+        + Default
+        + 'static
+{
+}
+
 /// In-place `self ← self + scalar · other`. Backend-generic vector update.
 pub trait ScaledAdd<S> {
     /// Add `scalar · other` into `self` in place.

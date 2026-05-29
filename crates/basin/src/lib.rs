@@ -69,7 +69,8 @@ pub use crate::core::inner::{InnerExecutor, WarmStart};
 pub use crate::core::math::{
     AddDiagonalInPlace, AddDiagonalVectorInPlace, BoxAffineScaling, ClampInPlace, DenseMatrix,
     DenseMatrixFromFn, Dot, GramMatrix, LinearSolveError, LinearSolveSpd, MatTransposeVec, MatVec,
-    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, SampleUniformBox, ScaledAdd, VectorIndex,
+    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, SampleUniformBox, Scalar, ScaledAdd,
+    VectorIndex,
 };
 pub use crate::core::numdiff::{
     FiniteDiff, Method, central_difference_gradient, central_difference_hessian,

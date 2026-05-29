@@ -104,6 +104,7 @@ dependencies = [
  "nalgebra",
  "nalgebra-sparse",
  "ndarray",
+ "num-traits",
  "rand 0.10.1",
  "rand_chacha 0.10.0",
  "rand_distr",
