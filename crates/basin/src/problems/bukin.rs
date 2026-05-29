@@ -92,7 +92,7 @@ impl CostFunction for BukinN6<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{bukin_n6, BukinN6};
+    use super::{BukinN6, bukin_n6};
     use crate::CostFunction;
     use nalgebra::DVector;
 
@@ -108,7 +108,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{bukin_n6, BukinN6};
+    use super::{BukinN6, bukin_n6};
     use crate::CostFunction;
     use ndarray::Array1;
 

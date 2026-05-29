@@ -96,7 +96,7 @@ impl Gradient for Zero<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{zero, zero_gradient, Zero};
+    use super::{Zero, zero, zero_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -121,7 +121,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{zero, zero_gradient, Zero};
+    use super::{Zero, zero, zero_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 

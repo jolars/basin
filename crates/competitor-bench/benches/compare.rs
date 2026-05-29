@@ -18,10 +18,10 @@ use std::hint::black_box;
 use basin::problems::{ExponentialFit, PowellSingular};
 use basin::{BasicState, Executor, LevenbergMarquardt};
 use competitor_bench::{
-    vardim_start, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
-    LM_DEFAULT_TOL,
+    LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
+    vardim_start,
 };
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use faer::Col;
 use nalgebra::DVector;
 

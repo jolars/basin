@@ -291,8 +291,8 @@ impl BoxConstraints for BoothBoxedResiduals<Vec<f64>> {
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
     use super::{
-        booth, booth_gradient, booth_residuals, booth_residuals_jacobian, Booth, BoothBoxed,
-        BoothBoxedResiduals, BoothResiduals,
+        Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth, booth_gradient,
+        booth_residuals, booth_residuals_jacobian,
     };
     use crate::{BoxConstraints, CostFunction, Gradient, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
@@ -413,7 +413,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{booth, booth_gradient, Booth, BoothBoxed};
+    use super::{Booth, BoothBoxed, booth, booth_gradient};
     use crate::{BoxConstraints, CostFunction, Gradient};
     use ndarray::Array1;
 
@@ -471,7 +471,7 @@ mod ndarray_impl {
 
 #[cfg(feature = "faer")]
 mod faer_impl {
-    use super::{booth_residuals_jacobian, Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals};
+    use super::{Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth_residuals_jacobian};
     use crate::{BoxConstraints, CostFunction, Gradient, Jacobian, Residual};
     use faer::{Col, Mat};
 

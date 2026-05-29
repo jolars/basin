@@ -142,7 +142,7 @@ fn rosenbrock_faer() {
 #[cfg(feature = "ndarray")]
 #[test]
 fn rosenbrock_ndarray() {
-    use ndarray::{array, Array1};
+    use ndarray::{Array1, array};
 
     struct Rosen;
     impl CostFunction for Rosen {

@@ -128,12 +128,12 @@ const ROCK_H: f64 = 16.0; // boulder height (px)
 
 /// Teal/slate palette.
 const PAPER: Rgb = Rgb(244, 241, 222); // #f4f1de background
-                                       // Terrain hypsometric ramps (low elevation → high), each sampled from the land
-                                       // section of a named colormap. To test a palette, change the `TERRAIN_RAMP`
-                                       // line at the bottom of this block to `&TURKU` / `&BILBAO` / `&BAMAKO` /
-                                       // `&SANDSTONE`, save, and look at `images/logo.svg` (run `task logo` and it
-                                       // re-renders on every save). Add your own by pasting any colormap's stops —
-                                       // `ramp_sample` interpolates across however many you give it.
+// Terrain hypsometric ramps (low elevation → high), each sampled from the land
+// section of a named colormap. To test a palette, change the `TERRAIN_RAMP`
+// line at the bottom of this block to `&TURKU` / `&BILBAO` / `&BAMAKO` /
+// `&SANDSTONE`, save, and look at `images/logo.svg` (run `task logo` and it
+// re-renders on every save). Add your own by pasting any colormap's stops —
+// `ramp_sample` interpolates across however many you give it.
 #[allow(dead_code)] // Crameri `lajolla` — vivid red-rock / sunset
 const SANDSTONE: [Rgb; 6] = [
     hex("#ca514b"),
@@ -447,10 +447,10 @@ fn trace_river() -> Vec<[f64; 2]> {
     }
     let stride = (full.len() / RIVER_POINTS).max(1);
     let mut pts: Vec<[f64; 2]> = full.iter().step_by(stride).copied().collect();
-    if let Some(&last) = full.last() {
-        if pts.last() != Some(&last) {
-            pts.push(last);
-        }
+    if let Some(&last) = full.last()
+        && pts.last() != Some(&last)
+    {
+        pts.push(last);
     }
     pts
 }
@@ -1129,7 +1129,7 @@ fn draw_butterfly(svg: &mut Svg, base: (f64, f64)) {
     let (lrx, lry) = rot(bx + 6.0, by + 6.0);
     svg.ellipse(lrx, lry, 5.2, 6.5, 16.0 + BFLY_TILT, BFLY_WING2); // lower right
     svg.ellipse(bx, by, 2.1, 9.0, BFLY_TILT, BFLY_BODY); // body (centre = pivot)
-                                                         // Antennae.
+    // Antennae.
     let (a0x, a0y) = rot(bx, by - 7.0);
     let (alx, aly) = rot(bx - 4.0, by - 13.0);
     let (arx, ary) = rot(bx + 4.0, by - 13.0);

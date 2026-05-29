@@ -29,7 +29,7 @@ use basin::problems::{ExponentialFit, PowellSingular};
 use basin::{
     BasicState, Executor, GramMatrix, LevenbergMarquardt, LinearSolveSpd, MatTransposeVec,
 };
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 use faer::{Col, Mat};
 use nalgebra::{DMatrix, DVector};

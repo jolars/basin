@@ -11,9 +11,9 @@
 //! doesn't ship sparse QR.
 
 use faer::linalg::solvers::{Solve, SolveLstsq};
-use faer::sparse::linalg::matmul::{sparse_dense_matmul, sparse_sparse_matmul};
-use faer::sparse::linalg::LltError;
 use faer::sparse::SparseColMat;
+use faer::sparse::linalg::LltError;
+use faer::sparse::linalg::matmul::{sparse_dense_matmul, sparse_sparse_matmul};
 use faer::{Accum, Col, Par, Side};
 
 use super::linalg::{

@@ -2,8 +2,8 @@
 
 use basin::problems::SparseLeastSquares;
 use basin::{BasicState, Executor, GaussNewton, TerminationReason};
-use faer::sparse::{SparseColMat, Triplet};
 use faer::Col;
+use faer::sparse::{SparseColMat, Triplet};
 
 type FaerSparseLeastSquares = SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>;
 

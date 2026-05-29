@@ -120,11 +120,7 @@ fn soft_reject_via_infinity_does_not_abort() {
             // strictly interior, so the soft reject only fires for
             // line-search probes that overshoot.
             let s: f64 = x.iter().map(|xi| xi * xi).sum();
-            if s > 1.0 {
-                Ok(f64::INFINITY)
-            } else {
-                Ok(s)
-            }
+            if s > 1.0 { Ok(f64::INFINITY) } else { Ok(s) }
         }
     }
     impl Gradient for InfiniteBeyondUnit {

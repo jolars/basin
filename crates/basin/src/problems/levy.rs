@@ -152,7 +152,7 @@ impl Gradient for Levy<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{levy, levy_gradient, Levy};
+    use super::{Levy, levy, levy_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -177,7 +177,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{levy, levy_gradient, Levy};
+    use super::{Levy, levy, levy_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
@@ -205,7 +205,7 @@ mod ndarray_impl {
 
 #[cfg(feature = "faer")]
 mod faer_impl {
-    use super::{levy, levy_gradient, Levy};
+    use super::{Levy, levy, levy_gradient};
     use crate::{CostFunction, Gradient};
     use faer::Col;
 
@@ -300,7 +300,7 @@ impl BoxConstraints for LevyBoxed<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_boxed_impl {
-    use super::{levy, levy_gradient, LevyBoxed, STANDARD_LOWER, STANDARD_UPPER};
+    use super::{LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient};
     use crate::{BoxConstraints, CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -345,7 +345,7 @@ mod nalgebra_boxed_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_boxed_impl {
-    use super::{levy, levy_gradient, LevyBoxed, STANDARD_LOWER, STANDARD_UPPER};
+    use super::{LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient};
     use crate::{BoxConstraints, CostFunction, Gradient};
     use ndarray::Array1;
 
@@ -393,7 +393,7 @@ mod ndarray_boxed_impl {
 
 #[cfg(feature = "faer")]
 mod faer_boxed_impl {
-    use super::{levy, levy_gradient, LevyBoxed, STANDARD_LOWER, STANDARD_UPPER};
+    use super::{LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient};
     use crate::{BoxConstraints, CostFunction, Gradient};
     use faer::Col;
 

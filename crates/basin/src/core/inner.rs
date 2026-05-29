@@ -14,7 +14,7 @@
 //! (eval aggregation, criteria statelessness across calls, failure
 //! routing) every outer solver must follow.
 
-use crate::core::executor::{run_loop, OptimizationResult};
+use crate::core::executor::{OptimizationResult, run_loop};
 use crate::core::problem::Problem;
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};

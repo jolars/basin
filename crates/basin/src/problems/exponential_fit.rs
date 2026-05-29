@@ -155,7 +155,7 @@ impl<V> HasSpec for ExponentialFit<V> {
 }
 
 mod vec_impl {
-    use super::{exponential_fit, exponential_fit_residuals, ExponentialFit};
+    use super::{ExponentialFit, exponential_fit, exponential_fit_residuals};
     use crate::{CostFunction, Residual};
 
     impl CostFunction for ExponentialFit<Vec<f64>> {
@@ -182,7 +182,7 @@ mod vec_impl {
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
     use super::{
-        exponential_fit, exponential_fit_jacobian, exponential_fit_residuals, ExponentialFit,
+        ExponentialFit, exponential_fit, exponential_fit_jacobian, exponential_fit_residuals,
     };
     use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
@@ -221,7 +221,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{exponential_fit, exponential_fit_residuals, ExponentialFit};
+    use super::{ExponentialFit, exponential_fit, exponential_fit_residuals};
     use crate::{CostFunction, Residual};
     use ndarray::Array1;
 
@@ -258,7 +258,7 @@ mod ndarray_impl {
 #[cfg(feature = "faer")]
 mod faer_impl {
     use super::{
-        exponential_fit, exponential_fit_jacobian, exponential_fit_residuals, ExponentialFit,
+        ExponentialFit, exponential_fit, exponential_fit_jacobian, exponential_fit_residuals,
     };
     use crate::{CostFunction, Jacobian, Residual};
     use faer::{Col, Mat};

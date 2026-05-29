@@ -111,7 +111,7 @@ impl Gradient for Beale<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{beale, beale_gradient, Beale};
+    use super::{Beale, beale, beale_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -136,7 +136,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{beale, beale_gradient, Beale};
+    use super::{Beale, beale, beale_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 

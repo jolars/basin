@@ -114,7 +114,7 @@ impl Gradient for ThreeHumpCamel<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{three_hump_camel, three_hump_camel_gradient, ThreeHumpCamel};
+    use super::{ThreeHumpCamel, three_hump_camel, three_hump_camel_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -139,7 +139,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{three_hump_camel, three_hump_camel_gradient, ThreeHumpCamel};
+    use super::{ThreeHumpCamel, three_hump_camel, three_hump_camel_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 

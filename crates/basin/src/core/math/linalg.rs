@@ -356,7 +356,7 @@ pub trait DenseMatrixFromFn: Sized {
 
     /// Build a `rows × cols` matrix with entry `(i, j) = f(i, j)`.
     fn dense_from_fn<F: FnMut(usize, usize) -> f64>(rows: usize, cols: usize, f: F)
-        -> Self::Matrix;
+    -> Self::Matrix;
 }
 
 /// Symmetric (self-adjoint) eigendecomposition `A = U diag(λ) Uᵀ`. The

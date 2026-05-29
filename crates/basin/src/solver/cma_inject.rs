@@ -11,7 +11,7 @@ use crate::core::state::{
     LbfgsState, State,
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
-use crate::solver::cma_es::{sort_population_ascending, CmaEs};
+use crate::solver::cma_es::{CmaEs, sort_population_ascending};
 use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 use crate::solver::levenberg_marquardt::LevenbergMarquardt;
 use crate::solver::nelder_mead::NelderMead;

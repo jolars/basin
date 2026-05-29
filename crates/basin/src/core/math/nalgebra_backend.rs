@@ -3,8 +3,8 @@ use rand::{Rng, RngExt};
 use rand_distr::{Distribution, StandardNormal};
 
 use super::cl_scaling::{
-    cl_scaling_pair, max_feasible_step_component, project_strictly_inside_component,
-    BoxAffineScaling,
+    BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
+    project_strictly_inside_component,
 };
 use super::linalg::{
     AddDiagonalInPlace, AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate,
@@ -722,10 +722,11 @@ mod tests {
         // SPD once you add μI, and Cholesky succeeds.
         let a = DMatrix::from_row_slice(2, 2, &[1.0, 2.0, 2.0, 4.0]);
         let mut g = a.gram();
-        assert!(g
-            .clone()
-            .solve_spd(&DVector::from_vec(vec![1.0, 1.0]))
-            .is_err());
+        assert!(
+            g.clone()
+                .solve_spd(&DVector::from_vec(vec![1.0, 1.0]))
+                .is_err()
+        );
         g.add_diagonal_in_place(1e-3);
         let x = g
             .solve_spd(&DVector::from_vec(vec![1.0, 1.0]))

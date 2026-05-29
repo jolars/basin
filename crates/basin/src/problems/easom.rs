@@ -112,7 +112,7 @@ impl Gradient for Easom<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{easom, easom_gradient, Easom};
+    use super::{Easom, easom, easom_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -137,7 +137,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{easom, easom_gradient, Easom};
+    use super::{Easom, easom, easom_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 

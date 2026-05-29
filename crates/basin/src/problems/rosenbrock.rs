@@ -104,7 +104,7 @@ impl Gradient for Rosenbrock<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{rosenbrock, rosenbrock_gradient, Rosenbrock};
+    use super::{Rosenbrock, rosenbrock, rosenbrock_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -129,7 +129,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{rosenbrock, rosenbrock_gradient, Rosenbrock};
+    use super::{Rosenbrock, rosenbrock, rosenbrock_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
@@ -291,7 +291,7 @@ impl Residual for RosenbrockResiduals<Vec<f64>> {
 #[cfg(feature = "nalgebra")]
 mod nalgebra_residuals_impl {
     use super::{
-        rosenbrock, rosenbrock_residuals, rosenbrock_residuals_jacobian, RosenbrockResiduals,
+        RosenbrockResiduals, rosenbrock, rosenbrock_residuals, rosenbrock_residuals_jacobian,
     };
     use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
@@ -328,7 +328,7 @@ mod nalgebra_residuals_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_residuals_impl {
-    use super::{rosenbrock, rosenbrock_residuals, RosenbrockResiduals};
+    use super::{RosenbrockResiduals, rosenbrock, rosenbrock_residuals};
     use crate::{CostFunction, Residual};
     use ndarray::Array1;
 
@@ -358,7 +358,7 @@ mod ndarray_residuals_impl {
 
 #[cfg(feature = "faer")]
 mod faer_residuals_impl {
-    use super::{rosenbrock_residuals_jacobian, RosenbrockResiduals};
+    use super::{RosenbrockResiduals, rosenbrock_residuals_jacobian};
     use crate::{CostFunction, Jacobian, Residual};
     use faer::{Col, Mat};
 

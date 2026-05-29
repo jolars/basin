@@ -55,9 +55,9 @@ pub mod bfgs;
 
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
-pub use bfgs::Bfgs;
 #[allow(deprecated)]
 pub use bfgs::BFGS;
+pub use bfgs::Bfgs;
 pub use bounded_cma_es::BoundedCmaEs;
 pub use bounded_cma_inject::BoundedCmaInject;
 pub use brent::Brent;

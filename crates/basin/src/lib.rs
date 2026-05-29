@@ -64,7 +64,7 @@ pub use crate::core::barrier::LogBarrier;
 pub use crate::core::constraint::{
     BoxConstraints, LinearEqualityConstraints, LinearInequalityConstraints,
 };
-pub use crate::core::executor::{run_loop, Executor, OptimizationResult, StepOutcome, Stepper};
+pub use crate::core::executor::{Executor, OptimizationResult, StepOutcome, Stepper, run_loop};
 pub use crate::core::inner::{InnerExecutor, WarmStart};
 pub use crate::core::math::{
     AddDiagonalInPlace, AddDiagonalVectorInPlace, BoxAffineScaling, ClampInPlace, DenseMatrix,
@@ -72,9 +72,9 @@ pub use crate::core::math::{
     MaxDiagonal, NegInPlace, NormInfinity, NormSquared, SampleUniformBox, ScaledAdd, VectorIndex,
 };
 pub use crate::core::numdiff::{
-    central_difference_gradient, central_difference_hessian, central_difference_jacobian,
-    forward_difference_gradient, forward_difference_hessian, forward_difference_jacobian,
-    FiniteDiff, Method,
+    FiniteDiff, Method, central_difference_gradient, central_difference_hessian,
+    central_difference_jacobian, forward_difference_gradient, forward_difference_hessian,
+    forward_difference_jacobian,
 };
 pub use crate::core::problem::{
     CostFunction, EvalCounts, Gradient, Hessian, Jacobian, Problem, Residual,
@@ -92,12 +92,12 @@ pub use crate::core::termination::{
     TerminationCriterion, TerminationReason,
 };
 pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
-pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
-#[allow(deprecated)]
-pub use crate::solver::lbfgs::{LBFGS, LBFGSB};
-pub use crate::solver::Bfgs;
 #[allow(deprecated)]
 pub use crate::solver::BFGS;
+pub use crate::solver::Bfgs;
+#[allow(deprecated)]
+pub use crate::solver::lbfgs::{LBFGS, LBFGSB};
+pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent, ClosureInner,
     CmaEs, CmaInject, De, GaussNewton, GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState,

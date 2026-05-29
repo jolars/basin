@@ -45,8 +45,7 @@ pub static POWELL_SINGULAR_SPEC: ProblemSpec = ProblemSpec {
     },
     references: &[Reference {
         citation: "Powell (1962)",
-        title:
-            "An iterative method for finding stationary values of a function of several variables",
+        title: "An iterative method for finding stationary values of a function of several variables",
         source: "The Computer Journal, 5(2), 147–151",
         doi: Some("10.1093/comjnl/5.2.147"),
         url: None,
@@ -175,7 +174,7 @@ impl Residual for PowellSingular<Vec<f64>> {
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
     use super::{
-        powell_singular, powell_singular_jacobian, powell_singular_residuals, PowellSingular,
+        PowellSingular, powell_singular, powell_singular_jacobian, powell_singular_residuals,
     };
     use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
@@ -214,7 +213,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{powell_singular, powell_singular_residuals, PowellSingular};
+    use super::{PowellSingular, powell_singular, powell_singular_residuals};
     use crate::{CostFunction, Residual};
     use ndarray::Array1;
 
@@ -245,7 +244,7 @@ mod ndarray_impl {
 
 #[cfg(feature = "faer")]
 mod faer_impl {
-    use super::{powell_singular_jacobian, PowellSingular, SQRT_10, SQRT_5};
+    use super::{PowellSingular, SQRT_5, SQRT_10, powell_singular_jacobian};
     use crate::{CostFunction, Jacobian, Residual};
     use faer::{Col, Mat};
 

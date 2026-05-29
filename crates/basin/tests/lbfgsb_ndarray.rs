@@ -9,7 +9,7 @@ use basin::{
     BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
     ProjectedGradientTolerance,
 };
-use ndarray::{array, Array1};
+use ndarray::{Array1, array};
 
 struct Rosen {
     l: Array1<f64>,

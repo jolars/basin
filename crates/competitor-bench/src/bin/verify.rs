@@ -9,8 +9,8 @@
 use basin::problems::{ExponentialFit, PowellSingular};
 use basin::{BasicState, Executor, LevenbergMarquardt};
 use competitor_bench::{
-    vardim_start, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
-    LM_DEFAULT_TOL,
+    LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
+    vardim_start,
 };
 use faer::Col;
 use levenberg_marquardt::LeastSquaresProblem;
@@ -98,7 +98,14 @@ fn main() {
     let p = r.param();
     println!(
         "  basin/nalg  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} cost-evals, {:?})",
-        r.iter(), r.cost(), p[0], p[1], p[2], p[3], r.cost_evals(), r.reason
+        r.iter(),
+        r.cost(),
+        p[0],
+        p[1],
+        p[2],
+        p[3],
+        r.cost_evals(),
+        r.reason
     );
 
     let r = Executor::new(
@@ -112,7 +119,14 @@ fn main() {
     let p = r.param();
     println!(
         "  basin/faer  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} cost-evals, {:?})",
-        r.iter(), r.cost(), p[0], p[1], p[2], p[3], r.cost_evals(), r.reason
+        r.iter(),
+        r.cost(),
+        p[0],
+        p[1],
+        p[2],
+        p[3],
+        r.cost_evals(),
+        r.reason
     );
 
     // ---- Variably Dimensioned (well-conditioned, full-rank) at the

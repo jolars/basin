@@ -12,7 +12,7 @@ use argmin::core::State;
 use argmin::solver::gradientdescent::SteepestDescent;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
-use basin::problems::{rosenbrock, rosenbrock_gradient, Rosenbrock};
+use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
 use basin::{
     BasicSimplexState, BasicState, Executor, GradientDescent, IntoInitialSimplex, MoreThuente,
     NelderMead,

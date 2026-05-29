@@ -10,9 +10,9 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicPopulationState, CountsMirror, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
-use crate::solver::bounded_cma_es::{evaluate_with_penalty, BoundedCmaEs};
+use crate::solver::bounded_cma_es::{BoundedCmaEs, evaluate_with_penalty};
 use crate::solver::cma_es::sort_population_ascending;
-use crate::solver::cma_inject::{default_c_y, MemeticInner};
+use crate::solver::cma_inject::{MemeticInner, default_c_y};
 
 /// Memetic [`BoundedCmaEs`] with Hansen (2011) injection. Sibling of
 /// [`CmaInject`](super::CmaInject); the outer is the bounded variant

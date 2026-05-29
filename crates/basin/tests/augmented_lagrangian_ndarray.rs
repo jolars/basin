@@ -8,7 +8,7 @@ use basin::{
     AugmentedLagrangianMethod, Backtracking, BasicState, Executor, GradientDescent, GradientState,
     TerminationReason,
 };
-use ndarray::{array, Array1, Array2};
+use ndarray::{Array1, Array2, array};
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`; constrained optimum (1,1).
 fn single_row_problem() -> EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>> {

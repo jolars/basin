@@ -87,7 +87,7 @@ impl CostFunction for Eggholder<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{eggholder, Eggholder};
+    use super::{Eggholder, eggholder};
     use crate::CostFunction;
     use nalgebra::DVector;
 
@@ -103,7 +103,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{eggholder, Eggholder};
+    use super::{Eggholder, eggholder};
     use crate::CostFunction;
     use ndarray::Array1;
 

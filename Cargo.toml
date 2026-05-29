@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/basin",
     "crates/basin-wasm",
@@ -10,7 +10,7 @@ members = [
 # all members must agree on a single major version per backend.
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 rust-version = "1.91.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jolars/basin"

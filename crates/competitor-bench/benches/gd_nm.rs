@@ -22,13 +22,13 @@ use argmin::core::Executor as ArgminExecutor;
 use argmin::solver::gradientdescent::SteepestDescent;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
-use basin::problems::{rosenbrock, rosenbrock_gradient, Rosenbrock};
+use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
 use basin::{
     BasicSimplexState, BasicState, Executor, GradientDescent, IntoInitialSimplex, MoreThuente,
     NelderMead,
 };
 use competitor_bench::ArgminProblem;
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 const MAX_ITERS: u64 = 200;
 

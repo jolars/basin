@@ -15,8 +15,8 @@
 
 use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::factorization::CscCholesky;
-use nalgebra_sparse::ops::serial::spmm_csc_dense;
 use nalgebra_sparse::ops::Op;
+use nalgebra_sparse::ops::serial::spmm_csc_dense;
 use nalgebra_sparse::{CscMatrix, SparseEntryMut};
 
 use super::linalg::{

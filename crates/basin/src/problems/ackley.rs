@@ -118,7 +118,7 @@ impl CostFunction for Ackley<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{ackley, Ackley};
+    use super::{Ackley, ackley};
     use crate::CostFunction;
     use nalgebra::DVector;
 
@@ -134,7 +134,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{ackley, Ackley};
+    use super::{Ackley, ackley};
     use crate::CostFunction;
     use ndarray::Array1;
 
@@ -150,7 +150,7 @@ mod ndarray_impl {
 
 #[cfg(feature = "faer")]
 mod faer_impl {
-    use super::{Ackley, A, B};
+    use super::{A, Ackley, B};
     use crate::CostFunction;
     use faer::Col;
 
@@ -239,7 +239,7 @@ impl BoxConstraints for AckleyBoxed<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_boxed_impl {
-    use super::{ackley, AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER};
+    use super::{AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER, ackley};
     use crate::{BoxConstraints, CostFunction};
     use nalgebra::DVector;
 
@@ -275,7 +275,7 @@ mod nalgebra_boxed_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_boxed_impl {
-    use super::{ackley, AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER};
+    use super::{AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER, ackley};
     use crate::{BoxConstraints, CostFunction};
     use ndarray::Array1;
 
@@ -311,7 +311,7 @@ mod ndarray_boxed_impl {
 
 #[cfg(feature = "faer")]
 mod faer_boxed_impl {
-    use super::{AckleyBoxed, A, B, STANDARD_LOWER, STANDARD_UPPER};
+    use super::{A, AckleyBoxed, B, STANDARD_LOWER, STANDARD_UPPER};
     use crate::{BoxConstraints, CostFunction};
     use faer::Col;
 

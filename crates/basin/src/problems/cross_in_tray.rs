@@ -88,7 +88,7 @@ impl CostFunction for CrossInTray<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{cross_in_tray, CrossInTray};
+    use super::{CrossInTray, cross_in_tray};
     use crate::CostFunction;
     use nalgebra::DVector;
 
@@ -104,7 +104,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{cross_in_tray, CrossInTray};
+    use super::{CrossInTray, cross_in_tray};
     use crate::CostFunction;
     use ndarray::Array1;
 

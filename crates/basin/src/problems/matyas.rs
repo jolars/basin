@@ -107,7 +107,7 @@ impl Gradient for Matyas<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{matyas, matyas_gradient, Matyas};
+    use super::{Matyas, matyas, matyas_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -132,7 +132,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{matyas, matyas_gradient, Matyas};
+    use super::{Matyas, matyas, matyas_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 

@@ -41,7 +41,7 @@ use basin::{
     GaussNewton, GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente, NelderMead,
     QuasiNewtonState,
 };
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 use faer::sparse::{SparseColMat, Triplet};
 use faer::{Col, Mat};
@@ -75,7 +75,7 @@ fn rosenbrock_start(n: usize) -> Vec<f64> {
 /// `$setup` and wrapping it in `$state`. `$solver` is reconstructed each
 /// iteration (cheap, and identical across backends).
 macro_rules! contestant {
-    ($g:expr, $label:literal, $setup:expr, $prob:ty, $solver:expr, $state:expr $(,)?) => {
+    ($g:expr_2021, $label:literal, $setup:expr_2021, $prob:ty, $solver:expr_2021, $state:expr_2021 $(,)?) => {
         $g.bench_function(BenchmarkId::from_parameter($label), |b| {
             b.iter_batched(
                 $setup,
@@ -96,7 +96,7 @@ macro_rules! contestant {
 /// canonical per-backend start-vector constructors. For vector-tier solvers
 /// that share one state constructor across backends.
 macro_rules! backends_all4 {
-    ($g:expr, $Prob:ident, $start:expr, $n:expr, $solver:expr, $state:expr $(,)?) => {{
+    ($g:expr_2021, $Prob:ident, $start:expr_2021, $n:expr_2021, $solver:expr_2021, $state:expr_2021 $(,)?) => {{
         let start = $start;
         contestant!(
             $g,

@@ -5,7 +5,7 @@ use basin::{
     Backtracking, BasicSimplexState, BasicState, CostFunction, Executor, GradientDescent,
     NelderMead,
 };
-use ndarray::{array, Array1};
+use ndarray::{Array1, array};
 
 #[test]
 fn gradient_descent_with_ndarray_array1() {

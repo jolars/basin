@@ -128,7 +128,7 @@ impl Gradient for McCormick<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{mccormick, mccormick_gradient, McCormick};
+    use super::{McCormick, mccormick, mccormick_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -153,7 +153,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{mccormick, mccormick_gradient, McCormick};
+    use super::{McCormick, mccormick, mccormick_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 

@@ -177,8 +177,8 @@ mod faer_impl {
     use super::{SparseLeastSquares, SparseLeastSquaresBoxed};
     use crate::core::math::{MatVec, ScaledAdd};
     use crate::{BoxConstraints, CostFunction, Jacobian, Residual};
-    use faer::sparse::SparseColMat;
     use faer::Col;
+    use faer::sparse::SparseColMat;
 
     impl CostFunction for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>> {
         type Param = Col<f64>;
@@ -284,8 +284,8 @@ mod tests {
     #[test]
     fn faer_residual_at_zero_returns_minus_b() {
         use crate::Residual;
-        use faer::sparse::{SparseColMat, Triplet};
         use faer::Col;
+        use faer::sparse::{SparseColMat, Triplet};
 
         // 3×2 design with two nonzeros per row.
         let triplets = [

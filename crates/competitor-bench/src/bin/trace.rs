@@ -33,12 +33,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use argmin::core::observers::{Observe, ObserverMode};
-use argmin::core::{Error, Executor as ArgminExecutor, State as ArgminState, KV};
+use argmin::core::{Error, Executor as ArgminExecutor, KV, State as ArgminState};
 use argmin::solver::gradientdescent::SteepestDescent;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use argmin::solver::quasinewton::LBFGS as ArgminLBFGS;
-use basin::problems::{rosenbrock, rosenbrock_gradient, Rosenbrock};
+use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
 use basin::{
     BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent, IntoInitialSimplex,
     LbfgsState, Lbfgsb, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome,
@@ -144,10 +144,10 @@ fn drain(points: &Points) -> Vec<(u128, f64)> {
 /// is `f(x0)`, which argmin *did* evaluate during init. Overwrite that
 /// leading non-finite cost so both libraries' curves start at `f(x0)`.
 fn finite_start(mut pts: Vec<(u128, f64)>, f0: f64) -> Vec<(u128, f64)> {
-    if let Some(first) = pts.first_mut() {
-        if !first.1.is_finite() {
-            *first = (0, f0);
-        }
+    if let Some(first) = pts.first_mut()
+        && !first.1.is_finite()
+    {
+        *first = (0, f0);
     }
     pts
 }

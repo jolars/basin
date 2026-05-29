@@ -88,7 +88,7 @@ impl CostFunction for HolderTable<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{holder_table, HolderTable};
+    use super::{HolderTable, holder_table};
     use crate::CostFunction;
     use nalgebra::DVector;
 
@@ -104,7 +104,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{holder_table, HolderTable};
+    use super::{HolderTable, holder_table};
     use crate::CostFunction;
     use ndarray::Array1;
 

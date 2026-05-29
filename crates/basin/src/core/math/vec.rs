@@ -2,8 +2,8 @@ use rand::{Rng, RngExt};
 use rand_distr::{Distribution, StandardNormal};
 
 use super::cl_scaling::{
-    cl_scaling_pair, max_feasible_step_component, project_strictly_inside_component,
-    BoxAffineScaling,
+    BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
+    project_strictly_inside_component,
 };
 use super::sample::{SampleStandardNormal, SampleUniformBox};
 use super::{

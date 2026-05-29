@@ -264,17 +264,17 @@ pub(crate) fn subsm(
         }
     }
 
-    if alpha < 1.0 {
-        if let Some(ibd) = ibd {
-            let dk = d[ibd];
-            let k = ind[ibd];
-            if dk > 0.0 {
-                x[k] = u[k];
-                d[ibd] = 0.0;
-            } else if dk < 0.0 {
-                x[k] = l[k];
-                d[ibd] = 0.0;
-            }
+    if alpha < 1.0
+        && let Some(ibd) = ibd
+    {
+        let dk = d[ibd];
+        let k = ind[ibd];
+        if dk > 0.0 {
+            x[k] = u[k];
+            d[ibd] = 0.0;
+        } else if dk < 0.0 {
+            x[k] = l[k];
+            d[ibd] = 0.0;
         }
     }
     for i in 0..nsub {

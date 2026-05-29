@@ -115,7 +115,7 @@ impl Gradient for Himmelblau<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{himmelblau, himmelblau_gradient, Himmelblau};
+    use super::{Himmelblau, himmelblau, himmelblau_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -140,7 +140,7 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{himmelblau, himmelblau_gradient, Himmelblau};
+    use super::{Himmelblau, himmelblau, himmelblau_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 

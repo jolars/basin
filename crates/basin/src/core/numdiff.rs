@@ -304,11 +304,7 @@ fn nr_step(xj: f64, scale: f64, fixed_step: Option<f64>) -> f64 {
     }
     let h = scale * xj.abs().max(1.0);
     let reround = (xj + h) - xj;
-    if reround == 0.0 {
-        h
-    } else {
-        reround
-    }
+    if reround == 0.0 { h } else { reround }
 }
 
 // ----------------------------------------------------------------------
@@ -406,11 +402,7 @@ where
             Some(h) => h,
             None => {
                 let h = eps * xj.abs();
-                if h == 0.0 {
-                    eps
-                } else {
-                    h
-                }
+                if h == 0.0 { eps } else { h }
             }
         };
         probe.set_scalar(j, xj + h);
@@ -650,8 +642,8 @@ mod tests {
     #[cfg(feature = "problems")]
     mod with_problems {
         use super::*;
-        use crate::problems::rosenbrock::{rosenbrock_gradient, Rosenbrock};
-        use crate::problems::sphere::{sphere_gradient, Sphere};
+        use crate::problems::rosenbrock::{Rosenbrock, rosenbrock_gradient};
+        use crate::problems::sphere::{Sphere, sphere_gradient};
 
         #[test]
         fn central_gradient_matches_sphere_analytic() {

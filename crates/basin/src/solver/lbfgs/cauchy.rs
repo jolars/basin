@@ -19,7 +19,7 @@
 //! `Col::try_as_col_major().unwrap().as_slice()`, or plain
 //! `Vec::as_slice()`).
 
-use super::compact::{bmv, BmvError};
+use super::compact::{BmvError, bmv};
 
 /// `iwhere` classification per Fortran v3.0 (`lbfgsb.f:1287-1296`).
 /// Stored as `i8` so `−3` round-trips correctly while staying compact.
