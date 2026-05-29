@@ -155,11 +155,20 @@ $effect(() => {
         <div
             class="max-w-screen-2xl mx-auto px-4 md:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-500"
         >
-            <p>
+            <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span class="font-semibold text-slate-700 dark:text-slate-300"
                     >Basin</span
                 >
-                — numerical optimization for Rust.
+                <a
+                    href="https://github.com/jolars/basin/blob/main/CHANGELOG.md"
+                    target="_blank"
+                    rel="noreferrer"
+                    title="View changelog"
+                    class="font-mono text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                >
+                    v{__BASIN_VERSION__}
+                </a>
+                <span>— numerical optimization for Rust.</span>
             </p>
             <div class="flex items-center gap-4">
                 <a

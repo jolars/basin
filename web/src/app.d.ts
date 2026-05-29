@@ -12,6 +12,9 @@ declare global {
         // interface PageState {}
         // interface Platform {}
     }
+
+    // Injected at build time by vite.config.ts from crates/basin/Cargo.toml.
+    const __BASIN_VERSION__: string;
 }
 
 export {};
