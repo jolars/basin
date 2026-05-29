@@ -6,7 +6,7 @@
 use web_time::{Duration, Instant};
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, ScaledAdd};
+use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd};
 use crate::core::state::{GradientState, SimplexState, State};
 
 /// Why the executor stopped. Returned on
@@ -150,12 +150,13 @@ impl<S: GradientState> TerminationCriterion<S> for MaxGradientEvals {
 ///
 /// Requires `S: GradientState` — pairing with a derivative-free solver
 /// is a compile error.
-pub struct GradientTolerance(pub f64);
+pub struct GradientTolerance<F = f64>(pub F);
 
-impl<S> TerminationCriterion<S> for GradientTolerance
+impl<S, F> TerminationCriterion<S> for GradientTolerance<F>
 where
+    F: Scalar,
     S: GradientState,
-    S::Param: NormSquared,
+    S::Param: NormSquared<F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let g = state.gradient()?;
@@ -186,14 +187,14 @@ where
 /// populated. Requires `S: GradientState` — pairing with a
 /// derivative-free solver is a compile error. Skipped silently while
 /// the state has no gradient populated yet.
-pub struct RelativeGradientTolerance {
-    tol: f64,
-    initial_norm_squared: Option<f64>,
+pub struct RelativeGradientTolerance<F = f64> {
+    tol: F,
+    initial_norm_squared: Option<F>,
 }
 
-impl RelativeGradientTolerance {
+impl<F: Scalar> RelativeGradientTolerance<F> {
     /// New tolerance with the given relative gradient-norm bound.
-    pub fn new(tol: f64) -> Self {
+    pub fn new(tol: F) -> Self {
         Self {
             tol,
             initial_norm_squared: None,
@@ -201,10 +202,11 @@ impl RelativeGradientTolerance {
     }
 }
 
-impl<S> TerminationCriterion<S> for RelativeGradientTolerance
+impl<S, F> TerminationCriterion<S> for RelativeGradientTolerance<F>
 where
+    F: Scalar,
     S: GradientState,
-    S::Param: NormSquared,
+    S::Param: NormSquared<F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let g = state.gradient()?;
@@ -242,21 +244,21 @@ where
 /// [`ScaledAdd<f64>`], [`ClampInPlace`], [`NormInfinity`], and `Clone`.
 /// Skipped silently when the state has no gradient populated yet
 /// (e.g. iter 0 before `init` has run).
-pub struct ProjectedGradientTolerance<P> {
+pub struct ProjectedGradientTolerance<P, F = f64> {
     lower: P,
     upper: P,
-    tol: f64,
+    tol: F,
 }
 
-impl<P> ProjectedGradientTolerance<P> {
+impl<P, F> ProjectedGradientTolerance<P, F> {
     /// New criterion with explicit bounds.
-    pub fn new(lower: P, upper: P, tol: f64) -> Self {
+    pub fn new(lower: P, upper: P, tol: F) -> Self {
         Self { lower, upper, tol }
     }
 
     /// New criterion that clones its bounds off a [`BoxConstraints`]
     /// problem.
-    pub fn from_problem<Pr>(problem: &Pr, tol: f64) -> Self
+    pub fn from_problem<Pr>(problem: &Pr, tol: F) -> Self
     where
         Pr: BoxConstraints<Param = P>,
         P: Clone,
@@ -269,17 +271,18 @@ impl<P> ProjectedGradientTolerance<P> {
     }
 }
 
-impl<S, P> TerminationCriterion<S> for ProjectedGradientTolerance<P>
+impl<S, P, F> TerminationCriterion<S> for ProjectedGradientTolerance<P, F>
 where
+    F: Scalar,
     S: GradientState + State<Param = P>,
-    P: ScaledAdd<f64> + ClampInPlace + NormInfinity + Clone,
+    P: ScaledAdd<F> + ClampInPlace + NormInfinity<F> + Clone,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let g = state.gradient()?;
         let mut probe = state.param().clone(); // x
-        probe.scaled_add(-1.0, g); // x − ∇f
+        probe.scaled_add(-F::one(), g); // x − ∇f
         probe.clamp_in_place(&self.lower, &self.upper); // π(x − ∇f)
-        probe.scaled_add(-1.0, state.param()); // π(x − ∇f) − x
+        probe.scaled_add(-F::one(), state.param()); // π(x − ∇f) − x
         if probe.norm_infinity() <= self.tol {
             Some(TerminationReason::ProjectedGradientTolerance)
         } else {
@@ -290,14 +293,14 @@ where
 
 /// Stop when `‖x_k − x_{k−1}‖ ≤ tol`. Holds its own copy of the previous
 /// iterate so it doesn't depend on state-side history.
-pub struct ParamTolerance<P> {
-    tol_squared: f64,
+pub struct ParamTolerance<P, F = f64> {
+    tol_squared: F,
     last: Option<P>,
 }
 
-impl<P> ParamTolerance<P> {
+impl<P, F: Scalar> ParamTolerance<P, F> {
     /// New tolerance with the given absolute step bound.
-    pub fn new(tol: f64) -> Self {
+    pub fn new(tol: F) -> Self {
         Self {
             tol_squared: tol * tol,
             last: None,
@@ -305,16 +308,17 @@ impl<P> ParamTolerance<P> {
     }
 }
 
-impl<S, P> TerminationCriterion<S> for ParamTolerance<P>
+impl<S, P, F> TerminationCriterion<S> for ParamTolerance<P, F>
 where
+    F: Scalar,
     S: State<Param = P>,
-    P: ScaledAdd<f64> + NormSquared + Clone,
+    P: ScaledAdd<F> + NormSquared<F> + Clone,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let curr = state.param();
         let triggered = if let Some(last) = &self.last {
             let mut diff = curr.clone();
-            diff.scaled_add(-1.0, last);
+            diff.scaled_add(-F::one(), last);
             diff.norm_squared() <= self.tol_squared
         } else {
             false
@@ -334,28 +338,29 @@ where
 /// `x = 0` the relative bound collapses (the right-hand side → 0), so
 /// pair it with an absolute [`ParamTolerance`] when the optimum may sit
 /// at the origin.
-pub struct RelativeParamTolerance<P> {
-    tol: f64,
+pub struct RelativeParamTolerance<P, F = f64> {
+    tol: F,
     last: Option<P>,
 }
 
-impl<P> RelativeParamTolerance<P> {
+impl<P, F> RelativeParamTolerance<P, F> {
     /// New tolerance with the given relative step bound.
-    pub fn new(tol: f64) -> Self {
+    pub fn new(tol: F) -> Self {
         Self { tol, last: None }
     }
 }
 
-impl<S, P> TerminationCriterion<S> for RelativeParamTolerance<P>
+impl<S, P, F> TerminationCriterion<S> for RelativeParamTolerance<P, F>
 where
+    F: Scalar,
     S: State<Param = P>,
-    P: ScaledAdd<f64> + NormSquared + Clone,
+    P: ScaledAdd<F> + NormSquared<F> + Clone,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let curr = state.param();
         let triggered = if let Some(last) = &self.last {
             let mut diff = curr.clone();
-            diff.scaled_add(-1.0, last);
+            diff.scaled_add(-F::one(), last);
             // ‖Δx‖ ≤ tol·‖x_k‖ ⟺ ‖Δx‖² ≤ tol²·‖x_k‖², avoiding a sqrt.
             diff.norm_squared() <= self.tol * self.tol * curr.norm_squared()
         } else {
@@ -368,21 +373,22 @@ where
 
 /// Stop when `|f_k − f_{k−1}| ≤ tol`. Holds its own copy of the previous
 /// cost.
-pub struct CostTolerance {
-    tol: f64,
-    last: Option<f64>,
+pub struct CostTolerance<F = f64> {
+    tol: F,
+    last: Option<F>,
 }
 
-impl CostTolerance {
+impl<F> CostTolerance<F> {
     /// New tolerance with the given absolute cost-change bound.
-    pub fn new(tol: f64) -> Self {
+    pub fn new(tol: F) -> Self {
         Self { tol, last: None }
     }
 }
 
-impl<S> TerminationCriterion<S> for CostTolerance
+impl<S, F> TerminationCriterion<S> for CostTolerance<F>
 where
-    S: State<Float = f64>,
+    F: Scalar,
+    S: State<Float = F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let curr = state.cost();
@@ -404,21 +410,22 @@ where
 /// magnitude (e.g. least-squares residuals carrying different
 /// normalizations). Near `f = 0` the relative bound collapses, so pair
 /// it with an absolute [`CostTolerance`] when the optimum cost is zero.
-pub struct RelativeCostTolerance {
-    tol: f64,
-    last: Option<f64>,
+pub struct RelativeCostTolerance<F = f64> {
+    tol: F,
+    last: Option<F>,
 }
 
-impl RelativeCostTolerance {
+impl<F> RelativeCostTolerance<F> {
     /// New tolerance with the given relative cost-change bound.
-    pub fn new(tol: f64) -> Self {
+    pub fn new(tol: F) -> Self {
         Self { tol, last: None }
     }
 }
 
-impl<S> TerminationCriterion<S> for RelativeCostTolerance
+impl<S, F> TerminationCriterion<S> for RelativeCostTolerance<F>
 where
-    S: State<Float = f64>,
+    F: Scalar,
+    S: State<Float = F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let curr = state.cost();
@@ -453,11 +460,12 @@ where
 /// [`BasicSimplexState`]: crate::core::state::BasicSimplexState
 /// [`BasicPopulationState`]: crate::core::state::BasicPopulationState
 /// [`QuasiNewtonState`]: crate::core::state::QuasiNewtonState
-pub struct TargetCost(pub f64);
+pub struct TargetCost<F = f64>(pub F);
 
-impl<S> TerminationCriterion<S> for TargetCost
+impl<S, F> TerminationCriterion<S> for TargetCost<F>
 where
-    S: State<Float = f64>,
+    F: Scalar,
+    S: State<Float = F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         (state.cost() <= self.0).then_some(TerminationReason::TargetCost)
@@ -494,17 +502,17 @@ where
 /// [`BasicSimplexState`]: crate::core::state::BasicSimplexState
 /// [`BasicPopulationState`]: crate::core::state::BasicPopulationState
 /// [`QuasiNewtonState`]: crate::core::state::QuasiNewtonState
-pub struct NoImprovement {
+pub struct NoImprovement<F = f64> {
     patience: u64,
-    tol: f64,
-    best: Option<f64>,
+    tol: F,
+    best: Option<F>,
     stalled: u64,
 }
 
-impl NoImprovement {
+impl<F> NoImprovement<F> {
     /// New criterion that fires after `patience` consecutive checks
     /// without an improvement of more than `tol`.
-    pub fn new(patience: u64, tol: f64) -> Self {
+    pub fn new(patience: u64, tol: F) -> Self {
         Self {
             patience,
             tol,
@@ -514,9 +522,10 @@ impl NoImprovement {
     }
 }
 
-impl<S> TerminationCriterion<S> for NoImprovement
+impl<S, F> TerminationCriterion<S> for NoImprovement<F>
 where
-    S: State<Float = f64>,
+    F: Scalar,
+    S: State<Float = F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let curr = state.cost();
@@ -544,22 +553,23 @@ where
 ///
 /// Requires `S: SimplexState` — single-iterate solvers (gradient
 /// descent, BFGS) cannot be paired with it (compile error).
-pub struct SimplexTolerance {
-    tol_x: f64,
-    tol_f: f64,
+pub struct SimplexTolerance<F = f64> {
+    tol_x: F,
+    tol_f: F,
 }
 
-impl SimplexTolerance {
+impl<F> SimplexTolerance<F> {
     /// New tolerance with separate vertex and cost bounds.
-    pub fn new(tol_x: f64, tol_f: f64) -> Self {
+    pub fn new(tol_x: F, tol_f: F) -> Self {
         Self { tol_x, tol_f }
     }
 }
 
-impl<S> TerminationCriterion<S> for SimplexTolerance
+impl<S, F> TerminationCriterion<S> for SimplexTolerance<F>
 where
-    S: SimplexState<Float = f64>,
-    S::Param: Clone + ScaledAdd<f64> + NormInfinity,
+    F: Scalar,
+    S: SimplexState<Float = F>,
+    S::Param: Clone + ScaledAdd<F> + NormInfinity<F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let vertices = state.vertices();
@@ -569,7 +579,7 @@ where
 
         for x_i in &vertices[1..] {
             let mut diff = x_i.clone();
-            diff.scaled_add(-1.0, best);
+            diff.scaled_add(-F::one(), best);
             if diff.norm_infinity() > self.tol_x {
                 return None;
             }
