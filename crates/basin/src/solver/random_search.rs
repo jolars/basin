@@ -1,5 +1,5 @@
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::SampleUniformBox;
+use crate::core::math::{SampleUniformBox, Scalar};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
@@ -148,7 +148,7 @@ impl RandomSearch {
 /// Sort `candidates` and `costs` jointly by ascending cost. NaN costs
 /// sort last so a single bad evaluation can't drag itself to the
 /// front. Mirrors `nelder_mead::sort_simplex`.
-fn sort_population_ascending<V>(candidates: &mut [V], costs: &mut [f64]) {
+fn sort_population_ascending<V, F: PartialOrd>(candidates: &mut [V], costs: &mut [F]) {
     let n = candidates.len();
     debug_assert_eq!(n, costs.len());
     let mut idx: Vec<usize> = (0..n).collect();
@@ -181,9 +181,10 @@ fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
     }
 }
 
-impl<P, V> Solver<P, BasicPopulationState<V>> for RandomSearch
+impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for RandomSearch
 where
-    P: CostFunction<Param = V, Output = f64> + BoxConstraints<Param = V>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
     V: SampleUniformBox + Clone,
 {
     type Error = P::Error;
@@ -191,8 +192,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<BasicPopulationState<V>, Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         // The state can arrive with a caller-supplied initial population
@@ -218,8 +219,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
         // Snapshot the elite before resampling — this is what makes
         // state.cost() monotone.
         let elite_x = state.candidates[0].clone();
