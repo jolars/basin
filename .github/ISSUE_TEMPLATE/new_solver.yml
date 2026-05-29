@@ -1,0 +1,42 @@
+name: New solver proposal
+description: Propose adding a new optimization solver to basin.
+title: "Solver request: <name>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The issue title is enough. Everything below is optional. Fill in what
+        you have; leave the rest blank.
+
+  - type: textarea
+    id: reference_impl
+    attributes:
+      label: Reference implementation
+      description: |
+        Existing implementations to mirror or compare against: SciPy, Ceres,
+        argmin, NLopt, a paper's reference code, anything. Links welcome.
+
+  - type: textarea
+    id: publications
+    attributes:
+      label: Publications
+      description: Papers describing the solver. DOIs, arXiv links, or other URLs.
+
+  - type: checkboxes
+    id: backends
+    attributes:
+      label: Backends you'd like to use it with
+      options:
+        - label: "`Vec<f64>`"
+        - label: "`nalgebra`"
+        - label: "`ndarray`"
+        - label: "`faer`"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: |
+        Hyperparameters you care about, use case, related issues, why you want
+        this solver, etc.
