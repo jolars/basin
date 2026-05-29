@@ -1,19 +1,16 @@
-name: Deploy website
+name: Website
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'crates/basin/**'
-      - 'crates/basin-wasm/**'
-      - 'web/**'
-      - '.github/workflows/web.yml'
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
-# A repo-level concurrency group so a fresh push cancels an in-flight
-# deploy instead of stacking.
+# Same-ref pushes cancel each other; tag pushes and main pushes don't fight.
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -57,11 +54,13 @@ jobs:
         run: touch web/build/.nojekyll
 
       - uses: actions/upload-pages-artifact@v5
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         with:
           path: web/build
 
   deploy:
     needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       pages: write
