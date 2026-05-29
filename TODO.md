@@ -120,13 +120,6 @@ harder to fix as more code piles on.
       nothing beyond the three AGENTS.md composition contracts (+ `WarmStart`
       for some)? Resolve by either writing the trait or writing the honest "no"
       comment in `core/inner.rs`.
-- [ ] **Refresh stale `increment_*_evals` rustdoc post-`Problem<P>` migration.**
-      The wrapper now bumps `EvalCounts` and `CountsMirror` mirrors onto state,
-      so outer solvers no longer call `increment_cost_evals` /
-      `increment_gradient_evals`. Two places still describe the old contract:
-      `core/inner.rs` `InnerExecutor` "Composition contracts" rule 1 (\~L82-90)
-      and `solver/barrier_method.rs` \~L126-127. Rewrite with the same-problem /
-      adapter-problem split already in `.claude/rules/solver-composition.md`.
 - [ ] **Retire `MemeticInner::work_units` (now dead).** No shipped solver calls
       it: `CmaInject` / `BoundedCmaInject` route inner evals through the shared
       `Problem<P>` wrapper, and `BasicPopulationState`'s `CountsMirror` folds

@@ -122,9 +122,11 @@ use crate::core::termination::{
 /// [`InnerExecutor`](crate::core::inner::InnerExecutor) — sidesteps the
 /// `MaxTime` cross-call statelessness caveat (see `AGENTS.md` "Solver
 /// composition"). The inner runs on its own `So::State` (seeded via
-/// [`WarmStart`]); its cost/gradient eval
-/// counts are rolled onto the outer state with `increment_cost_evals` /
-/// `increment_gradient_evals` after each solve (composition rule 1).
+/// [`WarmStart`]) against a fresh `Problem::new(LogBarrier)`; after each
+/// solve its
+/// [`EvalCounts`](crate::core::problem::EvalCounts) are folded back into
+/// the outer wrapper via
+/// [`Problem::counts_mut`] (adapter-problem composition, rule 1).
 ///
 /// # Examples
 ///

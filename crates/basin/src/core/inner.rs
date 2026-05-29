@@ -79,13 +79,28 @@ pub trait WarmStart<V> {
 /// Three rules outer solvers must follow when consuming the result of
 /// [`run`](Self::run); see also `AGENTS.md` "Solver composition":
 ///
-/// 1. **Eval aggregation.** The outer must roll the inner's
-///    [`State::cost_evals`] (and
-///    [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals)
-///    when both inner and outer states are
-///    [`GradientState`](crate::core::state::GradientState)) into the
-///    outer state via the `increment_*_evals` setters. Otherwise
-///    `MaxCostEvals` budgets and the public `result.cost_evals()` lie.
+/// 1. **Eval aggregation.** The [`Problem`] wrapper bumps
+///    [`EvalCounts`](crate::core::problem::EvalCounts) on every
+///    cost / gradient / residual / Jacobian / Hessian call, and the
+///    executor mirrors the per-run delta onto the inner state via
+///    [`CountsMirror`]. What the outer must do depends on which problem
+///    the inner sees:
+///
+///    - **Same-problem inner** (the outer passes its own
+///      `&mut Problem<P>` to [`run`](Self::run)): the inner's calls bump
+///      the *same* wrapper as the outer's, so aggregation happens
+///      transparently. No explicit roll-up; the outer state's
+///      [`CountsMirror`] impl decides how the counts surface on its
+///      [`State::cost_evals`] /
+///      [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals).
+///    - **Adapter-problem inner** (the outer builds a fresh
+///      `Problem::new(adapter)` per outer iter — e.g. the barrier /
+///      augmented-Lagrangian methods): after [`run`](Self::run) returns,
+///      fold the inner wrapper's counts back into the outer's wrapper via
+///      [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
+///      [`Problem::counts_mut`]. Skipping this fold silently corrupts
+///      `MaxCostEvals` budgets and the public `result.cost_evals()`.
+///
 ///    See the [`Solver::next_iter`]
 ///    contract for the canonical wording.
 ///
