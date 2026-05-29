@@ -37,21 +37,21 @@ the previous lands.
       on `Vec<f64>` + faer; `LBFGS`/`LBFGSB` on ndarray (now all four backends);
       `CmaEs`/`BoundedCmaEs` on `Vec<f64>` via the pure-Rust cyclic-Jacobi
       eigensolver (`dense_eig.rs`); `CmaEs`/`BoundedCmaEs` on ndarray (same
-      Jacobi solver wired through `as_standard_layout()` on `Array2`).
-      Remaining honest (pure-Rust, no BLAS) gaps: `BFGS` on ndarray (rank-one
-      update ops on `Array2` --- the last `✗` in its row); the least-squares
-      family (`GaussNewton`/`LevenbergMarquardt`/`Trf`) on `Vec<f64>` + ndarray
-      (a pure-Rust `LinearSolveLstsq`/QR on `DenseMatrix` + `Array2`,
-      explicitly blessed by the backends rule); the memetic family
+      Jacobi solver wired through `as_standard_layout()` on `Array2`). Remaining
+      honest (pure-Rust, no BLAS) gaps: `BFGS` on ndarray (rank-one update ops
+      on `Array2` --- the last `✗` in its row); the least-squares family
+      (`GaussNewton`/`LevenbergMarquardt`/`Trf`) on `Vec<f64>` + ndarray (a
+      pure-Rust `LinearSolveLstsq`/QR on `DenseMatrix` + `Array2`, explicitly
+      blessed by the backends rule); the memetic family
       (`CmaInject`/`BoundedCmaInject`/`MaLsChCma`) on `Vec<f64>` + ndarray ---
-      now that the CMA family covers both backends, the matrix bounds resolve
-      on `Array2<f64>`; ndarray coverage just needs wiring tests + a
+      now that the CMA family covers both backends, the matrix bounds resolve on
+      `Array2<f64>`; ndarray coverage just needs wiring tests + a
       `MemeticInner<Array1<f64>>` inner choice. While there, fix the stale
-      "Backends" notes in `cma_inject.rs` (~L286) and `bounded_cma_inject.rs`
-      (~L52): both claim "`Vec<f64>` and `ndarray` produce a compile-time
-      error" while also saying "Same coverage as `CmaEs`" --- the Vec<f64>
-      half was already wrong, and ndarray now resolves too. No permanent
-      (BLAS-only) gaps recorded yet.
+      "Backends" notes in `cma_inject.rs` (\~L286) and `bounded_cma_inject.rs`
+      (\~L52): both claim "`Vec<f64>` and `ndarray` produce a compile-time
+      error" while also saying "Same coverage as `CmaEs`" --- the Vec<f64> half
+      was already wrong, and ndarray now resolves too. No permanent (BLAS-only)
+      gaps recorded yet.
 - [x] **Made `BarrierMethod` / `AugmentedLagrangianMethod`
       inner-solver-agnostic.** Both now bound
       `So: WarmStart<V> + for<'a> Solver<Adapter<'a, P>,       So::State>` with
@@ -120,6 +120,30 @@ harder to fix as more code piles on.
       nothing beyond the three AGENTS.md composition contracts (+ `WarmStart`
       for some)? Resolve by either writing the trait or writing the honest "no"
       comment in `core/inner.rs`.
+- [ ] **Refresh stale `increment_*_evals` rustdoc post-`Problem<P>` migration.**
+      The wrapper now bumps `EvalCounts` and `CountsMirror` mirrors onto state,
+      so outer solvers no longer call `increment_cost_evals` /
+      `increment_gradient_evals`. Two places still describe the old contract:
+      `core/inner.rs` `InnerExecutor` "Composition contracts" rule 1 (\~L82-90)
+      and `solver/barrier_method.rs` \~L126-127. Rewrite with the same-problem /
+      adapter-problem split already in `.claude/rules/solver-composition.md`.
+- [ ] **Retire `MemeticInner::work_units` (now dead).** No shipped solver calls
+      it: `CmaInject` / `BoundedCmaInject` route inner evals through the shared
+      `Problem<P>` wrapper, and `BasicPopulationState`'s `CountsMirror` folds
+      inner work via `delta.total_work()`. The trait method + 4 impls in
+      `solver/cma_inject.rs` (NM, LM, `LBFGSB`, `ClosureInner`) and the rustdoc
+      selling it as the eval-aggregation channel (\~L53-58 / L70-75 / L283) can
+      go; `ClosureInner::new`'s `work_fn` parameter likewise becomes vestigial.
+      Cheap follow-up since the API is already `!`-tagged.
+- [ ] **Workspace wasm build broken by `competitor-bench` transitive dep.**
+      `cargo build --target wasm32-unknown-unknown` at the workspace level fails
+      inside `levenberg-marquardt` (via `getrandom 0.3` needing
+      `--cfg getrandom_backend="wasm_js"`). The library itself is clean ---
+      `cargo build --target wasm32-unknown-unknown -p basin -p basin-wasm`
+      succeeds --- so the wasm tenet holds for the two crates that need it.
+      Options: exclude `competitor-bench` from the wasm CI step, gate its
+      `levenberg-marquardt` dep behind a non-default feature, or set the
+      `getrandom_backend` cfg in `.cargo/config.toml`.
 
 See `AGENTS.md` for the design tenets and constraints that shape these
 decisions.
