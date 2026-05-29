@@ -1,7 +1,16 @@
 use super::{Dot, NegInPlace, NormInfinity, NormSquared, ScaledAdd};
 
-impl ScaledAdd<Self> for f64 {
-    fn scaled_add(&mut self, scalar: Self, other: &Self) {
+// These scalar-element impls treat `f64` itself as the parameter / vector
+// type — used by 1-D solvers that work directly on a scalar `x: f64`.
+// They are not blanketed over `F: Scalar` because that would conflict
+// with the container impls (`Vec<F>`, `DVector<F>`, `Col<F>`, …): Rust
+// can't rule out a future upstream `impl Scalar for Vec<...>` etc., so
+// `impl<F: Scalar> NormSquared<F> for F` would collide with
+// `impl<F: Scalar> NormSquared<F> for Vec<F>` under the coherence rules.
+// Add `impl ... for f32` here too once a consumer needs it.
+
+impl ScaledAdd for f64 {
+    fn scaled_add(&mut self, scalar: f64, other: &Self) {
         *self += scalar * other;
     }
 }

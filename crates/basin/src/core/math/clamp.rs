@@ -9,9 +9,11 @@
 ///
 /// # Contract
 ///
-/// - **Caller must:** ensure `lower[i] ≤ upper[i]` for every component.
-///   The implementor calls [`f64::clamp`], which panics on `NaN`
-///   bounds or `lower > upper`.
+/// - **Caller must:** ensure `lower[i] ≤ upper[i]` for every component
+///   and that neither bound is `NaN`. Backend impls use
+///   `x.max(lower).min(upper)` (the `Float` API lacks `clamp`), which
+///   matches `f64::clamp`'s output on well-ordered, finite bounds but
+///   silently mishandles `NaN` rather than panicking.
 /// - **Caller must:** pass values of the same shape as `self`. Backend
 ///   impls assert this and panic on mismatch.
 /// - **Implementor must:** mutate `self` in place with no allocation.
