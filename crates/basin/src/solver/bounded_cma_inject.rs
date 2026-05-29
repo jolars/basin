@@ -17,7 +17,7 @@ use crate::solver::cma_inject::{default_c_y, MemeticInner};
 /// Memetic [`BoundedCmaEs`] with Hansen (2011) injection. Sibling of
 /// [`CmaInject`](super::CmaInject); the outer is the bounded variant
 /// of CMA-ES, and bound-respecting inners (notably
-/// [`LBFGSB`](crate::LBFGSB)) see the same bounds the outer
+/// [`Lbfgsb`](crate::Lbfgsb)) see the same bounds the outer
 /// enforces via BoundPenalty.
 ///
 /// The injection mechanism (Hansen 2011 eq. 4 — Mahalanobis clip,
@@ -37,7 +37,7 @@ use crate::solver::cma_inject::{default_c_y, MemeticInner};
 /// determines the inner state shape. Shipped impls cover
 /// [`NelderMead`](crate::solver::NelderMead),
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt), and
-/// [`LBFGSB`](crate::LBFGSB). L-BFGS-B is the natural inner
+/// [`Lbfgsb`](crate::Lbfgsb). L-BFGS-B is the natural inner
 /// here — its `P: BoxConstraints` bound matches the outer's, and the
 /// same box flows through both ends of the composition.
 ///

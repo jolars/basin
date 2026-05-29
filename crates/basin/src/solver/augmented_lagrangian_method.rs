@@ -31,9 +31,9 @@ use crate::core::termination::{
 /// iterates over its own [`GradientState`], seeded at the current iterate via
 /// [`WarmStart::seed`]. That covers
 /// [`GradientDescent`](crate::solver::GradientDescent) ([`BasicState`]),
-/// [`BFGS`](crate::solver::BFGS)
+/// [`Bfgs`](crate::solver::Bfgs)
 /// ([`QuasiNewtonState`](crate::core::state::QuasiNewtonState)), and unbounded
-/// [`LBFGS`](crate::solver::lbfgs::LBFGS)
+/// [`Lbfgs`](crate::solver::lbfgs::Lbfgs)
 /// ([`LbfgsState`](crate::core::state::LbfgsState)). A least-squares inner
 /// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)) does not fit —
 /// `L_ρ` is not a sum of squares and the [`AugmentedLagrangian`] adapter

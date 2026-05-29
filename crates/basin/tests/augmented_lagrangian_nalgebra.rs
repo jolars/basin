@@ -4,8 +4,8 @@
 
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
-    AugmentedLagrangianMethod, Backtracking, BasicState, Executor, GradientDescent, GradientState,
-    TerminationReason, BFGS, LBFGSB,
+    AugmentedLagrangianMethod, Backtracking, BasicState, Bfgs, Executor, GradientDescent,
+    GradientState, Lbfgsb, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -96,7 +96,7 @@ fn eval_counts_are_recorded() {
     );
 }
 
-/// A `BFGS` inner (state `QuasiNewtonState`, not `BasicState`) proves the
+/// A `Bfgs` inner (state `QuasiNewtonState`, not `BasicState`) proves the
 /// augmented-Lagrangian method is no longer locked to `BasicState<V>` /
 /// `GradientDescent`. `L_ρ` is finite everywhere, so the default Wolfe line
 /// search is fine. Converges to the same projection (1,1).
@@ -107,7 +107,7 @@ fn bfgs_inner_converges_to_affine_projection() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(BFGS::new()),
+        AugmentedLagrangianMethod::new(Bfgs::new()),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -122,7 +122,7 @@ fn bfgs_inner_converges_to_affine_projection() {
     );
 }
 
-/// An unbounded `LBFGS` inner (state `LbfgsState`) exercises a third inner
+/// An unbounded `Lbfgs` inner (state `LbfgsState`) exercises a third inner
 /// state shape. `L_ρ` is finite, so the More–Thuente line search is fine.
 #[test]
 fn lbfgs_inner_converges_to_affine_projection() {
@@ -131,7 +131,7 @@ fn lbfgs_inner_converges_to_affine_projection() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(LBFGSB::new().unbounded()),
+        AugmentedLagrangianMethod::new(Lbfgsb::new().unbounded()),
         BasicState::new(initial),
     )
     .max_iter(50)

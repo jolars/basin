@@ -1,4 +1,4 @@
-//! Unconstrained `LBFGS<Unbounded>` convergence tests across backends.
+//! Unconstrained `Lbfgs<Unbounded>` convergence tests across backends.
 //!
 //! The bounded counterpart is `tests/lbfgsb_{vec,nalgebra,faer}.rs`;
 //! this file mirrors the Rosenbrock 2D smoke test but on the
@@ -7,8 +7,8 @@
 
 use basin::solver::lbfgs::{Bounded, Unbounded};
 use basin::{
-    CostFunction, Executor, Gradient, GradientTolerance, LbfgsState, MaxIter, MoreThuente, LBFGS,
-    LBFGSB,
+    CostFunction, Executor, Gradient, GradientTolerance, Lbfgs, LbfgsState, Lbfgsb, MaxIter,
+    MoreThuente,
 };
 
 /// 2-D Rosenbrock: `f(x) = (1 − x₀)² + 100 (x₁ − x₀²)²`. Used by all
@@ -46,7 +46,7 @@ fn rosenbrock_vec() {
     }
 
     let state = LbfgsState::new(vec![-1.2, 1.0], 5);
-    let result = Executor::new(Rosen, LBFGS::<Unbounded>::new(), state)
+    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(GradientTolerance(1e-8))
         .run()
@@ -85,7 +85,7 @@ fn rosenbrock_nalgebra() {
     }
 
     let state = LbfgsState::new(DVector::from_vec(vec![-1.2, 1.0]), 5);
-    let result = Executor::new(Rosen, LBFGS::<Unbounded>::new(), state)
+    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(GradientTolerance(1e-8))
         .run()
@@ -125,7 +125,7 @@ fn rosenbrock_faer() {
 
     let x0 = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
     let state = LbfgsState::new(x0, 5);
-    let result = Executor::new(Rosen, LBFGS::<Unbounded>::new(), state)
+    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(GradientTolerance(1e-8))
         .run()
@@ -164,7 +164,7 @@ fn rosenbrock_ndarray() {
     }
 
     let state = LbfgsState::new(array![-1.2, 1.0], 5);
-    let result = Executor::new(Rosen, LBFGS::<Unbounded>::new(), state)
+    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(GradientTolerance(1e-8))
         .run()
@@ -178,14 +178,14 @@ fn rosenbrock_ndarray() {
     );
 }
 
-/// `LBFGSB` must remain a transparent alias for `LBFGS<Bounded>`. Any
+/// `Lbfgsb` must remain a transparent alias for `Lbfgs<Bounded>`. Any
 /// drift here would break the iteration-parity test's import and every
-/// other downstream call site that holds an `LBFGSB<...>` value.
+/// other downstream call site that holds an `Lbfgsb<...>` value.
 #[test]
 fn lbfgsb_alias_compiles() {
-    let _: LBFGSB = LBFGS::<Bounded>::new();
-    let _: LBFGS<Bounded, MoreThuente> = LBFGSB::new();
-    // `LBFGS::default()` resolves to the default mode (Bounded) and
+    let _: Lbfgsb = Lbfgs::<Bounded>::new();
+    let _: Lbfgs<Bounded, MoreThuente> = Lbfgsb::new();
+    // `Lbfgs::default()` resolves to the default mode (Bounded) and
     // default line search (MoreThuente); same identity as above.
-    let _: LBFGSB = LBFGS::default();
+    let _: Lbfgsb = Lbfgs::default();
 }

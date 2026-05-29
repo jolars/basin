@@ -1,4 +1,4 @@
-//! BFGS convergence over the default `Vec<f64>` backend (no feature gate).
+//! Bfgs convergence over the default `Vec<f64>` backend (no feature gate).
 //!
 //! Mirrors the nalgebra tests in `tests/bfgs.rs` to confirm the generic
 //! `Solver` impl runs on the hand-rolled
@@ -6,8 +6,8 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    CostFunction, DenseMatrix, Executor, Gradient, GradientTolerance, QuasiNewtonState,
-    TerminationReason, BFGS,
+    Bfgs, CostFunction, DenseMatrix, Executor, Gradient, GradientTolerance, QuasiNewtonState,
+    TerminationReason,
 };
 
 #[test]
@@ -17,7 +17,7 @@ fn bfgs_converges_on_rosenbrock() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(initial),
     )
     .max_iter(100)
@@ -48,7 +48,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(initial),
     )
     .max_iter(200)
@@ -103,7 +103,7 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(initial),
     )
     .max_iter(50)

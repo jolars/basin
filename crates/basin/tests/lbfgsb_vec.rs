@@ -1,10 +1,10 @@
-//! L-BFGS-B convergence tests over the `Vec<f64>` backend.
+//! L-Bfgs-B convergence tests over the `Vec<f64>` backend.
 //!
-//! Layer A of S14.7 (per the L-BFGS-B port plan). Each test exercises
+//! Layer A of S14.7 (per the L-Bfgs-B port plan). Each test exercises
 //! a different code path:
 //!
 //! - **`unbounded_rosenbrock_2d_converges`** — `cnstnd == false`,
-//!   skips the GCP after the first iteration and runs L-BFGS-style.
+//!   skips the GCP after the first iteration and runs L-Bfgs-style.
 //! - **`booth_at_corner_converges`** — every variable two-sided
 //!   bounded; the optimum is at the upper-bound corner.
 //! - **`booth_slack_bounds_recover_unconstrained_minimum`** —
@@ -17,11 +17,11 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    CostFunction, Executor, Gradient, LbfgsState, MaxIter, ProjectedGradientTolerance, LBFGSB,
+    CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter, ProjectedGradientTolerance,
 };
 
 /// Unbounded Rosenbrock 2D from `(-1.2, 1.0)`. With infinite bounds
-/// L-BFGS-B reduces to L-BFGS (Fortran's `cnstnd == false` branch
+/// L-Bfgs-B reduces to L-Bfgs (Fortran's `cnstnd == false` branch
 /// skips the GCP entirely on iter ≥ 1).
 #[test]
 fn unbounded_rosenbrock_2d_converges() {
@@ -64,7 +64,7 @@ fn unbounded_rosenbrock_2d_converges() {
     let upper = problem.u.clone();
     let state = LbfgsState::new(vec![-1.2, 1.0], 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
         .run()
@@ -95,7 +95,7 @@ fn booth_at_corner_converges() {
     let upper = vec![1.0, 1.0];
     let state = LbfgsState::new(vec![0.0, 0.0], 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(
             lower.clone(),
@@ -129,7 +129,7 @@ fn booth_at_corner_converges() {
 
 /// `BoothBoxed` with bounds `[-5, 5]²` — the unconstrained minimum
 /// `(1, 3)` lies inside. The projected solver must recover the
-/// unconstrained answer, which is the L-BFGS-style behavior on a
+/// unconstrained answer, which is the L-Bfgs-style behavior on a
 /// well-conditioned 2-D quadratic.
 #[test]
 fn booth_slack_bounds_recover_unconstrained_minimum() {
@@ -138,7 +138,7 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
     let upper = vec![5.0, 5.0];
     let state = LbfgsState::new(vec![0.0, 0.0], 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
         .run()
@@ -160,7 +160,7 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
 /// Strictly convex 5-D quadratic `f(x) = ½ xᵀ A x − bᵀ x` with
 /// diagonal `A = diag(1, 2, …, 5)` and `b = (1, …, 1)`. Unconstrained
 /// minimum at `x*[i] = 1/diag[i]`. Bounds `[-2, 2]⁵` are slack — the
-/// optimum lies inside. With `m = 5` (matching the dimension), L-BFGS
+/// optimum lies inside. With `m = 5` (matching the dimension), L-Bfgs
 /// has enough memory to capture the exact diagonal Hessian.
 #[test]
 fn quadratic_5d_diagonal_converges_quickly() {
@@ -214,7 +214,7 @@ fn quadratic_5d_diagonal_converges_quickly() {
     let initial = vec![0.0; 5];
     let state = LbfgsState::new(initial, 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(50))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
         .run()

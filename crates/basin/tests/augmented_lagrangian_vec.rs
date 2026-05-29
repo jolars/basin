@@ -6,7 +6,7 @@
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
     AugmentedLagrangianMethod, Backtracking, BasicState, DenseMatrix, Executor, GradientDescent,
-    GradientState, TerminationReason, LBFGSB,
+    GradientState, Lbfgsb, TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. The unconstrained min (2,2) is
@@ -96,7 +96,7 @@ fn eval_counts_are_recorded() {
     );
 }
 
-/// An unbounded `LBFGS` inner (state `LbfgsState`, not `BasicState`) proves the
+/// An unbounded `Lbfgs` inner (state `LbfgsState`, not `BasicState`) proves the
 /// augmented-Lagrangian method is inner-agnostic on the `Vec<f64>` backend too.
 /// `L_ρ` is finite everywhere, so the inner's default line search is fine.
 /// Converges to the same projection (1,1).
@@ -107,7 +107,7 @@ fn lbfgs_inner_converges_to_affine_projection() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(LBFGSB::new().unbounded()),
+        AugmentedLagrangianMethod::new(Lbfgsb::new().unbounded()),
         BasicState::new(initial),
     )
     .max_iter(50)

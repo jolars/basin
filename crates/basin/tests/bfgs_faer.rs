@@ -1,13 +1,13 @@
 #![cfg(feature = "faer")]
 
-//! BFGS convergence over the faer backend (`Col<f64>` / `Mat<f64>`).
+//! Bfgs convergence over the faer backend (`Col<f64>` / `Mat<f64>`).
 //!
 //! Mirrors `tests/bfgs.rs` (nalgebra) and `tests/bfgs_vec.rs` (`Vec<f64>`):
 //! the same generic `Solver` impl drives faer's dense inverse-Hessian via
 //! `MatVec` + `GeneralRankOneUpdate` on `Mat<f64>`.
 
 use basin::problems::Rosenbrock;
-use basin::{Executor, GradientTolerance, QuasiNewtonState, TerminationReason, BFGS};
+use basin::{Bfgs, Executor, GradientTolerance, QuasiNewtonState, TerminationReason};
 use faer::{Col, Mat};
 
 #[test]
@@ -17,7 +17,7 @@ fn bfgs_converges_on_rosenbrock() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<Col<f64>, Mat<f64>>::new(initial),
     )
     .max_iter(100)
@@ -48,7 +48,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<Col<f64>, Mat<f64>>::new(initial),
     )
     .max_iter(200)

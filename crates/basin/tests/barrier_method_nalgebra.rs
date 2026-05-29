@@ -4,8 +4,8 @@
 
 use basin::problems::ConstrainedQuadratic;
 use basin::{
-    Backtracking, BarrierMethod, BasicState, Executor, GradientDescent, GradientState,
-    TerminationReason, BFGS,
+    Backtracking, BarrierMethod, BasicState, Bfgs, Executor, GradientDescent, GradientState,
+    TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -139,9 +139,9 @@ fn two_constraints_both_active() {
     );
 }
 
-/// A `BFGS` inner (state `QuasiNewtonState`, not `BasicState`) proves the
+/// A `Bfgs` inner (state `QuasiNewtonState`, not `BasicState`) proves the
 /// barrier method is no longer locked to `BasicState<V>` / `GradientDescent`.
-/// `BFGS` is paired with an Armijo `Backtracking` line search so it respects
+/// `Bfgs` is paired with an Armijo `Backtracking` line search so it respects
 /// the barrier's `+∞` wall (a Wolfe/More-Thuente search could step into the
 /// infeasible region). It converges to the same projection (1,1) as the
 /// gradient-descent inner.
@@ -152,7 +152,7 @@ fn bfgs_inner_converges_to_projection() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(BFGS::with_line_search(Backtracking::new())),
+        BarrierMethod::new(Bfgs::with_line_search(Backtracking::new())),
         BasicState::new(initial),
     )
     .max_iter(50)

@@ -11,8 +11,8 @@
 //! |---------------|------------------|------------------|--------------------------|
 //! | gradient desc | Rosenbrock       | vec/nalg/nd/faer | vector tier — all four   |
 //! | Nelder–Mead   | Ackley           | vec/nalg/nd/faer | vector tier — all four   |
-//! | L-BFGS        | Styblinski–Tang  | vec/nalg/nd/faer | compact form, all four   |
-//! | BFGS          | Levy             | vec/nalg/faer    | ndarray lacks the dense  |
+//! | L-Bfgs        | Styblinski–Tang  | vec/nalg/nd/faer | compact form, all four   |
+//! | Bfgs          | Levy             | vec/nalg/faer    | ndarray lacks the dense  |
 //! |               |                  |                  | rank-1 update + identity |
 //! | CMA-ES        | Rastrigin        | vec/nalg/faer    | ndarray lacks the        |
 //! |               |                  |                  | symmetric eigensolver    |
@@ -37,9 +37,9 @@ use std::hint::black_box;
 
 use basin::problems::{Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, StyblinskiTang};
 use basin::{
-    BasicPopulationState, BasicSimplexState, BasicState, CmaEs, DenseMatrix, Executor, GaussNewton,
-    GradientDescent, LbfgsState, LevenbergMarquardt, MoreThuente, NelderMead, QuasiNewtonState,
-    BFGS, LBFGSB,
+    BasicPopulationState, BasicSimplexState, BasicState, Bfgs, CmaEs, DenseMatrix, Executor,
+    GaussNewton, GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente, NelderMead,
+    QuasiNewtonState,
 };
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 
@@ -215,7 +215,7 @@ fn bench_nm(c: &mut Criterion) {
     }
 }
 
-/// Unconstrained L-BFGS on multimodal Styblinski–Tang — all four backends,
+/// Unconstrained L-Bfgs on multimodal Styblinski–Tang — all four backends,
 /// compact form (no dense matrix).
 fn bench_lbfgs(c: &mut Criterion) {
     for n in DIMS {
@@ -225,14 +225,14 @@ fn bench_lbfgs(c: &mut Criterion) {
             StyblinskiTang,
             vec![0.0; n],
             n,
-            LBFGSB::new().unbounded(),
+            Lbfgsb::new().unbounded(),
             |x0| LbfgsState::new(x0, 10),
         );
         g.finish();
     }
 }
 
-/// BFGS on multimodal Levy — dense O(n²) rank-2 inverse-Hessian update. No
+/// Bfgs on multimodal Levy — dense O(n²) rank-2 inverse-Hessian update. No
 /// ndarray: `Array2` implements neither `GeneralRankOneUpdate` nor
 /// `MatrixIdentity`, so that pairing is a compile error. The dense matrix type
 /// pairs with each vector backend (`DenseMatrix` / `DMatrix` / `Mat`).
@@ -245,7 +245,7 @@ fn bench_bfgs(c: &mut Criterion) {
             "vec",
             || start.clone(),
             Levy<Vec<f64>>,
-            BFGS::new(),
+            Bfgs::new(),
             QuasiNewtonState::<Vec<f64>, DenseMatrix>::new,
         );
         contestant!(
@@ -253,7 +253,7 @@ fn bench_bfgs(c: &mut Criterion) {
             "nalgebra",
             || DVector::from_vec(start.clone()),
             Levy<DVector<f64>>,
-            BFGS::new(),
+            Bfgs::new(),
             QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new,
         );
         contestant!(
@@ -261,7 +261,7 @@ fn bench_bfgs(c: &mut Criterion) {
             "faer",
             || Col::<f64>::from_fn(n, |i| start[i]),
             Levy<Col<f64>>,
-            BFGS::new(),
+            Bfgs::new(),
             QuasiNewtonState::<Col<f64>, Mat<f64>>::new,
         );
         g.finish();

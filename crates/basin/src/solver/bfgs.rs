@@ -48,7 +48,7 @@ use crate::line_search::{LineSearch, Wolfe};
 /// [`DenseMatrix`](crate::DenseMatrix):
 ///
 /// ```
-/// use basin::{BasicState, CostFunction, DenseMatrix, Executor, Gradient, QuasiNewtonState, BFGS};
+/// use basin::{BasicState, Bfgs, CostFunction, DenseMatrix, Executor, Gradient, QuasiNewtonState};
 ///
 /// struct Rosenbrock;
 /// impl CostFunction for Rosenbrock {
@@ -71,7 +71,7 @@ use crate::line_search::{LineSearch, Wolfe};
 ///
 /// let result = Executor::new(
 ///     Rosenbrock,
-///     BFGS::new(),
+///     Bfgs::new(),
 ///     QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(vec![-1.2, 1.0]),
 /// )
 /// .max_iter(100)
@@ -79,18 +79,18 @@ use crate::line_search::{LineSearch, Wolfe};
 /// .unwrap();
 /// assert!(result.cost() < 1e-8);
 /// ```
-pub struct BFGS<S = Wolfe> {
+pub struct Bfgs<S = Wolfe> {
     line_search: S,
     epsilon: f64,
 }
 
-impl Default for BFGS<Wolfe> {
+impl Default for Bfgs<Wolfe> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl BFGS<Wolfe> {
+impl Bfgs<Wolfe> {
     /// BFGS with the strong-Wolfe line search (Nocedal & Wright defaults)
     /// and `ε = 1e-10` for the curvature-condition guard.
     pub fn new() -> Self {
@@ -101,7 +101,7 @@ impl BFGS<Wolfe> {
     }
 }
 
-impl<S> BFGS<S> {
+impl<S> Bfgs<S> {
     /// BFGS with an explicit line-search strategy.
     pub fn with_line_search(line_search: S) -> Self {
         Self {
@@ -120,7 +120,7 @@ impl<S> BFGS<S> {
     }
 }
 
-impl<P, S, V, M> Solver<P, QuasiNewtonState<V, M>> for BFGS<S>
+impl<P, S, V, M> Solver<P, QuasiNewtonState<V, M>> for Bfgs<S>
 where
     P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
     S: LineSearch<P, V, Error = P::Error>,
@@ -228,7 +228,7 @@ where
     }
 }
 
-/// Lets [`BFGS`] serve as the inner of a composed solver
+/// Lets [`Bfgs`] serve as the inner of a composed solver
 /// (e.g. [`BarrierMethod`](crate::solver::BarrierMethod) /
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)),
 /// seeding a fresh [`QuasiNewtonState`] (identity inverse-Hessian) at the
@@ -238,9 +238,19 @@ where
 /// inner on the nalgebra backend. A `Vec<f64>` / faer `WarmStart` is a
 /// follow-up if a `Vec`-backed barrier inner is wanted.
 #[cfg(feature = "nalgebra")]
-impl<S> WarmStart<nalgebra::DVector<f64>> for BFGS<S> {
+impl<S> WarmStart<nalgebra::DVector<f64>> for Bfgs<S> {
     type State = QuasiNewtonState<nalgebra::DVector<f64>, nalgebra::DMatrix<f64>>;
     fn seed(&self, x: &nalgebra::DVector<f64>) -> Self::State {
         QuasiNewtonState::<nalgebra::DVector<f64>, nalgebra::DMatrix<f64>>::new(x.clone())
     }
 }
+
+/// Deprecated all-caps alias preserved for downstream code that imported
+/// the original [`BFGS`] name. Resolves to [`Bfgs`]; will be removed in
+/// a future release after the rename window closes.
+#[deprecated(
+    since = "0.8.0",
+    note = "use `Bfgs` (PascalCase) — the all-caps alias will be removed in a future release"
+)]
+#[allow(non_camel_case_types)]
+pub type BFGS<S = Wolfe> = Bfgs<S>;

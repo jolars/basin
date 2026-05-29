@@ -92,7 +92,11 @@ pub use crate::core::termination::{
     TerminationCriterion, TerminationReason,
 };
 pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
+pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
+#[allow(deprecated)]
 pub use crate::solver::lbfgs::{LBFGS, LBFGSB};
+pub use crate::solver::Bfgs;
+#[allow(deprecated)]
 pub use crate::solver::BFGS;
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent, ClosureInner,

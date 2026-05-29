@@ -41,7 +41,7 @@ use argmin::solver::quasinewton::LBFGS as ArgminLBFGS;
 use basin::problems::{rosenbrock, rosenbrock_gradient, Rosenbrock};
 use basin::{
     BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent, IntoInitialSimplex,
-    LbfgsState, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome, LBFGSB,
+    LbfgsState, Lbfgsb, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome,
 };
 use competitor_bench::ArgminProblem;
 
@@ -287,7 +287,7 @@ fn main() {
             points: median_reps(|| {
                 basin_trace(Executor::new(
                     Rosenbrock::<Vec<f64>>::default(),
-                    LBFGSB::new().unbounded(),
+                    Lbfgsb::new().unbounded(),
                     LbfgsState::new(start(), 10),
                 ))
             }),

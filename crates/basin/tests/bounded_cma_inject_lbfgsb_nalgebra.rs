@@ -1,27 +1,27 @@
-//! Integration tests for [`BoundedCmaInject`] with [`LBFGSB`] inner on
+//! Integration tests for [`BoundedCmaInject`] with [`Lbfgsb`] inner on
 //! the nalgebra backend (S13b).
 //!
 //! Two tests: convergence on `BoothBoxed` with bounds that contain the
-//! global optimum (so the L-BFGS-B inner can polish to high precision),
-//! and work-unit aggregation (L-BFGS-B `cost_evals` + `gradient_evals`
+//! global optimum (so the L-Bfgs-B inner can polish to high precision),
+//! and work-unit aggregation (L-Bfgs-B `cost_evals` + `gradient_evals`
 //! roll into the outer's `cost_evals`).
 
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::BoothBoxed;
-use basin::{BasicPopulationState, BoundedCmaEs, BoundedCmaInject, Executor, LBFGSB};
+use basin::{BasicPopulationState, BoundedCmaEs, BoundedCmaInject, Executor, Lbfgsb};
 use nalgebra::{DMatrix, DVector};
 
-/// BoundedCmaEs + L-BFGS-B on Booth with slack bounds `[-5, 5]²`. The
+/// BoundedCmaEs + L-Bfgs-B on Booth with slack bounds `[-5, 5]²`. The
 /// global min `(1, 3)` is strictly interior, so both the outer
 /// BoundPenalty (no active bounds at the optimum) and the inner
-/// L-BFGS-B (interior iterates) drive convergence. Assert
-/// `‖x* − (1, 3)‖_∞ ≤ 1e-6` — L-BFGS-B precision in the smooth
+/// L-Bfgs-B (interior iterates) drive convergence. Assert
+/// `‖x* − (1, 3)‖_∞ ≤ 1e-6` — L-Bfgs-B precision in the smooth
 /// quadratic basin.
 ///
 /// The starting mean is `(0, 2)` — close enough that Hansen's
 /// Mahalanobis clip (Hansen 2011 eq. 4) doesn't heavily attenuate the
-/// inner's full-amplitude L-BFGS-B refinements. With a distant start
+/// inner's full-amplitude L-Bfgs-B refinements. With a distant start
 /// the test would still converge but require many more outer iters
 /// as CMA's mean drifts toward the basin; that's a CMA-ES property,
 /// not an injection property, and tested elsewhere.
@@ -35,7 +35,7 @@ fn converges_on_booth_boxed_slack() {
     let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
     let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 19);
-    let solver = BoundedCmaInject::with_inner_solver(cma, LBFGSB::new())
+    let solver = BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())
         .with_k(1)
         .with_inner_max_iter(50);
 
@@ -59,7 +59,7 @@ fn converges_on_booth_boxed_slack() {
     );
 }
 
-/// BoundedCmaInject's L-BFGS-B work-unit closure rolls both
+/// BoundedCmaInject's L-Bfgs-B work-unit closure rolls both
 /// `cost_evals` and `gradient_evals` into the outer state's
 /// `cost_evals`.
 ///
@@ -67,7 +67,7 @@ fn converges_on_booth_boxed_slack() {
 /// runs the full `outer_iters` without early termination — otherwise
 /// the memetic variant converges faster on TolX and the eval-count
 /// comparison gets meaningless. The lower-bound check: per outer iter
-/// (after iter 0; CmaInject skips iter-0 injection), L-BFGS-B init
+/// (after iter 0; CmaInject skips iter-0 injection), L-Bfgs-B init
 /// contributes 1 cost + 1 gradient eval (2 work units), and the
 /// outer's re-evaluation after clipping is 1 cost — so the floor is
 /// `(outer_iters − 1) · k · 3`.
@@ -96,7 +96,7 @@ fn aggregates_lbfgsb_work_into_outer() {
     // Memetic variant on the same seed and outer budget; TolX disabled
     // for the same reason.
     let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 29).with_tol_x(0.0);
-    let solver = BoundedCmaInject::with_inner_solver(cma, LBFGSB::new())
+    let solver = BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
 
@@ -113,7 +113,7 @@ fn aggregates_lbfgsb_work_into_outer() {
     assert!(
         memetic.cost_evals() >= vanilla.cost_evals() + min_extra,
         "memetic cost_evals = {} should exceed vanilla {} by at least \
-         {} (outer iters × k × (L-BFGS-B init cost + gradient + re-eval))",
+         {} (outer iters × k × (L-Bfgs-B init cost + gradient + re-eval))",
         memetic.cost_evals(),
         vanilla.cost_evals(),
         min_extra

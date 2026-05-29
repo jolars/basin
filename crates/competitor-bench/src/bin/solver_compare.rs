@@ -1,5 +1,5 @@
 //! Convergence-trace harness for the *solvers* benchmark axis: basin's
-//! general optimizers (GD, NM, BFGS, L-BFGS, CMA-ES) on Rosenbrock from
+//! general optimizers (GD, NM, Bfgs, L-Bfgs, CMA-ES) on Rosenbrock from
 //! multiple seeded starting points, each capped on wall-clock time. Powers
 //! the `/benchmarks/solvers` page (see `web/scripts/collect-solvers.ts`).
 //!
@@ -27,13 +27,13 @@ use std::time::{Duration, Instant};
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicPopulationState, BasicSimplexState, BasicState, CmaEs, CountsMirror, DenseMatrix,
-    Executor, GradientDescent, LbfgsState, MoreThuente, NelderMead, QuasiNewtonState, Solver,
-    State as BasinState, StepOutcome, BFGS, LBFGSB,
+    BasicPopulationState, BasicSimplexState, BasicState, Bfgs, CmaEs, CountsMirror, DenseMatrix,
+    Executor, GradientDescent, LbfgsState, Lbfgsb, MoreThuente, NelderMead, QuasiNewtonState,
+    Solver, State as BasinState, StepOutcome,
 };
 
 /// Wall-clock budget per (solver, start, rep). 20 ms gives GD room to either
-/// converge or visibly stall on hard starts; BFGS/L-BFGS converge in a few
+/// converge or visibly stall on hard starts; Bfgs/L-Bfgs converge in a few
 /// hundred µs from easy starts and the line just ends there.
 const BUDGET: Duration = Duration::from_millis(20);
 /// Repetitions per (solver, start) for the per-iteration time median.
@@ -81,7 +81,7 @@ const PROBLEMS: &[ProblemConfig] = &[ProblemConfig {
     name: "rosenbrock",
     // n=2 is essentially solved by any second-order method in microseconds and
     // doesn't separate the families. n=10 keeps everything tractable while
-    // making GD work for it, exposing the BFGS / L-BFGS scaling gap, and
+    // making GD work for it, exposing the Bfgs / L-Bfgs scaling gap, and
     // letting NM and CMA-ES actually breathe.
     n: 10,
     domain_lo: -2.0,
@@ -274,7 +274,7 @@ fn run_bfgs(start: &[f64]) -> Vec<(u128, f64)> {
         basin_trace(
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
-                BFGS::new(),
+                Bfgs::new(),
                 QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(start.to_vec()),
             ),
             BUDGET,
@@ -287,7 +287,7 @@ fn run_lbfgs(start: &[f64]) -> Vec<(u128, f64)> {
         basin_trace(
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
-                LBFGSB::new().unbounded(),
+                Lbfgsb::new().unbounded(),
                 LbfgsState::new(start.to_vec(), 10),
             ),
             BUDGET,

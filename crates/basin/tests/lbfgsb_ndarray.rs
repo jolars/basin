@@ -1,13 +1,13 @@
 #![cfg(feature = "ndarray")]
 
-//! L-BFGS-B convergence tests over the ndarray backend. Mirrors
+//! L-Bfgs-B convergence tests over the ndarray backend. Mirrors
 //! `tests/lbfgsb_faer.rs` to confirm the `Array1<f64>` impl of
 //! [`basin::backend::AsFloatSliceMut`] plumbs through correctly.
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, MaxIter,
-    ProjectedGradientTolerance, LBFGSB,
+    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
+    ProjectedGradientTolerance,
 };
 use ndarray::{array, Array1};
 
@@ -52,7 +52,7 @@ fn unbounded_rosenbrock_2d_converges() {
     let upper = problem.u.clone();
     let state = LbfgsState::new(array![-1.2, 1.0], 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
         .run()
@@ -75,7 +75,7 @@ fn booth_at_corner_converges() {
     let upper = Array1::from_elem(2, 1.0);
     let state = LbfgsState::new(Array1::from_elem(2, 0.0), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
         .run()
@@ -102,7 +102,7 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
     let upper = Array1::from_elem(2, 5.0);
     let state = LbfgsState::new(Array1::from_elem(2, 0.0), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
         .run()

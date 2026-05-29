@@ -21,7 +21,7 @@ use basin::problems::{beale, beale_gradient, booth, booth_gradient};
 use basin::problems::{goldstein_price, goldstein_price_gradient};
 use basin::problems::{matyas, matyas_gradient, mccormick, mccormick_gradient};
 use basin::problems::{rosenbrock, rosenbrock_gradient, sphere, sphere_gradient};
-use basin::solver::lbfgs::{Unbounded as LbfgsUnbounded, LBFGS};
+use basin::solver::lbfgs::{Lbfgs, Unbounded as LbfgsUnbounded};
 use basin::{
     Backtracking, BasicSimplexState, BasicState, Constant, CostFunction, Executor, Gradient,
     GradientDescent, LbfgsState, MoreThuente, NelderMead, State, StepOutcome, Stepper,
@@ -78,7 +78,7 @@ struct RunOptions {
     /// Heavy-ball momentum coefficient for the gradient-descent solver;
     /// `0.0` disables it (plain steepest descent).
     gd_beta: f64,
-    /// L-BFGS history capacity `m` (number of stored (s, y) pairs).
+    /// L-Bfgs history capacity `m` (number of stored (s, y) pairs).
     lbfgs_m: usize,
 }
 
@@ -182,10 +182,10 @@ pub fn eval_grid(
     out
 }
 
-/// Concrete L-BFGS stepper type. Aliased to keep the [`Inner`] variant
+/// Concrete L-Bfgs stepper type. Aliased to keep the [`Inner`] variant
 /// readable (the boxed, fully-monomorphized generic otherwise trips
 /// `clippy::type_complexity`).
-type LbfgsStepper = Stepper<Problem2D, LbfgsState<Vec<f64>>, LBFGS<LbfgsUnbounded, MoreThuente>>;
+type LbfgsStepper = Stepper<Problem2D, LbfgsState<Vec<f64>>, Lbfgs<LbfgsUnbounded, MoreThuente>>;
 
 /// Inner enum dispatching by `(state shape, solver type)`. Each variant
 /// is fully concrete so the resulting wasm is tight and no `dyn Solver`
@@ -418,7 +418,7 @@ impl Run {
                 let m = opts.lbfgs_m.max(1);
                 let stepper = Executor::new(
                     p,
-                    LBFGS::<LbfgsUnbounded>::new().m_capacity(m),
+                    Lbfgs::<LbfgsUnbounded>::new().m_capacity(m),
                     LbfgsState::new(initial.clone(), m),
                 )
                 .max_iter(max_iter as u64)
@@ -592,7 +592,7 @@ mod tests {
             1e-10, // f* (0) + target suboptimality (1e-10)
         );
         let r = run.step_many_inner(1000);
-        // L-BFGS drives the Rosenbrock cost below 1e-10 well within the
+        // L-Bfgs drives the Rosenbrock cost below 1e-10 well within the
         // iteration cap, so the suboptimality stop fires first.
         assert!(r.done);
         assert_eq!(r.reason, Some("converged"));

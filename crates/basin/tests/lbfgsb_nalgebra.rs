@@ -1,6 +1,6 @@
 #![cfg(feature = "nalgebra")]
 
-//! L-BFGS-B convergence tests over the nalgebra backend.
+//! L-Bfgs-B convergence tests over the nalgebra backend.
 //!
 //! Mirrors `tests/lbfgsb_vec.rs` to confirm
 //! [`basin::backend::AsFloatSliceMut`]'s `DVector<f64>` impl plumbs
@@ -8,8 +8,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, MaxIter, MoreThuente,
-    ProjectedGradientTolerance, QuasiNewtonState, BFGS, LBFGSB,
+    Bfgs, BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
+    MoreThuente, ProjectedGradientTolerance, QuasiNewtonState,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -54,7 +54,7 @@ fn unbounded_rosenbrock_2d_converges() {
     let upper = problem.u.clone();
     let state = LbfgsState::new(DVector::from_vec(vec![-1.2, 1.0]), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
         .run()
@@ -79,7 +79,7 @@ fn booth_at_corner_converges() {
     let upper = DVector::from_vec(vec![1.0, 1.0]);
     let state = LbfgsState::new(DVector::from_vec(vec![0.0, 0.0]), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
         .run()
@@ -108,7 +108,7 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
     let upper = DVector::from_vec(vec![5.0, 5.0]);
     let state = LbfgsState::new(DVector::from_vec(vec![0.0, 0.0]), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
         .run()
@@ -123,8 +123,8 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
     assert!(result.cost() < 1e-8, "cost = {}", result.cost());
 }
 
-/// On the unbounded Rosenbrock, L-BFGS-B with `m = 10` should
-/// match BFGS-with-MoreThuente's iteration count within a small
+/// On the unbounded Rosenbrock, L-Bfgs-B with `m = 10` should
+/// match Bfgs-with-MoreThuente's iteration count within a small
 /// constant (limited-memory ≈ full-memory once `m ≥ 2` here). Both
 /// must reach machine-precision cost.
 #[test]
@@ -135,7 +135,7 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
 
     let bfgs_result = Executor::new(
         basin::problems::Rosenbrock::<DVector<f64>>::default(),
-        BFGS::with_line_search(MoreThuente::new()),
+        Bfgs::with_line_search(MoreThuente::new()),
         QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial.clone()),
     )
     .max_iter(200)
@@ -148,7 +148,7 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
             l: l.clone(),
             u: u.clone(),
         },
-        LBFGSB::new(),
+        Lbfgsb::new(),
         LbfgsState::new(initial, 10),
     )
     .max_iter(200)
@@ -158,22 +158,22 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
 
     assert!(
         bfgs_result.cost() < 1e-12,
-        "BFGS cost = {}",
+        "Bfgs cost = {}",
         bfgs_result.cost()
     );
     assert!(
         lbfgsb_result.cost() < 1e-10,
-        "LBFGSB cost = {}",
+        "Lbfgsb cost = {}",
         lbfgsb_result.cost()
     );
-    // L-BFGS-B's per-iteration extra cost+grad eval (the
+    // L-Bfgs-B's per-iteration extra cost+grad eval (the
     // re-evaluation at the accepted step, see `next_iter`) inflates
-    // its `cost_evals` slightly above BFGS's. The iteration count
+    // its `cost_evals` slightly above Bfgs's. The iteration count
     // should be comparable, though — a constant-factor slowdown
     // would indicate a wiring bug rather than the m → ∞ limit.
     assert!(
         lbfgsb_result.iter() < bfgs_result.iter() + 30,
-        "LBFGSB iter {} vs BFGS iter {}",
+        "Lbfgsb iter {} vs Bfgs iter {}",
         lbfgsb_result.iter(),
         bfgs_result.iter()
     );

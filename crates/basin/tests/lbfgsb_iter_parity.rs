@@ -1,9 +1,9 @@
-//! Iteration-wise parity test against Nocedal's L-BFGS-B v3.0
+//! Iteration-wise parity test against Nocedal's L-Bfgs-B v3.0
 //! Fortran reference.
 //!
 //! Reads `tests/fixtures/lbfgsb_rosenbrock_5d.tsv` (dumped from a
 //! gfortran build of `references/lbfgsb-v3.0/` — see
-//! `tests/fixtures/README.md`) and drives basin's `LBFGSB` through
+//! `tests/fixtures/README.md`) and drives basin's `Lbfgsb` through
 //! the same iterates, asserting per-step agreement on `x`, `f`, and
 //! `g`.
 //!
@@ -14,7 +14,7 @@
 //! reordering of floating-point ops but is tight enough to catch
 //! algorithmic divergence.
 
-use basin::{BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, MaxIter, LBFGSB};
+use basin::{BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter};
 use std::fs;
 
 /// Standard Rosenbrock 5D (basin's coefficient convention).
@@ -106,14 +106,14 @@ fn rosenbrock_5d_matches_fortran_trajectory() {
         u: vec![5.0; n],
     };
     // Start matching the Fortran driver: infeasible initial point gets
-    // projected during `LBFGSB::init`.
+    // projected during `Lbfgsb::init`.
     let initial = vec![-1.0, 2.0, -1.0, 2.0, -1.0];
     let state = LbfgsState::new(initial, 5);
 
     // Match Fortran driver: `factr = 0`, `pgtol = 0` — disable both
     // convergence tolerances so the parity comparator runs all 30
     // iterations regardless of how small the projected gradient gets.
-    let mut stepper = Executor::new(problem, LBFGSB::new().tol_pg(0.0), state)
+    let mut stepper = Executor::new(problem, Lbfgsb::new().tol_pg(0.0), state)
         .terminate_on(MaxIter(30))
         .into_stepper()
         .unwrap();

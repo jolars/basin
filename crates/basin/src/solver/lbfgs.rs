@@ -4,16 +4,16 @@
 
 //! Limited-memory BFGS — both modes.
 //!
-//! [`LBFGS`](crate::LBFGS) is generic over a type-state
+//! [`Lbfgs`](crate::Lbfgs) is generic over a type-state
 //! [`Mode`](crate::solver::lbfgs::Bounded) marker:
 //!
-//! - [`LBFGS<Bounded>`](crate::LBFGS) is a faithful port of Nocedal–Zhu's L-BFGS-B
+//! - [`Lbfgs<Bounded>`](crate::Lbfgs) is a faithful port of Nocedal–Zhu's L-BFGS-B
 //!   v3.0 Fortran source (`references/lbfgsb-v3.0/`). The Fortran
 //!   subroutines map to submodules below, and the top-level solver
 //!   mirrors the `mainlb` iteration loop (with the goto-style
-//!   coroutine flattened to a Rust `loop`). `LBFGSB` is the type
+//!   coroutine flattened to a Rust `loop`). `Lbfgsb` is the type
 //!   alias for this mode.
-//! - [`LBFGS<Unbounded>`](crate::LBFGS) is unconstrained limited-memory BFGS via
+//! - [`Lbfgs<Unbounded>`](crate::Lbfgs) is unconstrained limited-memory BFGS via
 //!   Nocedal–Wright's two-loop recursion (Algorithm 7.4). Uses the
 //!   same [`LbfgsState`](crate::LbfgsState) history fields (`ws`, `wy`, `sy`, `theta`)
 //!   but skips the Cauchy / `freev` / `subsm` machinery — those are
@@ -58,19 +58,19 @@ use self::subsm::subsm;
 
 /// Limited-memory BFGS, parameterised over a type-state mode marker.
 ///
-/// `LBFGS<Bounded>` (aliased as [`LBFGSB`]) is a faithful port of
+/// `Lbfgs<Bounded>` (aliased as [`Lbfgsb`]) is a faithful port of
 /// Byrd–Lu–Nocedal 1995 / Zhu–Byrd–Lu–Nocedal 1997 (ACM TOMS Alg. 778),
 /// with the Nocedal–Morales 2011 v3.0 directional-derivative + bound-
 /// backtracking deviation in subspace minimization. Iteration-wise
 /// parity with the Fortran v3.0 reference (`references/lbfgsb-v3.0/`)
 /// is verified by `tests/lbfgsb_iter_parity.rs`.
 ///
-/// `LBFGS<Unbounded>` is unconstrained limited-memory BFGS via
+/// `Lbfgs<Unbounded>` is unconstrained limited-memory BFGS via
 /// Nocedal–Wright's two-loop recursion (Algorithm 7.4). It reuses the
 /// same [`LbfgsState`] history machinery but skips the Cauchy /
 /// `freev` / `subsm` phases — those are box-constraint-specific.
-/// Construct with [`LBFGS::<Unbounded>::new()`], or transition from
-/// the default [`LBFGS::<Bounded>::new()`] via [`LBFGS::unbounded`].
+/// Construct with [`Lbfgs::<Unbounded>::new()`], or transition from
+/// the default [`Lbfgs::<Bounded>::new()`] via [`Lbfgs::unbounded`].
 ///
 /// # Bounded mode — per-iteration outline
 ///
@@ -139,11 +139,11 @@ use self::subsm::subsm;
 ///
 /// # Examples
 ///
-/// See [`BFGS`](crate::BFGS) for the quasi-Newton `Executor` pattern.
+/// See [`Bfgs`](crate::Bfgs) for the quasi-Newton `Executor` pattern.
 /// L-BFGS iterates an `LbfgsState` sized to the history length `m`
-/// (`LbfgsState::new(x0, m)`); construct the solver with `LBFGS::new()`
-/// (L-BFGS-B, the default) or `LBFGS::<Unbounded>::new()`.
-pub struct LBFGS<Mode = Bounded, S = MoreThuente> {
+/// (`LbfgsState::new(x0, m)`); construct the solver with `Lbfgs::new()`
+/// (L-BFGS-B, the default) or `Lbfgs::<Unbounded>::new()`.
+pub struct Lbfgs<Mode = Bounded, S = MoreThuente> {
     line_search: S,
     /// Fortran `dr ≤ epsmch · ddum` curvature-skip threshold
     /// (`lbfgsb.f:875`). Defaults to `f64::EPSILON`. Consulted in both
@@ -178,37 +178,36 @@ pub struct LBFGS<Mode = Bounded, S = MoreThuente> {
 }
 
 /// Type-state marker for box-constrained L-BFGS-B (the default).
-/// Constructors live on [`LBFGS<Bounded, MoreThuente>`]; the
+/// Constructors live on [`Lbfgs<Bounded, MoreThuente>`]; the
 /// [`Solver`] impl requires `P: BoxConstraints` and the full
 /// `AsFloatSliceMut` + [`Dot`] + [`ScaledAdd<f64>`] backend.
-/// [`LBFGSB`] is the canonical type alias for this mode.
+/// [`Lbfgsb`] is the canonical type alias for this mode.
 pub struct Bounded;
 
 /// Type-state marker for unconstrained L-BFGS. Constructors live on
-/// [`LBFGS<Unbounded, MoreThuente>`]; the [`Solver`] impl has the same
+/// [`Lbfgs<Unbounded, MoreThuente>`]; the [`Solver`] impl has the same
 /// backend bounds as [`Bounded`] but **no** [`BoxConstraints`]
 /// requirement. The algorithm is Nocedal–Wright's two-loop recursion
 /// over the [`LbfgsState`] history with `H₀ = (1/θ)·I`.
 pub struct Unbounded;
 
-/// Type alias preserving the original [`LBFGSB`] name. Equivalent to
-/// `LBFGS<Bounded, S>` — every call site that built `LBFGSB::new()`
-/// or held an `LBFGSB<MoreThuente>` value keeps working unchanged.
-pub type LBFGSB<S = MoreThuente> = LBFGS<Bounded, S>;
+/// Canonical name for the bounded-mode L-BFGS-B solver. Equivalent to
+/// [`Lbfgs<Bounded, S>`]; call sites can use either name interchangeably.
+pub type Lbfgsb<S = MoreThuente> = Lbfgs<Bounded, S>;
 
-impl Default for LBFGS<Bounded, MoreThuente> {
+impl Default for Lbfgs<Bounded, MoreThuente> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Default for LBFGS<Unbounded, MoreThuente> {
+impl Default for Lbfgs<Unbounded, MoreThuente> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl LBFGS<Bounded, MoreThuente> {
+impl Lbfgs<Bounded, MoreThuente> {
     /// L-BFGS-B with Moré–Thuente line search and Fortran v3.0
     /// defaults (`ftol = 1e-3`, `gtol = 0.9`, `xtol = 0.1`). Built-in
     /// projected-gradient tolerance is `1e-10`; the seed history
@@ -225,7 +224,7 @@ impl LBFGS<Bounded, MoreThuente> {
     }
 }
 
-impl LBFGS<Unbounded, MoreThuente> {
+impl Lbfgs<Unbounded, MoreThuente> {
     /// Unconstrained L-BFGS with Moré–Thuente line search and the same
     /// curvature-skip / history defaults as the bounded path. The
     /// `tol_pg` field is unused in this mode — terminate via the
@@ -242,7 +241,7 @@ impl LBFGS<Unbounded, MoreThuente> {
     }
 }
 
-impl<S> LBFGS<Bounded, S> {
+impl<S> Lbfgs<Bounded, S> {
     /// L-BFGS-B with an explicit line-search strategy. Note: using
     /// anything other than [`MoreThuente`] forfeits iteration-wise
     /// parity with the Fortran reference.
@@ -271,8 +270,8 @@ impl<S> LBFGS<Bounded, S> {
     /// the configured line search, curvature threshold, and history
     /// capacity. Mirrors [`NelderMead::projected`](crate::solver::NelderMead::projected)'s
     /// type-state transition.
-    pub fn unbounded(self) -> LBFGS<Unbounded, S> {
-        LBFGS {
+    pub fn unbounded(self) -> Lbfgs<Unbounded, S> {
+        Lbfgs {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
@@ -282,7 +281,7 @@ impl<S> LBFGS<Bounded, S> {
     }
 }
 
-impl<S> LBFGS<Unbounded, S> {
+impl<S> Lbfgs<Unbounded, S> {
     /// Unconstrained L-BFGS with an explicit line-search strategy.
     pub fn with_line_search(line_search: S) -> Self {
         Self {
@@ -298,8 +297,8 @@ impl<S> LBFGS<Unbounded, S> {
     /// configured line search, curvature threshold, and history
     /// capacity. The resulting solver requires the problem to
     /// implement [`BoxConstraints`].
-    pub fn bounded(self) -> LBFGS<Bounded, S> {
-        LBFGS {
+    pub fn bounded(self) -> Lbfgs<Bounded, S> {
+        Lbfgs {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
@@ -309,7 +308,7 @@ impl<S> LBFGS<Unbounded, S> {
     }
 }
 
-impl<Mode, S> LBFGS<Mode, S> {
+impl<Mode, S> Lbfgs<Mode, S> {
     /// Override the curvature-skip threshold. Default `f64::EPSILON`,
     /// matching Fortran's `dr ≤ epsmch · ddum` test.
     pub fn epsilon(mut self, epsilon: f64) -> Self {
@@ -333,7 +332,7 @@ impl<Mode, S> LBFGS<Mode, S> {
     }
 }
 
-impl<P, V, S> Solver<P, LbfgsState<V>> for LBFGS<Bounded, S>
+impl<P, V, S> Solver<P, LbfgsState<V>> for Lbfgs<Bounded, S>
 where
     P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V> + BoxConstraints,
     V: AsFloatSliceMut + Clone + Dot + ScaledAdd<f64>,
@@ -745,7 +744,7 @@ where
     }
 }
 
-impl<P, V, S> Solver<P, LbfgsState<V>> for LBFGS<Unbounded, S>
+impl<P, V, S> Solver<P, LbfgsState<V>> for Lbfgs<Unbounded, S>
 where
     P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
     V: AsFloatSliceMut + Clone + Dot + ScaledAdd<f64>,
@@ -1153,6 +1152,26 @@ fn try_restart_after_lnsrch<V>(state: &mut LbfgsState<V>, restart_budget: &mut u
     true
 }
 
+/// Deprecated all-caps alias preserved for downstream code that imported
+/// the original [`LBFGS`] name. Resolves to [`Lbfgs`]; will be removed in
+/// a future release after the rename window closes.
+#[deprecated(
+    since = "0.8.0",
+    note = "use `Lbfgs` (PascalCase) — the all-caps alias will be removed in a future release"
+)]
+#[allow(non_camel_case_types)]
+pub type LBFGS<Mode = Bounded, S = MoreThuente> = Lbfgs<Mode, S>;
+
+/// Deprecated all-caps alias preserved for downstream code that imported
+/// the original [`LBFGSB`] name. Resolves to [`Lbfgsb`]; will be removed
+/// in a future release after the rename window closes.
+#[deprecated(
+    since = "0.8.0",
+    note = "use `Lbfgsb` (PascalCase) — the all-caps alias will be removed in a future release"
+)]
+#[allow(non_camel_case_types)]
+pub type LBFGSB<S = MoreThuente> = Lbfgsb<S>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1204,7 +1223,7 @@ mod tests {
         };
 
         let state = LbfgsState::new(vec![1.0, 1.0], 5);
-        let solver = LBFGSB::new();
+        let solver = Lbfgsb::new();
         let lower = problem.lower().clone();
         let upper = problem.upper().clone();
         let result = Executor::new(problem, solver, state)
@@ -1260,7 +1279,7 @@ mod tests {
             u: vec![f64::INFINITY; 2],
         };
         let state = LbfgsState::new(vec![-1.2, 1.0], 5);
-        let solver = LBFGSB::new();
+        let solver = Lbfgsb::new();
         let lower = problem.lower().clone();
         let upper = problem.upper().clone();
         let result = Executor::new(problem, solver, state)

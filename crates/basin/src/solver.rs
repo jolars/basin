@@ -28,10 +28,10 @@ pub mod gauss_newton;
 /// Steepest-descent solver with a pluggable line search and optional
 /// heavy-ball momentum.
 pub mod gradient_descent;
-/// L-BFGS family — unconstrained `LBFGS<Unbounded>` (two-loop
-/// recursion) and box-constrained `LBFGS<Bounded>` (faithful port of
-/// Nocedal's L-BFGS-B v3.0). `LBFGSB` is a type alias for
-/// `LBFGS<Bounded>`.
+/// L-BFGS family — unconstrained `Lbfgs<Unbounded>` (two-loop
+/// recursion) and box-constrained `Lbfgs<Bounded>` (faithful port of
+/// Nocedal's L-BFGS-B v3.0). `Lbfgsb` is a type alias for
+/// `Lbfgs<Bounded>`.
 pub mod lbfgs;
 /// Levenberg-Marquardt solver for nonlinear least squares with
 /// Nielsen 1999 damping update.
@@ -55,6 +55,8 @@ pub mod bfgs;
 
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
+pub use bfgs::Bfgs;
+#[allow(deprecated)]
 pub use bfgs::BFGS;
 pub use bounded_cma_es::BoundedCmaEs;
 pub use bounded_cma_inject::BoundedCmaInject;

@@ -2,8 +2,8 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    Backtracking, BasicState, CostFunction, Executor, Gradient, GradientDescent, GradientTolerance,
-    QuasiNewtonState, TerminationReason, BFGS,
+    Backtracking, BasicState, Bfgs, CostFunction, Executor, Gradient, GradientDescent,
+    GradientTolerance, QuasiNewtonState, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -14,7 +14,7 @@ fn bfgs_converges_on_rosenbrock() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
     )
     .max_iter(100)
@@ -45,7 +45,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
     )
     .max_iter(200)
@@ -63,7 +63,7 @@ fn bfgs_converges_faster_than_gd_with_backtracking() {
 
     let bfgs_result = Executor::new(
         Rosenbrock::<DVector<f64>>::default(),
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial.clone()),
     )
     .max_iter(500)
@@ -81,18 +81,18 @@ fn bfgs_converges_faster_than_gd_with_backtracking() {
     .run()
     .unwrap();
 
-    // BFGS should reach the gradient tolerance while GD won't (or will
-    // need many more iters). At the very least BFGS should have a *much*
+    // Bfgs should reach the gradient tolerance while GD won't (or will
+    // need many more iters). At the very least Bfgs should have a *much*
     // lower final cost.
     assert!(
         bfgs_result.cost() < gd_result.cost(),
-        "BFGS cost {} not better than GD cost {}",
+        "Bfgs cost {} not better than GD cost {}",
         bfgs_result.cost(),
         gd_result.cost()
     );
     assert!(
         bfgs_result.iter() < gd_result.iter(),
-        "BFGS iters {} not fewer than GD iters {}",
+        "Bfgs iters {} not fewer than GD iters {}",
         bfgs_result.iter(),
         gd_result.iter()
     );
@@ -100,7 +100,7 @@ fn bfgs_converges_faster_than_gd_with_backtracking() {
 
 /// Strictly convex 5-D quadratic `f(x) = ½ xᵀ A x − bᵀ x` with diagonal
 /// `A = diag(1, 2, ..., 5)` and `b = (1, 1, ..., 1)`. Minimum at
-/// `x* = A⁻¹ b`, `f(x*) = −½ bᵀ A⁻¹ b`. BFGS on a quadratic with `n`
+/// `x* = A⁻¹ b`, `f(x*) = −½ bᵀ A⁻¹ b`. Bfgs on a quadratic with `n`
 /// dimensions converges in `n` steps with exact line search; with strong
 /// Wolfe it still converges very fast.
 struct Quadratic {
@@ -144,7 +144,7 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
     )
     .max_iter(50)
@@ -171,7 +171,7 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
 }
 
 /// Confirms the line-search-bail safety net: if a user picks a gradient
-/// tolerance below machine precision, BFGS still terminates (via
+/// tolerance below machine precision, Bfgs still terminates (via
 /// `SolverConverged`) instead of spinning forever doing wasted line-search
 /// work. The fast convergence makes |g| machine-epsilon-small after ~12
 /// iterations on this problem.
@@ -184,7 +184,7 @@ fn bfgs_terminates_via_converged_when_at_machine_precision() {
 
     let result = Executor::new(
         problem,
-        BFGS::new(),
+        Bfgs::new(),
         QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
     )
     .max_iter(200)

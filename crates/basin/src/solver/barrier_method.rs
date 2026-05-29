@@ -30,9 +30,9 @@ use crate::core::termination::{
 /// iterates over its own [`GradientState`]. The inner state is seeded at the
 /// current iterate via [`WarmStart::seed`],
 /// so each of [`GradientDescent`](crate::solver::GradientDescent)
-/// ([`BasicState`]), [`BFGS`](crate::solver::BFGS)
+/// ([`BasicState`]), [`Bfgs`](crate::solver::Bfgs)
 /// ([`QuasiNewtonState`](crate::core::state::QuasiNewtonState)), and unbounded
-/// [`LBFGS`](crate::solver::lbfgs::LBFGS)
+/// [`Lbfgs`](crate::solver::lbfgs::Lbfgs)
 /// ([`LbfgsState`](crate::core::state::LbfgsState)) is usable. Two inner kinds
 /// are deliberately excluded: a least-squares solver
 /// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)) — the barrier

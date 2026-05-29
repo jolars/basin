@@ -12,7 +12,7 @@ use crate::core::state::{
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{sort_population_ascending, CmaEs};
-use crate::solver::lbfgs::{LBFGS, LBFGSB};
+use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 use crate::solver::levenberg_marquardt::LevenbergMarquardt;
 use crate::solver::nelder_mead::NelderMead;
 
@@ -32,7 +32,7 @@ use crate::solver::nelder_mead::NelderMead;
 /// # Implementations
 ///
 /// Shipped impls for [`NelderMead`], [`LevenbergMarquardt`], and
-/// [`LBFGSB`]. To plug in something else, either impl this trait (plus
+/// [`Lbfgsb`]. To plug in something else, either impl this trait (plus
 /// [`WarmStart`]) on your solver, or wrap a `Solver<P, S>` in
 /// [`ClosureInner`] with inline seeder/work closures (escape hatch for
 /// one-off experiments and the `AlwaysFails`-style failure-bubbling
@@ -44,7 +44,7 @@ use crate::solver::nelder_mead::NelderMead;
 /// vertices), LM wants a single iterate with cached residual / Jacobian,
 /// L-BFGS-B wants the limited-memory history. Tying
 /// [`State`](WarmStart::State) to [`WarmStart`] lets the memetic factory
-/// write `BoundedCmaInject::with_inner_solver(cma, LBFGSB::new())`
+/// write `BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())`
 /// without the caller having to spell out `LbfgsState<V>` in turbofish —
 /// `I` determines it.
 ///
@@ -218,11 +218,11 @@ where
     }
 }
 
-// `WarmStart` is generic over the mode marker so both `LBFGSB` (bounded,
-// used as a CMA inner) and `LBFGS<Unbounded>` (used as a barrier / AL
+// `WarmStart` is generic over the mode marker so both `Lbfgsb` (bounded,
+// used as a CMA inner) and `Lbfgs<Unbounded>` (used as a barrier / AL
 // inner) seed the same `LbfgsState`. `MemeticInner` stays on the bounded
 // alias only — CMA injection pairs with the bounded variant.
-impl<Mode, S, V> WarmStart<V> for LBFGS<Mode, S>
+impl<Mode, S, V> WarmStart<V> for Lbfgs<Mode, S>
 where
     V: Clone,
 {
@@ -232,7 +232,7 @@ where
     }
 }
 
-impl<V, LS> MemeticInner<V> for LBFGSB<LS>
+impl<V, LS> MemeticInner<V> for Lbfgsb<LS>
 where
     V: Clone,
 {
@@ -272,7 +272,7 @@ where
 ///
 /// Generic over any `I: MemeticInner<V>`. The associated `I::State`
 /// determines the inner state shape. Shipped impls cover
-/// [`NelderMead`], [`LevenbergMarquardt`], and [`LBFGSB`]. For
+/// [`NelderMead`], [`LevenbergMarquardt`], and [`Lbfgsb`]. For
 /// L-BFGS-B inner with consistent bound flow, use the bounded sibling
 /// [`BoundedCmaInject`](crate::solver::BoundedCmaInject) over
 /// [`BoundedCmaEs`](crate::solver::BoundedCmaEs).

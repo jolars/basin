@@ -1,13 +1,13 @@
 #![cfg(feature = "faer")]
 
-//! L-BFGS-B convergence tests over the faer backend. Mirrors
+//! L-Bfgs-B convergence tests over the faer backend. Mirrors
 //! `tests/lbfgsb_vec.rs` to confirm the `Col<f64>` impl of
 //! [`basin::backend::AsFloatSliceMut`] plumbs through correctly.
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, MaxIter,
-    ProjectedGradientTolerance, LBFGSB,
+    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
+    ProjectedGradientTolerance,
 };
 use faer::Col;
 
@@ -52,7 +52,7 @@ fn unbounded_rosenbrock_2d_converges() {
     let upper = problem.u.clone();
     let state = LbfgsState::new(Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 }), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(200))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
         .run()
@@ -74,7 +74,7 @@ fn booth_at_corner_converges() {
     let upper = Col::from_fn(2, |_| 1.0);
     let state = LbfgsState::new(Col::from_fn(2, |_| 0.0), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
         .run()
@@ -100,7 +100,7 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
     let upper = Col::from_fn(2, |_| 5.0);
     let state = LbfgsState::new(Col::from_fn(2, |_| 0.0), 5);
 
-    let result = Executor::new(problem, LBFGSB::new(), state)
+    let result = Executor::new(problem, Lbfgsb::new(), state)
         .terminate_on(MaxIter(100))
         .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
         .run()
