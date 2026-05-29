@@ -1,7 +1,8 @@
 use nalgebra::{DMatrix, DVector, Dim, Matrix, Storage, StorageMut};
 use rand::{Rng, RngExt};
-use rand_distr::{Distribution, StandardNormal};
+use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
 
+use super::Scalar;
 use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
@@ -19,64 +20,74 @@ use super::{
     VectorLen,
 };
 
-impl<R, C, S> ScaledAdd<f64> for Matrix<f64, R, C, S>
+// `F: Scalar` (basin's alias) bundles `Float + FromPrimitive + Sum + Debug +
+// Default + 'static`, which transitively satisfies `nalgebra::Scalar`
+// (`Clone + PartialEq + Debug + 'static`) via its blanket impl — no separate
+// bound needed.
+
+impl<F, R, C, S> ScaledAdd<F> for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
-    fn scaled_add(&mut self, scalar: f64, other: &Self) {
+    fn scaled_add(&mut self, scalar: F, other: &Self) {
         assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
-        self.zip_apply(other, |x, y| *x += scalar * y);
+        self.zip_apply(other, |x, y| *x = *x + scalar * y);
     }
 }
 
-impl<R, C, S> NormSquared for Matrix<f64, R, C, S>
+impl<F, R, C, S> NormSquared<F> for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: Storage<f64, R, C>,
+    S: Storage<F, R, C>,
 {
-    fn norm_squared(&self) -> f64 {
-        self.iter().map(|x| x * x).sum()
+    fn norm_squared(&self) -> F {
+        self.iter().map(|x| *x * *x).sum()
     }
 }
 
-impl<R, C, S> NormInfinity for Matrix<f64, R, C, S>
+impl<F, R, C, S> NormInfinity<F> for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: Storage<f64, R, C>,
+    S: Storage<F, R, C>,
 {
-    fn norm_infinity(&self) -> f64 {
-        self.iter().map(|x| x.abs()).fold(0.0, f64::max)
+    fn norm_infinity(&self) -> F {
+        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
     }
 }
 
-impl<R, C, S> Dot for Matrix<f64, R, C, S>
+impl<F, R, C, S> Dot<F> for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: Storage<f64, R, C>,
+    S: Storage<F, R, C>,
 {
-    fn dot(&self, other: &Self) -> f64 {
+    fn dot(&self, other: &Self) -> F {
         assert_eq!(self.shape(), other.shape(), "dot: shape mismatch");
-        self.iter().zip(other.iter()).map(|(a, b)| a * b).sum()
+        self.iter().zip(other.iter()).map(|(a, b)| *a * *b).sum()
     }
 }
 
-impl<R, C, S> NegInPlace for Matrix<f64, R, C, S>
+impl<F, R, C, S> NegInPlace for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
     fn neg_in_place(&mut self) {
         self.apply(|x| *x = -*x);
     }
 }
 
-impl SampleUniformBox for DVector<f64> {
+impl<F: Scalar + SampleUniform> SampleUniformBox for DVector<F> {
     fn sample_uniform_box<G: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut G) -> Self {
         assert_eq!(
             lower.len(),
@@ -87,44 +98,49 @@ impl SampleUniformBox for DVector<f64> {
     }
 }
 
-impl VectorLen for DVector<f64> {
+impl<F: Scalar> VectorLen for DVector<F> {
     fn vec_len(&self) -> usize {
         self.len()
     }
 }
 
-impl VectorIndex for DVector<f64> {
-    fn get_scalar(&self, i: usize) -> f64 {
+impl<F: Scalar> VectorIndex<F> for DVector<F> {
+    fn get_scalar(&self, i: usize) -> F {
         self[i]
     }
-    fn set_scalar(&mut self, i: usize, value: f64) {
+    fn set_scalar(&mut self, i: usize, value: F) {
         self[i] = value;
     }
 }
 
-impl SampleStandardNormal for DVector<f64> {
+impl<F: Scalar> SampleStandardNormal for DVector<F>
+where
+    StandardNormal: Distribution<F>,
+{
     fn sample_standard_normal<G: Rng + ?Sized>(template: &Self, rng: &mut G) -> Self {
         Self::from_fn(template.len(), |_, _| StandardNormal.sample(rng))
     }
 }
 
-impl<R, C, S> ScaleInPlace for Matrix<f64, R, C, S>
+impl<F, R, C, S> ScaleInPlace<F> for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
-    fn scale_in_place(&mut self, scalar: f64) {
+    fn scale_in_place(&mut self, scalar: F) {
         // nalgebra's `*=` allocates intermediate; iterate manually.
-        self.apply(|x| *x *= scalar);
+        self.apply(|x| *x = *x * scalar);
     }
 }
 
-impl<R, C, S> ComponentMulAssign for Matrix<f64, R, C, S>
+impl<F, R, C, S> ComponentMulAssign for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
     fn component_mul_assign(&mut self, other: &Self) {
         assert_eq!(
@@ -132,15 +148,16 @@ where
             other.shape(),
             "component_mul_assign: shape mismatch"
         );
-        self.zip_apply(other, |x, y| *x *= y);
+        self.zip_apply(other, |x, y| *x = *x * y);
     }
 }
 
-impl<R, C, S> ComponentMaxAssign for Matrix<f64, R, C, S>
+impl<F, R, C, S> ComponentMaxAssign for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
     fn component_max_assign(&mut self, other: &Self) {
         assert_eq!(
@@ -152,26 +169,28 @@ where
     }
 }
 
-impl<R, C, S> FloorZerosInPlace for Matrix<f64, R, C, S>
+impl<F, R, C, S> FloorZerosInPlace<F> for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
-    fn floor_zeros_in_place(&mut self, value: f64) {
+    fn floor_zeros_in_place(&mut self, value: F) {
         self.apply(|x| {
-            if *x <= 0.0 {
+            if *x <= F::zero() {
                 *x = value;
             }
         });
     }
 }
 
-impl<R, C, S> ComponentDivAssign for Matrix<f64, R, C, S>
+impl<F, R, C, S> ComponentDivAssign for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
     fn component_div_assign(&mut self, other: &Self) {
         assert_eq!(
@@ -179,15 +198,16 @@ where
             other.shape(),
             "component_div_assign: shape mismatch"
         );
-        self.zip_apply(other, |x, y| *x /= y);
+        self.zip_apply(other, |x, y| *x = *x / y);
     }
 }
 
-impl<R, C, S> ClampInPlace for Matrix<f64, R, C, S>
+impl<F, R, C, S> ClampInPlace for Matrix<F, R, C, S>
 where
+    F: Scalar,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
     fn clamp_in_place(&mut self, lower: &Self, upper: &Self) {
         assert_eq!(
@@ -203,7 +223,9 @@ where
         // `iter_mut` and `iter` both traverse in column-major order, so
         // zipping is consistent across self / lower / upper.
         for ((x, &lo), &hi) in self.iter_mut().zip(lower.iter()).zip(upper.iter()) {
-            *x = x.clamp(lo, hi);
+            // `Float` has no `clamp`; `max(lo).min(hi)` matches the
+            // `f64::clamp` result on finite, ordered bounds.
+            *x = (*x).max(lo).min(hi);
         }
     }
 }

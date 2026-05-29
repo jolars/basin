@@ -2,8 +2,9 @@ use faer::linalg::matmul::matmul;
 use faer::linalg::solvers::{Llt, Solve};
 use faer::{Accum, Col, Mat, Par, Side};
 use rand::{Rng, RngExt};
-use rand_distr::{Distribution, StandardNormal};
+use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
 
+use super::Scalar;
 use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
@@ -21,39 +22,45 @@ use super::{
     VectorLen,
 };
 
-impl ScaledAdd<f64> for Col<f64> {
-    fn scaled_add(&mut self, scalar: f64, other: &Self) {
+// The vector-tier ops used here (`Col::iter`, `Col::from_fn`, indexing, the
+// `faer::zip!` / `faer::unzip!` macros) don't require `faer_traits::ComplexField`
+// — only the linalg-tier kernels (`Col::zeros`, `matmul`, factorizations) do.
+// So `F: Scalar` is the only bound needed at these impl sites.
+
+impl<F: Scalar> ScaledAdd<F> for Col<F> {
+    fn scaled_add(&mut self, scalar: F, other: &Self) {
         assert_eq!(self.nrows(), other.nrows(), "scaled_add: shape mismatch");
-        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x += scalar * *y);
+        faer::zip!(self.as_mut(), other.as_ref())
+            .for_each(|faer::unzip!(x, y)| *x = *x + scalar * *y);
     }
 }
 
-impl NormSquared for Col<f64> {
-    fn norm_squared(&self) -> f64 {
-        self.iter().map(|x| x * x).sum()
+impl<F: Scalar> NormSquared<F> for Col<F> {
+    fn norm_squared(&self) -> F {
+        self.iter().map(|x| *x * *x).sum()
     }
 }
 
-impl NormInfinity for Col<f64> {
-    fn norm_infinity(&self) -> f64 {
-        self.iter().map(|x| x.abs()).fold(0.0, f64::max)
+impl<F: Scalar> NormInfinity<F> for Col<F> {
+    fn norm_infinity(&self) -> F {
+        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
     }
 }
 
-impl Dot for Col<f64> {
-    fn dot(&self, other: &Self) -> f64 {
+impl<F: Scalar> Dot<F> for Col<F> {
+    fn dot(&self, other: &Self) -> F {
         assert_eq!(self.nrows(), other.nrows(), "dot: shape mismatch");
-        self.iter().zip(other.iter()).map(|(a, b)| a * b).sum()
+        self.iter().zip(other.iter()).map(|(a, b)| *a * *b).sum()
     }
 }
 
-impl NegInPlace for Col<f64> {
+impl<F: Scalar> NegInPlace for Col<F> {
     fn neg_in_place(&mut self) {
         faer::zip!(self.as_mut()).for_each(|faer::unzip!(x)| *x = -*x);
     }
 }
 
-impl SampleUniformBox for Col<f64> {
+impl<F: Scalar + SampleUniform> SampleUniformBox for Col<F> {
     fn sample_uniform_box<R: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut R) -> Self {
         assert_eq!(
             lower.nrows(),
@@ -64,45 +71,48 @@ impl SampleUniformBox for Col<f64> {
     }
 }
 
-impl VectorLen for Col<f64> {
+impl<F: Scalar> VectorLen for Col<F> {
     fn vec_len(&self) -> usize {
         self.nrows()
     }
 }
 
-impl VectorIndex for Col<f64> {
-    fn get_scalar(&self, i: usize) -> f64 {
+impl<F: Scalar> VectorIndex<F> for Col<F> {
+    fn get_scalar(&self, i: usize) -> F {
         self[i]
     }
-    fn set_scalar(&mut self, i: usize, value: f64) {
+    fn set_scalar(&mut self, i: usize, value: F) {
         self[i] = value;
     }
 }
 
-impl SampleStandardNormal for Col<f64> {
+impl<F: Scalar> SampleStandardNormal for Col<F>
+where
+    StandardNormal: Distribution<F>,
+{
     fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
         Self::from_fn(template.nrows(), |_| StandardNormal.sample(rng))
     }
 }
 
-impl ScaleInPlace for Col<f64> {
-    fn scale_in_place(&mut self, scalar: f64) {
-        faer::zip!(self.as_mut()).for_each(|faer::unzip!(x)| *x *= scalar);
+impl<F: Scalar> ScaleInPlace<F> for Col<F> {
+    fn scale_in_place(&mut self, scalar: F) {
+        faer::zip!(self.as_mut()).for_each(|faer::unzip!(x)| *x = *x * scalar);
     }
 }
 
-impl ComponentMulAssign for Col<f64> {
+impl<F: Scalar> ComponentMulAssign for Col<F> {
     fn component_mul_assign(&mut self, other: &Self) {
         assert_eq!(
             self.nrows(),
             other.nrows(),
             "component_mul_assign: shape mismatch"
         );
-        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x *= *y);
+        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x = *x * *y);
     }
 }
 
-impl ComponentMaxAssign for Col<f64> {
+impl<F: Scalar> ComponentMaxAssign for Col<F> {
     fn component_max_assign(&mut self, other: &Self) {
         assert_eq!(
             self.nrows(),
@@ -113,28 +123,28 @@ impl ComponentMaxAssign for Col<f64> {
     }
 }
 
-impl FloorZerosInPlace for Col<f64> {
-    fn floor_zeros_in_place(&mut self, value: f64) {
+impl<F: Scalar> FloorZerosInPlace<F> for Col<F> {
+    fn floor_zeros_in_place(&mut self, value: F) {
         faer::zip!(self.as_mut()).for_each(|faer::unzip!(x)| {
-            if *x <= 0.0 {
+            if *x <= F::zero() {
                 *x = value;
             }
         });
     }
 }
 
-impl ComponentDivAssign for Col<f64> {
+impl<F: Scalar> ComponentDivAssign for Col<F> {
     fn component_div_assign(&mut self, other: &Self) {
         assert_eq!(
             self.nrows(),
             other.nrows(),
             "component_div_assign: shape mismatch"
         );
-        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x /= *y);
+        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x = *x / *y);
     }
 }
 
-impl ClampInPlace for Col<f64> {
+impl<F: Scalar> ClampInPlace for Col<F> {
     fn clamp_in_place(&mut self, lower: &Self, upper: &Self) {
         assert_eq!(
             self.nrows(),
@@ -147,7 +157,9 @@ impl ClampInPlace for Col<f64> {
             "clamp_in_place: upper shape mismatch"
         );
         faer::zip!(self.as_mut(), lower.as_ref(), upper.as_ref())
-            .for_each(|faer::unzip!(x, lo, hi)| *x = x.clamp(*lo, *hi));
+            // `Float` has no `clamp`; `max(lo).min(hi)` matches the
+            // `f64::clamp` result on finite, ordered bounds.
+            .for_each(|faer::unzip!(x, lo, hi)| *x = (*x).max(*lo).min(*hi));
     }
 }
 

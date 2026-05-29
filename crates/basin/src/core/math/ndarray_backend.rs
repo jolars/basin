@@ -1,7 +1,8 @@
 use ndarray::{Array1, Array2, ArrayBase, Data, DataMut, Dimension};
 use rand::{Rng, RngExt};
-use rand_distr::{Distribution, StandardNormal};
+use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
 
+use super::Scalar;
 use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
@@ -14,51 +15,56 @@ use super::{
     SymmetricEigenError, VectorIndex, VectorLen,
 };
 
-impl<S, D> ScaledAdd<f64> for ArrayBase<S, D>
+impl<F, S, D> ScaledAdd<F> for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
-    fn scaled_add(&mut self, scalar: f64, other: &Self) {
+    fn scaled_add(&mut self, scalar: F, other: &Self) {
         assert_eq!(self.shape(), other.shape(), "scaled_add: shape mismatch");
-        self.zip_mut_with(other, |x, y| *x += scalar * y);
+        self.zip_mut_with(other, |x, y| *x = *x + scalar * *y);
     }
 }
 
-impl<S, D> NormSquared for ArrayBase<S, D>
+impl<F, S, D> NormSquared<F> for ArrayBase<S, D>
 where
-    S: Data<Elem = f64>,
+    F: Scalar,
+    S: Data<Elem = F>,
     D: Dimension,
 {
-    fn norm_squared(&self) -> f64 {
-        self.iter().map(|x| x * x).sum()
+    fn norm_squared(&self) -> F {
+        self.iter().map(|x| *x * *x).sum()
     }
 }
 
-impl<S, D> NormInfinity for ArrayBase<S, D>
+impl<F, S, D> NormInfinity<F> for ArrayBase<S, D>
 where
-    S: Data<Elem = f64>,
+    F: Scalar,
+    S: Data<Elem = F>,
     D: Dimension,
 {
-    fn norm_infinity(&self) -> f64 {
-        self.iter().map(|x| x.abs()).fold(0.0, f64::max)
+    fn norm_infinity(&self) -> F {
+        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
     }
 }
 
-impl<S, D> Dot for ArrayBase<S, D>
+impl<F, S, D> Dot<F> for ArrayBase<S, D>
 where
-    S: Data<Elem = f64>,
+    F: Scalar,
+    S: Data<Elem = F>,
     D: Dimension,
 {
-    fn dot(&self, other: &Self) -> f64 {
+    fn dot(&self, other: &Self) -> F {
         assert_eq!(self.shape(), other.shape(), "dot: shape mismatch");
-        self.iter().zip(other.iter()).map(|(a, b)| a * b).sum()
+        self.iter().zip(other.iter()).map(|(a, b)| *a * *b).sum()
     }
 }
 
-impl<S, D> NegInPlace for ArrayBase<S, D>
+impl<F, S, D> NegInPlace for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
     fn neg_in_place(&mut self) {
@@ -66,7 +72,7 @@ where
     }
 }
 
-impl SampleUniformBox for Array1<f64> {
+impl<F: Scalar + SampleUniform> SampleUniformBox for Array1<F> {
     fn sample_uniform_box<R: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut R) -> Self {
         assert_eq!(
             lower.len(),
@@ -77,7 +83,7 @@ impl SampleUniformBox for Array1<f64> {
     }
 }
 
-impl VectorLen for Array1<f64> {
+impl<F: Scalar> VectorLen for Array1<F> {
     fn vec_len(&self) -> usize {
         self.len()
     }
@@ -212,34 +218,39 @@ impl SymmetricEigen<Array1<f64>> for Array2<f64> {
     }
 }
 
-impl VectorIndex for Array1<f64> {
-    fn get_scalar(&self, i: usize) -> f64 {
+impl<F: Scalar> VectorIndex<F> for Array1<F> {
+    fn get_scalar(&self, i: usize) -> F {
         self[i]
     }
-    fn set_scalar(&mut self, i: usize, value: f64) {
+    fn set_scalar(&mut self, i: usize, value: F) {
         self[i] = value;
     }
 }
 
-impl SampleStandardNormal for Array1<f64> {
+impl<F: Scalar> SampleStandardNormal for Array1<F>
+where
+    StandardNormal: Distribution<F>,
+{
     fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
         Array1::from_shape_fn(template.len(), |_| StandardNormal.sample(rng))
     }
 }
 
-impl<S, D> ScaleInPlace for ArrayBase<S, D>
+impl<F, S, D> ScaleInPlace<F> for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
-    fn scale_in_place(&mut self, scalar: f64) {
-        self.map_inplace(|x| *x *= scalar);
+    fn scale_in_place(&mut self, scalar: F) {
+        self.map_inplace(|x| *x = *x * scalar);
     }
 }
 
-impl<S, D> ComponentMulAssign for ArrayBase<S, D>
+impl<F, S, D> ComponentMulAssign for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
     fn component_mul_assign(&mut self, other: &Self) {
@@ -248,13 +259,14 @@ where
             other.shape(),
             "component_mul_assign: shape mismatch"
         );
-        self.zip_mut_with(other, |x, y| *x *= y);
+        self.zip_mut_with(other, |x, y| *x = *x * *y);
     }
 }
 
-impl<S, D> ComponentMaxAssign for ArrayBase<S, D>
+impl<F, S, D> ComponentMaxAssign for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
     fn component_max_assign(&mut self, other: &Self) {
@@ -267,23 +279,25 @@ where
     }
 }
 
-impl<S, D> FloorZerosInPlace for ArrayBase<S, D>
+impl<F, S, D> FloorZerosInPlace<F> for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
-    fn floor_zeros_in_place(&mut self, value: f64) {
+    fn floor_zeros_in_place(&mut self, value: F) {
         self.map_inplace(|x| {
-            if *x <= 0.0 {
+            if *x <= F::zero() {
                 *x = value;
             }
         });
     }
 }
 
-impl<S, D> ComponentDivAssign for ArrayBase<S, D>
+impl<F, S, D> ComponentDivAssign for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
     fn component_div_assign(&mut self, other: &Self) {
@@ -292,13 +306,14 @@ where
             other.shape(),
             "component_div_assign: shape mismatch"
         );
-        self.zip_mut_with(other, |x, y| *x /= y);
+        self.zip_mut_with(other, |x, y| *x = *x / *y);
     }
 }
 
-impl<S, D> ClampInPlace for ArrayBase<S, D>
+impl<F, S, D> ClampInPlace for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
     fn clamp_in_place(&mut self, lower: &Self, upper: &Self) {
@@ -315,7 +330,9 @@ where
         ndarray::Zip::from(self)
             .and(lower)
             .and(upper)
-            .for_each(|x, &lo, &hi| *x = x.clamp(lo, hi));
+            // `Float` has no `clamp`; `max(lo).min(hi)` matches the
+            // `f64::clamp` result on finite, ordered bounds.
+            .for_each(|x, &lo, &hi| *x = (*x).max(lo).min(hi));
     }
 }
 
