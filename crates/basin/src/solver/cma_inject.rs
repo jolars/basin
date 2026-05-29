@@ -7,8 +7,8 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{
-    BasicPopulationState, BasicSimplexState, BasicState, CountsMirror, GradientState,
-    IntoInitialSimplex, LbfgsState, State,
+    BasicPopulationState, BasicSimplexState, BasicState, CountsMirror, IntoInitialSimplex,
+    LbfgsState, State,
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{sort_population_ascending, CmaEs};
@@ -21,20 +21,17 @@ use crate::solver::nelder_mead::NelderMead;
 ///
 /// Extends [`WarmStart`], which supplies the associated
 /// [`State`](WarmStart::State) shape and the σ-free
-/// [`seed`](WarmStart::seed). `MemeticInner` adds what CMA-ES injection
-/// additionally needs: a step-size-scaled seed and a work-unit count.
-///
-/// The trait is the contract between the outer memetic glue and the
-/// inner local solver: it says "given a CMA-ES candidate `x` and the
-/// current step-size `σ`, build a fresh inner state; given a final
-/// inner state, report the total work units accumulated."
+/// [`seed`](WarmStart::seed). `MemeticInner` adds the step-size-scaled
+/// seed CMA-ES injection needs: given a candidate `x` and the current
+/// CMA step-size `σ`, build a fresh inner state whose default scale
+/// tracks the outer distribution's spread.
 ///
 /// # Implementations
 ///
 /// Shipped impls for [`NelderMead`], [`LevenbergMarquardt`], and
 /// [`Lbfgsb`]. To plug in something else, either impl this trait (plus
 /// [`WarmStart`]) on your solver, or wrap a `Solver<P, S>` in
-/// [`ClosureInner`] with inline seeder/work closures (escape hatch for
+/// [`ClosureInner`] with an inline seeder closure (escape hatch for
 /// one-off experiments and the `AlwaysFails`-style failure-bubbling
 /// tests).
 ///
@@ -50,12 +47,14 @@ use crate::solver::nelder_mead::NelderMead;
 ///
 /// # Eval aggregation
 ///
-/// `work_units(&self, state)` is what the outer rolls into its
-/// `cost_evals` counter (AGENTS.md "Solver composition" rule 1). For
-/// gradient/Jacobian inners it should sum `state.cost_evals() +
-/// state.gradient_evals()` — CMA-ES outer state has no separate
-/// derivative-eval counter, so derivative work collapses into
-/// `cost_evals` honestly.
+/// No per-trait hook: same-problem composition shares the outer's
+/// [`Problem`] wrapper, so inner evals flow through automatically.
+/// [`BasicPopulationState`]'s [`CountsMirror`] folds every kind of work
+/// (`cost + gradient + residual + jacobian + hessian`) into the outer's
+/// `cost_evals` via `delta.total_work()`, so a derivative-based inner
+/// (LM, L-BFGS-B) has its gradient work honestly collapse into the
+/// outer's single `cost_evals` counter. See AGENTS.md "Solver
+/// composition" rule 1.
 pub trait MemeticInner<V>: WarmStart<V> {
     /// Build a fresh inner state seeded at CMA-ES candidate `x`, scaled
     /// by the current step-size `sigma`. Called once per refined
@@ -66,45 +65,30 @@ pub trait MemeticInner<V>: WarmStart<V> {
     fn seed_scaled(&self, x: &V, _sigma: f64) -> Self::State {
         self.seed(x)
     }
-
-    /// Total inner work units to roll into the outer's `cost_evals`.
-    /// Typically `state.cost_evals() + state.gradient_evals()` for
-    /// derivative-based inners, `state.cost_evals()` alone for
-    /// derivative-free inners. Takes `&self` so closure-based inners
-    /// ([`ClosureInner`]) can dispatch through captured state.
-    fn work_units(&self, state: &Self::State) -> u64;
 }
 
 /// Closure type for `ClosureInner`'s state seeder.
 type ClosureSeedFn<V, S> = Box<dyn Fn(&V, f64) -> S>;
-/// Closure type for `ClosureInner`'s work-unit aggregator.
-type ClosureWorkFn<S> = Box<dyn Fn(&S) -> u64>;
 
 /// Closure-based [`MemeticInner`] wrapper for custom inners that don't
-/// have a native impl. Holds an inner solver plus the two closures
+/// have a native impl. Holds an inner solver plus the seeder closure
 /// `MemeticInner` would otherwise express directly.
 ///
 /// Intended use is one-off experiments and contract tests (e.g. the
 /// `AlwaysFails` harness verifying `SolverFailed` bubbling). For
 /// shipping configurations, prefer impl-ing `MemeticInner` on your
-/// solver type — it's a five-line trait.
+/// solver type — it's a three-line trait.
 pub struct ClosureInner<I, S, V> {
     inner: I,
     seed_fn: ClosureSeedFn<V, S>,
-    work_fn: ClosureWorkFn<S>,
 }
 
 impl<I, S, V> ClosureInner<I, S, V> {
-    /// Wrap `inner` with explicit seeder and work-unit closures.
-    pub fn new(
-        inner: I,
-        seed_fn: impl Fn(&V, f64) -> S + 'static,
-        work_fn: impl Fn(&S) -> u64 + 'static,
-    ) -> Self {
+    /// Wrap `inner` with an explicit seeder closure.
+    pub fn new(inner: I, seed_fn: impl Fn(&V, f64) -> S + 'static) -> Self {
         Self {
             inner,
             seed_fn: Box::new(seed_fn),
-            work_fn: Box::new(work_fn),
         }
     }
 }
@@ -151,9 +135,6 @@ where
     fn seed_scaled(&self, x: &V, sigma: f64) -> S {
         (self.seed_fn)(x, sigma)
     }
-    fn work_units(&self, state: &S) -> u64 {
-        (self.work_fn)(state)
-    }
 }
 
 // -----------------------------------------------------------------------
@@ -193,9 +174,6 @@ where
         }
         BasicSimplexState::from_simplex(vertices)
     }
-    fn work_units(&self, state: &BasicSimplexState<V>) -> u64 {
-        state.cost_evals()
-    }
 }
 
 impl<V, M> WarmStart<V> for LevenbergMarquardt<V, M>
@@ -213,9 +191,6 @@ where
     V: Clone,
 {
     // `seed_scaled` defaults to `seed` — LM ignores σ.
-    fn work_units(&self, state: &BasicState<V>) -> u64 {
-        state.cost_evals() + state.gradient_evals()
-    }
 }
 
 // `WarmStart` is generic over the mode marker so both `Lbfgsb` (bounded,
@@ -237,9 +212,6 @@ where
     V: Clone,
 {
     // `seed_scaled` defaults to `seed` — L-BFGS-B ignores σ.
-    fn work_units(&self, state: &LbfgsState<V>) -> u64 {
-        state.cost_evals() + state.gradient_evals()
-    }
 }
 
 // -----------------------------------------------------------------------
@@ -279,13 +251,16 @@ where
 ///
 /// # Eval aggregation
 ///
-/// The outer's `state.cost_evals` aggregates total inner work units
-/// per `I::work_units(state)`. For derivative-based inners (LM,
-/// L-BFGS-B) the impl sums `cost_evals + gradient_evals`; CMA-ES
-/// outer state has no `gradient_evals` field
-/// (`BasicPopulationState` extends `State`, not `GradientState`), so
-/// derivative-eval counts collapse into `cost_evals` honestly per
-/// AGENTS.md "Solver composition" rule 1.
+/// Same-problem composition: the inner shares the outer's
+/// [`Problem`] wrapper, so every inner cost / gradient / Jacobian /
+/// Hessian call bumps the same
+/// [`EvalCounts`](crate::core::problem::EvalCounts) as the outer's own
+/// evaluations. [`BasicPopulationState`]'s [`CountsMirror`] folds every
+/// kind of work into the outer's single `cost_evals` via
+/// `delta.total_work()` — CMA-ES outer state has no `gradient_evals`
+/// field, so a derivative-based inner (LM, L-BFGS-B) has its gradient
+/// work honestly collapse into `cost_evals` with no per-trait cross-type
+/// fold. See AGENTS.md "Solver composition" rule 1.
 ///
 /// # Backends
 ///

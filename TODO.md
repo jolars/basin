@@ -120,14 +120,6 @@ harder to fix as more code piles on.
       nothing beyond the three AGENTS.md composition contracts (+ `WarmStart`
       for some)? Resolve by either writing the trait or writing the honest "no"
       comment in `core/inner.rs`.
-- [ ] **Retire `MemeticInner::work_units` (now dead).** No shipped solver calls
-      it: `CmaInject` / `BoundedCmaInject` route inner evals through the shared
-      `Problem<P>` wrapper, and `BasicPopulationState`'s `CountsMirror` folds
-      inner work via `delta.total_work()`. The trait method + 4 impls in
-      `solver/cma_inject.rs` (NM, LM, `LBFGSB`, `ClosureInner`) and the rustdoc
-      selling it as the eval-aggregation channel (\~L53-58 / L70-75 / L283) can
-      go; `ClosureInner::new`'s `work_fn` parameter likewise becomes vestigial.
-      Cheap follow-up since the API is already `!`-tagged.
 - [ ] **Workspace wasm build broken by `competitor-bench` transitive dep.**
       `cargo build --target wasm32-unknown-unknown` at the workspace level fails
       inside `levenberg-marquardt` (via `getrandom 0.3` needing

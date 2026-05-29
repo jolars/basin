@@ -165,11 +165,10 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     }
 
     /// Read-only access to the inner solver. Lets composed outer
-    /// solvers dispatch on the inner before / after `run` (e.g. to
-    /// construct an inner state via a `MemeticInner::seed` call, or to
-    /// read a `MemeticInner::work_units` total off the result).
-    /// Mutable access goes through `run`, which already takes
-    /// `&mut self`.
+    /// solvers dispatch on the inner before [`run`](Self::run) — e.g. to
+    /// build an inner state via [`WarmStart::seed`] or
+    /// `MemeticInner::seed_scaled`. Mutable access goes through
+    /// [`run`](Self::run), which already takes `&mut self`.
     pub fn solver(&self) -> &So {
         &self.solver
     }

@@ -4,10 +4,10 @@
 //!
 //! Uses the `AlwaysFails` harness (sibling of the one in
 //! `tests/inner_executor.rs`) wrapped in [`ClosureInner`] for the
-//! seeder + work-unit closures — `AlwaysFails` is a one-off fixture
-//! that doesn't have a dedicated [`MemeticInner`] impl. This is the
-//! S11-era deferred test promoted to a real fixture (S11 hardwired
-//! NelderMead and NelderMead never returns `SolverFailed`).
+//! seeder closure — `AlwaysFails` is a one-off fixture that doesn't
+//! have a dedicated [`MemeticInner`] impl. This is the S11-era
+//! deferred test promoted to a real fixture (S11 hardwired NelderMead
+//! and NelderMead never returns `SolverFailed`).
 
 #![cfg(feature = "nalgebra")]
 
@@ -42,14 +42,10 @@ fn bubbles_inner_failure() {
 
     let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 5);
 
-    // Wrap AlwaysFails in ClosureInner with a BasicState seeder. The
-    // work-unit closure reads cost_evals only since AlwaysFails
-    // doesn't touch the gradient counter.
-    let inner = ClosureInner::new(
-        AlwaysFails,
-        |x: &DVector<f64>, _sigma: f64| BasicState::new(x.clone()),
-        |s: &BasicState<DVector<f64>>| s.cost_evals(),
-    );
+    // Wrap AlwaysFails in ClosureInner with a BasicState seeder.
+    let inner = ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
+        BasicState::new(x.clone())
+    });
     let solver = CmaInject::with_inner_solver(cma, inner);
 
     let result = Executor::new(

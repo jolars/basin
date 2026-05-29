@@ -154,8 +154,8 @@ pub trait GradientState: State {
 ///   (derivative-free outer, no `gradient_evals` field):
 ///   `cost_evals = total_work` (every kind folded in). Lets a CMA-ES
 ///   outer running e.g. an L-BFGS inner have `state.cost_evals`
-///   reflect total computational work, replacing today's `work_units`
-///   manual cross-type fold.
+///   reflect total computational work without a per-trait cross-type
+///   fold.
 pub trait CountsMirror: State {
     /// Overwrite the state's counters from the per-run wrapper delta.
     /// Called by the executor after every successful
@@ -681,8 +681,7 @@ impl<V> CountsMirror for BasicPopulationState<V> {
         // Derivative-free outer: any kind of work (e.g. an L-BFGS
         // inner's gradient calls inside a CMA-injection wrapper) folds
         // into the single `cost_evals` counter so `state.cost_evals`
-        // reflects total work — replacing today's manual `work_units`
-        // cross-type fold.
+        // reflects total work, with no per-trait cross-type fold.
         self.cost_evals = delta.total_work();
     }
 }

@@ -105,9 +105,10 @@ inner's state, not just drive it — and inners carry different state shapes
   default scale).
 - `MemeticInner<V>: WarmStart<V>` (`src/solver/cma_inject.rs`) extends it with
   `seed_scaled(x, σ)` (defaults to `seed`; only Nelder-Mead's σ-scaled simplex
-  overrides it). The vestigial `work_units` method still exists but is now
-  unused by the shipped composed solvers — the `total_work()` fold on
-  derivative-free outer states replaces it; deprecate when convenient.
+  overrides it). No per-trait eval-aggregation hook — same-problem composition
+  shares the `Problem<P>` wrapper, and the `total_work()` fold in
+  `BasicPopulationState`'s `CountsMirror` rolls every kind of inner work into
+  the outer's single `cost_evals` automatically.
 
 Two consumer families validate the split: the barrier / AL methods bound `So:
 WarmStart<V>` with `So::State: GradientState + CountsMirror` (gradient inners
