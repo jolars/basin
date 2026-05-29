@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/jolars/basin/compare/v0.7.0...v0.8.0) (2026-05-29)
+
+### Breaking changes
+- **problem:** migrate to `Problem<P>` design, absorb counting ([`867f371`](https://github.com/jolars/basin/commit/867f371fa0ffe6a3df679d69323a8296f43c324a)), closes [#32](https://github.com/jolars/basin/issues/32)
+- **problem:** typed hard-abort error on problem traits ([`6b46d57`](https://github.com/jolars/basin/commit/6b46d570e651bc3ce74a0d989e9c16a1bb4f5f1c))
+
+### Features
+- dual-license the package under apache v2 and MIT ([`9a33eeb`](https://github.com/jolars/basin/commit/9a33eebd6a01f8e12b19ce8ddd43cc9b5746ad8a))
+- **solvers:** add differential evolution solver (`De`) ([`7a09e0a`](https://github.com/jolars/basin/commit/7a09e0a8bef8aaddb021e9615b7b953f9669e00e))
+- **problem:** migrate to `Problem<P>` design, absorb counting ([`867f371`](https://github.com/jolars/basin/commit/867f371fa0ffe6a3df679d69323a8296f43c324a)), closes [#32](https://github.com/jolars/basin/issues/32)
+- **problem:** typed hard-abort error on problem traits ([`6b46d57`](https://github.com/jolars/basin/commit/6b46d570e651bc3ce74a0d989e9c16a1bb4f5f1c))
+- **problem:** fused cost+grad/residual+jac via subtrait hierarchy ([`c08d595`](https://github.com/jolars/basin/commit/c08d5952f64697fdfd38634d817d71d5e857e8e8))
+- **termination:** add NoImprovement criterion ([`c06ff76`](https://github.com/jolars/basin/commit/c06ff7649d48e7a9dc09e809fddf45ab7f159cf6))
+- **termination:** add `TargetCost` criteria ([`690a82b`](https://github.com/jolars/basin/commit/690a82b1ffead98cdd3d15636adb909c3ebdefec))
 ## [0.7.0](https://github.com/jolars/basin/compare/v0.6.0...v0.7.0) (2026-05-28)
 
 ### Features
