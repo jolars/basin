@@ -1,4 +1,5 @@
 use crate::core::constraint::BoxConstraints;
+use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
@@ -17,62 +18,65 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Backends
 ///
-/// Scalar by construction: the parameter is a single `f64`, so Brent is
-/// backend-agnostic and needs no linear-algebra backend. The problem's
-/// `BoxConstraints` carry `f64` lower / upper bounds.
+/// Scalar by construction: the parameter is a single `F` (default
+/// `f64`), so Brent is backend-agnostic and needs no linear-algebra
+/// backend. The problem's `BoxConstraints` carry `F`-valued lower /
+/// upper bounds.
 ///
 /// # Examples
 ///
 /// `Brent` minimizes a 1-D function over a bracket, so the problem
-/// implements `CostFunction` *and* `BoxConstraints` with scalar (`f64`)
+/// implements `CostFunction` *and* `BoxConstraints` with scalar (`F`)
 /// bounds. See [`NelderMead`](crate::NelderMead) for the general
 /// derivative-free `Executor` pattern.
-pub struct Brent {
-    tol_rel: f64,
-    tol_abs: f64,
-    inner: Option<Inner>,
+pub struct Brent<F = f64> {
+    tol_rel: F,
+    tol_abs: F,
+    inner: Option<Inner<F>>,
 }
 
 /// `(3 − √5) / 2` — golden-section reduction factor used for the fallback
 /// step (split the larger sub-interval at its golden ratio).
-const GOLDEN_C: f64 = 0.381_966_011_250_105_2;
-
-#[derive(Clone, Copy)]
-struct Inner {
-    a: f64,
-    b: f64,
-    x: f64,
-    fx: f64,
-    w: f64,
-    fw: f64,
-    v: f64,
-    fv: f64,
-    d: f64,
-    e: f64,
+fn golden_c<F: Scalar>() -> F {
+    F::from_f64(0.381_966_011_250_105_2).unwrap()
 }
 
-impl Default for Brent {
+#[derive(Clone, Copy)]
+struct Inner<F> {
+    a: F,
+    b: F,
+    x: F,
+    fx: F,
+    w: F,
+    fw: F,
+    v: F,
+    fv: F,
+    d: F,
+    e: F,
+}
+
+impl<F: Scalar> Default for Brent<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Brent {
-    /// Brent solver with the standard tolerances: `tol_rel = √ε_f64`,
+impl<F: Scalar> Brent<F> {
+    /// Brent solver with the standard tolerances: `tol_rel = √ε_F`,
     /// `tol_abs = 1e-12`.
     pub fn new() -> Self {
         Self {
-            tol_rel: f64::EPSILON.sqrt(),
-            tol_abs: 1e-12,
+            tol_rel: F::epsilon().sqrt(),
+            tol_abs: F::from_f64(1e-12).unwrap(),
             inner: None,
         }
     }
 
     /// Brent solver with explicit relative and absolute tolerances. Both
     /// must be strictly positive.
-    pub fn with_tol(tol_rel: f64, tol_abs: f64) -> Self {
-        assert!(tol_rel > 0.0, "tol_rel must be > 0");
-        assert!(tol_abs > 0.0, "tol_abs must be > 0");
+    pub fn with_tol(tol_rel: F, tol_abs: F) -> Self {
+        assert!(tol_rel > F::zero(), "tol_rel must be > 0");
+        assert!(tol_abs > F::zero(), "tol_abs must be > 0");
         Self {
             tol_rel,
             tol_abs,
@@ -81,17 +85,18 @@ impl Brent {
     }
 }
 
-impl<P> Solver<P, BasicState<f64>> for Brent
+impl<P, F> Solver<P, BasicState<F, F>> for Brent<F>
 where
-    P: CostFunction<Param = f64, Output = f64> + BoxConstraints,
+    F: Scalar,
+    P: CostFunction<Param = F, Output = F> + BoxConstraints,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<f64>,
-    ) -> Result<BasicState<f64>, Self::Error> {
+        mut state: BasicState<F, F>,
+    ) -> Result<BasicState<F, F>, Self::Error> {
         let a = *problem.inner().lower();
         let b = *problem.inner().upper();
         assert!(
@@ -100,10 +105,12 @@ where
         );
         // Clamp the user-supplied seed into the bracket. If it lands on a
         // bound, nudge to a golden-section interior point so the first
-        // iteration has somewhere to step.
-        let mut x = state.param.clamp(a, b);
+        // iteration has somewhere to step. `Float` has no `clamp`, so use
+        // `.max(a).min(b)` — same output as `f64::clamp` on a well-ordered
+        // finite bracket (which the assert above guarantees).
+        let mut x = state.param.max(a).min(b);
         if x == a || x == b {
-            x = a + GOLDEN_C * (b - a);
+            x = a + golden_c::<F>() * (b - a);
         }
         let fx = problem.cost(&x)?;
         self.inner = Some(Inner {
@@ -115,8 +122,8 @@ where
             fw: fx,
             v: x,
             fv: fx,
-            d: 0.0,
-            e: 0.0,
+            d: F::zero(),
+            e: F::zero(),
         });
         state.param = x;
         state.cost = Some(fx);
@@ -126,12 +133,14 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<f64>,
-    ) -> Result<(BasicState<f64>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<F, F>,
+    ) -> Result<(BasicState<F, F>, Option<TerminationReason>), Self::Error> {
         let s = self.inner.as_mut().expect("Brent::init must run first");
-        let m = 0.5 * (s.a + s.b);
+        let half = F::from_f64(0.5).unwrap();
+        let two = F::from_f64(2.0).unwrap();
+        let m = half * (s.a + s.b);
         let tol1 = self.tol_rel * s.x.abs() + self.tol_abs;
-        let tol2 = 2.0 * tol1;
+        let tol2 = two * tol1;
 
         let mut use_golden = true;
         if s.e.abs() > tol1 {
@@ -139,36 +148,36 @@ where
             let r = (s.x - s.w) * (s.fx - s.fv);
             let q0 = (s.x - s.v) * (s.fx - s.fw);
             let mut p = (s.x - s.v) * q0 - (s.x - s.w) * r;
-            let mut q = 2.0 * (q0 - r);
-            if q > 0.0 {
+            let mut q = two * (q0 - r);
+            if q > F::zero() {
                 p = -p;
             }
             q = q.abs();
             let e_prev = s.e;
             // Accept only if the step is < half of the step before last and
             // stays strictly inside (a, b). Otherwise fall through to golden.
-            if p.abs() < (0.5 * q * e_prev).abs() && p > q * (s.a - s.x) && p < q * (s.b - s.x) {
+            if p.abs() < (half * q * e_prev).abs() && p > q * (s.a - s.x) && p < q * (s.b - s.x) {
                 s.e = s.d;
                 s.d = p / q;
                 let u = s.x + s.d;
                 // Don't probe within `tol2` of either bound; round the step
                 // off in the direction of the midpoint instead.
                 if u - s.a < tol2 || s.b - u < tol2 {
-                    s.d = if m - s.x >= 0.0 { tol1 } else { -tol1 };
+                    s.d = if m - s.x >= F::zero() { tol1 } else { -tol1 };
                 }
                 use_golden = false;
             }
         }
         if use_golden {
             s.e = if s.x >= m { s.a - s.x } else { s.b - s.x };
-            s.d = GOLDEN_C * s.e;
+            s.d = golden_c::<F>() * s.e;
         }
 
         // Floor the magnitude of the step at `tol1` so we never evaluate
         // the cost at a point indistinguishable from `x`.
         let step = if s.d.abs() >= tol1 {
             s.d
-        } else if s.d >= 0.0 {
+        } else if s.d >= F::zero() {
             tol1
         } else {
             -tol1
@@ -210,11 +219,13 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicState<f64>) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &BasicState<F, F>) -> Option<TerminationReason> {
         let s = self.inner.as_ref()?;
-        let m = 0.5 * (s.a + s.b);
+        let half = F::from_f64(0.5).unwrap();
+        let two = F::from_f64(2.0).unwrap();
+        let m = half * (s.a + s.b);
         let tol = self.tol_rel * s.x.abs() + self.tol_abs;
-        if (s.x - m).abs() + 0.5 * (s.b - s.a) <= 2.0 * tol {
+        if (s.x - m).abs() + half * (s.b - s.a) <= two * tol {
             Some(TerminationReason::SolverConverged)
         } else {
             None
