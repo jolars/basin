@@ -341,9 +341,10 @@ where
     }
 }
 
-impl<S, D> BoxAffineScaling for ArrayBase<S, D>
+impl<F, S, D> BoxAffineScaling<F> for ArrayBase<S, D>
 where
-    S: DataMut<Elem = f64>,
+    F: Scalar,
+    S: DataMut<Elem = F>,
     D: Dimension,
 {
     fn compute_cl_scaling(
@@ -386,13 +387,13 @@ where
             .and(lower)
             .and(upper)
             .for_each(|d, c, &x, &g, &l, &u| {
-                let (d_sq_i, c_i) = cl_scaling_pair(x, g, l, u);
+                let (d_sq_i, c_i) = cl_scaling_pair::<F>(x, g, l, u);
                 *d = d_sq_i;
                 *c = c_i;
             });
     }
 
-    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> f64 {
+    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> F {
         assert_eq!(
             self.shape(),
             step.shape(),
@@ -408,13 +409,13 @@ where
             upper.shape(),
             "max_feasible_step: upper shape mismatch"
         );
-        let mut tau = f64::INFINITY;
+        let mut tau = F::infinity();
         ndarray::Zip::from(self)
             .and(step)
             .and(lower)
             .and(upper)
             .for_each(|&x, &s, &l, &u| {
-                let t = max_feasible_step_component(x, s, l, u);
+                let t = max_feasible_step_component::<F>(x, s, l, u);
                 if t < tau {
                     tau = t;
                 }
@@ -422,15 +423,15 @@ where
         tau
     }
 
-    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> f64 {
+    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> F {
         assert_eq!(
             self.shape(),
             d_sq.shape(),
             "cl_kkt_inf_norm: shape mismatch"
         );
-        let mut best = 0.0_f64;
+        let mut best = F::zero();
         ndarray::Zip::from(self).and(d_sq).for_each(|&v, &d| {
-            let candidate = v.abs() / d;
+            let candidate = <F as num_traits::Float>::abs(v) / d;
             if candidate > best {
                 best = candidate;
             }
@@ -438,20 +439,20 @@ where
         best
     }
 
-    fn weighted_norm_squared(&self, weights: &Self) -> f64 {
+    fn weighted_norm_squared(&self, weights: &Self) -> F {
         assert_eq!(
             self.shape(),
             weights.shape(),
             "weighted_norm_squared: shape mismatch"
         );
-        let mut sum = 0.0_f64;
+        let mut sum = F::zero();
         ndarray::Zip::from(self)
             .and(weights)
-            .for_each(|&v, &w| sum += v * v * w);
+            .for_each(|&v, &w| sum = sum + v * v * w);
         sum
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: f64) {
+    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
         assert_eq!(
             self.shape(),
             lower.shape(),
@@ -466,7 +467,7 @@ where
             .and(lower)
             .and(upper)
             .for_each(|x, &l, &u| {
-                *x = project_strictly_inside_component(*x, l, u, rstep);
+                *x = project_strictly_inside_component::<F>(*x, l, u, rstep);
             });
     }
 }

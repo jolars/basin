@@ -163,7 +163,7 @@ impl<F: Scalar> ClampInPlace for Col<F> {
     }
 }
 
-impl BoxAffineScaling for Col<f64> {
+impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
     fn compute_cl_scaling(
         &self,
         gradient: &Self,
@@ -188,20 +188,20 @@ impl BoxAffineScaling for Col<f64> {
         );
         // Faer's `zip!` macro caps at four operands; do an indexed loop.
         for i in 0..n {
-            let (d_sq_i, c_i) = cl_scaling_pair(self[i], gradient[i], lower[i], upper[i]);
+            let (d_sq_i, c_i) = cl_scaling_pair::<F>(self[i], gradient[i], lower[i], upper[i]);
             d_sq[i] = d_sq_i;
             c_diag[i] = c_i;
         }
     }
 
-    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> f64 {
+    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> F {
         let n = self.nrows();
         assert_eq!(n, step.nrows(), "max_feasible_step: step shape mismatch");
         assert_eq!(n, lower.nrows(), "max_feasible_step: lower shape mismatch");
         assert_eq!(n, upper.nrows(), "max_feasible_step: upper shape mismatch");
-        let mut tau = f64::INFINITY;
+        let mut tau = F::infinity();
         for i in 0..n {
-            let t = max_feasible_step_component(self[i], step[i], lower[i], upper[i]);
+            let t = max_feasible_step_component::<F>(self[i], step[i], lower[i], upper[i]);
             if t < tau {
                 tau = t;
             }
@@ -209,7 +209,7 @@ impl BoxAffineScaling for Col<f64> {
         tau
     }
 
-    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> f64 {
+    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> F {
         assert_eq!(
             self.nrows(),
             d_sq.nrows(),
@@ -217,11 +217,11 @@ impl BoxAffineScaling for Col<f64> {
         );
         self.iter()
             .zip(d_sq.iter())
-            .map(|(&v, &d)| v.abs() / d)
-            .fold(0.0, f64::max)
+            .map(|(&v, &d)| <F as num_traits::Float>::abs(v) / d)
+            .fold(F::zero(), |a, b| if b > a { b } else { a })
     }
 
-    fn weighted_norm_squared(&self, weights: &Self) -> f64 {
+    fn weighted_norm_squared(&self, weights: &Self) -> F {
         assert_eq!(
             self.nrows(),
             weights.nrows(),
@@ -233,7 +233,7 @@ impl BoxAffineScaling for Col<f64> {
             .sum()
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: f64) {
+    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
         let n = self.nrows();
         assert_eq!(
             n,
@@ -246,7 +246,7 @@ impl BoxAffineScaling for Col<f64> {
             "project_strictly_inside: upper shape mismatch"
         );
         for i in 0..n {
-            self[i] = project_strictly_inside_component(self[i], lower[i], upper[i], rstep);
+            self[i] = project_strictly_inside_component::<F>(self[i], lower[i], upper[i], rstep);
         }
     }
 }

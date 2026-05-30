@@ -1,7 +1,7 @@
 use crate::core::math::{
     AddDiagonalVectorInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
     FloorZerosInPlace, GramMatrix, LinearSolveSpd, MatDiagonal, MatTransposeVec, NegInPlace,
-    NormInfinity, NormSquared, ScaleInPlace, ScaledAdd,
+    NormInfinity, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
@@ -190,18 +190,18 @@ use crate::core::termination::TerminationReason;
 /// assert!((result.param()[1] - 2.0).abs() < 1e-6);
 /// # }
 /// ```
-pub struct LevenbergMarquardt<V, M> {
-    tol_grad: f64,
-    tol_grad_rel: f64,
-    ftol: f64,
-    xtol: f64,
-    tau: f64,
+pub struct LevenbergMarquardt<V, M, F = f64> {
+    tol_grad: F,
+    tol_grad_rel: F,
+    ftol: F,
+    xtol: F,
+    tau: F,
     max_inner_attempts: u32,
 
     // Runtime state, populated by `init` and mutated by `next_iter`
     // through `&mut self`.
-    mu: Option<f64>,
-    nu: f64,
+    mu: Option<F>,
+    nu: F,
 
     // Marquardt scaling diagonal `D` — the monotone running max of
     // `diag(JᵀJ)` (Moré 1978). Seeded at `init` from `diag(J(x₀)ᵀJ(x₀))`
@@ -259,14 +259,16 @@ impl<V, M> LevenbergMarquardt<V, M> {
             jtr_cache: None,
         }
     }
+}
 
+impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Absolute first-order optimality tolerance: emit
     /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`
     /// (Madsen et al. eq. 3.3a). Set to `0.0` to disable the check and
     /// rely solely on [`tol_grad_rel`](Self::tol_grad_rel) and/or
     /// framework termination criteria. Default `1e-8`.
-    pub fn tol_grad(mut self, tol: f64) -> Self {
-        assert!(tol >= 0.0, "tol_grad must be ≥ 0");
+    pub fn tol_grad(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
         self.tol_grad = tol;
         self
     }
@@ -285,8 +287,8 @@ impl<V, M> LevenbergMarquardt<V, M> {
     /// Both gradient tests can be active at once; the solver converges
     /// when *either* fires (matching MINPACK, which checks `ftol`,
     /// `xtol`, and `gtol` independently).
-    pub fn tol_grad_rel(mut self, tol: f64) -> Self {
-        assert!(tol >= 0.0, "tol_grad_rel must be ≥ 0");
+    pub fn tol_grad_rel(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "tol_grad_rel must be ≥ 0");
         self.tol_grad_rel = tol;
         self
     }
@@ -319,8 +321,8 @@ impl<V, M> LevenbergMarquardt<V, M> {
     /// (see [`tol_grad`](Self::tol_grad)).
     ///
     /// [`RelativeCostTolerance`]: crate::core::termination::RelativeCostTolerance
-    pub fn ftol(mut self, tol: f64) -> Self {
-        assert!(tol >= 0.0, "ftol must be ≥ 0");
+    pub fn ftol(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "ftol must be ≥ 0");
         self.ftol = tol;
         self
     }
@@ -334,8 +336,8 @@ impl<V, M> LevenbergMarquardt<V, M> {
     /// `0.0` (disabled); use e.g. `1e-8` for MINPACK `xtol` parity.
     /// Converges when *any* enabled test fires (see
     /// [`tol_grad`](Self::tol_grad)).
-    pub fn xtol(mut self, tol: f64) -> Self {
-        assert!(tol >= 0.0, "xtol must be ≥ 0");
+    pub fn xtol(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "xtol must be ≥ 0");
         self.xtol = tol;
         self
     }
@@ -345,8 +347,8 @@ impl<V, M> LevenbergMarquardt<V, M> {
     /// scaling. Use a smaller value (e.g. `1e-6`) when `x₀` is believed
     /// close to the optimum; a larger value (e.g. `1.0`) when far from
     /// it. Default `1e-3` (Nielsen's "moderate trust").
-    pub fn tau(mut self, tau: f64) -> Self {
-        assert!(tau > 0.0, "tau must be > 0");
+    pub fn tau(mut self, tau: F) -> Self {
+        assert!(tau > F::zero(), "tau must be > 0");
         self.tau = tau;
         self
     }
@@ -363,19 +365,20 @@ impl<V, M> LevenbergMarquardt<V, M> {
     }
 }
 
-impl<P, V, M> Solver<P, BasicState<V>> for LevenbergMarquardt<V, M>
+impl<P, V, M, F> Solver<P, BasicState<V, F>> for LevenbergMarquardt<V, M, F>
 where
+    F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
-    V: ScaledAdd<f64>
-        + NormSquared
-        + NormInfinity
+    V: ScaledAdd<F>
+        + NormSquared<F>
+        + NormInfinity<F>
         + NegInPlace
-        + Dot
-        + ScaleInPlace
+        + Dot<F>
+        + ScaleInPlace<F>
         + ComponentMulAssign
         + ComponentDivAssign
         + ComponentMaxAssign
-        + FloorZerosInPlace
+        + FloorZerosInPlace<F>
         + Clone,
     M: GramMatrix
         + MatTransposeVec<V>
@@ -389,8 +392,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<BasicState<V>, Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<BasicState<V, F>, Self::Error> {
         // Seed cost so iter-0 termination criteria see a populated
         // state. Also evaluate J(x₀) once to seed the Marquardt scaling
         // diagonal `D`. The Gram `A₀`, gradient `g₀`, and residual `r`
@@ -398,7 +401,7 @@ where
         // them — no redundant evaluation (or re-formed Gram) at the
         // init/iter-0 boundary.
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(0.5 * r.norm_squared());
+        state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
 
         // A₀ = J(x₀)ᵀJ(x₀); its diagonal is D₀, the per-parameter
         // curvature. A column that's exactly zero at x₀ contributes 0
@@ -408,13 +411,13 @@ where
         // `next_iter` then keeps `D` monotone.
         let a = j.gram();
         let mut d = a.diagonal();
-        d.floor_zeros_in_place(1.0);
+        d.floor_zeros_in_place(F::one());
         self.diag = Some(d);
 
         // μ₀ = τ. Dimensionless: the per-parameter magnitude lives in
         // `D`, so the initial per-column damping is `τ·diag(J(x₀)ᵀJ(x₀))`.
         self.mu = Some(self.tau);
-        self.nu = 2.0;
+        self.nu = F::from_f64(2.0).unwrap();
         self.jtr_cache = Some(j.mat_transpose_vec(&r));
         self.gram_cache = Some(a);
         self.r_cache = Some(r);
@@ -424,8 +427,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
         // `r` is at the current `state.param` after init (initial point)
         // or the previous iteration's bookkeeping (post-accept: r at the
         // new iterate; post-reject: unchanged). Only count an eval on a
@@ -464,12 +467,12 @@ where
         // `diag(JᵀJ)ⱼ = 0` and `gⱼ = 0`; flooring the denominator to 1
         // makes that term `0/1 = 0` rather than `0/0 = NaN`, which is
         // MINPACK's "skip zero columns" behavior.
-        let abs_converged = self.tol_grad > 0.0 && g.norm_infinity() <= self.tol_grad;
-        let rel_converged = self.tol_grad_rel > 0.0 && {
+        let abs_converged = self.tol_grad > F::zero() && g.norm_infinity() <= self.tol_grad;
+        let rel_converged = self.tol_grad_rel > F::zero() && {
             let mut cos_sq = g.clone();
             cos_sq.component_mul_assign(&g);
             let mut denom = diag_cur.clone();
-            denom.floor_zeros_in_place(1.0);
+            denom.floor_zeros_in_place(F::one());
             cos_sq.component_div_assign(&denom);
             cos_sq.norm_infinity() <= self.tol_grad_rel * self.tol_grad_rel * r.norm_squared()
         };
@@ -507,6 +510,9 @@ where
         // SPD by construction. The retry path matters only for
         // pathological cases where the initial μ is too small to
         // overcome arithmetic roundoff.
+        let two = F::from_f64(2.0).unwrap();
+        let half = F::from_f64(0.5).unwrap();
+        let one_third = F::from_f64(1.0 / 3.0).unwrap();
         let h;
         let mut attempts: u32 = 0;
         loop {
@@ -533,8 +539,8 @@ where
                         self.jtr_cache = Some(g);
                         return Ok((state, Some(TerminationReason::SolverFailed)));
                     }
-                    mu *= nu;
-                    nu *= 2.0;
+                    mu = mu * nu;
+                    nu = nu * two;
                 }
             }
         }
@@ -547,26 +553,26 @@ where
         // h·(D ⊙ h) to avoid materializing μ·D·h − g.
         let mut dh = d.clone();
         dh.component_mul_assign(&h);
-        let l_diff = 0.5 * (mu * h.dot(&dh) - h.dot(&g));
+        let l_diff = half * (mu * h.dot(&dh) - h.dot(&g));
 
         // Trial step.
         let mut x_trial = state.param.clone();
-        x_trial.scaled_add(1.0, &h);
+        x_trial.scaled_add(F::one(), &h);
         let r_trial = problem.residual(&x_trial)?;
         state.cost_evals += 1;
-        let f_trial = 0.5 * r_trial.norm_squared();
+        let f_trial = half * r_trial.norm_squared();
 
         let prev_cost = state
             .cost
             .expect("cost not set: Solver::init must run before next_iter");
         let actual_diff = prev_cost - f_trial;
-        let rho = if l_diff > 0.0 {
+        let rho = if l_diff > F::zero() {
             actual_diff / l_diff
         } else {
-            0.0
+            F::zero()
         };
 
-        if rho > 0.0 {
+        if rho > F::zero() {
             // Accept. Update x and cost; adapt μ via Nielsen eq. 2.5
             // with β=2, γ=3, p=3. The trial residual is at the new
             // iterate — stash it; the iterate moved, so the Gram and
@@ -574,9 +580,9 @@ where
             // re-evaluates J(x_trial) and rebuilds A and g.
             state.param = x_trial;
             state.cost = Some(f_trial);
-            let factor = 1.0 - (2.0 * rho - 1.0).powi(3);
-            mu *= factor.max(1.0 / 3.0);
-            nu = 2.0;
+            let factor = F::one() - (two * rho - F::one()).powi(3);
+            mu = mu * factor.max(one_third);
+            nu = two;
             self.r_cache = Some(r_trial);
             self.gram_cache = None;
             self.jtr_cache = None;
@@ -586,8 +592,8 @@ where
             // held still, so r, A and g all remain valid — cache A and g
             // so the next attempt re-solves with a new μ instead of
             // reforming the Gram (Madsen-Nielsen Alg. 3.16; issue #10).
-            mu *= nu;
-            nu *= 2.0;
+            mu = mu * nu;
+            nu = nu * two;
             self.r_cache = Some(r);
             self.gram_cache = Some(a);
             self.jtr_cache = Some(g);
@@ -617,11 +623,11 @@ where
         //     large-jump rejected step keeps the solver going.
         //   * xtol  ‖h‖ ≤ xtol·‖x‖ — the step is negligible relative to
         //     the iterate. Squared on both sides to avoid a sqrt.
-        let ftol_converged = self.ftol > 0.0
+        let ftol_converged = self.ftol > F::zero()
             && actual_diff.abs() <= self.ftol * prev_cost
             && l_diff <= self.ftol * prev_cost
-            && rho <= 2.0;
-        let xtol_converged = self.xtol > 0.0
+            && rho <= two;
+        let xtol_converged = self.xtol > F::zero()
             && h.norm_squared() <= self.xtol * self.xtol * state.param.norm_squared();
         if ftol_converged || xtol_converged {
             return Ok((state, Some(TerminationReason::SolverConverged)));

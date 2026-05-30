@@ -1,5 +1,6 @@
 use crate::core::math::{
-    GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity, NormSquared, ScaledAdd,
+    GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity, NormSquared, Scalar,
+    ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
@@ -75,8 +76,8 @@ use crate::core::termination::TerminationReason;
 /// implement `Residual` + `Jacobian`, then drive a `BasicState` through
 /// the `Executor`, swapping `LevenbergMarquardt::new()` for
 /// `GaussNewton::new()`.
-pub struct GaussNewton<V, M> {
-    tol_grad: f64,
+pub struct GaussNewton<V, M, F = f64> {
+    tol_grad: F,
 
     // Residual and Jacobian caches across iterations. `r_cache` is set
     // to `r(x_new)` after the full GN step and reused at the top of the
@@ -103,22 +104,25 @@ impl<V, M> GaussNewton<V, M> {
             j_cache: None,
         }
     }
+}
 
+impl<V, M, F: Scalar> GaussNewton<V, M, F> {
     /// First-order optimality tolerance: emit
     /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`.
     /// Set to `0.0` to disable the check and rely solely on framework
     /// termination criteria. Default `1e-8`.
-    pub fn tol_grad(mut self, tol: f64) -> Self {
-        assert!(tol >= 0.0, "tol_grad must be ≥ 0");
+    pub fn tol_grad(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
         self.tol_grad = tol;
         self
     }
 }
 
-impl<P, V, M> Solver<P, BasicState<V>> for GaussNewton<V, M>
+impl<P, V, M, F> Solver<P, BasicState<V, F>> for GaussNewton<V, M, F>
 where
+    F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
-    V: ScaledAdd<f64> + NormSquared + NormInfinity + NegInPlace + Clone,
+    V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
     M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
 {
     type Error = <P as Residual>::Error;
@@ -126,13 +130,13 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<BasicState<V>, Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<BasicState<V, F>, Self::Error> {
         // Seed cost so iter-0 termination criteria see a populated
         // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
         // `next_iter` doesn't re-evaluate them at the same point.
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(0.5 * r.norm_squared());
+        state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
         self.r_cache = Some(r);
         self.j_cache = Some(j);
         Ok(state)
@@ -141,8 +145,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
         let r = match self.r_cache.take() {
             Some(r) => r,
             None => problem.residual(&state.param)?,
@@ -156,7 +160,7 @@ where
         // (Madsen/Nielsen/Tingleff eq. 3.3a) is the canonical NLLS
         // convergence test.
         let g = j.mat_transpose_vec(&r);
-        if self.tol_grad > 0.0 && g.norm_infinity() <= self.tol_grad {
+        if self.tol_grad > F::zero() && g.norm_infinity() <= self.tol_grad {
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             return Ok((state, Some(TerminationReason::SolverConverged)));
@@ -183,9 +187,9 @@ where
         // post-iteration state is consistent (Solver contract); stash
         // that residual so the next iter reuses it without re-eval.
         // `J(x_new)` is not computed, so `j_cache` stays empty.
-        state.param.scaled_add(1.0, &delta);
+        state.param.scaled_add(F::one(), &delta);
         let r_new = problem.residual(&state.param)?;
-        state.cost = Some(0.5 * r_new.norm_squared());
+        state.cost = Some(F::from_f64(0.5).unwrap() * r_new.norm_squared());
         self.r_cache = Some(r_new);
         self.j_cache = None;
 

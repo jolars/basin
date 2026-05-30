@@ -171,7 +171,7 @@ impl<F: Scalar> ClampInPlace for Vec<F> {
     }
 }
 
-impl BoxAffineScaling for Vec<f64> {
+impl<F: Scalar> BoxAffineScaling<F> for Vec<F> {
     fn compute_cl_scaling(
         &self,
         gradient: &Self,
@@ -195,20 +195,20 @@ impl BoxAffineScaling for Vec<f64> {
             "compute_cl_scaling: c_diag length mismatch"
         );
         for i in 0..n {
-            let (d_sq_i, c_i) = cl_scaling_pair(self[i], gradient[i], lower[i], upper[i]);
+            let (d_sq_i, c_i) = cl_scaling_pair::<F>(self[i], gradient[i], lower[i], upper[i]);
             d_sq[i] = d_sq_i;
             c_diag[i] = c_i;
         }
     }
 
-    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> f64 {
+    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> F {
         let n = self.len();
         assert_eq!(n, step.len(), "max_feasible_step: step length mismatch");
         assert_eq!(n, lower.len(), "max_feasible_step: lower length mismatch");
         assert_eq!(n, upper.len(), "max_feasible_step: upper length mismatch");
-        let mut tau = f64::INFINITY;
+        let mut tau = F::infinity();
         for i in 0..n {
-            let t = max_feasible_step_component(self[i], step[i], lower[i], upper[i]);
+            let t = max_feasible_step_component::<F>(self[i], step[i], lower[i], upper[i]);
             if t < tau {
                 tau = t;
             }
@@ -216,15 +216,15 @@ impl BoxAffineScaling for Vec<f64> {
         tau
     }
 
-    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> f64 {
+    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> F {
         assert_eq!(self.len(), d_sq.len(), "cl_kkt_inf_norm: length mismatch");
         self.iter()
             .zip(d_sq.iter())
             .map(|(&v, &d)| v.abs() / d)
-            .fold(0.0, f64::max)
+            .fold(F::zero(), |a, b| if b > a { b } else { a })
     }
 
-    fn weighted_norm_squared(&self, weights: &Self) -> f64 {
+    fn weighted_norm_squared(&self, weights: &Self) -> F {
         assert_eq!(
             self.len(),
             weights.len(),
@@ -236,7 +236,7 @@ impl BoxAffineScaling for Vec<f64> {
             .sum()
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: f64) {
+    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
         let n = self.len();
         assert_eq!(
             n,
@@ -249,7 +249,7 @@ impl BoxAffineScaling for Vec<f64> {
             "project_strictly_inside: upper length mismatch"
         );
         for i in 0..n {
-            self[i] = project_strictly_inside_component(self[i], lower[i], upper[i], rstep);
+            self[i] = project_strictly_inside_component::<F>(self[i], lower[i], upper[i], rstep);
         }
     }
 }
@@ -325,12 +325,12 @@ mod tests {
     fn cl_scaling_finite_bounds_negative_gradient_uses_upper() {
         // x = 0.5, g = -1, bounds [-2, 2].
         // Case (i): v = x - u = -1.5, |v| = 1.5, d_sq = 1/1.5, c = 1/1.5.
-        let x = vec![0.5];
-        let g = vec![-1.0];
-        let lower = vec![-2.0];
-        let upper = vec![2.0];
-        let mut d_sq = vec![0.0];
-        let mut c = vec![0.0];
+        let x: Vec<f64> = vec![0.5];
+        let g: Vec<f64> = vec![-1.0];
+        let lower: Vec<f64> = vec![-2.0];
+        let upper: Vec<f64> = vec![2.0];
+        let mut d_sq: Vec<f64> = vec![0.0];
+        let mut c: Vec<f64> = vec![0.0];
         x.compute_cl_scaling(&g, &lower, &upper, &mut d_sq, &mut c);
         assert!((d_sq[0] - (1.0 / 1.5)).abs() < 1e-12);
         assert!((c[0] - (1.0 / 1.5)).abs() < 1e-12);
@@ -340,12 +340,12 @@ mod tests {
     fn cl_scaling_finite_bounds_positive_gradient_uses_lower() {
         // x = 0.5, g = 2, bounds [-2, 2].
         // Case (ii): v = x - l = 2.5, |v| = 2.5, d_sq = 1/2.5, c = 2/2.5.
-        let x = vec![0.5];
-        let g = vec![2.0];
-        let lower = vec![-2.0];
-        let upper = vec![2.0];
-        let mut d_sq = vec![0.0];
-        let mut c = vec![0.0];
+        let x: Vec<f64> = vec![0.5];
+        let g: Vec<f64> = vec![2.0];
+        let lower: Vec<f64> = vec![-2.0];
+        let upper: Vec<f64> = vec![2.0];
+        let mut d_sq: Vec<f64> = vec![0.0];
+        let mut c: Vec<f64> = vec![0.0];
         x.compute_cl_scaling(&g, &lower, &upper, &mut d_sq, &mut c);
         assert!((d_sq[0] - (1.0 / 2.5)).abs() < 1e-12);
         assert!((c[0] - (2.0 / 2.5)).abs() < 1e-12);
@@ -355,12 +355,12 @@ mod tests {
     fn cl_scaling_infinite_bounds_yields_unit_d_and_zero_c() {
         // Both bounds infinite: d_sq = 1, c = 0 (cases iii / iv).
         // Effectively reduces to LM (D = I, C = 0).
-        let x = vec![0.0, 0.0];
-        let g = vec![-1.0, 1.0];
-        let lower = vec![f64::NEG_INFINITY, f64::NEG_INFINITY];
-        let upper = vec![f64::INFINITY, f64::INFINITY];
-        let mut d_sq = vec![0.0; 2];
-        let mut c = vec![0.0; 2];
+        let x: Vec<f64> = vec![0.0, 0.0];
+        let g: Vec<f64> = vec![-1.0, 1.0];
+        let lower: Vec<f64> = vec![f64::NEG_INFINITY, f64::NEG_INFINITY];
+        let upper: Vec<f64> = vec![f64::INFINITY, f64::INFINITY];
+        let mut d_sq: Vec<f64> = vec![0.0; 2];
+        let mut c: Vec<f64> = vec![0.0; 2];
         x.compute_cl_scaling(&g, &lower, &upper, &mut d_sq, &mut c);
         assert_eq!(d_sq, vec![1.0, 1.0]);
         assert_eq!(c, vec![0.0, 0.0]);
@@ -372,10 +372,10 @@ mod tests {
         // Component 0: τ_0 = (1 - 0) / 1 = 1.
         // Component 1: τ_1 = (1 - 0) / 2 = 0.5.
         // τ_max = 0.5.
-        let x = vec![0.0, 0.0];
-        let step = vec![1.0, 2.0];
-        let lower = vec![-1.0, -1.0];
-        let upper = vec![1.0, 1.0];
+        let x: Vec<f64> = vec![0.0, 0.0];
+        let step: Vec<f64> = vec![1.0, 2.0];
+        let lower: Vec<f64> = vec![-1.0, -1.0];
+        let upper: Vec<f64> = vec![1.0, 1.0];
         let tau = x.max_feasible_step(&step, &lower, &upper);
         assert!((tau - 0.5).abs() < 1e-12);
     }
@@ -383,18 +383,18 @@ mod tests {
     #[test]
     fn max_feasible_step_with_no_binding_bound_is_infinite() {
         // step is zero: no component reaches a bound.
-        let x = vec![0.0, 0.0];
-        let step = vec![0.0, 0.0];
-        let lower = vec![-1.0, -1.0];
-        let upper = vec![1.0, 1.0];
+        let x: Vec<f64> = vec![0.0, 0.0];
+        let step: Vec<f64> = vec![0.0, 0.0];
+        let lower: Vec<f64> = vec![-1.0, -1.0];
+        let upper: Vec<f64> = vec![1.0, 1.0];
         assert_eq!(x.max_feasible_step(&step, &lower, &upper), f64::INFINITY);
     }
 
     #[test]
     fn cl_kkt_inf_norm_matches_max_abs_g_over_d_sq() {
         // g = (3, -8), d_sq = (1, 4) → |g| / d_sq = (3, 2) → ‖·‖_∞ = 3.
-        let g = vec![3.0, -8.0];
-        let d_sq = vec![1.0, 4.0];
+        let g: Vec<f64> = vec![3.0, -8.0];
+        let d_sq: Vec<f64> = vec![1.0, 4.0];
         assert!((g.cl_kkt_inf_norm(&d_sq) - 3.0).abs() < 1e-12);
     }
 
@@ -403,8 +403,8 @@ mod tests {
         // Face-active emulation: g_i bounded but d_sq_i = 1/|v_i| huge
         // (because v_i ≈ 0 near the boundary). The KKT metric should
         // go to zero, *not* blow up.
-        let g = vec![-16.0, -20.0]; // gradients at corner (1, 1)
-        let d_sq = vec![1e10, 1e10]; // d_sq → ∞ as iterate → boundary
+        let g: Vec<f64> = vec![-16.0, -20.0]; // gradients at corner (1, 1)
+        let d_sq: Vec<f64> = vec![1e10, 1e10]; // d_sq → ∞ as iterate → boundary
         assert!(g.cl_kkt_inf_norm(&d_sq) < 1e-8);
     }
 }

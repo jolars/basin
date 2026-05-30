@@ -230,11 +230,12 @@ where
     }
 }
 
-impl<R, C, S> BoxAffineScaling for Matrix<f64, R, C, S>
+impl<F, R, C, S> BoxAffineScaling<F> for Matrix<F, R, C, S>
 where
+    F: Scalar + nalgebra::Scalar + Copy,
     R: Dim,
     C: Dim,
-    S: StorageMut<f64, R, C>,
+    S: StorageMut<F, R, C>,
 {
     fn compute_cl_scaling(
         &self,
@@ -280,13 +281,13 @@ where
             .zip(d_sq.iter_mut())
             .zip(c_diag.iter_mut())
         {
-            let (d_sq_i, c_i) = cl_scaling_pair(x, g, l, u);
+            let (d_sq_i, c_i) = cl_scaling_pair::<F>(x, g, l, u);
             *d = d_sq_i;
             *c = c_i;
         }
     }
 
-    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> f64 {
+    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> F {
         let shape = self.shape();
         assert_eq!(
             shape,
@@ -303,14 +304,14 @@ where
             upper.shape(),
             "max_feasible_step: upper shape mismatch"
         );
-        let mut tau = f64::INFINITY;
+        let mut tau = F::infinity();
         for (((&x, &s), &l), &u) in self
             .iter()
             .zip(step.iter())
             .zip(lower.iter())
             .zip(upper.iter())
         {
-            let t = max_feasible_step_component(x, s, l, u);
+            let t = max_feasible_step_component::<F>(x, s, l, u);
             if t < tau {
                 tau = t;
             }
@@ -318,7 +319,7 @@ where
         tau
     }
 
-    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> f64 {
+    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> F {
         assert_eq!(
             self.shape(),
             d_sq.shape(),
@@ -326,11 +327,11 @@ where
         );
         self.iter()
             .zip(d_sq.iter())
-            .map(|(&v, &d)| v.abs() / d)
-            .fold(0.0, f64::max)
+            .map(|(&v, &d)| <F as num_traits::Float>::abs(v) / d)
+            .fold(F::zero(), |a, b| if b > a { b } else { a })
     }
 
-    fn weighted_norm_squared(&self, weights: &Self) -> f64 {
+    fn weighted_norm_squared(&self, weights: &Self) -> F {
         assert_eq!(
             self.shape(),
             weights.shape(),
@@ -342,7 +343,7 @@ where
             .sum()
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: f64) {
+    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
         let shape = self.shape();
         assert_eq!(
             shape,
@@ -355,7 +356,7 @@ where
             "project_strictly_inside: upper shape mismatch"
         );
         for ((x, &l), &u) in self.iter_mut().zip(lower.iter()).zip(upper.iter()) {
-            *x = project_strictly_inside_component(*x, l, u, rstep);
+            *x = project_strictly_inside_component::<F>(*x, l, u, rstep);
         }
     }
 }

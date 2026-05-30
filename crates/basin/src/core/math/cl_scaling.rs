@@ -20,6 +20,12 @@
 //! `ndarray_backend.rs`, `faer_backend.rs`. All four backends are
 //! supported — the operations are pure element-wise, no LA dependency,
 //! so the vector-tier coverage is honest across the corpus.
+//!
+//! The trait carries an `F = f64` scalar default so existing
+//! `V: BoxAffineScaling` bounds resolve to the `f64` impl unchanged,
+//! while individual backends now broaden into other `F: Scalar`.
+
+use super::Scalar;
 
 /// Box-constrained NLLS vector primitives. Implemented for every
 /// vector backend basin ships (`Vec<f64>`, `nalgebra::DVector<f64>`,
@@ -29,7 +35,11 @@
 /// The trait groups three otherwise-unrelated element-wise operations
 /// because they share their caller and have no other users — splitting
 /// would just inflate the solver's `where` clause.
-pub trait BoxAffineScaling: Sized {
+///
+/// `F` defaults to `f64`, matching the legacy scalar pin; per-backend
+/// impls are generic in `F: Scalar` so [`Trf`](crate::solver::Trf) can
+/// run with `F = f32` once the broader NLLS slice picks it up.
+pub trait BoxAffineScaling<F = f64>: Sized {
     /// Coleman-Li affine scaling diagonals per Branch-Coleman-Li 1999
     /// eqs (i)–(iv). `self` is the current iterate `x`. After return:
     ///
@@ -64,7 +74,7 @@ pub trait BoxAffineScaling: Sized {
     );
 
     /// Largest `τ ≥ 0` such that `self + τ·step` stays component-wise
-    /// inside `[lower, upper]`. Returns `f64::INFINITY` when no
+    /// inside `[lower, upper]`. Returns `F::infinity()` when no
     /// component of `step` points at a finite bound from the current
     /// iterate (e.g. all bounds infinite, or `step` is zero where
     /// bounds are finite).
@@ -82,7 +92,7 @@ pub trait BoxAffineScaling: Sized {
     ///   bound infinite contribute no limit.
     /// - The TRF caller multiplies `τ` by a strict-interior factor
     ///   `θ ∈ [θ_l, 1)` to keep iterates in the *open* box.
-    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> f64;
+    fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> F;
 
     /// `max_i |self[i]| / d_sq[i]` — the BCL first-order optimality
     /// measure `‖v ⊙ g‖_∞` when `self = g` and `d_sq[i] = 1/|v_i|` is
@@ -103,7 +113,7 @@ pub trait BoxAffineScaling: Sized {
     /// - **Caller must:** pass `d_sq` of the same shape as `self`,
     ///   with strictly positive entries. Backends panic on shape
     ///   mismatch; entries of `0` produce `inf`, which propagates.
-    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> f64;
+    fn cl_kkt_inf_norm(&self, d_sq: &Self) -> F;
 
     /// `Σ self[i]² · weights[i]` — the squared D-norm `‖D · self‖²`
     /// when `weights = d_sq` is the [`compute_cl_scaling`](Self::compute_cl_scaling) output.
@@ -116,7 +126,7 @@ pub trait BoxAffineScaling: Sized {
     /// - **Caller must:** pass `weights` of the same shape as `self`.
     ///   Backends panic on shape mismatch.
     /// - **Implementor must:** return `Σᵢ self[i]² · weights[i]`.
-    fn weighted_norm_squared(&self, weights: &Self) -> f64;
+    fn weighted_norm_squared(&self, weights: &Self) -> F;
 
     /// Project `self` into the *open* box `(lower, upper)` element-wise.
     /// Components outside `[lower, upper]` are clamped to a strict-
@@ -142,68 +152,80 @@ pub trait BoxAffineScaling: Sized {
     ///   * Compute `hi_inner = upper[i] - rstep · max(1, |upper[i]|)`
     ///     analogously.
     ///   * Set `self[i] ← clamp(self[i], lo_inner, hi_inner)`.
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: f64);
+    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F);
 }
 
 /// Helper for the case dispatch in `compute_cl_scaling` — writes
 /// `(d_sq_i, c_diag_i)` for one component given the local `(x, g, l, u)`.
 /// Per-backend impls call this on each index to share the arithmetic;
-/// generic over `f64` only because every backend stores `f64` scalars.
+/// generic over `F: Scalar` so every backend can supply its own
+/// element type.
 #[inline]
-pub(crate) fn cl_scaling_pair(x: f64, g: f64, l: f64, u: f64) -> (f64, f64) {
-    if g < 0.0 {
+pub(crate) fn cl_scaling_pair<F: Scalar>(x: F, g: F, l: F, u: F) -> (F, F) {
+    let zero = F::zero();
+    let one = F::one();
+    if g < zero {
         if u.is_finite() {
             // Case (i): v_i = x − u < 0, |v_i| = u − x > 0 by strict feasibility.
             let abs_v = u - x;
-            (1.0 / abs_v, (-g) / abs_v)
+            (one / abs_v, (-g) / abs_v)
         } else {
             // Case (iii): v_i = -1, J^v_ii = 0, c_i = 0.
-            (1.0, 0.0)
+            (one, zero)
         }
     } else if l.is_finite() {
         // Case (ii): v_i = x − l > 0 by strict feasibility.
         let abs_v = x - l;
-        (1.0 / abs_v, g / abs_v)
+        (one / abs_v, g / abs_v)
     } else {
         // Case (iv): v_i = 1, J^v_ii = 0, c_i = 0.
-        (1.0, 0.0)
+        (one, zero)
     }
 }
 
 /// Helper for `project_strictly_inside` — per-component clamp into the
 /// *open* box. Returns the projected value.
 #[inline]
-pub(crate) fn project_strictly_inside_component(x: f64, l: f64, u: f64, rstep: f64) -> f64 {
+pub(crate) fn project_strictly_inside_component<F: Scalar>(x: F, l: F, u: F, rstep: F) -> F {
+    let one = F::one();
     let lo_inner = if l.is_finite() {
-        l + rstep * l.abs().max(1.0)
+        l + rstep * l.abs().max(one)
     } else {
-        f64::NEG_INFINITY
+        F::neg_infinity()
     };
     let hi_inner = if u.is_finite() {
-        u - rstep * u.abs().max(1.0)
+        u - rstep * u.abs().max(one)
     } else {
-        f64::INFINITY
+        F::infinity()
     };
-    x.clamp(lo_inner, hi_inner)
+    // num_traits::Float has no `clamp`; emulate with min/max.
+    if x < lo_inner {
+        lo_inner
+    } else if x > hi_inner {
+        hi_inner
+    } else {
+        x
+    }
 }
 
 /// Helper for `max_feasible_step` — per-component limit, returning
-/// `f64::INFINITY` when `step_i = 0` or the relevant bound is infinite.
+/// `F::infinity()` when `step_i = 0` or the relevant bound is infinite.
 #[inline]
-pub(crate) fn max_feasible_step_component(x: f64, step: f64, l: f64, u: f64) -> f64 {
-    if step > 0.0 {
+pub(crate) fn max_feasible_step_component<F: Scalar>(x: F, step: F, l: F, u: F) -> F {
+    let zero = F::zero();
+    if step > zero {
         if u.is_finite() {
             (u - x) / step
         } else {
-            f64::INFINITY
+            F::infinity()
         }
-    } else if step < 0.0 {
+    } else if step < zero {
         if l.is_finite() {
             (l - x) / step
         } else {
-            f64::INFINITY
+            F::infinity()
         }
     } else {
-        f64::INFINITY
+        F::infinity()
     }
 }

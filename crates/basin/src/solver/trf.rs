@@ -1,7 +1,7 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{
     AddDiagonalVectorInPlace, BoxAffineScaling, Dot, GramMatrix, LinearSolveSpd, MatTransposeVec,
-    MaxDiagonal, NegInPlace, NormSquared, ScaledAdd,
+    MaxDiagonal, NegInPlace, NormSquared, Scalar, ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
@@ -152,17 +152,17 @@ use crate::core::termination::TerminationReason;
 /// `Residual` + `Jacobian` least-squares pattern; `Trf` additionally
 /// requires the problem to implement `BoxConstraints` and is constructed
 /// with `Trf::new()`.
-pub struct Trf<V, M> {
-    tol_grad: f64,
-    tau: f64,
-    rstep: f64,
-    theta: f64,
+pub struct Trf<V, M, F = f64> {
+    tol_grad: F,
+    tau: F,
+    rstep: F,
+    theta: F,
     max_inner_attempts: u32,
 
     // Runtime state, populated by `init` and mutated by `next_iter`
     // through `&mut self`.
-    mu: Option<f64>,
-    nu: f64,
+    mu: Option<F>,
+    nu: F,
 
     // Residual and Jacobian caches across iterations — same shape as
     // [`LevenbergMarquardt`](super::LevenbergMarquardt). On accept the
@@ -196,12 +196,14 @@ impl<V, M> Trf<V, M> {
             j_cache: None,
         }
     }
+}
 
+impl<V, M, F: Scalar> Trf<V, M, F> {
     /// First-order optimality tolerance: emit
     /// [`TerminationReason::SolverConverged`] when
     /// `‖D · Jᵀr‖_∞ ≤ tol`. Set to `0.0` to disable. Default `1e-8`.
-    pub fn tol_grad(mut self, tol: f64) -> Self {
-        assert!(tol >= 0.0, "tol_grad must be ≥ 0");
+    pub fn tol_grad(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
         self.tol_grad = tol;
         self
     }
@@ -209,8 +211,8 @@ impl<V, M> Trf<V, M> {
     /// Initial damping scale `τ` in `μ₀ = τ · max diag(JᵀJ + diag(c))`.
     /// Smaller (e.g. `1e-6`) when `x₀` is believed close to the
     /// optimum; larger (e.g. `1.0`) when far from it. Default `1e-3`.
-    pub fn tau(mut self, tau: f64) -> Self {
-        assert!(tau > 0.0, "tau must be > 0");
+    pub fn tau(mut self, tau: F) -> Self {
+        assert!(tau > F::zero(), "tau must be > 0");
         self.tau = tau;
         self
     }
@@ -218,8 +220,8 @@ impl<V, M> Trf<V, M> {
     /// Strict-interior projection scale at `init`. Components within
     /// `rstep · max(1, |bound|)` of a finite bound are nudged inward.
     /// Default `1e-10` matches SciPy's `make_strictly_feasible`.
-    pub fn rstep(mut self, rstep: f64) -> Self {
-        assert!(rstep > 0.0, "rstep must be > 0");
+    pub fn rstep(mut self, rstep: F) -> Self {
+        assert!(rstep > F::zero(), "rstep must be > 0");
         self.rstep = rstep;
         self
     }
@@ -228,10 +230,11 @@ impl<V, M> Trf<V, M> {
     /// would land on or beyond a face, the actual step is scaled by
     /// `theta · τ_max` instead of `τ_max` to keep the iterate strictly
     /// inside. Must be in `(0, 1)`. Default `0.99995`.
-    pub fn theta(mut self, theta: f64) -> Self {
+    pub fn theta(mut self, theta: F) -> Self {
         assert!(
-            theta > 0.0 && theta < 1.0,
-            "theta must be in (0, 1), got {theta}"
+            theta > F::zero() && theta < F::one(),
+            "theta must be in (0, 1), got {:?}",
+            theta
         );
         self.theta = theta;
         self
@@ -249,15 +252,16 @@ impl<V, M> Trf<V, M> {
     }
 }
 
-impl<P, V, M> Solver<P, BasicState<V>> for Trf<V, M>
+impl<P, V, M, F> Solver<P, BasicState<V, F>> for Trf<V, M, F>
 where
+    F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M> + BoxConstraints<Param = V>,
-    V: ScaledAdd<f64> + NormSquared + NegInPlace + Dot + BoxAffineScaling + Clone,
+    V: ScaledAdd<F> + NormSquared<F> + NegInPlace + Dot<F> + BoxAffineScaling<F> + Clone,
     M: GramMatrix
         + MatTransposeVec<V>
         + LinearSolveSpd<V>
         + AddDiagonalVectorInPlace<V>
-        + MaxDiagonal
+        + MaxDiagonal<F>
         + Clone,
 {
     type Error = <P as Residual>::Error;
@@ -265,8 +269,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<BasicState<V>, Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<BasicState<V, F>, Self::Error> {
         // Project the starting iterate strictly into (lower, upper).
         // D is undefined where v_i = 0 (a finite face), so an
         // on-boundary or infeasible start is silently corrected.
@@ -277,7 +281,7 @@ where
         );
 
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(0.5 * r.norm_squared());
+        state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
 
         // μ₀ = τ · max diag(JᵀJ + diag(c)). The C-correction is
         // typically small; the τ · max diag scaling matches Nielsen's
@@ -295,9 +299,9 @@ where
 
         let mut a = j.gram();
         a.add_diagonal_vector_in_place(&c_diag);
-        let max_diag = a.max_diagonal().max(1.0);
+        let max_diag = a.max_diagonal().max(F::one());
         self.mu = Some(self.tau * max_diag);
-        self.nu = 2.0;
+        self.nu = F::from_f64(2.0).unwrap();
         self.r_cache = Some(r);
         self.j_cache = Some(j);
         Ok(state)
@@ -306,8 +310,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
         // Use cached `r` / `J` when available (set by init or by the
         // previous accept/reject branch). Only count an eval when the
         // cache misses.
@@ -340,7 +344,7 @@ where
         // `d_sq[i] = 1/|v_i|`). Goes to zero at any KKT point — interior
         // *or* face-active. Collapses to LM's `‖Jᵀr‖_∞` when bounds are
         // infinite (then `|v_i| = 1`, `d_sq = 1`, division is identity).
-        if self.tol_grad > 0.0 && g.cl_kkt_inf_norm(&d_sq) <= self.tol_grad {
+        if self.tol_grad > F::zero() && g.cl_kkt_inf_norm(&d_sq) <= self.tol_grad {
             // Restore caches; init resets them on each reuse, but
             // mirroring LM's pattern keeps the contract uniform.
             self.r_cache = Some(r);
@@ -362,6 +366,9 @@ where
         // The damped, scaled Gram is SPD by construction for μ > 0; the
         // retry path matters only for pathological cases where roundoff
         // breaks SPD-ness at the chosen μ.
+        let two = F::from_f64(2.0).unwrap();
+        let half = F::from_f64(0.5).unwrap();
+        let one_third = F::from_f64(1.0 / 3.0).unwrap();
         let h;
         let mut attempts: u32 = 0;
         loop {
@@ -385,8 +392,8 @@ where
                         self.j_cache = Some(j);
                         return Ok((state, Some(TerminationReason::SolverFailed)));
                     }
-                    mu *= nu;
-                    nu *= 2.0;
+                    mu = mu * nu;
+                    nu = nu * two;
                 }
             }
         }
@@ -398,8 +405,8 @@ where
             state
                 .param
                 .max_feasible_step(&h, problem.inner().lower(), problem.inner().upper());
-        let alpha = if tau_max >= 1.0 {
-            1.0
+        let alpha = if tau_max >= F::one() {
+            F::one()
         } else {
             self.theta * tau_max
         };
@@ -408,7 +415,7 @@ where
         let mut x_trial = state.param.clone();
         x_trial.scaled_add(alpha, &h);
         let r_trial = problem.residual(&x_trial)?;
-        let f_trial = 0.5 * r_trial.norm_squared();
+        let f_trial = half * r_trial.norm_squared();
 
         let prev_cost = state
             .cost
@@ -427,34 +434,34 @@ where
         let h_t_g = h.dot(&g);
         let dh_norm_sq = h.weighted_norm_squared(&d_sq);
         let predicted =
-            -alpha * (1.0 - 0.5 * alpha) * h_t_g + 0.5 * alpha * alpha * mu * dh_norm_sq;
-        let half_s_t_c_s = 0.5 * alpha * alpha * h.weighted_norm_squared(&c_diag);
+            -alpha * (F::one() - half * alpha) * h_t_g + half * alpha * alpha * mu * dh_norm_sq;
+        let half_s_t_c_s = half * alpha * alpha * h.weighted_norm_squared(&c_diag);
         let actual = prev_cost - f_trial - half_s_t_c_s;
 
-        let rho = if predicted > 0.0 {
+        let rho = if predicted > F::zero() {
             actual / predicted
         } else {
-            0.0
+            F::zero()
         };
 
-        if rho > 0.0 {
+        if rho > F::zero() {
             // Accept. Update x and cost; adapt μ via Nielsen smooth
             // cubic with β=2, γ=3, p=3 (matches LevenbergMarquardt).
             // Stash the trial residual (now at the new iterate); clear
             // the Jacobian cache since J(x_trial) was not computed.
             state.param = x_trial;
             state.cost = Some(f_trial);
-            let factor = 1.0 - (2.0 * rho - 1.0).powi(3);
-            mu *= factor.max(1.0 / 3.0);
-            nu = 2.0;
+            let factor = F::one() - (two * rho - F::one()).powi(3);
+            mu = mu * factor.max(one_third);
+            nu = two;
             self.r_cache = Some(r_trial);
             self.j_cache = None;
         } else {
             // Reject. Bump μ geometrically; double ν so consecutive
             // rejections escalate damping faster. Both r and J remain
             // valid at the unchanged iterate.
-            mu *= nu;
-            nu *= 2.0;
+            mu = mu * nu;
+            nu = nu * two;
             self.r_cache = Some(r);
             self.j_cache = Some(j);
         }
