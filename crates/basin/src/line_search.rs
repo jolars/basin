@@ -12,6 +12,7 @@ pub use backtracking::Backtracking;
 pub use more_thuente::MoreThuente;
 pub use wolfe::Wolfe;
 
+use crate::core::math::Scalar;
 use crate::core::problem::Problem;
 
 /// Compute a step size `α` along a caller-supplied descent direction `d`.
@@ -38,7 +39,11 @@ use crate::core::problem::Problem;
 /// [`Executor::run`](crate::Executor::run). See the
 /// [`problem`](crate::core::problem) module docs for the soft-reject /
 /// hard-abort split.
-pub trait LineSearch<P, V> {
+///
+/// `F` defaults to `f64` so legacy `LineSearch<P, V>` bounds on
+/// gradient-based solvers (still f64-only pending the linalg-tier
+/// migration) keep resolving unchanged.
+pub trait LineSearch<P, V, F = f64> {
     /// Hard-abort error type, mirroring the underlying problem's `Error`.
     type Error;
 
@@ -50,24 +55,28 @@ pub trait LineSearch<P, V> {
         &mut self,
         problem: &mut Problem<P>,
         param: &V,
-        cost: f64,
+        cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<f64, Self::Error>;
+    ) -> Result<F, Self::Error>;
 }
 
 /// Constant step size — returns the wrapped `α` regardless of input.
 /// Useful when the caller already knows a good fixed step.
-pub struct Constant(pub f64);
+pub struct Constant<F = f64>(pub F);
 
-impl Constant {
+impl<F: Scalar> Constant<F> {
     /// Constant step of size `alpha`.
-    pub fn new(alpha: f64) -> Self {
+    pub fn new(alpha: F) -> Self {
         Self(alpha)
     }
 }
 
-impl<P: crate::core::problem::CostFunction, V> LineSearch<P, V> for Constant {
+impl<P, V, F> LineSearch<P, V, F> for Constant<F>
+where
+    P: crate::core::problem::CostFunction,
+    F: Scalar,
+{
     // `Constant` makes no problem calls and so could declare any error
     // type, but solver bounds expect `L::Error = P::Error`; matching here
     // means callers never need a conversion glue layer.
@@ -77,10 +86,10 @@ impl<P: crate::core::problem::CostFunction, V> LineSearch<P, V> for Constant {
         &mut self,
         _problem: &mut Problem<P>,
         _param: &V,
-        _cost: f64,
+        _cost: F,
         _gradient: &V,
         _direction: &V,
-    ) -> Result<f64, Self::Error> {
+    ) -> Result<F, Self::Error> {
         Ok(self.0)
     }
 }

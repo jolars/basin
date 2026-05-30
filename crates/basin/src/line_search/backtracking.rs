@@ -1,33 +1,33 @@
-use crate::core::math::{Dot, ScaledAdd};
+use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Problem};
 use crate::line_search::LineSearch;
 
 /// Backtracking line search satisfying the Armijo condition only
 /// (Nocedal & Wright §3.1). Halves the trial step until
 /// `f(x + α d) ≤ f(x) + c · α · ∇f(x)ᵀd`.
-pub struct Backtracking {
+pub struct Backtracking<F = f64> {
     /// Initial trial step. Default `1.0`.
-    pub alpha_init: f64,
+    pub alpha_init: F,
     /// Backtracking factor in `(0, 1)`. Default `0.5`.
-    pub rho: f64,
+    pub rho: F,
     /// Armijo slope coefficient in `(0, 1)`. Default `1e-4`.
-    pub c: f64,
+    pub c: F,
     /// Maximum number of backtracks before giving up. Default `50`.
     pub max_iter: u32,
 }
 
-impl Default for Backtracking {
+impl<F: Scalar> Default for Backtracking<F> {
     fn default() -> Self {
         Self {
-            alpha_init: 1.0,
-            rho: 0.5,
-            c: 1e-4,
+            alpha_init: F::one(),
+            rho: F::from_f64(0.5).unwrap(),
+            c: F::from_f64(1e-4).unwrap(),
             max_iter: 50,
         }
     }
 }
 
-impl Backtracking {
+impl<F: Scalar> Backtracking<F> {
     /// Backtracking line search with default parameters
     /// (`α_init = 1.0`, `ρ = 0.5`, `c = 1e-4`, `max_iter = 50`).
     pub fn new() -> Self {
@@ -35,19 +35,19 @@ impl Backtracking {
     }
 
     /// Override the initial trial step.
-    pub fn alpha_init(mut self, alpha_init: f64) -> Self {
+    pub fn alpha_init(mut self, alpha_init: F) -> Self {
         self.alpha_init = alpha_init;
         self
     }
 
     /// Override the backtracking factor.
-    pub fn rho(mut self, rho: f64) -> Self {
+    pub fn rho(mut self, rho: F) -> Self {
         self.rho = rho;
         self
     }
 
     /// Override the Armijo slope coefficient.
-    pub fn c(mut self, c: f64) -> Self {
+    pub fn c(mut self, c: F) -> Self {
         self.c = c;
         self
     }
@@ -59,10 +59,11 @@ impl Backtracking {
     }
 }
 
-impl<P, V> LineSearch<P, V> for Backtracking
+impl<P, V, F> LineSearch<P, V, F> for Backtracking<F>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: ScaledAdd<f64> + Dot + Clone,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    V: ScaledAdd<F> + Dot<F> + Clone,
 {
     type Error = P::Error;
 
@@ -70,10 +71,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         param: &V,
-        cost: f64,
+        cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<f64, Self::Error> {
+    ) -> Result<F, Self::Error> {
         // Armijo: f(x + α d) ≤ f(x) + c α (∇f · d). For a descent direction,
         // `g_dot_d` is negative, so the threshold drops with α.
         let g_dot_d = gradient.dot(direction);
@@ -85,7 +86,7 @@ where
             if trial_cost <= cost + self.c * alpha * g_dot_d {
                 return Ok(alpha);
             }
-            alpha *= self.rho;
+            alpha = alpha * self.rho;
         }
         Ok(alpha)
     }
