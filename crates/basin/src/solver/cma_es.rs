@@ -505,7 +505,7 @@ where
 /// Sort `candidates` and `costs` jointly by ascending cost. NaN costs
 /// sort last (mirrors `nelder_mead::sort_simplex` /
 /// `random_search::sort_population_ascending`).
-pub(crate) fn sort_population_ascending<V>(candidates: &mut [V], costs: &mut [f64]) {
+pub(crate) fn sort_population_ascending<V, F: PartialOrd>(candidates: &mut [V], costs: &mut [F]) {
     let n = candidates.len();
     debug_assert_eq!(n, costs.len());
     let mut idx: Vec<usize> = (0..n).collect();

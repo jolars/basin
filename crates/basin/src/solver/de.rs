@@ -1,5 +1,7 @@
+use rand_distr::uniform::SampleUniform;
+
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{SampleUniformBox, ScaleInPlace, ScaledAdd, VectorLen};
+use crate::core::math::{SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
@@ -97,44 +99,53 @@ use crate::solver::cma_es::sort_population_ascending;
 /// # Backends
 ///
 /// Backend-generic — works with any `V` implementing
-/// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<f64>`] +
-/// [`ScaleInPlace`] + `Index<usize, Output = f64>` +
-/// `IndexMut<usize, Output = f64>` + `Clone`. That covers `Vec<f64>`,
-/// `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`). No matrix operations are required.
+/// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<F>`] +
+/// [`ScaleInPlace<F>`] + `Index<usize, Output = F>` +
+/// `IndexMut<usize, Output = F>` + `Clone`. With the default
+/// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
+/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
+/// `faer::Col<f64>` (feature `faer`). No matrix operations are required.
 ///
 /// [`scipy.optimize.differential_evolution`]:
 ///     https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html
-pub struct De {
+pub struct De<F = f64> {
     pop_size_override: Option<usize>,
-    f: f64,
+    f: F,
     cr: f64,
     seed: u64,
     rng: Option<ChaCha8Rng>,
 }
 
-impl De {
+impl<F: Scalar> De<F> {
     /// Build a new DE with defaults (`F = 0.8`, `CR = 0.9`, `pop_size`
-    /// resolved lazily to [`default_pop_size(D)`](Self::default_pop_size)
+    /// resolved lazily to [`default_pop_size(D)`](De::default_pop_size)
     /// in [`Solver::init`]) and a PRNG seeded from `seed`.
     pub fn new(seed: u64) -> Self {
         Self {
             pop_size_override: None,
-            f: 0.8,
+            f: F::from_f64(0.8).unwrap(),
             cr: 0.9,
             seed,
             rng: None,
         }
     }
+}
 
+impl<F> De<F> {
     /// Storn & Price's `10·D` rule, floored at 4 so mutation always has
     /// at least three peers to draw from (`pick_three_distinct` requires
     /// `NP ≥ 4`).
+    ///
+    /// `F`-free, so the `: Scalar` bound is dropped from this impl block
+    /// — keeps `De::default_pop_size(D)` callable from the trait-impl
+    /// `init` (`Self::default_pop_size`) and from F-agnostic test code
+    /// (`De::default_pop_size(0)`, with `F` defaulting to `f64`).
     pub fn default_pop_size(n: usize) -> usize {
         (10 * n).max(4)
     }
+}
 
+impl<F: Scalar> De<F> {
     /// Override the population size (default
     /// [`default_pop_size(D)`](Self::default_pop_size), resolved at
     /// [`Solver::init`]).
@@ -161,10 +172,10 @@ impl De {
     /// # Panics
     ///
     /// Panics if `f` is not strictly positive and finite.
-    pub fn with_f(mut self, f: f64) -> Self {
+    pub fn with_f(mut self, f: F) -> Self {
         assert!(
-            f.is_finite() && f > 0.0,
-            "De requires F > 0 and finite, got {}",
+            f.is_finite() && f > F::zero(),
+            "De requires F > 0 and finite, got {:?}",
             f
         );
         self.f = f;
@@ -227,14 +238,15 @@ where
 ///
 /// `pub(crate)` so a future memetic / strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
-pub(crate) fn de_rand_1_mutate<V>(x_r1: &V, x_r2: &V, x_r3: &V, f: f64) -> V
+pub(crate) fn de_rand_1_mutate<V, F>(x_r1: &V, x_r2: &V, x_r3: &V, f: F) -> V
 where
-    V: Clone + ScaledAdd<f64> + ScaleInPlace,
+    F: Scalar,
+    V: Clone + ScaledAdd<F> + ScaleInPlace<F>,
 {
     let mut v = x_r2.clone();
-    v.scaled_add(-1.0, x_r3);
+    v.scaled_add(-F::one(), x_r3);
     v.scale_in_place(f);
-    v.scaled_add(1.0, x_r1);
+    v.scaled_add(F::one(), x_r1);
     v
 }
 
@@ -246,9 +258,10 @@ where
 ///
 /// `pub(crate)` so a future memetic / strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
-pub(crate) fn repair_reinit_per_coord<V, R>(v: &mut V, lower: &V, upper: &V, rng: &mut R)
+pub(crate) fn repair_reinit_per_coord<V, F, R>(v: &mut V, lower: &V, upper: &V, rng: &mut R)
 where
-    V: VectorLen + std::ops::Index<usize, Output = f64> + std::ops::IndexMut<usize, Output = f64>,
+    F: Scalar + SampleUniform,
+    V: VectorLen + std::ops::Index<usize, Output = F> + std::ops::IndexMut<usize, Output = F>,
     R: Rng + ?Sized,
 {
     let n = v.vec_len();
@@ -265,12 +278,13 @@ where
 ///
 /// `pub(crate)` so a future memetic / strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
-pub(crate) fn binomial_crossover<V, R>(target: &V, donor: &V, cr: f64, rng: &mut R) -> V
+pub(crate) fn binomial_crossover<V, F, R>(target: &V, donor: &V, cr: f64, rng: &mut R) -> V
 where
+    F: Scalar,
     V: VectorLen
         + Clone
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     R: Rng + ?Sized,
 {
     let n = target.vec_len();
@@ -284,24 +298,25 @@ where
     u
 }
 
-impl<P, V> Solver<P, BasicPopulationState<V>> for De
+impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for De<F>
 where
-    P: CostFunction<Param = V, Output = f64> + BoxConstraints<Param = V>,
+    F: Scalar + SampleUniform,
+    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
     V: VectorLen
         + Clone
         + SampleUniformBox
-        + ScaledAdd<f64>
-        + ScaleInPlace
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<BasicPopulationState<V>, Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let n = lo.vec_len();
@@ -333,8 +348,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -348,7 +363,7 @@ where
         // single Vec avoids the asynchronous-update variant where a
         // just-replaced x[i] would feed back into the next mutation.
         let mut trials: Vec<V> = Vec::with_capacity(np);
-        let mut trial_costs: Vec<f64> = Vec::with_capacity(np);
+        let mut trial_costs: Vec<F> = Vec::with_capacity(np);
         for i in 0..np {
             let (r1, r2, r3) = pick_three_distinct(np, i, rng);
             let mut donor = de_rand_1_mutate(
@@ -386,10 +401,12 @@ mod tests {
 
     #[test]
     fn default_pop_size_uses_ten_d_with_floor_of_four() {
-        assert_eq!(De::default_pop_size(0), 4);
-        assert_eq!(De::default_pop_size(1), 10);
-        assert_eq!(De::default_pop_size(5), 50);
-        assert_eq!(De::default_pop_size(20), 200);
+        // F-explicit so inference picks the f64 monomorphization; the
+        // formula is F-free but `default_pop_size` lives on `De<F>`.
+        assert_eq!(De::<f64>::default_pop_size(0), 4);
+        assert_eq!(De::<f64>::default_pop_size(1), 10);
+        assert_eq!(De::<f64>::default_pop_size(5), 50);
+        assert_eq!(De::<f64>::default_pop_size(20), 200);
     }
 
     #[test]
@@ -410,9 +427,9 @@ mod tests {
     #[test]
     fn de_rand_1_mutate_computes_x_r1_plus_f_times_diff() {
         // v = [1, 2] + 0.5 * ([4, 5] - [3, 3]) = [1 + 0.5*1, 2 + 0.5*2] = [1.5, 3]
-        let x_r1 = vec![1.0, 2.0];
-        let x_r2 = vec![4.0, 5.0];
-        let x_r3 = vec![3.0, 3.0];
+        let x_r1: Vec<f64> = vec![1.0, 2.0];
+        let x_r2: Vec<f64> = vec![4.0, 5.0];
+        let x_r3: Vec<f64> = vec![3.0, 3.0];
         let v = de_rand_1_mutate(&x_r1, &x_r2, &x_r3, 0.5);
         assert!((v[0] - 1.5).abs() < 1e-12, "v[0] = {}", v[0]);
         assert!((v[1] - 3.0).abs() < 1e-12, "v[1] = {}", v[1]);
