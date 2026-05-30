@@ -99,8 +99,8 @@ impl<F: Scalar> VectorLen for Array1<F> {
 // makes inference explore ndarray's recursive `Dot`/`Not` bounds and overflow.
 // `assert_eq!` on the lengths matches the panic-on-shape-mismatch contract.
 
-impl MatVec<Array1<f64>> for Array2<f64> {
-    fn matvec(&self, x: &Array1<f64>) -> Array1<f64> {
+impl<F: Scalar> MatVec<Array1<F>> for Array2<F> {
+    fn matvec(&self, x: &Array1<F>) -> Array1<F> {
         assert_eq!(
             x.len(),
             self.ncols(),
@@ -109,13 +109,17 @@ impl MatVec<Array1<f64>> for Array2<f64> {
             self.ncols()
         );
         Array1::from_shape_fn(self.nrows(), |i| {
-            self.row(i).iter().zip(x.iter()).map(|(a, xj)| a * xj).sum()
+            self.row(i)
+                .iter()
+                .zip(x.iter())
+                .map(|(a, xj)| *a * *xj)
+                .sum()
         })
     }
 }
 
-impl MatTransposeVec<Array1<f64>> for Array2<f64> {
-    fn mat_transpose_vec(&self, x: &Array1<f64>) -> Array1<f64> {
+impl<F: Scalar> MatTransposeVec<Array1<F>> for Array2<F> {
+    fn mat_transpose_vec(&self, x: &Array1<F>) -> Array1<F> {
         assert_eq!(
             x.len(),
             self.nrows(),
@@ -127,26 +131,26 @@ impl MatTransposeVec<Array1<f64>> for Array2<f64> {
             self.column(j)
                 .iter()
                 .zip(x.iter())
-                .map(|(a, xi)| a * xi)
+                .map(|(a, xi)| *a * *xi)
                 .sum()
         })
     }
 }
 
-impl MatrixIdentity for Array2<f64> {
+impl<F: Scalar> MatrixIdentity for Array2<F> {
     fn identity(n: usize) -> Self {
         Array2::eye(n)
     }
 }
 
-impl MatrixFromDiagonal<Array1<f64>> for Array2<f64> {
-    fn from_diagonal(diag: &Array1<f64>) -> Self {
+impl<F: Scalar> MatrixFromDiagonal<Array1<F>> for Array2<F> {
+    fn from_diagonal(diag: &Array1<F>) -> Self {
         Array2::from_diag(diag)
     }
 }
 
-impl MatDiagonal<Array1<f64>> for Array2<f64> {
-    fn diagonal(&self) -> Array1<f64> {
+impl<F: Scalar> MatDiagonal<Array1<F>> for Array2<F> {
+    fn diagonal(&self) -> Array1<F> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -158,8 +162,8 @@ impl MatDiagonal<Array1<f64>> for Array2<f64> {
     }
 }
 
-impl RankOneUpdate<Array1<f64>> for Array2<f64> {
-    fn rank_one_update(&mut self, alpha: f64, v: &Array1<f64>) {
+impl<F: Scalar> RankOneUpdate<Array1<F>, F> for Array2<F> {
+    fn rank_one_update(&mut self, alpha: F, v: &Array1<F>) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -184,14 +188,15 @@ impl RankOneUpdate<Array1<f64>> for Array2<f64> {
             let av = alpha * v[i];
             let mut row = self.row_mut(i);
             for j in 0..n {
-                row[j] += av * v[j];
+                let entry = &mut row[j];
+                *entry = *entry + av * v[j];
             }
         }
     }
 }
 
-impl SymmetricEigen<Array1<f64>> for Array2<f64> {
-    fn try_eigh(&self) -> Result<(Self, Array1<f64>), SymmetricEigenError> {
+impl<F: Scalar> SymmetricEigen<Array1<F>> for Array2<F> {
+    fn try_eigh(&self) -> Result<(Self, Array1<F>), SymmetricEigenError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -200,7 +205,7 @@ impl SymmetricEigen<Array1<f64>> for Array2<f64> {
             self.ncols()
         );
         let n = self.nrows();
-        // `jacobi_eigen` takes a row-major `&[f64]`. `as_standard_layout`
+        // `jacobi_eigen` takes a row-major `&[F]`. `as_standard_layout`
         // returns a `CowArray` that is contiguous in row-major (C) order —
         // borrowing when `self` is already standard, otherwise cloning.
         let standard = self.as_standard_layout();
