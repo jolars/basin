@@ -19,13 +19,22 @@ use nalgebra_sparse::ops::Op;
 use nalgebra_sparse::ops::serial::spmm_csc_dense;
 use nalgebra_sparse::{CscMatrix, SparseEntryMut};
 
+use super::Scalar;
 use super::linalg::{
     AddDiagonalInPlace, AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveSpd,
     MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
 };
 
-impl MatVec<DVector<f64>> for CscMatrix<f64> {
-    fn matvec(&self, x: &DVector<f64>) -> DVector<f64> {
+// Bound stack mirrors the dense nalgebra backend: matvec / gram routes go
+// through nalgebra's `Closed*Assign + Zero + One` BLAS-2 tier, the
+// diagonal-walk impls stay on basic `Scalar`, and the Cholesky factor
+// step bounds on `RealField`. f32 and f64 satisfy every variant.
+
+impl<F> MatVec<DVector<F>> for CscMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+{
+    fn matvec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
             self.ncols(),
             x.len(),
@@ -33,15 +42,28 @@ impl MatVec<DVector<f64>> for CscMatrix<f64> {
             self.ncols(),
             x.len()
         );
-        // The `Mul` impl on `&CscMatrix * &DVector` forwards to
-        // spmm_csc_dense and returns an OMatrix<f64, Dyn, U1>, which
-        // is exactly DVector<f64>.
-        self * x
+        // Could call `&self * x` (the operator overload), but that adds
+        // ClosedSubAssign + ClosedDivAssign + Neg to the bound list. Going
+        // through spmm_csc_dense directly keeps the bound set to the two
+        // accumulator traits, mirroring mat_transpose_vec below.
+        let mut y = DMatrix::<F>::zeros(self.nrows(), 1);
+        let x_mat = DMatrix::from_column_slice(x.len(), 1, x.as_slice());
+        spmm_csc_dense(
+            F::zero(),
+            &mut y,
+            F::one(),
+            Op::NoOp(self),
+            Op::NoOp(&x_mat),
+        );
+        DVector::from_column_slice(y.column(0).as_slice())
     }
 }
 
-impl MatTransposeVec<DVector<f64>> for CscMatrix<f64> {
-    fn mat_transpose_vec(&self, x: &DVector<f64>) -> DVector<f64> {
+impl<F> MatTransposeVec<DVector<F>> for CscMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+{
+    fn mat_transpose_vec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
             self.nrows(),
             x.len(),
@@ -53,24 +75,41 @@ impl MatTransposeVec<DVector<f64>> for CscMatrix<f64> {
         // Aᵀ. Output dimension is `ncols(self) × 1`; the helper takes
         // dense RHS as a `DMatrixView`, so we wrap `x` as a 1-column
         // DMatrix.
-        let mut y = DMatrix::<f64>::zeros(self.ncols(), 1);
+        let mut y = DMatrix::<F>::zeros(self.ncols(), 1);
         let x_mat = DMatrix::from_column_slice(x.len(), 1, x.as_slice());
-        spmm_csc_dense(0.0, &mut y, 1.0, Op::Transpose(self), Op::NoOp(&x_mat));
+        spmm_csc_dense(
+            F::zero(),
+            &mut y,
+            F::one(),
+            Op::Transpose(self),
+            Op::NoOp(&x_mat),
+        );
         DVector::from_column_slice(y.column(0).as_slice())
     }
 }
 
-impl GramMatrix for CscMatrix<f64> {
+impl<F> GramMatrix for CscMatrix<F>
+where
+    F: Scalar
+        + nalgebra::ClosedAddAssign
+        + nalgebra::ClosedSubAssign
+        + nalgebra::ClosedMulAssign
+        + nalgebra::ClosedDivAssign
+        + std::ops::Neg<Output = F>,
+{
     fn gram(&self) -> Self {
         // The `&CscMatrix * &CscMatrix` operator overload composes
         // pattern construction + spmm. Aᵀ A → CSC of shape
-        // `(ncols, ncols)`; transpose() materializes Aᵀ as CSC.
+        // `(ncols, ncols)`; transpose() materializes Aᵀ as CSC. The
+        // overload's bound list is fatter than the MatVec / MatTranspose
+        // ones because nalgebra-sparse uses it for the general
+        // (in)equality-checked matrix algebra surface, not just SPD ops.
         &self.transpose() * self
     }
 }
 
-impl MaxDiagonal for CscMatrix<f64> {
-    fn max_diagonal(&self) -> f64 {
+impl<F: Scalar> MaxDiagonal<F> for CscMatrix<F> {
+    fn max_diagonal(&self) -> F {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -85,12 +124,12 @@ impl MaxDiagonal for CscMatrix<f64> {
                     .expect("max_diagonal: index in bounds")
                     .into_value()
             })
-            .fold(f64::NEG_INFINITY, f64::max)
+            .fold(F::neg_infinity(), F::max)
     }
 }
 
-impl MatDiagonal<DVector<f64>> for CscMatrix<f64> {
-    fn diagonal(&self) -> DVector<f64> {
+impl<F: Scalar> MatDiagonal<DVector<F>> for CscMatrix<F> {
+    fn diagonal(&self) -> DVector<F> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -111,8 +150,8 @@ impl MatDiagonal<DVector<f64>> for CscMatrix<f64> {
     }
 }
 
-impl AddDiagonalInPlace for CscMatrix<f64> {
-    fn add_diagonal_in_place(&mut self, scalar: f64) {
+impl<F: Scalar> AddDiagonalInPlace<F> for CscMatrix<F> {
+    fn add_diagonal_in_place(&mut self, scalar: F) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -129,7 +168,7 @@ impl AddDiagonalInPlace for CscMatrix<f64> {
                 .get_entry_mut(i, i)
                 .expect("add_diagonal_in_place: index in bounds")
             {
-                SparseEntryMut::NonZero(v) => *v += scalar,
+                SparseEntryMut::NonZero(v) => *v = *v + scalar,
                 SparseEntryMut::Zero => panic!(
                     "add_diagonal_in_place: diagonal entry ({i}, {i}) missing from CSC pattern"
                 ),
@@ -138,8 +177,8 @@ impl AddDiagonalInPlace for CscMatrix<f64> {
     }
 }
 
-impl AddDiagonalVectorInPlace<DVector<f64>> for CscMatrix<f64> {
-    fn add_diagonal_vector_in_place(&mut self, diag: &DVector<f64>) {
+impl<F: Scalar> AddDiagonalVectorInPlace<DVector<F>> for CscMatrix<F> {
+    fn add_diagonal_vector_in_place(&mut self, diag: &DVector<F>) {
         let n = self.nrows();
         assert_eq!(
             n,
@@ -161,7 +200,7 @@ impl AddDiagonalVectorInPlace<DVector<f64>> for CscMatrix<f64> {
                 .get_entry_mut(i, i)
                 .expect("add_diagonal_vector_in_place: index in bounds")
             {
-                SparseEntryMut::NonZero(v) => *v += diag[i],
+                SparseEntryMut::NonZero(v) => *v = *v + diag[i],
                 SparseEntryMut::Zero => panic!(
                     "add_diagonal_vector_in_place: diagonal entry ({i}, {i}) missing from CSC pattern"
                 ),
@@ -170,8 +209,11 @@ impl AddDiagonalVectorInPlace<DVector<f64>> for CscMatrix<f64> {
     }
 }
 
-impl LinearSolveSpd<DVector<f64>> for CscMatrix<f64> {
-    fn solve_spd(&self, b: &DVector<f64>) -> Result<DVector<f64>, LinearSolveError> {
+impl<F> LinearSolveSpd<DVector<F>> for CscMatrix<F>
+where
+    F: Scalar + nalgebra::RealField,
+{
+    fn solve_spd(&self, b: &DVector<F>) -> Result<DVector<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
