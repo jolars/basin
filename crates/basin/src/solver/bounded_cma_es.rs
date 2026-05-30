@@ -3,8 +3,8 @@ use std::collections::VecDeque;
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{
     ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, ScaleInPlace, ScaledAdd,
-    SymmetricEigen, VectorLen,
+    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace,
+    ScaledAdd, SymmetricEigen, VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
@@ -128,18 +128,18 @@ use super::cma_es::{compute_weights, expected_norm_n01, sort_population_ascendin
 /// See [`CmaEs`](crate::CmaEs) (and [`RandomSearch`](crate::RandomSearch)
 /// for the population `Executor` pattern); `BoundedCmaEs` additionally
 /// requires `BoxConstraints` on the problem.
-pub struct BoundedCmaEs<V, M> {
+pub struct BoundedCmaEs<V, M, F = f64> {
     initial_mean: V,
-    initial_sigma: f64,
+    initial_sigma: F,
     lambda_override: Option<usize>,
     seed: u64,
-    tol_x_override: Option<f64>,
+    tol_x_override: Option<F>,
     /// Per-coordinate initial standard deviations (pycma's `CMA_stds`).
     /// `None` keeps the isotropic `C = I` default; `Some(stds)` seeds the
     /// initial covariance to `diag(stds²)`. Set via [`with_stds`](Self::with_stds).
     stds_override: Option<V>,
 
-    state: Option<Working<V, M>>,
+    state: Option<Working<V, M, F>>,
 }
 
 /// Solver-internal mutable state, populated in [`Solver::init`] and
@@ -151,37 +151,37 @@ pub struct BoundedCmaEs<V, M> {
 /// composition. `BoundedCmaInject` uses these to clip injected `y_i`
 /// in Mahalanobis distance per Hansen 2011 eq. 4, mirroring how
 /// `CmaInject` reads from `CmaEs::Working`. Not a stable public surface.
-pub(crate) struct Working<V, M> {
+pub(crate) struct Working<V, M, F = f64> {
     // --- CMA-ES constants (computed once at init) ---
     pub(crate) n: usize,
     lambda: usize,
     mu: usize,
-    weights: Vec<f64>,
-    mu_eff: f64,
-    sum_w: f64,
-    c_sigma: f64,
-    d_sigma: f64,
-    c_c: f64,
-    c_1: f64,
-    c_mu: f64,
-    expected_norm: f64,
-    h_sigma_threshold: f64,
-    tol_x: f64,
+    weights: Vec<F>,
+    mu_eff: F,
+    sum_w: F,
+    c_sigma: F,
+    d_sigma: F,
+    c_c: F,
+    c_1: F,
+    c_mu: F,
+    expected_norm: F,
+    h_sigma_threshold: F,
+    tol_x: F,
 
     // --- BoundPenalty constants (computed once at init) ---
     /// `min(1, mu_eff / (10·n))`. Damping factor on the γ multiplicative
     /// update; pycma `boundary_handler.py:716`.
-    damp: f64,
+    damp: F,
     /// `3 · max(1, sqrt(n) / mu_eff)`. The σ-unit slack threshold
     /// before γ_i is raised on coordinate `i`; pycma `boundary_handler.py:730`.
-    edist_threshold: f64,
+    edist_threshold: F,
     /// Cap on the `hist` deque length: `20 + ⌊3n/λ⌋`. Pycma
     /// `boundary_handler.py:711`.
     hist_cap: usize,
 
     // --- CMA-ES mutable iterate ---
     pub(crate) m: V,
-    pub(crate) sigma: f64,
+    pub(crate) sigma: F,
     p_sigma: V,
     p_c: V,
     c: M,
@@ -210,15 +210,15 @@ pub(crate) struct Working<V, M> {
     /// Recent fitness IQR estimates, normalized by the average per-
     /// coordinate variance. Front-loaded (newest first) — pushed via
     /// `push_front`, trimmed via `pop_back`.
-    hist: VecDeque<f64>,
+    hist: VecDeque<F>,
     /// Sidecar storage: raw f-values (un-penalized) of the most recent
     /// generation, in *sample* order (not in `state.costs`'s sorted-by-
     /// penalized-cost order — γ-update only reads these as a flat bag
     /// of values for the IQR computation, so order is irrelevant).
-    raw_costs: Vec<f64>,
+    raw_costs: Vec<F>,
 }
 
-impl<V, M> BoundedCmaEs<V, M> {
+impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
     /// Build a bounded CMA-ES with the default population size
     /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48), the default TolX
     /// `tol_x = 1e−12 · initial_sigma`, and a seeded RNG.
@@ -226,10 +226,10 @@ impl<V, M> BoundedCmaEs<V, M> {
     /// # Panics
     ///
     /// Panics if `initial_sigma ≤ 0`.
-    pub fn new(initial_mean: V, initial_sigma: f64, seed: u64) -> Self {
+    pub fn new(initial_mean: V, initial_sigma: F, seed: u64) -> Self {
         assert!(
-            initial_sigma > 0.0,
-            "BoundedCmaEs requires initial_sigma > 0, got {}",
+            initial_sigma > F::zero(),
+            "BoundedCmaEs requires initial_sigma > 0, got {:?}",
             initial_sigma
         );
         Self {
@@ -267,7 +267,7 @@ impl<V, M> BoundedCmaEs<V, M> {
     /// Override the default TolX (`1e−12 · initial_sigma`, scaled by
     /// `maxᵢ stdsᵢ` when [`with_stds`](Self::with_stds) is set); see
     /// [`CmaEs::with_tol_x`](super::cma_es::CmaEs::with_tol_x).
-    pub fn with_tol_x(mut self, tol_x: f64) -> Self {
+    pub fn with_tol_x(mut self, tol_x: F) -> Self {
         self.tol_x_override = Some(tol_x);
         self
     }
@@ -285,14 +285,14 @@ impl<V, M> BoundedCmaEs<V, M> {
     /// `C^{-1/2} = B D^{-1} Bᵀ` to clip injected `y_i` per Hansen 2011
     /// eq. 4. Mirrors [`CmaEs::working`](super::cma_es::CmaEs::working).
     /// `None` before [`Solver::init`] has run.
-    pub(crate) fn working(&self) -> Option<&Working<V, M>> {
+    pub(crate) fn working(&self) -> Option<&Working<V, M, F>> {
         self.state.as_ref()
     }
 }
 
-impl<V, M> BoundedCmaEs<V, M>
+impl<V, M, F: Scalar> BoundedCmaEs<V, M, F>
 where
-    V: VectorLen + std::ops::Index<usize, Output = f64>,
+    V: VectorLen + std::ops::Index<usize, Output = F>,
 {
     /// Set per-coordinate initial standard deviations (pycma's
     /// `CMA_stds`), seeding an anisotropic initial covariance
@@ -316,8 +316,8 @@ where
         );
         for i in 0..n {
             assert!(
-                stds[i] > 0.0,
-                "BoundedCmaEs::with_stds requires every std > 0, got stds[{}] = {}",
+                stds[i] > F::zero(),
+                "BoundedCmaEs::with_stds requires every std > 0, got stds[{}] = {:?}",
                 i,
                 stds[i]
             );
@@ -327,14 +327,14 @@ where
     }
 }
 
-impl<V, M> BoundedCmaEs<V, M>
+impl<V, M, F: Scalar> BoundedCmaEs<V, M, F>
 where
-    V: VectorLen + Clone + ComponentMulAssign + std::ops::IndexMut<usize, Output = f64>,
+    V: VectorLen + Clone + ComponentMulAssign + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity + MatrixFromDiagonal<V>,
 {
     /// Build [`Working`] from `self`'s user-provided settings. Called
     /// once from [`Solver::init`].
-    fn build_working(&self) -> Working<V, M> {
+    fn build_working(&self) -> Working<V, M, F> {
         let n = self.initial_mean.vec_len();
         assert!(
             n >= 1,
@@ -344,47 +344,67 @@ where
             .lambda_override
             .unwrap_or_else(|| Self::default_lambda(n));
         let mu = lambda / 2;
+        let one = F::one();
+        let two = F::from_f64(2.0).unwrap();
+        let zero = F::zero();
+        let n_f = F::from_usize(n).unwrap();
+        let lambda_f = F::from_usize(lambda).unwrap();
 
         // Same provisional-µ_eff trick as CmaEs (Hansen Appendix A:
         // µ_eff is invariant under positive-weight rescaling).
-        let alpha_cov = 2.0;
-        let raw: Vec<f64> = (1..=lambda)
-            .map(|i| ((lambda as f64 + 1.0) / 2.0).ln() - (i as f64).ln())
+        let alpha_cov = two;
+        let raw: Vec<F> = (1..=lambda)
+            .map(|i| ((lambda_f + one) / two).ln() - F::from_usize(i).unwrap().ln())
             .collect();
-        let sum_pos: f64 = raw[..mu].iter().sum();
-        let mu_eff_provisional = sum_pos.powi(2) / raw[..mu].iter().map(|w| w * w).sum::<f64>();
+        let sum_pos: F = raw[..mu].iter().copied().sum();
+        let mu_eff_provisional = sum_pos * sum_pos / raw[..mu].iter().map(|w| *w * *w).sum::<F>();
 
-        let c_1 = alpha_cov / ((n as f64 + 1.3).powi(2) + mu_eff_provisional);
-        let c_mu_unbounded = alpha_cov * (mu_eff_provisional - 2.0 + 1.0 / mu_eff_provisional)
-            / ((n as f64 + 2.0).powi(2) + alpha_cov * mu_eff_provisional / 2.0);
-        let c_mu = (1.0 - c_1).min(c_mu_unbounded);
+        let c_1 = alpha_cov
+            / ((n_f + F::from_f64(1.3).unwrap()) * (n_f + F::from_f64(1.3).unwrap())
+                + mu_eff_provisional);
+        let c_mu_unbounded = alpha_cov * (mu_eff_provisional - two + one / mu_eff_provisional)
+            / ((n_f + two) * (n_f + two) + alpha_cov * mu_eff_provisional / two);
+        let c_mu = (one - c_1).min(c_mu_unbounded);
 
-        let (weights, mu_eff, sum_w) = compute_weights(n, lambda, c_1, c_mu);
+        let (weights, mu_eff, sum_w) = compute_weights::<F>(n, lambda, c_1, c_mu);
 
-        let c_sigma = (mu_eff + 2.0) / (n as f64 + mu_eff + 5.0);
+        let c_sigma = (mu_eff + two) / (n_f + mu_eff + F::from_f64(5.0).unwrap());
         let d_sigma = {
-            let inner = ((mu_eff - 1.0) / (n as f64 + 1.0)).sqrt() - 1.0;
-            1.0 + 2.0 * inner.max(0.0) + c_sigma
+            let inner = ((mu_eff - one) / (n_f + one)).sqrt() - one;
+            one + two * inner.max(zero) + c_sigma
         };
-        let c_c = (4.0 + mu_eff / n as f64) / (n as f64 + 4.0 + 2.0 * mu_eff / n as f64);
+        let c_c = (F::from_f64(4.0).unwrap() + mu_eff / n_f)
+            / (n_f + F::from_f64(4.0).unwrap() + two * mu_eff / n_f);
 
-        let expected_norm = expected_norm_n01(n);
-        let h_sigma_threshold = (1.4 + 2.0 / (n as f64 + 1.0)) * expected_norm;
+        let expected_norm = expected_norm_n01::<F>(n);
+        let h_sigma_threshold = (F::from_f64(1.4).unwrap() + two / (n_f + one)) * expected_norm;
         // Default TolX scales with the largest initial axis std (see
         // `CmaEs::build_working`); reduces to `1e−12 · initial_sigma`
         // without stds. An explicit override still wins.
-        let max_std = self
+        let max_std: F = self
             .stds_override
             .as_ref()
-            .map(|s| (0..n).map(|i| s[i]).fold(0.0_f64, f64::max))
-            .unwrap_or(1.0);
+            .map(|s| {
+                let mut m = F::zero();
+                for i in 0..n {
+                    let v = s[i];
+                    if v > m {
+                        m = v;
+                    }
+                }
+                m
+            })
+            .unwrap_or_else(F::one);
         let tol_x = self
             .tol_x_override
-            .unwrap_or(1e-12 * self.initial_sigma * max_std);
+            .unwrap_or_else(|| F::from_f64(1e-12).unwrap() * self.initial_sigma * max_std);
 
         // BoundPenalty constants: damp, edist threshold, hist cap.
-        let damp = (mu_eff / (10.0 * n as f64)).min(1.0);
-        let edist_threshold = 3.0 * (n as f64).sqrt().max(1.0) / mu_eff.max(f64::MIN_POSITIVE);
+        let ten = F::from_f64(10.0).unwrap();
+        let three = F::from_f64(3.0).unwrap();
+        let damp = (mu_eff / (ten * n_f)).min(one);
+        let edist_threshold =
+            three * n_f.sqrt().max(one) / mu_eff.max(F::from_f64(f64::MIN_POSITIVE).unwrap());
         // Pycma uses `mueff` (not `max(1, mueff)`) in the denominator;
         // we mirror but defensively floor to avoid div-by-zero on
         // pathological `lambda` (mu_eff is always > 0 for lambda >= 4
@@ -395,7 +415,7 @@ where
         // pycma; we materialize as a vector of ones for type uniformity).
         let mut gamma = self.initial_mean.clone();
         for i in 0..n {
-            gamma[i] = 1.0;
+            gamma[i] = one;
         }
 
         // Initial covariance: isotropic `C = I` by default, or anisotropic
@@ -457,27 +477,28 @@ where
 /// samples are sorted on — using raw cost on injection would let an
 /// out-of-box LM/L-BFGS-B refinement (e.g. landing at the unconstrained
 /// minimum) skip the penalty and pollute `state.costs`.
-pub(crate) fn evaluate_with_penalty<P, V>(
+pub(crate) fn evaluate_with_penalty<P, V, F>(
     problem: &mut Problem<P>,
     x: &V,
     lower: &V,
     upper: &V,
     gamma: &V,
     n: usize,
-) -> Result<(f64, f64), P::Error>
+) -> Result<(F, F), P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + ClampInPlace + std::ops::Index<usize, Output = f64>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    V: Clone + ClampInPlace + std::ops::Index<usize, Output = F>,
 {
     let mut x_rep = x.clone();
     x_rep.clamp_in_place(lower, upper);
     let raw = problem.cost(&x_rep)?;
-    let mut penalty = 0.0;
+    let mut penalty = F::zero();
     for i in 0..n {
         let dx = x[i] - x_rep[i];
-        penalty += gamma[i] * dx * dx;
+        penalty = penalty + gamma[i] * dx * dx;
     }
-    penalty /= n as f64;
+    penalty = penalty / F::from_usize(n).unwrap();
     Ok((raw, raw + penalty))
 }
 
@@ -486,37 +507,44 @@ where
 /// raw fitness from `w.raw_costs`, the current mean / σ / C from `w`,
 /// and the bounds from `problem`; writes back to `w.gamma`,
 /// `w.weights_initialized`, and `w.hist`.
-fn update_gamma<P, V, M>(w: &mut Working<V, M>, problem: &P)
+fn update_gamma<P, V, M, F>(w: &mut Working<V, M, F>, problem: &P)
 where
+    F: Scalar,
     P: BoxConstraints<Param = V>,
     V: Clone
         + ClampInPlace
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     M: MatDiagonal<V>,
 {
     if w.raw_costs.is_empty() {
         return;
     }
 
+    let zero = F::zero();
+    let two = F::from_f64(2.0).unwrap();
+    let three = F::from_f64(3.0).unwrap();
+    let five = F::from_f64(5.0).unwrap();
+    let n_f = F::from_usize(w.n).unwrap();
+
     // varis[i] = σ² · diag(C)[i]. Per-axis variance of N(m, σ²C).
     let diag_c = w.c.diagonal();
-    let mut mean_varis = 0.0;
+    let mut mean_varis = zero;
     for i in 0..w.n {
-        mean_varis += w.sigma * w.sigma * diag_c[i];
+        mean_varis = mean_varis + w.sigma * w.sigma * diag_c[i];
     }
-    mean_varis /= w.n as f64;
+    mean_varis = mean_varis / n_f;
 
     // dmean[i] = (m[i] − clamp(m)[i]) / sqrt(varis[i]). Mean violation
     // in σ-units along axis i; zero if the mean is feasible on i.
     let mut m_rep = w.m.clone();
     m_rep.clamp_in_place(problem.lower(), problem.upper());
-    let mut dmean: Vec<f64> = Vec::with_capacity(w.n);
+    let mut dmean: Vec<F> = Vec::with_capacity(w.n);
     let mut any_violation = false;
     for i in 0..w.n {
         let var_i = w.sigma * w.sigma * diag_c[i];
         let d = (w.m[i] - m_rep[i]) / var_i.sqrt();
-        if d != 0.0 {
+        if d != zero {
             any_violation = true;
         }
         dmean.push(d);
@@ -530,10 +558,14 @@ where
     let val = (sorted[3 * l / 4] - sorted[l / 4]) / mean_varis;
 
     // Push to hist (front), trim to hist_cap.
-    if val.is_finite() && val > 0.0 {
+    if val.is_finite() && val > zero {
         w.hist.push_front(val);
-    } else if val == f64::INFINITY && !w.hist.is_empty() {
-        let max_hist = w.hist.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    } else if val == F::infinity() && !w.hist.is_empty() {
+        let max_hist = w
+            .hist
+            .iter()
+            .copied()
+            .fold(F::neg_infinity(), |a, b| if b > a { b } else { a });
         w.hist.push_front(max_hist);
     }
     while w.hist.len() > w.hist_cap {
@@ -544,7 +576,7 @@ where
     }
 
     // dfit = median(hist).
-    let mut hsorted: Vec<f64> = w.hist.iter().cloned().collect();
+    let mut hsorted: Vec<F> = w.hist.iter().copied().collect();
     hsorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let dfit = hsorted[hsorted.len() / 2];
 
@@ -552,7 +584,7 @@ where
     // (We skip pycma's `countiter == 2` re-init path — see
     // references/pycma-bound-handling/NOTES.md "Implementation deltas".)
     if any_violation && !w.weights_initialized {
-        let init_val = 2.0 * dfit;
+        let init_val = two * dfit;
         for i in 0..w.n {
             w.gamma[i] = init_val;
         }
@@ -567,41 +599,42 @@ where
     if w.weights_initialized {
         for (i, dmean_i) in dmean.iter().enumerate() {
             let edist_i = dmean_i.abs() - w.edist_threshold;
-            if edist_i > 0.0 {
-                let factor = ((edist_i / 3.0).tanh() / 2.0 * w.damp).exp();
-                w.gamma[i] *= factor;
+            if edist_i > zero {
+                let factor = ((edist_i / three).tanh() / two * w.damp).exp();
+                w.gamma[i] = w.gamma[i] * factor;
             }
         }
-        let cap = 5.0 * dfit;
-        let decay = (-w.damp / 3.0).exp();
+        let cap = five * dfit;
+        let decay = (-w.damp / three).exp();
         for i in 0..w.n {
             if w.gamma[i] > cap {
-                w.gamma[i] *= decay;
+                w.gamma[i] = w.gamma[i] * decay;
             }
         }
     }
 }
 
-impl<P, V, M> Solver<P, BasicPopulationState<V>> for BoundedCmaEs<V, M>
+impl<P, V, M, F> Solver<P, BasicPopulationState<V, F>> for BoundedCmaEs<V, M, F>
 where
-    P: CostFunction<Param = V, Output = f64> + BoxConstraints,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + BoxConstraints,
     V: VectorLen
         + Clone
-        + ScaledAdd<f64>
-        + ScaleInPlace
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
         + ComponentMulAssign
         + ClampInPlace
-        + NormSquared
+        + NormSquared<F>
         + SampleStandardNormal
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity
         + MatrixFromDiagonal<V>
         + MatVec<V>
         + MatTransposeVec<V>
         + MatDiagonal<V>
-        + ScaleInPlace
-        + RankOneUpdate<V>
+        + ScaleInPlace<F>
+        + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
 {
@@ -610,8 +643,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<BasicPopulationState<V>, Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
         // Idempotent: a paused BoundedCmaEs re-entered via `run_loop`
         // must not have its evolution state rebuilt. Mirrors the
         // CmaEs::init early-return; see that solver's docs for the
@@ -624,17 +657,17 @@ where
         // (d, d_inv) = (stds, 1/stds) for the diagonal `C = diag(stds²)`
         // (b stays identity). See `CmaEs::init` for why no eigensolve runs
         // here — the diagonal decomposition is exact and order-preserving.
-        w.p_sigma.scale_in_place(0.0);
-        w.p_c.scale_in_place(0.0);
+        w.p_sigma.scale_in_place(F::zero());
+        w.p_c.scale_in_place(F::zero());
         if let Some(stds) = self.stds_override.as_ref() {
             for i in 0..w.n {
                 w.d[i] = stds[i];
-                w.d_inv[i] = 1.0 / stds[i];
+                w.d_inv[i] = F::one() / stds[i];
             }
         } else {
             for i in 0..w.n {
-                w.d[i] = 1.0;
-                w.d_inv[i] = 1.0;
+                w.d[i] = F::one();
+                w.d_inv[i] = F::one();
             }
         }
 
@@ -681,14 +714,18 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
         let w = self
             .state
             .as_mut()
             .expect("BoundedCmaEs::init must run before next_iter");
 
         w.generation += 1;
+
+        let one = F::one();
+        let two = F::from_f64(2.0).unwrap();
+        let zero = F::zero();
 
         // Recombination uses the un-repaired samples. y_{i:λ} = (x_{i:λ} − m) / σ
         // for the *previous* m, σ. (state.candidates carries the most recent
@@ -699,15 +736,15 @@ where
             .iter()
             .map(|x| {
                 let mut y = x.clone();
-                y.scaled_add(-1.0, &w.m);
-                y.scale_in_place(1.0 / w.sigma);
+                y.scaled_add(-one, &w.m);
+                y.scale_in_place(one / w.sigma);
                 y
             })
             .collect();
 
         // ⟨y⟩_w = Σ_{i=1..µ} w_i y_{i:λ}.
         let mut y_w = w.m.clone();
-        y_w.scale_in_place(0.0);
+        y_w.scale_in_place(zero);
         for (i, y_i) in y_sorted.iter().enumerate().take(w.mu) {
             y_w.scaled_add(w.weights[i], y_i);
         }
@@ -721,50 +758,51 @@ where
         let c_invsqrt_y_w = w.b.matvec(&bt_y_w);
 
         // p_σ ← (1 − c_σ) p_σ + √(c_σ(2 − c_σ) µ_eff) C^{−1/2} ⟨y⟩_w.
-        w.p_sigma.scale_in_place(1.0 - w.c_sigma);
-        let coef_sigma = (w.c_sigma * (2.0 - w.c_sigma) * w.mu_eff).sqrt();
+        w.p_sigma.scale_in_place(one - w.c_sigma);
+        let coef_sigma = (w.c_sigma * (two - w.c_sigma) * w.mu_eff).sqrt();
         w.p_sigma.scaled_add(coef_sigma, &c_invsqrt_y_w);
 
         // σ ← σ exp((c_σ / d_σ) (‖p_σ‖ / E‖N(0,I)‖ − 1)).
         let p_sigma_norm = w.p_sigma.norm_squared().sqrt();
-        let log_factor = (w.c_sigma / w.d_sigma) * (p_sigma_norm / w.expected_norm - 1.0);
-        w.sigma *= log_factor.exp();
+        let log_factor = (w.c_sigma / w.d_sigma) * (p_sigma_norm / w.expected_norm - one);
+        w.sigma = w.sigma * log_factor.exp();
 
         // h_σ test (Hansen 2016 p. 31, denominator uses 2(g+1)).
         let g_for_h = (w.generation + 1) as i32;
         let exponent = 2 * g_for_h;
-        let denom = (1.0 - (1.0 - w.c_sigma).powi(exponent)).sqrt();
+        let denom = (one - (one - w.c_sigma).powi(exponent)).sqrt();
         let h_sigma = if p_sigma_norm / denom < w.h_sigma_threshold {
-            1.0
+            one
         } else {
-            0.0
+            zero
         };
 
         // p_c update.
-        w.p_c.scale_in_place(1.0 - w.c_c);
-        let coef_c = h_sigma * (w.c_c * (2.0 - w.c_c) * w.mu_eff).sqrt();
+        w.p_c.scale_in_place(one - w.c_c);
+        let coef_c = h_sigma * (w.c_c * (two - w.c_c) * w.mu_eff).sqrt();
         w.p_c.scaled_add(coef_c, &y_w);
 
         // C update (eq. 47).
-        let delta_h = (1.0 - h_sigma) * w.c_c * (2.0 - w.c_c);
-        let c_scale = 1.0 + w.c_1 * delta_h - w.c_1 - w.c_mu * w.sum_w;
+        let delta_h = (one - h_sigma) * w.c_c * (two - w.c_c);
+        let c_scale = one + w.c_1 * delta_h - w.c_1 - w.c_mu * w.sum_w;
         w.c.scale_in_place(c_scale);
         w.c.rank_one_update(w.c_1, &w.p_c);
+        let n_f = F::from_usize(w.n).unwrap();
         for (i, y_i) in y_sorted.iter().enumerate() {
             let w_i = w.weights[i];
-            let w_i_o = if w_i >= 0.0 {
+            let w_i_o = if w_i >= zero {
                 w_i
             } else {
                 let mut bt_y = w.b.mat_transpose_vec(y_i);
                 bt_y.component_mul_assign(&w.d_inv);
                 let cinv_norm_sq = bt_y.norm_squared();
-                if cinv_norm_sq > 0.0 {
-                    w_i * (w.n as f64) / cinv_norm_sq
+                if cinv_norm_sq > zero {
+                    w_i * n_f / cinv_norm_sq
                 } else {
-                    0.0
+                    zero
                 }
             };
-            if w_i_o != 0.0 {
+            if w_i_o != zero {
                 w.c.rank_one_update(w.c_mu * w_i_o, y_i);
             }
         }
@@ -776,11 +814,12 @@ where
             Err(_) => return Ok((state, Some(TerminationReason::SolverFailed))),
         };
         w.b = b_new;
+        let eig_floor = F::from_f64(1e-30).unwrap();
         for i in 0..w.n {
-            let lam = eigs[i].max(1e-30);
+            let lam = eigs[i].max(eig_floor);
             let s = lam.sqrt();
             w.d[i] = s;
-            w.d_inv[i] = 1.0 / s;
+            w.d_inv[i] = one / s;
         }
 
         // γ adaptation — runs after the m / σ / C update so it sees
@@ -813,9 +852,9 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicPopulationState<V>) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &BasicPopulationState<V, F>) -> Option<TerminationReason> {
         let w = self.state.as_ref()?;
-        let mut max_d = 0.0_f64;
+        let mut max_d = F::zero();
         for i in 0..w.n {
             let v = w.d[i];
             if v > max_d {
