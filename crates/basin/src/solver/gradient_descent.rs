@@ -1,5 +1,5 @@
 use crate::core::inner::WarmStart;
-use crate::core::math::{NegInPlace, ScaleInPlace, ScaledAdd};
+use crate::core::math::{NegInPlace, Scalar, ScaleInPlace, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
@@ -38,11 +38,11 @@ use crate::line_search::{Constant, LineSearch};
 /// # Backends
 ///
 /// Backend-generic — works with any `V` implementing
-/// [`ScaledAdd<f64>`](crate::core::math::ScaledAdd) +
-/// [`NegInPlace`] + [`ScaleInPlace`] + `Clone`. That covers
-/// `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`).
+/// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
+/// [`NegInPlace`] + [`ScaleInPlace<F>`] + `Clone`. With the default
+/// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
+/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
+/// `faer::Col<f64>` (feature `faer`).
 ///
 /// # References
 ///
@@ -81,37 +81,37 @@ use crate::line_search::{Constant, LineSearch};
 ///     .unwrap();
 /// assert!(result.cost() < 1e-12);
 /// ```
-pub struct GradientDescent<L, V> {
+pub struct GradientDescent<L, V, F = f64> {
     line_search: L,
     /// Momentum coefficient `β`; `0.0` disables momentum (plain steepest
     /// descent, taking the original allocation-free code path).
-    beta: f64,
+    beta: F,
     /// Heavy-ball velocity `vₖ`. `None` until the first momentum step
     /// (treated as the zero vector) and reset by [`init`](Solver::init) so
     /// a reused solver restarts from rest. Stays `None` when `β = 0`.
     velocity: Option<V>,
 }
 
-impl<V> GradientDescent<Constant, V> {
+impl<V, F: Scalar> GradientDescent<Constant<F>, V, F> {
     /// Gradient descent with a fixed step size `alpha`. Equivalent to
     /// `with_line_search(Constant(alpha))`.
-    pub fn new(alpha: f64) -> Self {
+    pub fn new(alpha: F) -> Self {
         Self {
             line_search: Constant(alpha),
-            beta: 0.0,
+            beta: F::zero(),
             velocity: None,
         }
     }
 }
 
-impl<L, V> GradientDescent<L, V> {
+impl<L, V, F: Scalar> GradientDescent<L, V, F> {
     /// Gradient descent with an explicit line-search strategy
     /// (e.g. [`Backtracking`](crate::line_search::Backtracking),
     /// [`Wolfe`](crate::line_search::Wolfe)).
     pub fn with_line_search(line_search: L) -> Self {
         Self {
             line_search,
-            beta: 0.0,
+            beta: F::zero(),
             velocity: None,
         }
     }
@@ -120,25 +120,26 @@ impl<L, V> GradientDescent<L, V> {
     /// `beta = 0.0` is plain steepest descent; `beta` in `(0, 1)`
     /// (commonly `0.9`) adds momentum. See the [type docs](Self#momentum)
     /// for the update rule and stability caveat.
-    pub fn with_momentum(mut self, beta: f64) -> Self {
+    pub fn with_momentum(mut self, beta: F) -> Self {
         self.beta = beta;
         self
     }
 }
 
-impl<P, V, L> Solver<P, BasicState<V>> for GradientDescent<L, V>
+impl<P, V, F, L> Solver<P, BasicState<V, F>> for GradientDescent<L, V, F>
 where
-    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
-    V: ScaledAdd<f64> + NegInPlace + ScaleInPlace + Clone,
-    L: LineSearch<P, V, Error = P::Error>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    V: ScaledAdd<F> + NegInPlace + ScaleInPlace<F> + Clone,
+    L: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<BasicState<V>, Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<BasicState<V, F>, Self::Error> {
         // Start momentum from rest, even if this solver instance is reused
         // across runs (composition): velocity must not leak between runs.
         self.velocity = None;
@@ -154,8 +155,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
         let grad = state
             .gradient
             .take()
@@ -169,7 +170,7 @@ where
             .line_search
             .next(problem, &state.param, prev_cost, &grad, &direction)?;
 
-        if self.beta == 0.0 {
+        if self.beta == F::zero() {
             // No momentum: the original allocation-free steepest-descent
             // step, bit-identical to the pre-momentum implementation.
             state.param.scaled_add(alpha, &direction);
@@ -188,7 +189,7 @@ where
                     direction
                 }
             };
-            state.param.scaled_add(1.0, &velocity);
+            state.param.scaled_add(F::one(), &velocity);
             self.velocity = Some(velocity);
         }
 
@@ -203,12 +204,13 @@ where
 /// (e.g. [`BarrierMethod`](crate::solver::BarrierMethod) /
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)),
 /// seeding a fresh [`BasicState`] at the warm-start point.
-impl<L, V> WarmStart<V> for GradientDescent<L, V>
+impl<L, V, F> WarmStart<V> for GradientDescent<L, V, F>
 where
+    F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V>;
-    fn seed(&self, x: &V) -> BasicState<V> {
+    type State = BasicState<V, F>;
+    fn seed(&self, x: &V) -> BasicState<V, F> {
         BasicState::new(x.clone())
     }
 }
