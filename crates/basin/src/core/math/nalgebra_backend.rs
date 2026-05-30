@@ -361,12 +361,23 @@ where
 }
 
 // ----------------------------------------------------------------------
-// linalg tier — dense ops on DMatrix<f64> with V = DVector<f64>.
+// linalg tier — dense ops on DMatrix<F> with V = DVector<F>.
 // Per tenet 5, this is dense-only; sparse comes in S2b.
+//
+// The bound `F: Scalar` (basin's alias) is paired here with nalgebra's
+// `Closed*Assign` traits — basin's `Float`-based `Scalar` doesn't subsume
+// the `+= / *=` requirements that nalgebra's BLAS-2 ops (`Mul`, `tr_mul`,
+// `ger`, …) accumulate into. `f64` and `f32` both satisfy both halves, so
+// the migration covers every scalar a real consumer will use today; the
+// heavyweight factorization impls (`LinearSolveSpd`, `SymmetricEigen`)
+// additionally need `nalgebra::ComplexField` / `RealField`.
 // ----------------------------------------------------------------------
 
-impl MatVec<DVector<f64>> for DMatrix<f64> {
-    fn matvec(&self, x: &DVector<f64>) -> DVector<f64> {
+impl<F> MatVec<DVector<F>> for DMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+{
+    fn matvec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
             self.ncols(),
             x.len(),
@@ -378,8 +389,11 @@ impl MatVec<DVector<f64>> for DMatrix<f64> {
     }
 }
 
-impl MatTransposeVec<DVector<f64>> for DMatrix<f64> {
-    fn mat_transpose_vec(&self, x: &DVector<f64>) -> DVector<f64> {
+impl<F> MatTransposeVec<DVector<F>> for DMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+{
+    fn mat_transpose_vec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
             self.nrows(),
             x.len(),
@@ -391,15 +405,18 @@ impl MatTransposeVec<DVector<f64>> for DMatrix<f64> {
     }
 }
 
-impl GramMatrix for DMatrix<f64> {
+impl<F> GramMatrix for DMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+{
     fn gram(&self) -> Self {
         // tr_mul(self) computes Aᵀ A in one pass without an explicit transpose.
         self.tr_mul(self)
     }
 }
 
-impl MaxDiagonal for DMatrix<f64> {
-    fn max_diagonal(&self) -> f64 {
+impl<F: Scalar> MaxDiagonal<F> for DMatrix<F> {
+    fn max_diagonal(&self) -> F {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -409,12 +426,12 @@ impl MaxDiagonal for DMatrix<f64> {
         );
         (0..self.nrows())
             .map(|i| self[(i, i)])
-            .fold(f64::NEG_INFINITY, f64::max)
+            .fold(F::neg_infinity(), F::max)
     }
 }
 
-impl MatDiagonal<DVector<f64>> for DMatrix<f64> {
-    fn diagonal(&self) -> DVector<f64> {
+impl<F: Scalar> MatDiagonal<DVector<F>> for DMatrix<F> {
+    fn diagonal(&self) -> DVector<F> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -426,8 +443,11 @@ impl MatDiagonal<DVector<f64>> for DMatrix<f64> {
     }
 }
 
-impl AddDiagonalInPlace for DMatrix<f64> {
-    fn add_diagonal_in_place(&mut self, scalar: f64) {
+impl<F> AddDiagonalInPlace<F> for DMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign,
+{
+    fn add_diagonal_in_place(&mut self, scalar: F) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -441,8 +461,11 @@ impl AddDiagonalInPlace for DMatrix<f64> {
     }
 }
 
-impl AddDiagonalVectorInPlace<DVector<f64>> for DMatrix<f64> {
-    fn add_diagonal_vector_in_place(&mut self, diag: &DVector<f64>) {
+impl<F> AddDiagonalVectorInPlace<DVector<F>> for DMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign,
+{
+    fn add_diagonal_vector_in_place(&mut self, diag: &DVector<F>) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -464,31 +487,30 @@ impl AddDiagonalVectorInPlace<DVector<f64>> for DMatrix<f64> {
     }
 }
 
-impl MatrixIdentity for DMatrix<f64> {
+impl<F: Scalar> MatrixIdentity for DMatrix<F> {
     fn identity(n: usize) -> Self {
         Self::identity(n, n)
     }
 }
 
-impl MatrixFromDiagonal<DVector<f64>> for DMatrix<f64> {
-    fn from_diagonal(diag: &DVector<f64>) -> Self {
+impl<F: Scalar> MatrixFromDiagonal<DVector<F>> for DMatrix<F> {
+    fn from_diagonal(diag: &DVector<F>) -> Self {
         Self::from_diagonal(diag)
     }
 }
 
-impl DenseMatrixFromFn for DVector<f64> {
-    type Matrix = DMatrix<f64>;
-    fn dense_from_fn<F: FnMut(usize, usize) -> f64>(
-        rows: usize,
-        cols: usize,
-        f: F,
-    ) -> DMatrix<f64> {
+impl<F: Scalar> DenseMatrixFromFn<F> for DVector<F> {
+    type Matrix = DMatrix<F>;
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, f: G) -> DMatrix<F> {
         DMatrix::from_fn(rows, cols, f)
     }
 }
 
-impl SymmetricEigen<DVector<f64>> for DMatrix<f64> {
-    fn try_eigh(&self) -> Result<(Self, DVector<f64>), SymmetricEigenError> {
+impl<F> SymmetricEigen<DVector<F>> for DMatrix<F>
+where
+    F: Scalar + nalgebra::RealField,
+{
+    fn try_eigh(&self) -> Result<(Self, DVector<F>), SymmetricEigenError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -501,14 +523,18 @@ impl SymmetricEigen<DVector<f64>> for DMatrix<f64> {
         // cap is the standard `n × 30` heuristic.
         let n = self.nrows();
         let max_iter = n.saturating_mul(30).max(64);
-        nalgebra::SymmetricEigen::try_new(self.clone(), 1e-10, max_iter)
+        let eps = <F as num_traits::FromPrimitive>::from_f64(1e-10).unwrap();
+        nalgebra::SymmetricEigen::try_new(self.clone(), eps, max_iter)
             .map(|eig| (eig.eigenvectors, eig.eigenvalues))
             .ok_or(SymmetricEigenError::Failed)
     }
 }
 
-impl RankOneUpdate<DVector<f64>> for DMatrix<f64> {
-    fn rank_one_update(&mut self, alpha: f64, v: &DVector<f64>) {
+impl<F> RankOneUpdate<DVector<F>, F> for DMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+{
+    fn rank_one_update(&mut self, alpha: F, v: &DVector<F>) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -526,12 +552,15 @@ impl RankOneUpdate<DVector<f64>> for DMatrix<f64> {
         );
         // self ← self + α · v · vᵀ via ger (nalgebra's BLAS-2 rank-1 update).
         // ger(α, v, w, β) computes self ← α v wᵀ + β self.
-        self.ger(alpha, v, v, 1.0);
+        self.ger(alpha, v, v, F::one());
     }
 }
 
-impl GeneralRankOneUpdate<DVector<f64>> for DMatrix<f64> {
-    fn general_rank_one_update(&mut self, alpha: f64, u: &DVector<f64>, v: &DVector<f64>) {
+impl<F> GeneralRankOneUpdate<DVector<F>, F> for DMatrix<F>
+where
+    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+{
+    fn general_rank_one_update(&mut self, alpha: F, u: &DVector<F>, v: &DVector<F>) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -556,12 +585,15 @@ impl GeneralRankOneUpdate<DVector<f64>> for DMatrix<f64> {
             v.len()
         );
         // self ← self + α · u · vᵀ via ger: ger(α, u, v, β) ⇒ α u vᵀ + β self.
-        self.ger(alpha, u, v, 1.0);
+        self.ger(alpha, u, v, F::one());
     }
 }
 
-impl LinearSolveSpd<DVector<f64>> for DMatrix<f64> {
-    fn solve_spd(&self, b: &DVector<f64>) -> Result<DVector<f64>, LinearSolveError> {
+impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
+where
+    F: Scalar + nalgebra::ComplexField,
+{
+    fn solve_spd(&self, b: &DVector<F>) -> Result<DVector<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
