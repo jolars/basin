@@ -1,5 +1,7 @@
+use rand_distr::uniform::SampleUniform;
+
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{NormSquared, SampleUniformBox, ScaledAdd, VectorLen};
+use crate::core::math::{NormSquared, SampleUniformBox, Scalar, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
@@ -92,10 +94,10 @@ use crate::solver::cma_es::sort_population_ascending;
 /// # Backends
 ///
 /// Backend-generic — works with any `V` implementing
-/// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<f64>`] +
-/// [`NormSquared`] + `Index<usize, Output = f64>` +
-/// `IndexMut<usize, Output = f64>` + `Clone`. That covers `Vec<f64>`,
-/// `nalgebra::DVector<f64>` (feature `nalgebra`),
+/// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<F>`] +
+/// [`NormSquared<F>`] + `Index<usize, Output = F>` +
+/// `IndexMut<usize, Output = F>` + `Clone`. With the default `F = f64`
+/// that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
 /// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
 /// (feature `faer`). No matrix operations are required.
 ///
@@ -104,18 +106,18 @@ use crate::solver::cma_es::sort_population_ascending;
 /// See [`RandomSearch`](crate::RandomSearch) for the population-based
 /// `Executor` pattern (a `BasicPopulationState` sized to `pop_size`);
 /// `Ssga` likewise requires `BoxConstraints` on the problem.
-pub struct Ssga {
+pub struct Ssga<F = f64> {
     pop_size: usize,
-    blx_alpha: f64,
+    blx_alpha: F,
     nam_pool: usize,
     mutation_prob: f64,
-    bga_range_fraction: f64,
+    bga_range_fraction: F,
     offspring_per_step: usize,
     seed: u64,
     rng: Option<ChaCha8Rng>,
 }
 
-impl Ssga {
+impl<F: Scalar> Ssga<F> {
     /// Build a new SSGA with the Molina 2010 §4.4.7 defaults
     /// (`pop_size = 60`, `blx_alpha = 0.5`, `nam_pool = 4`,
     /// `mutation_prob = 0.125`, `bga_range_fraction = 0.1`,
@@ -123,10 +125,10 @@ impl Ssga {
     pub fn new(seed: u64) -> Self {
         Self {
             pop_size: 60,
-            blx_alpha: 0.5,
+            blx_alpha: F::from_f64(0.5).unwrap(),
             nam_pool: 4,
             mutation_prob: 0.125,
-            bga_range_fraction: 0.1,
+            bga_range_fraction: F::from_f64(0.1).unwrap(),
             offspring_per_step: 2,
             seed,
             rng: None,
@@ -158,8 +160,12 @@ impl Ssga {
     /// # Panics
     ///
     /// Panics if `alpha < 0`.
-    pub fn with_blx_alpha(mut self, alpha: f64) -> Self {
-        assert!(alpha >= 0.0, "Ssga requires blx_alpha >= 0, got {}", alpha);
+    pub fn with_blx_alpha(mut self, alpha: F) -> Self {
+        assert!(
+            alpha >= F::zero(),
+            "Ssga requires blx_alpha >= 0, got {:?}",
+            alpha
+        );
         self.blx_alpha = alpha;
         self
     }
@@ -201,8 +207,12 @@ impl Ssga {
     /// # Panics
     ///
     /// Panics if `f <= 0`.
-    pub fn with_bga_range_fraction(mut self, f: f64) -> Self {
-        assert!(f > 0.0, "Ssga requires bga_range_fraction > 0, got {}", f);
+    pub fn with_bga_range_fraction(mut self, f: F) -> Self {
+        assert!(
+            f > F::zero(),
+            "Ssga requires bga_range_fraction > 0, got {:?}",
+            f
+        );
         self.bga_range_fraction = f;
         self
     }
@@ -229,29 +239,31 @@ impl Ssga {
 ///
 /// `pub(crate)` so [`MaLsChCma`](crate::solver::ma_ls_ch_cma::MaLsChCma)
 /// reuses the operator directly; not a stable public surface.
-pub(crate) fn blx_alpha_crossover<V, R>(
+pub(crate) fn blx_alpha_crossover<V, F, R>(
     p1: &V,
     p2: &V,
-    alpha: f64,
+    alpha: F,
     lower: &V,
     upper: &V,
     rng: &mut R,
 ) -> V
 where
+    F: Scalar,
     V: VectorLen
         + Clone
         + SampleUniformBox
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     R: Rng + ?Sized,
 {
     let n = p1.vec_len();
     // Build a per-component box [blx_lo, blx_hi] for the BLX interval,
-    // pre-clipped to [lower, upper]. SampleUniformBox samples one f64
+    // pre-clipped to [lower, upper]. SampleUniformBox samples one F
     // per component from the inclusive range, which matches Eshelman &
     // Schaffer's definition.
     let mut blx_lo = lower.clone();
     let mut blx_hi = upper.clone();
+    let half = F::from_f64(0.5).unwrap();
     for i in 0..n {
         let a = p1[i];
         let b = p2[i];
@@ -267,7 +279,7 @@ where
             blx_lo[i] = lo;
             blx_hi[i] = hi;
         } else {
-            let mid = 0.5 * (lower[i] + upper[i]);
+            let mid = half * (lower[i] + upper[i]);
             blx_lo[i] = mid;
             blx_hi[i] = mid;
         }
@@ -282,9 +294,10 @@ where
 ///
 /// `pub(crate)` so [`MaLsChCma`](crate::solver::ma_ls_ch_cma::MaLsChCma)
 /// reuses the operator directly; not a stable public surface.
-pub(crate) fn nam_select<V, R>(pop: &[V], pool: usize, rng: &mut R) -> (usize, usize)
+pub(crate) fn nam_select<V, F, R>(pop: &[V], pool: usize, rng: &mut R) -> (usize, usize)
 where
-    V: Clone + ScaledAdd<f64> + NormSquared,
+    F: Scalar,
+    V: Clone + ScaledAdd<F> + NormSquared<F>,
     R: Rng + ?Sized,
 {
     debug_assert!(pop.len() >= 2, "nam_select needs at least 2 individuals");
@@ -298,13 +311,13 @@ where
     let mut best = first;
     let mut best_d_sq = {
         let mut diff = pop[p1].clone();
-        diff.scaled_add(-1.0, &pop[first]);
+        diff.scaled_add(-F::one(), &pop[first]);
         diff.norm_squared()
     };
     for _ in 1..(pool - 1) {
         let c = rng.random_range(0..n);
         let mut diff = pop[p1].clone();
-        diff.scaled_add(-1.0, &pop[c]);
+        diff.scaled_add(-F::one(), &pop[c]);
         let d_sq = diff.norm_squared();
         if d_sq > best_d_sq {
             best_d_sq = d_sq;
@@ -327,32 +340,40 @@ where
 ///
 /// `pub(crate)` so [`MaLsChCma`](crate::solver::ma_ls_ch_cma::MaLsChCma)
 /// reuses the operator directly; not a stable public surface.
-pub(crate) fn bga_mutate_in_place<V, R>(
+pub(crate) fn bga_mutate_in_place<V, F, R>(
     child: &mut V,
     lower: &V,
     upper: &V,
     prob: f64,
-    range_fraction: f64,
+    range_fraction: F,
     rng: &mut R,
 ) where
-    V: VectorLen + std::ops::Index<usize, Output = f64> + std::ops::IndexMut<usize, Output = f64>,
+    F: Scalar,
+    V: VectorLen + std::ops::Index<usize, Output = F> + std::ops::IndexMut<usize, Output = F>,
     R: Rng + ?Sized,
 {
     let n = child.vec_len();
+    // BGA's α_k sum `Σ_{k=0..15} α_k · 2^{−k}` and its 1/16 Bernoulli gate
+    // are F-independent — keep them as f64 and convert the final sum to F
+    // once, rather than redo `from_f64` per loop body.
     for i in 0..n {
         if rng.random::<f64>() >= prob {
             continue;
         }
-        let sign = if rng.random::<f64>() < 0.5 { 1.0 } else { -1.0 };
+        let sign_pos = rng.random::<f64>() < 0.5;
         let rang = range_fraction * (upper[i] - lower[i]);
-        let mut s = 0.0;
+        let mut s_f64 = 0.0_f64;
         for k in 0..16 {
             if rng.random::<f64>() < 1.0 / 16.0 {
-                s += (-(k as f64)).exp2();
+                s_f64 += (-(k as f64)).exp2();
             }
         }
-        let v = child[i] + sign * rang * s;
-        child[i] = v.clamp(lower[i], upper[i]);
+        let s = F::from_f64(s_f64).unwrap();
+        let delta = if sign_pos { rang * s } else { -(rang * s) };
+        let v = child[i] + delta;
+        // `Float` has no `clamp`; `max(lo).min(hi)` matches `f64::clamp`
+        // on finite, ordered bounds.
+        child[i] = v.max(lower[i]).min(upper[i]);
     }
 }
 
@@ -368,11 +389,11 @@ pub(crate) fn bga_mutate_in_place<V, R>(
 ///
 /// `pub(crate)` so [`MaLsChCma`](crate::solver::ma_ls_ch_cma::MaLsChCma)
 /// reuses the operator directly; not a stable public surface.
-pub(crate) fn replace_worst_if_better<V>(
+pub(crate) fn replace_worst_if_better<V, F: Scalar>(
     pop: &mut [V],
-    costs: &mut [f64],
+    costs: &mut [F],
     child: V,
-    c_child: f64,
+    c_child: F,
 ) -> Option<usize> {
     let mut worst_idx = 0;
     let mut worst_cost = costs[0];
@@ -404,24 +425,25 @@ pub(crate) fn replace_worst_if_better<V>(
     }
 }
 
-impl<P, V> Solver<P, BasicPopulationState<V>> for Ssga
+impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for Ssga<F>
 where
-    P: CostFunction<Param = V, Output = f64> + BoxConstraints<Param = V>,
+    F: Scalar + SampleUniform,
+    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
     V: VectorLen
         + Clone
         + SampleUniformBox
-        + ScaledAdd<f64>
-        + NormSquared
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + ScaledAdd<F>
+        + NormSquared<F>
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<BasicPopulationState<V>, Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
@@ -445,8 +467,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V>,
-    ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicPopulationState<V, F>,
+    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
