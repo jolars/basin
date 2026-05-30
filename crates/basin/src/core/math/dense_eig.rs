@@ -1,6 +1,6 @@
-//! Cyclic Jacobi symmetric eigendecomposition for the `Vec<f64>` backend.
+//! Cyclic Jacobi symmetric eigendecomposition for the `Vec<F>` backend.
 //!
-//! [`DenseMatrix`](super::DenseMatrix) is `Vec<f64>`'s dense matrix companion,
+//! [`DenseMatrix`](super::DenseMatrix) is `Vec<F>`'s dense matrix companion,
 //! but it has no external linear-algebra crate behind it. CMA-ES factors its
 //! covariance every iteration (the [`SymmetricEigen`](super::SymmetricEigen)
 //! op), so to run CMA-ES on the default backend we need an honest, pure-Rust
@@ -12,22 +12,24 @@
 //! simplest correct symmetric eigensolver: a sequence of plane rotations that
 //! drive the off-diagonal mass to zero, accumulating the eigenvectors in an
 //! orthogonal matrix. It is slower than the tridiagonal-QR method the
-//! nalgebra/faer backends use, but `Vec<f64>` is the convenience backend —
+//! nalgebra/faer backends use, but `Vec<F>` is the convenience backend —
 //! callers wanting speed at large `n` reach for faer.
 
+use super::Scalar;
+
 /// Frobenius norm `‖m‖_F = sqrt(Σ mᵢⱼ²)` of a row-major `n × n` matrix.
-fn frobenius_norm(m: &[f64]) -> f64 {
-    m.iter().map(|&x| x * x).sum::<f64>().sqrt()
+fn frobenius_norm<F: Scalar>(m: &[F]) -> F {
+    m.iter().map(|&x| x * x).sum::<F>().sqrt()
 }
 
 /// Sum of squares of the strictly-upper-triangular (off-diagonal) entries of a
 /// symmetric row-major `n × n` matrix.
-fn off_diagonal_sum_sq(m: &[f64], n: usize) -> f64 {
-    let mut s = 0.0;
+fn off_diagonal_sum_sq<F: Scalar>(m: &[F], n: usize) -> F {
+    let mut s = F::zero();
     for p in 0..n {
         for q in (p + 1)..n {
             let v = m[p * n + q];
-            s += v * v;
+            s = s + v * v;
         }
     }
     s
@@ -46,12 +48,16 @@ fn off_diagonal_sum_sq(m: &[f64], n: usize) -> f64 {
 /// Returns `None` if the sweep budget is exhausted before the off-diagonal mass
 /// falls below tolerance — a failure the caller maps to
 /// [`SymmetricEigenError::Failed`](super::SymmetricEigenError::Failed).
-pub(super) fn jacobi_eigen(a: &[f64], n: usize) -> Option<(Vec<f64>, Vec<f64>)> {
+pub(super) fn jacobi_eigen<F: Scalar>(a: &[F], n: usize) -> Option<(Vec<F>, Vec<F>)> {
     debug_assert_eq!(a.len(), n * n, "jacobi_eigen: expected an n×n buffer");
+
+    let zero = F::zero();
+    let one = F::one();
+    let two = F::from_f64(2.0).unwrap();
 
     // Working symmetric matrix, row-major; mirror the lower triangle into the
     // upper so the input's upper triangle is ignored (per the contract).
-    let mut m = vec![0.0_f64; n * n];
+    let mut m = vec![zero; n * n];
     for i in 0..n {
         for j in 0..=i {
             let val = a[i * n + j];
@@ -61,9 +67,9 @@ pub(super) fn jacobi_eigen(a: &[f64], n: usize) -> Option<(Vec<f64>, Vec<f64>)> 
     }
 
     // Eigenvector accumulator V = I (row-major). Columns become eigenvectors.
-    let mut v = vec![0.0_f64; n * n];
+    let mut v = vec![zero; n * n];
     for i in 0..n {
-        v[i * n + i] = 1.0;
+        v[i * n + i] = one;
     }
 
     // n ≤ 1 is already diagonal; nothing to rotate.
@@ -75,8 +81,11 @@ pub(super) fn jacobi_eigen(a: &[f64], n: usize) -> Option<(Vec<f64>, Vec<f64>)> 
     // Converged once the off-diagonal Frobenius mass is negligible relative to
     // the whole matrix. The Frobenius norm is invariant under the orthogonal
     // rotations, so the threshold is effectively fixed across sweeps.
+    // The threshold scales with `F::epsilon()` (≈ 2.22e-16 at f64,
+    // ≈ 1.19e-7 at f32) so the same code converges to backend-appropriate
+    // precision at any scalar width.
     const MAX_SWEEPS: usize = 100;
-    let tol = 1e-15 * frobenius_norm(&m).max(f64::MIN_POSITIVE);
+    let tol = F::epsilon() * frobenius_norm(&m).max(F::min_positive_value());
 
     for _ in 0..MAX_SWEEPS {
         if off_diagonal_sum_sq(&m, n).sqrt() <= tol {
@@ -88,31 +97,31 @@ pub(super) fn jacobi_eigen(a: &[f64], n: usize) -> Option<(Vec<f64>, Vec<f64>)> 
         for p in 0..n {
             for q in (p + 1)..n {
                 let apq = m[p * n + q];
-                if apq == 0.0 {
+                if apq == zero {
                     continue;
                 }
                 let app = m[p * n + p];
                 let aqq = m[q * n + q];
 
                 // Rotation angle that zeros m[p][q] (Golub & Van Loan eq. 8.5.2).
-                let theta = (aqq - app) / (2.0 * apq);
-                let t = if theta == 0.0 {
-                    1.0
+                let theta = (aqq - app) / (two * apq);
+                let t = if theta == zero {
+                    one
                 } else {
-                    let sign = if theta > 0.0 { 1.0 } else { -1.0 };
+                    let sign = if theta > zero { one } else { -one };
                     // For huge |theta| this underflows to ~0 (near-identity
                     // rotation) rather than producing a NaN.
-                    sign / (theta.abs() + (theta * theta + 1.0).sqrt())
+                    sign / (theta.abs() + (theta * theta + one).sqrt())
                 };
-                let c = 1.0 / (t * t + 1.0).sqrt();
+                let c = one / (t * t + one).sqrt();
                 let s = t * c;
-                let tau = s / (1.0 + c);
+                let tau = s / (one + c);
 
                 // Diagonal updates; zero the pivot in both symmetric slots.
                 m[p * n + p] = app - t * apq;
                 m[q * n + q] = aqq + t * apq;
-                m[p * n + q] = 0.0;
-                m[q * n + p] = 0.0;
+                m[p * n + q] = zero;
+                m[q * n + p] = zero;
 
                 // Rotate the remaining entries of rows/cols p and q, keeping
                 // the matrix symmetric.
@@ -191,7 +200,7 @@ mod tests {
     fn known_2x2() {
         // [[2, 1], [1, 2]] has eigenvalues {1, 3}.
         let a = vec![2.0, 1.0, 1.0, 2.0];
-        let (eigs, vecs) = jacobi_eigen(&a, 2).unwrap();
+        let (eigs, vecs) = jacobi_eigen::<f64>(&a, 2).unwrap();
         assert_orthonormal(&vecs, 2);
         // Reconstruct from the *paired* (unsorted) factors before sorting.
         assert_close(&reconstruct(&eigs, &vecs, 2), &a, 1e-12);
@@ -205,7 +214,7 @@ mod tests {
     fn reconstructs_symmetric_3x3() {
         // A symmetric (indefinite) matrix.
         let a = vec![4.0, 1.0, -2.0, 1.0, 2.0, 0.0, -2.0, 0.0, 3.0];
-        let (eigs, vecs) = jacobi_eigen(&a, 3).unwrap();
+        let (eigs, vecs) = jacobi_eigen::<f64>(&a, 3).unwrap();
         assert_orthonormal(&vecs, 3);
         assert_close(&reconstruct(&eigs, &vecs, 3), &a, 1e-10);
     }
@@ -214,7 +223,7 @@ mod tests {
     fn diagonal_input_passthrough() {
         // diag(3, 5, 7): eigenvalues are the diagonal, eigenvectors orthonormal.
         let a = vec![3.0, 0.0, 0.0, 0.0, 5.0, 0.0, 0.0, 0.0, 7.0];
-        let (mut eigs, vecs) = jacobi_eigen(&a, 3).unwrap();
+        let (mut eigs, vecs) = jacobi_eigen::<f64>(&a, 3).unwrap();
         assert_orthonormal(&vecs, 3);
         eigs.sort_by(|x, y| x.partial_cmp(y).unwrap());
         assert_close(&eigs, &[3.0, 5.0, 7.0], 1e-12);
@@ -226,8 +235,8 @@ mod tests {
         // triangle (and diagonal) define the matrix.
         let clean = vec![2.0, 1.0, 1.0, 2.0];
         let dirty = vec![2.0, 99.0, 1.0, 2.0]; // upper entry differs
-        let (mut e_clean, _) = jacobi_eigen(&clean, 2).unwrap();
-        let (mut e_dirty, _) = jacobi_eigen(&dirty, 2).unwrap();
+        let (mut e_clean, _) = jacobi_eigen::<f64>(&clean, 2).unwrap();
+        let (mut e_dirty, _) = jacobi_eigen::<f64>(&dirty, 2).unwrap();
         e_clean.sort_by(|x, y| x.partial_cmp(y).unwrap());
         e_dirty.sort_by(|x, y| x.partial_cmp(y).unwrap());
         assert_close(&e_clean, &e_dirty, 1e-14);
@@ -251,7 +260,7 @@ mod tests {
                 a[i * n + j] = s + if i == j { 5.0 } else { 0.0 };
             }
         }
-        let (eigs, vecs) = jacobi_eigen(&a, n).unwrap();
+        let (eigs, vecs) = jacobi_eigen::<f64>(&a, n).unwrap();
         assert_orthonormal(&vecs, n);
         for &lam in &eigs {
             assert!(
@@ -264,8 +273,19 @@ mod tests {
 
     #[test]
     fn single_element() {
-        let (eigs, vecs) = jacobi_eigen(&[42.0], 1).unwrap();
+        let (eigs, vecs) = jacobi_eigen::<f64>(&[42.0], 1).unwrap();
         assert_eq!(eigs, vec![42.0]);
         assert_eq!(vecs, vec![1.0]);
+    }
+
+    /// f32 sanity check: the Jacobi sweep should converge at any precision.
+    /// Tolerances loosened to f32-appropriate scale.
+    #[test]
+    fn f32_known_2x2() {
+        let a: Vec<f32> = vec![2.0, 1.0, 1.0, 2.0];
+        let (mut eigs, _vecs) = jacobi_eigen::<f32>(&a, 2).unwrap();
+        eigs.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        assert!((eigs[0] - 1.0).abs() < 1e-5, "λ₀ = {}", eigs[0]);
+        assert!((eigs[1] - 3.0).abs() < 1e-5, "λ₁ = {}", eigs[1]);
     }
 }
