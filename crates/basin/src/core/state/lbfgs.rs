@@ -10,19 +10,24 @@
 //! in oldest-to-newest order" and never depend on the ring-buffer
 //! index modulo `m_capacity`.
 
-use crate::core::math::Dot;
+use crate::core::math::{Dot, Scalar};
 use crate::core::problem::EvalCounts;
 use crate::core::state::{CountsMirror, GradientState, State};
 
-/// Solver state for L-BFGS-B (and the unbounded L-BFGS solver, when
-/// it lands).
+/// Solver state for L-BFGS-B and the unbounded L-BFGS solver.
 ///
-/// `theta` initializes to `1.0`; after the first accepted update
+/// `theta` initializes to `1`; after the first accepted update
 /// it becomes `(y · y) / (s · y)`, matching the Fortran convention
 /// at `mainlb`'s `matupd` call site.
-pub struct LbfgsState<V> {
+///
+/// The scalar `F` defaults to `f64` so existing `LbfgsState<V>` call
+/// sites resolve unchanged. The L-BFGS-B-specific `work` buffer
+/// ([`LbfgsbWork`]) stays hard-coded to `f64` for now — the bounded
+/// path's compact-form numerics (cauchy / subsm / formk) haven't been
+/// generified, so `Lbfgs<Bounded, S>` only matches `F = f64`.
+pub struct LbfgsState<V, F = f64> {
     pub(crate) param: V,
-    pub(crate) cost: Option<f64>,
+    pub(crate) cost: Option<F>,
     pub(crate) gradient: Option<V>,
 
     /// History capacity. Fortran's `m`; recommended `[3, 20]`.
@@ -33,12 +38,12 @@ pub struct LbfgsState<V> {
     pub(crate) wy: Vec<V>,
     /// `SᵀY` as row-major `m_capacity²` storage; only the leading
     /// `col × col` block (`col = ws.len()`) is live.
-    pub(crate) sy: Vec<f64>,
+    pub(crate) sy: Vec<F>,
     /// `SᵀS`, same row-major layout as `sy`.
-    pub(crate) ss: Vec<f64>,
-    /// Compact-form scaling. `1.0` until first accepted update,
+    pub(crate) ss: Vec<F>,
+    /// Compact-form scaling. `1` until first accepted update,
     /// thereafter `(y · y) / (s · y)`.
-    pub(crate) theta: f64,
+    pub(crate) theta: F,
 
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
@@ -48,7 +53,7 @@ pub struct LbfgsState<V> {
     /// L-BFGS-B iteration (Fortran's `mainlb` scratch arrays plus the
     /// pieces of `isave`/`dsave` that survive across iterations).
     /// Initialized lazily by `LBFGSB::init`; absent when [`LbfgsState`]
-    /// is used by other solvers (e.g. a future unbounded L-BFGS).
+    /// is used by other solvers (e.g. the unbounded L-BFGS path).
     pub(crate) work: Option<LbfgsbWork>,
 }
 
@@ -174,7 +179,7 @@ impl LbfgsbWork {
     }
 }
 
-impl<V> LbfgsState<V> {
+impl<V, F: Scalar> LbfgsState<V, F> {
     /// Build state at the given starting point with capacity for
     /// `m_capacity` history pairs. Use `m_capacity = 10` as a
     /// reasonable default; Fortran recommends `[3, 20]`.
@@ -192,9 +197,9 @@ impl<V> LbfgsState<V> {
             m_capacity,
             ws: Vec::with_capacity(m_capacity),
             wy: Vec::with_capacity(m_capacity),
-            sy: vec![0.0; mm],
-            ss: vec![0.0; mm],
-            theta: 1.0,
+            sy: vec![F::zero(); mm],
+            ss: vec![F::zero(); mm],
+            theta: F::one(),
             iter: 0,
             cost_evals: 0,
             gradient_evals: 0,
@@ -220,11 +225,11 @@ impl<V> LbfgsState<V> {
     /// that case.
     pub(crate) fn append_pair(&mut self, s: V, y: V) -> bool
     where
-        V: Dot,
+        V: Dot<F>,
     {
         let sy_dot = s.dot(&y);
         let yy_dot = y.dot(&y);
-        if !(sy_dot > 0.0 && sy_dot.is_finite() && yy_dot.is_finite()) {
+        if !(sy_dot > F::zero() && sy_dot.is_finite() && yy_dot.is_finite()) {
             return false;
         }
 
@@ -246,10 +251,10 @@ impl<V> LbfgsState<V> {
             }
             // Zero the now-vacated last row and last column.
             for i in 0..m {
-                self.sy[i * m + (m - 1)] = 0.0;
-                self.sy[(m - 1) * m + i] = 0.0;
-                self.ss[i * m + (m - 1)] = 0.0;
-                self.ss[(m - 1) * m + i] = 0.0;
+                self.sy[i * m + (m - 1)] = F::zero();
+                self.sy[(m - 1) * m + i] = F::zero();
+                self.ss[i * m + (m - 1)] = F::zero();
+                self.ss[(m - 1) * m + i] = F::zero();
             }
         }
 
@@ -281,9 +286,9 @@ impl<V> LbfgsState<V> {
     }
 }
 
-impl<V> State for LbfgsState<V> {
+impl<V, F: Scalar> State for LbfgsState<V, F> {
     type Param = V;
-    type Float = f64;
+    type Float = F;
 
     fn iter(&self) -> u64 {
         self.iter
@@ -304,13 +309,13 @@ impl<V> State for LbfgsState<V> {
     /// the full safety argument; same contract.
     ///
     /// [`BasicState::cost`]: crate::core::state::BasicState::cost
-    fn cost(&self) -> f64 {
+    fn cost(&self) -> F {
         self.cost
             .expect("LbfgsState::cost read before Solver::init populated it")
     }
 }
 
-impl<V> GradientState for LbfgsState<V> {
+impl<V, F: Scalar> GradientState for LbfgsState<V, F> {
     fn gradient(&self) -> Option<&V> {
         self.gradient.as_ref()
     }
@@ -319,7 +324,7 @@ impl<V> GradientState for LbfgsState<V> {
     }
 }
 
-impl<V> CountsMirror for LbfgsState<V> {
+impl<V, F: Scalar> CountsMirror for LbfgsState<V, F> {
     fn mirror(&mut self, delta: &EvalCounts) {
         self.cost_evals = delta.cost_evals + delta.residual_evals;
         self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;

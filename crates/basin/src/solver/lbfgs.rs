@@ -43,7 +43,7 @@ pub(crate) mod subsm;
 use core::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{Dot, ScaledAdd};
+use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::lbfgs::{LbfgsState, LbfgsbWork};
@@ -143,12 +143,13 @@ use self::subsm::subsm;
 /// L-BFGS iterates an `LbfgsState` sized to the history length `m`
 /// (`LbfgsState::new(x0, m)`); construct the solver with `Lbfgs::new()`
 /// (L-BFGS-B, the default) or `Lbfgs::<Unbounded>::new()`.
-pub struct Lbfgs<Mode = Bounded, S = MoreThuente> {
+pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     line_search: S,
     /// Fortran `dr ≤ epsmch · ddum` curvature-skip threshold
-    /// (`lbfgsb.f:875`). Defaults to `f64::EPSILON`. Consulted in both
-    /// modes for the limited-memory update acceptance test.
-    epsilon: f64,
+    /// (`lbfgsb.f:875`). Defaults to `f64::EPSILON` (or `F::epsilon()`
+    /// when the unbounded path runs at a non-`f64` scalar). Consulted
+    /// in both modes for the limited-memory update acceptance test.
+    epsilon: F,
     /// Built-in projected-gradient convergence tolerance. Bounded mode
     /// only — emits [`TerminationReason::SolverConverged`] at the top
     /// of an iteration when `‖projgr(x, g, l, u)‖_∞ ≤ tol_pg`. Default
@@ -281,22 +282,27 @@ impl<S> Lbfgs<Bounded, S> {
     }
 }
 
-impl<S> Lbfgs<Unbounded, S> {
-    /// Unconstrained L-BFGS with an explicit line-search strategy.
+impl<S, F: Scalar> Lbfgs<Unbounded, S, F> {
+    /// Unconstrained L-BFGS with an explicit line-search strategy. The
+    /// curvature-skip threshold defaults to `F::epsilon()` (matching
+    /// `f64::EPSILON` when `F = f64`).
     pub fn with_line_search(line_search: S) -> Self {
         Self {
             line_search,
-            epsilon: f64::EPSILON,
+            epsilon: F::epsilon(),
             tol_pg: 1e-10,
             m_capacity: 10,
             _mode: PhantomData,
         }
     }
+}
 
+impl<S> Lbfgs<Unbounded, S> {
     /// Switch to box-constrained [`Bounded`] mode while preserving the
     /// configured line search, curvature threshold, and history
     /// capacity. The resulting solver requires the problem to
-    /// implement [`BoxConstraints`].
+    /// implement [`BoxConstraints`]; only available when `F = f64`
+    /// (the bounded path's compact-form numerics are still f64-only).
     pub fn bounded(self) -> Lbfgs<Bounded, S> {
         Lbfgs {
             line_search: self.line_search,
@@ -308,11 +314,12 @@ impl<S> Lbfgs<Unbounded, S> {
     }
 }
 
-impl<Mode, S> Lbfgs<Mode, S> {
-    /// Override the curvature-skip threshold. Default `f64::EPSILON`,
-    /// matching Fortran's `dr ≤ epsmch · ddum` test.
-    pub fn epsilon(mut self, epsilon: f64) -> Self {
-        assert!(epsilon >= 0.0, "epsilon must be ≥ 0");
+impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
+    /// Override the curvature-skip threshold. Default `F::epsilon()`
+    /// (= `f64::EPSILON` when `F = f64`), matching Fortran's
+    /// `dr ≤ epsmch · ddum` test.
+    pub fn epsilon(mut self, epsilon: F) -> Self {
+        assert!(epsilon >= F::zero(), "epsilon must be ≥ 0");
         self.epsilon = epsilon;
         self
     }
@@ -744,19 +751,20 @@ where
     }
 }
 
-impl<P, V, S> Solver<P, LbfgsState<V>> for Lbfgs<Unbounded, S>
+impl<P, V, S, F> Solver<P, LbfgsState<V, F>> for Lbfgs<Unbounded, S, F>
 where
-    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
-    V: AsFloatSliceMut + Clone + Dot + ScaledAdd<f64>,
-    S: LineSearch<P, V, Error = P::Error>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F>,
+    S: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V>,
-    ) -> Result<LbfgsState<V>, Self::Error> {
+        mut state: LbfgsState<V, F>,
+    ) -> Result<LbfgsState<V, F>, Self::Error> {
         // Cache cost and gradient at the initial iterate. `state.work`
         // stays `None` — the box-constrained scratch buffers are
         // never touched on the unbounded path.
@@ -769,8 +777,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V>,
-    ) -> Result<(LbfgsState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: LbfgsState<V, F>,
+    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error> {
         let g_v = state
             .gradient
             .take()
@@ -796,43 +804,43 @@ where
             d_slice.copy_from_slice(g_slice);
 
             if col > 0 {
-                let mut alpha = vec![0.0_f64; col];
+                let mut alpha = vec![F::zero(); col];
 
                 // Backward pass: q ← q − αᵢ yᵢ for i = col-1 .. 0.
                 for i in (0..col).rev() {
-                    let rho_i = 1.0 / state.sy[i * m + i];
+                    let rho_i = F::one() / state.sy[i * m + i];
                     let s_i = state.ws[i].as_float_slice();
                     let y_i = state.wy[i].as_float_slice();
-                    let mut s_dot_q = 0.0_f64;
+                    let mut s_dot_q = F::zero();
                     for k in 0..n {
-                        s_dot_q += s_i[k] * d_slice[k];
+                        s_dot_q = s_dot_q + s_i[k] * d_slice[k];
                     }
                     let a = rho_i * s_dot_q;
                     alpha[i] = a;
                     for k in 0..n {
-                        d_slice[k] -= a * y_i[k];
+                        d_slice[k] = d_slice[k] - a * y_i[k];
                     }
                 }
 
                 // r ← H₀ · q with H₀ = (1/θ)·I.
-                let inv_theta = 1.0 / theta;
+                let inv_theta = F::one() / theta;
                 for k in 0..n {
-                    d_slice[k] *= inv_theta;
+                    d_slice[k] = d_slice[k] * inv_theta;
                 }
 
                 // Forward pass: r ← r + (αᵢ − β) sᵢ for i = 0 .. col-1.
                 for i in 0..col {
-                    let rho_i = 1.0 / state.sy[i * m + i];
+                    let rho_i = F::one() / state.sy[i * m + i];
                     let s_i = state.ws[i].as_float_slice();
                     let y_i = state.wy[i].as_float_slice();
-                    let mut y_dot_r = 0.0_f64;
+                    let mut y_dot_r = F::zero();
                     for k in 0..n {
-                        y_dot_r += y_i[k] * d_slice[k];
+                        y_dot_r = y_dot_r + y_i[k] * d_slice[k];
                     }
                     let beta = rho_i * y_dot_r;
                     let coef = alpha[i] - beta;
                     for k in 0..n {
-                        d_slice[k] += coef * s_i[k];
+                        d_slice[k] = d_slice[k] + coef * s_i[k];
                     }
                 }
             }
@@ -844,17 +852,21 @@ where
         }
 
         // gᵀd for the curvature-skip threshold (Fortran `gdold`).
-        let gdold: f64 = {
+        let gdold: F = {
             let g_slice = g_v.as_float_slice();
             let d_slice = d_v.as_float_slice();
-            (0..n).map(|i| g_slice[i] * d_slice[i]).sum()
+            let mut acc = F::zero();
+            for i in 0..n {
+                acc = acc + g_slice[i] * d_slice[i];
+            }
+            acc
         };
 
         let stp = self
             .line_search
             .next(problem, &state.param, f_old, &g_v, &d_v)?;
 
-        if !(stp.is_finite() && stp > 0.0) {
+        if !(stp.is_finite() && stp > F::zero()) {
             // Line search bailed. Restore cached cost / gradient so
             // the caller's final state is consistent with the last
             // accepted iterate, and bubble the failure.
@@ -872,11 +884,11 @@ where
         let g_new_slice = g_new.as_float_slice();
         let g_old_slice = g_v.as_float_slice();
         let d_slice = d_v.as_float_slice();
-        let mut dr = 0.0_f64;
+        let mut dr = F::zero();
         for i in 0..n {
             let yi = g_new_slice[i] - g_old_slice[i];
             let si = stp * d_slice[i];
-            dr += yi * si;
+            dr = dr + yi * si;
         }
         let ddum = -gdold * stp;
 
