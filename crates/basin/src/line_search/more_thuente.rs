@@ -1,4 +1,4 @@
-use crate::core::math::{Dot, ScaledAdd};
+use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::line_search::LineSearch;
 
@@ -39,89 +39,95 @@ use crate::line_search::LineSearch;
 /// (`dcsrch` and `dcstep`). MINPACK-1 1983, MINPACK-2 1993; J. J. Moré
 /// and D. J. Thuente, *Line search algorithms with guaranteed
 /// sufficient decrease*, ACM TOMS 20(3), 1994.
-pub struct MoreThuente {
+pub struct MoreThuente<F = f64> {
     /// Sufficient-decrease (Armijo) coefficient. Default `1e-3`
     /// (Fortran `lnsrlb` constant). Strong-Wolfe `c1` analog.
-    pub ftol: f64,
+    pub ftol: F,
     /// Curvature coefficient. Default `0.9` (Fortran `lnsrlb`
     /// constant). Strong-Wolfe `c2` analog.
-    pub gtol: f64,
+    pub gtol: F,
     /// Relative tolerance on the bracket width — exits with
     /// `xtol`-warning if the bracket has collapsed to relative size
     /// `≤ xtol`. Default `0.1` (Fortran `lnsrlb` constant).
-    pub xtol: f64,
+    pub xtol: F,
     /// Initial trial step. Default `1.0` (the quasi-Newton unit step).
-    pub alpha_init: f64,
+    pub alpha_init: F,
     /// Hard lower bound on the step. Default `0.0`.
-    pub stpmin: f64,
+    pub stpmin: F,
     /// Hard upper bound on the step. Default `1e10` (Fortran `big`).
     /// L-BFGS-B overrides this per-iteration via direct field
     /// mutation, with `stpmax = max α s.t. x + α·d ∈ [l, u]`.
-    pub stpmax: f64,
+    pub stpmax: F,
     /// Safety cap on function evaluations. Default `20`. The Moré–
     /// Thuente warning conditions normally terminate well before
     /// this; the cap exists to bound pathological inputs.
     pub maxfev: u32,
 }
 
-impl Default for MoreThuente {
+impl<F: Scalar> Default for MoreThuente<F> {
     fn default() -> Self {
         Self {
-            ftol: 1.0e-3,
-            gtol: 0.9,
-            xtol: 0.1,
-            alpha_init: 1.0,
-            stpmin: 0.0,
-            stpmax: 1.0e10,
+            ftol: F::from_f64(1.0e-3).unwrap(),
+            gtol: F::from_f64(0.9).unwrap(),
+            xtol: F::from_f64(0.1).unwrap(),
+            alpha_init: F::one(),
+            stpmin: F::zero(),
+            stpmax: F::from_f64(1.0e10).unwrap(),
             maxfev: 20,
         }
     }
 }
 
-impl MoreThuente {
+impl<F: Scalar> MoreThuente<F> {
     /// Moré–Thuente with L-BFGS-B's `lnsrlb` defaults.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Override the Armijo coefficient. Panics if not in `(0, 1)`.
-    pub fn ftol(mut self, ftol: f64) -> Self {
-        assert!(0.0 < ftol && ftol < 1.0, "ftol must be in (0, 1)");
+    pub fn ftol(mut self, ftol: F) -> Self {
+        assert!(
+            F::zero() < ftol && ftol < F::one(),
+            "ftol must be in (0, 1)"
+        );
         self.ftol = ftol;
         self
     }
 
     /// Override the curvature coefficient. Panics if not in `(0, 1)`.
-    pub fn gtol(mut self, gtol: f64) -> Self {
-        assert!(0.0 < gtol && gtol < 1.0, "gtol must be in (0, 1)");
+    pub fn gtol(mut self, gtol: F) -> Self {
+        assert!(
+            F::zero() < gtol && gtol < F::one(),
+            "gtol must be in (0, 1)"
+        );
         self.gtol = gtol;
         self
     }
 
     /// Override the bracket-width relative tolerance. Panics if `< 0`.
-    pub fn xtol(mut self, xtol: f64) -> Self {
-        assert!(xtol >= 0.0, "xtol must be ≥ 0");
+    pub fn xtol(mut self, xtol: F) -> Self {
+        assert!(xtol >= F::zero(), "xtol must be ≥ 0");
         self.xtol = xtol;
         self
     }
 
     /// Override the initial trial step. Panics if not strictly positive.
-    pub fn alpha_init(mut self, alpha_init: f64) -> Self {
-        assert!(alpha_init > 0.0, "alpha_init must be > 0");
+    pub fn alpha_init(mut self, alpha_init: F) -> Self {
+        assert!(alpha_init > F::zero(), "alpha_init must be > 0");
         self.alpha_init = alpha_init;
         self
     }
 
     /// Override the step lower bound. Panics if `< 0`.
-    pub fn stpmin(mut self, stpmin: f64) -> Self {
-        assert!(stpmin >= 0.0, "stpmin must be ≥ 0");
+    pub fn stpmin(mut self, stpmin: F) -> Self {
+        assert!(stpmin >= F::zero(), "stpmin must be ≥ 0");
         self.stpmin = stpmin;
         self
     }
 
     /// Override the step upper bound. Panics if `< stpmin`.
-    pub fn stpmax(mut self, stpmax: f64) -> Self {
-        assert!(stpmax > 0.0, "stpmax must be > 0");
+    pub fn stpmax(mut self, stpmax: F) -> Self {
+        assert!(stpmax > F::zero(), "stpmax must be > 0");
         self.stpmax = stpmax;
         self
     }
@@ -133,10 +139,11 @@ impl MoreThuente {
     }
 }
 
-impl<P, V> LineSearch<P, V> for MoreThuente
+impl<P, V, F> LineSearch<P, V, F> for MoreThuente<F>
 where
-    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
-    V: ScaledAdd<f64> + Dot + Clone,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    V: ScaledAdd<F> + Dot<F> + Clone,
 {
     type Error = P::Error;
 
@@ -144,21 +151,27 @@ where
         &mut self,
         problem: &mut Problem<P>,
         param: &V,
-        cost: f64,
+        cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<f64, Self::Error> {
+    ) -> Result<F, Self::Error> {
+        let zero = F::zero();
+        let p5 = F::from_f64(0.5).unwrap();
+        let p66 = F::from_f64(0.66).unwrap();
+        let xtrapl = F::from_f64(1.1).unwrap();
+        let xtrapu = F::from_f64(4.0).unwrap();
+
         let finit = cost;
         let ginit = gradient.dot(direction);
 
         // Initial-derivative checks (Fortran START block, lines 3497–3512).
         // Defensive: catch ascent direction or non-finite slope. The
         // `!is_finite()` guard routes NaN here too.
-        if !ginit.is_finite() || ginit >= 0.0 {
-            return Ok(0.0);
+        if !ginit.is_finite() || ginit >= zero {
+            return Ok(zero);
         }
         if !(self.alpha_init >= self.stpmin && self.alpha_init <= self.stpmax) {
-            return Ok(0.0);
+            return Ok(zero);
         }
 
         // Initialization (Fortran lines 3514–3541).
@@ -166,16 +179,16 @@ where
         let mut stage: u8 = 1;
         let gtest = self.ftol * ginit;
         let mut width = self.stpmax - self.stpmin;
-        let mut width1 = width / P5;
+        let mut width1 = width / p5;
 
-        let mut stx = 0.0;
+        let mut stx = zero;
         let mut fx = finit;
         let mut gx = ginit;
-        let mut sty = 0.0;
+        let mut sty = zero;
         let mut fy = finit;
         let mut gy = ginit;
-        let mut stmin = 0.0;
-        let mut stmax = self.alpha_init + XTRAPU * self.alpha_init;
+        let mut stmin = zero;
+        let mut stmax = self.alpha_init + xtrapu * self.alpha_init;
 
         let mut stp = self.alpha_init;
 
@@ -189,7 +202,7 @@ where
 
             // Stage transition (Fortran lines 3572–3574).
             let ftest = finit + stp * gtest;
-            if stage == 1 && f <= ftest && g >= 0.0 {
+            if stage == 1 && f <= ftest && g >= zero {
                 stage = 2;
             }
 
@@ -220,7 +233,7 @@ where
                 let mut gxm = gx - gtest;
                 let mut gym = gy - gtest;
 
-                dcstep(
+                dcstep::<F>(
                     &mut stx,
                     &mut fxm,
                     &mut gxm,
@@ -240,7 +253,7 @@ where
                 gx = gxm + gtest;
                 gy = gym + gtest;
             } else {
-                dcstep(
+                dcstep::<F>(
                     &mut stx,
                     &mut fx,
                     &mut gx,
@@ -258,8 +271,8 @@ where
 
             // Bisection if bracket width isn't shrinking (Fortran 3634–3638).
             if brackt {
-                if (sty - stx).abs() >= P66 * width1 {
-                    stp = stx + P5 * (sty - stx);
+                if (sty - stx).abs() >= p66 * width1 {
+                    stp = stx + p5 * (sty - stx);
                 }
                 width1 = width;
                 width = (sty - stx).abs();
@@ -271,8 +284,8 @@ where
                 stmin = stx.min(sty);
                 stmax = stx.max(sty);
             } else {
-                stmin = stp + XTRAPL * (stp - stx);
-                stmax = stp + XTRAPU * (stp - stx);
+                stmin = stp + xtrapl * (stp - stx);
+                stmax = stp + xtrapu * (stp - stx);
             }
 
             // Clamp stp to user-supplied (stpmin, stpmax) (Fortran 3652–3653).
@@ -293,12 +306,6 @@ where
     }
 }
 
-// Fortran constants (lines 3486–3488).
-const P5: f64 = 0.5;
-const P66: f64 = 0.66;
-const XTRAPL: f64 = 1.1;
-const XTRAPU: f64 = 4.0;
-
 /// Safeguarded cubic/quadratic step interpolation.
 ///
 /// Direct port of `dcstep.f` (Fortran lines 3694–3948). Updates
@@ -314,26 +321,31 @@ const XTRAPU: f64 = 4.0;
 ///    safeguards.
 /// 4. Otherwise: cubic if bracketed, else hit a step bound.
 #[allow(clippy::too_many_arguments)]
-fn dcstep(
-    stx: &mut f64,
-    fx: &mut f64,
-    dx: &mut f64,
-    sty: &mut f64,
-    fy: &mut f64,
-    dy: &mut f64,
-    stp: &mut f64,
-    fp: f64,
-    dp: f64,
+fn dcstep<F: Scalar>(
+    stx: &mut F,
+    fx: &mut F,
+    dx: &mut F,
+    sty: &mut F,
+    fy: &mut F,
+    dy: &mut F,
+    stp: &mut F,
+    fp: F,
+    dp: F,
     brackt: &mut bool,
-    stpmin: f64,
-    stpmax: f64,
+    stpmin: F,
+    stpmax: F,
 ) {
+    let zero = F::zero();
+    let two = F::from_f64(2.0).unwrap();
+    let three = F::from_f64(3.0).unwrap();
+    let p66 = F::from_f64(0.66).unwrap();
+
     let sgnd = dp * (*dx / dx.abs());
     let stpf;
 
     if fp > *fx {
         // Case 1.
-        let theta = 3.0 * (*fx - fp) / (*stp - *stx) + *dx + dp;
+        let theta = three * (*fx - fp) / (*stp - *stx) + *dx + dp;
         let s = theta.abs().max(dx.abs()).max(dp.abs());
         let mut gamma = s * ((theta / s).powi(2) - (*dx / s) * (dp / s)).sqrt();
         if *stp < *stx {
@@ -343,16 +355,16 @@ fn dcstep(
         let q = ((gamma - *dx) + gamma) + dp;
         let r = p / q;
         let stpc = *stx + r * (*stp - *stx);
-        let stpq = *stx + ((*dx / ((*fx - fp) / (*stp - *stx) + *dx)) / 2.0) * (*stp - *stx);
+        let stpq = *stx + ((*dx / ((*fx - fp) / (*stp - *stx) + *dx)) / two) * (*stp - *stx);
         stpf = if (stpc - *stx).abs() < (stpq - *stx).abs() {
             stpc
         } else {
-            stpc + (stpq - stpc) / 2.0
+            stpc + (stpq - stpc) / two
         };
         *brackt = true;
-    } else if sgnd < 0.0 {
+    } else if sgnd < zero {
         // Case 2.
-        let theta = 3.0 * (*fx - fp) / (*stp - *stx) + *dx + dp;
+        let theta = three * (*fx - fp) / (*stp - *stx) + *dx + dp;
         let s = theta.abs().max(dx.abs()).max(dp.abs());
         let mut gamma = s * ((theta / s).powi(2) - (*dx / s) * (dp / s)).sqrt();
         if *stp > *stx {
@@ -371,22 +383,19 @@ fn dcstep(
         *brackt = true;
     } else if dp.abs() < dx.abs() {
         // Case 3.
-        let theta = 3.0 * (*fx - fp) / (*stp - *stx) + *dx + dp;
+        let theta = three * (*fx - fp) / (*stp - *stx) + *dx + dp;
         let s = theta.abs().max(dx.abs()).max(dp.abs());
         // `gamma = 0` only arises if the cubic does not tend to infinity
         // in the direction of the step. The `max(0, ·)` guards a
         // negative argument to sqrt from rounding.
-        let mut gamma = s
-            * (0.0_f64)
-                .max((theta / s).powi(2) - (*dx / s) * (dp / s))
-                .sqrt();
+        let mut gamma = s * (zero.max((theta / s).powi(2) - (*dx / s) * (dp / s))).sqrt();
         if *stp > *stx {
             gamma = -gamma;
         }
         let p = (gamma - dp) + theta;
         let q = (gamma + (*dx - dp)) + gamma;
         let r = p / q;
-        let stpc = if r < 0.0 && gamma != 0.0 {
+        let stpc = if r < zero && gamma != zero {
             *stp + r * (*stx - *stp)
         } else if *stp > *stx {
             stpmax
@@ -402,9 +411,9 @@ fn dcstep(
                 stpq
             };
             if *stp > *stx {
-                (*stp + P66 * (*sty - *stp)).min(cand)
+                (*stp + p66 * (*sty - *stp)).min(cand)
             } else {
-                (*stp + P66 * (*sty - *stp)).max(cand)
+                (*stp + p66 * (*sty - *stp)).max(cand)
             }
         } else {
             let cand = if (stpc - *stp).abs() > (stpq - *stp).abs() {
@@ -417,7 +426,7 @@ fn dcstep(
     } else {
         // Case 4.
         stpf = if *brackt {
-            let theta = 3.0 * (fp - *fy) / (*sty - *stp) + *dy + dp;
+            let theta = three * (fp - *fy) / (*sty - *stp) + *dy + dp;
             let s = theta.abs().max(dy.abs()).max(dp.abs());
             let mut gamma = s * ((theta / s).powi(2) - (*dy / s) * (dp / s)).sqrt();
             if *stp > *sty {
@@ -440,7 +449,7 @@ fn dcstep(
         *fy = fp;
         *dy = dp;
     } else {
-        if sgnd < 0.0 {
+        if sgnd < zero {
             *sty = *stx;
             *fy = *fx;
             *dy = *dx;
