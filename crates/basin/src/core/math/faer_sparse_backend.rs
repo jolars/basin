@@ -16,13 +16,24 @@ use faer::sparse::linalg::LltError;
 use faer::sparse::linalg::matmul::{sparse_dense_matmul, sparse_sparse_matmul};
 use faer::{Accum, Col, Par, Side};
 
+use super::Scalar;
 use super::linalg::{
     AddDiagonalInPlace, AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveLstsq,
     LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
 };
 
-impl MatVec<Col<f64>> for SparseColMat<usize, f64> {
-    fn matvec(&self, x: &Col<f64>) -> Col<f64> {
+// As with the dense faer backend, sparse matmul / Cholesky / QR all
+// require `faer_traits::ComplexField`, while the diagonal-walk impls
+// stay on plain `Scalar`. f32 and f64 satisfy both halves; the sparse
+// SPD / lstsq factorizations additionally bound on `RealField`-like
+// behaviour through `ComplexField` (faer's hierarchy folds the real-
+// scalar case into ComplexField directly).
+
+impl<F> MatVec<Col<F>> for SparseColMat<usize, F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn matvec(&self, x: &Col<F>) -> Col<F> {
         assert_eq!(
             self.ncols(),
             x.nrows(),
@@ -30,21 +41,24 @@ impl MatVec<Col<f64>> for SparseColMat<usize, f64> {
             self.ncols(),
             x.nrows()
         );
-        let mut y = Col::<f64>::zeros(self.nrows());
+        let mut y = Col::<F>::zeros(self.nrows());
         sparse_dense_matmul(
             y.as_mat_mut(),
             Accum::Replace,
             self.as_ref(),
             x.as_mat(),
-            1.0,
+            F::one(),
             Par::Seq,
         );
         y
     }
 }
 
-impl MatTransposeVec<Col<f64>> for SparseColMat<usize, f64> {
-    fn mat_transpose_vec(&self, x: &Col<f64>) -> Col<f64> {
+impl<F> MatTransposeVec<Col<F>> for SparseColMat<usize, F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn mat_transpose_vec(&self, x: &Col<F>) -> Col<F> {
         assert_eq!(
             self.nrows(),
             x.nrows(),
@@ -52,7 +66,7 @@ impl MatTransposeVec<Col<f64>> for SparseColMat<usize, f64> {
             self.nrows(),
             x.nrows()
         );
-        let mut y = Col::<f64>::zeros(self.ncols());
+        let mut y = Col::<F>::zeros(self.ncols());
         // SparseRowMatRef impls SparseDenseMatMul, so transposing the
         // CSC view (giving a CSR view of Aᵀ) lets us reuse the same
         // entry point without materializing the transpose.
@@ -61,14 +75,17 @@ impl MatTransposeVec<Col<f64>> for SparseColMat<usize, f64> {
             Accum::Replace,
             self.as_ref().transpose(),
             x.as_mat(),
-            1.0,
+            F::one(),
             Par::Seq,
         );
         y
     }
 }
 
-impl GramMatrix for SparseColMat<usize, f64> {
+impl<F> GramMatrix for SparseColMat<usize, F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
     fn gram(&self) -> Self {
         // Aᵀ · A: `transpose()` gives a SparseRowMatRef view; faer's
         // sparse_sparse_matmul wants two CSC operands, so materialize
@@ -78,13 +95,13 @@ impl GramMatrix for SparseColMat<usize, f64> {
             .transpose()
             .to_col_major()
             .expect("gram: out of memory while transposing");
-        sparse_sparse_matmul(at_csc.as_ref(), self.as_ref(), 1.0, Par::Seq)
+        sparse_sparse_matmul(at_csc.as_ref(), self.as_ref(), F::one(), Par::Seq)
             .expect("gram: out of memory while multiplying")
     }
 }
 
-impl MaxDiagonal for SparseColMat<usize, f64> {
-    fn max_diagonal(&self) -> f64 {
+impl<F: Scalar> MaxDiagonal<F> for SparseColMat<usize, F> {
+    fn max_diagonal(&self) -> F {
         let n = self.ncols();
         assert_eq!(
             self.nrows(),
@@ -99,13 +116,13 @@ impl MaxDiagonal for SparseColMat<usize, f64> {
         let col_ptr = self.col_ptr();
         let row_idx = self.row_idx();
         let vals = self.val();
-        let mut best = f64::NEG_INFINITY;
+        let mut best = F::neg_infinity();
         for j in 0..n {
             let start = col_ptr[j];
             let end = col_ptr[j + 1];
             let v = (start..end)
                 .find_map(|k| (row_idx[k] == j).then_some(vals[k]))
-                .unwrap_or(0.0);
+                .unwrap_or(F::zero());
             if v > best {
                 best = v;
             }
@@ -114,8 +131,8 @@ impl MaxDiagonal for SparseColMat<usize, f64> {
     }
 }
 
-impl MatDiagonal<Col<f64>> for SparseColMat<usize, f64> {
-    fn diagonal(&self) -> Col<f64> {
+impl<F: Scalar> MatDiagonal<Col<F>> for SparseColMat<usize, F> {
+    fn diagonal(&self) -> Col<F> {
         let n = self.ncols();
         assert_eq!(
             self.nrows(),
@@ -135,13 +152,13 @@ impl MatDiagonal<Col<f64>> for SparseColMat<usize, f64> {
             let end = col_ptr[j + 1];
             (start..end)
                 .find_map(|k| (row_idx[k] == j).then_some(vals[k]))
-                .unwrap_or(0.0)
+                .unwrap_or(F::zero())
         })
     }
 }
 
-impl AddDiagonalInPlace for SparseColMat<usize, f64> {
-    fn add_diagonal_in_place(&mut self, scalar: f64) {
+impl<F: Scalar> AddDiagonalInPlace<F> for SparseColMat<usize, F> {
+    fn add_diagonal_in_place(&mut self, scalar: F) {
         let n = self.ncols();
         assert_eq!(
             self.nrows(),
@@ -165,7 +182,7 @@ impl AddDiagonalInPlace for SparseColMat<usize, f64> {
             let mut found = false;
             for k in start..end {
                 if row_idx[k] == j {
-                    vals[k] += scalar;
+                    vals[k] = vals[k] + scalar;
                     found = true;
                     break;
                 }
@@ -178,8 +195,8 @@ impl AddDiagonalInPlace for SparseColMat<usize, f64> {
     }
 }
 
-impl AddDiagonalVectorInPlace<Col<f64>> for SparseColMat<usize, f64> {
-    fn add_diagonal_vector_in_place(&mut self, diag: &Col<f64>) {
+impl<F: Scalar> AddDiagonalVectorInPlace<Col<F>> for SparseColMat<usize, F> {
+    fn add_diagonal_vector_in_place(&mut self, diag: &Col<F>) {
         let n = self.ncols();
         assert_eq!(
             self.nrows(),
@@ -205,7 +222,7 @@ impl AddDiagonalVectorInPlace<Col<f64>> for SparseColMat<usize, f64> {
             let mut found = false;
             for k in start..end {
                 if row_idx[k] == j {
-                    vals[k] += diag[j];
+                    vals[k] = vals[k] + diag[j];
                     found = true;
                     break;
                 }
@@ -218,8 +235,11 @@ impl AddDiagonalVectorInPlace<Col<f64>> for SparseColMat<usize, f64> {
     }
 }
 
-impl LinearSolveSpd<Col<f64>> for SparseColMat<usize, f64> {
-    fn solve_spd(&self, b: &Col<f64>) -> Result<Col<f64>, LinearSolveError> {
+impl<F> LinearSolveSpd<Col<F>> for SparseColMat<usize, F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn solve_spd(&self, b: &Col<F>) -> Result<Col<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -249,8 +269,11 @@ impl LinearSolveSpd<Col<f64>> for SparseColMat<usize, f64> {
     }
 }
 
-impl LinearSolveLstsq<Col<f64>> for SparseColMat<usize, f64> {
-    fn solve_lstsq(&self, b: &Col<f64>) -> Result<Col<f64>, LinearSolveError> {
+impl<F> LinearSolveLstsq<Col<F>> for SparseColMat<usize, F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn solve_lstsq(&self, b: &Col<F>) -> Result<Col<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             b.nrows(),
