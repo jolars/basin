@@ -1,4 +1,4 @@
-use crate::core::math::{Dot, ScaledAdd};
+use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::line_search::LineSearch;
 
@@ -17,33 +17,33 @@ use crate::line_search::LineSearch;
 /// Algorithms 3.5 (bracketing) and 3.6 (zoom) from Nocedal & Wright. The
 /// zoom phase uses bisection (always-progress, no interpolation pitfalls);
 /// cubic-interpolation in zoom is a possible future perf improvement.
-pub struct Wolfe {
+pub struct Wolfe<F = f64> {
     /// Armijo slope coefficient in `(0, 1)`. Default `1e-4` (N&W §3.5).
-    pub c1: f64,
+    pub c1: F,
     /// Strong-curvature coefficient in `(c1, 1)`. Default `0.9`.
-    pub c2: f64,
+    pub c2: F,
     /// Initial trial step. Default `1.0` so quasi-Newton solvers get the
     /// unit step they expect asymptotically.
-    pub alpha_init: f64,
+    pub alpha_init: F,
     /// Upper bound on the bracketing trial step. Default `10.0`.
-    pub alpha_max: f64,
+    pub alpha_max: F,
     /// Maximum bracketing/zoom iterations before bailing. Default `25`.
     pub max_iter: u32,
 }
 
-impl Default for Wolfe {
+impl<F: Scalar> Default for Wolfe<F> {
     fn default() -> Self {
         Self {
-            c1: 1e-4,
-            c2: 0.9,
-            alpha_init: 1.0,
-            alpha_max: 10.0,
+            c1: F::from_f64(1e-4).unwrap(),
+            c2: F::from_f64(0.9).unwrap(),
+            alpha_init: F::one(),
+            alpha_max: F::from_f64(10.0).unwrap(),
             max_iter: 25,
         }
     }
 }
 
-impl Wolfe {
+impl<F: Scalar> Wolfe<F> {
     /// Strong-Wolfe line search with the Nocedal & Wright defaults
     /// (`c1 = 1e-4`, `c2 = 0.9`, `α_init = 1.0`, `α_max = 10.0`,
     /// `max_iter = 25`).
@@ -52,29 +52,29 @@ impl Wolfe {
     }
 
     /// Override the Armijo slope coefficient. Panics if not in `(0, 1)`.
-    pub fn c1(mut self, c1: f64) -> Self {
-        assert!(0.0 < c1 && c1 < 1.0, "c1 must be in (0, 1)");
+    pub fn c1(mut self, c1: F) -> Self {
+        assert!(F::zero() < c1 && c1 < F::one(), "c1 must be in (0, 1)");
         self.c1 = c1;
         self
     }
 
     /// Override the strong-curvature coefficient. Panics if not in `(0, 1)`.
-    pub fn c2(mut self, c2: f64) -> Self {
-        assert!(0.0 < c2 && c2 < 1.0, "c2 must be in (0, 1)");
+    pub fn c2(mut self, c2: F) -> Self {
+        assert!(F::zero() < c2 && c2 < F::one(), "c2 must be in (0, 1)");
         self.c2 = c2;
         self
     }
 
     /// Override the initial trial step. Panics if not strictly positive.
-    pub fn alpha_init(mut self, alpha_init: f64) -> Self {
-        assert!(alpha_init > 0.0, "alpha_init must be > 0");
+    pub fn alpha_init(mut self, alpha_init: F) -> Self {
+        assert!(alpha_init > F::zero(), "alpha_init must be > 0");
         self.alpha_init = alpha_init;
         self
     }
 
     /// Override the maximum trial step. Panics if not strictly positive.
-    pub fn alpha_max(mut self, alpha_max: f64) -> Self {
-        assert!(alpha_max > 0.0, "alpha_max must be > 0");
+    pub fn alpha_max(mut self, alpha_max: F) -> Self {
+        assert!(alpha_max > F::zero(), "alpha_max must be > 0");
         self.alpha_max = alpha_max;
         self
     }
@@ -86,10 +86,11 @@ impl Wolfe {
     }
 }
 
-impl<P, V> LineSearch<P, V> for Wolfe
+impl<P, V, F> LineSearch<P, V, F> for Wolfe<F>
 where
-    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
-    V: ScaledAdd<f64> + Dot + Clone,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    V: ScaledAdd<F> + Dot<F> + Clone,
 {
     type Error = P::Error;
 
@@ -97,21 +98,22 @@ where
         &mut self,
         problem: &mut Problem<P>,
         param: &V,
-        cost: f64,
+        cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<f64, Self::Error> {
+    ) -> Result<F, Self::Error> {
         let phi0 = cost;
         let phi0_prime = gradient.dot(direction);
 
         // If `direction` is not a descent direction (or `phi0_prime` is
         // NaN), bail with α = 0 rather than looping forever. Written
         // positively so NaN routes here too — `NaN < 0.0` is false.
-        if phi0_prime >= 0.0 || phi0_prime.is_nan() {
-            return Ok(0.0);
+        if phi0_prime >= F::zero() || phi0_prime.is_nan() {
+            return Ok(F::zero());
         }
 
-        let mut alpha_prev = 0.0;
+        let two = F::from_f64(2.0).unwrap();
+        let mut alpha_prev = F::zero();
         let mut phi_prev = phi0;
         let mut alpha = self.alpha_init.min(self.alpha_max);
 
@@ -139,7 +141,7 @@ where
             // Slope flipped sign → minimum is in (alpha, alpha_prev). Note
             // the swapped argument order so `alpha_lo < alpha_hi` is *not*
             // assumed inside zoom (matches N&W).
-            if phi_prime >= 0.0 {
+            if phi_prime >= F::zero() {
                 return self.zoom(
                     problem, param, direction, phi0, phi0_prime, alpha, phi, alpha_prev,
                 );
@@ -149,7 +151,7 @@ where
             phi_prev = phi;
             // Expansion: double, capped at alpha_max. Once we're at the
             // cap, the next iteration's φ check will end up in zoom anyway.
-            let next_alpha = (alpha * 2.0).min(self.alpha_max);
+            let next_alpha = (alpha * two).min(self.alpha_max);
             if next_alpha == alpha {
                 // Cannot expand further. Best we can do is return current
                 // α — Armijo is satisfied here even if curvature isn't.
@@ -166,7 +168,7 @@ where
     }
 }
 
-impl Wolfe {
+impl<F: Scalar> Wolfe<F> {
     /// Zoom on bracket `(alpha_lo, alpha_hi)` with `φ(alpha_lo) = phi_lo`.
     /// `alpha_hi` may be either side of `alpha_lo`; the algorithm only
     /// requires that the bracket contains a Wolfe-satisfying step.
@@ -176,20 +178,21 @@ impl Wolfe {
         problem: &mut Problem<P>,
         param: &V,
         direction: &V,
-        phi0: f64,
-        phi0_prime: f64,
-        mut alpha_lo: f64,
-        mut phi_lo: f64,
-        mut alpha_hi: f64,
-    ) -> Result<f64, P::Error>
+        phi0: F,
+        phi0_prime: F,
+        mut alpha_lo: F,
+        mut phi_lo: F,
+        mut alpha_hi: F,
+    ) -> Result<F, P::Error>
     where
-        P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
-        V: ScaledAdd<f64> + Dot + Clone,
+        P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+        V: ScaledAdd<F> + Dot<F> + Clone,
     {
+        let half = F::from_f64(0.5).unwrap();
         for _ in 0..self.max_iter {
             // Bisection. Cubic-safeguarded interpolation would converge
             // faster but is brittle; bisection always halves the bracket.
-            let alpha_j = 0.5 * (alpha_lo + alpha_hi);
+            let alpha_j = half * (alpha_lo + alpha_hi);
 
             let mut trial = param.clone();
             trial.scaled_add(alpha_j, direction);
@@ -205,7 +208,7 @@ impl Wolfe {
                     return Ok(alpha_j);
                 }
 
-                if phi_j_prime * (alpha_hi - alpha_lo) >= 0.0 {
+                if phi_j_prime * (alpha_hi - alpha_lo) >= F::zero() {
                     alpha_hi = alpha_lo;
                 }
                 alpha_lo = alpha_j;
@@ -213,7 +216,7 @@ impl Wolfe {
             }
 
             // Bracket collapsed — return the best α we have.
-            if (alpha_hi - alpha_lo).abs() <= f64::EPSILON * alpha_hi.abs().max(1.0) {
+            if (alpha_hi - alpha_lo).abs() <= F::epsilon() * alpha_hi.abs().max(F::one()) {
                 break;
             }
         }
