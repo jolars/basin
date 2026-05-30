@@ -184,9 +184,13 @@ pub trait LinearSolveLstsq<V> {
 /// # Backends
 ///
 /// Same coverage as [`AddDiagonalInPlace`].
-pub trait MaxDiagonal {
-    /// Compute the maximum diagonal entry as `f64`.
-    fn max_diagonal(&self) -> f64;
+///
+/// The `F` parameter is the scalar; it defaults to `f64`, which is the only
+/// scalar every backend currently implements. Future f32 / extended-precision
+/// impls would specify it explicitly.
+pub trait MaxDiagonal<F = f64> {
+    /// Compute the maximum diagonal entry as `F`.
+    fn max_diagonal(&self) -> F;
 }
 
 /// Extract the diagonal `diag(self) ∈ R^n` of a square matrix into a
@@ -235,9 +239,12 @@ pub trait MatDiagonal<V> {
 /// dense tier, and for `nalgebra_sparse::CscMatrix<f64>` and
 /// `faer::sparse::SparseColMat<usize, f64>` at the sparse tier — same
 /// coverage as [`GramMatrix`] / [`LinearSolveSpd`].
-pub trait AddDiagonalInPlace {
+///
+/// The `F` parameter is the scalar; it defaults to `f64`, matching the
+/// scalar that every current backend impl pins.
+pub trait AddDiagonalInPlace<F = f64> {
     /// Add `scalar` to every diagonal entry of `self` in place.
-    fn add_diagonal_in_place(&mut self, scalar: f64);
+    fn add_diagonal_in_place(&mut self, scalar: F);
 }
 
 /// In-place diagonal augmentation `A ← A + diag(d)` for a vector `d`.
@@ -350,13 +357,12 @@ pub trait MatrixFromDiagonal<V> {
 /// difference `Jacobian` / `Hessian` over them is a compile-time error
 /// (tenet 5 in `AGENTS.md`), mirroring the analytic
 /// [`Jacobian`](crate::core::problem::Jacobian) backend coverage.
-pub trait DenseMatrixFromFn: Sized {
+pub trait DenseMatrixFromFn<F = f64>: Sized {
     /// The dense matrix type paired with this vector backend.
     type Matrix;
 
     /// Build a `rows × cols` matrix with entry `(i, j) = f(i, j)`.
-    fn dense_from_fn<F: FnMut(usize, usize) -> f64>(rows: usize, cols: usize, f: F)
-    -> Self::Matrix;
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, f: G) -> Self::Matrix;
 }
 
 /// Symmetric (self-adjoint) eigendecomposition `A = U diag(λ) Uᵀ`. The
@@ -456,9 +462,9 @@ impl core::error::Error for SymmetricEigenError {}
 /// *not* implement this — a rank-one update of a sparse matrix would
 /// densify the pattern, and CMA-ES's covariance is dense by construction
 /// anyway.
-pub trait RankOneUpdate<V> {
+pub trait RankOneUpdate<V, F = f64> {
     /// Compute `self ← self + α · v · vᵀ` in place.
-    fn rank_one_update(&mut self, alpha: f64, v: &V);
+    fn rank_one_update(&mut self, alpha: F, v: &V);
 }
 
 /// In-place *general* rank-one update `self ← self + α · u · vᵀ` with two
@@ -488,9 +494,9 @@ pub trait RankOneUpdate<V> {
 /// `V = Vec<f64>`) via a direct double loop — so BFGS runs on `Vec<f64>`,
 /// nalgebra, and faer. Sparse backends do *not* implement this, matching
 /// [`RankOneUpdate`].
-pub trait GeneralRankOneUpdate<V> {
+pub trait GeneralRankOneUpdate<V, F = f64> {
     /// Compute `self ← self + α · u · vᵀ` in place.
-    fn general_rank_one_update(&mut self, alpha: f64, u: &V, v: &V);
+    fn general_rank_one_update(&mut self, alpha: F, u: &V, v: &V);
 }
 
 /// Reasons a linear-solve trait call can fail. Variants are
