@@ -8,13 +8,13 @@
 //! bound on the minimum capability they need (tenet 3 in `AGENTS.md`).
 //!
 //! `State::Float` is generic across the trait. The vector-tier-only states
-//! ([`BasicState`], [`BasicSimplexState`], [`BasicPopulationState`]) take an
-//! `F: Scalar` parameter that defaults to `f64`, so existing call sites
-//! resolve unchanged while opening the door to `f32`. [`QuasiNewtonState`]
-//! and [`LbfgsState`] stay locked to `f64` for now — they couple to the
-//! linalg tier (dense / L-BFGS-B working matrices), which is still f64-only.
-//! Every shipped termination criterion that reads costs also still assumes
-//! `f64`. See the *Provisional choices* section of `AGENTS.md`.
+//! ([`BasicState`], [`BasicSimplexState`], [`BasicPopulationState`]) and the
+//! linalg-tier-using [`QuasiNewtonState`] take an `F: Scalar` parameter that
+//! defaults to `f64`, so existing call sites resolve unchanged while opening
+//! the door to `f32`. [`LbfgsState`] stays locked to `f64` for now — its
+//! L-BFGS-B working matrices haven't been generified yet. Every shipped
+//! termination criterion that reads costs also still assumes `f64`. See the
+//! *Provisional choices* section of `AGENTS.md`.
 
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
@@ -519,9 +519,12 @@ impl<V, F: Scalar> SimplexState for BasicSimplexState<V, F> {
 /// `H₀ ← (sᵀy / yᵀy)·I` rescaling after the first accepted step (Nocedal
 /// & Wright (6.20)). This makes the unit step well-scaled on poorly
 /// conditioned problems where plain identity initialization stalls.
-pub struct QuasiNewtonState<V, M> {
+///
+/// The scalar `F` defaults to `f64` so existing `QuasiNewtonState<V, M>`
+/// call sites resolve unchanged.
+pub struct QuasiNewtonState<V, M, F = f64> {
     pub(crate) param: V,
-    pub(crate) cost: Option<f64>,
+    pub(crate) cost: Option<F>,
     pub(crate) gradient: Option<V>,
     pub(crate) inverse_hessian: M,
     pub(crate) initial_scaling_done: bool,
@@ -530,7 +533,7 @@ pub struct QuasiNewtonState<V, M> {
     pub(crate) gradient_evals: u64,
 }
 
-impl<V: VectorLen, M: MatrixIdentity> QuasiNewtonState<V, M> {
+impl<V: VectorLen, M: MatrixIdentity, F> QuasiNewtonState<V, M, F> {
     /// Build a state at the given starting point with the inverse-Hessian
     /// approximation initialised to the identity.
     ///
@@ -555,9 +558,9 @@ impl<V: VectorLen, M: MatrixIdentity> QuasiNewtonState<V, M> {
     }
 }
 
-impl<V, M> State for QuasiNewtonState<V, M> {
+impl<V, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
     type Param = V;
-    type Float = f64;
+    type Float = F;
 
     fn iter(&self) -> u64 {
         self.iter
@@ -583,13 +586,13 @@ impl<V, M> State for QuasiNewtonState<V, M> {
     /// [`Solver::init`](crate::core::solver::Solver::init) has populated
     /// the cached cost. See [`BasicState::cost`] for the full safety
     /// argument — same contract.
-    fn cost(&self) -> f64 {
+    fn cost(&self) -> F {
         self.cost
             .expect("QuasiNewtonState::cost read before Solver::init populated it")
     }
 }
 
-impl<V, M> GradientState for QuasiNewtonState<V, M> {
+impl<V, M, F: Scalar> GradientState for QuasiNewtonState<V, M, F> {
     fn gradient(&self) -> Option<&V> {
         self.gradient.as_ref()
     }
@@ -599,7 +602,7 @@ impl<V, M> GradientState for QuasiNewtonState<V, M> {
     }
 }
 
-impl<V, M> CountsMirror for QuasiNewtonState<V, M> {
+impl<V, M, F: Scalar> CountsMirror for QuasiNewtonState<V, M, F> {
     fn mirror(&mut self, delta: &EvalCounts) {
         self.cost_evals = delta.cost_evals + delta.residual_evals;
         self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;

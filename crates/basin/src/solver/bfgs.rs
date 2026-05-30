@@ -1,8 +1,8 @@
 #[cfg(feature = "nalgebra")]
 use crate::core::inner::WarmStart;
 use crate::core::math::{
-    Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity, NegInPlace, NormSquared, ScaleInPlace,
-    ScaledAdd, VectorLen,
+    Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity, NegInPlace, NormSquared, Scalar,
+    ScaleInPlace, ScaledAdd, VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -79,9 +79,9 @@ use crate::line_search::{LineSearch, Wolfe};
 /// .unwrap();
 /// assert!(result.cost() < 1e-8);
 /// ```
-pub struct Bfgs<S = Wolfe> {
+pub struct Bfgs<S = Wolfe, F = f64> {
     line_search: S,
-    epsilon: f64,
+    epsilon: F,
 }
 
 impl Default for Bfgs<Wolfe> {
@@ -101,39 +101,40 @@ impl Bfgs<Wolfe> {
     }
 }
 
-impl<S> Bfgs<S> {
+impl<S, F: Scalar> Bfgs<S, F> {
     /// BFGS with an explicit line-search strategy.
     pub fn with_line_search(line_search: S) -> Self {
         Self {
             line_search,
-            epsilon: 1e-10,
+            epsilon: F::from_f64(1e-10).unwrap(),
         }
     }
 
     /// Relative threshold for the curvature condition `yᵀs > ε · |y| · |s|`.
     /// Iterations where this fails skip the H update (rare with strong
     /// Wolfe). Default `1e-10`.
-    pub fn epsilon(mut self, epsilon: f64) -> Self {
-        assert!(epsilon >= 0.0, "epsilon must be ≥ 0");
+    pub fn epsilon(mut self, epsilon: F) -> Self {
+        assert!(epsilon >= F::zero(), "epsilon must be ≥ 0");
         self.epsilon = epsilon;
         self
     }
 }
 
-impl<P, S, V, M> Solver<P, QuasiNewtonState<V, M>> for Bfgs<S>
+impl<P, S, V, M, F> Solver<P, QuasiNewtonState<V, M, F>> for Bfgs<S, F>
 where
-    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V>,
-    S: LineSearch<P, V, Error = P::Error>,
-    V: Clone + Dot + NormSquared + ScaledAdd<f64> + ScaleInPlace + NegInPlace + VectorLen,
-    M: MatVec<V> + MatrixIdentity + ScaleInPlace + GeneralRankOneUpdate<V>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    S: LineSearch<P, V, F, Error = P::Error>,
+    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace + VectorLen,
+    M: MatVec<V> + MatrixIdentity + ScaleInPlace<F> + GeneralRankOneUpdate<V, F>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: QuasiNewtonState<V, M>,
-    ) -> Result<QuasiNewtonState<V, M>, Self::Error> {
+        mut state: QuasiNewtonState<V, M, F>,
+    ) -> Result<QuasiNewtonState<V, M, F>, Self::Error> {
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
@@ -143,8 +144,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: QuasiNewtonState<V, M>,
-    ) -> Result<(QuasiNewtonState<V, M>, Option<TerminationReason>), Self::Error> {
+        mut state: QuasiNewtonState<V, M, F>,
+    ) -> Result<(QuasiNewtonState<V, M, F>, Option<TerminationReason>), Self::Error> {
         let g = state
             .gradient
             .take()
@@ -167,7 +168,7 @@ where
         // stays consistent and report it as a mid-iter termination so the
         // executor halts immediately. NaN routes here too
         // (`NaN > 0.0` is false).
-        if !(alpha.is_finite() && alpha > 0.0) {
+        if !(alpha.is_finite() && alpha > F::zero()) {
             state.gradient = Some(g);
             state.cost = Some(cost_old);
             return Ok((state, Some(TerminationReason::SolverConverged)));
@@ -176,7 +177,7 @@ where
         // s = α d, x ← x + s.
         let mut s = direction;
         s.scale_in_place(alpha);
-        state.param.scaled_add(1.0, &s);
+        state.param.scaled_add(F::one(), &s);
 
         // Fused cost+grad at the new iterate — one fused call gives both
         // values consumed below (BFGS update reads g_new; state caches
@@ -185,7 +186,7 @@ where
 
         // y = g_new − g.
         let mut y = g_new.clone();
-        y.scaled_add(-1.0, &g);
+        y.scaled_add(-F::one(), &g);
         let sy = s.dot(&y);
         let s_norm = s.norm_squared().sqrt();
         let y_norm = y.norm_squared().sqrt();
@@ -197,7 +198,7 @@ where
             // large or small on poorly scaled problems.
             if !state.initial_scaling_done {
                 let yy = y.dot(&y);
-                if yy > 0.0 {
+                if yy > F::zero() {
                     let scale = sy / yy;
                     let n = state.param.vec_len();
                     let mut h0 = M::identity(n);
@@ -207,10 +208,10 @@ where
                 state.initial_scaling_done = true;
             }
 
-            let rho = 1.0 / sy;
+            let rho = F::one() / sy;
             let hy = state.inverse_hessian.matvec(&y);
             let yhy = y.dot(&hy);
-            let coef = rho * (1.0 + rho * yhy);
+            let coef = rho * (F::one() + rho * yhy);
 
             // H ← H + coef · s sᵀ − ρ · (s (Hy)ᵀ + (Hy) sᵀ).
             // Three rank-1 updates, all in place.
