@@ -43,9 +43,11 @@ ndarray = ["dep:ndarray"]
 # exists for nalgebra (0.34 has no `blas` feature; its BLAS path lives in
 # the separate `nalgebra-lapack` crate) or for faer (pure-Rust by design).
 ndarray-blas = ["ndarray", "ndarray/blas"]
-# `generativity` is a transitive dep of faer, surfaced here so it only enters
-# the graph when `faer` is enabled.
-faer = ["dep:faer", "dep:generativity"]
+# `generativity` and `faer-traits` are transitive deps of faer, surfaced
+# here so they only enter the graph when `faer` is enabled. `faer-traits`
+# is the home of `ComplexField` / `RealField` — bounds the faer-backend
+# linalg impls need to remain F-generic.
+faer = ["dep:faer", "dep:generativity", "dep:faer-traits"]
 # Opt-in parallel evaluation (currently faer's rayon-backed linalg). Off by
 # default because basin is typically embedded inside a caller that already
 # manages parallelism (multi-start sweeps, R/Python schedulers, outer rayon
@@ -80,6 +82,10 @@ faer = { version = "0.24", optional = true, default-features = false, features =
 # Transitive dep of faer, surfaced as an optional dep so it only enters the
 # graph behind the `faer` feature. basin doesn't use this crate directly.
 generativity = { version = "1", optional = true }
+# Transitive dep of faer, surfaced as an optional dep so the F-generic faer
+# linalg impls can name `ComplexField` / `RealField` bounds. Major pinned to
+# match faer 0.24 so the dep tree stays single-version.
+faer-traits = { version = "0.24", optional = true, default-features = false }
 # Re-exports `std::time::Instant` on native and a wasm-compatible shim on
 # `wasm32-unknown-unknown`, so `MaxTime` works on both without feature gating.
 # Tiny crate, MSRV 1.60, no transitive deps on native.

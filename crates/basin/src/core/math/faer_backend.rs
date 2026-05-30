@@ -256,8 +256,11 @@ impl BoxAffineScaling for Col<f64> {
 // faer 0.24 has no `*` operator on Mat/Col — go through `matmul` directly.
 // ----------------------------------------------------------------------
 
-impl MatVec<Col<f64>> for Mat<f64> {
-    fn matvec(&self, x: &Col<f64>) -> Col<f64> {
+impl<F> MatVec<Col<F>> for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn matvec(&self, x: &Col<F>) -> Col<F> {
         assert_eq!(
             self.ncols(),
             x.nrows(),
@@ -265,21 +268,24 @@ impl MatVec<Col<f64>> for Mat<f64> {
             self.ncols(),
             x.nrows()
         );
-        let mut y = Col::<f64>::zeros(self.nrows());
+        let mut y = Col::<F>::zeros(self.nrows());
         matmul(
             y.as_mut(),
             Accum::Replace,
             self.as_ref(),
             x.as_ref(),
-            1.0,
+            F::one(),
             Par::Seq,
         );
         y
     }
 }
 
-impl MatTransposeVec<Col<f64>> for Mat<f64> {
-    fn mat_transpose_vec(&self, x: &Col<f64>) -> Col<f64> {
+impl<F> MatTransposeVec<Col<F>> for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn mat_transpose_vec(&self, x: &Col<F>) -> Col<F> {
         assert_eq!(
             self.nrows(),
             x.nrows(),
@@ -287,20 +293,23 @@ impl MatTransposeVec<Col<f64>> for Mat<f64> {
             self.nrows(),
             x.nrows()
         );
-        let mut y = Col::<f64>::zeros(self.ncols());
+        let mut y = Col::<F>::zeros(self.ncols());
         matmul(
             y.as_mut(),
             Accum::Replace,
             self.transpose(),
             x.as_ref(),
-            1.0,
+            F::one(),
             Par::Seq,
         );
         y
     }
 }
 
-impl GramMatrix for Mat<f64> {
+impl<F> GramMatrix for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
     fn gram(&self) -> Self {
         let n = self.ncols();
         let mut g = Self::zeros(n, n);
@@ -309,15 +318,15 @@ impl GramMatrix for Mat<f64> {
             Accum::Replace,
             self.transpose(),
             self.as_ref(),
-            1.0,
+            F::one(),
             Par::Seq,
         );
         g
     }
 }
 
-impl MaxDiagonal for Mat<f64> {
-    fn max_diagonal(&self) -> f64 {
+impl<F: Scalar> MaxDiagonal<F> for Mat<F> {
+    fn max_diagonal(&self) -> F {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -327,12 +336,12 @@ impl MaxDiagonal for Mat<f64> {
         );
         (0..self.nrows())
             .map(|i| self[(i, i)])
-            .fold(f64::NEG_INFINITY, f64::max)
+            .fold(F::neg_infinity(), F::max)
     }
 }
 
-impl MatDiagonal<Col<f64>> for Mat<f64> {
-    fn diagonal(&self) -> Col<f64> {
+impl<F: Scalar> MatDiagonal<Col<F>> for Mat<F> {
+    fn diagonal(&self) -> Col<F> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -344,8 +353,8 @@ impl MatDiagonal<Col<f64>> for Mat<f64> {
     }
 }
 
-impl AddDiagonalInPlace for Mat<f64> {
-    fn add_diagonal_in_place(&mut self, scalar: f64) {
+impl<F: Scalar> AddDiagonalInPlace<F> for Mat<F> {
+    fn add_diagonal_in_place(&mut self, scalar: F) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -354,13 +363,14 @@ impl AddDiagonalInPlace for Mat<f64> {
             self.ncols()
         );
         for i in 0..self.nrows() {
-            self[(i, i)] += scalar;
+            let entry = &mut self[(i, i)];
+            *entry = *entry + scalar;
         }
     }
 }
 
-impl AddDiagonalVectorInPlace<Col<f64>> for Mat<f64> {
-    fn add_diagonal_vector_in_place(&mut self, diag: &Col<f64>) {
+impl<F: Scalar> AddDiagonalVectorInPlace<Col<F>> for Mat<F> {
+    fn add_diagonal_vector_in_place(&mut self, diag: &Col<F>) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -377,39 +387,46 @@ impl AddDiagonalVectorInPlace<Col<f64>> for Mat<f64> {
             diag.nrows()
         );
         for i in 0..self.nrows() {
-            self[(i, i)] += diag[i];
+            let entry = &mut self[(i, i)];
+            *entry = *entry + diag[i];
         }
     }
 }
 
-impl ScaleInPlace for Mat<f64> {
-    fn scale_in_place(&mut self, scalar: f64) {
-        faer::zip!(self.as_mut()).for_each(|faer::unzip!(x)| *x *= scalar);
+impl<F: Scalar> ScaleInPlace<F> for Mat<F> {
+    fn scale_in_place(&mut self, scalar: F) {
+        faer::zip!(self.as_mut()).for_each(|faer::unzip!(x)| *x = *x * scalar);
     }
 }
 
-impl MatrixIdentity for Mat<f64> {
+impl<F> MatrixIdentity for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
     fn identity(n: usize) -> Self {
         Self::identity(n, n)
     }
 }
 
-impl MatrixFromDiagonal<Col<f64>> for Mat<f64> {
-    fn from_diagonal(diag: &Col<f64>) -> Self {
+impl<F: Scalar> MatrixFromDiagonal<Col<F>> for Mat<F> {
+    fn from_diagonal(diag: &Col<F>) -> Self {
         let n = diag.nrows();
-        Self::from_fn(n, n, |i, j| if i == j { diag[i] } else { 0.0 })
+        Self::from_fn(n, n, |i, j| if i == j { diag[i] } else { F::zero() })
     }
 }
 
-impl DenseMatrixFromFn for Col<f64> {
-    type Matrix = Mat<f64>;
-    fn dense_from_fn<F: FnMut(usize, usize) -> f64>(rows: usize, cols: usize, f: F) -> Mat<f64> {
+impl<F: Scalar> DenseMatrixFromFn<F> for Col<F> {
+    type Matrix = Mat<F>;
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, f: G) -> Mat<F> {
         Mat::from_fn(rows, cols, f)
     }
 }
 
-impl SymmetricEigen<Col<f64>> for Mat<f64> {
-    fn try_eigh(&self) -> Result<(Self, Col<f64>), SymmetricEigenError> {
+impl<F> SymmetricEigen<Col<F>> for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField<Real = F>,
+{
+    fn try_eigh(&self) -> Result<(Self, Col<F>), SymmetricEigenError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -434,13 +451,16 @@ impl SymmetricEigen<Col<f64>> for Mat<f64> {
                 u_mat[(i, j)] = u_ref[(i, j)];
             }
         }
-        let s_col = Col::<f64>::from_fn(n, |i| s_ref[i]);
+        let s_col = Col::<F>::from_fn(n, |i| s_ref[i]);
         Ok((u_mat, s_col))
     }
 }
 
-impl RankOneUpdate<Col<f64>> for Mat<f64> {
-    fn rank_one_update(&mut self, alpha: f64, v: &Col<f64>) {
+impl<F> RankOneUpdate<Col<F>, F> for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn rank_one_update(&mut self, alpha: F, v: &Col<F>) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -469,8 +489,11 @@ impl RankOneUpdate<Col<f64>> for Mat<f64> {
     }
 }
 
-impl GeneralRankOneUpdate<Col<f64>> for Mat<f64> {
-    fn general_rank_one_update(&mut self, alpha: f64, u: &Col<f64>, v: &Col<f64>) {
+impl<F> GeneralRankOneUpdate<Col<F>, F> for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn general_rank_one_update(&mut self, alpha: F, u: &Col<F>, v: &Col<F>) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -507,8 +530,11 @@ impl GeneralRankOneUpdate<Col<f64>> for Mat<f64> {
     }
 }
 
-impl LinearSolveSpd<Col<f64>> for Mat<f64> {
-    fn solve_spd(&self, b: &Col<f64>) -> Result<Col<f64>, LinearSolveError> {
+impl<F> LinearSolveSpd<Col<F>> for Mat<F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    fn solve_spd(&self, b: &Col<F>) -> Result<Col<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
