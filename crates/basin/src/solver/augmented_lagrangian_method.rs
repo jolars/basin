@@ -4,7 +4,9 @@ use crate::core::augmented_lagrangian::AugmentedLagrangian;
 use crate::core::constraint::LinearEqualityConstraints;
 use crate::core::executor::run_loop;
 use crate::core::inner::WarmStart;
-use crate::core::math::{Dot, MatTransposeVec, MatVec, NormSquared, ScaleInPlace, ScaledAdd};
+use crate::core::math::{
+    Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicState, CountsMirror, GradientState, State};
@@ -114,23 +116,23 @@ use crate::core::termination::{
 /// `LinearEqualityConstraints`, and tolerates infeasible starts. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
-pub struct AugmentedLagrangianMethod<So, V> {
+pub struct AugmentedLagrangianMethod<So, V, F = f64> {
     inner_solver: So,
     inner_max_iter: u64,
-    inner_grad_tol: f64,
-    rho0: f64,
-    rho: f64,
-    rho_increase: f64,
-    feasibility_decrease: f64,
-    tol: f64,
+    inner_grad_tol: F,
+    rho0: F,
+    rho: F,
+    rho_increase: F,
+    feasibility_decrease: F,
+    tol: F,
     /// Multiplier estimate `λ ∈ ℝᵐ`; populated in [`init`](Solver::init) with
     /// a zero vector shaped like `b`, then carried across outer iterations.
     lambda: Option<V>,
     /// `‖c(x)‖` of the most recent inner solve; `+∞` until the first solve so
     /// [`terminate`](Solver::terminate) cannot fire at iter 0.
-    c_norm: f64,
+    c_norm: F,
     /// `‖c(x)‖` of the previous outer iteration, for the `ρ`-increase test.
-    c_norm_prev: f64,
+    c_norm_prev: F,
 }
 
 impl<So, V> AugmentedLagrangianMethod<So, V> {
@@ -155,14 +157,16 @@ impl<So, V> AugmentedLagrangianMethod<So, V> {
             c_norm_prev: f64::INFINITY,
         }
     }
+}
 
+impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// Initial penalty parameter `ρ` (default `10.0`).
     ///
     /// # Panics
     ///
     /// Panics unless `rho0 > 0` — a non-positive penalty is not a penalty.
-    pub fn rho0(mut self, rho0: f64) -> Self {
-        assert!(rho0 > 0.0, "rho0 must be > 0");
+    pub fn rho0(mut self, rho0: F) -> Self {
+        assert!(rho0 > F::zero(), "rho0 must be > 0");
         self.rho0 = rho0;
         self
     }
@@ -175,8 +179,8 @@ impl<So, V> AugmentedLagrangianMethod<So, V> {
     /// Panics unless `rho_increase > 1` — otherwise the penalty would not
     /// grow and a stalled iterate could never be pushed onto the feasible
     /// set.
-    pub fn rho_increase(mut self, rho_increase: f64) -> Self {
-        assert!(rho_increase > 1.0, "rho_increase must be > 1");
+    pub fn rho_increase(mut self, rho_increase: F) -> Self {
+        assert!(rho_increase > F::one(), "rho_increase must be > 1");
         self.rho_increase = rho_increase;
         self
     }
@@ -188,9 +192,9 @@ impl<So, V> AugmentedLagrangianMethod<So, V> {
     /// # Panics
     ///
     /// Panics unless `0 < feasibility_decrease < 1`.
-    pub fn feasibility_decrease(mut self, feasibility_decrease: f64) -> Self {
+    pub fn feasibility_decrease(mut self, feasibility_decrease: F) -> Self {
         assert!(
-            feasibility_decrease > 0.0 && feasibility_decrease < 1.0,
+            feasibility_decrease > F::zero() && feasibility_decrease < F::one(),
             "feasibility_decrease must be in (0, 1)"
         );
         self.feasibility_decrease = feasibility_decrease;
@@ -203,8 +207,8 @@ impl<So, V> AugmentedLagrangianMethod<So, V> {
     /// # Panics
     ///
     /// Panics unless `tol > 0`.
-    pub fn tol(mut self, tol: f64) -> Self {
-        assert!(tol > 0.0, "tol must be > 0");
+    pub fn tol(mut self, tol: F) -> Self {
+        assert!(tol > F::zero(), "tol must be > 0");
         self.tol = tol;
         self
     }
@@ -233,41 +237,46 @@ impl<So, V> AugmentedLagrangianMethod<So, V> {
     /// # Panics
     ///
     /// Panics unless `inner_grad_tol ≥ 0`.
-    pub fn inner_grad_tol(mut self, inner_grad_tol: f64) -> Self {
-        assert!(inner_grad_tol >= 0.0, "inner_grad_tol must be ≥ 0");
+    pub fn inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
+        assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
         self.inner_grad_tol = inner_grad_tol;
         self
     }
 }
 
-impl<P, V, M, So> Solver<P, BasicState<V>> for AugmentedLagrangianMethod<So, V>
+impl<P, V, M, So, F> Solver<P, BasicState<V, F>> for AugmentedLagrangianMethod<So, V, F>
 where
-    P: CostFunction<Param = V, Output = f64>
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + LinearEqualityConstraints<Param = V, Matrix = M>,
     M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<f64> + Dot + NormSquared + ScaleInPlace + Clone,
+    V: ScaledAdd<F> + Dot<F> + NormSquared<F> + ScaleInPlace<F> + Clone,
     So: WarmStart<V>
-        + for<'a> Solver<AugmentedLagrangian<'a, P, V>, So::State, Error = <P as CostFunction>::Error>,
-    So::State: GradientState<Param = V> + CountsMirror,
+        + for<'a> Solver<
+            AugmentedLagrangian<'a, P, V, F>,
+            So::State,
+            Error = <P as CostFunction>::Error,
+        >,
+    So::State: GradientState<Param = V, Float = F> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<BasicState<V>, Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<BasicState<V, F>, Self::Error> {
         self.rho = self.rho0;
-        self.c_norm = f64::INFINITY;
-        self.c_norm_prev = f64::INFINITY;
+        self.c_norm = F::infinity();
+        self.c_norm_prev = F::infinity();
 
         // λ ← 0 ∈ ℝᵐ. Clone `b` for the right shape (m entries), then zero it
         // — backend-generic with no "zeros_like" in the math layer. No
         // feasibility precondition: the augmented Lagrangian tolerates an
         // infeasible x₀.
         let mut lambda = problem.inner().b().clone();
-        lambda.scale_in_place(0.0);
+        lambda.scale_in_place(F::zero());
         self.lambda = Some(lambda);
 
         // Seed the *true* objective so framework criteria and the public
@@ -281,8 +290,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
         // *separate* inner state seeded (warm-started) at the current
         // iterate. Fresh criteria each call satisfies the statelessness
@@ -324,7 +333,7 @@ where
 
         // Constraint residual c = A x − b at the new iterate.
         let mut c = problem.inner().a().matvec(&state.param);
-        c.scaled_add(-1.0, problem.inner().b());
+        c.scaled_add(-F::one(), problem.inner().b());
         self.c_norm_prev = self.c_norm;
         self.c_norm = c.norm_squared().sqrt();
 
@@ -337,13 +346,13 @@ where
             lambda.scaled_add(self.rho, &c);
         } else {
             // Feasibility stalled: tighten the penalty, keep λ.
-            self.rho *= self.rho_increase;
+            self.rho = self.rho * self.rho_increase;
         }
 
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicState<V>) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &BasicState<V, F>) -> Option<TerminationReason> {
         // Feasibility bound ‖A x − b‖ from the most recent solve. Optimality
         // is handled by the inner solve driving ‖∇L_ρ‖ down.
         if self.c_norm <= self.tol {

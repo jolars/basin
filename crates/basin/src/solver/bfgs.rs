@@ -239,10 +239,13 @@ where
 /// inner on the nalgebra backend. A `Vec<f64>` / faer `WarmStart` is a
 /// follow-up if a `Vec`-backed barrier inner is wanted.
 #[cfg(feature = "nalgebra")]
-impl<S> WarmStart<nalgebra::DVector<f64>> for Bfgs<S> {
-    type State = QuasiNewtonState<nalgebra::DVector<f64>, nalgebra::DMatrix<f64>>;
-    fn seed(&self, x: &nalgebra::DVector<f64>) -> Self::State {
-        QuasiNewtonState::<nalgebra::DVector<f64>, nalgebra::DMatrix<f64>>::new(x.clone())
+impl<S, F> WarmStart<nalgebra::DVector<F>> for Bfgs<S, F>
+where
+    F: Scalar + nalgebra::Scalar + num_traits::Zero,
+{
+    type State = QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
+    fn seed(&self, x: &nalgebra::DVector<F>) -> Self::State {
+        QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(x.clone())
     }
 }
 

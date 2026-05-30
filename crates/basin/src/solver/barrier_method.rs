@@ -6,7 +6,7 @@ use crate::core::constraint::LinearInequalityConstraints;
 use crate::core::executor::run_loop;
 use crate::core::inner::WarmStart;
 use crate::core::math::{
-    MatTransposeVec, MatVec, NegInPlace, NormSquared, ScaledAdd, VectorIndex, VectorLen,
+    MatTransposeVec, MatVec, NegInPlace, NormSquared, Scalar, ScaledAdd, VectorIndex, VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -134,17 +134,17 @@ use crate::core::termination::{
 /// `Backtracking`) to handle `LinearInequalityConstraints`. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
-pub struct BarrierMethod<So> {
+pub struct BarrierMethod<So, F = f64> {
     inner_solver: So,
     inner_max_iter: u64,
-    inner_grad_tol: f64,
-    mu0: f64,
-    mu: f64,
-    reduction: f64,
-    tol: f64,
+    inner_grad_tol: F,
+    mu0: F,
+    mu: F,
+    reduction: F,
+    tol: F,
     /// `m · μ` of the most recent inner solve; `+∞` until the first solve
     /// so [`terminate`](Solver::terminate) cannot fire at iter 0.
-    gap: f64,
+    gap: F,
     infeasible: bool,
 }
 
@@ -172,14 +172,16 @@ impl<So> BarrierMethod<So> {
             infeasible: false,
         }
     }
+}
 
+impl<So, F: Scalar> BarrierMethod<So, F> {
     /// Initial barrier parameter `μ` (default `1.0`).
     ///
     /// # Panics
     ///
     /// Panics unless `mu0 > 0` — a non-positive `μ` is not a barrier.
-    pub fn mu0(mut self, mu0: f64) -> Self {
-        assert!(mu0 > 0.0, "mu0 must be > 0");
+    pub fn mu0(mut self, mu0: F) -> Self {
+        assert!(mu0 > F::zero(), "mu0 must be > 0");
         self.mu0 = mu0;
         self
     }
@@ -191,8 +193,8 @@ impl<So> BarrierMethod<So> {
     ///
     /// Panics unless `reduction > 1` — otherwise `μ` would not shrink and
     /// the duality gap would never close.
-    pub fn reduction(mut self, reduction: f64) -> Self {
-        assert!(reduction > 1.0, "reduction must be > 1");
+    pub fn reduction(mut self, reduction: F) -> Self {
+        assert!(reduction > F::one(), "reduction must be > 1");
         self.reduction = reduction;
         self
     }
@@ -203,8 +205,8 @@ impl<So> BarrierMethod<So> {
     /// # Panics
     ///
     /// Panics unless `tol > 0`.
-    pub fn tol(mut self, tol: f64) -> Self {
-        assert!(tol > 0.0, "tol must be > 0");
+    pub fn tol(mut self, tol: F) -> Self {
+        assert!(tol > F::zero(), "tol must be > 0");
         self.tol = tol;
         self
     }
@@ -242,39 +244,40 @@ impl<So> BarrierMethod<So> {
     /// # Panics
     ///
     /// Panics unless `inner_grad_tol ≥ 0`.
-    pub fn inner_grad_tol(mut self, inner_grad_tol: f64) -> Self {
-        assert!(inner_grad_tol >= 0.0, "inner_grad_tol must be ≥ 0");
+    pub fn inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
+        assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
         self.inner_grad_tol = inner_grad_tol;
         self
     }
 }
 
-impl<P, V, M, So> Solver<P, BasicState<V>> for BarrierMethod<So>
+impl<P, V, M, So, F> Solver<P, BasicState<V, F>> for BarrierMethod<So, F>
 where
-    P: CostFunction<Param = V, Output = f64>
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + LinearInequalityConstraints<Param = V, Matrix = M>,
     M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<f64> + NegInPlace + VectorIndex + VectorLen + NormSquared + Clone,
+    V: ScaledAdd<F> + NegInPlace + VectorIndex<F> + VectorLen + NormSquared<F> + Clone,
     So: WarmStart<V>
-        + for<'a> Solver<LogBarrier<'a, P>, So::State, Error = <P as CostFunction>::Error>,
-    So::State: GradientState<Param = V> + CountsMirror,
+        + for<'a> Solver<LogBarrier<'a, P, F>, So::State, Error = <P as CostFunction>::Error>,
+    So::State: GradientState<Param = V, Float = F> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<BasicState<V>, Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<BasicState<V, F>, Self::Error> {
         self.mu = self.mu0;
-        self.gap = f64::INFINITY;
+        self.gap = F::infinity();
 
         // Feasibility at x₀: slack s = b − A x₀ must be strictly positive.
         let mut slack = problem.inner().a().matvec(state.param());
         slack.neg_in_place();
-        slack.scaled_add(1.0, problem.inner().b());
-        self.infeasible = (0..slack.vec_len()).any(|i| slack.get_scalar(i) <= 0.0);
+        slack.scaled_add(F::one(), problem.inner().b());
+        self.infeasible = (0..slack.vec_len()).any(|i| slack.get_scalar(i) <= F::zero());
 
         // Seed the *true* objective so framework criteria and the public
         // result read f, not the barrier value.
@@ -287,8 +290,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
         if self.infeasible {
             // Phase 1 deferred: bubble an infeasible start as a failure.
             return Ok((state, Some(TerminationReason::SolverFailed)));
@@ -333,12 +336,12 @@ where
         state.gradient = Some(grad);
 
         // Record the duality gap for this μ, then shrink for the next solve.
-        self.gap = problem.inner().b().vec_len() as f64 * self.mu;
-        self.mu /= self.reduction;
+        self.gap = F::from_usize(problem.inner().b().vec_len()).unwrap() * self.mu;
+        self.mu = self.mu / self.reduction;
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicState<V>) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &BasicState<V, F>) -> Option<TerminationReason> {
         // Log-barrier duality-gap bound m·μ from the most recent solve.
         if self.gap <= self.tol {
             Some(TerminationReason::SolverConverged)

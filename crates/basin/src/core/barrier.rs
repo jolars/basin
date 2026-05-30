@@ -47,7 +47,9 @@
 //! impls (tenet 5).
 
 use crate::core::constraint::LinearInequalityConstraints;
-use crate::core::math::{MatTransposeVec, MatVec, NegInPlace, ScaledAdd, VectorIndex, VectorLen};
+use crate::core::math::{
+    MatTransposeVec, MatVec, NegInPlace, Scalar, ScaledAdd, VectorIndex, VectorLen,
+};
 use crate::core::problem::{CostFunction, Gradient};
 
 /// A [`LinearInequalityConstraints`] problem rewritten as the unconstrained
@@ -59,65 +61,67 @@ use crate::core::problem::{CostFunction, Gradient};
 /// `LogBarrier` per outer iteration as it shrinks `μ`. See the
 /// [module docs](self) for the formulation, the tenet-4 adapter asymmetry,
 /// and the feasibility / backend notes.
-pub struct LogBarrier<'a, P> {
+pub struct LogBarrier<'a, P, F = f64> {
     problem: &'a P,
-    mu: f64,
+    mu: F,
 }
 
-impl<'a, P> LogBarrier<'a, P> {
+impl<'a, P, F: Scalar> LogBarrier<'a, P, F> {
     /// Wrap `problem` with barrier parameter `mu` (`μ > 0`). Smaller `μ`
     /// hews closer to the true constrained objective but makes `φ_μ`
     /// stiffer near the feasible boundary.
-    pub fn new(problem: &'a P, mu: f64) -> Self {
+    pub fn new(problem: &'a P, mu: F) -> Self {
         Self { problem, mu }
     }
 
     /// The barrier parameter `μ` this adapter was built with.
-    pub fn mu(&self) -> f64 {
+    pub fn mu(&self) -> F {
         self.mu
     }
 }
 
-impl<P, V, M> CostFunction for LogBarrier<'_, P>
+impl<P, V, M, F> CostFunction for LogBarrier<'_, P, F>
 where
-    P: CostFunction<Param = V, Output = f64> + LinearInequalityConstraints<Param = V, Matrix = M>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + LinearInequalityConstraints<Param = V, Matrix = M>,
     M: MatVec<V>,
-    V: ScaledAdd<f64> + NegInPlace + VectorIndex + VectorLen,
+    V: ScaledAdd<F> + NegInPlace + VectorIndex<F> + VectorLen,
 {
     type Param = V;
-    type Output = f64;
+    type Output = F;
     // Pass through the wrapped problem's hard-abort error: barrier-internal
     // issues (slack ≤ 0) still use the soft `+∞` reject path, so the only
     // `Err` that can come out of this `cost` is one the user's `cost`
     // returned.
     type Error = <P as CostFunction>::Error;
 
-    fn cost(&self, x: &V) -> Result<f64, Self::Error> {
+    fn cost(&self, x: &V) -> Result<F, Self::Error> {
         // slack s = b − A x.
         let mut s = self.problem.a().matvec(x);
         s.neg_in_place();
-        s.scaled_add(1.0, self.problem.b());
+        s.scaled_add(F::one(), self.problem.b());
 
-        let mut log_sum = 0.0;
+        let mut log_sum = F::zero();
         for i in 0..s.vec_len() {
             let si = s.get_scalar(i);
-            if si <= 0.0 {
+            if si <= F::zero() {
                 // Infeasible: barrier is +∞, so the whole objective is +∞.
-                return Ok(f64::INFINITY);
+                return Ok(F::infinity());
             }
-            log_sum += si.ln();
+            log_sum = log_sum + si.ln();
         }
         Ok(self.problem.cost(x)? - self.mu * log_sum)
     }
 }
 
-impl<P, V, M> Gradient for LogBarrier<'_, P>
+impl<P, V, M, F> Gradient for LogBarrier<'_, P, F>
 where
-    P: CostFunction<Param = V, Output = f64>
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + LinearInequalityConstraints<Param = V, Matrix = M>,
     M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<f64> + NegInPlace + VectorIndex + VectorLen,
+    V: ScaledAdd<F> + NegInPlace + VectorIndex<F> + VectorLen,
 {
     type Gradient = V;
 
@@ -126,7 +130,7 @@ where
         // wᵢ = μ / sᵢ. ∇[−μ log(bᵢ − aᵢᵀx)] = μ aᵢ / sᵢ, summed = Aᵀ w.
         let mut s = self.problem.a().matvec(x);
         s.neg_in_place();
-        s.scaled_add(1.0, self.problem.b());
+        s.scaled_add(F::one(), self.problem.b());
         for i in 0..s.vec_len() {
             let si = s.get_scalar(i);
             s.set_scalar(i, self.mu / si);
@@ -134,7 +138,7 @@ where
 
         let mut g = self.problem.gradient(x)?;
         let barrier_grad = self.problem.a().mat_transpose_vec(&s);
-        g.scaled_add(1.0, &barrier_grad);
+        g.scaled_add(F::one(), &barrier_grad);
         Ok(g)
     }
 }

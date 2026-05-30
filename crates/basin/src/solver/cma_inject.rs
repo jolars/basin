@@ -197,12 +197,13 @@ where
 // used as a CMA inner) and `Lbfgs<Unbounded>` (used as a barrier / AL
 // inner) seed the same `LbfgsState`. `MemeticInner` stays on the bounded
 // alias only — CMA injection pairs with the bounded variant.
-impl<Mode, S, V> WarmStart<V> for Lbfgs<Mode, S>
+impl<Mode, S, V, F> WarmStart<V> for Lbfgs<Mode, S, F>
 where
+    F: crate::core::math::Scalar,
     V: Clone,
 {
-    type State = LbfgsState<V>;
-    fn seed(&self, x: &V) -> LbfgsState<V> {
+    type State = LbfgsState<V, F>;
+    fn seed(&self, x: &V) -> LbfgsState<V, F> {
         LbfgsState::new(x.clone(), self.m_capacity)
     }
 }

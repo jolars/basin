@@ -44,7 +44,7 @@
 //! impls (tenet 5).
 
 use crate::core::constraint::LinearEqualityConstraints;
-use crate::core::math::{Dot, MatTransposeVec, MatVec, NormSquared, ScaledAdd};
+use crate::core::math::{Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient};
 
 /// A [`LinearEqualityConstraints`] problem rewritten as the unconstrained
@@ -60,18 +60,18 @@ use crate::core::problem::{CostFunction, Gradient};
 /// carries a borrowed *vector* `λ`, not just a scalar.) See the
 /// [module docs](self) for the formulation, the tenet-4 adapter asymmetry,
 /// and the backend note.
-pub struct AugmentedLagrangian<'a, P, V> {
+pub struct AugmentedLagrangian<'a, P, V, F = f64> {
     problem: &'a P,
     lambda: &'a V,
-    rho: f64,
+    rho: F,
 }
 
-impl<'a, P, V> AugmentedLagrangian<'a, P, V> {
+impl<'a, P, V, F: Scalar> AugmentedLagrangian<'a, P, V, F> {
     /// Wrap `problem` with multiplier estimate `lambda` (`λ ∈ ℝᵐ`, one entry
     /// per constraint row) and penalty parameter `rho` (`ρ > 0`). Larger `ρ`
     /// pushes the iterate harder onto the feasible affine subspace but makes
     /// `L_ρ` more ill-conditioned.
-    pub fn new(problem: &'a P, lambda: &'a V, rho: f64) -> Self {
+    pub fn new(problem: &'a P, lambda: &'a V, rho: F) -> Self {
         Self {
             problem,
             lambda,
@@ -80,55 +80,59 @@ impl<'a, P, V> AugmentedLagrangian<'a, P, V> {
     }
 
     /// The penalty parameter `ρ` this adapter was built with.
-    pub fn rho(&self) -> f64 {
+    pub fn rho(&self) -> F {
         self.rho
     }
 }
 
-impl<P, V, M> CostFunction for AugmentedLagrangian<'_, P, V>
+impl<P, V, M, F> CostFunction for AugmentedLagrangian<'_, P, V, F>
 where
-    P: CostFunction<Param = V, Output = f64> + LinearEqualityConstraints<Param = V, Matrix = M>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + LinearEqualityConstraints<Param = V, Matrix = M>,
     M: MatVec<V>,
-    V: ScaledAdd<f64> + Dot + NormSquared,
+    V: ScaledAdd<F> + Dot<F> + NormSquared<F>,
 {
     type Param = V;
-    type Output = f64;
+    type Output = F;
     // Pass through the wrapped problem's hard-abort error. `L_ρ` is finite
     // everywhere (no feasibility wall, no soft-reject path), so the only
     // `Err` that can come out of this `cost` is one the user's `cost`
     // returned.
     type Error = <P as CostFunction>::Error;
 
-    fn cost(&self, x: &V) -> Result<f64, Self::Error> {
+    fn cost(&self, x: &V) -> Result<F, Self::Error> {
         // Constraint residual c = A x − b.
         let mut c = self.problem.a().matvec(x);
-        c.scaled_add(-1.0, self.problem.b());
+        c.scaled_add(-F::one(), self.problem.b());
         // L_ρ = f(x) + λᵀc + (ρ/2)‖c‖².
-        Ok(self.problem.cost(x)? + self.lambda.dot(&c) + 0.5 * self.rho * c.norm_squared())
+        Ok(self.problem.cost(x)?
+            + self.lambda.dot(&c)
+            + F::from_f64(0.5).unwrap() * self.rho * c.norm_squared())
     }
 }
 
-impl<P, V, M> Gradient for AugmentedLagrangian<'_, P, V>
+impl<P, V, M, F> Gradient for AugmentedLagrangian<'_, P, V, F>
 where
-    P: CostFunction<Param = V, Output = f64>
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + LinearEqualityConstraints<Param = V, Matrix = M>,
     M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<f64> + Dot + NormSquared + Clone,
+    V: ScaledAdd<F> + Dot<F> + NormSquared<F> + Clone,
 {
     type Gradient = V;
 
     fn gradient(&self, x: &V) -> Result<V, <Self as CostFunction>::Error> {
         // Constraint residual c = A x − b.
         let mut c = self.problem.a().matvec(x);
-        c.scaled_add(-1.0, self.problem.b());
+        c.scaled_add(-F::one(), self.problem.b());
         // Weight w = λ + ρ c, so the constraint contribution is Aᵀ w.
         let mut w = self.lambda.clone();
         w.scaled_add(self.rho, &c);
         // ∇L_ρ = ∇f + Aᵀ(λ + ρ c).
         let mut g = self.problem.gradient(x)?;
         let constraint_grad = self.problem.a().mat_transpose_vec(&w);
-        g.scaled_add(1.0, &constraint_grad);
+        g.scaled_add(F::one(), &constraint_grad);
         Ok(g)
     }
 }
