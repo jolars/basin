@@ -1,5 +1,5 @@
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{ClampInPlace, NegInPlace, ScaledAdd};
+use crate::core::math::{ClampInPlace, NegInPlace, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
@@ -63,11 +63,12 @@ use crate::line_search::{Constant, LineSearch};
 /// # Backends
 ///
 /// Backend-generic — works with any `V` implementing
-/// [`ScaledAdd<f64>`](crate::core::math::ScaledAdd) +
-/// [`NegInPlace`] + [`ClampInPlace`] + `Clone`. That covers
-/// `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`). The problem must implement [`BoxConstraints`].
+/// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
+/// [`NegInPlace`] + [`ClampInPlace`] + `Clone`. With the default
+/// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
+/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
+/// `faer::Col<f64>` (feature `faer`). The problem must implement
+/// [`BoxConstraints`].
 ///
 /// # Examples
 ///
@@ -118,12 +119,12 @@ pub struct ProjectedGradientDescent<S> {
     line_search: S,
 }
 
-impl ProjectedGradientDescent<Constant> {
+impl<F: Scalar> ProjectedGradientDescent<Constant<F>> {
     /// Projected gradient descent with a fixed step size `alpha`.
     /// Equivalent to `with_line_search(Constant(alpha))`. Recommended
     /// default — the line search variant has the caveat documented on
     /// the type.
-    pub fn new(alpha: f64) -> Self {
+    pub fn new(alpha: F) -> Self {
         Self {
             line_search: Constant(alpha),
         }
@@ -142,19 +143,20 @@ impl<S> ProjectedGradientDescent<S> {
     }
 }
 
-impl<P, V, S> Solver<P, BasicState<V>> for ProjectedGradientDescent<S>
+impl<P, V, F, S> Solver<P, BasicState<V, F>> for ProjectedGradientDescent<S>
 where
-    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V> + BoxConstraints,
-    V: ScaledAdd<f64> + NegInPlace + ClampInPlace + Clone,
-    S: LineSearch<P, V, Error = P::Error>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V> + BoxConstraints,
+    V: ScaledAdd<F> + NegInPlace + ClampInPlace + Clone,
+    S: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<BasicState<V>, Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<BasicState<V, F>, Self::Error> {
         // Project an infeasible start once so iter-0 termination checks
         // see a feasible iterate. Subsequent iterations preserve
         // feasibility by construction.
@@ -170,8 +172,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V>,
-    ) -> Result<(BasicState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: BasicState<V, F>,
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
         let grad = state
             .gradient
             .take()
