@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.9.0](https://github.com/jolars/basin/compare/v0.8.0...v0.9.0) (2026-05-31)
+
+### Features
+- lower rust version requirement to 1.87.0 ([`7ca5342`](https://github.com/jolars/basin/commit/7ca53421f6a398a7d523e74dd552d41892df65b6))
 ## [0.8.0](https://github.com/jolars/basin/compare/v0.7.0...v0.8.0) (2026-05-29)
 
 ### Breaking changes
