@@ -2,7 +2,8 @@ use crate::core::executor::OptimizationResult;
 use crate::core::inner::{InnerExecutor, WarmStart};
 use crate::core::math::{
     ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NormSquared,
-    RankOneUpdate, SampleStandardNormal, ScaleInPlace, ScaledAdd, SymmetricEigen, VectorLen,
+    RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
+    VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -12,7 +13,7 @@ use crate::core::state::{
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
-use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
+use crate::solver::lbfgs::{Bounded, Lbfgs};
 use crate::solver::levenberg_marquardt::LevenbergMarquardt;
 use crate::solver::nelder_mead::NelderMead;
 
@@ -29,7 +30,7 @@ use crate::solver::nelder_mead::NelderMead;
 /// # Implementations
 ///
 /// Shipped impls for [`NelderMead`], [`LevenbergMarquardt`], and
-/// [`Lbfgsb`]. To plug in something else, either impl this trait (plus
+/// [`Lbfgsb`](crate::Lbfgsb). To plug in something else, either impl this trait (plus
 /// [`WarmStart`]) on your solver, or wrap a `Solver<P, S>` in
 /// [`ClosureInner`] with an inline seeder closure (escape hatch for
 /// one-off experiments and the `AlwaysFails`-style failure-bubbling
@@ -55,20 +56,23 @@ use crate::solver::nelder_mead::NelderMead;
 /// (LM, L-BFGS-B) has its gradient work honestly collapse into the
 /// outer's single `cost_evals` counter. See AGENTS.md "Solver
 /// composition" rule 1.
-pub trait MemeticInner<V>: WarmStart<V> {
+pub trait MemeticInner<V, F = f64>: WarmStart<V>
+where
+    F: Scalar,
+{
     /// Build a fresh inner state seeded at CMA-ES candidate `x`, scaled
     /// by the current step-size `sigma`. Called once per refined
     /// candidate per outer generation.
     ///
     /// Defaults to the σ-free [`WarmStart::seed`]; only inners whose
     /// state scales with σ (Nelder-Mead's simplex edge) override it.
-    fn seed_scaled(&self, x: &V, _sigma: f64) -> Self::State {
+    fn seed_scaled(&self, x: &V, _sigma: F) -> Self::State {
         self.seed(x)
     }
 }
 
 /// Closure type for `ClosureInner`'s state seeder.
-type ClosureSeedFn<V, S> = Box<dyn Fn(&V, f64) -> S>;
+type ClosureSeedFn<V, S, F> = Box<dyn Fn(&V, F) -> S>;
 
 /// Closure-based [`MemeticInner`] wrapper for custom inners that don't
 /// have a native impl. Holds an inner solver plus the seeder closure
@@ -78,14 +82,14 @@ type ClosureSeedFn<V, S> = Box<dyn Fn(&V, f64) -> S>;
 /// `AlwaysFails` harness verifying `SolverFailed` bubbling). For
 /// shipping configurations, prefer impl-ing `MemeticInner` on your
 /// solver type — it's a three-line trait.
-pub struct ClosureInner<I, S, V> {
+pub struct ClosureInner<I, S, V, F = f64> {
     inner: I,
-    seed_fn: ClosureSeedFn<V, S>,
+    seed_fn: ClosureSeedFn<V, S, F>,
 }
 
-impl<I, S, V> ClosureInner<I, S, V> {
+impl<I, S, V, F> ClosureInner<I, S, V, F> {
     /// Wrap `inner` with an explicit seeder closure.
-    pub fn new(inner: I, seed_fn: impl Fn(&V, f64) -> S + 'static) -> Self {
+    pub fn new(inner: I, seed_fn: impl Fn(&V, F) -> S + 'static) -> Self {
         Self {
             inner,
             seed_fn: Box::new(seed_fn),
@@ -93,7 +97,7 @@ impl<I, S, V> ClosureInner<I, S, V> {
     }
 }
 
-impl<P, I, S, V> Solver<P, S> for ClosureInner<I, S, V>
+impl<P, I, S, V, F> Solver<P, S> for ClosureInner<I, S, V, F>
 where
     I: Solver<P, S>,
     S: State,
@@ -115,8 +119,9 @@ where
     }
 }
 
-impl<I, S, V> WarmStart<V> for ClosureInner<I, S, V>
+impl<I, S, V, F> WarmStart<V> for ClosureInner<I, S, V, F>
 where
+    F: Scalar,
     S: State<Param = V>,
 {
     type State = S;
@@ -124,15 +129,16 @@ where
         // σ-free seed: the closure receives σ = 0. `ClosureInner` is an
         // experiment / contract-test escape hatch, so a documented dummy
         // is acceptable here where it is not in the native impls.
-        (self.seed_fn)(x, 0.0)
+        (self.seed_fn)(x, F::zero())
     }
 }
 
-impl<I, S, V> MemeticInner<V> for ClosureInner<I, S, V>
+impl<I, S, V, F> MemeticInner<V, F> for ClosureInner<I, S, V, F>
 where
+    F: Scalar,
     S: State<Param = V>,
 {
-    fn seed_scaled(&self, x: &V, sigma: f64) -> S {
+    fn seed_scaled(&self, x: &V, sigma: F) -> S {
         (self.seed_fn)(x, sigma)
     }
 }
@@ -141,12 +147,13 @@ where
 // WarmStart + MemeticInner impls for the three shipped inners.
 // -----------------------------------------------------------------------
 
-impl<V> WarmStart<V> for NelderMead
+impl<Mode, V, F> WarmStart<V> for NelderMead<Mode, F>
 where
-    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = f64>,
+    F: Scalar,
+    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = F>,
 {
-    type State = BasicSimplexState<V>;
-    fn seed(&self, x: &V) -> BasicSimplexState<V> {
+    type State = BasicSimplexState<V, F>;
+    fn seed(&self, x: &V) -> BasicSimplexState<V, F> {
         // σ-free seed: Nelder-Mead's own default relative-step simplex
         // (FMINSEARCH/SciPy 5%), used when there is no outer step-size to
         // track (e.g. a barrier / AL inner).
@@ -154,11 +161,12 @@ where
     }
 }
 
-impl<V> MemeticInner<V> for NelderMead
+impl<Mode, V, F> MemeticInner<V, F> for NelderMead<Mode, F>
 where
-    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = f64>,
+    F: Scalar,
+    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = F>,
 {
-    fn seed_scaled(&self, x: &V, sigma: f64) -> BasicSimplexState<V> {
+    fn seed_scaled(&self, x: &V, sigma: F) -> BasicSimplexState<V, F> {
         // σ-scaled axis-aligned simplex: edge = current CMA step-size,
         // so the inner's exploration tracks the outer distribution's
         // spread and shrinks with σ. Hansen 2011 doesn't prescribe a
@@ -169,25 +177,27 @@ where
         vertices.push(x.clone());
         for j in 0..n {
             let mut v = x.clone();
-            v[j] += sigma;
+            v[j] = v[j] + sigma;
             vertices.push(v);
         }
         BasicSimplexState::from_simplex(vertices)
     }
 }
 
-impl<V, M> WarmStart<V> for LevenbergMarquardt<V, M>
+impl<V, M, F> WarmStart<V> for LevenbergMarquardt<V, M, F>
 where
+    F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V>;
-    fn seed(&self, x: &V) -> BasicState<V> {
+    type State = BasicState<V, F>;
+    fn seed(&self, x: &V) -> BasicState<V, F> {
         BasicState::new(x.clone())
     }
 }
 
-impl<V, M> MemeticInner<V> for LevenbergMarquardt<V, M>
+impl<V, M, F> MemeticInner<V, F> for LevenbergMarquardt<V, M, F>
 where
+    F: Scalar,
     V: Clone,
 {
     // `seed_scaled` defaults to `seed` — LM ignores σ.
@@ -199,7 +209,7 @@ where
 // alias only — CMA injection pairs with the bounded variant.
 impl<Mode, S, V, F> WarmStart<V> for Lbfgs<Mode, S, F>
 where
-    F: crate::core::math::Scalar,
+    F: Scalar,
     V: Clone,
 {
     type State = LbfgsState<V, F>;
@@ -208,8 +218,9 @@ where
     }
 }
 
-impl<V, LS> MemeticInner<V> for Lbfgsb<LS>
+impl<S, V, F> MemeticInner<V, F> for Lbfgs<Bounded, S, F>
 where
+    F: Scalar,
     V: Clone,
 {
     // `seed_scaled` defaults to `seed` — L-BFGS-B ignores σ.
@@ -245,7 +256,7 @@ where
 ///
 /// Generic over any `I: MemeticInner<V>`. The associated `I::State`
 /// determines the inner state shape. Shipped impls cover
-/// [`NelderMead`], [`LevenbergMarquardt`], and [`Lbfgsb`]. For
+/// [`NelderMead`], [`LevenbergMarquardt`], and [`Lbfgsb`](crate::Lbfgsb). For
 /// L-BFGS-B inner with consistent bound flow, use the bounded sibling
 /// [`BoundedCmaInject`](crate::solver::BoundedCmaInject) over
 /// [`BoundedCmaEs`](crate::solver::BoundedCmaEs).
@@ -273,25 +284,27 @@ where
 ///
 /// See [`CmaEs`] for the base population-based `Executor` pattern;
 /// `CmaInject` adds a local-search inner via Hansen-2011 injection.
-pub struct CmaInject<I, V, M>
+pub struct CmaInject<I, V, M, F = f64>
 where
-    I: MemeticInner<V>,
+    F: Scalar,
+    I: MemeticInner<V, F>,
 {
-    cma: CmaEs<V, M>,
+    cma: CmaEs<V, M, F>,
     inner: InnerExecutor<I::State, I>,
     k: usize,
-    c_y_override: Option<f64>,
+    c_y_override: Option<F>,
 }
 
-impl<I, V, M> CmaInject<I, V, M>
+impl<I, V, M, F> CmaInject<I, V, M, F>
 where
-    I: MemeticInner<V>,
+    F: Scalar,
+    I: MemeticInner<V, F>,
     I::State: CountsMirror,
 {
     /// Wrap a configured [`CmaEs`] with `inner` as the local
     /// refinement step. Defaults: `k = 1` refinement per generation,
     /// inner `max_iter = 50`, `c_y` = Hansen-2011 Table 1 default.
-    pub fn with_inner_solver(cma: CmaEs<V, M>, inner: I) -> Self {
+    pub fn with_inner_solver(cma: CmaEs<V, M, F>, inner: I) -> Self {
         Self {
             cma,
             inner: InnerExecutor::new(inner).max_iter(50),
@@ -318,8 +331,8 @@ where
     /// # Panics
     ///
     /// Panics if `c_y <= 0`.
-    pub fn with_c_y(mut self, c_y: f64) -> Self {
-        assert!(c_y > 0.0, "CmaInject requires c_y > 0, got {}", c_y);
+    pub fn with_c_y(mut self, c_y: F) -> Self {
+        assert!(c_y > F::zero(), "CmaInject requires c_y > 0, got {:?}", c_y);
         self.c_y_override = Some(c_y);
         self
     }
@@ -371,42 +384,44 @@ where
 /// `pub(crate)` so the sibling
 /// [`BoundedCmaInject`](crate::solver::BoundedCmaInject) can share
 /// this default without re-deriving it.
-pub(crate) fn default_c_y(n: usize) -> f64 {
-    let n = n as f64;
-    n.sqrt() + 2.0 * n / (n + 2.0)
+pub(crate) fn default_c_y<F: Scalar>(n: usize) -> F {
+    let n = F::from_usize(n).unwrap();
+    let two = F::from_f64(2.0).unwrap();
+    n.sqrt() + two * n / (n + two)
 }
 
-impl<P, I, V, M> Solver<P, BasicPopulationState<V>> for CmaInject<I, V, M>
+impl<P, I, V, M, F> Solver<P, BasicPopulationState<V, F>> for CmaInject<I, V, M, F>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    I: MemeticInner<V> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
-    I::State: State<Param = V, Float = f64> + CountsMirror,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    I: MemeticInner<V, F> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
+    I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone
-        + ScaledAdd<f64>
-        + ScaleInPlace
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
         + ComponentMulAssign
-        + NormSquared
+        + NormSquared<F>
         + SampleStandardNormal
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity
         + MatrixFromDiagonal<V>
         + MatVec<V>
         + MatTransposeVec<V>
-        + ScaleInPlace
-        + RankOneUpdate<V>
+        + ScaleInPlace<F>
+        + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    CmaEs<V, M>: Solver<P, BasicPopulationState<V>, Error = P::Error>,
+    CmaEs<V, M, F>: Solver<P, BasicPopulationState<V, F>, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V>,
-    ) -> Result<BasicPopulationState<V>, Self::Error> {
+        state: BasicPopulationState<V, F>,
+    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
         // Hansen's preliminary experiments inject from iter 1 onward,
         // so we delegate the initial population to vanilla CMA-ES.
         self.cma.init(problem, state)
@@ -415,8 +430,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V>,
-    ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
+        state: BasicPopulationState<V, F>,
+    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
         //    previous generation, sample λ fresh candidates sorted by
         //    cost ascending.
@@ -433,7 +448,7 @@ where
                 .expect("CmaEs::init must run before CmaInject::next_iter");
             (w.n, w.m.clone(), w.sigma)
         };
-        let c_y = self.c_y_override.unwrap_or_else(|| default_c_y(n));
+        let c_y = self.c_y_override.unwrap_or_else(|| default_c_y::<F>(n));
         let refine = self.k.min(state.candidates.len());
 
         for i in 0..refine {
@@ -460,8 +475,8 @@ where
 
             // 6. y = (x_refined − m) / σ.
             let mut y = x_refined;
-            y.scaled_add(-1.0, &m);
-            y.scale_in_place(1.0 / sigma);
+            y.scaled_add(-F::one(), &m);
+            y.scale_in_place(F::one() / sigma);
 
             // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
             let inv_sqrt_norm = {
@@ -472,9 +487,9 @@ where
             };
 
             // 8. Clipping factor α (Hansen 2011 eq. 4 + eq. 10).
-            if inv_sqrt_norm > 0.0 {
-                let alpha = (c_y / inv_sqrt_norm).min(1.0);
-                if alpha < 1.0 {
+            if inv_sqrt_norm > F::zero() {
+                let alpha = (c_y / inv_sqrt_norm).min(F::one());
+                if alpha < F::one() {
                     y.scale_in_place(alpha);
                 }
             }
@@ -499,7 +514,7 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, state: &BasicPopulationState<V>) -> Option<TerminationReason> {
-        <CmaEs<V, M> as Solver<P, BasicPopulationState<V>>>::terminate(&self.cma, state)
+    fn terminate(&self, state: &BasicPopulationState<V, F>) -> Option<TerminationReason> {
+        <CmaEs<V, M, F> as Solver<P, BasicPopulationState<V, F>>>::terminate(&self.cma, state)
     }
 }

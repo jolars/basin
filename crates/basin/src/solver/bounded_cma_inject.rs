@@ -3,8 +3,8 @@ use crate::core::executor::OptimizationResult;
 use crate::core::inner::{InnerExecutor, WarmStart};
 use crate::core::math::{
     ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, ScaleInPlace, ScaledAdd,
-    SymmetricEigen, VectorLen,
+    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace,
+    ScaledAdd, SymmetricEigen, VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -57,25 +57,27 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 ///
 /// See [`BoundedCmaEs`] for the bounded population-based `Executor`
 /// pattern; `BoundedCmaInject` adds a bound-respecting local-search inner.
-pub struct BoundedCmaInject<I, V, M>
+pub struct BoundedCmaInject<I, V, M, F = f64>
 where
-    I: MemeticInner<V>,
+    F: Scalar,
+    I: MemeticInner<V, F>,
 {
-    cma: BoundedCmaEs<V, M>,
+    cma: BoundedCmaEs<V, M, F>,
     inner: InnerExecutor<I::State, I>,
     k: usize,
-    c_y_override: Option<f64>,
+    c_y_override: Option<F>,
 }
 
-impl<I, V, M> BoundedCmaInject<I, V, M>
+impl<I, V, M, F> BoundedCmaInject<I, V, M, F>
 where
-    I: MemeticInner<V>,
+    F: Scalar,
+    I: MemeticInner<V, F>,
     I::State: CountsMirror,
 {
     /// Wrap a configured [`BoundedCmaEs`] with `inner` as the local
     /// refinement step. Defaults: `k = 1`, inner `max_iter = 50`,
     /// `c_y` = Hansen-2011 Table 1 default.
-    pub fn with_inner_solver(cma: BoundedCmaEs<V, M>, inner: I) -> Self {
+    pub fn with_inner_solver(cma: BoundedCmaEs<V, M, F>, inner: I) -> Self {
         Self {
             cma,
             inner: InnerExecutor::new(inner).max_iter(50),
@@ -102,8 +104,12 @@ where
     /// # Panics
     ///
     /// Panics if `c_y <= 0`.
-    pub fn with_c_y(mut self, c_y: f64) -> Self {
-        assert!(c_y > 0.0, "BoundedCmaInject requires c_y > 0, got {}", c_y);
+    pub fn with_c_y(mut self, c_y: F) -> Self {
+        assert!(
+            c_y > F::zero(),
+            "BoundedCmaInject requires c_y > 0, got {:?}",
+            c_y
+        );
         self.c_y_override = Some(c_y);
         self
     }
@@ -146,47 +152,48 @@ where
     }
 }
 
-impl<P, I, V, M> Solver<P, BasicPopulationState<V>> for BoundedCmaInject<I, V, M>
+impl<P, I, V, M, F> Solver<P, BasicPopulationState<V, F>> for BoundedCmaInject<I, V, M, F>
 where
-    P: CostFunction<Param = V, Output = f64> + BoxConstraints,
-    I: MemeticInner<V> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
-    I::State: State<Param = V, Float = f64> + CountsMirror,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + BoxConstraints,
+    I: MemeticInner<V, F> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
+    I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone
-        + ScaledAdd<f64>
-        + ScaleInPlace
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
         + ComponentMulAssign
         + ClampInPlace
-        + NormSquared
+        + NormSquared<F>
         + SampleStandardNormal
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity
         + MatrixFromDiagonal<V>
         + MatVec<V>
         + MatTransposeVec<V>
         + MatDiagonal<V>
-        + ScaleInPlace
-        + RankOneUpdate<V>
+        + ScaleInPlace<F>
+        + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    BoundedCmaEs<V, M>: Solver<P, BasicPopulationState<V>, Error = P::Error>,
+    BoundedCmaEs<V, M, F>: Solver<P, BasicPopulationState<V, F>, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V>,
-    ) -> Result<BasicPopulationState<V>, Self::Error> {
+        state: BasicPopulationState<V, F>,
+    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
         self.cma.init(problem, state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V>,
-    ) -> Result<(BasicPopulationState<V>, Option<TerminationReason>), Self::Error> {
+        state: BasicPopulationState<V, F>,
+    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
         // 1. Standard BoundedCmaEs iteration first.
         let (mut state, reason) = self.cma.next_iter(problem, state)?;
         if let Some(r) = reason {
@@ -201,7 +208,7 @@ where
                 .expect("BoundedCmaEs::init must run before BoundedCmaInject::next_iter");
             (w.n, w.m.clone(), w.sigma)
         };
-        let c_y = self.c_y_override.unwrap_or_else(|| default_c_y(n));
+        let c_y = self.c_y_override.unwrap_or_else(|| default_c_y::<F>(n));
         let refine = self.k.min(state.candidates.len());
 
         for i in 0..refine {
@@ -224,8 +231,8 @@ where
 
             // 6. y = (x_refined − m) / σ.
             let mut y = x_refined;
-            y.scaled_add(-1.0, &m);
-            y.scale_in_place(1.0 / sigma);
+            y.scaled_add(-F::one(), &m);
+            y.scale_in_place(F::one() / sigma);
 
             // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
             let inv_sqrt_norm = {
@@ -236,9 +243,9 @@ where
             };
 
             // 8. Clipping (Hansen 2011 eq. 4 + eq. 10).
-            if inv_sqrt_norm > 0.0 {
-                let alpha = (c_y / inv_sqrt_norm).min(1.0);
-                if alpha < 1.0 {
+            if inv_sqrt_norm > F::zero() {
+                let alpha = (c_y / inv_sqrt_norm).min(F::one());
+                if alpha < F::one() {
                     y.scale_in_place(alpha);
                 }
             }
@@ -280,8 +287,10 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, state: &BasicPopulationState<V>) -> Option<TerminationReason> {
+    fn terminate(&self, state: &BasicPopulationState<V, F>) -> Option<TerminationReason> {
         // TolX inherits from BoundedCmaEs unchanged.
-        <BoundedCmaEs<V, M> as Solver<P, BasicPopulationState<V>>>::terminate(&self.cma, state)
+        <BoundedCmaEs<V, M, F> as Solver<P, BasicPopulationState<V, F>>>::terminate(
+            &self.cma, state,
+        )
     }
 }
