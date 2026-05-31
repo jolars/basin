@@ -144,10 +144,10 @@ fn drain(points: &Points) -> Vec<(u128, f64)> {
 /// is `f(x0)`, which argmin *did* evaluate during init. Overwrite that
 /// leading non-finite cost so both libraries' curves start at `f(x0)`.
 fn finite_start(mut pts: Vec<(u128, f64)>, f0: f64) -> Vec<(u128, f64)> {
-    if let Some(first) = pts.first_mut()
-        && !first.1.is_finite()
-    {
-        *first = (0, f0);
+    if let Some(first) = pts.first_mut() {
+        if !first.1.is_finite() {
+            *first = (0, f0);
+        }
     }
     pts
 }

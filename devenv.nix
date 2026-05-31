@@ -27,7 +27,7 @@
     rust = {
       enable = true;
       channel = "stable";
-      version = "1.91.1";
+      version = "1.87.0";
       targets = [ "wasm32-unknown-unknown" ];
     };
 

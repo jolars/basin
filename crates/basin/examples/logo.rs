@@ -447,10 +447,10 @@ fn trace_river() -> Vec<[f64; 2]> {
     }
     let stride = (full.len() / RIVER_POINTS).max(1);
     let mut pts: Vec<[f64; 2]> = full.iter().step_by(stride).copied().collect();
-    if let Some(&last) = full.last()
-        && pts.last() != Some(&last)
-    {
-        pts.push(last);
+    if let Some(&last) = full.last() {
+        if pts.last() != Some(&last) {
+            pts.push(last);
+        }
     }
     pts
 }

@@ -267,17 +267,17 @@ pub(crate) fn subsm<F: Scalar>(
         }
     }
 
-    if alpha < one
-        && let Some(ibd) = ibd
-    {
-        let dk = d[ibd];
-        let k = ind[ibd];
-        if dk > zero {
-            x[k] = u[k];
-            d[ibd] = zero;
-        } else if dk < zero {
-            x[k] = l[k];
-            d[ibd] = zero;
+    if alpha < one {
+        if let Some(ibd) = ibd {
+            let dk = d[ibd];
+            let k = ind[ibd];
+            if dk > zero {
+                x[k] = u[k];
+                d[ibd] = zero;
+            } else if dk < zero {
+                x[k] = l[k];
+                d[ibd] = zero;
+            }
         }
     }
     for i in 0..nsub {

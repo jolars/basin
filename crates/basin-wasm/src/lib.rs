@@ -459,11 +459,11 @@ impl Run {
                     iters_added += 1;
                     // Visualizer-level convergence: stop once the cost is
                     // within the target suboptimality of the known optimum.
-                    if let Some(target) = self.target_cost
-                        && cost <= target
-                    {
-                        self.finished = Some("converged");
-                        break;
+                    if let Some(target) = self.target_cost {
+                        if cost <= target {
+                            self.finished = Some("converged");
+                            break;
+                        }
                     }
                 }
                 StepOutcome::Stopped(reason) => {

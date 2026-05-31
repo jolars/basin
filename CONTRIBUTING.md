@@ -32,7 +32,7 @@ linear-algebra backend (`Vec<f64>`, nalgebra, ndarray, faer).
 - `cargo fmt`: format (also enforced by pre-commit).
 
 The dev environment is provided by `devenv.nix` (loaded automatically via
-`direnv` from `.envrc`). It pins Rust 1.91.1 (matches `rust-version` in
+`direnv` from `.envrc`). It pins Rust 1.87.0 (matches `rust-version` in
 `Cargo.toml`) and adds the `wasm32-unknown-unknown` target plus tooling:
 `cargo-llvm-cov`, `cargo-flamegraph`, `cargo-audit`, `cargo-deny`, `cargo-msrv`,
 `samply`, `wasm-pack`, `go-task`. Pre-commit hooks run `clippy` (with
@@ -132,7 +132,7 @@ dependencies, not a feature. CI enforces it
 
 ## MSRV is externally constrained --- do not bump casually
 
-basin's MSRV (**Rust 1.91.1**, pinned in `Cargo.toml` and `devenv.nix`) is set
+basin's MSRV (**Rust 1.87.0**, pinned in `Cargo.toml` and `devenv.nix`) is set
 by downstream consumers, not basin's own preferences:
 
 - **Primary: CRAN.** A planned R-package wrapper must build under CRAN's Rust
