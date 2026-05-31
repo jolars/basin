@@ -98,12 +98,6 @@ harder to fix as more code piles on.
       Filling in docs on items that hold no contract (struct fields, trivial
       constructors) is the open follow-up --- those are the \~100 `missing_docs`
       warnings still surfaced by the lint.
-- [ ] **`ParamVec<F>`marker for solvers doing linear algebra on params.**
-      Nelder-Mead needs `V: Clone + ScaledAdd<f64>`; gradient descent needs
-      `V: ScaledAdd<f64>`; future solvers will repeat the bound pair. Add a
-      blanket-impl marker like
-      `trait ParamVec<F>: Clone + ScaledAdd<F> + NormSquared {}` once the third
-      solver wants it --- premature with only two users.
 - [ ] **Unified `Composed<Outer, Inner>` abstraction (or honest "no").** Two
       concrete memetic shapes now exist: `CmaInject` / `BoundedCmaInject`
       (per-generation top-k polish via `MemeticInner`, S11 + S13) and
