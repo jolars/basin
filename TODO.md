@@ -80,7 +80,7 @@ the previous lands.
       inners) prove a non-`BasicState` inner converges to the same optimum as
       the `GradientDescent` inner.
 - [ ] **Generalize over scalar (`f64` → `F: Float`).** Per the
-      provisional-choices section in `AGENTS.md`. Neither the first stochastic
+      provisional-choices section in `CONTRIBUTING.md`. Neither the first stochastic
       solver (S7 `RandomSearch`) nor CMA-ES (S8) forced this --- both landed on
       `f64`, and the bound-boilerplate cost of preemptive generality still
       outweighs the refactor. Trigger now reads "a real f32 use case appears" or
@@ -114,10 +114,10 @@ harder to fix as more code piles on.
       barrier/AL family and (via `MemeticInner: WarmStart`) CMA-injection ---
       but that is explicitly **not** a `Composed` abstraction (it says nothing
       about the outer loop, eval routing, or failure bubbling; see the
-      `WarmStart` note in `AGENTS.md` "Solver composition"). Remaining question:
+      `WarmStart` note in `CONTRIBUTING.md` "Solver composition"). Remaining question:
       is there a shared `Composed` abstraction (coarser than `WarmStart` --- a
       "composed solver" marker), or do these memetic shapes genuinely share
-      nothing beyond the three AGENTS.md composition contracts (+ `WarmStart`
+      nothing beyond the three CONTRIBUTING.md composition contracts (+ `WarmStart`
       for some)? Resolve by either writing the trait or writing the honest "no"
       comment in `core/inner.rs`.
 - [ ] **Workspace wasm build broken by `competitor-bench` transitive dep.**
@@ -130,5 +130,5 @@ harder to fix as more code piles on.
       `levenberg-marquardt` dep behind a non-default feature, or set the
       `getrandom_backend` cfg in `.cargo/config.toml`.
 
-See `AGENTS.md` for the design tenets and constraints that shape these
+See `CONTRIBUTING.md` for the design tenets and constraints that shape these
 decisions.

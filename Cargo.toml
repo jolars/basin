@@ -6,7 +6,7 @@ members = [
     "crates/competitor-bench",
 ]
 # Lockfile lives at the workspace root; member crates share dependency
-# resolution. Per AGENTS.md tenet 2 (no per-version backend feature gates),
+# resolution. Per CONTRIBUTING.md tenet 2 (no per-version backend feature gates),
 # all members must agree on a single major version per backend.
 
 [workspace.package]

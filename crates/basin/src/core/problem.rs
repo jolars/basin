@@ -71,7 +71,7 @@
 pub trait CostFunction {
     /// The parameter type the objective is defined over.
     type Param;
-    /// Scalar cost type. In practice `f64` (see `AGENTS.md`'s
+    /// Scalar cost type. In practice `f64` (see `CONTRIBUTING.md`'s
     /// provisional choices).
     type Output;
     /// User-chosen hard-abort error. Pick
@@ -327,7 +327,7 @@ pub trait Residual {
 /// has no `Jacobian` impl: `ndarray-linalg` requires system BLAS/LAPACK
 /// and breaks the wasm-default tenet, so there's no honest
 /// [`LinearSolveSpd`](crate::core::math::LinearSolveSpd) to back it.
-/// Per tenet 5 in `AGENTS.md`, missing backend coverage is a
+/// Per tenet 5 in `CONTRIBUTING.md`, missing backend coverage is a
 /// compile-time error rather than a runtime surprise.
 ///
 /// # Examples
@@ -435,7 +435,7 @@ pub trait Jacobian: Residual {
 ///
 /// `Vec<f64>` and `ndarray::Array1<f64>` deliberately have no `Hessian`
 /// impl — there's no honest dense matrix type to pair with them. Per
-/// tenet 5 in `AGENTS.md`, missing backend coverage is a compile-time
+/// tenet 5 in `CONTRIBUTING.md`, missing backend coverage is a compile-time
 /// error rather than a runtime surprise.
 ///
 /// # Examples

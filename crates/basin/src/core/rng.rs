@@ -12,7 +12,7 @@
 //!   (or 32-byte seed) needs no entropy source, so basin's
 //!   `wasm32-unknown-unknown` build does not pull in any JS feature
 //!   flags from `getrandom`. This is load-bearing per the WASM hard
-//!   constraint in `AGENTS.md`.
+//!   constraint in `CONTRIBUTING.md`.
 //! - **Pure-Rust, no platform deps.** `rand 0.10` / `rand_chacha 0.10`
 //!   compile under basin's MSRV and have no `getrandom` pull-in when
 //!   `default-features = false` — see the dep config in `Cargo.toml`.

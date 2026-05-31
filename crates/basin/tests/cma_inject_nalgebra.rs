@@ -8,7 +8,7 @@
 //!
 //! For the LM-inner variant see `cma_inject_lm_nalgebra.rs`; for
 //! L-BFGS-B inner see `bounded_cma_inject_lbfgsb_nalgebra.rs`; for the
-//! `SolverFailed`-bubbling contract test (AGENTS.md "Solver composition"
+//! `SolverFailed`-bubbling contract test (CONTRIBUTING.md "Solver composition"
 //! rule 3) see `cma_inject_solver_failed_bubbles.rs`.
 
 #![cfg(feature = "nalgebra")]
@@ -61,7 +61,7 @@ fn converges_on_rosenbrock_2d() {
 }
 
 /// CmaInject must roll inner Nelder-Mead `cost_evals` into the outer
-/// state's eval counter (AGENTS.md "Solver composition" rule 1).
+/// state's eval counter (CONTRIBUTING.md "Solver composition" rule 1).
 /// Compare CmaInject vs vanilla CmaEs on the same seed/budget/state:
 /// the memetic variant invokes the inner `k` times per outer iter, so
 /// its public `cost_evals()` must come back strictly larger by at

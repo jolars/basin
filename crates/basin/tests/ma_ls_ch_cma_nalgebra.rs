@@ -192,7 +192,7 @@ fn chain_resumes_at_least_one_individual_twice() {
     );
 }
 
-/// Eval-aggregation contract (AGENTS.md "Solver composition" rule 1):
+/// Eval-aggregation contract (CONTRIBUTING.md "Solver composition" rule 1):
 /// `result.cost_evals()` reflects outer SSGA evals + every inner CMA
 /// evaluation. With budget `B`, the final count overshoots `B` by at
 /// most one chain segment's evals plus the SSGA phase of the trailing

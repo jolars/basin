@@ -24,7 +24,7 @@ use crate::core::termination::TerminationReason;
 /// transition with [`projected`](Self::projected) when the problem carries
 /// box bounds. The projected `Solver` impl requires `P: BoxConstraints`
 /// and `V: ClampInPlace`, so handing a non-bounded problem to a projected
-/// `NelderMead` is a compile-time error per AGENTS.md tenet 4.
+/// `NelderMead` is a compile-time error per CONTRIBUTING.md tenet 4.
 ///
 /// # Backends
 ///

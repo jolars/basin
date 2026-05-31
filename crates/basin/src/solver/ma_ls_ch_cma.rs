@@ -28,7 +28,7 @@ type ChainSlot<V, M> = (CmaEs<V, M>, BasicPopulationState<V>);
 /// per-individual local-search chain data.
 ///
 /// Solver-private (declared `pub` so the impl can construct it but kept
-/// out of `core::state` per AGENTS.md tenet 4 — one consumer, no
+/// out of `core::state` per CONTRIBUTING.md tenet 4 — one consumer, no
 /// shared abstraction to design yet). Each chain entry is the saved
 /// `(CmaEs, BasicPopulationState)` pair the inner needs for a resumed
 /// run: the [`CmaEs`] carries the algorithmic-constants and evolution
@@ -164,7 +164,7 @@ impl<V, M> Default for MaLsChState<V, M> {
 ///    &mut [MaxCostEvals(ls_intensity)], u64::MAX)`. `CmaEs::init` is
 ///    idempotent (early-returns when its `state` is `Some`), so
 ///    resumed runs keep their evolution state across calls.
-/// 6. **Aggregate, route failures, write back.** Per AGENTS.md
+/// 6. **Aggregate, route failures, write back.** Per CONTRIBUTING.md
 ///    "Solver composition" rules:
 ///    - Roll `inner_result.state.cost_evals()` into outer
 ///      `cost_evals` (rule 1: eval aggregation).

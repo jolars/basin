@@ -123,7 +123,7 @@ pub trait Solver<P, S: State> {
     ///   [`Problem::counts_mut`]. When the inner shares the outer's
     ///   wrapper (same problem type, passed via `&mut`), counts flow
     ///   through automatically and no roll-up is needed. See
-    ///   `AGENTS.md` "Solver composition" for the failure-routing and
+    ///   `CONTRIBUTING.md` "Solver composition" for the failure-routing and
     ///   criteria-statelessness contracts that still apply uniformly.
     fn next_iter(
         &mut self,

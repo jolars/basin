@@ -1,6 +1,6 @@
 //! Termination layer: the [`TerminationCriterion`] trait and the
 //! framework-level criteria solvers can be terminated by. Each criterion
-//! bounds on the minimum state shape it needs (tenet 3 in `AGENTS.md`),
+//! bounds on the minimum state shape it needs (tenet 3 in `CONTRIBUTING.md`),
 //! so mismatches are compile errors rather than runtime no-ops.
 
 use web_time::{Duration, Instant};
@@ -63,7 +63,7 @@ impl TerminationReason {
     /// [`MaxIter`](Self::MaxIter), the `*Tolerance` reasons, and
     /// [`SolverConverged`](Self::SolverConverged) are all "clean stops"
     /// that an outer solver running an inner per outer iter should treat
-    /// as "result is fine, move on". See `AGENTS.md` "Solver
+    /// as "result is fine, move on". See `CONTRIBUTING.md` "Solver
     /// composition" for the failure-routing contract.
     pub fn is_failure(&self) -> bool {
         matches!(self, Self::SolverFailed)
@@ -85,7 +85,7 @@ impl TerminationReason {
 /// - **Caller must:** rely on the bound on `S` to encode capability:
 ///   e.g. [`GradientTolerance`] requires `S: GradientState`, so handing
 ///   it to a derivative-free solver is a compile error, not a runtime
-///   "N/A" (tenet 3 in `AGENTS.md`).
+///   "N/A" (tenet 3 in `CONTRIBUTING.md`).
 /// - **Implementor must:** treat [`check`](Self::check) as side-effect
 ///   free *with respect to the optimization*. Internal state for criteria
 ///   that need history (e.g. [`ParamTolerance`], [`CostTolerance`])

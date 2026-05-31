@@ -2,7 +2,7 @@
 # optimization libraries (axis 3 of the bench plan): the
 # `levenberg-marquardt` crate for NLLS, and `argmin` for the
 # gradient-based and derivative-free solvers. These external frameworks
-# (and criterion) have no business in basin proper — so per AGENTS.md
+# (and criterion) have no business in basin proper — so per CONTRIBUTING.md
 # ("a new member should pull in heavy deps that have no business in the
 # core crate") they live here, isolated from basin's own dependency
 # graph, MSRV gate, and the wasm build (CI scopes those to `-p basin`).

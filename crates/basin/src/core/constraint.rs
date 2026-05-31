@@ -1,4 +1,4 @@
-//! Constraint markers carried on the problem (tenet 4 in `AGENTS.md`).
+//! Constraint markers carried on the problem (tenet 4 in `CONTRIBUTING.md`).
 //! [`BoxConstraints`] (interval bounds, consumed by projection-based
 //! solvers), [`LinearInequalityConstraints`] (`A x ≤ b`, consumed by the
 //! log-barrier method), and [`LinearEqualityConstraints`] (`A x = b`,
@@ -17,7 +17,7 @@ use crate::core::problem::CostFunction;
 
 /// Box (interval) bounds on the parameter.
 ///
-/// Lives on the *problem* side (tenet 4 in `AGENTS.md`): constraints
+/// Lives on the *problem* side (tenet 4 in `CONTRIBUTING.md`): constraints
 /// describe the problem, not the executor. Solvers that require box
 /// bounds bind on this trait so handing them an unconstrained problem is
 /// a compile error rather than a silent runtime issue.
@@ -73,7 +73,7 @@ pub trait BoxConstraints: CostFunction {
 ///
 /// `A` is the `m × n` constraint matrix and `b ∈ ℝᵐ`; the feasible set is
 /// `{ x ∈ ℝⁿ : A x ≤ b }`. Like [`BoxConstraints`], the constraint data
-/// lives on the *problem* side (tenet 4 in `AGENTS.md`): solvers that
+/// lives on the *problem* side (tenet 4 in `CONTRIBUTING.md`): solvers that
 /// handle linear inequalities (currently the log-barrier
 /// [`BarrierMethod`](crate::solver::BarrierMethod)) bind on this trait, so
 /// handing them an unconstrained problem is a compile error.
@@ -115,7 +115,7 @@ pub trait LinearInequalityConstraints: CostFunction {
 /// `A` is the `m × n` constraint matrix and `b ∈ ℝᵐ`; the feasible set is
 /// the affine subspace `{ x ∈ ℝⁿ : A x = b }`. Like the sibling
 /// constraint traits, the data lives on the *problem* side (tenet 4 in
-/// `AGENTS.md`): solvers that handle linear equalities (currently the
+/// `CONTRIBUTING.md`): solvers that handle linear equalities (currently the
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod))
 /// bind on this trait, so handing them an unconstrained problem is a compile
 /// error.

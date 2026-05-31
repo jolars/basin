@@ -13,7 +13,7 @@
 //!   [`Hessian`](problem::Hessian) to a problem that only exposes
 //!   function values.
 //! - [`constraint`] — constraint markers carried on the problem (tenet 4
-//!   in `AGENTS.md`): [`BoxConstraints`](constraint::BoxConstraints) and
+//!   in `CONTRIBUTING.md`): [`BoxConstraints`](constraint::BoxConstraints) and
 //!   [`LinearInequalityConstraints`](constraint::LinearInequalityConstraints).
 //! - [`barrier`] — the [`LogBarrier`](barrier::LogBarrier) adapter that
 //!   rewrites a linearly-constrained problem as the unconstrained
@@ -39,7 +39,7 @@
 //! - [`inner`] — the composition adapter:
 //!   [`InnerExecutor`](inner::InnerExecutor) wraps `run_loop` for outer
 //!   solvers that drive an inner solver per outer iteration. See
-//!   `AGENTS.md` "Solver composition" for the contracts.
+//!   `CONTRIBUTING.md` "Solver composition" for the contracts.
 //! - [`math`] — the small shared math layer
 //!   ([`ScaledAdd`](math::ScaledAdd), [`NormSquared`](math::NormSquared),
 //!   …) that backend-generic solvers depend on. Per tenet 5, this stays

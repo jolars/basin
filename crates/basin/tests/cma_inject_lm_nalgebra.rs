@@ -49,7 +49,7 @@ fn converges_on_rosenbrock_residuals_2d() {
 
 /// CmaInject's work-unit closure for LM rolls both `cost_evals`
 /// (residual calls) and `gradient_evals` (Jacobian calls) into the
-/// outer state's `cost_evals` (AGENTS.md "Solver composition" rule 1;
+/// outer state's `cost_evals` (CONTRIBUTING.md "Solver composition" rule 1;
 /// CMA-ES has no `gradient_evals` field, so derivative-eval counts
 /// collapse honestly).
 ///

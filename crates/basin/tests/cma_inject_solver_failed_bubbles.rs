@@ -1,6 +1,6 @@
 //! [`CmaInject`] must bubble `SolverFailed` from the inner solver out
 //! through the outer's mid-iter `Option<TerminationReason>` return
-//! (AGENTS.md "Solver composition" rule 3).
+//! (CONTRIBUTING.md "Solver composition" rule 3).
 //!
 //! Uses the `AlwaysFails` harness (sibling of the one in
 //! `tests/inner_executor.rs`) wrapped in [`ClosureInner`] for the

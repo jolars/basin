@@ -1,6 +1,6 @@
 //! Math abstraction the solvers depend on.
 //!
-//! Two tiers per `AGENTS.md` tenet 5:
+//! Two tiers per `CONTRIBUTING.md` tenet 5:
 //!
 //! - **Vector tier** (this module): small ops every backend can implement
 //!   well — [`ScaledAdd`], [`NormSquared`], [`NormInfinity`], [`Dot`],

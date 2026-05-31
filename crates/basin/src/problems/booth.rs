@@ -131,7 +131,7 @@ impl Gradient for Booth<Vec<f64>> {
 /// Booth function with explicit element-wise box bounds, suitable for
 /// constrained solvers ([`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)).
 ///
-/// Carries the bounds as data on the problem (tenet 4 in `AGENTS.md`)
+/// Carries the bounds as data on the problem (tenet 4 in `CONTRIBUTING.md`)
 /// and routes cost and gradient through the same raw [`booth`] /
 /// [`booth_gradient`] free fns as the unconstrained [`Booth`]. The
 /// global minimum `(1, 3)` of unconstrained Booth is on the interior

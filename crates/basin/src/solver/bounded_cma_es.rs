@@ -72,7 +72,7 @@ use super::cma_es::{compute_weights, expected_norm_n01, sort_population_ascendin
 /// - **Caller must:** implement
 ///   [`CostFunction<Param = V, Output = f64>`] **and**
 ///   [`BoxConstraints`] on the same problem type. The bounds live on
-///   the problem (tenet 4 in `AGENTS.md`); handing this solver a
+///   the problem (tenet 4 in `CONTRIBUTING.md`); handing this solver a
 ///   problem without `BoxConstraints` is a compile-time error.
 /// - **Caller must:** ensure `lower[i] ≤ upper[i]` for every component
 ///   ([`f64::clamp`] panics otherwise) and `initial_sigma > 0`.

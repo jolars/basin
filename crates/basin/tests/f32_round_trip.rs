@@ -1,6 +1,6 @@
 //! End-to-end smoke test that solvers, states, and termination criteria
 //! compose at `F = f32` over the `Vec<F>` backend. Demonstrates the
-//! provisional-choice trigger from `AGENTS.md` is now satisfiable: the
+//! provisional-choice trigger from `CONTRIBUTING.md` is now satisfiable: the
 //! whole pipeline runs at a non-`f64` scalar without further refactor.
 
 use basin::GradientDescent;

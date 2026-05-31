@@ -103,7 +103,7 @@ use crate::core::termination::{
 /// (`MaxIter` + `GradientTolerance` on the augmented Lagrangian). Building
 /// criteria per call — rather than storing an
 /// [`InnerExecutor`](crate::core::inner::InnerExecutor) — sidesteps the
-/// `MaxTime` cross-call statelessness caveat (see `AGENTS.md` "Solver
+/// `MaxTime` cross-call statelessness caveat (see `CONTRIBUTING.md` "Solver
 /// composition"). After each inner solve, the inner wrapper's
 /// [`EvalCounts`](crate::core::problem::EvalCounts) is folded into the
 /// outer's wrapper via

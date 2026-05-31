@@ -1,6 +1,6 @@
 //! Dense linear-algebra ops for LA-heavy solvers (Gauss-Newton,
 //! Levenberg-Marquardt, TRF). This is the second math tier per
-//! `AGENTS.md` tenet 5: most of these operations are carried only by
+//! `CONTRIBUTING.md` tenet 5: most of these operations are carried only by
 //! backends that can implement them honestly (currently nalgebra and
 //! faer). The two matvec ops ([`MatVec`], [`MatTransposeVec`]) are the
 //! exception — they are cheap and honest on every backend, so `Vec<f64>`
@@ -355,7 +355,7 @@ pub trait MatrixFromDiagonal<V> {
 /// `faer::Col<f64>` (`Matrix = Mat<f64>`). `Vec<f64>` and `ndarray` do not
 /// implement it — they have no honest dense matrix type — so finite-
 /// difference `Jacobian` / `Hessian` over them is a compile-time error
-/// (tenet 5 in `AGENTS.md`), mirroring the analytic
+/// (tenet 5 in `CONTRIBUTING.md`), mirroring the analytic
 /// [`Jacobian`](crate::core::problem::Jacobian) backend coverage.
 pub trait DenseMatrixFromFn<F = f64>: Sized {
     /// The dense matrix type paired with this vector backend.

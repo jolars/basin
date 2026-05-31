@@ -120,7 +120,7 @@ use crate::core::termination::{
 /// vector each outer iteration (`MaxIter` + `GradientTolerance` on the
 /// barrier objective). Building criteria per call — rather than storing an
 /// [`InnerExecutor`](crate::core::inner::InnerExecutor) — sidesteps the
-/// `MaxTime` cross-call statelessness caveat (see `AGENTS.md` "Solver
+/// `MaxTime` cross-call statelessness caveat (see `CONTRIBUTING.md` "Solver
 /// composition"). The inner runs on its own `So::State` (seeded via
 /// [`WarmStart`]) against a fresh `Problem::new(LogBarrier)`; after each
 /// solve its

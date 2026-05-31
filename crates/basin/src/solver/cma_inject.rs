@@ -54,7 +54,7 @@ use crate::solver::nelder_mead::NelderMead;
 /// (`cost + gradient + residual + jacobian + hessian`) into the outer's
 /// `cost_evals` via `delta.total_work()`, so a derivative-based inner
 /// (LM, L-BFGS-B) has its gradient work honestly collapse into the
-/// outer's single `cost_evals` counter. See AGENTS.md "Solver
+/// outer's single `cost_evals` counter. See CONTRIBUTING.md "Solver
 /// composition" rule 1.
 pub trait MemeticInner<V, F = f64>: WarmStart<V>
 where
@@ -272,7 +272,7 @@ where
 /// `delta.total_work()` — CMA-ES outer state has no `gradient_evals`
 /// field, so a derivative-based inner (LM, L-BFGS-B) has its gradient
 /// work honestly collapse into `cost_evals` with no per-trait cross-type
-/// fold. See AGENTS.md "Solver composition" rule 1.
+/// fold. See CONTRIBUTING.md "Solver composition" rule 1.
 ///
 /// # Backends
 ///
@@ -358,7 +358,7 @@ where
     /// so they MUST be stateless across calls — `MaxIter`, the
     /// `*Tolerance` family, and `MaxCostEvals` are safe;
     /// [`MaxTime`](crate::core::termination::MaxTime) is **not**.
-    /// See AGENTS.md "Solver composition" rule 2.
+    /// See CONTRIBUTING.md "Solver composition" rule 2.
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where
         C: TerminationCriterion<I::State> + 'static,

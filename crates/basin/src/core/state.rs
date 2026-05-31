@@ -5,7 +5,7 @@
 //! generic termination criteria need to read; richer state shapes extend
 //! it ([`GradientState`] for first-order solvers, [`SimplexState`] for
 //! simplex-based solvers like Nelder-Mead) so termination criteria can
-//! bound on the minimum capability they need (tenet 3 in `AGENTS.md`).
+//! bound on the minimum capability they need (tenet 3 in `CONTRIBUTING.md`).
 //!
 //! `State::Float` is generic across the trait. The vector-tier-only states
 //! ([`BasicState`], [`BasicSimplexState`], [`BasicPopulationState`]) and the
@@ -16,7 +16,7 @@
 //! shipped termination criteria all carry the same `F = f64` default. See
 //! `tests/f32_round_trip.rs` for an end-to-end demonstration that the full
 //! pipeline composes at `F = f32`, and the *Provisional choices* section of
-//! `AGENTS.md`.
+//! `CONTRIBUTING.md`.
 
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;

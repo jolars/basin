@@ -197,7 +197,7 @@ mod faer_impl {
 /// Rastrigin function with explicit element-wise box bounds, suitable
 /// for solvers that require [`BoxConstraints`] (e.g. CMA-ES variants
 /// like MA-LSCh-CMA). Carries the bounds as data on the problem (tenet
-/// 4 in `crate::core` / `AGENTS.md`) and routes the cost through the
+/// 4 in `crate::core` / `CONTRIBUTING.md`) and routes the cost through the
 /// same raw [`rastrigin`] free function as the unconstrained
 /// [`Rastrigin`].
 ///

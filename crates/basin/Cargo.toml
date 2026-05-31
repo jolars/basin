@@ -27,7 +27,7 @@ path = "src/lib.rs"
 
 [features]
 default = ["problems"]
-# Pin one version per backend (tenet 2 in AGENTS.md). A backend major bump
+# Pin one version per backend (tenet 2 in CONTRIBUTING.md). A backend major bump
 # becomes a basin major bump — do not introduce per-version features.
 # `nalgebra-sparse` rides along on the same feature: it's a separate crate,
 # but logically part of the nalgebra story (sparse Jacobians, sparse
@@ -69,7 +69,7 @@ num-traits = { version = "0.2", default-features = false, features = ["std"] }
 nalgebra = { version = "0.34", optional = true }
 nalgebra-sparse = { version = "0.11", optional = true }
 # Pure-Rust (no BLAS feature) so it stays wasm-compatible per the WASM hard
-# constraint in AGENTS.md.
+# constraint in CONTRIBUTING.md.
 ndarray = { version = "0.17", optional = true, default-features = false }
 # default-features off because faer's defaults pull in rayon (breaks wasm,
 # tenet: no parallelism in default features) and npy (file I/O). We enable

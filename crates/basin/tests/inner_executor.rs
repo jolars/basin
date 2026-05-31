@@ -3,7 +3,7 @@
 //! Defines a private outer solver `PerVertexRefine<G>` that holds k
 //! parallel iterates and refines each one with an inner GD per outer
 //! iter. Exercises the composition contracts documented in
-//! `AGENTS.md` "Solver composition":
+//! `CONTRIBUTING.md` "Solver composition":
 //!
 //!   1. Eval-counter aggregation. Inner cost evals flow through the
 //!      shared `Problem<P>` wrapper automatically; the outer state's

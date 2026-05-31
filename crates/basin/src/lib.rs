@@ -11,7 +11,7 @@
 //! Start at [`Executor`] for the user-facing driver, or [`core`] for the
 //! trait taxonomy and the iteration-loop contract.
 //!
-//! See `AGENTS.md` at the repo root for the design tenets that shape
+//! See `CONTRIBUTING.md` at the repo root for the design tenets that shape
 //! these APIs (notably tenet 3 on framework-level termination, tenet 4
 //! on first-class constraints, and tenet 5 on backend tiering).
 //!

@@ -10,7 +10,7 @@
 //!
 //! The wrapper *forwards* [`BoxConstraints`] when the inner problem carries
 //! box bounds — adding derivatives must not silently un-constrain a problem
-//! (tenet 4 in `AGENTS.md`: an adapter that *adds* a capability preserves
+//! (tenet 4 in `CONTRIBUTING.md`: an adapter that *adds* a capability preserves
 //! the rest).
 //!
 //! # Step sizes (paper-anchored)

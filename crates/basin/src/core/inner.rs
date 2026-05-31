@@ -10,7 +10,7 @@
 //! solver, the criteria vec, and the iteration budget so the same set of
 //! settings can be reused across outer iters without re-allocating.
 //!
-//! See `AGENTS.md` "Solver composition" for the three load-bearing rules
+//! See `CONTRIBUTING.md` "Solver composition" for the three load-bearing rules
 //! (eval aggregation, criteria statelessness across calls, failure
 //! routing) every outer solver must follow.
 
@@ -77,7 +77,7 @@ pub trait WarmStart<V> {
 /// # Composition contracts
 ///
 /// Three rules outer solvers must follow when consuming the result of
-/// [`run`](Self::run); see also `AGENTS.md` "Solver composition":
+/// [`run`](Self::run); see also `CONTRIBUTING.md` "Solver composition":
 ///
 /// 1. **Eval aggregation.** The [`Problem`] wrapper bumps
 ///    [`EvalCounts`](crate::core::problem::EvalCounts) on every

@@ -294,7 +294,7 @@ where
 /// (e.g. CG inside CMA, NM inside DE) call `run_loop` directly so the
 /// inner solver shares the outer's wrapper — inner cost / gradient
 /// calls bump the same [`EvalCounts`] as outer calls, so the eval
-/// aggregation contract (`AGENTS.md` "Solver composition" rule 1) is
+/// aggregation contract (`CONTRIBUTING.md` "Solver composition" rule 1) is
 /// satisfied automatically for same-problem inners. For composed
 /// solvers driving an inner against an **adapter problem** (e.g.
 /// [`LogBarrier`](crate::core::barrier::LogBarrier)), construct a
