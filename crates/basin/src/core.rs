@@ -4,6 +4,8 @@
 //! - [`problem`] — what the *user* implements about their objective:
 //!   [`CostFunction`](problem::CostFunction),
 //!   [`Gradient`](problem::Gradient),
+//!   [`MiniBatchGradient`](problem::MiniBatchGradient) (finite-sum,
+//!   for mini-batch SGD),
 //!   [`Residual`](problem::Residual) / [`Jacobian`](problem::Jacobian)
 //!   (least squares), and [`Hessian`](problem::Hessian) (second order).
 //!   Future: operators (matrix-free).

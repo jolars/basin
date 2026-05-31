@@ -44,6 +44,9 @@ pub mod nelder_mead;
 pub mod projected_gradient_descent;
 /// Elitist (1+λ) random search over a feasible box.
 pub mod random_search;
+/// Mini-batch stochastic gradient descent with constant learning rate
+/// and optional Polyak heavy-ball momentum.
+pub mod sgd;
 /// Steady-state real-coded GA with BLX-α + NAM + BGA + replace-worst.
 pub mod ssga;
 /// Levenberg-Marquardt with box bounds (TRF — trust-region-reflective).
@@ -71,5 +74,6 @@ pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
 pub use projected_gradient_descent::ProjectedGradientDescent;
 pub use random_search::RandomSearch;
+pub use sgd::Sgd;
 pub use ssga::Ssga;
 pub use trf::Trf;

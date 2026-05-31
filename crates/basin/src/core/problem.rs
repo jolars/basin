@@ -215,6 +215,117 @@ pub trait Gradient: CostFunction {
     }
 }
 
+/// Finite-sum gradient `(1/|B|) Σ_{i ∈ B} ∇fᵢ(x)` over a chosen subset
+/// `B` of component samples. Required by mini-batch stochastic solvers
+/// ([`Sgd`](crate::solver::Sgd)),
+/// which call it once per step with a fresh batch of indices the solver
+/// drew from its own [`ChaCha8Rng`](crate::core::rng::ChaCha8Rng).
+///
+/// `MiniBatchGradient` is a *subtrait* of [`CostFunction`]: the batch
+/// gradient is the gradient of the *average* per-sample loss restricted
+/// to `B`, so the parameter and error types are inherited.
+///
+/// # Contract
+///
+/// - **Implementor must:** be a *pure* function of `param` and `batch` —
+///   evaluating at the same `(param, batch)` twice must return the same
+///   `Gradient` (or the same `Err`). Same call-order independence as
+///   [`CostFunction::cost`].
+/// - **Implementor must:** return the *averaged* batch gradient
+///   `(1/|batch|) · Σ_{i ∈ batch} ∇fᵢ(param)`, not the unscaled sum.
+///   This convention matches PyTorch / JAX / ensmallen and keeps the
+///   solver's learning-rate `α` interpretation independent of batch
+///   size — switching `batch_size` does not require rescaling `α`.
+/// - **Implementor must:** return a `Gradient` whose shape matches
+///   `param`, same as [`Gradient::gradient`].
+/// - **Caller (solver) must:** pass a non-empty `batch` whose indices
+///   are all in `0..self.n_samples()`. Implementors may rely on this
+///   for indexing without bounds checks.
+///
+/// No fused `batch_cost_and_gradient` is shipped today: vanilla SGD
+/// only consumes the gradient, and the only cost it evaluates is the
+/// *full* objective via [`CostFunction::cost`] (so the cached
+/// `state.cost` reflects the true value at the current iterate, not a
+/// noisy batch estimate). Add a fused entry point alongside a solver
+/// that consumes per-batch cost.
+///
+/// # Soft reject vs hard abort
+///
+/// Same split as the [module docs](self#soft-reject-vs-hard-abort).
+/// `MiniBatchGradient::Error` is inherited from [`CostFunction::Error`].
+///
+/// # Examples
+///
+/// Linear regression `f(x) = (1/n) Σᵢ (aᵢ·x − bᵢ)²` with per-sample
+/// gradient `2 (aᵢ·x − bᵢ) aᵢ`. Storing rows of `A` and entries of
+/// `b` on the problem lets `batch_gradient` average over any subset:
+///
+/// ```
+/// use basin::{CostFunction, MiniBatchGradient};
+///
+/// struct LinReg {
+///     rows: Vec<Vec<f64>>,
+///     y: Vec<f64>,
+/// }
+/// impl CostFunction for LinReg {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = std::convert::Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+///         let n = self.rows.len() as f64;
+///         let mut s = 0.0;
+///         for (a, &yi) in self.rows.iter().zip(self.y.iter()) {
+///             let r = a.iter().zip(x).map(|(ai, xi)| ai * xi).sum::<f64>() - yi;
+///             s += r * r;
+///         }
+///         Ok(s / n)
+///     }
+/// }
+/// impl MiniBatchGradient for LinReg {
+///     type Gradient = Vec<f64>;
+///     fn n_samples(&self) -> usize {
+///         self.rows.len()
+///     }
+///     fn batch_gradient(
+///         &self,
+///         x: &Vec<f64>,
+///         batch: &[usize],
+///     ) -> Result<Vec<f64>, Self::Error> {
+///         let inv = 2.0 / batch.len() as f64;
+///         let mut g = vec![0.0; x.len()];
+///         for &i in batch {
+///             let a = &self.rows[i];
+///             let r = a.iter().zip(x).map(|(ai, xi)| ai * xi).sum::<f64>() - self.y[i];
+///             for (gj, aj) in g.iter_mut().zip(a) {
+///                 *gj += inv * r * aj;
+///             }
+///         }
+///         Ok(g)
+///     }
+/// }
+/// ```
+pub trait MiniBatchGradient: CostFunction {
+    /// The gradient type. Typically the same as
+    /// [`CostFunction::Param`].
+    type Gradient;
+
+    /// Number of component samples `n` in the finite-sum objective
+    /// `f(x) = (1/n) Σᵢ fᵢ(x)`. Fixed for a given problem instance —
+    /// solvers may cache it once at [`Solver::init`](crate::core::solver::Solver::init).
+    fn n_samples(&self) -> usize;
+
+    /// Averaged gradient over a batch of sample indices:
+    /// `(1/|batch|) · Σ_{i ∈ batch} ∇fᵢ(param)`.
+    ///
+    /// `batch` is non-empty and every index satisfies
+    /// `i < self.n_samples()` (the solver's responsibility).
+    fn batch_gradient(
+        &self,
+        param: &Self::Param,
+        batch: &[usize],
+    ) -> Result<Self::Gradient, Self::Error>;
+}
+
 /// Vector-valued residual `r(x): Param → Output` for least-squares
 /// problems. Required by Gauss-Newton, Levenberg-Marquardt, and any
 /// solver that minimizes `½‖r(x)‖²`.
@@ -693,6 +804,22 @@ impl<P: Gradient> Problem<P> {
         self.counts.cost_evals += 1;
         self.counts.gradient_evals += 1;
         self.inner.cost_and_gradient(param)
+    }
+}
+
+impl<P: MiniBatchGradient> Problem<P> {
+    /// Counted [`MiniBatchGradient::batch_gradient`]: one call bumps
+    /// [`EvalCounts::gradient_evals`] by one, regardless of batch
+    /// size — same convention as [`Gradient::gradient`] (one *call* is
+    /// one gradient evaluation; the per-sample work is implementation
+    /// detail).
+    pub fn batch_gradient(
+        &mut self,
+        param: &P::Param,
+        batch: &[usize],
+    ) -> Result<<P as MiniBatchGradient>::Gradient, P::Error> {
+        self.counts.gradient_evals += 1;
+        self.inner.batch_gradient(param, batch)
     }
 }
 

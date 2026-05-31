@@ -78,7 +78,7 @@ pub use crate::core::numdiff::{
     forward_difference_jacobian,
 };
 pub use crate::core::problem::{
-    CostFunction, EvalCounts, Gradient, Hessian, Jacobian, Problem, Residual,
+    CostFunction, EvalCounts, Gradient, Hessian, Jacobian, MiniBatchGradient, Problem, Residual,
 };
 pub use crate::core::solver::Solver;
 pub use crate::core::state::QuasiNewtonState;
@@ -102,5 +102,5 @@ pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent, ClosureInner,
     CmaEs, CmaInject, De, GaussNewton, GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState,
-    MemeticInner, NelderMead, ProjectedGradientDescent, RandomSearch, Ssga, Trf,
+    MemeticInner, NelderMead, ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
 };
