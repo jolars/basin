@@ -11,11 +11,12 @@
 //! ([`BasicState`], [`BasicSimplexState`], [`BasicPopulationState`]) and the
 //! linalg-tier-using [`QuasiNewtonState`] / [`LbfgsState`] take an `F: Scalar`
 //! parameter that defaults to `f64`, so existing call sites resolve unchanged
-//! while opening the door to `f32`. Both `Lbfgs<Bounded, S, F>` and
-//! `Lbfgs<Unbounded, S, F>` run at any `F: Scalar` — the L-BFGS-B-specific
-//! `work` buffer carries the same scalar. Every shipped termination criterion
-//! that reads costs also still assumes `f64`. See the *Provisional choices*
-//! section of `AGENTS.md`.
+//! while opening the door to `f32`. Solvers (`GradientDescent`, `Bfgs`,
+//! both `Lbfgs` modes, the NLLS family, CMA-ES, barrier / AL, etc.) and the
+//! shipped termination criteria all carry the same `F = f64` default. See
+//! `tests/f32_round_trip.rs` for an end-to-end demonstration that the full
+//! pipeline composes at `F = f32`, and the *Provisional choices* section of
+//! `AGENTS.md`.
 
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;

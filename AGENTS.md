@@ -25,12 +25,14 @@ the relevant files. Don't duplicate it here:
 
 ## Provisional choices (deferred, not tenets)
 
-- **Scalar type is hardcoded to `f64`.** Solvers, `BasicState`, and tolerance
-  defaults assume `f64` — simpler bounds and clearer constant defaults now, at
-  the cost of a future mechanical refactor. Scalar-genericity *is* coming
-  (ensmallen-style stochastic solvers want f32). **Trigger:** the first
-  stochastic solver lands, or a real f32 use case appears. Plan: switch to
-  `F: num_traits::Float` on `BasicState<P, F>`, `GradientDescent<F>`, etc.; the
-  `ScaledAdd<S>` trait is already generic. Don't add a *fake* scalar generic
-  where defaults only work in `f64` — commit to it properly or stay f64-only
-  honestly.
+- **Scalar type defaults to `f64`, but the whole pipeline is `F: Scalar`.**
+  Every state (`BasicState`, `BasicSimplexState`, `BasicPopulationState`,
+  `QuasiNewtonState`, `LbfgsState`), every solver (gradient descent, BFGS,
+  both L-BFGS modes, NLLS family, CMA-ES, barrier / AL, line searches), and
+  every shipped termination criterion carries an `F = f64` default. Existing
+  call sites resolve unchanged; `f32` works end-to-end (see
+  `tests/f32_round_trip.rs`). The `F = f64` default is preserved as the
+  ergonomic choice for the majority case, not as a constraint. The rule from
+  the original deferred-choice still stands: don't add a fake scalar generic
+  where defaults only work in `f64` — commit to it properly across the new
+  surface (state + solver + termination + math impls).
