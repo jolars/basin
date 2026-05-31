@@ -1,18 +1,16 @@
 //! Backend-agnostic slice views over the parameter vector.
 //!
 //! L-BFGS-B's inner numerics (cauchy, subsm, formk, compact-form
-//! helpers) all operate on `&[f64]` / `&mut [f64]`. To stay generic
-//! over the user-chosen parameter backend (`Vec<f64>`, nalgebra
-//! `DVector<f64>`, faer `Col<f64>`, ndarray `Array1<f64>`), the
-//! top-level solver views each vector as a contiguous f64 slice at
-//! iteration boundaries. The two
-//! tiny traits below capture that view; impls are per-backend and
-//! `pub(crate)` to keep them off the public API surface.
+//! helpers) operate on `&[F]` / `&mut [F]` for the solver's scalar
+//! `F: Scalar`. To stay generic over the user-chosen parameter backend
+//! (`Vec<F>`, nalgebra `DVector<F>`, faer `Col<F>`, ndarray
+//! `Array1<F>`), the top-level solver views each vector as a
+//! contiguous `F` slice at iteration boundaries. The two tiny traits
+//! below capture that view; impls are per-backend and `pub(crate)` to
+//! keep them off the public API surface.
 //!
-//! The trait carries an `F = f64` default so the unbounded L-BFGS
-//! solver path can run with `F = f32` while the L-BFGS-B bounded path
-//! (cauchy / subsm / formk and friends — still hard-coded to `&[f64]`)
-//! resolves through the default unchanged.
+//! The trait carries an `F = f64` default so existing call sites
+//! resolve unchanged.
 
 /// Read-only view of a parameter vector as a contiguous `&[F]`.
 pub(crate) trait AsFloatSlice<F = f64> {

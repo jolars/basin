@@ -130,10 +130,10 @@ use self::subsm::subsm;
 /// # Backends
 ///
 /// Generic over any parameter type implementing
-/// `AsFloatSliceMut` + [`Clone`] + [`Dot`] +
-/// [`ScaledAdd<f64>`]. Built-in impls cover `Vec<f64>`,
-/// `nalgebra::DVector<f64>` (feature `nalgebra`), `faer::Col<f64>`
-/// (feature `faer`), and `ndarray::Array1<f64>` (feature `ndarray`).
+/// `AsFloatSliceMut<F>` + [`Clone`] + [`Dot<F>`] +
+/// [`ScaledAdd<F>`]. Built-in impls cover `Vec<F>`,
+/// `nalgebra::DVector<F>` (feature `nalgebra`), `faer::Col<F>`
+/// (feature `faer`), and `ndarray::Array1<F>` (feature `ndarray`).
 /// Other backends can implement the trait if their storage is
 /// contiguous.
 ///
@@ -146,8 +146,7 @@ use self::subsm::subsm;
 pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     line_search: S,
     /// Fortran `dr ≤ epsmch · ddum` curvature-skip threshold
-    /// (`lbfgsb.f:875`). Defaults to `f64::EPSILON` (or `F::epsilon()`
-    /// when the unbounded path runs at a non-`f64` scalar). Consulted
+    /// (`lbfgsb.f:875`). Defaults to `F::epsilon()`. Consulted
     /// in both modes for the limited-memory update acceptance test.
     epsilon: F,
     /// Built-in projected-gradient convergence tolerance. Bounded mode
@@ -161,7 +160,7 @@ pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     /// the framework-level
     /// [`GradientTolerance`](crate::core::termination::GradientTolerance)
     /// instead.
-    tol_pg: f64,
+    tol_pg: F,
     /// Default limited-memory history capacity (Fortran `m`,
     /// `references/lbfgsb-v3.0/`). Default `10`. Only consulted when
     /// the solver constructs the state itself — e.g. as a
@@ -181,7 +180,7 @@ pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
 /// Type-state marker for box-constrained L-BFGS-B (the default).
 /// Constructors live on [`Lbfgs<Bounded, MoreThuente>`]; the
 /// [`Solver`] impl requires `P: BoxConstraints` and the full
-/// `AsFloatSliceMut` + [`Dot`] + [`ScaledAdd<f64>`] backend.
+/// `AsFloatSliceMut<F>` + [`Dot<F>`] + [`ScaledAdd<F>`] backend.
 /// [`Lbfgsb`] is the canonical type alias for this mode.
 pub struct Bounded;
 
@@ -242,15 +241,17 @@ impl Lbfgs<Unbounded, MoreThuente> {
     }
 }
 
-impl<S> Lbfgs<Bounded, S> {
+impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
     /// L-BFGS-B with an explicit line-search strategy. Note: using
     /// anything other than [`MoreThuente`] forfeits iteration-wise
-    /// parity with the Fortran reference.
+    /// parity with the Fortran reference. The curvature-skip threshold
+    /// defaults to `F::epsilon()` (matching `f64::EPSILON` when
+    /// `F = f64`); `tol_pg` defaults to `1e-10`.
     pub fn with_line_search(line_search: S) -> Self {
         Self {
             line_search,
-            epsilon: f64::EPSILON,
-            tol_pg: 1e-10,
+            epsilon: F::epsilon(),
+            tol_pg: F::from_f64(1e-10).unwrap(),
             m_capacity: 10,
             _mode: PhantomData,
         }
@@ -261,8 +262,8 @@ impl<S> Lbfgs<Bounded, S> {
     /// semantics, used by the iteration-wise parity test). Bounded
     /// mode only — the unbounded path doesn't compute a projected
     /// gradient.
-    pub fn tol_pg(mut self, tol_pg: f64) -> Self {
-        assert!(tol_pg >= 0.0, "tol_pg must be ≥ 0");
+    pub fn tol_pg(mut self, tol_pg: F) -> Self {
+        assert!(tol_pg >= F::zero(), "tol_pg must be ≥ 0");
         self.tol_pg = tol_pg;
         self
     }
@@ -271,7 +272,7 @@ impl<S> Lbfgs<Bounded, S> {
     /// the configured line search, curvature threshold, and history
     /// capacity. Mirrors [`NelderMead::projected`](crate::solver::NelderMead::projected)'s
     /// type-state transition.
-    pub fn unbounded(self) -> Lbfgs<Unbounded, S> {
+    pub fn unbounded(self) -> Lbfgs<Unbounded, S, F> {
         Lbfgs {
             line_search: self.line_search,
             epsilon: self.epsilon,
@@ -290,20 +291,17 @@ impl<S, F: Scalar> Lbfgs<Unbounded, S, F> {
         Self {
             line_search,
             epsilon: F::epsilon(),
-            tol_pg: 1e-10,
+            tol_pg: F::from_f64(1e-10).unwrap(),
             m_capacity: 10,
             _mode: PhantomData,
         }
     }
-}
 
-impl<S> Lbfgs<Unbounded, S> {
     /// Switch to box-constrained [`Bounded`] mode while preserving the
     /// configured line search, curvature threshold, and history
     /// capacity. The resulting solver requires the problem to
-    /// implement [`BoxConstraints`]; only available when `F = f64`
-    /// (the bounded path's compact-form numerics are still f64-only).
-    pub fn bounded(self) -> Lbfgs<Bounded, S> {
+    /// implement [`BoxConstraints`].
+    pub fn bounded(self) -> Lbfgs<Bounded, S, F> {
         Lbfgs {
             line_search: self.line_search,
             epsilon: self.epsilon,
@@ -339,22 +337,23 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
     }
 }
 
-impl<P, V, S> Solver<P, LbfgsState<V>> for Lbfgs<Bounded, S>
+impl<P, V, S, F> Solver<P, LbfgsState<V, F>> for Lbfgs<Bounded, S, F>
 where
-    P: CostFunction<Param = V, Output = f64> + Gradient<Gradient = V> + BoxConstraints,
-    V: AsFloatSliceMut + Clone + Dot + ScaledAdd<f64>,
-    S: LineSearch<P, V, Error = P::Error>,
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V> + BoxConstraints,
+    V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F>,
+    S: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V>,
-    ) -> Result<LbfgsState<V>, Self::Error> {
+        mut state: LbfgsState<V, F>,
+    ) -> Result<LbfgsState<V, F>, Self::Error> {
         let n = state.param.as_float_slice().len();
         let m = state.m_capacity;
-        let mut work = LbfgsbWork::new(n, m);
+        let mut work = LbfgsbWork::<F>::new(n, m);
 
         // Project the initial iterate onto the feasible box and
         // initialise `iwhere`, `cnstnd`, `boxed` (Fortran `active`,
@@ -378,8 +377,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V>,
-    ) -> Result<(LbfgsState<V>, Option<TerminationReason>), Self::Error> {
+        mut state: LbfgsState<V, F>,
+    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error> {
         // Take the gradient and cost cached at the current `param`;
         // restore them on early exits.
         let g_v = state
@@ -445,8 +444,8 @@ where
                 // Unbounded with history: skip GCP, set z := x.
                 work.z.copy_from_slice(state.param.as_float_slice());
             } else {
-                let ws_cols: Vec<&[f64]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
-                let wy_cols: Vec<&[f64]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
+                let ws_cols: Vec<&[F]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
+                let wy_cols: Vec<&[F]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
                 let cauchy_res = cauchy(
                     state.param.as_float_slice(),
                     problem.inner().lower().as_float_slice(),
@@ -500,10 +499,8 @@ where
             // -------------------------------------------------------
             if nfree > 0 && col > 0 {
                 if wrk {
-                    let ws_cols: Vec<&[f64]> =
-                        state.ws.iter().map(|v| v.as_float_slice()).collect();
-                    let wy_cols: Vec<&[f64]> =
-                        state.wy.iter().map(|v| v.as_float_slice()).collect();
+                    let ws_cols: Vec<&[F]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
+                    let wy_cols: Vec<&[F]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
                     if formk(
                         &mut work.wn,
                         &mut work.wn1,
@@ -561,8 +558,8 @@ where
                 }
 
                 // subsm: writes the subspace minimizer into `z`.
-                let ws_cols: Vec<&[f64]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
-                let wy_cols: Vec<&[f64]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
+                let ws_cols: Vec<&[F]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
+                let wy_cols: Vec<&[F]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
                 let subsm_res = subsm(
                     &mut work.z,
                     &mut work.r,
@@ -598,14 +595,14 @@ where
             for i in 0..n {
                 work.d[i] = work.z[i] - state.param.as_float_slice()[i];
             }
-            let dtd: f64 = work.d.iter().map(|x| x * x).sum();
+            let dtd: F = work.d.iter().fold(F::zero(), |acc, x| acc + (*x) * (*x));
             let dnorm = dtd.sqrt();
             work.dnorm = dnorm;
 
             // Maximum feasible step (Fortran lnsrlb `stpmx`).
             let stpmx = if cnstnd {
                 if state.iter == 0 {
-                    1.0
+                    F::one()
                 } else {
                     feasible_step_cap(
                         state.param.as_float_slice(),
@@ -615,13 +612,13 @@ where
                     )
                 }
             } else {
-                1.0e10
+                F::from_f64(1.0e10).unwrap()
             };
 
             let alpha_init = if state.iter == 0 && !boxed {
-                (1.0_f64 / dnorm).min(stpmx)
+                (F::one() / dnorm).min(stpmx)
             } else {
-                1.0
+                F::one()
             };
 
             // Build a V-typed direction for the line search.
@@ -636,8 +633,7 @@ where
                 .d
                 .iter()
                 .zip(g_v.as_float_slice())
-                .map(|(a, b)| a * b)
-                .sum();
+                .fold(F::zero(), |acc, (a, b)| acc + (*a) * (*b));
 
             // Drive the line search. Fortran `lnsrlb` sets the
             // initial trial step and the feasibility cap on
@@ -653,7 +649,7 @@ where
                 .line_search
                 .next(problem, &state.param, f_old, &g_v, &d_v)?;
 
-            if !(stp.is_finite() && stp > 0.0) {
+            if !(stp.is_finite() && stp > F::zero()) {
                 // Line search bailed. If col == 0, abnormal
                 // termination — there's no compact-form state to
                 // reset. Otherwise restart with cleared history. The
@@ -691,11 +687,11 @@ where
             let g_new_slice = g_new.as_float_slice();
             let g_old_slice = work.r.as_slice(); // saved earlier
 
-            let mut dr = 0.0;
+            let mut dr = F::zero();
             for i in 0..n {
                 let yi = g_new_slice[i] - g_old_slice[i];
                 let si = stp * work.d[i];
-                dr += yi * si;
+                dr = dr + yi * si;
             }
             let ddum = -work.gdold * stp;
 
@@ -724,12 +720,12 @@ where
                         state.ws.clear();
                         state.wy.clear();
                         for v in state.sy.iter_mut() {
-                            *v = 0.0;
+                            *v = F::zero();
                         }
                         for v in state.ss.iter_mut() {
-                            *v = 0.0;
+                            *v = F::zero();
                         }
-                        state.theta = 1.0;
+                        state.theta = F::one();
                         work.reset_history();
                     }
                 } else {
@@ -921,10 +917,10 @@ where
 
 /// Project a candidate `x` into `[l, u]` and initialize `iwhere`
 /// per Fortran `active` (`lbfgsb.f:1004`).
-fn active_init(
-    x: &mut [f64],
-    l: &[f64],
-    u: &[f64],
+fn active_init<F: Scalar>(
+    x: &mut [F],
+    l: &[F],
+    u: &[F],
     iwhere: &mut [i8],
     cnstnd: &mut bool,
     boxed: &mut bool,
@@ -961,14 +957,15 @@ fn active_init(
 
 /// Infinity-norm of the projected gradient (Fortran `projgr`,
 /// `lbfgsb.f:2942`).
-fn projected_gradient_norm(x: &[f64], g: &[f64], l: &[f64], u: &[f64]) -> f64 {
-    let mut sbgnrm = 0.0_f64;
+fn projected_gradient_norm<F: Scalar>(x: &[F], g: &[F], l: &[F], u: &[F]) -> F {
+    let zero = F::zero();
+    let mut sbgnrm = zero;
     for i in 0..x.len() {
         let mut gi = g[i];
         let lower_finite = l[i].is_finite();
         let upper_finite = u[i].is_finite();
         if lower_finite || upper_finite {
-            if gi < 0.0 {
+            if gi < zero {
                 if upper_finite {
                     gi = (x[i] - u[i]).max(gi);
                 }
@@ -976,7 +973,10 @@ fn projected_gradient_norm(x: &[f64], g: &[f64], l: &[f64], u: &[f64]) -> f64 {
                 gi = (x[i] - l[i]).min(gi);
             }
         }
-        sbgnrm = sbgnrm.max(gi.abs());
+        let abs_gi = gi.abs();
+        if abs_gi > sbgnrm {
+            sbgnrm = abs_gi;
+        }
     }
     sbgnrm
 }
@@ -984,23 +984,24 @@ fn projected_gradient_norm(x: &[f64], g: &[f64], l: &[f64], u: &[f64]) -> f64 {
 /// Largest feasible step `stpmx` along `d` such that `x + stpmx · d`
 /// stays inside `[l, u]`. Fortran `lnsrlb` initial-step calculation
 /// (`lbfgsb.f:2511-2530`).
-fn feasible_step_cap(x: &[f64], l: &[f64], u: &[f64], d: &[f64]) -> f64 {
-    let mut stpmx = 1.0e10_f64;
+fn feasible_step_cap<F: Scalar>(x: &[F], l: &[F], u: &[F], d: &[F]) -> F {
+    let zero = F::zero();
+    let mut stpmx = F::from_f64(1.0e10).unwrap();
     for i in 0..x.len() {
         let di = d[i];
         let lower_finite = l[i].is_finite();
         let upper_finite = u[i].is_finite();
-        if di < 0.0 && lower_finite {
+        if di < zero && lower_finite {
             let gap = l[i] - x[i];
-            if gap >= 0.0 {
-                stpmx = 0.0;
+            if gap >= zero {
+                stpmx = zero;
             } else if di * stpmx < gap {
                 stpmx = gap / di;
             }
-        } else if di > 0.0 && upper_finite {
+        } else if di > zero && upper_finite {
             let gap = u[i] - x[i];
-            if gap <= 0.0 {
-                stpmx = 0.0;
+            if gap <= zero {
+                stpmx = zero;
             } else if di * stpmx > gap {
                 stpmx = gap / di;
             }
@@ -1063,26 +1064,26 @@ fn freev(
 /// `r[0..nfree]`; consumes the compact-form Cauchy correction stored
 /// in `wa_c` (= `W'(xcp − x)` from cauchy).
 #[allow(clippy::too_many_arguments)]
-fn cmprlb<V>(
-    x: &[f64],
-    g: &[f64],
-    z: &[f64],
-    r: &mut [f64],
-    wa_c: &mut [f64],
-    wa_p: &mut [f64],
-    sy: &[f64],
-    wt: &[f64],
+fn cmprlb<V, F: Scalar>(
+    x: &[F],
+    g: &[F],
+    z: &[F],
+    r: &mut [F],
+    wa_c: &mut [F],
+    wa_p: &mut [F],
+    sy: &[F],
+    wt: &[F],
     ws: &[V],
     wy: &[V],
     index: &[usize],
     nfree: usize,
     cnstnd: bool,
     col: usize,
-    theta: f64,
+    theta: F,
     m: usize,
 ) -> Result<(), ()>
 where
-    V: AsFloatSlice,
+    V: AsFloatSlice<F>,
 {
     if !cnstnd && col > 0 {
         for i in 0..x.len() {
@@ -1103,7 +1104,7 @@ where
         let ws_j = ws[j].as_float_slice();
         for i in 0..nfree {
             let k = index[i];
-            r[i] += wy_j[k] * a1 + ws_j[k] * a2;
+            r[i] = r[i] + wy_j[k] * a1 + ws_j[k] * a2;
         }
     }
     Ok(())
@@ -1113,7 +1114,12 @@ where
 /// based on `restart_budget`. Returns `true` if a restart was budgeted
 /// and the caller should `continue` the outer loop, `false` if budget
 /// was exhausted.
-fn try_restart<V>(state: &mut LbfgsState<V>, g_v: &V, f_old: f64, restart_budget: &mut u8) -> bool
+fn try_restart<V, F: Scalar>(
+    state: &mut LbfgsState<V, F>,
+    g_v: &V,
+    f_old: F,
+    restart_budget: &mut u8,
+) -> bool
 where
     V: Clone,
 {
@@ -1129,12 +1135,12 @@ where
     state.ws.clear();
     state.wy.clear();
     for v in state.sy.iter_mut() {
-        *v = 0.0;
+        *v = F::zero();
     }
     for v in state.ss.iter_mut() {
-        *v = 0.0;
+        *v = F::zero();
     }
-    state.theta = 1.0;
+    state.theta = F::one();
     if let Some(work) = state.work.as_mut() {
         work.reset_history();
     }
@@ -1144,7 +1150,10 @@ where
 /// Same as `try_restart`, but used after the line search has already
 /// applied side effects we need to leave intact (state.gradient / cost
 /// already restored by the caller).
-fn try_restart_after_lnsrch<V>(state: &mut LbfgsState<V>, restart_budget: &mut u8) -> bool {
+fn try_restart_after_lnsrch<V, F: Scalar>(
+    state: &mut LbfgsState<V, F>,
+    restart_budget: &mut u8,
+) -> bool {
     if *restart_budget == 0 {
         return false;
     }
@@ -1152,12 +1161,12 @@ fn try_restart_after_lnsrch<V>(state: &mut LbfgsState<V>, restart_budget: &mut u
     state.ws.clear();
     state.wy.clear();
     for v in state.sy.iter_mut() {
-        *v = 0.0;
+        *v = F::zero();
     }
     for v in state.ss.iter_mut() {
-        *v = 0.0;
+        *v = F::zero();
     }
-    state.theta = 1.0;
+    state.theta = F::one();
     if let Some(work) = state.work.as_mut() {
         work.reset_history();
     }

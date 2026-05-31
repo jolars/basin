@@ -21,10 +21,9 @@ use crate::core::state::{CountsMirror, GradientState, State};
 /// at `mainlb`'s `matupd` call site.
 ///
 /// The scalar `F` defaults to `f64` so existing `LbfgsState<V>` call
-/// sites resolve unchanged. The L-BFGS-B-specific `work` buffer
-/// ([`LbfgsbWork`]) stays hard-coded to `f64` for now — the bounded
-/// path's compact-form numerics (cauchy / subsm / formk) haven't been
-/// generified, so `Lbfgs<Bounded, S>` only matches `F = f64`.
+/// sites resolve unchanged. Both the bounded and unbounded paths now
+/// run F-generic; the L-BFGS-B-specific `work` buffer
+/// (`LbfgsbWork<F>`, private) carries the same scalar.
 pub struct LbfgsState<V, F = f64> {
     pub(crate) param: V,
     pub(crate) cost: Option<F>,
@@ -54,7 +53,7 @@ pub struct LbfgsState<V, F = f64> {
     /// pieces of `isave`/`dsave` that survive across iterations).
     /// Initialized lazily by `LBFGSB::init`; absent when [`LbfgsState`]
     /// is used by other solvers (e.g. the unbounded L-BFGS path).
-    pub(crate) work: Option<LbfgsbWork>,
+    pub(crate) work: Option<LbfgsbWork<F>>,
 }
 
 /// Mutable working storage threaded through the L-BFGS-B iteration.
@@ -70,43 +69,43 @@ pub struct LbfgsState<V, F = f64> {
 /// Stored on [`LbfgsState`] rather than the solver struct so that
 /// [`crate::core::solver::Solver`] implementations stay
 /// configuration-only (mirroring [`crate::solver::BFGS`]).
-pub(crate) struct LbfgsbWork {
+pub(crate) struct LbfgsbWork<F = f64> {
     // ---- Compact-form matrices ----
     /// `2m × 2m` row-major; stores the `L·E·Lᵀ` factor of the
     /// indefinite middle matrix `K`. Output of `formk`, consumed by
     /// `subsm`.
-    pub(crate) wn: Vec<f64>,
+    pub(crate) wn: Vec<F>,
     /// `2m × 2m` row-major; the lower-triangular `N` Gram cache that
     /// `formk` maintains incrementally across outer iterations.
-    pub(crate) wn1: Vec<f64>,
+    pub(crate) wn1: Vec<F>,
     /// `m × m` row-major; Cholesky factor of `T = θ SᵀS + LD⁻¹Lᵀ`,
     /// produced by `formt`, consumed by `bmv` inside `cauchy`.
-    pub(crate) wt: Vec<f64>,
+    pub(crate) wt: Vec<F>,
 
     // ---- n-sized working vectors ----
     /// Cauchy point / subspace Newton point (Fortran `z`).
-    pub(crate) z: Vec<f64>,
+    pub(crate) z: Vec<F>,
     /// Reduced gradient at the Cauchy point (Fortran `r`).
-    pub(crate) r: Vec<f64>,
+    pub(crate) r: Vec<F>,
     /// Search direction `d = z − x` (Fortran `d`).
-    pub(crate) d: Vec<f64>,
+    pub(crate) d: Vec<F>,
     /// Cauchy breakpoint buffer / line-search previous iterate
     /// (Fortran `t`).
-    pub(crate) t_buf: Vec<f64>,
+    pub(crate) t_buf: Vec<F>,
     /// Subspace projected-Newton safeguard slot (Fortran `xp`).
-    pub(crate) xp: Vec<f64>,
+    pub(crate) xp: Vec<F>,
 
     // ---- 2m-sized cauchy / subsm scratch ----
     /// `Wᵀ d` accumulator inside `cauchy` (Fortran `wa(1..2m)`).
-    pub(crate) wa_p: Vec<f64>,
+    pub(crate) wa_p: Vec<F>,
     /// `Wᵀ (xcp − x)` accumulator (Fortran `wa(2m+1..4m)`); fed to
     /// `subsm` via `cmprlb`.
-    pub(crate) wa_c: Vec<f64>,
+    pub(crate) wa_c: Vec<F>,
     /// Breakpoint `W` row inside `cauchy` (Fortran `wa(4m+1..6m)`).
-    pub(crate) wa_wbp: Vec<f64>,
+    pub(crate) wa_wbp: Vec<F>,
     /// Middle-matrix solve scratch (Fortran `wa(6m+1..8m)`); reused
     /// by `subsm` as `wv`.
-    pub(crate) wa_v: Vec<f64>,
+    pub(crate) wa_v: Vec<F>,
 
     // ---- Integer working arrays ----
     /// Cauchy-point variable classification (`FREE_NOT_MOVED`, etc.).
@@ -129,34 +128,34 @@ pub(crate) struct LbfgsbWork {
     pub(crate) iupdat: u32,
     /// `‖d‖` from the last line search; used on subsequent calls to
     /// set the initial step.
-    pub(crate) dnorm: f64,
+    pub(crate) dnorm: F,
     /// `−gᵀd` from the previous line search (Fortran `gdold`); needed
     /// for the curvature-skip threshold.
-    pub(crate) gdold: f64,
+    pub(crate) gdold: F,
     /// Number of free variables at the GCP (`nfree`). Carried across
     /// iterations because `freev` uses the *previous* `index` to
     /// detect leaving variables.
     pub(crate) nfree: usize,
 }
 
-impl LbfgsbWork {
+impl<F: Scalar> LbfgsbWork<F> {
     /// Pre-allocate every buffer to its required size given the
     /// problem dimension `n` and history capacity `m`.
     pub(crate) fn new(n: usize, m: usize) -> Self {
         let two_m = 2 * m;
         Self {
-            wn: vec![0.0; two_m * two_m],
-            wn1: vec![0.0; two_m * two_m],
-            wt: vec![0.0; m * m],
-            z: vec![0.0; n],
-            r: vec![0.0; n],
-            d: vec![0.0; n],
-            t_buf: vec![0.0; n],
-            xp: vec![0.0; n],
-            wa_p: vec![0.0; two_m],
-            wa_c: vec![0.0; two_m],
-            wa_wbp: vec![0.0; two_m],
-            wa_v: vec![0.0; two_m],
+            wn: vec![F::zero(); two_m * two_m],
+            wn1: vec![F::zero(); two_m * two_m],
+            wt: vec![F::zero(); m * m],
+            z: vec![F::zero(); n],
+            r: vec![F::zero(); n],
+            d: vec![F::zero(); n],
+            t_buf: vec![F::zero(); n],
+            xp: vec![F::zero(); n],
+            wa_p: vec![F::zero(); two_m],
+            wa_c: vec![F::zero(); two_m],
+            wa_wbp: vec![F::zero(); two_m],
+            wa_v: vec![F::zero(); two_m],
             iwhere: vec![0; n],
             index: (0..n).collect(),
             indx2: vec![0; n],
@@ -164,8 +163,8 @@ impl LbfgsbWork {
             boxed: true,
             updatd: false,
             iupdat: 0,
-            dnorm: 0.0,
-            gdold: 0.0,
+            dnorm: F::zero(),
+            gdold: F::zero(),
             nfree: n,
         }
     }

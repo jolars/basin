@@ -49,6 +49,8 @@
 //! triangle of `wn` ends up storing the upper-triangular `L^T` factor
 //! used by [`super::subsm`].
 
+use crate::core::math::Scalar;
+
 /// Reasons [`formk`] can fail. Matches Fortran's `info ≠ 0` exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FormkError {
@@ -87,15 +89,15 @@ pub(crate) enum FormkError {
 ///   for the `> m` shift trigger).
 /// - `updatd` — was history updated since the previous formk call?
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn formk(
-    wn: &mut [f64],
-    wn1: &mut [f64],
+pub(crate) fn formk<F: Scalar>(
+    wn: &mut [F],
+    wn1: &mut [F],
     m: usize,
     col: usize,
-    theta: f64,
-    sy: &[f64],
-    ws_cols: &[&[f64]],
-    wy_cols: &[&[f64]],
+    theta: F,
+    sy: &[F],
+    ws_cols: &[&[F]],
+    wy_cols: &[&[F]],
     nsub: usize,
     ind: &[usize],
     nenter: usize,
@@ -155,17 +157,17 @@ pub(crate) fn formk(
         // `last = col − 1` is the 0-indexed slot of the newest pair.
         let last = col - 1;
         for jy in 0..col {
-            let mut temp1 = 0.0; // (Y'ZZ'Y)[last, jy] over free indices
-            let mut temp2 = 0.0; // (S'AA'S)[last, jy] over active indices
-            let mut temp3 = 0.0; // (L_a)[last, jy] over active indices
+            let mut temp1 = F::zero(); // (Y'ZZ'Y)[last, jy] over free indices
+            let mut temp2 = F::zero(); // (S'AA'S)[last, jy] over active indices
+            let mut temp3 = F::zero(); // (L_a)[last, jy] over active indices
             for k in 0..nsub {
                 let k1 = ind[k];
-                temp1 += wy_cols[last][k1] * wy_cols[jy][k1];
+                temp1 = temp1 + wy_cols[last][k1] * wy_cols[jy][k1];
             }
             for k in nsub..n {
                 let k1 = ind[k];
-                temp2 += ws_cols[last][k1] * ws_cols[jy][k1];
-                temp3 += ws_cols[last][k1] * wy_cols[jy][k1];
+                temp2 = temp2 + ws_cols[last][k1] * ws_cols[jy][k1];
+                temp3 = temp3 + ws_cols[last][k1] * wy_cols[jy][k1];
             }
             wn1[last * two_m + jy] = temp1;
             wn1[(m + last) * two_m + (m + jy)] = temp2;
@@ -175,10 +177,10 @@ pub(crate) fn formk(
         // Last column of (2,1): R_z column for the new pair. Walks the
         // *free* index set with `last` on the `wy` side.
         for i in 0..col {
-            let mut temp3 = 0.0;
+            let mut temp3 = F::zero();
             for k in 0..nsub {
                 let k1 = ind[k];
-                temp3 += ws_cols[i][k1] * wy_cols[last][k1];
+                temp3 = temp3 + ws_cols[i][k1] * wy_cols[last][k1];
             }
             wn1[(m + i) * two_m + last] = temp3;
         }
@@ -193,22 +195,22 @@ pub(crate) fn formk(
     // -----------------------------------------------------------------
     for iy in 0..upcl {
         for jy in 0..=iy {
-            let mut temp1 = 0.0;
-            let mut temp2 = 0.0;
-            let mut temp3 = 0.0;
-            let mut temp4 = 0.0;
+            let mut temp1 = F::zero();
+            let mut temp2 = F::zero();
+            let mut temp3 = F::zero();
+            let mut temp4 = F::zero();
             for k in 0..nenter {
                 let k1 = indx2[k];
-                temp1 += wy_cols[iy][k1] * wy_cols[jy][k1];
-                temp2 += ws_cols[iy][k1] * ws_cols[jy][k1];
+                temp1 = temp1 + wy_cols[iy][k1] * wy_cols[jy][k1];
+                temp2 = temp2 + ws_cols[iy][k1] * ws_cols[jy][k1];
             }
             for k in ileave..n {
                 let k1 = indx2[k];
-                temp3 += wy_cols[iy][k1] * wy_cols[jy][k1];
-                temp4 += ws_cols[iy][k1] * ws_cols[jy][k1];
+                temp3 = temp3 + wy_cols[iy][k1] * wy_cols[jy][k1];
+                temp4 = temp4 + ws_cols[iy][k1] * ws_cols[jy][k1];
             }
-            wn1[iy * two_m + jy] += temp1 - temp3;
-            wn1[(m + iy) * two_m + (m + jy)] += -temp2 + temp4;
+            wn1[iy * two_m + jy] = wn1[iy * two_m + jy] + temp1 - temp3;
+            wn1[(m + iy) * two_m + (m + jy)] = wn1[(m + iy) * two_m + (m + jy)] + (-temp2 + temp4);
         }
     }
 
@@ -216,22 +218,22 @@ pub(crate) fn formk(
     // (block) diagonal (`is ≤ jy + m` in Fortran ⇔ `iy ≤ jy` here).
     for iy in 0..upcl {
         for jy in 0..upcl {
-            let mut temp1 = 0.0;
-            let mut temp3 = 0.0;
+            let mut temp1 = F::zero();
+            let mut temp3 = F::zero();
             for k in 0..nenter {
                 let k1 = indx2[k];
-                temp1 += ws_cols[iy][k1] * wy_cols[jy][k1];
+                temp1 = temp1 + ws_cols[iy][k1] * wy_cols[jy][k1];
             }
             for k in ileave..n {
                 let k1 = indx2[k];
-                temp3 += ws_cols[iy][k1] * wy_cols[jy][k1];
+                temp3 = temp3 + ws_cols[iy][k1] * wy_cols[jy][k1];
             }
             let delta = if iy <= jy {
                 temp1 - temp3
             } else {
                 -temp1 + temp3
             };
-            wn1[(m + iy) * two_m + jy] += delta;
+            wn1[(m + iy) * two_m + jy] = wn1[(m + iy) * two_m + jy] + delta;
         }
     }
 
@@ -261,7 +263,7 @@ pub(crate) fn formk(
             wn[jy * two_m + is] = wn1[is1 * two_m + jy];
         }
         // Add D's diagonal back into (1,1).
-        wn[iy * two_m + iy] += sy[iy * m + iy];
+        wn[iy * two_m + iy] = wn[iy * two_m + iy] + sy[iy * m + iy];
     }
 
     // -----------------------------------------------------------------
@@ -271,9 +273,9 @@ pub(crate) fn formk(
         let mut s = wn[j * two_m + j];
         for k in 0..j {
             let jkj = wn[k * two_m + j];
-            s -= jkj * jkj;
+            s = s - jkj * jkj;
         }
-        if !s.is_finite() || s <= 0.0 {
+        if !s.is_finite() || s <= F::zero() {
             return Err(FormkError::NotPositiveDefiniteFirst);
         }
         let djj = s.sqrt();
@@ -281,7 +283,7 @@ pub(crate) fn formk(
         for i in (j + 1)..col {
             let mut s = wn[j * two_m + i];
             for k in 0..j {
-                s -= wn[k * two_m + j] * wn[k * two_m + i];
+                s = s - wn[k * two_m + j] * wn[k * two_m + i];
             }
             wn[j * two_m + i] = s / djj;
         }
@@ -295,7 +297,7 @@ pub(crate) fn formk(
         for i in 0..col {
             let mut s = wn[i * two_m + js];
             for k in 0..i {
-                s -= wn[k * two_m + i] * wn[k * two_m + js];
+                s = s - wn[k * two_m + i] * wn[k * two_m + js];
             }
             wn[i * two_m + js] = s / wn[i * two_m + i];
         }
@@ -306,11 +308,11 @@ pub(crate) fn formk(
     // -----------------------------------------------------------------
     for is in col..col2 {
         for js in is..col2 {
-            let mut acc = 0.0;
+            let mut acc = F::zero();
             for k in 0..col {
-                acc += wn[k * two_m + is] * wn[k * two_m + js];
+                acc = acc + wn[k * two_m + is] * wn[k * two_m + js];
             }
-            wn[is * two_m + js] += acc;
+            wn[is * two_m + js] = wn[is * two_m + js] + acc;
         }
     }
 
@@ -322,9 +324,9 @@ pub(crate) fn formk(
         let mut s = wn[(col + j) * two_m + (col + j)];
         for k in 0..j {
             let jkj = wn[(col + k) * two_m + (col + j)];
-            s -= jkj * jkj;
+            s = s - jkj * jkj;
         }
-        if !s.is_finite() || s <= 0.0 {
+        if !s.is_finite() || s <= F::zero() {
             return Err(FormkError::NotPositiveDefiniteSecond);
         }
         let djj = s.sqrt();
@@ -332,7 +334,7 @@ pub(crate) fn formk(
         for i in (j + 1)..col {
             let mut s = wn[(col + j) * two_m + (col + i)];
             for k in 0..j {
-                s -= wn[(col + k) * two_m + (col + j)] * wn[(col + k) * two_m + (col + i)];
+                s = s - wn[(col + k) * two_m + (col + j)] * wn[(col + k) * two_m + (col + i)];
             }
             wn[(col + j) * two_m + (col + i)] = s / djj;
         }

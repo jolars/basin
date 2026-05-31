@@ -15,11 +15,13 @@
 //!   Fortran layout of `wt(m, m)` with only the leading `col × col`
 //!   live.
 //!
-//! All routines operate on `&[f64]` / `&mut [f64]`; the surrounding
-//! solver is responsible for sourcing those slices from whichever
-//! backend [`LbfgsState`][s] is parameterized on.
+//! All routines operate on `&[F]` / `&mut [F]` for `F: Scalar`; the
+//! surrounding solver is responsible for sourcing those slices from
+//! whichever backend [`LbfgsState`][s] is parameterized on.
 //!
 //! [s]: crate::core::state::LbfgsState
+
+use crate::core::math::Scalar;
 
 /// Build the upper triangle of `T = θ · SᵀS + L D⁻¹ Lᵀ` from
 /// `sy = SᵀY`, `ss = SᵀS`, and `theta`, then Cholesky-factorize so the
@@ -32,13 +34,13 @@
 ///
 /// Returns `Ok(())` on success, or `Err(FormtError::NotPositiveDefinite)`
 /// matching Fortran's `info = -3`.
-pub(crate) fn formt(
-    theta: f64,
-    sy: &[f64],
-    ss: &[f64],
+pub(crate) fn formt<F: Scalar>(
+    theta: F,
+    sy: &[F],
+    ss: &[F],
     col: usize,
     m: usize,
-    wt: &mut [f64],
+    wt: &mut [F],
 ) -> Result<(), FormtError> {
     debug_assert!(col <= m, "col must be ≤ m");
     debug_assert!(sy.len() >= m * m && ss.len() >= m * m && wt.len() >= m * m);
@@ -56,9 +58,9 @@ pub(crate) fn formt(
         for j in i..col {
             // ddum = Σ_{k=0}^{min(i,j)-1} SY[i,k] · SY[j,k] / SY[k,k]
             let k1 = i.min(j);
-            let mut ddum = 0.0;
+            let mut ddum = F::zero();
             for k in 0..k1 {
-                ddum += sy[i * m + k] * sy[j * m + k] / sy[k * m + k];
+                ddum = ddum + sy[i * m + k] * sy[j * m + k] / sy[k * m + k];
             }
             wt[i * m + j] = ddum + theta * ss[i * m + j];
         }
@@ -86,7 +88,7 @@ pub(crate) enum FormtError {
 /// Mirrors LINPACK's `dpofa`. Returns `false` if a pivot is
 /// non-positive (matches `dpofa`'s `info > 0` exit; Fortran flags it
 /// as `info = -3` in `formt`).
-pub(crate) fn cholesky_upper_in_place(t: &mut [f64], col: usize, m: usize) -> bool {
+pub(crate) fn cholesky_upper_in_place<F: Scalar>(t: &mut [F], col: usize, m: usize) -> bool {
     if col == 0 {
         return true;
     }
@@ -95,9 +97,9 @@ pub(crate) fn cholesky_upper_in_place(t: &mut [f64], col: usize, m: usize) -> bo
         let mut s = t[j * m + j];
         for k in 0..j {
             let jkj = t[k * m + j];
-            s -= jkj * jkj;
+            s = s - jkj * jkj;
         }
-        if !s.is_finite() || s <= 0.0 {
+        if !s.is_finite() || s <= F::zero() {
             return false;
         }
         let djj = s.sqrt();
@@ -106,7 +108,7 @@ pub(crate) fn cholesky_upper_in_place(t: &mut [f64], col: usize, m: usize) -> bo
         for i in (j + 1)..col {
             let mut s = t[j * m + i];
             for k in 0..j {
-                s -= t[k * m + j] * t[k * m + i];
+                s = s - t[k * m + j] * t[k * m + i];
             }
             t[j * m + i] = s / djj;
         }
@@ -118,7 +120,7 @@ pub(crate) fn cholesky_upper_in_place(t: &mut [f64], col: usize, m: usize) -> bo
 /// Cholesky factor stored in the upper triangle of `j_upper`
 /// (row-major, stride `m`, leading `col × col` live). Mirrors LINPACK's
 /// `dtrsl(..., job=01, ...)`.
-pub(crate) fn solve_upper_tri(j_upper: &[f64], col: usize, m: usize, b: &mut [f64]) {
+pub(crate) fn solve_upper_tri<F: Scalar>(j_upper: &[F], col: usize, m: usize, b: &mut [F]) {
     if col == 0 {
         return;
     }
@@ -126,7 +128,7 @@ pub(crate) fn solve_upper_tri(j_upper: &[f64], col: usize, m: usize, b: &mut [f6
     for i in (0..col).rev() {
         let mut s = b[i];
         for k in (i + 1)..col {
-            s -= j_upper[i * m + k] * b[k];
+            s = s - j_upper[i * m + k] * b[k];
         }
         b[i] = s / j_upper[i * m + i];
     }
@@ -135,14 +137,19 @@ pub(crate) fn solve_upper_tri(j_upper: &[f64], col: usize, m: usize, b: &mut [f6
 /// Solve `Jᵀ x = b` in place on `b`. Mirrors LINPACK's `dtrsl(...,
 /// job=11, ...)` — `J` is upper triangular, the transposed solve runs
 /// top-down.
-pub(crate) fn solve_upper_tri_transposed(j_upper: &[f64], col: usize, m: usize, b: &mut [f64]) {
+pub(crate) fn solve_upper_tri_transposed<F: Scalar>(
+    j_upper: &[F],
+    col: usize,
+    m: usize,
+    b: &mut [F],
+) {
     if col == 0 {
         return;
     }
     for i in 0..col {
         let mut s = b[i];
         for k in 0..i {
-            s -= j_upper[k * m + i] * b[k];
+            s = s - j_upper[k * m + i] * b[k];
         }
         b[i] = s / j_upper[i * m + i];
     }
@@ -162,13 +169,13 @@ pub(crate) fn solve_upper_tri_transposed(j_upper: &[f64], col: usize, m: usize, 
 ///
 /// `M_inv = [ -D       Lᵀ ]` and the structured factorization in
 /// `[ L    θ SᵀS ]` Fortran `bmv` gives the two-stage solve below.
-pub(crate) fn bmv(
-    sy: &[f64],
-    wt: &[f64],
+pub(crate) fn bmv<F: Scalar>(
+    sy: &[F],
+    wt: &[F],
     col: usize,
     m: usize,
-    v: &[f64],
-    p: &mut [f64],
+    v: &[F],
+    p: &mut [F],
 ) -> Result<(), BmvError> {
     if col == 0 {
         return Ok(());
@@ -181,7 +188,7 @@ pub(crate) fn bmv(
     // `info ≠ 0` exit from `dtrsl`.
     for i in 0..col {
         let d = wt[i * m + i];
-        if d == 0.0 || !d.is_finite() {
+        if d == F::zero() || !d.is_finite() {
             return Err(BmvError::SingularJ);
         }
     }
@@ -195,9 +202,9 @@ pub(crate) fn bmv(
     // Cholesky factor `J` solves `Jᵀ x = b`.
     p[col] = v[col];
     for i in 1..col {
-        let mut sum = 0.0;
+        let mut sum = F::zero();
         for k in 0..i {
-            sum += sy[i * m + k] * v[k] / sy[k * m + k];
+            sum = sum + sy[i * m + k] * v[k] / sy[k * m + k];
         }
         p[col + i] = v[col + i] + sum;
     }
@@ -222,11 +229,11 @@ pub(crate) fn bmv(
         p[i] = -p[i] / sy[i * m + i].sqrt();
     }
     for i in 0..col {
-        let mut sum = 0.0;
+        let mut sum = F::zero();
         for k in (i + 1)..col {
-            sum += sy[k * m + i] * p[col + k] / sy[i * m + i];
+            sum = sum + sy[k * m + i] * p[col + k] / sy[i * m + i];
         }
-        p[i] += sum;
+        p[i] = p[i] + sum;
     }
     Ok(())
 }
@@ -253,7 +260,7 @@ mod tests {
     fn cholesky_round_trip_2x2() {
         // T = [[4, 6], [6, 13]] is SPD with J = [[2, 3], [0, 2]].
         let m = 3;
-        let mut t = vec![0.0; m * m];
+        let mut t = vec![0.0_f64; m * m];
         t[0 * m + 0] = 4.0;
         t[0 * m + 1] = 6.0;
         t[1 * m + 1] = 13.0;
@@ -268,7 +275,7 @@ mod tests {
     fn cholesky_rejects_non_pd() {
         // T = [[1, 2], [2, 1]] has det −3 — indefinite.
         let m = 2;
-        let mut t = vec![0.0; m * m];
+        let mut t = vec![0.0_f64; m * m];
         t[0 * m + 0] = 1.0;
         t[0 * m + 1] = 2.0;
         t[1 * m + 1] = 1.0;
@@ -282,11 +289,11 @@ mod tests {
         // J x = b → 2 x1 + 3 x2 = 5 and 2 x2 = 4. So x2 = 2, x1 = (5
         // − 6)/2 = −0.5.
         let m = 2;
-        let mut j_upper = vec![0.0; m * m];
+        let mut j_upper = vec![0.0_f64; m * m];
         j_upper[0 * m + 0] = 2.0;
         j_upper[0 * m + 1] = 3.0;
         j_upper[1 * m + 1] = 2.0;
-        let mut b = vec![5.0, 4.0];
+        let mut b = vec![5.0_f64, 4.0];
         solve_upper_tri(&j_upper, 2, m, &mut b);
         assert!((b[0] - (-0.5)).abs() < 1e-12);
         assert!((b[1] - 2.0).abs() < 1e-12);
@@ -298,11 +305,11 @@ mod tests {
         // Jᵀ = [[2, 0], [3, 2]]. So 2 x1 = 4 → x1 = 2; 3·2 + 2 x2 =
         // 11 → x2 = 2.5.
         let m = 2;
-        let mut j_upper = vec![0.0; m * m];
+        let mut j_upper = vec![0.0_f64; m * m];
         j_upper[0 * m + 0] = 2.0;
         j_upper[0 * m + 1] = 3.0;
         j_upper[1 * m + 1] = 2.0;
-        let mut b = vec![4.0, 11.0];
+        let mut b = vec![4.0_f64, 11.0];
         solve_upper_tri_transposed(&j_upper, 2, m, &mut b);
         assert!((b[0] - 2.0).abs() < 1e-12);
         assert!((b[1] - 2.5).abs() < 1e-12);
@@ -313,12 +320,12 @@ mod tests {
         // col = 1: T = θ · ss[0,0] (no L D⁻¹ Lᵀ contribution).
         // Cholesky of 1x1 just takes sqrt.
         let m = 3;
-        let mut sy = vec![0.0; m * m];
-        let mut ss = vec![0.0; m * m];
+        let mut sy = vec![0.0_f64; m * m];
+        let mut ss = vec![0.0_f64; m * m];
         sy[0] = 11.0; // s·y
         ss[0] = 5.0; // s·s
-        let theta = 25.0 / 11.0;
-        let mut wt = vec![0.0; m * m];
+        let theta = 25.0_f64 / 11.0;
+        let mut wt = vec![0.0_f64; m * m];
         formt(theta, &sy, &ss, 1, m, &mut wt).unwrap();
         assert!((wt[0] - (theta * 5.0).sqrt()).abs() < 1e-12);
     }
@@ -326,10 +333,10 @@ mod tests {
     #[test]
     fn bmv_returns_zero_for_col_zero() {
         // col = 0 → bmv is a no-op; p stays untouched.
-        let sy = vec![0.0; 4];
-        let wt = vec![0.0; 4];
-        let v = vec![1.0, 2.0];
-        let mut p = vec![99.0, 99.0];
+        let sy = vec![0.0_f64; 4];
+        let wt = vec![0.0_f64; 4];
+        let v = vec![1.0_f64, 2.0];
+        let mut p = vec![99.0_f64, 99.0];
         assert!(bmv(&sy, &wt, 0, 2, &v, &mut p).is_ok());
         assert_eq!(p, vec![99.0, 99.0]);
     }
@@ -347,16 +354,16 @@ mod tests {
         // Picking d = sy[0,0] = 11, ss[0,0] = 5, θ = 25/11 (so the
         // theta from the (1, 2)/(3, 4) pair in the LbfgsState test).
         let m = 2;
-        let mut sy = vec![0.0; m * m];
-        let mut ss = vec![0.0; m * m];
+        let mut sy = vec![0.0_f64; m * m];
+        let mut ss = vec![0.0_f64; m * m];
         sy[0] = 11.0;
         ss[0] = 5.0;
-        let theta = 25.0 / 11.0;
-        let mut wt = vec![0.0; m * m];
+        let theta = 25.0_f64 / 11.0;
+        let mut wt = vec![0.0_f64; m * m];
         formt(theta, &sy, &ss, 1, m, &mut wt).unwrap();
 
-        let v = vec![7.0, 9.0]; // (v1, v2)
-        let mut p = vec![0.0; 2];
+        let v = vec![7.0_f64, 9.0]; // (v1, v2)
+        let mut p = vec![0.0_f64; 2];
         bmv(&sy, &wt, 1, m, &v, &mut p).unwrap();
 
         let d = 11.0;

@@ -37,6 +37,7 @@
 //! (`lbfgsb.f:3273-3329`, the v3.0 deviation from Algorithm 778).
 
 use super::compact::{solve_upper_tri, solve_upper_tri_transposed};
+use crate::core::math::Scalar;
 
 /// Status of the subspace solution returned from [`subsm`]. Mirrors
 /// Fortran `iword`.
@@ -89,22 +90,22 @@ pub(crate) enum SubsmError {
 /// - `m`, `col`, `theta` — compact-form parameters matching the data
 ///   stored in `wn`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn subsm(
-    x: &mut [f64],
-    d: &mut [f64],
-    xp: &mut [f64],
-    xx: &[f64],
-    gg: &[f64],
+pub(crate) fn subsm<F: Scalar>(
+    x: &mut [F],
+    d: &mut [F],
+    xp: &mut [F],
+    xx: &[F],
+    gg: &[F],
     ind: &[usize],
-    l: &[f64],
-    u: &[f64],
-    ws_cols: &[&[f64]],
-    wy_cols: &[&[f64]],
-    wn: &[f64],
-    wv: &mut [f64],
+    l: &[F],
+    u: &[F],
+    ws_cols: &[&[F]],
+    wy_cols: &[&[F]],
+    wn: &[F],
+    wv: &mut [F],
     m: usize,
     col: usize,
-    theta: f64,
+    theta: F,
 ) -> Result<SubsmStatus, SubsmError> {
     let n = x.len();
     let nsub = ind.len();
@@ -123,6 +124,8 @@ pub(crate) fn subsm(
         return Ok(SubsmStatus::InteriorStep);
     }
 
+    let zero = F::zero();
+    let one = F::one();
     let m2 = 2 * m;
     let col2 = 2 * col;
 
@@ -130,12 +133,12 @@ pub(crate) fn subsm(
     //   wv[i]       = Σ_j wy[k, i] · d[j]            k = ind[j]
     //   wv[col + i] = θ · Σ_j ws[k, i] · d[j]
     for i in 0..col {
-        let mut temp1 = 0.0;
-        let mut temp2 = 0.0;
+        let mut temp1 = zero;
+        let mut temp2 = zero;
         for j in 0..nsub {
             let k = ind[j];
-            temp1 += wy_cols[i][k] * d[j];
-            temp2 += ws_cols[i][k] * d[j];
+            temp1 = temp1 + wy_cols[i][k] * d[j];
+            temp2 = temp2 + ws_cols[i][k] * d[j];
         }
         wv[i] = temp1;
         wv[col + i] = theta * temp2;
@@ -149,7 +152,7 @@ pub(crate) fn subsm(
         // Check K's diagonal upfront (singular pivot ⇒ SubsmError).
         for i in 0..col2 {
             let pivot = wn[i * m2 + i];
-            if pivot == 0.0 || !pivot.is_finite() {
+            if pivot == zero || !pivot.is_finite() {
                 return Err(SubsmError::SingularK);
             }
         }
@@ -167,11 +170,11 @@ pub(crate) fn subsm(
         let js = col + jy;
         for i in 0..nsub {
             let k = ind[i];
-            d[i] += wy_cols[jy][k] * wv[jy] / theta + ws_cols[jy][k] * wv[js];
+            d[i] = d[i] + wy_cols[jy][k] * wv[jy] / theta + ws_cols[jy][k] * wv[js];
         }
     }
     for slot in d.iter_mut().take(nsub) {
-        *slot /= theta;
+        *slot = *slot / theta;
     }
 
     // Step 4: projected Newton step. Save x first so the backtracking
@@ -216,11 +219,11 @@ pub(crate) fn subsm(
     // iterate `xx`. If `(x − xx)ᵀ gg > 0` the projected step ascends
     // at `xx`; fall through to the bound-backtracking branch
     // (`lbfgsb.f:3273-3286`).
-    let mut dd_p = 0.0;
+    let mut dd_p = zero;
     for i in 0..n {
-        dd_p += (x[i] - xx[i]) * gg[i];
+        dd_p = dd_p + (x[i] - xx[i]) * gg[i];
     }
-    if dd_p <= 0.0 {
+    if dd_p <= zero {
         return Ok(iword);
     }
 
@@ -231,7 +234,7 @@ pub(crate) fn subsm(
     // previous value (which equals `alpha` after the prior `if` flush),
     // so the `temp1 < alpha` check correctly skips non-binders.
     x.copy_from_slice(xp);
-    let mut alpha = 1.0_f64;
+    let mut alpha = one;
     let mut temp1 = alpha;
     let mut ibd: Option<usize> = None;
 
@@ -243,17 +246,17 @@ pub(crate) fn subsm(
         if !l_finite && !u_finite {
             continue;
         }
-        if dk < 0.0 && l_finite {
+        if dk < zero && l_finite {
             let temp2 = l[k] - x[k];
-            if temp2 >= 0.0 {
-                temp1 = 0.0;
+            if temp2 >= zero {
+                temp1 = zero;
             } else if dk * alpha < temp2 {
                 temp1 = temp2 / dk;
             }
-        } else if dk > 0.0 && u_finite {
+        } else if dk > zero && u_finite {
             let temp2 = u[k] - x[k];
-            if temp2 <= 0.0 {
-                temp1 = 0.0;
+            if temp2 <= zero {
+                temp1 = zero;
             } else if dk * alpha > temp2 {
                 temp1 = temp2 / dk;
             }
@@ -264,22 +267,22 @@ pub(crate) fn subsm(
         }
     }
 
-    if alpha < 1.0
+    if alpha < one
         && let Some(ibd) = ibd
     {
         let dk = d[ibd];
         let k = ind[ibd];
-        if dk > 0.0 {
+        if dk > zero {
             x[k] = u[k];
-            d[ibd] = 0.0;
-        } else if dk < 0.0 {
+            d[ibd] = zero;
+        } else if dk < zero {
             x[k] = l[k];
-            d[ibd] = 0.0;
+            d[ibd] = zero;
         }
     }
     for i in 0..nsub {
         let k = ind[i];
-        x[k] += alpha * d[i];
+        x[k] = x[k] + alpha * d[i];
     }
 
     Ok(iword)

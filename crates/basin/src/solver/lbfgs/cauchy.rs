@@ -13,13 +13,14 @@
 //! `x_c` (the GCP) is what subspace minimization (`subsm`) then
 //! refines.
 //!
-//! All array arguments are `&[f64]` / `&mut [f64]`; the surrounding
-//! solver supplies them by viewing the active backend's storage as a
-//! slice (nalgebra `DVector::as_slice`, faer
+//! All array arguments are `&[F]` / `&mut [F]` for `F: Scalar`; the
+//! surrounding solver supplies them by viewing the active backend's
+//! storage as a slice (nalgebra `DVector::as_slice`, faer
 //! `Col::try_as_col_major().unwrap().as_slice()`, or plain
 //! `Vec::as_slice()`).
 
 use super::compact::{BmvError, bmv};
+use crate::core::math::Scalar;
 
 /// `iwhere` classification per Fortran v3.0 (`lbfgsb.f:1287-1296`).
 /// Stored as `i8` so `−3` round-trips correctly while staying compact.
@@ -75,27 +76,27 @@ impl From<BmvError> for CauchyError {
 /// convention); the Fortran `nbd(i)` code is recovered per-component
 /// from `l[i].is_finite() / u[i].is_finite()`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn cauchy(
-    x: &[f64],
-    l: &[f64],
-    u: &[f64],
-    g: &[f64],
-    ws_cols: &[&[f64]],
-    wy_cols: &[&[f64]],
-    sy: &[f64],
-    wt: &[f64],
+pub(crate) fn cauchy<F: Scalar>(
+    x: &[F],
+    l: &[F],
+    u: &[F],
+    g: &[F],
+    ws_cols: &[&[F]],
+    wy_cols: &[&[F]],
+    sy: &[F],
+    wt: &[F],
     m: usize,
-    theta: f64,
-    sbgnrm: f64,
-    xcp: &mut [f64],
-    d: &mut [f64],
-    t: &mut [f64],
+    theta: F,
+    sbgnrm: F,
+    xcp: &mut [F],
+    d: &mut [F],
+    t: &mut [F],
     iwhere: &mut [i8],
     iorder: &mut [usize],
-    p_buf: &mut [f64],
-    c_buf: &mut [f64],
-    wbp_buf: &mut [f64],
-    v_buf: &mut [f64],
+    p_buf: &mut [F],
+    c_buf: &mut [F],
+    wbp_buf: &mut [F],
+    v_buf: &mut [F],
 ) -> Result<CauchyResult, CauchyError> {
     let n = x.len();
     let col = ws_cols.len();
@@ -112,8 +113,10 @@ pub(crate) fn cauchy(
     debug_assert!(p_buf.len() >= 2 * m && c_buf.len() >= 2 * m);
     debug_assert!(wbp_buf.len() >= 2 * m && v_buf.len() >= 2 * m);
 
+    let zero = F::zero();
+
     // Early exit when the projected gradient is zero (`lbfgsb.f:1423`).
-    if sbgnrm <= 0.0 {
+    if sbgnrm <= zero {
         xcp.copy_from_slice(x);
         return Ok(CauchyResult {
             nseg: 0,
@@ -126,12 +129,12 @@ pub(crate) fn cauchy(
     let mut nfree = n;
     let mut nbreak: usize = 0;
     let mut ibkmin: usize = 0;
-    let mut bkmin: f64 = 0.0;
-    let mut f1: f64 = 0.0;
+    let mut bkmin: F = zero;
+    let mut f1: F = zero;
 
     // Zero the leading 2*col of p_buf (Fortran loop 20).
     for slot in p_buf.iter_mut().take(col2) {
-        *slot = 0.0;
+        *slot = zero;
     }
 
     // Per-variable classify / direction / breakpoint (Fortran loop 50).
@@ -140,37 +143,37 @@ pub(crate) fn cauchy(
         if iwhere[i] != iwhere::ALWAYS_FIXED && iwhere[i] != iwhere::ALWAYS_FREE {
             let lower_finite = l[i].is_finite();
             let upper_finite = u[i].is_finite();
-            let tl = if lower_finite { x[i] - l[i] } else { 0.0 };
-            let tu = if upper_finite { u[i] - x[i] } else { 0.0 };
-            let xlower = lower_finite && tl <= 0.0;
-            let xupper = upper_finite && tu <= 0.0;
+            let tl = if lower_finite { x[i] - l[i] } else { zero };
+            let tu = if upper_finite { u[i] - x[i] } else { zero };
+            let xlower = lower_finite && tl <= zero;
+            let xupper = upper_finite && tu <= zero;
             iwhere[i] = iwhere::FREE_MOVED;
             if xlower {
-                if neggi <= 0.0 {
+                if neggi <= zero {
                     iwhere[i] = iwhere::AT_LOWER;
                 }
             } else if xupper {
-                if neggi >= 0.0 {
+                if neggi >= zero {
                     iwhere[i] = iwhere::AT_UPPER;
                 }
-            } else if neggi.abs() <= 0.0 {
+            } else if neggi.abs() <= zero {
                 iwhere[i] = iwhere::FREE_NOT_MOVED;
             }
         }
 
         if iwhere[i] != iwhere::FREE_MOVED && iwhere[i] != iwhere::ALWAYS_FREE {
-            d[i] = 0.0;
+            d[i] = zero;
         } else {
             d[i] = neggi;
-            f1 -= neggi * neggi;
+            f1 = f1 - neggi * neggi;
             // p ← p − Wᵀ eᵢ · gᵢ.
             for j in 0..col {
-                p_buf[j] += wy_cols[j][i] * neggi;
-                p_buf[col + j] += ws_cols[j][i] * neggi;
+                p_buf[j] = p_buf[j] + wy_cols[j][i] * neggi;
+                p_buf[col + j] = p_buf[col + j] + ws_cols[j][i] * neggi;
             }
             let lower_finite = l[i].is_finite();
             let upper_finite = u[i].is_finite();
-            if lower_finite && neggi < 0.0 {
+            if lower_finite && neggi < zero {
                 let tnew = (x[i] - l[i]) / -neggi;
                 iorder[nbreak] = i;
                 t[nbreak] = tnew;
@@ -179,7 +182,7 @@ pub(crate) fn cauchy(
                     ibkmin = nbreak;
                 }
                 nbreak += 1;
-            } else if upper_finite && neggi > 0.0 {
+            } else if upper_finite && neggi > zero {
                 let tnew = (u[i] - x[i]) / neggi;
                 iorder[nbreak] = i;
                 t[nbreak] = tnew;
@@ -193,7 +196,7 @@ pub(crate) fn cauchy(
                 // the tail of iorder (Fortran's `nfree` walks down).
                 nfree -= 1;
                 iorder[nfree] = i;
-                if neggi.abs() > 0.0 {
+                if neggi.abs() > zero {
                     bnded = false;
                 }
             }
@@ -201,9 +204,9 @@ pub(crate) fn cauchy(
     }
 
     // θ-scale the second half of p (`lbfgsb.f:1514`).
-    if theta != 1.0 {
+    if theta != F::one() {
         for slot in p_buf.iter_mut().skip(col).take(col) {
-            *slot *= theta;
+            *slot = *slot * theta;
         }
     }
 
@@ -220,7 +223,7 @@ pub(crate) fn cauchy(
 
     // Zero c = Wᵀ(xcp − x).
     for slot in c_buf.iter_mut().take(col2) {
-        *slot = 0.0;
+        *slot = zero;
     }
 
     // Initial f2 = −θ f1 − pᵀ M p.
@@ -229,12 +232,12 @@ pub(crate) fn cauchy(
     if col > 0 {
         bmv(sy, wt, col, m, p_buf, v_buf)?;
         for j in 0..col2 {
-            f2 -= v_buf[j] * p_buf[j];
+            f2 = f2 - v_buf[j] * p_buf[j];
         }
     }
 
     let mut dtm = -f1 / f2;
-    let mut tsum = 0.0;
+    let mut tsum = zero;
     let mut nseg: usize = 1;
 
     if nbreak == 0 {
@@ -245,8 +248,11 @@ pub(crate) fn cauchy(
 
     let mut nleft = nbreak;
     let mut iter: usize = 1;
-    let mut tj: f64 = 0.0;
+    let mut tj: F = zero;
     let mut all_pinned_early = false;
+
+    let two = F::from_f64(2.0).unwrap();
+    let eps_f = F::epsilon();
 
     loop {
         let tj0 = tj;
@@ -274,13 +280,13 @@ pub(crate) fn cauchy(
             break;
         }
 
-        tsum += dt;
+        tsum = tsum + dt;
         nleft -= 1;
         iter += 1;
         let dibp = d[ibp];
-        d[ibp] = 0.0;
+        d[ibp] = zero;
         let zibp;
-        if dibp > 0.0 {
+        if dibp > zero {
             zibp = u[ibp] - x[ibp];
             xcp[ibp] = u[ibp];
             iwhere[ibp] = iwhere::AT_UPPER;
@@ -300,12 +306,12 @@ pub(crate) fn cauchy(
         nseg += 1;
         let dibp2 = dibp * dibp;
         f1 = f1 + dt * f2 + dibp2 - theta * dibp * zibp;
-        f2 -= theta * dibp2;
+        f2 = f2 - theta * dibp2;
 
         if col > 0 {
             // c ← c + dt · p.
             for j in 0..col2 {
-                c_buf[j] += dt * p_buf[j];
+                c_buf[j] = c_buf[j] + dt * p_buf[j];
             }
             // wbp = row of W at variable `ibp`.
             for j in 0..col {
@@ -314,24 +320,24 @@ pub(crate) fn cauchy(
             }
             // v = M · wbp.
             bmv(sy, wt, col, m, wbp_buf, v_buf)?;
-            let mut wmc = 0.0;
-            let mut wmp = 0.0;
-            let mut wmw = 0.0;
+            let mut wmc = zero;
+            let mut wmp = zero;
+            let mut wmw = zero;
             for j in 0..col2 {
-                wmc += c_buf[j] * v_buf[j];
-                wmp += p_buf[j] * v_buf[j];
-                wmw += wbp_buf[j] * v_buf[j];
+                wmc = wmc + c_buf[j] * v_buf[j];
+                wmp = wmp + p_buf[j] * v_buf[j];
+                wmw = wmw + wbp_buf[j] * v_buf[j];
             }
             // p ← p − dibp · wbp.
             for j in 0..col2 {
-                p_buf[j] -= dibp * wbp_buf[j];
+                p_buf[j] = p_buf[j] - dibp * wbp_buf[j];
             }
-            f1 += dibp * wmc;
-            f2 += 2.0 * dibp * wmp - dibp2 * wmw;
+            f1 = f1 + dibp * wmc;
+            f2 = f2 + two * dibp * wmp - dibp2 * wmw;
         }
 
         // Floor f2 at `eps · f2_org` (`lbfgsb.f:1666`).
-        let floor = f64::EPSILON * f2_org;
+        let floor = eps_f * f2_org;
         if f2 < floor {
             f2 = floor;
         }
@@ -340,9 +346,9 @@ pub(crate) fn cauchy(
             dtm = -f1 / f2;
         } else if bnded {
             // Entire ray was bounded — pin to current xcp.
-            f1 = 0.0;
+            f1 = zero;
             let _ = f1; // explicit zero matches Fortran but unused below
-            dtm = 0.0;
+            dtm = zero;
             all_pinned_early = true;
             break;
         } else {
@@ -353,11 +359,11 @@ pub(crate) fn cauchy(
 
     if all_pinned_early {
         // Fortran exit 999: only update c, no further free move.
-        if dtm <= 0.0 {
-            dtm = 0.0;
+        if dtm <= zero {
+            dtm = zero;
         }
         for j in 0..col2 {
-            c_buf[j] += dtm * p_buf[j];
+            c_buf[j] = c_buf[j] + dtm * p_buf[j];
         }
         return Ok(CauchyResult {
             nseg,
@@ -373,26 +379,27 @@ pub(crate) fn cauchy(
 /// Apply `xcp ← xcp + (tsum + dtm) · d` and `c ← c + dtm · p`.
 /// Matches Fortran's exit path through label `888` then `999`.
 #[allow(clippy::too_many_arguments)]
-fn finalize_with_free_move(
-    d: &[f64],
-    xcp: &mut [f64],
-    mut dtm: f64,
-    tsum: f64,
-    c_buf: &mut [f64],
-    p_buf: &[f64],
+fn finalize_with_free_move<F: Scalar>(
+    d: &[F],
+    xcp: &mut [F],
+    mut dtm: F,
+    tsum: F,
+    c_buf: &mut [F],
+    p_buf: &[F],
     col2: usize,
     bnded: bool,
     nseg: usize,
 ) -> CauchyResult {
-    if dtm <= 0.0 {
-        dtm = 0.0;
+    let zero = F::zero();
+    if dtm <= zero {
+        dtm = zero;
     }
     let total = tsum + dtm;
     for i in 0..xcp.len() {
-        xcp[i] += total * d[i];
+        xcp[i] = xcp[i] + total * d[i];
     }
     for j in 0..col2 {
-        c_buf[j] += dtm * p_buf[j];
+        c_buf[j] = c_buf[j] + dtm * p_buf[j];
     }
     CauchyResult {
         nseg,
@@ -417,7 +424,7 @@ fn finalize_with_free_move(
 ///   min-heap.
 ///
 /// Callers decrement `nleft` themselves after consuming the popped min.
-fn hpsolb(nleft: usize, t: &mut [f64], iorder: &mut [usize], first: bool) {
+fn hpsolb<F: Scalar>(nleft: usize, t: &mut [F], iorder: &mut [usize], first: bool) {
     if first {
         // Build a min-heap on `t[0..nleft]` by sift-up insertion of
         // positions 1..nleft.
