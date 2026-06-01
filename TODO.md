@@ -79,6 +79,29 @@ the previous lands.
       `tests/augmented_lagrangian_nalgebra.rs` (`BFGS` and unbounded `LBFGS`
       inners) prove a non-`BasicState` inner converges to the same optimum as
       the `GradientDescent` inner.
+- [ ] **Observer layer.** First slice shipped: `Observe<S>` trait (three
+      defaulted infallible methods, generic over the minimum state shape per
+      tenet 3), `ObserverMode::{Never, Always, Every(n)}`,
+      `Executor::observe_with` builder, wired into `Stepper` so `observe_init`
+      fires after `Solver::init`, `observe_iter` after each successful step
+      (mode-gated), and `observe_final` on clean stop. No concrete observers
+      ship; the trait + wiring is the meat. Remaining: a `BestCostState`
+      extension trait (only `BasicSimplexState` / `BasicPopulationState` track
+      best-so-far today) plus an `ObserverMode::NewBest` variant bound on it;
+      a zero-dep starter set in core (`StoreBest`, `Report`) once
+      `BestCostState` lands; satellite crates for heavier integrations
+      (`basin-observer-tracing`, `basin-observer-slog`, eventually a
+      TUI/spectator-style crate) per the repo-structure rule (features on
+      `basin` for light deps, separate crate only when heavy or
+      platform-specific). A `CheckpointWriter` observer (serialize `state`
+      every N iters via `serde` + `bincode`, gated on the `serde` feature and
+      `not(target_arch = "wasm32")`) belongs in the same followup — argmin
+      ships checkpointing as a first-class executor concern, but for basin
+      "save the iterate periodically so a new run can warm-start" is exactly
+      an observer's job; resume just deserializes into the initial state, no
+      framework support needed. Keep observers strictly read-only --- problem
+      transformers (gradient clipping etc.) stay as problem-adapter wrappers,
+      not observer hooks, mirroring how constraints attach problem-side.
 - [ ] **Generalize over scalar (`f64` → `F: Float`).** Per the
       provisional-choices section in `CONTRIBUTING.md`. Neither the first stochastic
       solver (S7 `RandomSearch`) nor CMA-ES (S8) forced this --- both landed on

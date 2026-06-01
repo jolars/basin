@@ -4,9 +4,10 @@
 //! ([`CostFunction`], [`Gradient`], [`BoxConstraints`],
 //! [`LinearInequalityConstraints`], [`LinearEqualityConstraints`]), state shapes
 //! solvers iterate over ([`State`], [`GradientState`], [`SimplexState`]),
-//! the [`Solver`] trait, and a pluggable termination layer
-//! ([`TerminationCriterion`]). Concrete solvers are in [`solver`];
-//! line searches in [`line_search`].
+//! the [`Solver`] trait, a pluggable termination layer
+//! ([`TerminationCriterion`]), and a read-only observer layer
+//! ([`Observe`]). Concrete solvers are in [`solver`]; line searches in
+//! [`line_search`].
 //!
 //! Start at [`Executor`] for the user-facing driver, or [`core`] for the
 //! trait taxonomy and the iteration-loop contract.
@@ -77,6 +78,7 @@ pub use crate::core::numdiff::{
     central_difference_jacobian, forward_difference_gradient, forward_difference_hessian,
     forward_difference_jacobian,
 };
+pub use crate::core::observer::{Observe, ObserverMode};
 pub use crate::core::problem::{
     CostFunction, EvalCounts, Gradient, Hessian, Jacobian, MiniBatchGradient, Problem, Residual,
 };

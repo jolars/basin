@@ -32,6 +32,7 @@
 //! point exits immediately with the corresponding reason rather than
 //! taking one redundant step.
 
+use crate::core::observer::{Observe, ObserverMode};
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
@@ -128,6 +129,7 @@ pub struct Stepper<P, S, So> {
     state: Option<S>,
     solver: So,
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
+    observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
     max_iter: u64,
     finished: Option<TerminationReason>,
 }
@@ -173,11 +175,20 @@ where
     /// the stepper is sticky: subsequent calls keep returning the same
     /// `Stopped(reason)` without touching the state or solver.
     ///
+    /// Registered observers fire here:
+    /// [`observe_iter`](Observe::observe_iter) on
+    /// [`StepOutcome::Continue`], gated by each observer's
+    /// [`ObserverMode`]; [`observe_final`](Observe::observe_final) once
+    /// when this call first returns [`StepOutcome::Stopped`]. See the
+    /// [`observer`](crate::core::observer) module for the lifecycle.
+    ///
     /// Returns `Err` when the underlying problem returns `Err` from any
     /// cost / gradient / residual / Jacobian / Hessian call during the
     /// step. The stepper is *not* made sticky on `Err` — the typical
     /// downstream pattern is to surface the error and drop the stepper,
     /// but callers may inspect [`state`](Self::state) and try again.
+    /// Observers do *not* fire on the `Err` path (the state has been
+    /// consumed by the failing call).
     pub fn step(&mut self) -> Result<StepOutcome, So::Error> {
         if let Some(reason) = self.finished {
             return Ok(StepOutcome::Stopped(reason));
@@ -190,8 +201,26 @@ where
             &mut self.criteria,
             self.max_iter,
         )?;
-        if let StepOutcome::Stopped(reason) = outcome {
-            self.finished = Some(reason);
+        match outcome {
+            StepOutcome::Continue => {
+                let state = self
+                    .state
+                    .as_ref()
+                    .expect("state slot is Some after Continue");
+                let iter = state.iter();
+                for (observer, mode) in self.observers.iter_mut() {
+                    if mode.fires_on(iter) {
+                        observer.observe_iter(state);
+                    }
+                }
+            }
+            StepOutcome::Stopped(reason) => {
+                self.finished = Some(reason);
+                let state = self.state.as_ref().expect("state slot is Some on Stopped");
+                for (observer, _mode) in self.observers.iter_mut() {
+                    observer.observe_final(state, &reason);
+                }
+            }
         }
         Ok(outcome)
     }
@@ -387,6 +416,7 @@ pub struct Executor<P, S, So> {
     solver: So,
     max_iter: u64,
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
+    observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
 }
 
 impl<P, S, So> Executor<P, S, So>
@@ -404,6 +434,7 @@ where
             solver,
             max_iter: 1000,
             criteria: Vec::new(),
+            observers: Vec::new(),
         }
     }
 
@@ -427,12 +458,30 @@ where
         self
     }
 
+    /// Register an [`Observe`] hook. Observers fire in registration order;
+    /// `mode` gates [`Observe::observe_iter`] only —
+    /// [`Observe::observe_init`] and [`Observe::observe_final`] always
+    /// fire. See the [`observer`](crate::core::observer) module for the
+    /// lifecycle.
+    ///
+    /// Observers cannot stop the run; use
+    /// [`terminate_on`](Self::terminate_on) for that.
+    pub fn observe_with<O>(mut self, observer: O, mode: ObserverMode) -> Self
+    where
+        O: Observe<S> + 'static,
+    {
+        self.observers.push((Box::new(observer), mode));
+        self
+    }
+
     /// Convert the executor into a [`Stepper`] for one-iteration-at-a-time
     /// control. `solver.init` runs here so the returned stepper sits at
-    /// iter 0 with a complete state.
+    /// iter 0 with a complete state; all registered observers' `observe_init`
+    /// fire here too.
     ///
     /// Returns `Err` when [`Solver::init`] does (e.g. the problem's
-    /// initial cost/gradient evaluation `Err`-ed).
+    /// initial cost/gradient evaluation `Err`-ed). Observers do *not* fire
+    /// on that error path.
     pub fn into_stepper(self) -> Result<Stepper<P, S, So>, So::Error> {
         let Self {
             problem,
@@ -440,17 +489,22 @@ where
             mut solver,
             max_iter,
             criteria,
+            mut observers,
         } = self;
         let mut problem = Problem::new(problem);
         let mut state = solver.init(&mut problem, state)?;
         // Mirror init's work onto the state before any termination
         // check. Baseline is zero — this is a fresh top-level wrapper.
         state.mirror(problem.counts());
+        for (observer, _mode) in observers.iter_mut() {
+            observer.observe_init(&state);
+        }
         Ok(Stepper {
             problem,
             state: Some(state),
             solver,
             criteria,
+            observers,
             max_iter,
             finished: None,
         })

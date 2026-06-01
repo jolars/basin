@@ -34,6 +34,9 @@
 //!   trait plus shipped criteria. Each criterion bounds on the minimum
 //!   state shape it needs (tenet 3), so mismatches are compile errors
 //!   rather than runtime no-ops.
+//! - [`observer`] — read-only side-effect hooks fired around the loop
+//!   ([`Observe`](observer::Observe) + [`ObserverMode`](observer::ObserverMode)).
+//!   Sibling to [`termination`]: observers watch, criteria decide.
 //! - [`executor`] — the driver: [`Executor`](executor::Executor) /
 //!   [`Stepper`](executor::Stepper) / [`run_loop`](executor::run_loop).
 //!   The canonical iteration ordering is documented on the
@@ -55,6 +58,7 @@ pub mod executor;
 pub mod inner;
 pub mod math;
 pub mod numdiff;
+pub mod observer;
 pub mod problem;
 pub mod rng;
 pub mod solver;
