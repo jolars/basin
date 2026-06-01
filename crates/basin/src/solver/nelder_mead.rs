@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{ClampInPlace, Scalar, ScaledAdd};
+use crate::core::math::{ClampInPlace, Scalar, ScaleInPlace, ScaledAdd};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicSimplexState;
@@ -209,65 +209,55 @@ impl<Mode, F: Scalar> NelderMead<Mode, F> {
     }
 }
 
-/// Build `(1 - t) * a + t * b` from two vectors and a scalar interpolant.
-/// Works for any `t ∈ ℝ` — values outside `[0, 1]` extrapolate, which is
-/// what reflection needs.
-fn affine<V, F>(a: &V, b: &V, t: F) -> V
+/// Write `(1 − t)·a + t·b` into `out`, in place. Works for any
+/// `t ∈ ℝ` — values outside `[0, 1]` extrapolate, which is what
+/// reflection needs. `out`'s previous contents are overwritten; the
+/// caller must guarantee it has the same shape as `a` / `b` (the
+/// solver enforces this by pre-allocating scratch in `init`).
+fn affine_into<V, F>(out: &mut V, a: &V, b: &V, t: F)
 where
-    V: Clone + ScaledAdd<F>,
+    V: ScaleInPlace<F> + ScaledAdd<F>,
     F: Scalar,
 {
-    let mut out = a.clone();
-    out.scaled_add(-t, a);
+    out.scale_in_place(F::zero());
+    out.scaled_add(F::one() - t, a);
     out.scaled_add(t, b);
-    out
 }
 
-/// Centroid of `vertices` (mean of all entries).
-fn centroid<V, F>(vertices: &[V]) -> V
+/// Write the mean of `vertices` into `out`, in place. `out`'s previous
+/// contents are overwritten.
+fn centroid_into<V, F>(out: &mut V, vertices: &[V])
 where
-    V: Clone + ScaledAdd<F>,
+    V: ScaleInPlace<F> + ScaledAdd<F>,
     F: Scalar,
 {
     let inv = F::from_usize(vertices.len()).unwrap().recip();
-    let mut c = vertices[0].clone();
-    c.scaled_add(inv - F::one(), &vertices[0]);
-    for v in &vertices[1..] {
-        c.scaled_add(inv, v);
+    out.scale_in_place(F::zero());
+    for v in vertices {
+        out.scaled_add(inv, v);
     }
-    c
 }
 
-/// Sort `vertices` and `costs` jointly by ascending cost. NaN costs sort
-/// last so a single bad evaluation can't drag itself to the front.
-fn sort_simplex<V, F: PartialOrd>(vertices: &mut [V], costs: &mut [F]) {
-    let n = vertices.len();
-    let mut idx: Vec<usize> = (0..n).collect();
-    idx.sort_by(|&i, &j| {
-        costs[i]
-            .partial_cmp(&costs[j])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    apply_permutation(vertices, &idx);
-    apply_permutation(costs, &idx);
-}
-
-fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
-    let mut visited = vec![false; slice.len()];
-    for start in 0..slice.len() {
-        if visited[start] || idx[start] == start {
-            visited[start] = true;
-            continue;
-        }
-        let mut current = start;
-        loop {
-            let next = idx[current];
-            visited[current] = true;
-            if next == start {
-                break;
-            }
-            slice.swap(current, next);
-            current = next;
+/// In-place insertion sort over `vertices` / `costs` ascending by cost.
+/// NaN costs stay where they are (the `Some(Less)` check fails on NaN),
+/// which means a single bad evaluation can't drag itself to the front.
+///
+/// Called from `next_iter` where the simplex is already sorted except
+/// for the one slot Nelder-Mead just rewrote (or the four slots after a
+/// shrink), so each call does only a handful of swaps in the steady
+/// state — and crucially, allocates nothing.
+fn insertion_sort_simplex<V, F: PartialOrd>(vertices: &mut [V], costs: &mut [F]) {
+    for i in 1..vertices.len() {
+        let mut j = i;
+        while j > 0
+            && matches!(
+                costs[j].partial_cmp(&costs[j - 1]),
+                Some(std::cmp::Ordering::Less)
+            )
+        {
+            vertices.swap(j, j - 1);
+            costs.swap(j, j - 1);
+            j -= 1;
         }
     }
 }
@@ -286,8 +276,20 @@ where
     for (v, c) in state.vertices.iter().zip(state.costs.iter_mut()) {
         *c = problem.cost(v)?;
     }
-    sort_simplex(&mut state.vertices, &mut state.costs);
+    insertion_sort_simplex(&mut state.vertices, &mut state.costs);
     Ok(())
+}
+
+/// Pre-allocate Nelder-Mead's three scratch slots (centroid + two trial
+/// vertices) on `state.scratch` if it isn't sized yet. Idempotent — a
+/// re-`init` reuses the existing storage.
+fn ensure_scratch<V, F>(state: &mut BasicSimplexState<V, F>)
+where
+    V: Clone,
+{
+    if state.scratch.len() < 3 {
+        state.scratch = vec![state.vertices[0].clone(); 3];
+    }
 }
 
 /// One Nelder-Mead iteration, parameterised by a projection closure.
@@ -296,6 +298,11 @@ where
 /// impl passes one that clamps into `[lower, upper]`. Vertices are
 /// sorted (best at index 0) on entry; the invariant is restored before
 /// returning. The simplex has `n + 1` vertices in `n`-D.
+///
+/// The three trial points (centroid, reflection, expansion-or-contraction)
+/// are computed in `state.scratch` slots `[0]`, `[1]`, `[2]` so the hot
+/// path performs no heap allocation. `Solver::init` pre-sizes the
+/// scratch.
 #[allow(clippy::type_complexity)]
 fn next_iter_inner<P, V, F, Proj>(
     problem: &mut Problem<P>,
@@ -306,48 +313,57 @@ fn next_iter_inner<P, V, F, Proj>(
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: Clone + ScaledAdd<F>,
+    V: ScaleInPlace<F> + ScaledAdd<F>,
     Proj: Fn(&mut V),
 {
     let m = state.vertices.len();
     let n = m - 1;
     let worst = m - 1;
 
-    let x_bar = centroid(&state.vertices[..n]);
-
     let f1 = state.costs[0];
     let fn_ = state.costs[n - 1];
     let fnp1 = state.costs[worst];
 
+    // Split scratch into three independent mutable slots: x_bar, x_r,
+    // and x_alt (expansion or contraction, depending on branch). Then
+    // borrow the worst vertex immutably for the affine builds.
+    let (xbar_slice, rest) = state.scratch.split_at_mut(1);
+    let (xr_slice, alt_slice) = rest.split_at_mut(1);
+    let x_bar = &mut xbar_slice[0];
+    let x_r = &mut xr_slice[0];
+    let x_alt = &mut alt_slice[0];
+
+    centroid_into(x_bar, &state.vertices[..n]);
+
     // Reflection: x_r = x_bar + α(x_bar − x_{n+1}) = (1+α)·x_bar − α·x_{n+1}
-    let mut x_r = affine(&x_bar, &state.vertices[worst], -p.alpha);
-    project(&mut x_r);
-    let fr = problem.cost(&x_r)?;
+    affine_into(x_r, x_bar, &state.vertices[worst], -p.alpha);
+    project(x_r);
+    let fr = problem.cost(x_r)?;
 
     if f1 <= fr && fr < fn_ {
         // Accept reflection.
-        state.vertices[worst] = x_r;
+        std::mem::swap(&mut state.vertices[worst], x_r);
         state.costs[worst] = fr;
     } else if fr < f1 {
         // Try expansion: x_e = x_bar + β(x_r − x_bar).
-        let mut x_e = affine(&x_bar, &x_r, p.beta);
-        project(&mut x_e);
-        let fe = problem.cost(&x_e)?;
+        affine_into(x_alt, x_bar, x_r, p.beta);
+        project(x_alt);
+        let fe = problem.cost(x_alt)?;
         if fe < fr {
-            state.vertices[worst] = x_e;
+            std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = fe;
         } else {
-            state.vertices[worst] = x_r;
+            std::mem::swap(&mut state.vertices[worst], x_r);
             state.costs[worst] = fr;
         }
     } else if fr < fnp1 {
         // fn ≤ fr < f_{n+1}: outside contraction.
         // x_oc = x_bar + γ(x_r − x_bar).
-        let mut x_oc = affine(&x_bar, &x_r, p.gamma);
-        project(&mut x_oc);
-        let foc = problem.cost(&x_oc)?;
+        affine_into(x_alt, x_bar, x_r, p.gamma);
+        project(x_alt);
+        let foc = problem.cost(x_alt)?;
         if foc <= fr {
-            state.vertices[worst] = x_oc;
+            std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = foc;
         } else {
             shrink_inner(problem, &mut state, p.delta, project)?;
@@ -355,18 +371,18 @@ where
     } else {
         // fr ≥ f_{n+1}: inside contraction.
         // x_ic = x_bar − γ(x_bar − x_{n+1}) = (1−γ)·x_bar + γ·x_{n+1}.
-        let mut x_ic = affine(&x_bar, &state.vertices[worst], p.gamma);
-        project(&mut x_ic);
-        let fic = problem.cost(&x_ic)?;
+        affine_into(x_alt, x_bar, &state.vertices[worst], p.gamma);
+        project(x_alt);
+        let fic = problem.cost(x_alt)?;
         if fic < fnp1 {
-            state.vertices[worst] = x_ic;
+            std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = fic;
         } else {
             shrink_inner(problem, &mut state, p.delta, project)?;
         }
     }
 
-    sort_simplex(&mut state.vertices, &mut state.costs);
+    insertion_sort_simplex(&mut state.vertices, &mut state.costs);
     Ok((state, None))
 }
 
@@ -379,17 +395,22 @@ fn shrink_inner<P, V, F, Proj>(
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: Clone + ScaledAdd<F>,
+    V: ScaleInPlace<F> + ScaledAdd<F>,
     Proj: Fn(&mut V),
 {
-    // Best vertex is fixed at index 0; shrink every other vertex toward it.
-    // Split-borrow lets us read x[0] while mutating x[i].
+    // Best vertex is fixed at index 0; shrink every other vertex toward
+    // it in place: v ← best + δ·(v − best) = (1 − δ)·best + δ·v.
+    // Split-borrow lets us read x[0] while mutating x[i], and the
+    // affine write goes directly into the vertex slot — no scratch
+    // alloc per shrunk vertex.
+    let one = F::one();
     let (best_slice, rest) = state.vertices.split_at_mut(1);
     let best = &best_slice[0];
     for (v, c) in rest.iter_mut().zip(&mut state.costs[1..]) {
-        let mut new_v = affine(best, v, delta);
-        project(&mut new_v);
-        *v = new_v;
+        // Multiply v by δ in place, then add (1−δ)·best; finally project.
+        v.scale_in_place(delta);
+        v.scaled_add(one - delta, best);
+        project(v);
         *c = problem.cost(v)?;
     }
     Ok(())
@@ -399,7 +420,7 @@ impl<P, V, F> Solver<P, BasicSimplexState<V, F>> for NelderMead<Unbounded, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: Clone + ScaledAdd<F>,
+    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
 {
     type Error = P::Error;
 
@@ -410,6 +431,7 @@ where
     ) -> Result<BasicSimplexState<V, F>, Self::Error> {
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
+        ensure_scratch(&mut state);
         init_costs_and_sort(problem, &mut state)?;
         Ok(state)
     }
@@ -430,7 +452,7 @@ impl<P, V, F> Solver<P, BasicSimplexState<V, F>> for NelderMead<Projected, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
-    V: Clone + ScaledAdd<F> + ClampInPlace,
+    V: Clone + ScaleInPlace<F> + ScaledAdd<F> + ClampInPlace,
 {
     type Error = P::Error;
 
@@ -450,6 +472,7 @@ where
         for v in state.vertices.iter_mut() {
             v.clamp_in_place(&lo, &hi);
         }
+        ensure_scratch(&mut state);
         init_costs_and_sort(problem, &mut state)?;
         Ok(state)
     }
