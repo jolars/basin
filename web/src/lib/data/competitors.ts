@@ -8,13 +8,13 @@
  * hand-edited. This module just types it and adds display metadata, reusing
  * the solver/problem vocabulary from `./benchmarks`.
  */
-import rawData from './competitor-benchmarks.json';
-import { type Solver, SOLVER_LABELS, PROBLEM_LABELS } from './benchmarks';
+import rawData from "./competitor-benchmarks.json";
+import { type Solver, SOLVER_LABELS, PROBLEM_LABELS } from "./benchmarks";
 
 export { type Solver, SOLVER_LABELS, PROBLEM_LABELS };
 
 /** Competing libraries a case is run against. */
-export type Library = 'basin' | 'argmin' | 'gomez';
+export type Library = "basin" | "argmin" | "gomez" | "nlopt";
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
 export interface TracePoint {
@@ -43,21 +43,23 @@ export interface CompetitorBenchmarks {
 
 export const COMPETITOR_BENCHMARKS = rawData as CompetitorBenchmarks;
 
-export const LIBRARY_ORDER: Library[] = ['basin', 'argmin', 'gomez'];
+export const LIBRARY_ORDER: Library[] = ["basin", "argmin", "gomez", "nlopt"];
 
 export const LIBRARY_LABELS: Record<Library, string> = {
-    basin: 'basin',
-    argmin: 'argmin',
-    gomez: 'gomez',
+    basin: "basin",
+    argmin: "argmin",
+    gomez: "gomez",
+    nlopt: "nlopt",
 };
 
 /** Line/legend colors per library, legible on light and dark backgrounds.
  * basin is indigo (its backend-chart `Vec<f64>` hue); argmin is amber;
- * gomez is teal. */
+ * gomez is teal; nlopt is rose. */
 export const LIBRARY_COLORS: Record<Library, string> = {
-    basin: '#6366f1',
-    argmin: '#f59e0b',
-    gomez: '#14b8a6',
+    basin: "#6366f1",
+    argmin: "#f59e0b",
+    gomez: "#14b8a6",
+    nlopt: "#e11d48",
 };
 
 /** One curated competitor case. */
@@ -76,19 +78,19 @@ export interface CompetitorCase {
  */
 export const COMPETITOR_CASES: CompetitorCase[] = [
     {
-        solver: 'gd',
-        problem: 'rosenbrock',
-        blurb: 'Steepest descent with a More–Thuente line search — first-order, identical configuration on both sides.',
+        solver: "gd",
+        problem: "rosenbrock",
+        blurb: "Steepest descent with a More–Thuente line search — first-order, identical configuration on both sides.",
     },
     {
-        solver: 'nm',
-        problem: 'rosenbrock',
-        blurb: "Derivative-free Nelder–Mead. basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez constructs its own simplex with its default coefficients, then drives next() to convergence. The implementations diverge in path and per-iteration cost.",
+        solver: "nm",
+        problem: "rosenbrock",
+        blurb: "Derivative-free Nelder–Mead. basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez and nlopt construct their own simplex with their default coefficients. nlopt's curve is a per-eval best-so-far trace (no per-iteration hook), the others are per-iteration raw cost. The implementations diverge in path and per-iteration cost.",
     },
     {
-        solver: 'lbfgs',
-        problem: 'rosenbrock',
-        blurb: 'Limited-memory BFGS (m = 10, More–Thuente line search) — quasi-Newton; both converge well before the iteration cap.',
+        solver: "lbfgs",
+        problem: "rosenbrock",
+        blurb: "Limited-memory BFGS (m = 10) — quasi-Newton; basin and argmin both use a More–Thuente line search; nlopt uses its bundled L-BFGS (no line-search knob exposed). nlopt's curve is a per-eval best-so-far trace; the others are per-iteration raw cost.",
     },
 ];
 
@@ -96,7 +98,10 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
 export function librariesFor(solver: Solver, problem: string): Library[] {
     return LIBRARY_ORDER.filter((lib) =>
         COMPETITOR_BENCHMARKS.results.some(
-            (r) => r.solver === solver && r.problem === problem && r.library === lib,
+            (r) =>
+                r.solver === solver &&
+                r.problem === problem &&
+                r.library === lib,
         ),
     );
 }

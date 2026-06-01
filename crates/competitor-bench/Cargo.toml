@@ -1,11 +1,13 @@
 # Non-published benchmark harness comparing basin against competing
 # optimization libraries (axis 3 of the bench plan): the
-# `levenberg-marquardt` crate for NLLS, and `argmin` and `gomez` for the
-# gradient-based and derivative-free solvers. These external frameworks
-# (and criterion) have no business in basin proper — so per CONTRIBUTING.md
-# ("a new member should pull in heavy deps that have no business in the
-# core crate") they live here, isolated from basin's own dependency
-# graph, MSRV gate, and the wasm build (CI scopes those to `-p basin`).
+# `levenberg-marquardt` crate for NLLS, `argmin` and `gomez` for the
+# gradient-based and derivative-free solvers, and `nlopt` (a C-linked
+# wrapper around NLopt 2.9.1) on the derivative-free / L-BFGS cases.
+# These external frameworks (and criterion) have no business in basin
+# proper — so per CONTRIBUTING.md ("a new member should pull in heavy
+# deps that have no business in the core crate") they live here,
+# isolated from basin's own dependency graph, MSRV gate, and the wasm
+# build (CI scopes those to `-p basin`).
 #
 # Backend-vs-backend (axis 1) and solver-vs-solver (axis 2) benchmarks
 # are basin-internal and live in `crates/basin/benches/` instead.
@@ -41,6 +43,15 @@ argmin-math = { version = "0.5", features = ["vec"] }
 # never a basin/lm type — so the two nalgebra majors coexist in the
 # lockfile without interacting.
 gomez = "0.5"
+# nlopt wraps the NLopt C library (statically linked, vendored via
+# nlopt-sys bundling NLopt 2.9.1) — needs `cmake` at build time (added
+# to devenv.nix). NLopt has no per-iteration callback; the objective
+# closure is the only observation point, so the trace harness records a
+# best-so-far curve at function-eval granularity — vs the per-iteration
+# curves the other libraries report (see trace.rs for the asymmetry
+# note). LGPL-2.1, but `publish = false` keeps it from ever propagating
+# to basin proper or the wasm build.
+nlopt = "0.8"
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }

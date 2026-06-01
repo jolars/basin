@@ -26,21 +26,22 @@ const outFile = resolve(scriptDir, '..', 'src', 'lib', 'data', 'competitor-bench
 /** Iteration budget the harness caps each solve at (`MAX_ITERS`). */
 const ITERATIONS = 200;
 
-const LIBRARY_ORDER = ['basin', 'argmin', 'gomez'] as const;
+const LIBRARY_ORDER = ['basin', 'argmin', 'gomez', 'nlopt'] as const;
 type Library = (typeof LIBRARY_ORDER)[number];
 
 /**
  * Curated (solver, problem, libraries) cases, in page order. Drives the
  * deterministic sort and the expected-count sanity check. Not every case has
  * every library — argmin has no NLLS so it's absent from those; gomez only
- * lines up with the derivative-free NM case. Keep in sync with
- * `COMPETITOR_CASES` in `src/lib/data/competitors.ts` and the cases in the
- * `trace` bench (`crates/competitor-bench/src/bin/trace.rs`).
+ * lines up with the derivative-free NM case; nlopt joins NM and L-BFGS but
+ * has no GD entry (its `Lbfgs` is the closest first-order analog). Keep in
+ * sync with `COMPETITOR_CASES` in `src/lib/data/competitors.ts` and the
+ * cases in the `trace` bench (`crates/competitor-bench/src/bin/trace.rs`).
  */
 const CASE_ORDER: { solver: string; problem: string; libraries: Library[] }[] = [
     { solver: 'gd', problem: 'rosenbrock', libraries: ['basin', 'argmin'] },
-    { solver: 'nm', problem: 'rosenbrock', libraries: ['basin', 'argmin', 'gomez'] },
-    { solver: 'lbfgs', problem: 'rosenbrock', libraries: ['basin', 'argmin'] },
+    { solver: 'nm', problem: 'rosenbrock', libraries: ['basin', 'argmin', 'gomez', 'nlopt'] },
+    { solver: 'lbfgs', problem: 'rosenbrock', libraries: ['basin', 'argmin', 'nlopt'] },
 ];
 
 const caseIndex = (solver: string, problem: string) =>

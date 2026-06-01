@@ -1,7 +1,7 @@
 //! Convergence-trace harness for the *competitor* benchmark axis: basin
-//! vs `argmin` (and `gomez` on the derivative-free case) on `Vec<f64>`,
-//! recording suboptimality `f(x) − f*` against wall-clock time at every
-//! iteration. Powers the `/benchmarks/competitors` page (see
+//! vs `argmin` (and `gomez` / `nlopt` where they line up) on `Vec<f64>`,
+//! recording suboptimality `f(x) − f*` against wall-clock time. Powers
+//! the `/benchmarks/competitors` page (see
 //! `web/scripts/collect-competitors.ts`).
 //!
 //! Unlike the criterion benches (a single mean solve time vs `n`, valid
@@ -18,18 +18,27 @@
 //!   * GD     — steepest descent + More-Thuente line search. basin vs argmin.
 //!   * NM     — standard coefficients and a bit-identical initial simplex
 //!     (basin's `IntoInitialSimplex`, relative step 0.05) for basin/argmin;
-//!     gomez constructs its own simplex with its default coefficients, so
-//!     it's "out-of-the-box gomez NM" against the matched basin/argmin pair.
+//!     gomez and nlopt construct their own simplex with their default
+//!     coefficients, so they're "out-of-the-box" against the matched
+//!     basin/argmin pair.
 //!   * L-BFGS — limited-memory `m = 10`, More-Thuente line search; argmin's
-//!     gradient/cost tolerances are zeroed so it runs the full budget. gomez
-//!     has no L-BFGS, so it's basin vs argmin only.
+//!     gradient/cost tolerances are zeroed so it runs the full budget.
+//!     gomez has no L-BFGS, so the third comparator is nlopt's `Lbfgs`
+//!     (NLopt's own L-BFGS — limited memory, no line-search knob exposed).
 //!
 //! Timing: the solvers are deterministic, so the cost sequence is identical
 //! every run and only timing jitters. We run `REPS` reps per (case, library)
-//! and take the *median* elapsed-ns per iteration index, paired with the
-//! (rep-invariant) cost at that index. One honest asymmetry: basin and gomez
-//! are timestamped from the driving loop, argmin from inside an `Arc<Mutex>`
-//! observer — negligible against per-iteration cost.
+//! and take the *median* elapsed-ns per sample index, paired with the
+//! (rep-invariant) cost at that index. Two honest asymmetries:
+//!   * basin and gomez are timestamped from the driving loop, argmin from
+//!     inside an `Arc<Mutex>` observer — negligible against per-iteration
+//!     cost.
+//!   * nlopt exposes no per-iteration hook, only the objective closure, so
+//!     its curve is a *best-so-far* trace at function-eval granularity
+//!     (matching argmin's `get_best_cost()` semantic monotonically, but
+//!     sampled per cost call rather than per iter). The eval budget is set
+//!     to `MAX_ITERS`, so nlopt sees no more cost calls than the other
+//!     libraries log iterations.
 //!
 //! Run: `cargo run -p competitor-bench --release --bin trace`.
 
@@ -185,6 +194,68 @@ fn gomez_trace_nm(f0: f64) -> Vec<(u128, f64)> {
 }
 
 // ---------------------------------------------------------------------
+// nlopt side: NLopt has no per-iteration callback hook — the objective
+// closure is the only observation point. Record `(elapsed_ns, f_best)`
+// inside the closure on every improvement, producing a monotone
+// best-so-far curve at function-eval granularity. The clock is started
+// at the first cost call (so t = 0 means "just before NLopt asks for
+// the first cost", matching argmin's observer-init reset). The eval
+// budget is `MAX_ITERS` and the function/parameter tolerances are
+// zeroed so NLopt definitely uses the full budget.
+// ---------------------------------------------------------------------
+
+struct NloptState {
+    start: Option<Instant>,
+    best: f64,
+    points: Vec<(u128, f64)>,
+}
+
+/// Inert gradient hook for derivative-free algorithms — NLopt never
+/// asks for a gradient under `Neldermead`, so this is dead code there.
+fn noop_grad(_x: &[f64], _g: &mut [f64]) {}
+
+fn nlopt_trace(
+    algo: nlopt::Algorithm,
+    cost: fn(&[f64]) -> f64,
+    grad: fn(&[f64], &mut [f64]),
+    f0: f64,
+) -> Vec<(u128, f64)> {
+    let state = NloptState {
+        start: None,
+        best: f0,
+        points: vec![(0u128, f0)],
+    };
+    let obj = move |x: &[f64], g: Option<&mut [f64]>, st: &mut NloptState| -> f64 {
+        if let Some(g) = g {
+            grad(x, g);
+        }
+        let f = cost(x);
+        let t = match st.start {
+            Some(t0) => t0.elapsed().as_nanos(),
+            None => {
+                st.start = Some(Instant::now());
+                0
+            }
+        };
+        if f < st.best {
+            st.best = f;
+            st.points.push((t, st.best));
+        }
+        f
+    };
+    let mut opt = nlopt::Nlopt::new(algo, N, obj, nlopt::Target::Minimize, state);
+    opt.set_maxeval(MAX_ITERS as u32).unwrap();
+    // Zero tolerances so NLopt runs the full eval budget (no early
+    // stop), matching the other libraries' policy in this harness.
+    let _ = opt.set_ftol_rel(0.0);
+    let _ = opt.set_ftol_abs(0.0);
+    let _ = opt.set_xtol_rel(0.0);
+    let mut x = start();
+    let _ = opt.optimize(&mut x);
+    opt.recover_user_data().points
+}
+
+// ---------------------------------------------------------------------
 // median over reps
 // ---------------------------------------------------------------------
 
@@ -317,6 +388,13 @@ fn main() {
             library: "gomez",
             points: median_reps(|| gomez_trace_nm(f0)),
         },
+        Trace {
+            solver: "nm",
+            library: "nlopt",
+            points: median_reps(|| {
+                nlopt_trace(nlopt::Algorithm::Neldermead, rosenbrock, noop_grad, f0)
+            }),
+        },
         // ---- L-BFGS (limited memory m = 10, More-Thuente) ----
         Trace {
             solver: "lbfgs",
@@ -351,6 +429,13 @@ fn main() {
                 }),
                 f0,
             ),
+        },
+        Trace {
+            solver: "lbfgs",
+            library: "nlopt",
+            points: median_reps(|| {
+                nlopt_trace(nlopt::Algorithm::Lbfgs, rosenbrock, rosenbrock_gradient, f0)
+            }),
         },
     ];
 

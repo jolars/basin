@@ -21,6 +21,7 @@
     quartoMinimal
     shfmt
     resvg # SVG → PNG rasteriser for the `task logo` asset pipeline
+    cmake # for nlopt-sys (competitor-bench only; builds bundled NLopt 2.9.1)
   ];
 
   languages = {
