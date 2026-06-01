@@ -1,6 +1,6 @@
 use rand::seq::SliceRandom;
 
-use crate::core::math::{NegInPlace, Scalar, ScaleInPlace, ScaledAdd};
+use crate::core::math::{Scalar, ScaleInPlace, ScaledAdd};
 use crate::core::problem::{CostFunction, MiniBatchGradient, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
@@ -92,10 +92,10 @@ use crate::core::termination::TerminationReason;
 ///
 /// Backend-generic — works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
-/// [`NegInPlace`] + [`ScaleInPlace<F>`] + `Clone`. With the default
-/// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
-/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
-/// `faer::Col<f64>` (feature `faer`).
+/// [`ScaleInPlace<F>`] + `Clone`. With the default `F = f64` that covers
+/// `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
+/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
+/// (feature `faer`).
 ///
 /// # References
 ///
@@ -270,7 +270,7 @@ impl<P, V, F> Solver<P, BasicState<V, F>> for Sgd<V, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + MiniBatchGradient<Gradient = V>,
-    V: ScaledAdd<F> + NegInPlace + ScaleInPlace<F> + Clone,
+    V: ScaledAdd<F> + ScaleInPlace<F> + Clone,
 {
     type Error = P::Error;
 
@@ -337,25 +337,26 @@ where
         let grad = problem.batch_gradient(&state.param, batch)?;
         self.cursor += bs;
 
-        let mut direction = grad;
-        direction.neg_in_place();
-
         if self.beta == F::zero() {
-            // No momentum: x ← x + α·(−g). Allocation-free.
-            state.param.scaled_add(self.alpha, &direction);
+            // No momentum: x ← x − α·g. One fused pass via
+            // `scaled_add(-α, &g)`, instead of materializing `direction = −g`
+            // and stepping `x ← x + α·direction` — the latter touched the
+            // dim-sized buffer twice per step.
+            state.param.scaled_add(-self.alpha, &grad);
         } else {
-            // Heavy ball: v ← β·v + α·(−g) = β·v − α·g, then x ← x + v.
-            // With v₀ = 0, the first step is α·(−g); form it by consuming
-            // `direction` to avoid materializing a zero vector.
+            // Heavy ball: v ← β·v − α·g, then x ← x + v.
+            // With v₀ = 0 the first step is just −α·g; form it by consuming
+            // `grad` to avoid materializing a zero vector.
             let velocity = match self.velocity.take() {
                 Some(mut v) => {
                     v.scale_in_place(self.beta);
-                    v.scaled_add(self.alpha, &direction);
+                    v.scaled_add(-self.alpha, &grad);
                     v
                 }
                 None => {
-                    direction.scale_in_place(self.alpha);
-                    direction
+                    let mut v = grad;
+                    v.scale_in_place(-self.alpha);
+                    v
                 }
             };
             state.param.scaled_add(F::one(), &velocity);
