@@ -334,6 +334,13 @@ pub struct BasicSimplexState<V, F = f64> {
     pub(crate) costs: Vec<F>,
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
+    /// Solver-owned scratch buffers, populated lazily in `Solver::init`
+    /// so the per-iter hot path can compute trial vertices in place
+    /// instead of allocating a fresh `V` each time. Empty until the
+    /// solver fills it; size and meaning are entirely a solver's
+    /// internal concern (Nelder-Mead uses three slots for centroid +
+    /// two trial points).
+    pub(crate) scratch: Vec<V>,
 }
 
 impl<V, F: Scalar> BasicSimplexState<V, F> {
@@ -352,6 +359,7 @@ impl<V, F: Scalar> BasicSimplexState<V, F> {
             costs: vec![F::infinity(); n],
             iter: 0,
             cost_evals: 0,
+            scratch: Vec::new(),
         }
     }
 }
