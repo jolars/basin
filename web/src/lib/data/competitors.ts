@@ -14,7 +14,7 @@ import { type Solver, SOLVER_LABELS, PROBLEM_LABELS } from './benchmarks';
 export { type Solver, SOLVER_LABELS, PROBLEM_LABELS };
 
 /** Competing libraries a case is run against. */
-export type Library = 'basin' | 'argmin';
+export type Library = 'basin' | 'argmin' | 'gomez';
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
 export interface TracePoint {
@@ -43,18 +43,21 @@ export interface CompetitorBenchmarks {
 
 export const COMPETITOR_BENCHMARKS = rawData as CompetitorBenchmarks;
 
-export const LIBRARY_ORDER: Library[] = ['basin', 'argmin'];
+export const LIBRARY_ORDER: Library[] = ['basin', 'argmin', 'gomez'];
 
 export const LIBRARY_LABELS: Record<Library, string> = {
     basin: 'basin',
     argmin: 'argmin',
+    gomez: 'gomez',
 };
 
 /** Line/legend colors per library, legible on light and dark backgrounds.
- * basin is indigo (its backend-chart `Vec<f64>` hue); argmin is amber. */
+ * basin is indigo (its backend-chart `Vec<f64>` hue); argmin is amber;
+ * gomez is teal. */
 export const LIBRARY_COLORS: Record<Library, string> = {
     basin: '#6366f1',
     argmin: '#f59e0b',
+    gomez: '#14b8a6',
 };
 
 /** One curated competitor case. */
@@ -80,7 +83,7 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
     {
         solver: 'nm',
         problem: 'rosenbrock',
-        blurb: 'Derivative-free Nelder–Mead from a bit-identical initial simplex (standard coefficients) — the implementations diverge in path and per-iteration cost.',
+        blurb: "Derivative-free Nelder–Mead. basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez constructs its own simplex with its default coefficients, then drives next() to convergence. The implementations diverge in path and per-iteration cost.",
     },
     {
         solver: 'lbfgs',

@@ -1,30 +1,34 @@
 //! Convergence-trace harness for the *competitor* benchmark axis: basin
-//! vs `argmin` on `Vec<f64>`, recording suboptimality `f(x) − f*` against
-//! wall-clock time at every iteration. Powers the `/benchmarks/competitors`
-//! page (see `web/scripts/collect-competitors.ts`).
+//! vs `argmin` (and `gomez` on the derivative-free case) on `Vec<f64>`,
+//! recording suboptimality `f(x) − f*` against wall-clock time at every
+//! iteration. Powers the `/benchmarks/competitors` page (see
+//! `web/scripts/collect-competitors.ts`).
 //!
 //! Unlike the criterion benches (a single mean solve time vs `n`, valid
 //! only when the *same* algorithm runs across backends), competitors do
-//! not share an implementation: argmin's Nelder-Mead / GD / L-BFGS take a
-//! different path and have different per-iteration cost than basin's. A
-//! single mean would hide that, so we emit the whole convergence curve and
-//! let the chart show both how fast each library drives down the objective
-//! and how much wall time it spends.
+//! not share an implementation: each library's Nelder-Mead / GD / L-BFGS
+//! takes a different path and has a different per-iteration cost than
+//! basin's. A single mean would hide that, so we emit the whole
+//! convergence curve and let the chart show both how fast each library
+//! drives down the objective and how much wall time it spends.
 //!
 //! Cases (all Rosenbrock, `n = 2`, classic start `(−1.2, 1.0)`, matched
 //! configs mirroring `benches/gd_nm.rs`, a fixed `MAX_ITERS` budget with
-//! no early stop on either side):
-//!   * GD     — steepest descent + More-Thuente line search.
+//! no early stop on any side):
+//!   * GD     — steepest descent + More-Thuente line search. basin vs argmin.
 //!   * NM     — standard coefficients and a bit-identical initial simplex
-//!     (basin's `IntoInitialSimplex`, relative step 0.05).
+//!     (basin's `IntoInitialSimplex`, relative step 0.05) for basin/argmin;
+//!     gomez constructs its own simplex with its default coefficients, so
+//!     it's "out-of-the-box gomez NM" against the matched basin/argmin pair.
 //!   * L-BFGS — limited-memory `m = 10`, More-Thuente line search; argmin's
-//!     gradient/cost tolerances are zeroed so it runs the full budget.
+//!     gradient/cost tolerances are zeroed so it runs the full budget. gomez
+//!     has no L-BFGS, so it's basin vs argmin only.
 //!
 //! Timing: the solvers are deterministic, so the cost sequence is identical
 //! every run and only timing jitters. We run `REPS` reps per (case, library)
 //! and take the *median* elapsed-ns per iteration index, paired with the
-//! (rep-invariant) cost at that index. One honest asymmetry: basin is
-//! timestamped from the `Stepper` side, argmin from inside an `Arc<Mutex>`
+//! (rep-invariant) cost at that index. One honest asymmetry: basin and gomez
+//! are timestamped from the driving loop, argmin from inside an `Arc<Mutex>`
 //! observer — negligible against per-iteration cost.
 //!
 //! Run: `cargo run -p competitor-bench --release --bin trace`.
@@ -43,7 +47,9 @@ use basin::{
     BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent, IntoInitialSimplex,
     LbfgsState, Lbfgsb, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome,
 };
-use competitor_bench::ArgminProblem;
+use competitor_bench::{ArgminProblem, GomezProblem};
+use gomez::OptimizerDriver;
+use gomez::algo::NelderMead as GomezNelderMead;
 
 /// Fixed iteration budget — matches `benches/gd_nm.rs` and the backend
 /// bench, so both libraries do the same nominal work.
@@ -147,6 +153,32 @@ fn finite_start(mut pts: Vec<(u128, f64)>, f0: f64) -> Vec<(u128, f64)> {
     if let Some(first) = pts.first_mut() {
         if !first.1.is_finite() {
             *first = (0, f0);
+        }
+    }
+    pts
+}
+
+// ---------------------------------------------------------------------
+// gomez side: step `OptimizerDriver::next`, timestamping after each call.
+// gomez doesn't expose a guaranteed-initialized `fx()` before the first
+// step (unlike basin's stepper, whose `init` runs eagerly), so we seed
+// (0_ns, f(x0)) explicitly and reset the clock — mirroring how
+// `finite_start` handles argmin's leading +∞.
+// ---------------------------------------------------------------------
+
+fn gomez_trace_nm(f0: f64) -> Vec<(u128, f64)> {
+    let problem = GomezProblem::new(rosenbrock, N);
+    let mut optimizer = OptimizerDriver::builder(&problem)
+        .with_initial(start())
+        .with_algo(GomezNelderMead::new)
+        .build();
+    let mut pts = Vec::with_capacity(MAX_ITERS as usize + 1);
+    pts.push((0u128, f0));
+    let t0 = Instant::now();
+    for _ in 0..MAX_ITERS {
+        match optimizer.next() {
+            Ok((_x, fx)) => pts.push((t0.elapsed().as_nanos(), fx)),
+            Err(_) => break,
         }
     }
     pts
@@ -279,6 +311,11 @@ fn main() {
                 }),
                 f0,
             ),
+        },
+        Trace {
+            solver: "nm",
+            library: "gomez",
+            points: median_reps(|| gomez_trace_nm(f0)),
         },
         // ---- L-BFGS (limited memory m = 10, More-Thuente) ----
         Trace {

@@ -1,6 +1,6 @@
 # Non-published benchmark harness comparing basin against competing
 # optimization libraries (axis 3 of the bench plan): the
-# `levenberg-marquardt` crate for NLLS, and `argmin` for the
+# `levenberg-marquardt` crate for NLLS, and `argmin` and `gomez` for the
 # gradient-based and derivative-free solvers. These external frameworks
 # (and criterion) have no business in basin proper — so per CONTRIBUTING.md
 # ("a new member should pull in heavy deps that have no business in the
@@ -14,8 +14,9 @@
 # workspace lockfile pins them to the *same* nalgebra patch: comparing
 # the lm crate against basin's nalgebra backend isolates pure
 # solver-loop overhead with zero linear-algebra-library confound. argmin
-# is compared on the `Vec<f64>` backend, which both basin and argmin
-# support natively, so GD / Nelder-Mead run on identical param types.
+# and gomez are compared on the `Vec<f64>` backend, which basin, argmin,
+# and gomez (via its bundled `gomez::nalgebra` re-export, 0.32) all
+# support natively, so NM / GD run on identical param types.
 [package]
 name = "competitor-bench"
 version = "0.9.0"
@@ -34,6 +35,12 @@ faer = { version = "0.24", default-features = false, features = ["std", "linalg"
 # per-version backend feature (the explosion basin's tenet 2 avoids).
 argmin = "0.11"
 argmin-math = { version = "0.5", features = ["vec"] }
+# gomez bundles its own nalgebra (0.32). That's a major mismatch with
+# the lm/basin nalgebra (0.34) elsewhere in this crate, but gomez is
+# used standalone — its `Function` trait takes a `gomez::nalgebra::DVector`,
+# never a basin/lm type — so the two nalgebra majors coexist in the
+# lockfile without interacting.
+gomez = "0.5"
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }

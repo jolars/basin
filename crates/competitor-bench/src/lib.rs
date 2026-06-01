@@ -1,6 +1,6 @@
 //! Benchmark-support library for basin's cross-framework comparisons
 //! (axis 3 of the bench plan): basin vs the `levenberg-marquardt` crate
-//! (NLLS) and vs `argmin` (gradient-based / derivative-free).
+//! (NLLS) and vs `argmin` and `gomez` (gradient-based / derivative-free).
 //!
 //! The pattern throughout is to reuse basin's corpus as the source of
 //! truth and build thin adapters for the competitors, so every framework
@@ -18,6 +18,12 @@
 //!   [`Gradient`](argmin::core::Gradient) on the `Vec<f64>` backend —
 //!   the backend both basin and argmin support natively, so GD /
 //!   Nelder-Mead run on identical param types.
+//! - **gomez** ([`GomezProblem`]): a single fn-pointer adapter that
+//!   wraps a basin raw cost function into gomez's
+//!   [`Problem`](gomez::Problem) + [`Function`](gomez::Function), so
+//!   gomez's derivative-free optimizers see the same math basin and
+//!   argmin do. gomez has no gradient-based optimizer that lines up
+//!   with basin's GD or L-BFGS, so the adapter is cost-only.
 //!
 //! `benches/compare.rs` (LM) and `benches/gd_nm.rs` (argmin) hold the
 //! timing harnesses; the `verify*` binaries print one-shot convergence
@@ -29,6 +35,8 @@ use std::marker::PhantomData;
 use argmin::core::{CostFunction, Error, Gradient};
 use basin::{Jacobian, Residual};
 use faer::{Col, Mat};
+use gomez::nalgebra as gna;
+use gomez::{Domain, Function, Problem};
 use levenberg_marquardt::LeastSquaresProblem;
 use nalgebra::storage::Owned;
 use nalgebra::{DMatrix, DVector, Dyn};
@@ -64,6 +72,43 @@ impl Gradient for ArgminProblem {
         let mut g = vec![0.0; p.len()];
         (self.grad)(p, &mut g);
         Ok(g)
+    }
+}
+
+/// gomez-side adapter wrapping a basin raw cost `fn(&[f64]) -> f64` into
+/// gomez's [`Problem`] + [`Function`] over an unconstrained `n`-D domain.
+/// Cost-only — gomez has no gradient-using optimizer that lines up with
+/// basin's first-order solvers, so the adapter exposes only the value;
+/// gomez approximates derivatives internally if a method ever needs them.
+///
+/// Operates on `gomez::nalgebra::DVector<f64>` (gomez's bundled nalgebra
+/// 0.32), which is a separate version from the lm/basin nalgebra 0.34
+/// elsewhere in this crate — the two majors coexist in the lockfile and
+/// never meet, because gomez only ever sees its own type.
+pub struct GomezProblem {
+    cost: fn(&[f64]) -> f64,
+    n: usize,
+}
+
+impl GomezProblem {
+    pub fn new(cost: fn(&[f64]) -> f64, n: usize) -> Self {
+        Self { cost, n }
+    }
+}
+
+impl Problem for GomezProblem {
+    type Field = f64;
+    fn domain(&self) -> Domain<f64> {
+        Domain::unconstrained(self.n)
+    }
+}
+
+impl Function for GomezProblem {
+    fn apply<Sx>(&self, x: &gna::Vector<f64, gna::Dyn, Sx>) -> f64
+    where
+        Sx: gna::Storage<f64, gna::Dyn> + gna::IsContiguous,
+    {
+        (self.cost)(x.as_slice())
     }
 }
 

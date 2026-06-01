@@ -26,23 +26,30 @@ const outFile = resolve(scriptDir, '..', 'src', 'lib', 'data', 'competitor-bench
 /** Iteration budget the harness caps each solve at (`MAX_ITERS`). */
 const ITERATIONS = 200;
 
-const LIBRARY_ORDER = ['basin', 'argmin'] as const;
+const LIBRARY_ORDER = ['basin', 'argmin', 'gomez'] as const;
 type Library = (typeof LIBRARY_ORDER)[number];
 
 /**
- * Curated (solver, problem) cases, in page order. Drives the deterministic
- * sort and the expected-count sanity check. Keep in sync with
+ * Curated (solver, problem, libraries) cases, in page order. Drives the
+ * deterministic sort and the expected-count sanity check. Not every case has
+ * every library — argmin has no NLLS so it's absent from those; gomez only
+ * lines up with the derivative-free NM case. Keep in sync with
  * `COMPETITOR_CASES` in `src/lib/data/competitors.ts` and the cases in the
  * `trace` bench (`crates/competitor-bench/src/bin/trace.rs`).
  */
-const CASE_ORDER: { solver: string; problem: string }[] = [
-    { solver: 'gd', problem: 'rosenbrock' },
-    { solver: 'nm', problem: 'rosenbrock' },
-    { solver: 'lbfgs', problem: 'rosenbrock' },
+const CASE_ORDER: { solver: string; problem: string; libraries: Library[] }[] = [
+    { solver: 'gd', problem: 'rosenbrock', libraries: ['basin', 'argmin'] },
+    { solver: 'nm', problem: 'rosenbrock', libraries: ['basin', 'argmin', 'gomez'] },
+    { solver: 'lbfgs', problem: 'rosenbrock', libraries: ['basin', 'argmin'] },
 ];
 
 const caseIndex = (solver: string, problem: string) =>
     CASE_ORDER.findIndex((c) => c.solver === solver && c.problem === problem);
+
+const caseAllowsLibrary = (solver: string, problem: string, lib: Library) =>
+    CASE_ORDER.some(
+        (c) => c.solver === solver && c.problem === problem && c.libraries.includes(lib),
+    );
 
 type TracePoint = { tNs: number; subopt: number };
 type CompetitorResult = {
@@ -67,7 +74,10 @@ const raw = JSON.parse(readFileSync(tracesFile, 'utf8')) as CompetitorResult[];
 // Keep only curated (solver, problem, library) rows — robust to stale traces
 // from an earlier case layout.
 const results = raw.filter(
-    (r) => caseIndex(r.solver, r.problem) >= 0 && LIBRARY_ORDER.includes(r.library),
+    (r) =>
+        caseIndex(r.solver, r.problem) >= 0 &&
+        LIBRARY_ORDER.includes(r.library) &&
+        caseAllowsLibrary(r.solver, r.problem, r.library),
 );
 
 if (results.length === 0) {
@@ -97,11 +107,11 @@ const data = {
 mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, `${JSON.stringify(data, null, 2)}\n`);
 
-const expected = CASE_ORDER.length * LIBRARY_ORDER.length;
+const expected = CASE_ORDER.reduce((acc, c) => acc + c.libraries.length, 0);
 console.log(`✓ wrote ${results.length} result(s) to ${outFile}`);
 if (results.length !== expected) {
     console.warn(
-        `  note: expected ${expected} rows (${CASE_ORDER.length} cases × ${LIBRARY_ORDER.length} libraries); ` +
+        `  note: expected ${expected} rows (sum of curated libraries per case); ` +
             'is the harness run complete?',
     );
 }

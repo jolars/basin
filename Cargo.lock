@@ -102,7 +102,7 @@ dependencies = [
  "faer",
  "faer-traits",
  "generativity",
- "nalgebra",
+ "nalgebra 0.34.2",
  "nalgebra-sparse",
  "ndarray",
  "num-traits",
@@ -253,8 +253,9 @@ dependencies = [
  "basin",
  "criterion",
  "faer",
+ "gomez",
  "levenberg-marquardt",
- "nalgebra",
+ "nalgebra 0.34.2",
 ]
 
 [[package]]
@@ -498,6 +499,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastrand"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
+
+[[package]]
+name = "fastrand-contrib"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb6c045880cda8f657f4859baf534963ff0595e2dcce0de5f52dcdf3076c290b"
+dependencies = [
+ "fastrand",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -680,6 +696,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "getset"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cf0fc11e47561d47397154977bc219f4cf809b2974facc3ccb3b89e2436f912"
+dependencies = [
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "glam"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -788,6 +816,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
 
 [[package]]
+name = "gomez"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "317ca6514f0a3dc278dc2287ecf0b2b51195910329057852e4749e246065eccf"
+dependencies = [
+ "approx",
+ "fastrand",
+ "fastrand-contrib",
+ "getset",
+ "log",
+ "nalgebra 0.32.6",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -863,7 +906,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8be7a65739a815308eef33a6d8c78e435a7317305d5b0af0c8c465a2d7ac6fc6"
 dependencies = [
  "cfg-if",
- "nalgebra",
+ "nalgebra 0.34.2",
  "num-traits",
  "rustc_version",
 ]
@@ -926,6 +969,22 @@ checksum = "6b947ae49db0d222b1dbc6b113ce7248a3fc3a6ca21b696717bfc000ba4484d8"
 
 [[package]]
 name = "nalgebra"
+version = "0.32.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5c17de023a86f59ed79891b2e5d5a94c705dbe904a5b5c9c952ea6221b03e4"
+dependencies = [
+ "approx",
+ "matrixmultiply",
+ "nalgebra-macros 0.2.2",
+ "num-complex",
+ "num-rational",
+ "num-traits",
+ "simba 0.8.1",
+ "typenum",
+]
+
+[[package]]
+name = "nalgebra"
 version = "0.34.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df76ea0ff5c7e6b88689085804d6132ded0ddb9de5ca5b8aeb9eeadc0508a70a"
@@ -950,12 +1009,23 @@ dependencies = [
  "glam 0.31.1",
  "glam 0.32.1",
  "matrixmultiply",
- "nalgebra-macros",
+ "nalgebra-macros 0.3.0",
  "num-complex",
  "num-rational",
  "num-traits",
- "simba",
+ "simba 0.9.1",
  "typenum",
+]
+
+[[package]]
+name = "nalgebra-macros"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "254a5372af8fc138e36684761d3c0cdb758a4410e938babcff1c860ce14ddbfc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -975,7 +1045,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df054d7815152d4e66955fc59a1f97f4036e5103134a381b6b54ec55babfa6b7"
 dependencies = [
- "nalgebra",
+ "nalgebra 0.34.2",
  "num-traits",
 ]
 
@@ -1207,6 +1277,28 @@ dependencies = [
  "rayon",
  "spindle",
  "sysctl",
+]
+
+[[package]]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "proc-macro-error2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
+dependencies = [
+ "proc-macro-error-attr2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1530,6 +1622,19 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "simba"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "061507c94fc6ab4ba1c9a0305018408e312e17c041eb63bef8aa726fa33aceae"
+dependencies = [
+ "approx",
+ "num-complex",
+ "num-traits",
+ "paste",
+ "wide",
+]
 
 [[package]]
 name = "simba"
