@@ -214,8 +214,18 @@ where
             }
         }
 
-        state.param = s.x;
-        state.cost = Some(s.fx);
+        // Post the just-probed point (u, fu) into the state, not the
+        // retained best (s.x, s.fx). This honors `BasicState`'s
+        // documented "current iterate" semantics, so one-step change
+        // tests like `CostTolerance` see real Δf signals instead of
+        // firing on the unchanged s.fx after a non-improving probe
+        // (issue #36). The executor's best-so-far tracking
+        // (`state.best_param` / `state.best_cost`) captures the
+        // true optimum independently of what's reported here, and
+        // Brent's bracket-collapse `terminate` only fires once
+        // `|u - x| < 2·tol`, so the two coincide at convergence.
+        state.param = u;
+        state.cost = Some(fu);
         Ok((state, None))
     }
 
@@ -338,10 +348,58 @@ mod tests {
         .run()
         .unwrap();
         assert_eq!(r.reason, TerminationReason::SolverConverged);
-        assert!((r.param() - 1.0).abs() < 1e-6, "x = {}", r.param());
-        assert!((r.cost() + 2.0).abs() < 1e-10, "f = {}", r.cost());
+        assert!(
+            (r.best_param() - 1.0).abs() < 1e-6,
+            "x = {}",
+            r.best_param()
+        );
+        assert!((r.best_cost() + 2.0).abs() < 1e-10, "f = {}", r.best_cost());
         // Brent should converge in well under 100 cost evals on a smooth
         // cubic; if this regresses we want to know.
         assert!(r.state.cost_evals() < 30);
+    }
+
+    #[test]
+    fn cost_tolerance_does_not_fire_on_non_improving_probe() {
+        // Regression for issue #36: before the fix, Brent posted its
+        // retained best `s.fx` into `state.cost` every iter, so a
+        // non-improving probe left `state.cost` unchanged and
+        // `CostTolerance` fired immediately (|Δf| = 0 ≤ tol). Now
+        // Brent posts the just-probed `(u, fu)`, so CostTolerance
+        // sees the real Δf signal; the only legitimate trigger is
+        // genuine convergence.
+        use crate::core::termination::CostTolerance;
+        let r = Executor::new(
+            Cubic { lo: 0.0, hi: 2.0 },
+            Brent::new(),
+            BasicState::new(0.5),
+        )
+        .max_iter(200)
+        .terminate_on(CostTolerance::new(1e-12))
+        .run()
+        .unwrap();
+        // Whatever stop fires (Brent's own bracket-collapse or
+        // CostTolerance kicking in once Δf legitimately drops below
+        // 1e-12 near the optimum), the best-so-far must still be the
+        // analytical optimum.
+        assert!(
+            (r.best_param() - 1.0).abs() < 1e-5,
+            "best_x = {}, reason = {:?}",
+            r.best_param(),
+            r.reason
+        );
+        assert!(
+            (r.best_cost() + 2.0).abs() < 1e-9,
+            "best_cost = {}, reason = {:?}",
+            r.best_cost(),
+            r.reason
+        );
+        // And the best-tracking metadata should be populated.
+        assert!(r.best_iter() > 0, "best_iter = {}", r.best_iter());
+        assert!(
+            r.best_cost_evals() > 0,
+            "best_cost_evals = {}",
+            r.best_cost_evals()
+        );
     }
 }

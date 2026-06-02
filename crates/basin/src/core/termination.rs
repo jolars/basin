@@ -437,7 +437,7 @@ where
     }
 }
 
-/// Stop when `f(x_k) ≤ target` — a user-supplied target cost level.
+/// Stop when `best_cost ≤ target` — a user-supplied target cost level.
 /// This is NLopt's `stopval` and SciPy's `f_min`: an absolute *level*
 /// stop, not a change-in-cost stop like [`CostTolerance`].
 ///
@@ -446,20 +446,12 @@ where
 /// rule than asymptotic convergence, and for benchmarking
 /// ("how long until the solver hits cost ≤ ε?").
 ///
-/// # Semantics under different state shapes
-///
-/// `state.cost()` means *best-so-far* for [`BasicSimplexState`] and
-/// [`BasicPopulationState`] (it returns `costs[0]`, the best vertex /
-/// individual), and *current iterate* for single-iterate states like
-/// [`BasicState`] / [`QuasiNewtonState`]. So on a non-monotone solver
-/// (e.g. CMA-ES sampling, a line search that allows transient
-/// increases) this fires once the best ever seen drops to the target,
-/// not on a transient dip of the current iterate alone.
-///
-/// [`BasicState`]: crate::core::state::BasicState
-/// [`BasicSimplexState`]: crate::core::state::BasicSimplexState
-/// [`BasicPopulationState`]: crate::core::state::BasicPopulationState
-/// [`QuasiNewtonState`]: crate::core::state::QuasiNewtonState
+/// Binds on [`State::best_cost`] — the lowest cost the executor has
+/// ever observed on this state — so on non-monotone solvers (Brent's
+/// rejected probes, a line search that allows transient increases,
+/// CMA-ES sampling) this fires once any iterate dropped to the
+/// target, never on a transient uphill step away from a previously
+/// reached target.
 pub struct TargetCost<F = f64>(pub F);
 
 impl<S, F> TerminationCriterion<S> for TargetCost<F>
@@ -468,44 +460,34 @@ where
     S: State<Float = F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
-        (state.cost() <= self.0).then_some(TerminationReason::TargetCost)
+        (state.best_cost() <= self.0).then_some(TerminationReason::TargetCost)
     }
 }
 
-/// Stop when the best cost seen so far has not improved by more than
-/// `tol` in `patience` consecutive iterations — the early-stopping
-/// pattern from ML, minus the validation set.
+/// Stop when the executor-maintained best cost has not improved by
+/// more than `tol` in `patience` consecutive checks — the early-
+/// stopping pattern from ML, minus the validation set.
 ///
-/// Improvement is counted strictly: an observation counts as
-/// improvement iff `curr < best_so_far − tol`. So `tol` is the minimum
-/// drop that resets the patience counter (Keras calls this
-/// `min_delta`). `tol = 0.0` means "any strict decrease resets".
+/// Improvement is counted strictly against a running anchor: an
+/// observation counts as improvement iff
+/// `state.best_cost() < anchor − tol`. So `tol` is the minimum drop
+/// that resets the patience counter (Keras calls this `min_delta`).
+/// `tol = 0.0` means "any strict decrease resets".
 ///
 /// Most useful for stochastic / global / non-monotone solvers (random
-/// search, CMA-ES, the steady-state GA, future basin-hopping) where
+/// search, CMA-ES, the steady-state GA, future basin-hopping) and for
+/// non-monotone single-iterate solvers (Brent's rejected probes) where
 /// the one-step [`CostTolerance`] family fires spuriously on accidental
-/// small `|Δf|`. By tracking the running minimum of `state.cost()`
-/// across all checks, this criterion is robust against transient
-/// increases (CMA-ES generation-to-generation variation, non-monotone
-/// line search, GA replacement noise).
-///
-/// # Semantics under different state shapes
-///
-/// Tracks `min` of `state.cost()` across checks. For
-/// [`BasicSimplexState`] / [`BasicPopulationState`] that's the best
-/// vertex / individual at each generation; for [`BasicState`] /
-/// [`QuasiNewtonState`] it's the current iterate's cost. Either way
-/// the running minimum is monotone non-increasing, so "improvement"
-/// has a single consistent meaning.
-///
-/// [`BasicState`]: crate::core::state::BasicState
-/// [`BasicSimplexState`]: crate::core::state::BasicSimplexState
-/// [`BasicPopulationState`]: crate::core::state::BasicPopulationState
-/// [`QuasiNewtonState`]: crate::core::state::QuasiNewtonState
+/// small `|Δf|`. Binds on [`State::best_cost`], which is monotone
+/// non-increasing by construction (executor-maintained), so the
+/// "improvement" check has the same meaning across every state shape.
 pub struct NoImprovement<F = f64> {
     patience: u64,
     tol: F,
-    best: Option<F>,
+    /// Last `best_cost()` value that counted as improvement —
+    /// resets the patience counter on the next strict drop below
+    /// `anchor − tol`.
+    anchor: Option<F>,
     stalled: u64,
 }
 
@@ -516,7 +498,7 @@ impl<F> NoImprovement<F> {
         Self {
             patience,
             tol,
-            best: None,
+            anchor: None,
             stalled: 0,
         }
     }
@@ -528,13 +510,13 @@ where
     S: State<Float = F>,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
-        let curr = state.cost();
-        let improved = match self.best {
-            None => true,
-            Some(best) => curr.is_finite() && curr < best - self.tol,
+        let curr = state.best_cost();
+        let improved = match self.anchor {
+            None => curr.is_finite(),
+            Some(anchor) => curr.is_finite() && curr < anchor - self.tol,
         };
         if improved {
-            self.best = Some(curr);
+            self.anchor = Some(curr);
             self.stalled = 0;
             None
         } else {

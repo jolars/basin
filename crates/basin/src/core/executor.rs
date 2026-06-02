@@ -71,6 +71,32 @@ impl<S: State> OptimizationResult<S> {
         self.state.cost_evals()
     }
 
+    /// Best iterate observed during the run — the lowest-cost point
+    /// the executor ever saw. For sorted-simplex / sorted-population
+    /// states this coincides with [`param`](Self::param); for non-
+    /// monotone single-iterate runs (Brent's probes, future SA) the
+    /// two diverge.
+    pub fn best_param(&self) -> &S::Param {
+        self.state.best_param()
+    }
+
+    /// Cost at [`best_param`](Self::best_param).
+    pub fn best_cost(&self) -> S::Float {
+        self.state.best_cost()
+    }
+
+    /// Iteration at which [`best_param`](Self::best_param) was found.
+    pub fn best_iter(&self) -> u64 {
+        self.state.best_iter()
+    }
+
+    /// Cumulative cost evaluations at the moment
+    /// [`best_param`](Self::best_param) was found — answers "how many
+    /// evals until the solver hit its best?".
+    pub fn best_cost_evals(&self) -> u64 {
+        self.state.best_cost_evals()
+    }
+
     /// Consume the result and return the final state.
     pub fn into_state(self) -> S {
         self.state
@@ -309,10 +335,15 @@ where
     };
     next.mirror(&problem.counts().delta_since(baseline));
     if let Some(reason) = mid_iter_reason {
+        // Refresh best-so-far from the mid-iter state too: the solver
+        // may have produced its best iterate on the same step that
+        // bailed.
+        next.update_best();
         *state_slot = Some(next);
         return Ok(StepOutcome::Stopped(reason));
     }
     next.increment_iter();
+    next.update_best();
     *state_slot = Some(next);
     Ok(StepOutcome::Continue)
 }
@@ -346,7 +377,7 @@ where
 /// `state.iter()` still reflects the last fully completed iteration.
 pub fn run_loop<P, S, So>(
     problem: &mut Problem<P>,
-    state: S,
+    mut state: S,
     solver: &mut So,
     criteria: &mut [Box<dyn TerminationCriterion<S>>],
     max_iter: u64,
@@ -356,9 +387,16 @@ where
     So: Solver<P, S>,
 {
     let baseline = *problem.counts();
+    // Reset best-so-far so the state always reflects per-run work,
+    // matching the snapshot discipline `state.mirror` uses for eval
+    // counters. This makes the same state safe to drive across
+    // multiple `run_loop` calls (e.g. an outer solver re-driving an
+    // inner) without best-so-far bleeding from one run into the next.
+    state.reset_best();
     let mut state = solver.init(problem, state)?;
     // Mirror init's work onto the state before any termination check.
     state.mirror(&problem.counts().delta_since(&baseline));
+    state.update_best();
     let mut slot = Some(state);
     let reason = loop {
         match step_once(problem, &baseline, &mut slot, solver, criteria, max_iter)? {
@@ -485,17 +523,22 @@ where
     pub fn into_stepper(self) -> Result<Stepper<P, S, So>, So::Error> {
         let Self {
             problem,
-            state,
+            mut state,
             mut solver,
             max_iter,
             criteria,
             mut observers,
         } = self;
         let mut problem = Problem::new(problem);
+        // Fresh top-level wrapper: reset best-so-far so it tracks
+        // this run's iterates only, matching the `state.mirror`
+        // per-run snapshot discipline.
+        state.reset_best();
         let mut state = solver.init(&mut problem, state)?;
         // Mirror init's work onto the state before any termination
         // check. Baseline is zero — this is a fresh top-level wrapper.
         state.mirror(problem.counts());
+        state.update_best();
         for (observer, _mode) in observers.iter_mut() {
             observer.observe_init(&state);
         }

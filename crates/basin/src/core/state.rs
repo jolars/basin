@@ -45,6 +45,37 @@ use crate::core::problem::EvalCounts;
 ///   evaluate the cost many times (line searches, Nelder-Mead shrinks),
 ///   and users budget against this counter rather than
 ///   [`iter`](Self::iter).
+///
+/// # Current vs best
+///
+/// The trait exposes two parallel views of the iterate stream:
+///
+/// - **Current** ([`param`](Self::param), [`cost`](Self::cost)) — what
+///   the solver is working with right now. May be non-monotone: a
+///   line-search probe, a rejected Brent step, a CMA-ES sample. Solvers
+///   write these.
+/// - **Best so far** ([`best_param`](Self::best_param),
+///   [`best_cost`](Self::best_cost), [`best_iter`](Self::best_iter),
+///   [`best_cost_evals`](Self::best_cost_evals)) — the lowest-cost
+///   iterate ever observed and the iter / eval count at which it was
+///   found. **Executor-maintained**: solvers do not write these; the
+///   executor calls [`update_best`](Self::update_best) after every
+///   successful [`Solver::init`](crate::core::solver::Solver::init) /
+///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
+///   Termination criteria like
+///   [`NoImprovement`](crate::core::termination::NoImprovement) and
+///   [`TargetCost`](crate::core::termination::TargetCost) bind on
+///   `best_cost()`; one-step change tests like
+///   [`CostTolerance`](crate::core::termination::CostTolerance) bind on
+///   `cost()`.
+///
+/// For state shapes whose [`cost`](Self::cost) is monotone non-increasing
+/// by construction (sorted-simplex / sorted-population), `best_cost()`
+/// equals `cost()` at every check — the two accessors coincide. Single-
+/// iterate shapes ([`BasicState`], [`QuasiNewtonState`], [`LbfgsState`])
+/// have the two diverge whenever the current iterate is worse than the
+/// running best (Brent on a non-improving probe; SA / basin-hopping on a
+/// transient uphill step; …).
 pub trait State {
     /// The parameter type the solver iterates over (e.g. `Vec<f64>`,
     /// `nalgebra::DVector<f64>`).
@@ -94,6 +125,55 @@ pub trait State {
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
     /// are safe.
     fn cost(&self) -> Self::Float;
+
+    /// Best [`param`](Self::param) ever observed by the executor's
+    /// best-tracking on this state.
+    ///
+    /// For sorted-simplex / sorted-population shapes, coincides with
+    /// [`param`](Self::param) (the best vertex is always at index 0).
+    ///
+    /// # Panics
+    ///
+    /// Single-iterate states panic if read before
+    /// [`Solver::init`](crate::core::solver::Solver::init) has populated
+    /// the cached cost — the first
+    /// [`update_best`](Self::update_best) call (after init) seeds the
+    /// best slot. Reads from termination criteria and from
+    /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
+    /// are safe.
+    fn best_param(&self) -> &Self::Param;
+    /// Cost at [`best_param`](Self::best_param) — the lowest cost ever
+    /// observed on this state.
+    fn best_cost(&self) -> Self::Float;
+    /// Iteration at which the current best was found. `0` before the
+    /// first [`update_best`](Self::update_best) call; thereafter, the
+    /// value of [`iter`](Self::iter) at the moment of the last strict
+    /// improvement in `best_cost()`.
+    fn best_iter(&self) -> u64;
+    /// Cumulative cost evaluations at the moment the current best was
+    /// found — useful for benchmarking ("how many evals until the
+    /// solver hit its best?").
+    fn best_cost_evals(&self) -> u64;
+    /// Refresh the best-so-far slots from the current iterate, if
+    /// [`cost`](Self::cost) strictly improves on
+    /// [`best_cost`](Self::best_cost).
+    ///
+    /// Called by the [`Executor`](crate::core::executor::Executor) after
+    /// every successful
+    /// [`Solver::init`](crate::core::solver::Solver::init) /
+    /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter),
+    /// once the state's counters have been mirrored. Solvers do not
+    /// call this directly.
+    fn update_best(&mut self);
+    /// Reset the best-so-far slots to their pre-init defaults
+    /// (`best_cost = +∞`, all best counters zero).
+    ///
+    /// Called by [`run_loop`](crate::core::executor::run_loop) at run
+    /// entry so a state passed across multiple runs (e.g. an inner
+    /// solver re-driven by an outer) tracks per-run best rather than
+    /// cumulative-across-runs best — the same per-run-snapshot
+    /// discipline [`CountsMirror`] uses for eval counters.
+    fn reset_best(&mut self);
 }
 
 /// States that carry a gradient at the current [`param`](State::param).
@@ -125,6 +205,11 @@ pub trait GradientState: State {
     /// [`State::cost_evals`] for the broader rule and
     /// [`CountsMirror`] for the per-state mapping.
     fn gradient_evals(&self) -> u64;
+    /// Cumulative gradient evaluations at the moment the current best
+    /// was found — companion to [`State::best_cost_evals`]. Useful for
+    /// benchmarking first-order solvers ("how many gradient calls until
+    /// the solver hit its best?").
+    fn best_gradient_evals(&self) -> u64;
 }
 
 /// Bridge from the wrapper's
@@ -242,9 +327,14 @@ pub struct BasicState<P, F = f64> {
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
     pub(crate) gradient_evals: u64,
+    pub(crate) best_param: Option<P>,
+    pub(crate) best_cost: F,
+    pub(crate) best_iter: u64,
+    pub(crate) best_cost_evals: u64,
+    pub(crate) best_gradient_evals: u64,
 }
 
-impl<P, F> BasicState<P, F> {
+impl<P, F: Scalar> BasicState<P, F> {
     /// Build a state at the given starting point. Cost and gradient
     /// are filled in by [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(param: P) -> Self {
@@ -255,11 +345,16 @@ impl<P, F> BasicState<P, F> {
             iter: 0,
             cost_evals: 0,
             gradient_evals: 0,
+            best_param: None,
+            best_cost: F::infinity(),
+            best_iter: 0,
+            best_cost_evals: 0,
+            best_gradient_evals: 0,
         }
     }
 }
 
-impl<P, F: Scalar> State for BasicState<P, F> {
+impl<P: Clone, F: Scalar> State for BasicState<P, F> {
     type Param = P;
     type Float = F;
 
@@ -296,15 +391,57 @@ impl<P, F: Scalar> State for BasicState<P, F> {
         self.cost
             .expect("BasicState::cost read before Solver::init populated it")
     }
+
+    fn best_param(&self) -> &P {
+        self.best_param
+            .as_ref()
+            .expect("BasicState::best_param read before Solver::init populated it")
+    }
+
+    fn best_cost(&self) -> F {
+        self.best_cost
+    }
+
+    fn best_iter(&self) -> u64 {
+        self.best_iter
+    }
+
+    fn best_cost_evals(&self) -> u64 {
+        self.best_cost_evals
+    }
+
+    fn update_best(&mut self) {
+        if let Some(curr) = self.cost {
+            if self.best_param.is_none() || curr < self.best_cost {
+                self.best_param = Some(self.param.clone());
+                self.best_cost = curr;
+                self.best_iter = self.iter;
+                self.best_cost_evals = self.cost_evals;
+                self.best_gradient_evals = self.gradient_evals;
+            }
+        }
+    }
+
+    fn reset_best(&mut self) {
+        self.best_param = None;
+        self.best_cost = F::infinity();
+        self.best_iter = 0;
+        self.best_cost_evals = 0;
+        self.best_gradient_evals = 0;
+    }
 }
 
-impl<P, F: Scalar> GradientState for BasicState<P, F> {
+impl<P: Clone, F: Scalar> GradientState for BasicState<P, F> {
     fn gradient(&self) -> Option<&P> {
         self.gradient.as_ref()
     }
 
     fn gradient_evals(&self) -> u64 {
         self.gradient_evals
+    }
+
+    fn best_gradient_evals(&self) -> u64 {
+        self.best_gradient_evals
     }
 }
 
@@ -334,6 +471,9 @@ pub struct BasicSimplexState<V, F = f64> {
     pub(crate) costs: Vec<F>,
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
+    pub(crate) best_cost: F,
+    pub(crate) best_iter: u64,
+    pub(crate) best_cost_evals: u64,
     /// Solver-owned scratch buffers, populated lazily in `Solver::init`
     /// so the per-iter hot path can compute trial vertices in place
     /// instead of allocating a fresh `V` each time. Empty until the
@@ -359,6 +499,9 @@ impl<V, F: Scalar> BasicSimplexState<V, F> {
             costs: vec![F::infinity(); n],
             iter: 0,
             cost_evals: 0,
+            best_cost: F::infinity(),
+            best_iter: 0,
+            best_cost_evals: 0,
             scratch: Vec::new(),
         }
     }
@@ -489,6 +632,39 @@ impl<V, F: Scalar> State for BasicSimplexState<V, F> {
     fn cost(&self) -> F {
         self.costs[0]
     }
+
+    fn best_param(&self) -> &V {
+        // costs[0] is monotone non-increasing across iters (sort
+        // invariant), so the best vertex IS vertices[0].
+        &self.vertices[0]
+    }
+
+    fn best_cost(&self) -> F {
+        self.best_cost
+    }
+
+    fn best_iter(&self) -> u64 {
+        self.best_iter
+    }
+
+    fn best_cost_evals(&self) -> u64 {
+        self.best_cost_evals
+    }
+
+    fn update_best(&mut self) {
+        let curr = self.costs[0];
+        if curr < self.best_cost {
+            self.best_cost = curr;
+            self.best_iter = self.iter;
+            self.best_cost_evals = self.cost_evals;
+        }
+    }
+
+    fn reset_best(&mut self) {
+        self.best_cost = F::infinity();
+        self.best_iter = 0;
+        self.best_cost_evals = 0;
+    }
 }
 
 impl<V, F> CountsMirror for BasicSimplexState<V, F>
@@ -541,9 +717,14 @@ pub struct QuasiNewtonState<V, M, F = f64> {
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
     pub(crate) gradient_evals: u64,
+    pub(crate) best_param: Option<V>,
+    pub(crate) best_cost: F,
+    pub(crate) best_iter: u64,
+    pub(crate) best_cost_evals: u64,
+    pub(crate) best_gradient_evals: u64,
 }
 
-impl<V: VectorLen, M: MatrixIdentity, F> QuasiNewtonState<V, M, F> {
+impl<V: VectorLen, M: MatrixIdentity, F: Scalar> QuasiNewtonState<V, M, F> {
     /// Build a state at the given starting point with the inverse-Hessian
     /// approximation initialised to the identity.
     ///
@@ -564,11 +745,16 @@ impl<V: VectorLen, M: MatrixIdentity, F> QuasiNewtonState<V, M, F> {
             iter: 0,
             cost_evals: 0,
             gradient_evals: 0,
+            best_param: None,
+            best_cost: F::infinity(),
+            best_iter: 0,
+            best_cost_evals: 0,
+            best_gradient_evals: 0,
         }
     }
 }
 
-impl<V, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
+impl<V: Clone, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
     type Param = V;
     type Float = F;
 
@@ -600,9 +786,47 @@ impl<V, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
         self.cost
             .expect("QuasiNewtonState::cost read before Solver::init populated it")
     }
+
+    fn best_param(&self) -> &V {
+        self.best_param
+            .as_ref()
+            .expect("QuasiNewtonState::best_param read before Solver::init populated it")
+    }
+
+    fn best_cost(&self) -> F {
+        self.best_cost
+    }
+
+    fn best_iter(&self) -> u64 {
+        self.best_iter
+    }
+
+    fn best_cost_evals(&self) -> u64 {
+        self.best_cost_evals
+    }
+
+    fn update_best(&mut self) {
+        if let Some(curr) = self.cost {
+            if self.best_param.is_none() || curr < self.best_cost {
+                self.best_param = Some(self.param.clone());
+                self.best_cost = curr;
+                self.best_iter = self.iter;
+                self.best_cost_evals = self.cost_evals;
+                self.best_gradient_evals = self.gradient_evals;
+            }
+        }
+    }
+
+    fn reset_best(&mut self) {
+        self.best_param = None;
+        self.best_cost = F::infinity();
+        self.best_iter = 0;
+        self.best_cost_evals = 0;
+        self.best_gradient_evals = 0;
+    }
 }
 
-impl<V, M, F: Scalar> GradientState for QuasiNewtonState<V, M, F> {
+impl<V: Clone, M, F: Scalar> GradientState for QuasiNewtonState<V, M, F> {
     fn gradient(&self) -> Option<&V> {
         self.gradient.as_ref()
     }
@@ -610,9 +834,13 @@ impl<V, M, F: Scalar> GradientState for QuasiNewtonState<V, M, F> {
     fn gradient_evals(&self) -> u64 {
         self.gradient_evals
     }
+
+    fn best_gradient_evals(&self) -> u64 {
+        self.best_gradient_evals
+    }
 }
 
-impl<V, M, F: Scalar> CountsMirror for QuasiNewtonState<V, M, F> {
+impl<V: Clone, M, F: Scalar> CountsMirror for QuasiNewtonState<V, M, F> {
     fn mirror(&mut self, delta: &EvalCounts) {
         self.cost_evals = delta.cost_evals + delta.residual_evals;
         self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
@@ -634,6 +862,9 @@ pub struct BasicPopulationState<V, F = f64> {
     pub(crate) costs: Vec<F>,
     pub(crate) iter: u64,
     pub(crate) cost_evals: u64,
+    pub(crate) best_cost: F,
+    pub(crate) best_iter: u64,
+    pub(crate) best_cost_evals: u64,
 }
 
 impl<V, F: Scalar> BasicPopulationState<V, F> {
@@ -656,6 +887,9 @@ impl<V, F: Scalar> BasicPopulationState<V, F> {
             costs: vec![F::infinity(); n],
             iter: 0,
             cost_evals: 0,
+            best_cost: F::infinity(),
+            best_iter: 0,
+            best_cost_evals: 0,
         }
     }
 
@@ -678,6 +912,9 @@ impl<V, F: Scalar> BasicPopulationState<V, F> {
             costs: Vec::with_capacity(lambda),
             iter: 0,
             cost_evals: 0,
+            best_cost: F::infinity(),
+            best_iter: 0,
+            best_cost_evals: 0,
         }
     }
 }
@@ -704,6 +941,39 @@ impl<V, F: Scalar> State for BasicPopulationState<V, F> {
 
     fn cost(&self) -> F {
         self.costs[0]
+    }
+
+    fn best_param(&self) -> &V {
+        // costs[0] is monotone non-increasing across iters (sort
+        // invariant), so the best candidate IS candidates[0].
+        &self.candidates[0]
+    }
+
+    fn best_cost(&self) -> F {
+        self.best_cost
+    }
+
+    fn best_iter(&self) -> u64 {
+        self.best_iter
+    }
+
+    fn best_cost_evals(&self) -> u64 {
+        self.best_cost_evals
+    }
+
+    fn update_best(&mut self) {
+        let curr = self.costs[0];
+        if curr < self.best_cost {
+            self.best_cost = curr;
+            self.best_iter = self.iter;
+            self.best_cost_evals = self.cost_evals;
+        }
+    }
+
+    fn reset_best(&mut self) {
+        self.best_cost = F::infinity();
+        self.best_iter = 0;
+        self.best_cost_evals = 0;
     }
 }
 

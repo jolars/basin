@@ -33,6 +33,9 @@ struct MultiStartState {
     costs: Vec<f64>,
     iter: u64,
     cost_evals: u64,
+    best_cost: f64,
+    best_iter: u64,
+    best_cost_evals: u64,
 }
 
 impl MultiStartState {
@@ -43,6 +46,9 @@ impl MultiStartState {
             costs: vec![f64::INFINITY; n],
             iter: 0,
             cost_evals: 0,
+            best_cost: f64::INFINITY,
+            best_iter: 0,
+            best_cost_evals: 0,
         }
     }
 }
@@ -65,6 +71,31 @@ impl State for MultiStartState {
     }
     fn cost(&self) -> f64 {
         self.costs[0]
+    }
+    fn best_param(&self) -> &Vec<f64> {
+        &self.iterates[0]
+    }
+    fn best_cost(&self) -> f64 {
+        self.best_cost
+    }
+    fn best_iter(&self) -> u64 {
+        self.best_iter
+    }
+    fn best_cost_evals(&self) -> u64 {
+        self.best_cost_evals
+    }
+    fn update_best(&mut self) {
+        let curr = self.costs[0];
+        if curr < self.best_cost {
+            self.best_cost = curr;
+            self.best_iter = self.iter;
+            self.best_cost_evals = self.cost_evals;
+        }
+    }
+    fn reset_best(&mut self) {
+        self.best_cost = f64::INFINITY;
+        self.best_iter = 0;
+        self.best_cost_evals = 0;
     }
 }
 

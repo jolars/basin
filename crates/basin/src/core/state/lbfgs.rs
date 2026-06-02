@@ -48,6 +48,12 @@ pub struct LbfgsState<V, F = f64> {
     pub(crate) cost_evals: u64,
     pub(crate) gradient_evals: u64,
 
+    pub(crate) best_param: Option<V>,
+    pub(crate) best_cost: F,
+    pub(crate) best_iter: u64,
+    pub(crate) best_cost_evals: u64,
+    pub(crate) best_gradient_evals: u64,
+
     /// Working buffers and persistent solver-side scalars for the
     /// L-BFGS-B iteration (Fortran's `mainlb` scratch arrays plus the
     /// pieces of `isave`/`dsave` that survive across iterations).
@@ -202,6 +208,11 @@ impl<V, F: Scalar> LbfgsState<V, F> {
             iter: 0,
             cost_evals: 0,
             gradient_evals: 0,
+            best_param: None,
+            best_cost: F::infinity(),
+            best_iter: 0,
+            best_cost_evals: 0,
+            best_gradient_evals: 0,
             work: None,
         }
     }
@@ -285,7 +296,7 @@ impl<V, F: Scalar> LbfgsState<V, F> {
     }
 }
 
-impl<V, F: Scalar> State for LbfgsState<V, F> {
+impl<V: Clone, F: Scalar> State for LbfgsState<V, F> {
     type Param = V;
     type Float = F;
 
@@ -312,18 +323,59 @@ impl<V, F: Scalar> State for LbfgsState<V, F> {
         self.cost
             .expect("LbfgsState::cost read before Solver::init populated it")
     }
+
+    fn best_param(&self) -> &V {
+        self.best_param
+            .as_ref()
+            .expect("LbfgsState::best_param read before Solver::init populated it")
+    }
+
+    fn best_cost(&self) -> F {
+        self.best_cost
+    }
+
+    fn best_iter(&self) -> u64 {
+        self.best_iter
+    }
+
+    fn best_cost_evals(&self) -> u64 {
+        self.best_cost_evals
+    }
+
+    fn update_best(&mut self) {
+        if let Some(curr) = self.cost {
+            if self.best_param.is_none() || curr < self.best_cost {
+                self.best_param = Some(self.param.clone());
+                self.best_cost = curr;
+                self.best_iter = self.iter;
+                self.best_cost_evals = self.cost_evals;
+                self.best_gradient_evals = self.gradient_evals;
+            }
+        }
+    }
+
+    fn reset_best(&mut self) {
+        self.best_param = None;
+        self.best_cost = F::infinity();
+        self.best_iter = 0;
+        self.best_cost_evals = 0;
+        self.best_gradient_evals = 0;
+    }
 }
 
-impl<V, F: Scalar> GradientState for LbfgsState<V, F> {
+impl<V: Clone, F: Scalar> GradientState for LbfgsState<V, F> {
     fn gradient(&self) -> Option<&V> {
         self.gradient.as_ref()
     }
     fn gradient_evals(&self) -> u64 {
         self.gradient_evals
     }
+    fn best_gradient_evals(&self) -> u64 {
+        self.best_gradient_evals
+    }
 }
 
-impl<V, F: Scalar> CountsMirror for LbfgsState<V, F> {
+impl<V: Clone, F: Scalar> CountsMirror for LbfgsState<V, F> {
     fn mirror(&mut self, delta: &EvalCounts) {
         self.cost_evals = delta.cost_evals + delta.residual_evals;
         self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
