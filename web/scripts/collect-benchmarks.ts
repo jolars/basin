@@ -40,13 +40,13 @@ type Backend = (typeof BACKEND_ORDER)[number];
  * `count` is the expected `dims × backends` rows for that case.
  */
 const CASE_ORDER: { solver: Solver; problem: string; count: number }[] = [
-    { solver: 'gd', problem: 'rosenbrock', count: 3 * 4 },
-    { solver: 'nm', problem: 'ackley', count: 3 * 4 },
-    { solver: 'lbfgs', problem: 'styblinski', count: 3 * 4 },
-    { solver: 'bfgs', problem: 'levy', count: 3 * 3 },
-    { solver: 'cmaes', problem: 'rastrigin', count: 2 * 3 },
-    { solver: 'lm', problem: 'sparselsq', count: 3 * 2 },
-    { solver: 'gn', problem: 'sparselsq', count: 3 * 2 },
+    { solver: 'gd', problem: 'rosenbrock', count: 5 * 4 },
+    { solver: 'nm', problem: 'ackley', count: 5 * 4 },
+    { solver: 'lbfgs', problem: 'styblinski', count: 5 * 4 },
+    { solver: 'bfgs', problem: 'levy', count: 5 * 3 },
+    { solver: 'cmaes', problem: 'rastrigin', count: 5 * 3 },
+    { solver: 'lm', problem: 'sparselsq', count: 5 * 2 },
+    { solver: 'gn', problem: 'sparselsq', count: 5 * 2 },
 ];
 
 const caseIndex = (solver: Solver, problem: string) =>

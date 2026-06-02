@@ -54,12 +54,13 @@ use ndarray::Array1;
 const MAX_ITERS: u64 = 200;
 
 /// Problem sizes. Larger `n` surfaces the backends' vectorization differences;
-/// `n = 2` is the classic small case.
-const DIMS: [usize; 3] = [2, 10, 100];
+/// `n = 2` is the classic small case. Log-spaced so the per-`n` curves render
+/// cleanly on the log–log chart.
+const DIMS: [usize; 5] = [2, 6, 20, 60, 200];
 
 /// CMA-ES sizes. Kept small: each generation does λ cost-evals plus an O(n³)
 /// eigendecomposition, so high `n` is dominated by the eigensolve.
-const CMA_DIMS: [usize; 2] = [2, 10];
+const CMA_DIMS: [usize; 5] = [2, 4, 8, 16, 32];
 
 /// Classic Rosenbrock start, extended to `n` dims by repeating `(−1.2, 1.0)`
 /// (matches `competitor-bench`'s `gd_nm.rs`); also the start for the
