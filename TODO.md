@@ -87,27 +87,21 @@ the previous lands.
       (mode-gated), and `observe_final` on clean stop. No concrete observers
       ship; the trait + wiring is the meat. Remaining: a `BestCostState`
       extension trait (only `BasicSimplexState` / `BasicPopulationState` track
-      best-so-far today) plus an `ObserverMode::NewBest` variant bound on it;
-      a zero-dep starter set in core (`StoreBest`, `Report`) once
-      `BestCostState` lands; satellite crates for heavier integrations
+      best-so-far today) plus an `ObserverMode::NewBest` variant bound on it; a
+      zero-dep starter set in core (`StoreBest`, `Report`) once `BestCostState`
+      lands; satellite crates for heavier integrations
       (`basin-observer-tracing`, `basin-observer-slog`, eventually a
       TUI/spectator-style crate) per the repo-structure rule (features on
       `basin` for light deps, separate crate only when heavy or
-      platform-specific). A `CheckpointWriter` observer (serialize `state`
-      every N iters via `serde` + `bincode`, gated on the `serde` feature and
-      `not(target_arch = "wasm32")`) belongs in the same followup — argmin
-      ships checkpointing as a first-class executor concern, but for basin
-      "save the iterate periodically so a new run can warm-start" is exactly
-      an observer's job; resume just deserializes into the initial state, no
+      platform-specific). A `CheckpointWriter` observer (serialize `state` every
+      N iters via `serde` + `bincode`, gated on the `serde` feature and
+      `not(target_arch = "wasm32")`) belongs in the same followup --- argmin
+      ships checkpointing as a first-class executor concern, but for basin "save
+      the iterate periodically so a new run can warm-start" is exactly an
+      observer's job; resume just deserializes into the initial state, no
       framework support needed. Keep observers strictly read-only --- problem
       transformers (gradient clipping etc.) stay as problem-adapter wrappers,
       not observer hooks, mirroring how constraints attach problem-side.
-- [ ] **Generalize over scalar (`f64` → `F: Float`).** Per the
-      provisional-choices section in `CONTRIBUTING.md`. Neither the first stochastic
-      solver (S7 `RandomSearch`) nor CMA-ES (S8) forced this --- both landed on
-      `f64`, and the bound-boilerplate cost of preemptive generality still
-      outweighs the refactor. Trigger now reads "a real f32 use case appears" or
-      "a later stochastic solver needs it".
 
 ## Cleanup / design debt (review notes)
 
@@ -131,12 +125,12 @@ harder to fix as more code piles on.
       barrier/AL family and (via `MemeticInner: WarmStart`) CMA-injection ---
       but that is explicitly **not** a `Composed` abstraction (it says nothing
       about the outer loop, eval routing, or failure bubbling; see the
-      `WarmStart` note in `CONTRIBUTING.md` "Solver composition"). Remaining question:
-      is there a shared `Composed` abstraction (coarser than `WarmStart` --- a
-      "composed solver" marker), or do these memetic shapes genuinely share
-      nothing beyond the three CONTRIBUTING.md composition contracts (+ `WarmStart`
-      for some)? Resolve by either writing the trait or writing the honest "no"
-      comment in `core/inner.rs`.
+      `WarmStart` note in `CONTRIBUTING.md` "Solver composition"). Remaining
+      question: is there a shared `Composed` abstraction (coarser than
+      `WarmStart` --- a "composed solver" marker), or do these memetic shapes
+      genuinely share nothing beyond the three CONTRIBUTING.md composition
+      contracts (+ `WarmStart` for some)? Resolve by either writing the trait or
+      writing the honest "no" comment in `core/inner.rs`.
 - [ ] **Workspace wasm build broken by `competitor-bench` transitive dep.**
       `cargo build --target wasm32-unknown-unknown` at the workspace level fails
       inside `levenberg-marquardt` (via `getrandom 0.3` needing
