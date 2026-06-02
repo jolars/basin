@@ -49,6 +49,10 @@
     // Animated trajectory and cost log fed to the children.
     let trajectory: Float64Array<ArrayBufferLike> = $state(new Float64Array(0));
     let costs: Float64Array<ArrayBufferLike> = $state(new Float64Array(0));
+    // Current-generation population for stochastic solvers (CMA-ES, DE, RS,
+    // SSGA). Empty Float64Array for the local solvers — the contour plot
+    // skips rendering when length is zero.
+    let population: Float64Array<ArrayBufferLike> = $state(new Float64Array(0));
     let reason = $state('');
 
     let problemMeta = $derived(problemByKind(problemKind));
@@ -90,6 +94,7 @@
         // Solver options crossing the wasm boundary (see RunOptions in
         // crates/basin-wasm/src/lib.rs). Each solver reads only what it
         // needs; reading the fields here tracks them as effect deps.
+        const d = problemMeta.domain;
         const opts = {
             gdLineSearch: optionValues.gdLineSearch ?? 'constant',
             gdAlpha: optionValues.gdAlpha ?? problemMeta.gdAlphaDefault,
@@ -97,6 +102,24 @@
             // playground does). Plain steepest descent for the GD solver.
             gdBeta: 0,
             lbfgsM: optionValues.lbfgsM ?? 10,
+            // Stochastic solvers (CMA-ES, DE, RandomSearch, SSGA). NaN on
+            // cmaSigma → wasm picks a viewport-scaled default.
+            seed: optionValues.seed ?? 0,
+            cmaSigma: optionValues.cmaSigma ?? NaN,
+            cmaLambda: optionValues.cmaLambda ?? 0,
+            dePopSize: optionValues.dePopSize ?? 0,
+            deF: optionValues.deF ?? 0.8,
+            deCr: optionValues.deCr ?? 0.9,
+            rsLambda: optionValues.rsLambda ?? 16,
+            ssgaPopSize: optionValues.ssgaPopSize ?? 0,
+            // Box bounds for DE / SSGA / RandomSearch — they use the visible
+            // viewport as the feasible region (the right semantics for a 2D
+            // demo). Reading the fields here ties the effect to domain
+            // changes when the user switches problems.
+            xmin: d.xmin,
+            xmax: d.xmax,
+            ymin: d.ymin,
+            ymax: d.ymax,
         };
         // Stop early once the cost is within SUBOPT_TARGET of the known
         // optimum — the same value the cost chart uses as its log floor.
@@ -115,23 +138,41 @@
         activeRun = run;
         trajectory = run.trajectoryXy();
         costs = run.costs();
+        population = run.populationXy();
         reason = '';
 
+        // Generation-based solvers (CMA-ES / DE / RS) advance one full
+        // generation per `next_iter`, so 8/frame races through the run in
+        // a flash. The solver's meta gates this. Fractional rates (< 1) mean
+        // "step every Nth frame" — for population-based solvers where each
+        // generation is a big visible jump, this gives the eye time to read
+        // the cloud between updates. SSGA's "iter" is a single offspring
+        // evaluation, so it keeps the default chunk of 8.
+        const itersPerFrame = solverMeta.itersPerFrame ?? 8;
+        // Carry fractional remainder across frames so non-integer rates
+        // advance whole iterations on the frames the accumulator overflows.
+        let acc = 0;
         const tick = () => {
             // Stale-frame guard: a newer effect run replaces `activeRun`,
             // so a tick from an older closure should bail.
             if (run !== activeRun) return;
-            const result = run.stepMany(8) as {
-                done: boolean;
-                iters_added: number;
-                reason?: string | null;
-            };
-            trajectory = run.trajectoryXy();
-            costs = run.costs();
-            if (result.done) {
-                reason = result.reason ?? '';
-                frameId = null;
-                return;
+            acc += itersPerFrame;
+            const n = Math.floor(acc);
+            if (n >= 1) {
+                acc -= n;
+                const result = run.stepMany(n) as {
+                    done: boolean;
+                    iters_added: number;
+                    reason?: string | null;
+                };
+                trajectory = run.trajectoryXy();
+                costs = run.costs();
+                population = run.populationXy();
+                if (result.done) {
+                    reason = result.reason ?? '';
+                    frameId = null;
+                    return;
+                }
             }
             frameId = requestAnimationFrame(tick);
         };
@@ -185,6 +226,9 @@
             solverKind = patch.solverKind;
             // Reset options to the new solver's schema defaults.
             optionValues = initOptionValues(solverKind, problemKind);
+            // Clear the stale population so we don't render the old solver's
+            // dots for the one frame before the run-effect reseeds them.
+            population = new Float64Array(0);
         }
         if (patch.maxIter !== undefined) maxIter = patch.maxIter;
     }
@@ -227,6 +271,7 @@
                     nx={GRID_N}
                     ny={GRID_N}
                     {trajectory}
+                    {population}
                     {startPoint}
                     theme={theme.effective}
                     onPick={handlePick}
@@ -251,6 +296,7 @@
                     <CostChart
                         {costs}
                         fStar={problemMeta.fStar}
+                        {maxIter}
                         {reason}
                         theme={theme.effective}
                     />

@@ -8,12 +8,16 @@
         costs: Float64Array;
         /** Known optimal value f*; the chart plots suboptimality f − f*. */
         fStar: number;
+        /** Iteration budget. Fixes the x-axis right edge so the curve
+         *  descends into a fixed frame instead of the chart auto-rescaling
+         *  each animation tick. */
+        maxIter: number;
         /** Termination reason string when the run ends, else empty. */
         reason: string;
         theme: Theme;
     };
 
-    let { costs, fStar, reason, theme }: Props = $props();
+    let { costs, fStar, maxIter, reason, theme }: Props = $props();
     let palette = $derived(paletteFor(theme));
 
     let canvas: HTMLCanvasElement | undefined = $state();
@@ -22,7 +26,7 @@
 
     $effect(() => {
         if (!canvas) return;
-        render(canvas, costs, fStar, palette);
+        render(canvas, costs, fStar, maxIter, palette);
     });
 
     onMount(() => {
@@ -43,6 +47,7 @@
         cv: HTMLCanvasElement,
         c: Float64Array,
         fstar: number,
+        xMax: number,
         pal: ReturnType<typeof paletteFor>,
     ) {
         const dpr = window.devicePixelRatio || 1;
@@ -127,21 +132,24 @@
             ctx.fillText(reason, w - padR, padT - 5);
         }
 
-        // x-axis: iteration index. Tick endpoints + centered caption.
-        const lastIter = c.length - 1;
+        // x-axis: iteration index. Range is FIXED to [0, maxIter] so the
+        // curve descends into a static frame as the run progresses, instead
+        // of the chart auto-scaling to the most-recent iteration (which made
+        // the polyline appear to compress as new points arrived).
+        const xRange = Math.max(xMax, 1);
         ctx.fillStyle = pal.text;
         ctx.textBaseline = 'top';
         ctx.textAlign = 'left';
         ctx.fillText('0', padL, padT + innerH + 5);
         ctx.textAlign = 'right';
-        ctx.fillText(`${lastIter}`, padL + innerW, padT + innerH + 5);
+        ctx.fillText(`${xRange}`, padL + innerW, padT + innerH + 5);
         ctx.textAlign = 'center';
         ctx.fillText('iteration', padL + innerW / 2, padT + innerH + 18);
 
         // Polyline.
         ctx.beginPath();
         for (let i = 0; i < c.length; i++) {
-            const x = padL + (i / Math.max(lastIter, 1)) * innerW;
+            const x = padL + (i / xRange) * innerW;
             const y = pxOf(yOf(c[i]));
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);

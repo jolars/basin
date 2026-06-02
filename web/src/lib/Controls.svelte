@@ -158,6 +158,67 @@
                         )}
                 />
             </label>
+        {:else if opt.kind === 'linearSlider'}
+            <label class="flex flex-col gap-1">
+                <span class={labelCls}
+                    >{opt.label}:
+                    <span class={valueCls}
+                        >{Number(
+                            optionValues[opt.id] ?? opt.default,
+                        ).toFixed(2)}</span
+                    ></span
+                >
+                <input
+                    type="range"
+                    min={opt.min}
+                    max={opt.max}
+                    step={opt.step}
+                    value={Number(optionValues[opt.id] ?? opt.default)}
+                    oninput={(e) =>
+                        onOptionChange(
+                            opt.id,
+                            Number(
+                                (e.currentTarget as HTMLInputElement).value,
+                            ),
+                        )}
+                />
+            </label>
+        {:else if opt.kind === 'seedField'}
+            <label class="flex flex-col gap-1">
+                <span class={labelCls}>{opt.label}</span>
+                <span class="flex gap-2 items-center">
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        class={`${selectCls} flex-1 font-mono`}
+                        value={Number(optionValues[opt.id] ?? opt.default)}
+                        oninput={(e) =>
+                            onOptionChange(
+                                opt.id,
+                                Math.max(
+                                    0,
+                                    Math.floor(
+                                        Number(
+                                            (e.currentTarget as HTMLInputElement)
+                                                .value,
+                                        ),
+                                    ),
+                                ),
+                            )}
+                    />
+                    <button
+                        type="button"
+                        class="px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700"
+                        title="Reroll seed"
+                        onclick={() =>
+                            onOptionChange(
+                                opt.id,
+                                Math.floor(Math.random() * 2147483647),
+                            )}>🎲</button
+                    >
+                </span>
+            </label>
         {/if}
     {/each}
 

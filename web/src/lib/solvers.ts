@@ -36,6 +36,28 @@ export type SolverOption =
           max: number;
           step: number;
           default: number;
+      }
+    | {
+          /** Slider whose value is stored as-is (no log warp).
+           *  Used for DE's F and CR — both want linear sliders.
+           */
+          id: string;
+          kind: 'linearSlider';
+          label: string;
+          min: number;
+          max: number;
+          step: number;
+          default: number;
+      }
+    | {
+          /** A `u64` seed input with a 🎲 button to reroll it. The dice button
+           *  writes a fresh `Math.floor(Math.random() * 2**31)` back via
+           *  `onOptionChange`. Default `0` keeps the first-load run
+           *  reproducible. */
+          id: string;
+          kind: 'seedField';
+          label: string;
+          default: number;
       };
 
 export type SolverMeta = {
@@ -45,6 +67,15 @@ export type SolverMeta = {
     blurb: string;
     /** Solver-specific controls, rendered in order by `Controls`. */
     options: SolverOption[];
+    /**
+     * Iterations advanced per animation frame. Fractional values are
+     * supported: `0.25` means "one iter every 4 frames" — useful for
+     * population solvers where each generation is a big visible jump and
+     * you want time to read the cloud between updates. Defaults to 8 —
+     * fine for single-iterate solvers (GD, NM, L-BFGS) and SSGA (whose
+     * "iter" is a single offspring evaluation).
+     */
+    itersPerFrame?: number;
 };
 
 export const SOLVERS: SolverMeta[] = [
@@ -96,6 +127,112 @@ export const SOLVERS: SolverMeta[] = [
                 step: 1,
                 default: 10,
             },
+        ],
+    },
+    {
+        kind: SolverKind.CmaEs,
+        label: 'CMA-ES (covariance matrix adaptation)',
+        blurb: 'Hansen–Ostermeier evolution strategy with rank-µ + rank-1.',
+        itersPerFrame: 1,
+        options: [
+            {
+                id: 'cmaSigma',
+                kind: 'logSlider',
+                label: 'Initial σ',
+                min: -2,
+                max: 1,
+                step: 0.05,
+                // The wasm picks a viewport-scaled σ when this is left at NaN;
+                // the slider default is a reasonable middle-of-the-road value.
+                default: 0.5,
+            },
+            {
+                id: 'cmaLambda',
+                kind: 'intSlider',
+                label: 'Population λ (0 = auto)',
+                min: 0,
+                max: 50,
+                step: 1,
+                default: 0,
+            },
+            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
+        ],
+    },
+    {
+        kind: SolverKind.De,
+        label: 'Differential Evolution',
+        blurb: 'Storn–Price DE/rand/1/bin in the viewport box.',
+        // ½ gen / frame ≈ 30 gens / sec. DE on Sphere finishes in ~30 gens,
+        // so the cluster contraction reads as a deliberate animation rather
+        // than a flash.
+        itersPerFrame: 0.5,
+        options: [
+            {
+                id: 'dePopSize',
+                kind: 'intSlider',
+                label: 'Population (0 = 10n)',
+                min: 0,
+                max: 100,
+                step: 1,
+                default: 0,
+            },
+            {
+                id: 'deF',
+                kind: 'linearSlider',
+                label: 'F (differential weight)',
+                min: 0.1,
+                max: 2,
+                step: 0.05,
+                default: 0.8,
+            },
+            {
+                id: 'deCr',
+                kind: 'linearSlider',
+                label: 'CR (crossover probability)',
+                min: 0,
+                max: 1,
+                step: 0.05,
+                default: 0.9,
+            },
+            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
+        ],
+    },
+    {
+        kind: SolverKind.RandomSearch,
+        label: 'Random Search (elitist 1+λ)',
+        blurb: 'Uniform samples in the viewport box; keeps the best.',
+        // RS resamples uniformly each generation, so the dots are just
+        // noise that refreshes. Slow it way down (≈ 6 gens / sec) so each
+        // cloud can be read before the next one replaces it.
+        itersPerFrame: 0.1,
+        options: [
+            {
+                id: 'rsLambda',
+                kind: 'intSlider',
+                label: 'Samples per step λ',
+                min: 1,
+                max: 100,
+                step: 1,
+                default: 16,
+            },
+            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
+        ],
+    },
+    {
+        kind: SolverKind.Ssga,
+        label: 'Steady-state GA',
+        blurb: 'Real-coded GA with BLX-α crossover and BGA mutation.',
+        options: [
+            {
+                id: 'ssgaPopSize',
+                kind: 'intSlider',
+                label: 'Population (0 = default)',
+                min: 0,
+                max: 100,
+                step: 1,
+                default: 0,
+            },
+            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
         ],
     },
 ];

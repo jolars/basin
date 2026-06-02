@@ -112,6 +112,41 @@ export const PROBLEMS: ProblemMeta[] = [
         intensity: 'log1p',
         gdAlphaDefault: 1e-5,
     },
+    {
+        kind: ProblemKind.Rastrigin,
+        label: 'Rastrigin',
+        domain: { xmin: -5.12, xmax: 5.12, ymin: -5.12, ymax: 5.12 },
+        minimum: { x: 0, y: 0 },
+        fStar: 0,
+        // Cosine ripple sits on top of a paraboloid; sqrt keeps the lattice
+        // of local minima visible without flattening the basin floor.
+        intensity: 'sqrt',
+        // GD on Rastrigin is "wrong tool for the job" — it stalls in the
+        // nearest local well. Kept here so the slider has a sensible default
+        // when users explore the (poor) local-search experience.
+        gdAlphaDefault: 0.01,
+    },
+    {
+        kind: ProblemKind.Ackley,
+        label: 'Ackley',
+        domain: { xmin: -5, xmax: 5, ymin: -5, ymax: 5 },
+        minimum: { x: 0, y: 0 },
+        fStar: 0,
+        // The cone+ripple already has bounded dynamic range; log/sqrt would
+        // wash out the central funnel.
+        intensity: 'linear',
+        gdAlphaDefault: 0.01,
+    },
+    {
+        kind: ProblemKind.StyblinskiTang,
+        label: 'Styblinski-Tang',
+        domain: { xmin: -5, xmax: 5, ymin: -5, ymax: 5 },
+        minimum: { x: -2.903534, y: -2.903534 },
+        // f* = -39.16599 · n at n = 2.
+        fStar: -78.33233,
+        intensity: 'linear',
+        gdAlphaDefault: 0.01,
+    },
 ];
 
 export function problemByKind(kind: ProblemKind): ProblemMeta {

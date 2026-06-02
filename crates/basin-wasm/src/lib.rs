@@ -17,15 +17,17 @@
 //! concrete type per solver. That keeps the wasm bundle small and avoids
 //! `dyn`-incompatible plumbing on the `Solver` trait.
 
-use basin::problems::{beale, beale_gradient, booth, booth_gradient};
+use basin::problems::{ackley, beale, beale_gradient, booth, booth_gradient};
 use basin::problems::{goldstein_price, goldstein_price_gradient};
 use basin::problems::{matyas, matyas_gradient, mccormick, mccormick_gradient};
-use basin::problems::{rosenbrock, rosenbrock_gradient, sphere, sphere_gradient};
+use basin::problems::{rastrigin, rosenbrock, rosenbrock_gradient, sphere, sphere_gradient};
+use basin::problems::{styblinski_tang, styblinski_tang_gradient};
 use basin::solver::lbfgs::{Lbfgs, Unbounded as LbfgsUnbounded};
 use basin::{
-    Backtracking, BasicSimplexState, BasicState, Constant, CostFunction, Executor, Gradient,
-    GradientDescent, LbfgsState, MoreThuente, NelderMead, State, StepOutcome, Stepper,
-    TerminationReason,
+    Backtracking, BasicPopulationState, BasicSimplexState, BasicState, BoxConstraints, CmaEs,
+    Constant, CostFunction, De, DenseMatrix, Executor, FiniteDiff, Gradient, GradientDescent,
+    LbfgsState, MoreThuente, NelderMead, PopulationState, RandomSearch, Ssga, State, StepOutcome,
+    Stepper, TerminationReason,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -51,6 +53,9 @@ pub enum ProblemKind {
     Matyas = 4,
     McCormick = 5,
     GoldsteinPrice = 6,
+    Rastrigin = 7,
+    Ackley = 8,
+    StyblinskiTang = 9,
 }
 
 #[wasm_bindgen]
@@ -59,14 +64,18 @@ pub enum SolverKind {
     GradientDescent = 0,
     NelderMead = 1,
     Lbfgs = 2,
+    CmaEs = 3,
+    De = 4,
+    RandomSearch = 5,
+    Ssga = 6,
 }
 
 /// Solver-specific knobs, marshaled across the wasm boundary as a single
-/// plain JS object (`{ gdLineSearch, gdAlpha, gdBeta, lbfgsM }`) and
-/// deserialized here with serde. Passing one object instead of a growing
-/// tail of positional args to [`Run::new`] keeps the constructor stable
-/// as solvers gain options; each solver branch reads only the fields it
-/// cares about. Missing fields fall back to [`RunOptions::default`].
+/// plain JS object (`{ gdLineSearch, gdAlpha, ... }`) and deserialized here
+/// with serde. Passing one object instead of a growing tail of positional
+/// args to [`Run::new`] keeps the constructor stable as solvers gain
+/// options; each solver branch reads only the fields it cares about.
+/// Missing fields fall back to [`RunOptions::default`].
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct RunOptions {
@@ -80,6 +89,33 @@ struct RunOptions {
     gd_beta: f64,
     /// L-Bfgs history capacity `m` (number of stored (s, y) pairs).
     lbfgs_m: usize,
+    /// RNG seed shared by every stochastic solver. Fixed seed → reproducible
+    /// trajectory; the UI's 🎲 button rerolls it.
+    seed: u64,
+    /// CMA-ES initial step-size σ. `NaN` (default) lets the wasm pick a
+    /// sensible value from the viewport dimensions.
+    cma_sigma: f64,
+    /// CMA-ES population size λ. `0` (default) → `CmaEs::default_lambda(n)`.
+    /// Values `< 4` are treated as `0`; CMA-ES needs at least 4 for sane
+    /// recombination weights.
+    cma_lambda: usize,
+    /// DE population size. `0` (default) → `De::default_pop_size(n)` (= 10·n).
+    /// Values `< 4` are treated as `0` (DE/rand/1/bin needs ≥ 4 vectors).
+    de_pop_size: usize,
+    /// DE differential weight F (Storn–Price scaling factor).
+    de_f: f64,
+    /// DE crossover probability CR ∈ [0, 1].
+    de_cr: f64,
+    /// Random-search samples per generation λ.
+    rs_lambda: usize,
+    /// SSGA population size. `0` → use the solver's own default.
+    ssga_pop_size: usize,
+    /// Box-bounds for stochastic solvers (DE, SSGA, Random Search). Sourced
+    /// from the visualizer viewport — "visible" doubles as "feasible" here.
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
 }
 
 impl Default for RunOptions {
@@ -89,6 +125,18 @@ impl Default for RunOptions {
             gd_alpha: 0.01,
             gd_beta: 0.0,
             lbfgs_m: 10,
+            seed: 0,
+            cma_sigma: f64::NAN,
+            cma_lambda: 0,
+            de_pop_size: 0,
+            de_f: 0.8,
+            de_cr: 0.9,
+            rs_lambda: 16,
+            ssga_pop_size: 0,
+            xmin: -1.0,
+            xmax: 1.0,
+            ymin: -1.0,
+            ymax: 1.0,
         }
     }
 }
@@ -114,7 +162,59 @@ impl CostFunction for Problem2D {
             ProblemKind::Matyas => matyas(x),
             ProblemKind::McCormick => mccormick(x),
             ProblemKind::GoldsteinPrice => goldstein_price(x),
+            ProblemKind::Rastrigin => rastrigin(x),
+            ProblemKind::Ackley => ackley(x),
+            ProblemKind::StyblinskiTang => styblinski_tang(x),
         })
+    }
+}
+
+/// Cost-only twin of [`Problem2D`] for use with [`FiniteDiff`] on the
+/// global-opt problems (Rastrigin, Ackley) that ship in the corpus without
+/// hand-written gradients. Kept separate so [`Problem2D`]'s `Gradient` impl
+/// can dispatch to either the analytic gradient or `FiniteDiff` without
+/// infinite recursion.
+#[derive(Clone, Copy)]
+struct Problem2DCost(ProblemKind);
+
+impl CostFunction for Problem2DCost {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = std::convert::Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+        Problem2D(self.0).cost(x)
+    }
+}
+
+/// 2D problem dispatcher with box bounds attached. DE, SSGA, and
+/// Random Search bound their `Solver<P, ...>` impl on `P:
+/// BoxConstraints<Param = V>`, so they can't reuse the bare [`Problem2D`].
+/// Bounds are sourced from the visualizer viewport — "visible" doubles as
+/// "feasible" here, which is the right semantics for a 2D demo.
+#[derive(Clone)]
+struct Problem2DBounded {
+    kind: ProblemKind,
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl CostFunction for Problem2DBounded {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = std::convert::Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+        Problem2D(self.kind).cost(x)
+    }
+}
+
+impl BoxConstraints for Problem2DBounded {
+    fn lower(&self) -> &Vec<f64> {
+        &self.lower
+    }
+    fn upper(&self) -> &Vec<f64> {
+        &self.upper
     }
 }
 
@@ -131,6 +231,15 @@ impl Gradient for Problem2D {
             ProblemKind::Matyas => matyas_gradient(x, &mut out),
             ProblemKind::McCormick => mccormick_gradient(x, &mut out),
             ProblemKind::GoldsteinPrice => goldstein_price_gradient(x, &mut out),
+            ProblemKind::StyblinskiTang => styblinski_tang_gradient(x, &mut out),
+            // Rastrigin / Ackley ship without an analytic gradient in the
+            // corpus; synthesize one via central finite differences. Doubles
+            // the per-step cost evals on these two problems, which is invisible
+            // at the visualizer's pace.
+            ProblemKind::Rastrigin | ProblemKind::Ackley => {
+                let g = FiniteDiff::new(Problem2DCost(self.0)).gradient(x)?;
+                out.copy_from_slice(&g);
+            }
         }
         Ok(out)
     }
@@ -186,6 +295,13 @@ pub fn eval_grid(
 /// readable (the boxed, fully-monomorphized generic otherwise trips
 /// `clippy::type_complexity`).
 type LbfgsStepper = Stepper<Problem2D, LbfgsState<Vec<f64>>, Lbfgs<LbfgsUnbounded, MoreThuente>>;
+/// Concrete population-solver stepper aliases. Same motivation as
+/// [`LbfgsStepper`] — keep the [`Inner`] variants readable.
+type CmaEsStepper =
+    Stepper<Problem2D, BasicPopulationState<Vec<f64>>, CmaEs<Vec<f64>, DenseMatrix>>;
+type DeStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, De>;
+type RandomSearchStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, RandomSearch>;
+type SsgaStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, Ssga>;
 
 /// Inner enum dispatching by `(state shape, solver type)`. Each variant
 /// is fully concrete so the resulting wasm is tight and no `dyn Solver`
@@ -201,6 +317,13 @@ enum Inner {
     // `Inner` small (clippy::large_enum_variant). Auto-deref means the
     // `step`/`xy`/`cost` match arms need no `*` and read like the rest.
     Lbfgs(Box<LbfgsStepper>),
+    // All four population-based steppers carry per-candidate cost buffers
+    // plus solver-side RNG / weight tables, so they also get boxed for the
+    // same `large_enum_variant` reason.
+    CmaEs(Box<CmaEsStepper>),
+    De(Box<DeStepper>),
+    RandomSearch(Box<RandomSearchStepper>),
+    Ssga(Box<SsgaStepper>),
 }
 
 impl Inner {
@@ -210,15 +333,27 @@ impl Inner {
             Self::GdBacktracking(s) => s.step().unwrap(),
             Self::NelderMead(s) => s.step().unwrap(),
             Self::Lbfgs(s) => s.step().unwrap(),
+            Self::CmaEs(s) => s.step().unwrap(),
+            Self::De(s) => s.step().unwrap(),
+            Self::RandomSearch(s) => s.step().unwrap(),
+            Self::Ssga(s) => s.step().unwrap(),
         }
     }
 
     fn xy(&self) -> (f64, f64) {
+        // For the population steppers, `state().param()` is defined to
+        // return the best-so-far candidate (see `BasicPopulationState`'s
+        // `State::param` impl), so the trajectory plot reads the same way
+        // it does for the single-iterate solvers.
         let p: &Vec<f64> = match self {
             Self::GdConstant(s) => s.state().param(),
             Self::GdBacktracking(s) => s.state().param(),
             Self::NelderMead(s) => s.state().param(),
             Self::Lbfgs(s) => s.state().param(),
+            Self::CmaEs(s) => s.state().param(),
+            Self::De(s) => s.state().param(),
+            Self::RandomSearch(s) => s.state().param(),
+            Self::Ssga(s) => s.state().param(),
         };
         (p[0], p[1])
     }
@@ -229,7 +364,30 @@ impl Inner {
             Self::GdBacktracking(s) => s.state().cost(),
             Self::NelderMead(s) => s.state().cost(),
             Self::Lbfgs(s) => s.state().cost(),
+            Self::CmaEs(s) => s.state().cost(),
+            Self::De(s) => s.state().cost(),
+            Self::RandomSearch(s) => s.state().cost(),
+            Self::Ssga(s) => s.state().cost(),
         }
+    }
+
+    /// Flat `(x, y)` pairs of the current generation's population, for the
+    /// four population-based solvers. `None` for the single-iterate solvers
+    /// so the JS side can render nothing instead of a stale cloud.
+    fn population_xy(&self) -> Option<Vec<f64>> {
+        let cands: &[Vec<f64>] = match self {
+            Self::CmaEs(s) => s.state().candidates(),
+            Self::De(s) => s.state().candidates(),
+            Self::RandomSearch(s) => s.state().candidates(),
+            Self::Ssga(s) => s.state().candidates(),
+            _ => return None,
+        };
+        let mut out = Vec::with_capacity(cands.len() * 2);
+        for c in cands {
+            out.push(c[0]);
+            out.push(c[1]);
+        }
+        Some(out)
     }
 }
 
@@ -322,6 +480,14 @@ impl Run {
     /// (so `costs.length === trajectory.length / 2`).
     pub fn costs(&self) -> Vec<f64> {
         self.costs.clone()
+    }
+
+    /// Flat `(x, y)` pairs for the current generation's population, or an
+    /// empty array for non-population solvers. JS reads this once per frame
+    /// to render the search cloud beneath the best-so-far trail.
+    #[wasm_bindgen(js_name = populationXy)]
+    pub fn population_xy(&self) -> Vec<f64> {
+        self.inner.population_xy().unwrap_or_default()
     }
 
     /// Iteration counter (excludes the initial point).
@@ -425,6 +591,99 @@ impl Run {
                 .into_stepper()
                 .unwrap();
                 Inner::Lbfgs(Box::new(stepper))
+            }
+            SolverKind::CmaEs => {
+                // σ default: a quarter of the average viewport span. Gives
+                // σ ≈ 1.5 on Sphere [-3,3]², σ ≈ 1 on Goldstein-Price [-2,2]²,
+                // σ ≈ 5 on Booth [-10,10]² — fine starting points; the slider
+                // overrides this whenever the user touches it.
+                let sigma = if opts.cma_sigma.is_finite() && opts.cma_sigma > 0.0 {
+                    opts.cma_sigma
+                } else {
+                    0.25 * 0.5 * ((opts.xmax - opts.xmin) + (opts.ymax - opts.ymin))
+                };
+                let mut solver =
+                    CmaEs::<Vec<f64>, DenseMatrix>::new(initial.clone(), sigma, opts.seed);
+                // λ < 4 is invalid for CMA-ES recombination weights; treat
+                // small overrides as "auto" and let the solver pick.
+                let lambda = if opts.cma_lambda >= 4 {
+                    solver = solver.with_lambda(opts.cma_lambda);
+                    opts.cma_lambda
+                } else {
+                    CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2)
+                };
+                let stepper = Executor::new(
+                    p,
+                    solver,
+                    BasicPopulationState::<Vec<f64>>::with_size(lambda),
+                )
+                .max_iter(max_iter as u64)
+                .into_stepper()
+                .unwrap();
+                Inner::CmaEs(Box::new(stepper))
+            }
+            SolverKind::De => {
+                let pb = Problem2DBounded {
+                    kind: problem,
+                    lower: vec![opts.xmin, opts.ymin],
+                    upper: vec![opts.xmax, opts.ymax],
+                };
+                let pop = if opts.de_pop_size >= 4 {
+                    opts.de_pop_size
+                } else {
+                    De::<f64>::default_pop_size(2)
+                };
+                let mut solver = De::<f64>::new(opts.seed)
+                    .with_f(opts.de_f)
+                    .with_cr(opts.de_cr);
+                if opts.de_pop_size >= 4 {
+                    solver = solver.with_pop_size(opts.de_pop_size);
+                }
+                let stepper =
+                    Executor::new(pb, solver, BasicPopulationState::<Vec<f64>>::with_size(pop))
+                        .max_iter(max_iter as u64)
+                        .into_stepper()
+                        .unwrap();
+                Inner::De(Box::new(stepper))
+            }
+            SolverKind::RandomSearch => {
+                let pb = Problem2DBounded {
+                    kind: problem,
+                    lower: vec![opts.xmin, opts.ymin],
+                    upper: vec![opts.xmax, opts.ymax],
+                };
+                let lambda = opts.rs_lambda.max(1);
+                let stepper = Executor::new(
+                    pb,
+                    RandomSearch::new(lambda, opts.seed),
+                    BasicPopulationState::<Vec<f64>>::with_size(lambda),
+                )
+                .max_iter(max_iter as u64)
+                .into_stepper()
+                .unwrap();
+                Inner::RandomSearch(Box::new(stepper))
+            }
+            SolverKind::Ssga => {
+                let pb = Problem2DBounded {
+                    kind: problem,
+                    lower: vec![opts.xmin, opts.ymin],
+                    upper: vec![opts.xmax, opts.ymax],
+                };
+                let mut solver = Ssga::<f64>::new(opts.seed);
+                let pop = if opts.ssga_pop_size > 0 {
+                    solver = solver.with_pop_size(opts.ssga_pop_size);
+                    opts.ssga_pop_size
+                } else {
+                    // SSGA has no public `default_pop_size`; mirror the
+                    // documented default by sizing the state buffer at 20.
+                    20
+                };
+                let stepper =
+                    Executor::new(pb, solver, BasicPopulationState::<Vec<f64>>::with_size(pop))
+                        .max_iter(max_iter as u64)
+                        .into_stepper()
+                        .unwrap();
+                Inner::Ssga(Box::new(stepper))
             }
         };
         Self {
@@ -619,5 +878,136 @@ mod tests {
         assert!(r.done);
         assert_eq!(r.reason, Some("converged"));
         assert!(run.iter() < 1000);
+    }
+
+    /// Run options sized to the Sphere viewport so DE / Random Search /
+    /// SSGA have plausible box bounds to sample inside.
+    fn opts_for_sphere() -> RunOptions {
+        RunOptions {
+            xmin: -3.0,
+            xmax: 3.0,
+            ymin: -3.0,
+            ymax: 3.0,
+            ..RunOptions::default()
+        }
+    }
+
+    #[test]
+    fn cma_es_reduces_cost_on_sphere() {
+        let mut run = Run::new_inner(
+            ProblemKind::Sphere,
+            SolverKind::CmaEs,
+            2.0,
+            2.0,
+            RunOptions {
+                cma_sigma: 1.0,
+                ..opts_for_sphere()
+            },
+            300,
+            f64::NAN,
+        );
+        run.step_many_inner(300);
+        // Initial cost is 8.0; CMA-ES at σ=1 on the sphere should drop it
+        // by several orders of magnitude well within 300 generations.
+        assert!(run.costs().last().copied().unwrap() < 1e-6);
+    }
+
+    #[test]
+    fn de_makes_progress_on_sphere() {
+        let mut run = Run::new_inner(
+            ProblemKind::Sphere,
+            SolverKind::De,
+            2.0,
+            2.0,
+            opts_for_sphere(),
+            200,
+            f64::NAN,
+        );
+        let initial = run.costs()[0];
+        run.step_many_inner(200);
+        // Modest target — DE on 2D Sphere is easy but the test just needs
+        // to confirm the box-constraints plumbing works end to end.
+        let last = run.costs().last().copied().unwrap();
+        assert!(last < 0.1 * initial, "{last} not < 0.1 × {initial}");
+    }
+
+    #[test]
+    fn random_search_is_reproducible_under_fixed_seed() {
+        let mk = || {
+            let mut run = Run::new_inner(
+                ProblemKind::Sphere,
+                SolverKind::RandomSearch,
+                2.0,
+                2.0,
+                RunOptions {
+                    seed: 42,
+                    rs_lambda: 8,
+                    ..opts_for_sphere()
+                },
+                50,
+                f64::NAN,
+            );
+            run.step_many_inner(50);
+            run.trajectory_xy()
+        };
+        assert_eq!(mk(), mk());
+    }
+
+    #[test]
+    fn population_xy_is_2_lambda_for_cmaes_and_empty_for_gd() {
+        // GD: single iterate, no population.
+        let gd = Run::new_inner(
+            ProblemKind::Sphere,
+            SolverKind::GradientDescent,
+            1.0,
+            1.0,
+            RunOptions::default(),
+            10,
+            f64::NAN,
+        );
+        assert!(gd.population_xy().is_empty());
+
+        // CMA-ES: default λ for n=2 is 4 + ⌊3 ln 2⌋ = 6, so 2λ = 12 floats.
+        let cma = Run::new_inner(
+            ProblemKind::Sphere,
+            SolverKind::CmaEs,
+            2.0,
+            2.0,
+            RunOptions {
+                cma_sigma: 0.5,
+                ..opts_for_sphere()
+            },
+            10,
+            f64::NAN,
+        );
+        let pop = cma.population_xy();
+        assert_eq!(pop.len() % 2, 0);
+        assert!(
+            pop.len() >= 8,
+            "expected at least 4 candidates worth of pairs"
+        );
+    }
+
+    #[test]
+    fn gradient_via_finite_diff_works_on_rastrigin() {
+        // GD on Rastrigin would normally stall; we only check that the
+        // FiniteDiff-synthesized gradient path doesn't panic and that the
+        // run produces finite costs.
+        let mut run = Run::new_inner(
+            ProblemKind::Rastrigin,
+            SolverKind::GradientDescent,
+            1.0,
+            0.0,
+            RunOptions {
+                gd_alpha: 0.01,
+                ..RunOptions::default()
+            },
+            20,
+            f64::NAN,
+        );
+        run.step_many_inner(20);
+        for c in run.costs() {
+            assert!(c.is_finite());
+        }
     }
 }

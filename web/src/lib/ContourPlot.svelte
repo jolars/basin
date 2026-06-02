@@ -16,6 +16,10 @@
         nx: number;
         ny: number;
         trajectory: Float64Array; // flat (x, y) pairs
+        /** Current generation's population as flat (x, y) pairs. Optional —
+         *  empty for non-population solvers (GD, NM, L-BFGS). When non-empty,
+         *  drawn as faint dots underneath the trajectory polyline. */
+        population?: Float64Array;
         startPoint: { x: number; y: number };
         theme: Theme;
         onPick: (p: { x: number; y: number }) => void;
@@ -30,6 +34,7 @@
         nx,
         ny,
         trajectory,
+        population = new Float64Array(0),
         startPoint,
         theme,
         onPick,
@@ -145,14 +150,15 @@
     });
 
     // Trajectory + markers go on a separate overlay so they redraw cheaply
-    // every time the trajectory grows. Re-runs on theme too so marker
-    // colors flip immediately.
+    // every time the trajectory grows. Re-runs on theme and on population
+    // updates so the search cloud refreshes alongside the best-so-far trail.
     $effect(() => {
         if (!overlay) return;
         renderOverlay(
             overlay,
             problem.domain,
             trajectory,
+            population,
             startPoint,
             problem.minimum,
             palette,
@@ -262,6 +268,7 @@
         cv: HTMLCanvasElement,
         d: Domain,
         traj: Float64Array,
+        pop: Float64Array,
         start: { x: number; y: number },
         minimum: { x: number; y: number },
         pal: ReturnType<typeof paletteFor>,
@@ -277,6 +284,22 @@
         if (!ctx) return;
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, w, h);
+
+        // Current-generation population cloud (CMA-ES, DE, RS, SSGA). Drawn
+        // first so the best-so-far trail visually wins. Faint sky-blue dots
+        // read as "the swarm" vs the white/accent trajectory line.
+        if (pop.length >= 2) {
+            ctx.fillStyle =
+                theme === 'dark'
+                    ? 'rgba(56, 189, 248, 0.55)' // sky-400
+                    : 'rgba(2, 132, 199, 0.55)'; // sky-600
+            for (let i = 0; i < pop.length; i += 2) {
+                const [px, py] = dataToPixel(pop[i], pop[i + 1], d, w, h);
+                ctx.beginPath();
+                ctx.arc(px, py, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
 
         // Trajectory line + dots.
         if (traj.length >= 4) {
