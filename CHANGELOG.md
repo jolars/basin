@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0](https://github.com/jolars/basin/compare/v0.9.0...v0.10.0) (2026-06-02)
+
+### Breaking changes
+- add `best_cost`, `best_iter` and friends to `BasicState` ([`c5e425a`](https://github.com/jolars/basin/commit/c5e425a0e835dbf47ff7fc964f97ff966fa6fcec)), closes [#36](https://github.com/jolars/basin/issues/36)
+
+### Features
+- **solvers:** add `DeInject` solver ([`ca34b5c`](https://github.com/jolars/basin/commit/ca34b5c88e79d3b6420a9e00af277704e6b0ef85))
+- add `best_cost`, `best_iter` and friends to `BasicState` ([`c5e425a`](https://github.com/jolars/basin/commit/c5e425a0e835dbf47ff7fc964f97ff966fa6fcec)), closes [#36](https://github.com/jolars/basin/issues/36)
+- add `scratch` buffer for simplex state ([`5255d75`](https://github.com/jolars/basin/commit/5255d750ad932bfce35d51f4fc6f57be21f19eac))
+- add `core::observer::Observe<S>` trait ([`6b740ac`](https://github.com/jolars/basin/commit/6b740ac2e03a041876e392ad35ce5a04d0e371b2))
+- **solvers:** add vanilla mini-batch SGD solver ([`916fa7f`](https://github.com/jolars/basin/commit/916fa7f28aeb112df402418bb1f05be7104b23f4))
+
+### Performance Improvements
+- **solvers:** reduce allocations in Nelder-Mead ([`514c4a0`](https://github.com/jolars/basin/commit/514c4a07275211af8325841061f29f66797f57bc))
+- speed up `SGD::next_iter()` ([`b9fa041`](https://github.com/jolars/basin/commit/b9fa041b206dda373a4ef5cf980a415816ca4538))
+
 ## [0.9.0](https://github.com/jolars/basin/compare/v0.8.0...v0.9.0) (2026-05-31)
 
 ### Features
