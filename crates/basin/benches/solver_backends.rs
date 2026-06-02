@@ -34,6 +34,7 @@
 //! `cargo bench --features nalgebra,ndarray,faer --bench solver_backends`.
 
 use std::hint::black_box;
+use std::time::Duration;
 
 use basin::problems::{Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, StyblinskiTang};
 use basin::{
@@ -388,14 +389,21 @@ fn bench_gn(c: &mut Criterion) {
     }
 }
 
-criterion_group!(
-    benches,
-    bench_gd,
-    bench_nm,
-    bench_lbfgs,
-    bench_bfgs,
-    bench_cmaes,
-    bench_lm,
-    bench_gn
-);
+/// Trimmed criterion budget: 30 samples × 2 s measurement (default is 100 × 5 s)
+/// with 1 s warm-up (default 3 s). Cuts per-bench overhead by ~3× without
+/// meaningfully widening the mean's confidence interval — the chart consumes
+/// the mean only, and the 5-dim × {2..4}-backend grid (≈110 contestants)
+/// otherwise pushes total wall-clock past 30 min on a 12-core desktop.
+fn bench_config() -> Criterion {
+    Criterion::default()
+        .sample_size(30)
+        .warm_up_time(Duration::from_secs(1))
+        .measurement_time(Duration::from_secs(2))
+}
+
+criterion_group! {
+    name = benches;
+    config = bench_config();
+    targets = bench_gd, bench_nm, bench_lbfgs, bench_bfgs, bench_cmaes, bench_lm, bench_gn
+}
 criterion_main!(benches);
