@@ -103,6 +103,6 @@ pub use crate::solver::lbfgs::{LBFGS, LBFGSB};
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent, ClosureInner,
-    CmaEs, CmaInject, De, GaussNewton, GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState,
-    MemeticInner, NelderMead, ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
+    CmaEs, CmaInject, De, DeInject, GaussNewton, GradientDescent, LevenbergMarquardt, MaLsChCma,
+    MaLsChState, MemeticInner, NelderMead, ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
 };

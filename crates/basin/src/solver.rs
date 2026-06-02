@@ -23,6 +23,10 @@ pub mod cma_inject;
 /// Differential Evolution (DE/rand/1/bin) — Storn-Price 1997 global
 /// optimizer on a feasible box, fully backend-generic.
 pub mod de;
+/// Memetic [`De`] with per-generation top-k local refinement —
+/// DE-flavored sibling of [`cma_inject`]. Inners: Nelder-Mead,
+/// Levenberg-Marquardt, L-BFGS-B.
+pub mod de_inject;
 /// Pure Gauss-Newton solver for nonlinear least squares.
 pub mod gauss_newton;
 /// Steepest-descent solver with a pluggable line search and optional
@@ -67,6 +71,7 @@ pub use brent::Brent;
 pub use cma_es::CmaEs;
 pub use cma_inject::{ClosureInner, CmaInject, MemeticInner};
 pub use de::De;
+pub use de_inject::DeInject;
 pub use gauss_newton::GaussNewton;
 pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;
