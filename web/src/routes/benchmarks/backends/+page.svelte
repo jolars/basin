@@ -6,7 +6,6 @@ import {
     BACKEND_BENCHMARKS as data,
     BACKEND_COLORS,
     BACKEND_LABELS,
-    BACKEND_ORDER,
     CASES,
     PROBLEM_LABELS,
     SOLVER_LABELS,
@@ -68,21 +67,6 @@ function seriesFor(solver: Solver, problem: string) {
         and differ in cause. Times are criterion's mean per full solve, so
         lower is better.
     </p>
-
-    <!-- Shared legend for the charts and bars; the full backend palette. -->
-    <div class="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-        {#each BACKEND_ORDER as backend}
-            <span class="inline-flex items-center gap-2">
-                <span
-                    class="inline-block h-2.5 w-2.5 rounded-full"
-                    style="background: {BACKEND_COLORS[backend]}"
-                ></span>
-                <span class="font-mono text-slate-600 dark:text-slate-300">
-                    {BACKEND_LABELS[backend]}
-                </span>
-            </span>
-        {/each}
-    </div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
         {#each CASES as c}

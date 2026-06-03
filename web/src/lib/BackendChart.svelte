@@ -14,12 +14,17 @@ let {
 const W = 380;
 const H = 264;
 const padL = 50;
-const padR = 14;
+// Right margin holds the direct end-of-line labels (one per backend),
+// so we trade a little plot width for an always-visible, scroll-proof
+// key that needs no separate legend.
+const padR = 78;
 const padT = 16;
 const padB = 38;
 const innerW = W - padL - padR;
 const innerH = H - padT - padB;
 const axisY = padT + innerH;
+// Minimum vertical gap between stacked end-of-line labels.
+const labelGap = 13;
 
 // Log–log layout: x = log10(n), y = log10(time). Derived once from the
 // static data (re-derives if props ever change).
@@ -57,10 +62,35 @@ const g = $derived.by(() => {
         const d = pts
             .map((p, i) => `${i ? "L" : "M"}${p.cx.toFixed(1)},${p.cy.toFixed(1)}`)
             .join(" ");
-        return { color: s.color, d, pts };
+        return { label: s.label, color: s.color, d, pts };
     });
 
-    return { xTicks, yTicks, lines };
+    // Direct end-of-line labels: anchor each at its line's right endpoint,
+    // then nudge vertically so converging labels don't overlap. Sort by the
+    // target y and push collisions downward; if the stack runs past the axis,
+    // shift the whole group back up so it stays inside the plot.
+    const labels = lines
+        .filter((l) => l.pts.length > 0)
+        .map((l) => ({
+            text: l.label,
+            color: l.color,
+            y: l.pts[l.pts.length - 1].cy,
+        }))
+        .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) {
+        if (labels[i].y - labels[i - 1].y < labelGap) {
+            labels[i].y = labels[i - 1].y + labelGap;
+        }
+    }
+    if (labels.length) {
+        const overflow = labels[labels.length - 1].y - axisY;
+        if (overflow > 0) for (const l of labels) l.y -= overflow;
+        const underflow = padT - labels[0].y;
+        if (underflow > 0) for (const l of labels) l.y += underflow;
+    }
+    const labelX = padL + innerW + 6;
+
+    return { xTicks, yTicks, lines, labels, labelX };
 });
 </script>
 
@@ -147,5 +177,17 @@ const g = $derived.by(() => {
         {#each line.pts as p}
             <circle cx={p.cx} cy={p.cy} r="2.6" style="fill: {line.color}" />
         {/each}
+    {/each}
+
+    <!-- direct end-of-line labels: the per-chart key, in each line's color -->
+    {#each g.labels as label}
+        <text
+            x={g.labelX}
+            y={label.y}
+            text-anchor="start"
+            dominant-baseline="middle"
+            font-weight="600"
+            style="fill: {label.color}">{label.text}</text
+        >
     {/each}
 </svg>
