@@ -7,7 +7,6 @@ import {
     COMPETITOR_CASES,
     LIBRARY_COLORS,
     LIBRARY_LABELS,
-    LIBRARY_ORDER,
     PROBLEM_LABELS,
     SOLVER_LABELS,
     librariesFor,
@@ -72,21 +71,6 @@ function seriesFor(solver: Solver, problem: string) {
         and further left is better.
     </p>
 
-    <!-- Shared legend for the charts. -->
-    <div class="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-        {#each LIBRARY_ORDER as library}
-            <span class="inline-flex items-center gap-2">
-                <span
-                    class="inline-block h-2.5 w-2.5 rounded-full"
-                    style="background: {LIBRARY_COLORS[library]}"
-                ></span>
-                <span class="font-mono text-slate-600 dark:text-slate-300">
-                    {LIBRARY_LABELS[library]}
-                </span>
-            </span>
-        {/each}
-    </div>
-
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
         {#each COMPETITOR_CASES as c}
             <div
@@ -102,6 +86,7 @@ function seriesFor(solver: Solver, problem: string) {
                 </p>
                 <div class="mt-3">
                     <ConvergenceChart
+                        directLabels
                         series={seriesFor(c.solver, c.problem)}
                         ariaLabel={`${SOLVER_LABELS[c.solver]} on ${PROBLEM_LABELS[c.problem]}: suboptimality vs wall-clock time, one line per library`}
                     />
