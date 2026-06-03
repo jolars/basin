@@ -267,6 +267,7 @@ dependencies = [
  "levenberg-marquardt",
  "nalgebra 0.34.2",
  "nlopt",
+ "rayon",
 ]
 
 [[package]]

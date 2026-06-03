@@ -52,6 +52,21 @@ gomez = "0.5"
 # note). LGPL-2.1, but `publish = false` keeps it from ever propagating
 # to basin proper or the wasm build.
 nlopt = "0.8"
+# Pulled in only by the `parallel` feature: lets the population-scaling
+# bench query the active rayon pool size (`current_num_threads`) so each
+# run self-reports whether it is in the serial (`RAYON_NUM_THREADS=1`) or
+# all-cores configuration. basin's own `parallel` feature pins the same
+# rayon major.
+rayon = { version = "1", optional = true }
+
+[features]
+# Off by default so the axis-3 competitor benches (`compare`, `gd_nm`)
+# compile basin *without* rayon — a single-threaded basin vs a
+# single-threaded argmin/lm/gomez/nlopt, with no parallelism confound.
+# Enabling it turns on basin's population-eval parallelism and unlocks the
+# `population_scaling` bench, which compares serial vs parallel *within one
+# build* by varying `RAYON_NUM_THREADS` across two runs.
+parallel = ["basin/parallel", "dep:rayon"]
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
@@ -63,3 +78,11 @@ harness = false
 [[bench]]
 name = "gd_nm"
 harness = false
+
+# Serial-vs-parallel scaling of basin's population solvers (axis 4:
+# basin-internal, but co-located here for the criterion + heavy-dep setup).
+# Requires the `parallel` feature; skipped by a plain `cargo bench`.
+[[bench]]
+name = "population_scaling"
+harness = false
+required-features = ["parallel"]
