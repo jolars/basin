@@ -300,13 +300,17 @@ where
 
 impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for De<F>
 where
-    F: Scalar + SampleUniform,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
+    F: Scalar + SampleUniform + crate::core::parallel::MaybeSend,
+    P: CostFunction<Param = V, Output = F>
+        + BoxConstraints<Param = V>
+        + crate::core::parallel::MaybeSync,
+    P::Error: crate::core::parallel::MaybeSend,
     V: VectorLen
         + Clone
         + SampleUniformBox
         + ScaledAdd<F>
         + ScaleInPlace<F>
+        + crate::core::parallel::MaybeSync
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
 {
@@ -334,12 +338,13 @@ where
         // BasicPopulationState constructor the caller used.
         state.candidates.clear();
         state.costs.clear();
+        // Sample the initial population (sequential RNG), then evaluate the
+        // independent members in one batch (parallel under `parallel`).
         for _ in 0..pop_size {
             let x = V::sample_uniform_box(&lo, &hi, &mut rng);
-            let c = problem.cost(&x)?;
             state.candidates.push(x);
-            state.costs.push(c);
         }
+        state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         self.rng = Some(rng);
         Ok(state)
@@ -363,7 +368,6 @@ where
         // single Vec avoids the asynchronous-update variant where a
         // just-replaced x[i] would feed back into the next mutation.
         let mut trials: Vec<V> = Vec::with_capacity(np);
-        let mut trial_costs: Vec<F> = Vec::with_capacity(np);
         for i in 0..np {
             let (r1, r2, r3) = pick_three_distinct(np, i, rng);
             let mut donor = de_rand_1_mutate(
@@ -374,10 +378,12 @@ where
             );
             repair_reinit_per_coord(&mut donor, &lo, &hi, rng);
             let trial = binomial_crossover(&state.candidates[i], &donor, self.cr, rng);
-            let c_trial = problem.cost(&trial)?;
             trials.push(trial);
-            trial_costs.push(c_trial);
         }
+        // All trials are built from the frozen current generation, so they
+        // are independent — evaluate them in one batch (parallel under the
+        // `parallel` feature).
+        let trial_costs = problem.cost_batch(&trials)?;
 
         // Greedy selection: `<=` (not `<`) lets equal-cost trials take
         // over, which keeps the population moving on plateaus without

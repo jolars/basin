@@ -183,9 +183,12 @@ fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
 
 impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for RandomSearch
 where
-    F: Scalar,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
-    V: SampleUniformBox + Clone,
+    F: Scalar + crate::core::parallel::MaybeSend,
+    P: CostFunction<Param = V, Output = F>
+        + BoxConstraints<Param = V>
+        + crate::core::parallel::MaybeSync,
+    P::Error: crate::core::parallel::MaybeSend,
+    V: SampleUniformBox + Clone + crate::core::parallel::MaybeSync,
 {
     type Error = P::Error;
 
@@ -206,12 +209,13 @@ where
         // place where the solver's seeded RNG seeds the run.
         state.candidates.clear();
         state.costs.clear();
+        // Sample (sequential RNG), then evaluate the independent draws in one
+        // batch (parallel under the `parallel` feature).
         for _ in 0..self.lambda {
             let x = V::sample_uniform_box(&lo, &hi, &mut self.rng);
-            let c = problem.cost(&x)?;
             state.candidates.push(x);
-            state.costs.push(c);
         }
+        state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         Ok(state)
     }
@@ -232,12 +236,18 @@ where
         state.costs.clear();
         state.candidates.push(elite_x);
         state.costs.push(elite_c);
+        // Sample the λ fresh draws (sequential RNG) into their own buffer so
+        // the elite's already-known cost is not re-evaluated, then batch the
+        // independent draws (parallel under the `parallel` feature). Pushing
+        // them in sample order keeps the population bit-identical to a serial
+        // loop before the sort.
+        let mut fresh: Vec<V> = Vec::with_capacity(self.lambda);
         for _ in 0..self.lambda {
-            let x = V::sample_uniform_box(&lo, &hi, &mut self.rng);
-            let c = problem.cost(&x)?;
-            state.candidates.push(x);
-            state.costs.push(c);
+            fresh.push(V::sample_uniform_box(&lo, &hi, &mut self.rng));
         }
+        let fresh_costs = problem.cost_batch(&fresh)?;
+        state.candidates.extend(fresh);
+        state.costs.extend(fresh_costs);
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         // Drop the worst back down to λ. Sort puts the elite first
         // when it's still the best, so truncation never drops it.

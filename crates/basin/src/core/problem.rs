@@ -783,6 +783,35 @@ impl<P: CostFunction> Problem<P> {
         self.counts.cost_evals += 1;
         self.inner.cost(param)
     }
+
+    /// Counted batch cost evaluation: evaluate the inner
+    /// [`CostFunction::cost`] at every `param` and collect the outputs in
+    /// input order.
+    ///
+    /// Bumps [`EvalCounts::cost_evals`] by `params.len()` once, on the
+    /// calling thread, then fans the evaluations across the `rayon` pool
+    /// when the `parallel` feature is on (sequential otherwise). The counter
+    /// touch happens before the fan-out and the parallel closure only borrows
+    /// the inner problem immutably, so there is no shared mutable state across
+    /// threads; the total it adds is identical to one
+    /// [`cost`](Self::cost) per element. Results are collected in slice order,
+    /// so the returned costs are bit-identical to a serial loop whether or not
+    /// `parallel` is enabled.
+    ///
+    /// Population solvers use this for per-generation fitness evaluation —
+    /// the λ candidates of one generation are independent, so they evaluate
+    /// concurrently. Short-circuits on the first `Err` (hard abort).
+    pub fn cost_batch(&mut self, params: &[P::Param]) -> Result<Vec<P::Output>, P::Error>
+    where
+        P: crate::core::parallel::MaybeSync,
+        P::Param: crate::core::parallel::MaybeSync,
+        P::Output: crate::core::parallel::MaybeSend,
+        P::Error: crate::core::parallel::MaybeSend,
+    {
+        self.counts.cost_evals += params.len() as u64;
+        let inner = &self.inner;
+        crate::core::parallel::try_map_slice_with(params, || (), |(), p| inner.cost(p))
+    }
 }
 
 impl<P: Gradient> Problem<P> {

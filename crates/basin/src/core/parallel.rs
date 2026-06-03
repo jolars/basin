@@ -1,8 +1,8 @@
 //! Internal parallelism plumbing for the opt-in `parallel` feature.
 //!
 //! Doc-hidden: this is crate-internal infrastructure, not public API. It lets
-//! a loop over *independent* evaluations (finite-difference probes today,
-//! population evaluation later) fan across a `rayon` thread pool when the
+//! a loop over *independent* evaluations (finite-difference probes and
+//! per-generation population fitness) fan across a `rayon` thread pool when the
 //! `parallel` feature is on, while staying allocation- and result-identical to
 //! the sequential path when it is off.
 //!

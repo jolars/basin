@@ -565,8 +565,9 @@ fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
 
 impl<P, V, M, F> Solver<P, BasicPopulationState<V, F>> for CmaEs<V, M, F>
 where
-    F: Scalar,
-    P: CostFunction<Param = V, Output = F>,
+    F: Scalar + crate::core::parallel::MaybeSend,
+    P: CostFunction<Param = V, Output = F> + crate::core::parallel::MaybeSync,
+    P::Error: crate::core::parallel::MaybeSend,
     V: VectorLen
         + Clone
         + ScaledAdd<F>
@@ -574,6 +575,7 @@ where
         + ComponentMulAssign
         + NormSquared<F>
         + SampleStandardNormal
+        + crate::core::parallel::MaybeSync
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity
@@ -630,6 +632,9 @@ where
         let anisotropic = self.stds_override.is_some();
         state.candidates.clear();
         state.costs.clear();
+        // Sample the generation (sequential — the RNG draws define the
+        // reproducible trajectory), then evaluate the λ independent
+        // candidates in one batch (parallel under the `parallel` feature).
         for _k in 0..w.lambda {
             let z_k = V::sample_standard_normal(&w.m, &mut w.rng);
             let mut x_k = w.m.clone();
@@ -641,10 +646,9 @@ where
             } else {
                 x_k.scaled_add(w.sigma, &z_k);
             }
-            let cost = problem.cost(&x_k)?;
             state.candidates.push(x_k);
-            state.costs.push(cost);
         }
+        state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
         self.state = Some(w);
@@ -774,7 +778,10 @@ where
             w.d_inv[i] = one / s;
         }
 
-        // Sample new generation: x_k = m + σ B (D ⊙ z_k).
+        // Sample new generation: x_k = m + σ B (D ⊙ z_k). Sampling is
+        // sequential (the RNG draws define the reproducible trajectory);
+        // the λ independent candidates then evaluate in one batch
+        // (parallel under the `parallel` feature).
         state.candidates.clear();
         state.costs.clear();
         for _k in 0..w.lambda {
@@ -784,10 +791,9 @@ where
             let bd_z = w.b.matvec(&bd_z);
             let mut x_k = w.m.clone();
             x_k.scaled_add(w.sigma, &bd_z);
-            let cost = problem.cost(&x_k)?;
             state.candidates.push(x_k);
-            state.costs.push(cost);
         }
+        state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
         Ok((state, None))
