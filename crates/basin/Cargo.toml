@@ -48,13 +48,16 @@ ndarray-blas = ["ndarray", "ndarray/blas"]
 # is the home of `ComplexField` / `RealField` — bounds the faer-backend
 # linalg impls need to remain F-generic.
 faer = ["dep:faer", "dep:generativity", "dep:faer-traits"]
-# Opt-in parallel evaluation (currently faer's rayon-backed linalg). Off by
-# default because basin is typically embedded inside a caller that already
-# manages parallelism (multi-start sweeps, R/Python schedulers, outer rayon
-# loops) — a default-on thread pool causes oversubscription and fights the
-# caller. WASM-incompatible: enabling this on wasm32-unknown-unknown will
-# fail to compile. No-op unless a backend that hooks into it is also enabled.
-parallel = ["faer?/rayon"]
+# Opt-in parallel evaluation. Fans the independent probes of a
+# finite-difference gradient / Jacobian / Hessian across a `rayon` thread pool
+# (`FiniteDiff`, via `core::parallel`), and turns on faer's rayon-backed
+# linalg. Off by default because basin is typically embedded inside a caller
+# that already manages parallelism (multi-start sweeps, R/Python schedulers,
+# outer rayon loops) — a default-on thread pool causes oversubscription and
+# fights the caller. WASM-incompatible: enabling this on wasm32-unknown-unknown
+# will fail to compile. Under this feature `FiniteDiff: Gradient/Jacobian/
+# Hessian` additionally requires the wrapped problem to be `Sync`.
+parallel = ["dep:rayon", "faer?/rayon"]
 # Standard test-problem corpus (Rosenbrock, ...). Pure-Rust, no extra deps;
 # default-on so plain `cargo test` keeps working without `--features problems`
 # (integration tests can't see `cfg(test)` lib gating). Downstream can drop
@@ -100,6 +103,10 @@ rand_chacha = { version = "0.10", default-features = false }
 # Standard-normal sampling for CMA-ES. rand_distr 0.6 pairs with rand 0.10.
 # default-features off to stay consistent with the wasm-safe rand setup.
 rand_distr = { version = "0.6", default-features = false }
+# Opt-in CPU parallelism (the `parallel` feature only). Not wasm-compatible —
+# kept off by default per the WASM hard constraint. MSRV well under basin's
+# (rayon 1.x builds far below 1.87), so it doesn't constrain the CRAN pin.
+rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 # Statistical bench harness. dev-dependency only — never enters the

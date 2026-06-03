@@ -61,6 +61,11 @@ jobs:
             flags: "--features ndarray"
           - features: faer
             flags: "--features faer"
+          # Exercise the rayon-backed `parallel` path (FiniteDiff probe
+          # fan-out). Matrix backends are needed for the FD Jacobian/Hessian
+          # tests; faer + nalgebra cover both.
+          - features: parallel
+            flags: "--features nalgebra,faer,parallel"
     steps:
       - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2

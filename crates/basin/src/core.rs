@@ -59,6 +59,8 @@ pub mod inner;
 pub mod math;
 pub mod numdiff;
 pub mod observer;
+#[doc(hidden)]
+pub mod parallel;
 pub mod problem;
 pub mod rng;
 pub mod solver;

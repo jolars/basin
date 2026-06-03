@@ -46,9 +46,28 @@
 //!   rather than aborting; keeping probes inside the strict domain
 //!   (e.g. via [`FiniteDiff::function_precision`] or
 //!   [`FiniteDiff::with_step`]) is the caller's responsibility.
+//!
+//! # Parallelism (`parallel` feature)
+//!
+//! The probes of one derivative are independent, so with the `parallel`
+//! feature they fan across a `rayon` thread pool: the `n` gradient/Jacobian
+//! columns, and the `n(n+1)/2` upper-triangular Hessian entries, are evaluated
+//! concurrently (the shared `f(x)` / `r(x)` base evaluation runs once up
+//! front). The result is **bit-identical** to the sequential path — each
+//! output slot is written independently and collected in order, with no
+//! floating-point reduction — so enabling the feature never changes the
+//! numbers, only the wall-clock.
+//!
+//! This is a win when the wrapped `cost` / `residual` is expensive; for a
+//! cheap function at small `n` the thread-pool overhead can exceed the saving,
+//! so it is opt-in. Under the feature, `FiniteDiff`'s [`Gradient`] /
+//! [`Jacobian`] / [`Hessian`] impls additionally require the wrapped problem
+//! (and its param vector / error type) to be [`Sync`] / [`Send`]; without the
+//! feature there is no such bound and the evaluation is sequential.
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{DenseMatrixFromFn, VectorIndex, VectorLen};
+use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with, try_map_slice_with};
 use crate::core::problem::{CostFunction, Gradient, Hessian, Jacobian, Residual};
 
 /// Which finite-difference stencil to use for a given derivative.
@@ -221,8 +240,9 @@ impl<P: BoxConstraints> BoxConstraints for FiniteDiff<P> {
 
 impl<P, V> Gradient for FiniteDiff<P>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex,
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    <P as CostFunction>::Error: MaybeSend,
 {
     type Gradient = V;
     fn gradient(&self, param: &V) -> Result<V, P::Error> {
@@ -245,8 +265,9 @@ where
 
 impl<P, V> Jacobian for FiniteDiff<P>
 where
-    P: Residual<Param = V, Output = V>,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn,
+    P: Residual<Param = V, Output = V> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync + MaybeSend,
+    <P as Residual>::Error: MaybeSend,
 {
     type Jacobian = <V as DenseMatrixFromFn>::Matrix;
     fn jacobian(&self, param: &V) -> Result<Self::Jacobian, P::Error> {
@@ -269,8 +290,9 @@ where
 
 impl<P, V> Hessian for FiniteDiff<P>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn,
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    <P as CostFunction>::Error: MaybeSend,
 {
     type Hessian = <V as DenseMatrixFromFn>::Matrix;
     fn hessian(&self, param: &V) -> Result<Self::Hessian, P::Error> {
@@ -323,22 +345,31 @@ pub fn central_difference_gradient<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<V, P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex,
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P::Error: MaybeSend,
 {
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).cbrt();
-    let mut probe = x.clone();
+    // Each task perturbs coordinate `j` of its own probe buffer, evaluates,
+    // and resets it — so the buffer stays equal to `x` between indices.
+    let cols = try_map_range_with(
+        n,
+        || x.clone(),
+        |probe, j| {
+            let xj = x.get_scalar(j);
+            let h = nr_step(xj, scale, fixed_step);
+            probe.set_scalar(j, xj + h);
+            let fp = problem.cost(probe)?;
+            probe.set_scalar(j, xj - h);
+            let fm = problem.cost(probe)?;
+            probe.set_scalar(j, xj);
+            Ok((fp - fm) / (2.0 * h))
+        },
+    )?;
     let mut grad = x.clone();
-    for j in 0..n {
-        let xj = x.get_scalar(j);
-        let h = nr_step(xj, scale, fixed_step);
-        probe.set_scalar(j, xj + h);
-        let fp = problem.cost(&probe)?;
-        probe.set_scalar(j, xj - h);
-        let fm = problem.cost(&probe)?;
-        probe.set_scalar(j, xj);
-        grad.set_scalar(j, (fp - fm) / (2.0 * h));
+    for (j, g) in cols.into_iter().enumerate() {
+        grad.set_scalar(j, g);
     }
     Ok(grad)
 }
@@ -355,21 +386,28 @@ pub fn forward_difference_gradient<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<V, P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex,
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    P::Error: MaybeSend,
 {
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).sqrt();
     let f0 = problem.cost(x)?;
-    let mut probe = x.clone();
+    let cols = try_map_range_with(
+        n,
+        || x.clone(),
+        |probe, j| {
+            let xj = x.get_scalar(j);
+            let h = nr_step(xj, scale, fixed_step);
+            probe.set_scalar(j, xj + h);
+            let fp = problem.cost(probe)?;
+            probe.set_scalar(j, xj);
+            Ok((fp - f0) / h)
+        },
+    )?;
     let mut grad = x.clone();
-    for j in 0..n {
-        let xj = x.get_scalar(j);
-        let h = nr_step(xj, scale, fixed_step);
-        probe.set_scalar(j, xj + h);
-        let fp = problem.cost(&probe)?;
-        probe.set_scalar(j, xj);
-        grad.set_scalar(j, (fp - f0) / h);
+    for (j, g) in cols.into_iter().enumerate() {
+        grad.set_scalar(j, g);
     }
     Ok(grad)
 }
@@ -387,32 +425,35 @@ pub fn forward_difference_jacobian<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
-    P: Residual<Param = V, Output = V>,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn,
+    P: Residual<Param = V, Output = V> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync + MaybeSend,
+    P::Error: MaybeSend,
 {
     let n = x.vec_len();
     let r0 = problem.residual(x)?;
     let m = r0.vec_len();
     let eps = function_precision.max(f64::EPSILON).sqrt();
-    let mut probe = x.clone();
-    let mut columns: Vec<V> = Vec::with_capacity(n);
-    for j in 0..n {
-        let xj = x.get_scalar(j);
-        let h = match fixed_step {
-            Some(h) => h,
-            None => {
-                let h = eps * xj.abs();
-                if h == 0.0 { eps } else { h }
+    let columns = try_map_range_with(
+        n,
+        || x.clone(),
+        |probe, j| {
+            let xj = x.get_scalar(j);
+            let h = match fixed_step {
+                Some(h) => h,
+                None => {
+                    let h = eps * xj.abs();
+                    if h == 0.0 { eps } else { h }
+                }
+            };
+            probe.set_scalar(j, xj + h);
+            let mut col = problem.residual(probe)?;
+            probe.set_scalar(j, xj);
+            for i in 0..m {
+                col.set_scalar(i, (col.get_scalar(i) - r0.get_scalar(i)) / h);
             }
-        };
-        probe.set_scalar(j, xj + h);
-        let mut col = problem.residual(&probe)?;
-        probe.set_scalar(j, xj);
-        for i in 0..m {
-            col.set_scalar(i, (col.get_scalar(i) - r0.get_scalar(i)) / h);
-        }
-        columns.push(col);
-    }
+            Ok(col)
+        },
+    )?;
     Ok(V::dense_from_fn(m, n, |i, j| columns[j].get_scalar(i)))
 }
 
@@ -428,27 +469,30 @@ pub fn central_difference_jacobian<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
-    P: Residual<Param = V, Output = V>,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn,
+    P: Residual<Param = V, Output = V> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync + MaybeSend,
+    P::Error: MaybeSend,
 {
     let n = x.vec_len();
     let m = problem.residual(x)?.vec_len();
     let scale = function_precision.max(f64::EPSILON).cbrt();
-    let mut probe = x.clone();
-    let mut columns: Vec<V> = Vec::with_capacity(n);
-    for j in 0..n {
-        let xj = x.get_scalar(j);
-        let h = nr_step(xj, scale, fixed_step);
-        probe.set_scalar(j, xj + h);
-        let mut col = problem.residual(&probe)?;
-        probe.set_scalar(j, xj - h);
-        let rm = problem.residual(&probe)?;
-        probe.set_scalar(j, xj);
-        for i in 0..m {
-            col.set_scalar(i, (col.get_scalar(i) - rm.get_scalar(i)) / (2.0 * h));
-        }
-        columns.push(col);
-    }
+    let columns = try_map_range_with(
+        n,
+        || x.clone(),
+        |probe, j| {
+            let xj = x.get_scalar(j);
+            let h = nr_step(xj, scale, fixed_step);
+            probe.set_scalar(j, xj + h);
+            let mut col = problem.residual(probe)?;
+            probe.set_scalar(j, xj - h);
+            let rm = problem.residual(probe)?;
+            probe.set_scalar(j, xj);
+            for i in 0..m {
+                col.set_scalar(i, (col.get_scalar(i) - rm.get_scalar(i)) / (2.0 * h));
+            }
+            Ok(col)
+        },
+    )?;
     Ok(V::dense_from_fn(m, n, |i, j| columns[j].get_scalar(i)))
 }
 
@@ -465,8 +509,9 @@ pub fn central_difference_hessian<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn,
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    P::Error: MaybeSend,
 {
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).powf(0.25);
@@ -474,33 +519,41 @@ where
     let h: Vec<f64> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
+    // Upper-triangular entries (i ≤ j); each is independent given `f0`/`h`.
+    let pairs: Vec<(usize, usize)> = (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
+    let values = try_map_slice_with(
+        &pairs,
+        || x.clone(),
+        |probe, &(i, j)| {
+            let xi = x.get_scalar(i);
+            if i == j {
+                probe.set_scalar(i, xi + h[i]);
+                let fp = problem.cost(probe)?;
+                probe.set_scalar(i, xi - h[i]);
+                let fm = problem.cost(probe)?;
+                probe.set_scalar(i, xi);
+                Ok((fp - 2.0 * f0 + fm) / (h[i] * h[i]))
+            } else {
+                let xj = x.get_scalar(j);
+                probe.set_scalar(i, xi + h[i]);
+                probe.set_scalar(j, xj + h[j]);
+                let fpp = problem.cost(probe)?;
+                probe.set_scalar(j, xj - h[j]);
+                let fpm = problem.cost(probe)?;
+                probe.set_scalar(i, xi - h[i]);
+                let fmm = problem.cost(probe)?;
+                probe.set_scalar(j, xj + h[j]);
+                let fmp = problem.cost(probe)?;
+                probe.set_scalar(i, xi);
+                probe.set_scalar(j, xj);
+                Ok((fpp - fpm - fmp + fmm) / (4.0 * h[i] * h[j]))
+            }
+        },
+    )?;
     let mut hess = vec![0.0_f64; n * n];
-    let mut probe = x.clone();
-    for i in 0..n {
-        let xi = x.get_scalar(i);
-        probe.set_scalar(i, xi + h[i]);
-        let fp = problem.cost(&probe)?;
-        probe.set_scalar(i, xi - h[i]);
-        let fm = problem.cost(&probe)?;
-        probe.set_scalar(i, xi);
-        hess[i * n + i] = (fp - 2.0 * f0 + fm) / (h[i] * h[i]);
-        for j in (i + 1)..n {
-            let xj = x.get_scalar(j);
-            probe.set_scalar(i, xi + h[i]);
-            probe.set_scalar(j, xj + h[j]);
-            let fpp = problem.cost(&probe)?;
-            probe.set_scalar(j, xj - h[j]);
-            let fpm = problem.cost(&probe)?;
-            probe.set_scalar(i, xi - h[i]);
-            let fmm = problem.cost(&probe)?;
-            probe.set_scalar(j, xj + h[j]);
-            let fmp = problem.cost(&probe)?;
-            probe.set_scalar(i, xi);
-            probe.set_scalar(j, xj);
-            let v = (fpp - fpm - fmp + fmm) / (4.0 * h[i] * h[j]);
-            hess[i * n + j] = v;
-            hess[j * n + i] = v;
-        }
+    for (&(i, j), &v) in pairs.iter().zip(&values) {
+        hess[i * n + j] = v;
+        hess[j * n + i] = v;
     }
     Ok(V::dense_from_fn(n, n, |i, j| hess[i * n + j]))
 }
@@ -518,8 +571,9 @@ pub fn forward_difference_hessian<P, V>(
     fixed_step: Option<f64>,
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
-    P: CostFunction<Param = V, Output = f64>,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn,
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync,
+    P::Error: MaybeSend,
 {
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).powf(0.25);
@@ -527,38 +581,46 @@ where
     let h: Vec<f64> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
-    let mut probe = x.clone();
-    // f(x + hₖeₖ) for each k.
-    let mut fi: Vec<f64> = Vec::with_capacity(n);
-    for (k, &hk) in h.iter().enumerate().take(n) {
-        let xk = x.get_scalar(k);
-        probe.set_scalar(k, xk + hk);
-        let f = problem.cost(&probe)?;
-        probe.set_scalar(k, xk);
-        fi.push(f);
-    }
-    let mut hess = vec![0.0_f64; n * n];
-    for i in 0..n {
-        let xi = x.get_scalar(i);
-        for j in i..n {
+    // f(x + hₖeₖ) for each k — independent across k.
+    let fi = try_map_range_with(
+        n,
+        || x.clone(),
+        |probe, k| {
+            let xk = x.get_scalar(k);
+            probe.set_scalar(k, xk + h[k]);
+            let f = problem.cost(probe)?;
+            probe.set_scalar(k, xk);
+            Ok(f)
+        },
+    )?;
+    // Upper-triangular entries (i ≤ j); each is independent given `fi`/`f0`/`h`.
+    let pairs: Vec<(usize, usize)> = (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
+    let values = try_map_slice_with(
+        &pairs,
+        || x.clone(),
+        |probe, &(i, j)| {
+            let xi = x.get_scalar(i);
             let cross = if i == j {
                 probe.set_scalar(i, xi + 2.0 * h[i]);
-                let c = problem.cost(&probe)?;
+                let c = problem.cost(probe)?;
                 probe.set_scalar(i, xi);
                 c
             } else {
                 let xj = x.get_scalar(j);
                 probe.set_scalar(i, xi + h[i]);
                 probe.set_scalar(j, xj + h[j]);
-                let c = problem.cost(&probe)?;
+                let c = problem.cost(probe)?;
                 probe.set_scalar(i, xi);
                 probe.set_scalar(j, xj);
                 c
             };
-            let v = (cross - fi[i] - fi[j] + f0) / (h[i] * h[j]);
-            hess[i * n + j] = v;
-            hess[j * n + i] = v;
-        }
+            Ok((cross - fi[i] - fi[j] + f0) / (h[i] * h[j]))
+        },
+    )?;
+    let mut hess = vec![0.0_f64; n * n];
+    for (&(i, j), &v) in pairs.iter().zip(&values) {
+        hess[i * n + j] = v;
+        hess[j * n + i] = v;
     }
     Ok(V::dense_from_fn(n, n, |i, j| hess[i * n + j]))
 }
@@ -621,6 +683,25 @@ mod tests {
             .unwrap();
         assert!(approx(g[0], 0.0, 1e-9), "got {}", g[0]);
         assert_eq!(g.len(), 1);
+    }
+
+    // The probe fan-out (under `parallel`) writes each output slot
+    // independently and collects in order, so the result must be identical
+    // across repeated calls — no reduction-order nondeterminism. `n = 16` is
+    // large enough that the rayon path spreads across worker threads.
+    #[test]
+    fn gradient_is_bitwise_reproducible_across_calls() {
+        let a: Vec<f64> = (0..16).map(|k| 0.5 + k as f64).collect();
+        let x: Vec<f64> = (0..16).map(|k| -2.0 + 0.37 * k as f64).collect();
+        let fd = FiniteDiff::new(DiagQuadratic { a });
+        let g1 = fd.gradient(&x).unwrap();
+        let g2 = fd.gradient(&x).unwrap();
+        assert_eq!(g1, g2, "finite-difference gradient is not reproducible");
+        // And it still tracks the analytic gradient 2·aᵢ·xᵢ.
+        for (k, gk) in g1.iter().enumerate() {
+            let want = 2.0 * (0.5 + k as f64) * x[k];
+            assert!(approx(*gk, want, 1e-6), "k={k} got {gk} want {want}");
+        }
     }
 
     #[test]
