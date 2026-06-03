@@ -4,62 +4,115 @@ Basin ships a growing catalogue of solvers, all driven by the same `Executor`
 loop. Pick one based on what your problem provides (a gradient? only costs?
 residuals?) and whether it is constrained.
 
+Each solver name links to its API page on [docs.rs](https://docs.rs/basin); the
+trailing note cites the paper it implements (or the source it ports).
+
 ## First-order
 
-- **`GradientDescent`** — steepest descent with a pluggable step rule:
-  `Constant`, `Backtracking`, `MoreThuente`, or `Wolfe` line searches.
-- **`ProjectedGradientDescent`** — gradient descent for box-constrained
-  problems, projecting each step back onto the feasible box.
+- **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/struct.GradientDescent.html)**
+  — steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
+  `MoreThuente`, or `Wolfe` line searches) and optional heavy-ball momentum
+  (Polyak, 1964).
+- **[`Sgd`](https://docs.rs/basin/latest/basin/solver/struct.Sgd.html)** —
+  mini-batch stochastic gradient descent with a constant learning rate and
+  optional Polyak (1964) heavy-ball momentum.
+- **[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/struct.ProjectedGradientDescent.html)**
+  — gradient descent for box-constrained problems, projecting each step back
+  onto the feasible box.
 
 ## Derivative-free
 
-- **`NelderMead`** — the classic reflection / expansion / contraction simplex;
-  needs only a `CostFunction`. `NelderMead::adaptive()` uses the
-  dimension-aware coefficients of Gao & Han (2012).
-- **`Brent`** — robust 1-D minimization on a bracketed interval; also used
-  inside line searches.
+- **[`NelderMead`](https://docs.rs/basin/latest/basin/solver/struct.NelderMead.html)**
+  — the classic reflection / expansion / contraction simplex; needs only a
+  `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
+  uses the dimension-aware coefficients of Gao & Han (2012), and the projected
+  variant follows Luersen & Le Riche (2004).
+- **[`Brent`](https://docs.rs/basin/latest/basin/solver/struct.Brent.html)** —
+  robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
+  in _Numerical Recipes_ §10.2); also used inside line searches.
 
 ## Quasi-Newton
 
-- **`BFGS`** — dense quasi-Newton with a full approximate Hessian.
-- **`LBFGS`** — limited-memory BFGS (two-loop recursion) for larger problems.
-- **`LBFGSB`** — L-BFGS with box bounds, a faithful port of Nocedal's
-  Fortran v3.0.
+- **[`BFGS`](https://docs.rs/basin/latest/basin/solver/struct.BFGS.html)** —
+  dense quasi-Newton with a full approximate Hessian (Nocedal & Wright, 2006).
+- **[`LBFGS`](https://docs.rs/basin/latest/basin/solver/struct.Lbfgs.html)** —
+  limited-memory BFGS for larger problems (two-loop recursion, Nocedal &
+  Wright Alg. 7.4).
+- **[`LBFGSB`](https://docs.rs/basin/latest/basin/solver/struct.Lbfgs.html)** —
+  L-BFGS with box bounds; a faithful port of the Nocedal–Zhu L-BFGS-B v3.0
+  Fortran source (Byrd, Lu & Nocedal, 1995; Zhu, Byrd, Lu & Nocedal, 1997,
+  ACM TOMS Alg. 778).
 
 ## Nonlinear least squares
 
 For problems expressed as residuals (`Residual` + `Jacobian`):
 
-- **`GaussNewton`** — undamped normal-equations solver.
-- **`LevenbergMarquardt`** — damped least squares with Nielsen's (1999) update
-  rule; the workhorse for curve fitting.
-- **`Trf`** — trust-region reflective: Levenberg–Marquardt with box bounds.
+- **[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/struct.GaussNewton.html)**
+  — undamped normal-equations solver (Madsen, Nielsen & Tingleff, 2004, §3.1).
+- **[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/struct.LevenbergMarquardt.html)**
+  — damped least squares; the workhorse for curve fitting. Marquardt (1963)
+  with Nielsen's (1999) smooth damping update and Moré (1978) / MINPACK column
+  scaling (Madsen, Nielsen & Tingleff, 2004, §3.2).
+- **[`Trf`](https://docs.rs/basin/latest/basin/solver/struct.Trf.html)** —
+  trust-region reflective: Levenberg–Marquardt with box bounds (Branch,
+  Coleman & Li, 1999, affine scaling).
 
 ## Global & stochastic
 
-- **`CmaEs`** / **`BoundedCmaEs`** — covariance-matrix adaptation evolution
-  strategy (Hansen, 2016), unconstrained and box-bounded.
-- **`RandomSearch`** — elitist (1+λ) uniform sampling over a box.
-- **`Ssga`** — steady-state genetic algorithm (BLX-α crossover, replace-worst).
+- **[`CmaEs`](https://docs.rs/basin/latest/basin/solver/struct.CmaEs.html)** /
+  **[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/struct.BoundedCmaEs.html)**
+  — covariance-matrix adaptation evolution strategy (Hansen, 2016),
+  unconstrained and box-bounded; the bounded variant uses Hansen's adaptive
+  `BoundPenalty` (the `pycma` default).
+- **[`De`](https://docs.rs/basin/latest/basin/solver/struct.De.html)** —
+  differential evolution (DE/rand/1/bin) over a feasible box (Storn & Price,
+  1997).
+- **[`RandomSearch`](https://docs.rs/basin/latest/basin/solver/struct.RandomSearch.html)**
+  — elitist (1+λ) uniform sampling over a box.
+- **[`Ssga`](https://docs.rs/basin/latest/basin/solver/struct.Ssga.html)** —
+  steady-state real-coded genetic algorithm (replace-worst) with BLX-α
+  crossover (Eshelman & Schaffer, 1993), negative assortative mating
+  (Fernandes & Rosa, 2001) and BGA mutation (Mühlenbein &
+  Schlierkamp-Voosen, 1993); the SSGA component of Molina et al. (2010), §4.4.
 
 ## Memetic (composed)
 
 These run a local solver inside a global one — an example of Basin's solver
 composition primitives:
 
-- **`CmaInject`** / **`BoundedCmaInject`** — CMA-ES with per-generation local
-  polishing of the best individuals.
-- **`MaLsChCma`** — a memetic algorithm with persistent local-search chains.
+- **[`CmaInject`](https://docs.rs/basin/latest/basin/solver/struct.CmaInject.html)**
+  / **[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/struct.BoundedCmaInject.html)**
+  — CMA-ES with per-generation local polishing of the best individuals,
+  re-injected via Hansen's (2011) injection mechanism.
+- **[`DeInject`](https://docs.rs/basin/latest/basin/solver/struct.DeInject.html)**
+  — the DE-flavored sibling of `CmaInject`: differential evolution (Storn &
+  Price, 1997) with per-generation top-_k_ local refinement and Hansen-style
+  (2011) injection.
+- **[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/struct.MaLsChCma.html)**
+  — a memetic algorithm with persistent local-search chains and a CMA-ES inner
+  (Molina et al., 2010).
 
 ## Constrained (composed)
 
 These wrap any gradient inner solver in an outer loop that handles linear
 constraints:
 
-- **`BarrierMethod`** — log-barrier interior-point continuation for linear
-  inequality constraints (`A x ≤ b`); needs a strictly feasible start.
-- **`AugmentedLagrangianMethod`** — quadratic penalty plus multiplier updates
-  for linear equality constraints (`A x = b`); tolerates an infeasible start.
+- **[`BarrierMethod`](https://docs.rs/basin/latest/basin/solver/struct.BarrierMethod.html)**
+  — log-barrier interior-point continuation for linear inequality constraints
+  (`A x ≤ b`); needs a strictly feasible start (Boyd & Vandenberghe,
+  _Convex Optimization_, §11.3, Alg. 11.1).
+- **[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/struct.AugmentedLagrangianMethod.html)**
+  — quadratic penalty plus multiplier updates for linear equality constraints
+  (`A x = b`); tolerates an infeasible start (Nocedal & Wright, §17.3,
+  Alg. 17.4, LANCELOT-style).
+
+The pluggable line searches are documented alongside the first-order solvers:
+[`Backtracking`](https://docs.rs/basin/latest/basin/line_search/struct.Backtracking.html)
+(Armijo; Nocedal & Wright §3.1),
+[`Wolfe`](https://docs.rs/basin/latest/basin/line_search/struct.Wolfe.html)
+(strong Wolfe; Nocedal & Wright Alg. 3.5/3.6), and
+[`MoreThuente`](https://docs.rs/basin/latest/basin/line_search/struct.MoreThuente.html)
+(Moré & Thuente, 1994; a port of MINPACK-2's `dcsrch`).
 
 ## Backends and constraints
 
@@ -80,6 +133,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | Solver | Family | `Vec<f64>` | nalgebra | ndarray | faer |
 | --- | --- | :---: | :---: | :---: | :---: |
 | `GradientDescent` | First-order | ✓ | ✓ | ✓ | ✓ |
+| `Sgd` | First-order | ✓ | ✓ | ✓ | ✓ |
 | `ProjectedGradientDescent` | First-order | ✓ | ✓ | ✓ | ✓ |
 | `NelderMead` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Brent` | Derivative-free | — | — | — | — |
@@ -91,16 +145,22 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Trf` | Least squares | ✗ | ✓ | ✗ | ✓ |
 | `CmaEs` | Global | ✓ | ✓ | ✓ | ✓ |
 | `BoundedCmaEs` | Global | ✓ | ✓ | ✓ | ✓ |
+| `De` | Global | ✓ | ✓ | ✓ | ✓ |
 | `RandomSearch` | Global | ✓ | ✓ | ✓ | ✓ |
 | `Ssga` | Global | ✓ | ✓ | ✓ | ✓ |
 | `CmaInject` | Memetic | ✗ | ✓ | ✗ | ✓ |
 | `BoundedCmaInject` | Memetic | ✗ | ✓ | ✗ | ✓ |
+| `DeInject` | Memetic | ✓† | ✓ | ✓† | ✓ |
 | `MaLsChCma` | Memetic | ✗ | ✓ | ✗ | ✓ |
 | `BarrierMethod` | Constrained | ✓ | ✓ | ✓ | ✓ |
 | `AugmentedLagrangianMethod` | Constrained | ✓ | ✓ | ✓ | ✓ |
 
 `Brent` minimizes over a scalar `f64` interval (1-D), so the vector-backend
 choice does not apply.
+
+† `DeInject` is itself backend-generic, but its effective coverage is the
+intersection of `De` and the chosen inner solver: a `LevenbergMarquardt` or
+`LBFGSB` inner narrows it to nalgebra / faer.
 
 Each solver's page on [docs.rs](https://docs.rs/basin) carries a **Backends**
 note listing exactly which parameter types it supports.
