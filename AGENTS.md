@@ -55,3 +55,13 @@ the relevant files. Don't duplicate it here:
   "expose it on a richer state trait" answer does not cover those scalars.
   Don't "fix" the absence of a KV channel by reflex — but don't treat it as
   permanently closed either.
+
+- **No `Solver::name()` introspection.** The `Solver` trait (`core/solver.rs`)
+  has `type Error` + `init` / `next_iter` / `terminate` and deliberately no
+  `name() -> &str` (argmin requires one for logging/observer display). **Why:**
+  no shipped observer prints the solver name, so it would be unused surface
+  frozen into 1.0. **Safe to defer:** adding `fn name(&self) -> &str` with a
+  default impl is additive and non-breaking *even post-1.0*, so there's no
+  freeze-now pressure. Revisit only if/when an observer that displays the solver
+  name is actually wanted — at which point add it with a default. Recorded so
+  the absence reads as a deliberate choice, not an oversight.

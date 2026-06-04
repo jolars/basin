@@ -239,13 +239,14 @@ path). The per-trait docs remain the detailed reference. (The clean-stop channel
 was added explicitly because the original two-channel framing omitted it, and it
 is exactly the distinction downstream is most likely to rely on.)
 
-### A5. `Solver::name()` introspection `[DO: defer]`
+### A5. `Solver::name()` introspection `[DONE — deferred]`
 
 argmin requires `Solver::name() -> &str` for logging/observer display; basin's
 `Solver` trait (`core/solver.rs`) has none. Adding it with a default impl is
-*additive and non-breaking* even post-1.0. Record as explicitly deferred so it
-reads as a deliberate choice, not an oversight. Revisit only if/when an observer
-that prints the solver name is wanted.
+*additive and non-breaking* even post-1.0, so there is no freeze-now pressure.
+Recorded as an explicit deferred choice in `AGENTS.md` ("Provisional choices")
+so the absence reads as deliberate, not an oversight. Revisit only if/when an
+observer that prints the solver name is wanted.
 
 --------------------------------------------------------------------------------
 
