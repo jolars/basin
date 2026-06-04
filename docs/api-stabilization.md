@@ -69,25 +69,36 @@ exhaustive match (`reason_str` in `crates/basin-wasm/src/lib.rs`). All matches
 inside `crates/basin` are unaffected (`non_exhaustive` is a no-op within the
 defining crate).
 
-### A2. Observer metadata / KV channel `[DECIDE]`
+### A2. Observer metadata / KV channel `[DONE — deferred]`
 
 argmin passes a `KV` key-value store to observers so solvers can surface
 algorithm-specific metrics (step size, population diversity, barrier μ). basin's
-`Observe` (`core/observer.rs:68`) passes only `&S`. Adding a metadata argument
-to `observe_iter` after 1.0 is breaking --- so the choice must be made now:
-**commit to no-KV**, or **add the channel now**.
+`Observe` (`core/observer.rs:68`) passes only `&S`.
 
-**Recommend: commit to no-KV.** basin's design already says "state shape is the
-contract" (tenet 3 --- criteria and observers bind on the minimum `State`/
+**Decision: no KV channel for 1.0.** basin's design already says "state shape is
+the contract" (tenet 3 --- criteria and observers bind on the minimum `State`/
 `GradientState`/`SimplexState`/`PopulationState` shape). Algorithm-specific
 metrics belong on a richer state trait an observer binds on, not a
-stringly-typed side channel that erases the compile-time shape guarantee. Record
-this as a deliberate non-tenet choice in `AGENTS.md` so it isn't "fixed" later
-by accident.
+stringly-typed side channel that erases the compile-time shape guarantee.
+Recorded as a deliberate non-tenet choice in `AGENTS.md`.
 
-If a concrete need for solver-internal scalars (that don't fit a state trait)
-appears before 1.0, revisit --- but the default is to keep `Observe` infallible,
-read-only, and state-only.
+**Correction to this item's original framing: A2 is *not* a true freeze-now /
+one-way door.** The original draft claimed "adding a metadata argument to
+`observe_iter` after 1.0 is breaking, so the choice must be made now." That is
+only true for the naïve route of mutating the existing method's signature. A KV
+channel can be added post-1.0 *additively*: add a new default-bodied trait
+method (`fn observe_iter_with(&mut self, state: &S, kv: &Kv) {
+self.observe_iter(state) }`), switch the executor's internal call site
+(`executor.rs:239`) to it, and every existing `Observe` impl keeps compiling via
+the forwarding default; a concrete `Kv` type keeps the trait object-safe for the
+`Box<dyn Observe<S>>` storage. So the door is *deferred open*, not closed --- the
+1.0 commitment is purely "don't build it now."
+
+The genuine future motivation, if it appears: solver-internal working scalars
+that don't fit a state trait (CMA-ES σ / covariance / evolution paths, LM μ / ν
+/ diag --- see A3) live in the *solver* struct, not the state, so "expose it on
+a richer state trait" does not cover them. Until then, keep `Observe`
+infallible, read-only, and state-only.
 
 ### A3. serde door-open verification `[REVIEW]`
 
