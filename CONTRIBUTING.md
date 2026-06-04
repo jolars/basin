@@ -158,7 +158,7 @@ The workspace manifest is at the repo root (shared lockfile) with three members:
 - `crates/competitor-bench` --- benchmarks against competing libraries.
 
 Keep optional integrations as Cargo features on `basin` itself (`nalgebra`,
-`ndarray`, `faer`, `serde`, `parallel`, `problems`), not new crates. Add a
+`ndarray`, `faer`, `parallel`, `problems`), not new crates. Add a
 workspace member only on a concrete trigger --- heavy or platform-specific deps
 that have no business in the core crate:
 

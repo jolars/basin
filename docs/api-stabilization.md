@@ -100,12 +100,13 @@ that don't fit a state trait (CMA-ES σ / covariance / evolution paths, LM μ / 
 a richer state trait" does not cover them. Until then, keep `Observe`
 infallible, read-only, and state-only.
 
-### A3. serde door-open verification `[REVIEW]`
+### A3. serde door-open verification `[DONE]`
 
-Deferred-but-not-foreclosed (per the up-front decision). Produce a
-"serde-readiness" subsection confirming the concrete public state structs **and
-the solver structs** can gain `#[derive(Serialize, Deserialize)]` behind a future
-`serde` feature without a breaking change.
+Deferred-but-not-foreclosed (per the up-front decision). The "serde-readiness"
+audit below confirms the concrete public state structs **and the solver
+structs** can gain `#[derive(Serialize, Deserialize)]` behind a future `serde`
+feature without a breaking change. **Verdict: the door is open.** Findings (and
+corrections to this item's original scoping) follow the rationale.
 
 **Why solvers, not just states (the observer ≠ checkpointing point).** The
 observer layer already covers the *save / monitor* half of what a checkpointing
@@ -143,12 +144,79 @@ the door-open check below must include solvers or the door is quietly half-close
 - `PhantomData<fn() -> Mode>` type-state markers (`NelderMead`, `Lbfgs`) derive
   serde fine — note for completeness.
 
-**Also `[DO]`:** `CONTRIBUTING.md` lists a `serde` feature in its features
-enumeration ("nalgebra, ndarray, faer, serde, parallel, problems") that **does
-not exist** in `crates/basin/Cargo.toml` (`[features]`, lines 28--62, defines
-only `nalgebra`, `ndarray`, `ndarray-blas`, `faer`, `parallel`, `problems`).
-Remove the `serde` mention until the feature actually lands, or the doc
-misleads.
+**Also `[DO]` — done.** `CONTRIBUTING.md` listed a `serde` feature in its
+features enumeration ("nalgebra, ndarray, faer, serde, parallel, problems") that
+**does not exist** in `crates/basin/Cargo.toml` (`[features]` defines only
+`nalgebra`, `ndarray`, `ndarray-blas`, `faer`, `parallel`, `problems`). The
+stray `serde` mention has been removed.
+
+#### Serde-readiness findings
+
+Method: field-level audit of every public state and solver struct, hunting for
+fields whose type can *never* implement `Deserialize` (trait objects, fn
+pointers, closures, references) — those are the only thing that could foreclose
+adding a derive later, since a generic field is auto-bounded by serde's derive
+(`impl<T: Serialize> Serialize for Foo<T>`) and a derive is otherwise purely
+additive.
+
+**Serde-clean (no field blocks a future derive; generics auto-bound):**
+
+- **All five states** — `BasicState`, `BasicSimplexState`,
+  `BasicPopulationState`, `QuasiNewtonState`, `LbfgsState` (incl. nested
+  `LbfgsbWork`: only `Vec<F>` / `Vec<usize>` / `Vec<i8>` / scalars). Scalars,
+  `Vec`, `Option`, and generic `V` / `M` / `F` only.
+- **All four line searches** — `Constant`, `Backtracking`, `Wolfe`,
+  `MoreThuente`. *Correction:* these are stateless scalar config; the original
+  list claimed "`MoreThuente` / `Wolfe` carry scratch" — they do not. Their
+  scratch (`stx` / `fx` / `brackt` / …) is function-local, not struct fields.
+- **Core working-state solvers** — `CmaEs` / `BoundedCmaEs` (+ their `Working`,
+  incl. `ChaCha8Rng` and `VecDeque<F>`), `LevenbergMarquardt`, `GaussNewton`,
+  `Trf`. Serde-able given backend serde bounds; `ChaCha8Rng` needs
+  `rand_chacha`'s own `serde` feature — an additive dep-feature, not a
+  foreclosure.
+- **Solvers holding a generic line search** — `Bfgs`, `Lbfgs`,
+  `GradientDescent` (incl. `velocity: Option<V>`). The `line_search: S` field is
+  a *generic param*, auto-bounded by serde's derive; **not** a blocker.
+- **`PhantomData<fn() -> Mode>` type-state markers** (`NelderMead`, `Lbfgs`) —
+  serde impls `PhantomData<T>` for all `T`; worst case the derive adds a
+  spurious `Mode: Serialize` bound, fixed with a one-line `#[serde(bound = "")]`
+  or by deriving serde on the zero-size marker types. Additive either way.
+- **`BarrierMethod`, `AugmentedLagrangianMethod`** — serde-clean. *Correction:*
+  the original list said all three outer solvers "embed an inner solver + an
+  `InnerExecutor` … inherit the `InnerExecutor` blocker." That is **wrong** for
+  these two: they store `inner_solver: So` + scalar config and build their
+  termination criteria with a fresh `Vec` per call via `run_loop` (they
+  explicitly *sidestep* `InnerExecutor`). No trait-object field.
+
+**True non-serde fields — and why none foreclose the door:**
+
+- **`InnerExecutor.criteria: Vec<Box<dyn TerminationCriterion<S>>>`**
+  (`core/inner.rs`) — trait object, not serde-able. It is a *driver*, not
+  persisted state; a resume design rebuilds it. *Correction to blast radius:*
+  the structs that actually **store** an `InnerExecutor` are the three injection
+  solvers — `CmaInject`, `BoundedCmaInject`, `DeInject` — not the barrier / AL
+  pair. Adding serde to those later means `#[serde(skip)]` on the private
+  `inner` field plus a rebuild on load; additive, so not foreclosed. The
+  top-level `Executor` carries the same `Vec<Box<dyn …>>` criteria/observers and
+  has the same driver status (never in the persisted-state set).
+- **`ClosureInner.seed_fn: Box<dyn Fn(&V, F) -> S>`** (`solver/cma_inject.rs`) —
+  a closure. `ClosureInner` is publicly exported but documented as a one-off
+  experiment / contract-test escape hatch that wraps user logic; it is
+  intrinsically non-serializable (any closure-holding type is), and it carries
+  no iteration state. Not in scope for resume, and nothing about it foreclosed
+  by a 1.0 choice — the non-serde-ness is inherent to "wraps a closure."
+- A future **closure-filter `ObserverMode`** variant would also be non-serde;
+  another reason to keep `ObserverMode` plain data (ties to A1, where it was
+  kept a plain `#[non_exhaustive]` enum).
+
+**Conclusion.** No 1.0 choice forecloses a later `serde` feature. The persisted
+iteration state (states + the working-state solvers) is uniformly serde-clean
+given backend bounds; the only non-serde types are runtime drivers a resume
+design rebuilds (`InnerExecutor` / `Executor`) or an explicit closure escape
+hatch (`ClosureInner`), none of which block adding derives additively. If resume
+is ever scoped, the work is: serde on states + solver structs, `#[serde(skip)]`
++ rebuild for the `InnerExecutor`-holding injection solvers, plus an `Executor`
+load path that skips `Solver::init`.
 
 ### A4. Error-type model `[RECOMMEND]`
 
