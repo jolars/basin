@@ -321,6 +321,43 @@ distinction is documented consistently on each state's `cost()` and confirm no
 public path exposes a pre-init read. Decide whether that's worth a doc-only pass
 now or is already adequately covered.
 
+### B6. `InnerExecutor` criteria-reuse semantics `[REVIEW]`
+
+`InnerExecutor` (`core/inner.rs`) holds one
+`Vec<Box<dyn TerminationCriterion<S>>>` for its whole lifetime and reuses it on
+every `run()`. Correct for stateless criteria (`MaxIter`, the `*Tolerance`
+family, `MaxCostEvals`); a sharp edge for stateful ones — `MaxTime` sets
+`start: Option<Instant>` on its first `check` and never clears it, so on a
+second `run()` it fires prematurely. The composition rules already document this
+as contract 2 ("inner termination criteria must be stateless across calls").
+
+The footgun already shapes the codebase. The adapter-problem outer solvers
+(`BarrierMethod`, `AugmentedLagrangianMethod`) deliberately **sidestep**
+`InnerExecutor` and drive their inner via `run_loop` with a fresh criteria
+vector each outer iteration. That is partly intrinsic — they minimize a
+*changing surrogate* (shrinking μ / updated λ, ρ) against a fresh
+`Problem::new(adapter)` per outer iter, which the store-and-reuse model doesn't
+fit — but it is *also* an explicit dodge of the `MaxTime` cross-call caveat (see
+`barrier_method.rs` "Composition"). Only the same-problem injection solvers
+(`CmaInject`, `BoundedCmaInject`, `DeInject`) actually store an `InnerExecutor`.
+(This also corrects A3's original scoping, which had attributed an embedded
+`InnerExecutor` to the barrier / AL pair.)
+
+**Design question (not a public-surface freeze):** should `InnerExecutor` make
+reuse safe — e.g. take a criteria *factory* rebuilt per `run()`, or add a
+defaulted `reset(&mut self)` hook to `TerminationCriterion` that `run()` calls
+before each pass — so stateful criteria can't silently misbehave? Both routes
+are additive (a defaulted trait method or a new builder method can land post-1.0
+without breaking), so this is **not** strictly freeze-now. But it is the *same
+underlying issue* as C1 (`run_loop` visibility): C1 keeps `run_loop` public
+precisely as the escape hatch for "fresh per-call criteria," so the two should
+be decided together — making `InnerExecutor` safe for stateful criteria weakens
+C1's main reason to keep `run_loop` public.
+
+**Leaning:** document the caveat as the 1.0 contract (status quo) and treat a
+`reset` / factory mechanism as deferred-but-additive; revisit only when a real
+consumer hits the `MaxTime`-in-an-inner case.
+
 --------------------------------------------------------------------------------
 
 ## C. Surface-minimization review
@@ -333,7 +370,9 @@ public.
 Both the high-level `InnerExecutor` builder and the low-level `run_loop`
 function are public (`lib.rs:68`). `run_loop` is the escape hatch for custom
 outer solvers that need fresh per-call termination criteria (the `InnerExecutor`
-reuses criteria, which misbehaves with stateful ones like `MaxTime`).
+reuses criteria, which misbehaves with stateful ones like `MaxTime` --- see B6,
+which asks whether `InnerExecutor` should instead be made safe for stateful
+criteria; decide the two together).
 
 **Decide:** keep `run_loop` public (sanction the escape hatch, document the
 criteria-reuse caveat) or make it `pub(crate)` and route everything through
