@@ -218,18 +218,26 @@ is ever scoped, the work is: serde on states + solver structs, `#[serde(skip)]`
 + rebuild for the `InnerExecutor`-holding injection solvers, plus an `Executor`
 load path that skips `Solver::init`.
 
-### A4. Error-type model `[RECOMMEND]`
+### A4. Error-type model `[DONE]`
 
 The model: per-trait associated `type Error`; `LineSearch` constrains
 `L::Error = P::Error` (`line_search.rs`); a two-channel convention of
 soft-reject (`Ok(f64::INFINITY)` rejects a point) vs hard-abort (`Err(_)` ends
 the solve). It is load-bearing and internally consistent.
 
-**Recommend:** ratify as-is for 1.0. Action item is documentation, not code:
-elevate the soft-reject vs hard-abort contract to a prominent, stable-guarantee
-section in the crate-level docs (it is currently spread across per-trait
-rustdoc). This is the contract most likely to be relied on by downstream and
-hardest to change later.
+**Decision: ratified as-is for 1.0** — no code change to the model. The action
+item was documentation, and it is done: a prominent, stable-guarantee
+`# Error model` section now lives in the crate-level docs (`lib.rs`),
+consolidating what was spread across per-trait rustdoc. It names *three*
+outcomes rather than two — soft-reject (`Ok(f64::INFINITY)`, one point), **clean
+stop** (a `TerminationReason` via `Executor::run`'s `Ok(OptimizationResult)`,
+which is *not* an error), and hard-abort (`Err(_)`, bubbles out as
+`Result<_, P::Error>`) — plus the "one error type, threaded through" plumbing
+(`CostFunction::Error` / `Residual::Error` chosen once; `Solver::Error` and
+`LineSearch::Error` mirror `P::Error`; `Infallible` for the zero-cost happy
+path). The per-trait docs remain the detailed reference. (The clean-stop channel
+was added explicitly because the original two-channel framing omitted it, and it
+is exactly the distinction downstream is most likely to rely on.)
 
 ### A5. `Solver::name()` introspection `[DO: defer]`
 

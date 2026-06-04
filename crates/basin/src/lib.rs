@@ -48,6 +48,43 @@
 //!     .unwrap();
 //! assert!(result.cost() < 1e-12);
 //! ```
+//!
+//! # Error model
+//!
+//! basin distinguishes *three* outcomes a run can produce. The split is a
+//! stable part of the public contract — downstream code can rely on it:
+//!
+//! - **Soft reject** — return `Ok(f64::INFINITY)` from [`CostFunction::cost`]
+//!   to reject a *single point* without stopping the solve. Line searches treat
+//!   `+∞` as worse and retreat; population solvers treat it as worst fitness.
+//!   This is the channel for "this `x` is outside my domain, but the solve
+//!   should continue."
+//! - **Clean stop** — the run ends *normally* with a
+//!   [`TerminationReason`], either
+//!   because a [`TerminationCriterion`] fired or because the [`Solver`] reported
+//!   a mid-iteration stop. [`Executor::run`] returns
+//!   `Ok(`[`OptimizationResult`]`)` carrying that reason. This is **not** an
+//!   error.
+//! - **Hard abort** — return `Err(_)` from a problem-trait method to terminate
+//!   the *entire* solve. The error is your own type and bubbles out of
+//!   [`Executor::run`] untouched, typed as `Result<_, P::Error>`. Use it when
+//!   the failure is not about a particular `x` — a downstream service vanished,
+//!   the user pressed cancel, an early-stop condition in your own problem state
+//!   fired.
+//!
+//! ## One error type, threaded through
+//!
+//! The hard-abort error is chosen *once*, on the problem
+//! ([`CostFunction::Error`], or
+//! [`Residual::Error`] for nonlinear
+//! least squares). Every downstream trait mirrors it: [`Solver::Error`] and
+//! [`LineSearch::Error`] are set to `P::Error`, so a custom problem error flows
+//! through the solver and line search out to the caller with no conversion glue.
+//! Problems that cannot fail pick [`std::convert::Infallible`]; its niche
+//! optimization keeps `Result<f64, Infallible>` the same layout as a bare `f64`,
+//! so the happy path stays zero-cost.
+//!
+//! The [`problem`](crate::core::problem) module docs carry the per-trait detail.
 #![cfg_attr(docsrs, feature(doc_cfg), doc(auto_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
