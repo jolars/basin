@@ -420,6 +420,7 @@ pub trait SymmetricEigen<V> {
 /// are backend-agnostic — backends translate their native error types
 /// into these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SymmetricEigenError {
     /// The eigensolver iteration failed to converge to the requested
     /// accuracy. Both backends use bounded-iteration QR / divide-and-
@@ -503,6 +504,7 @@ pub trait GeneralRankOneUpdate<V, F = f64> {
 /// backend-agnostic — backends translate their native error types
 /// into these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LinearSolveError {
     /// Cholesky factorization encountered a zero or negative pivot.
     /// The matrix is not positive definite (it may still be positive

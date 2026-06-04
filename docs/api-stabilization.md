@@ -38,9 +38,10 @@ PR-sized chunk once the `[DECIDE]` items are ratified.
 
 ## A. Freeze-now decisions --- breaking if deferred past 1.0
 
-### A1. `#[non_exhaustive]` on public enums `[DECIDE]`
+### A1. `#[non_exhaustive]` on public enums `[DONE]`
 
-*Highest leverage, nearly free.* No public enum uses `#[non_exhaustive]` today:
+*Highest leverage, nearly free.* No public enum used `#[non_exhaustive]`
+before this change:
 
   | Enum                   | Location                  | Grows after 1.0?                                    |
   | ---------------------- | ------------------------- | --------------------------------------------------- |
@@ -55,13 +56,18 @@ PR-sized chunk once the `[DECIDE]` items are ratified.
 Frozen exhaustively, every addition to `TerminationReason` is a major bump ---
 unacceptable for an enum that *will* grow as solvers are added.
 
-**Recommend:** `#[non_exhaustive]` on `TerminationReason`,
-`SymmetricEigenError`, `LinearSolveError`. **Decide** on `ObserverMode` /
-`Method` (extension is plausible; `non_exhaustive` costs every caller a wildcard
-match arm). Leave `StepOutcome` and `Dimensionality` exhaustive (genuinely
-closed; exhaustive matching is a feature for callers).
+**Decided:** `#[non_exhaustive]` applied to `TerminationReason`,
+`SymmetricEigenError`, `LinearSolveError`, **and** `ObserverMode` and `Method`
+--- the two `[DECIDE]` enums were resolved *yes*: both are config-style enums
+users construct rather than match on, both have plausible future variants
+(`NewBest` / closure filter; higher-order stencils), so the cost is effectively
+nil and the door stays open. `StepOutcome` and `Dimensionality` were left
+exhaustive (genuinely closed; exhaustive matching is a feature for callers).
 
-Cost: trivial (attribute + add wildcard arms in basin's own matches).
+Cost was trivial: the attribute plus one wildcard arm in the only external
+exhaustive match (`reason_str` in `crates/basin-wasm/src/lib.rs`). All matches
+inside `crates/basin` are unaffected (`non_exhaustive` is a no-op within the
+defining crate).
 
 ### A2. Observer metadata / KV channel `[DECIDE]`
 

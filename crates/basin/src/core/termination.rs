@@ -13,6 +13,7 @@ use crate::core::state::{GradientState, SimplexState, State};
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
 /// and the various step / run hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TerminationReason {
     /// `state.iter() >= max_iter`.
     MaxIter,

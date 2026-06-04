@@ -72,6 +72,7 @@ use crate::core::problem::{CostFunction, Gradient, Hessian, Jacobian, Residual};
 
 /// Which finite-difference stencil to use for a given derivative.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Method {
     /// One-sided difference. Cheaper (`n+1` evals for a gradient), `O(h)`
     /// truncation error. The MINPACK `fdjac2` stencil for Jacobians.

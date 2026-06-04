@@ -103,6 +103,7 @@ pub trait Observe<S> {
 /// `observe_final` always fire. A user who wants to fully disable an observer
 /// should simply not register it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ObserverMode {
     /// Skip [`observe_iter`](Observe::observe_iter) entirely. The observer
     /// still sees `observe_init` / `observe_final`.

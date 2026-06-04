@@ -775,6 +775,7 @@ fn reason_str(r: TerminationReason) -> &'static str {
         TerminationReason::MaxTime => "max_time",
         TerminationReason::SolverConverged => "solver_converged",
         TerminationReason::SolverFailed => "solver_failed",
+        _ => "unknown",
     }
 }
 
