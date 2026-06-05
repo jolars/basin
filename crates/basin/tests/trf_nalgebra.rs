@@ -142,10 +142,14 @@ fn trf_caches_residual_and_jacobian_across_iterations() {
     );
     let initial = DVector::from_vec(vec![0.0, 0.0]);
 
-    let result = Executor::new(problem, Trf::new().tol_grad(0.0), BasicState::new(initial))
-        .max_iter(3)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        Trf::new().with_tol_grad(0.0),
+        BasicState::new(initial),
+    )
+    .max_iter(3)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxIter);
     assert_eq!(result.iter(), 3);

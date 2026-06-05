@@ -27,10 +27,10 @@ use nalgebra::DVector;
 
 fn basin_lm<V, M>() -> LevenbergMarquardt<V, M> {
     LevenbergMarquardt::new()
-        .tol_grad(0.0)
-        .tol_grad_rel(LM_DEFAULT_TOL)
-        .ftol(LM_DEFAULT_TOL)
-        .xtol(LM_DEFAULT_TOL)
+        .with_tol_grad(0.0)
+        .with_tol_grad_rel(LM_DEFAULT_TOL)
+        .with_tol_cost_rel(LM_DEFAULT_TOL)
+        .with_tol_step_rel(LM_DEFAULT_TOL)
 }
 
 fn bench_exp_fit(c: &mut Criterion) {

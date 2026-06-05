@@ -155,7 +155,7 @@ impl<So> BarrierMethod<So> {
     /// `inner_max_iter = 50`, `inner_grad_tol = 1e-8`.
     ///
     /// The `inner_max_iter` default is intentionally modest:
-    /// [`inner_max_iter`](Self::inner_max_iter) is the dominant cost lever
+    /// [`with_inner_max_iter`](Self::with_inner_max_iter) is the dominant cost lever
     /// (see its docs) and the outer μ-continuation tolerates loosely-centered
     /// subproblems, so a small budget usually converges to the same point far
     /// more cheaply than a large one.
@@ -193,7 +193,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     ///
     /// Panics unless `reduction > 1` — otherwise `μ` would not shrink and
     /// the duality gap would never close.
-    pub fn reduction(mut self, reduction: F) -> Self {
+    pub fn with_reduction(mut self, reduction: F) -> Self {
         assert!(reduction > F::one(), "reduction must be > 1");
         self.reduction = reduction;
         self
@@ -205,7 +205,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// # Panics
     ///
     /// Panics unless `tol > 0`.
-    pub fn tol(mut self, tol: F) -> Self {
+    pub fn with_tol(mut self, tol: F) -> Self {
         assert!(tol > F::zero(), "tol must be > 0");
         self.tol = tol;
         self
@@ -216,7 +216,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     ///
     /// **This is the dominant cost lever.** A first-order inner solver
     /// (`GradientDescent`) on the ill-conditioned barrier typically exhausts
-    /// this budget rather than reaching [`inner_grad_tol`](Self::inner_grad_tol),
+    /// this budget rather than reaching [`with_inner_grad_tol`](Self::with_inner_grad_tol),
     /// so total work scales roughly linearly with it. Because the outer
     /// μ-continuation re-solves at each shrinking `μ`, a loosely-centered
     /// (small-budget) subproblem usually still converges to the same point —
@@ -228,7 +228,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     ///
     /// Panics unless `inner_max_iter ≥ 1` (a zero budget would never move the
     /// iterate).
-    pub fn inner_max_iter(mut self, inner_max_iter: u64) -> Self {
+    pub fn with_inner_max_iter(mut self, inner_max_iter: u64) -> Self {
         assert!(inner_max_iter >= 1, "inner_max_iter must be ≥ 1");
         self.inner_max_iter = inner_max_iter;
         self
@@ -238,16 +238,43 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// (default `1e-8`). Inner solves stop at `‖∇φ_μ‖ ≤ inner_grad_tol`.
     ///
     /// Note: with a first-order inner solver this rarely binds — the
-    /// ill-conditioned barrier means [`inner_max_iter`](Self::inner_max_iter)
+    /// ill-conditioned barrier means [`with_inner_max_iter`](Self::with_inner_max_iter)
     /// usually governs instead. It matters for a Newton-class inner.
     ///
     /// # Panics
     ///
     /// Panics unless `inner_grad_tol ≥ 0`.
-    pub fn inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
+    pub fn with_inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
         assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
         self.inner_grad_tol = inner_grad_tol;
         self
+    }
+}
+
+// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
+impl<So, F: Scalar> BarrierMethod<So, F> {
+    /// Deprecated: renamed to [`with_reduction`](Self::with_reduction).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_reduction`")]
+    pub fn reduction(self, reduction: F) -> Self {
+        self.with_reduction(reduction)
+    }
+
+    /// Deprecated: renamed to [`with_tol`](Self::with_tol).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tol`")]
+    pub fn tol(self, tol: F) -> Self {
+        self.with_tol(tol)
+    }
+
+    /// Deprecated: renamed to [`with_inner_max_iter`](Self::with_inner_max_iter).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_max_iter`")]
+    pub fn inner_max_iter(self, inner_max_iter: u64) -> Self {
+        self.with_inner_max_iter(inner_max_iter)
+    }
+
+    /// Deprecated: renamed to [`with_inner_grad_tol`](Self::with_inner_grad_tol).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_grad_tol`")]
+    pub fn inner_grad_tol(self, inner_grad_tol: F) -> Self {
+        self.with_inner_grad_tol(inner_grad_tol)
     }
 }
 
@@ -367,24 +394,24 @@ mod tests {
     #[test]
     #[should_panic(expected = "reduction must be > 1")]
     fn rejects_reduction_not_greater_than_one() {
-        let _ = BarrierMethod::new(()).reduction(1.0);
+        let _ = BarrierMethod::new(()).with_reduction(1.0);
     }
 
     #[test]
     #[should_panic(expected = "tol must be > 0")]
     fn rejects_nonpositive_tol() {
-        let _ = BarrierMethod::new(()).tol(0.0);
+        let _ = BarrierMethod::new(()).with_tol(0.0);
     }
 
     #[test]
     #[should_panic(expected = "inner_max_iter must be ≥ 1")]
     fn rejects_zero_inner_max_iter() {
-        let _ = BarrierMethod::new(()).inner_max_iter(0);
+        let _ = BarrierMethod::new(()).with_inner_max_iter(0);
     }
 
     #[test]
     #[should_panic(expected = "inner_grad_tol must be ≥ 0")]
     fn rejects_negative_inner_grad_tol() {
-        let _ = BarrierMethod::new(()).inner_grad_tol(-1.0);
+        let _ = BarrierMethod::new(()).with_inner_grad_tol(-1.0);
     }
 }

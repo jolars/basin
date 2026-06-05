@@ -113,7 +113,7 @@ fn rosenbrock_5d_matches_fortran_trajectory() {
     // Match Fortran driver: `factr = 0`, `pgtol = 0` — disable both
     // convergence tolerances so the parity comparator runs all 30
     // iterations regardless of how small the projected gradient gets.
-    let mut stepper = Executor::new(problem, Lbfgsb::new().tol_pg(0.0), state)
+    let mut stepper = Executor::new(problem, Lbfgsb::new().with_tol_pg(0.0), state)
         .terminate_on(MaxIter(30))
         .into_stepper()
         .unwrap();

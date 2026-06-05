@@ -113,10 +113,19 @@ impl<S, F: Scalar> Bfgs<S, F> {
     /// Relative threshold for the curvature condition `yᵀs > ε · |y| · |s|`.
     /// Iterations where this fails skip the H update (rare with strong
     /// Wolfe). Default `1e-10`.
-    pub fn epsilon(mut self, epsilon: F) -> Self {
+    pub fn with_epsilon(mut self, epsilon: F) -> Self {
         assert!(epsilon >= F::zero(), "epsilon must be ≥ 0");
         self.epsilon = epsilon;
         self
+    }
+}
+
+// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
+impl<S, F: Scalar> Bfgs<S, F> {
+    /// Deprecated: renamed to [`with_epsilon`](Self::with_epsilon).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_epsilon`")]
+    pub fn epsilon(self, epsilon: F) -> Self {
+        self.with_epsilon(epsilon)
     }
 }
 

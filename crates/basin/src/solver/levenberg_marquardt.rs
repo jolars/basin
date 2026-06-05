@@ -70,7 +70,7 @@ use crate::core::termination::TerminationReason;
 ///   too small to make `JᵀJ + μ·D` SPD (effectively never, for any
 ///   sensible `JᵀJ` and finite μ), the inner damping loop bumps μ via
 ///   `μ := μ·ν, ν := 2ν` and retries. Default
-///   [`max_inner_attempts`](Self::max_inner_attempts) is 50 — far more
+///   [`with_max_inner_attempts`](Self::with_max_inner_attempts) is 50 — far more
 ///   than enough; in practice the first attempt succeeds. If the cap
 ///   is exhausted (μ overflowing to `inf`), the solver returns
 ///   [`TerminationReason::SolverFailed`]. Note that bumping μ cannot
@@ -106,20 +106,21 @@ use crate::core::termination::TerminationReason;
 ///   (disabled); set e.g. `1e-8` for parity. The per-column norms
 ///   `‖J·,ⱼ‖ = √diag(JᵀJ)ⱼ` reuse the Marquardt scaling diagonal the
 ///   solver already forms.
-/// - **`ftol`** — relative cost reduction, MINPACK `ftol` (Moré 1978):
-///   `|actred| ≤ ftol·F  ∧  prered ≤ ftol·F  ∧  ρ ≤ 2`, with the actual
+/// - **`tol_cost_rel`** — relative cost reduction, MINPACK `ftol` (Moré 1978):
+///   `|actred| ≤ tol·F  ∧  prered ≤ tol·F  ∧  ρ ≤ 2`, with the actual
 ///   and *predicted* per-iteration reductions in `F = ½‖r‖²`. The
 ///   `prered` clause is what the framework's
 ///   [`RelativeCostTolerance`](crate::core::termination::RelativeCostTolerance)
 ///   cannot express — it gates on the LM model, so the solver iterates
 ///   through temporary settling points (small actual gain, large
 ///   predicted gain) instead of stopping short. Default `0.0`
-///   (disabled). See [`ftol`](Self::ftol).
-/// - **`xtol`** — relative step, MINPACK `xtol` (Moré 1978):
-///   `‖h‖ ≤ xtol·‖x‖`. Default `0.0` (disabled). See [`xtol`](Self::xtol).
+///   (disabled). See [`with_tol_cost_rel`](Self::with_tol_cost_rel).
+/// - **`tol_step_rel`** — relative step, MINPACK `xtol` (Moré 1978):
+///   `‖h‖ ≤ tol·‖x‖`. Default `0.0` (disabled). See
+///   [`with_tol_step_rel`](Self::with_tol_step_rel).
 ///
 /// The two gradient tests run before the step is computed (a step at a
-/// stationary point is wasted); `ftol`/`xtol` run after, since they need
+/// stationary point is wasted); `tol_cost_rel`/`tol_step_rel` run after, since they need
 /// the attempted step and its predicted/actual reduction.
 ///
 /// LM deliberately leaves `state.gradient = None` — the framework's
@@ -193,8 +194,8 @@ use crate::core::termination::TerminationReason;
 pub struct LevenbergMarquardt<V, M, F = f64> {
     tol_grad: F,
     tol_grad_rel: F,
-    ftol: F,
-    xtol: F,
+    tol_cost_rel: F,
+    tol_step_rel: F,
     tau: F,
     max_inner_attempts: u32,
 
@@ -241,14 +242,14 @@ impl<V, M> Default for LevenbergMarquardt<V, M> {
 
 impl<V, M> LevenbergMarquardt<V, M> {
     /// Levenberg-Marquardt with Nielsen's defaults: `tol_grad = 1e-8`,
-    /// `tol_grad_rel = 0.0` (disabled), `ftol = 0.0` (disabled),
-    /// `xtol = 0.0` (disabled), `tau = 1e-3`, `max_inner_attempts = 50`.
+    /// `tol_grad_rel = 0.0` (disabled), `tol_cost_rel = 0.0` (disabled),
+    /// `tol_step_rel = 0.0` (disabled), `tau = 1e-3`, `max_inner_attempts = 50`.
     pub fn new() -> Self {
         Self {
             tol_grad: 1e-8,
             tol_grad_rel: 0.0,
-            ftol: 0.0,
-            xtol: 0.0,
+            tol_cost_rel: 0.0,
+            tol_step_rel: 0.0,
             tau: 1e-3,
             max_inner_attempts: 50,
             mu: None,
@@ -265,9 +266,9 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Absolute first-order optimality tolerance: emit
     /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`
     /// (Madsen et al. eq. 3.3a). Set to `0.0` to disable the check and
-    /// rely solely on [`tol_grad_rel`](Self::tol_grad_rel) and/or
+    /// rely solely on [`with_tol_grad_rel`](Self::with_tol_grad_rel) and/or
     /// framework termination criteria. Default `1e-8`.
-    pub fn tol_grad(mut self, tol: F) -> Self {
+    pub fn with_tol_grad(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
         self.tol_grad = tol;
         self
@@ -281,13 +282,13 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// `g = Jᵀr`. Being a dimensionless cosine, it is invariant to
     /// scaling of the residuals, so one tolerance ports across problems
     /// with different residual normalizations — unlike the absolute
-    /// [`tol_grad`](Self::tol_grad). Set to `0.0` to disable. Default
+    /// [`with_tol_grad`](Self::with_tol_grad). Set to `0.0` to disable. Default
     /// `0.0` (disabled); use e.g. `1e-8` for MINPACK `gtol` parity.
     ///
     /// Both gradient tests can be active at once; the solver converges
     /// when *either* fires (matching MINPACK, which checks `ftol`,
     /// `xtol`, and `gtol` independently).
-    pub fn tol_grad_rel(mut self, tol: F) -> Self {
+    pub fn with_tol_grad_rel(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad_rel must be ≥ 0");
         self.tol_grad_rel = tol;
         self
@@ -318,12 +319,12 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     ///
     /// Set to `0.0` to disable. Default `0.0` (disabled); use e.g. `1e-8`
     /// for MINPACK `ftol` parity. Converges when *any* enabled test fires
-    /// (see [`tol_grad`](Self::tol_grad)).
+    /// (see [`with_tol_grad`](Self::with_tol_grad)).
     ///
     /// [`RelativeCostTolerance`]: crate::core::termination::RelativeCostTolerance
-    pub fn ftol(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "ftol must be ≥ 0");
-        self.ftol = tol;
+    pub fn with_tol_cost_rel(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "tol_cost_rel must be ≥ 0");
+        self.tol_cost_rel = tol;
         self
     }
 
@@ -335,10 +336,10 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// MINPACK's `delta ≤ xtol·xnorm`. Set to `0.0` to disable. Default
     /// `0.0` (disabled); use e.g. `1e-8` for MINPACK `xtol` parity.
     /// Converges when *any* enabled test fires (see
-    /// [`tol_grad`](Self::tol_grad)).
-    pub fn xtol(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "xtol must be ≥ 0");
-        self.xtol = tol;
+    /// [`with_tol_grad`](Self::with_tol_grad)).
+    pub fn with_tol_step_rel(mut self, tol: F) -> Self {
+        assert!(tol >= F::zero(), "tol_step_rel must be ≥ 0");
+        self.tol_step_rel = tol;
         self
     }
 
@@ -347,7 +348,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// scaling. Use a smaller value (e.g. `1e-6`) when `x₀` is believed
     /// close to the optimum; a larger value (e.g. `1.0`) when far from
     /// it. Default `1e-3` (Nielsen's "moderate trust").
-    pub fn tau(mut self, tau: F) -> Self {
+    pub fn with_tau(mut self, tau: F) -> Self {
         assert!(tau > F::zero(), "tau must be > 0");
         self.tau = tau;
         self
@@ -358,10 +359,58 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// bump multiplies μ by ν (initially 2) and doubles ν. With the
     /// default 50, μ grows by a factor of `2^50 ≈ 10¹⁵` before bailing
     /// — effectively unreachable in practice. Default `50`.
-    pub fn max_inner_attempts(mut self, n: u32) -> Self {
+    pub fn with_max_inner_attempts(mut self, n: u32) -> Self {
         assert!(n > 0, "max_inner_attempts must be > 0");
         self.max_inner_attempts = n;
         self
+    }
+}
+
+// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
+// `ftol`/`xtol` carried the MINPACK names; their replacements also changed stem.
+impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
+    /// Deprecated: renamed to [`with_tol_grad`](Self::with_tol_grad).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_grad`")]
+    pub fn tol_grad(self, tol: F) -> Self {
+        self.with_tol_grad(tol)
+    }
+
+    /// Deprecated: renamed to [`with_tol_grad_rel`](Self::with_tol_grad_rel).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_grad_rel`")]
+    pub fn tol_grad_rel(self, tol: F) -> Self {
+        self.with_tol_grad_rel(tol)
+    }
+
+    /// Deprecated: the MINPACK `ftol` test, renamed to
+    /// [`with_tol_cost_rel`](Self::with_tol_cost_rel).
+    #[deprecated(
+        since = "0.10.0",
+        note = "renamed to `with_tol_cost_rel` (MINPACK ftol)"
+    )]
+    pub fn ftol(self, tol: F) -> Self {
+        self.with_tol_cost_rel(tol)
+    }
+
+    /// Deprecated: the MINPACK `xtol` test, renamed to
+    /// [`with_tol_step_rel`](Self::with_tol_step_rel).
+    #[deprecated(
+        since = "0.10.0",
+        note = "renamed to `with_tol_step_rel` (MINPACK xtol)"
+    )]
+    pub fn xtol(self, tol: F) -> Self {
+        self.with_tol_step_rel(tol)
+    }
+
+    /// Deprecated: renamed to [`with_tau`](Self::with_tau).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tau`")]
+    pub fn tau(self, tau: F) -> Self {
+        self.with_tau(tau)
+    }
+
+    /// Deprecated: renamed to [`with_max_inner_attempts`](Self::with_max_inner_attempts).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_max_inner_attempts`")]
+    pub fn max_inner_attempts(self, n: u32) -> Self {
+        self.with_max_inner_attempts(n)
     }
 }
 
@@ -611,9 +660,9 @@ where
         // (disabled); converge on *either*, matching MINPACK's
         // independent `info` codes.
         //
-        //   * ftol  |actred| ≤ ftol·F  AND  prered ≤ ftol·F  AND  ρ ≤ 2.
+        //   * tol_cost_rel  |actred| ≤ tol·F  AND  prered ≤ tol·F  AND  ρ ≤ 2.
         //     Neither the achieved nor the *predicted* reduction is
-        //     meaningful. The `prered ≤ ftol·F` clause is load-bearing: it
+        //     meaningful. The `prered ≤ tol·F` clause is load-bearing: it
         //     separates a true plateau from a temporary settling point
         //     where one step's actual gain is small but the model still
         //     predicts progress — there `prered` is large, so we keep
@@ -621,15 +670,16 @@ where
         //     `dabs(actred)`: a step that *raised* the cost only counts as
         //     converged if the increase is itself below tolerance, so a
         //     large-jump rejected step keeps the solver going.
-        //   * xtol  ‖h‖ ≤ xtol·‖x‖ — the step is negligible relative to
-        //     the iterate. Squared on both sides to avoid a sqrt.
-        let ftol_converged = self.ftol > F::zero()
-            && actual_diff.abs() <= self.ftol * prev_cost
-            && l_diff <= self.ftol * prev_cost
+        //   * tol_step_rel  ‖h‖ ≤ tol_step_rel·‖x‖ — the step is negligible
+        //     relative to the iterate. Squared on both sides to avoid a sqrt.
+        let cost_rel_converged = self.tol_cost_rel > F::zero()
+            && actual_diff.abs() <= self.tol_cost_rel * prev_cost
+            && l_diff <= self.tol_cost_rel * prev_cost
             && rho <= two;
-        let xtol_converged = self.xtol > F::zero()
-            && h.norm_squared() <= self.xtol * self.xtol * state.param.norm_squared();
-        if ftol_converged || xtol_converged {
+        let step_rel_converged = self.tol_step_rel > F::zero()
+            && h.norm_squared()
+                <= self.tol_step_rel * self.tol_step_rel * state.param.norm_squared();
+        if cost_rel_converged || step_rel_converged {
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
 

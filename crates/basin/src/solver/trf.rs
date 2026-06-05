@@ -89,7 +89,7 @@ use crate::core::termination::TerminationReason;
 ///   `JᵀJ + diag(c) + μ·diag(d²)` is SPD by construction for `μ > 0`,
 ///   so Cholesky should succeed on the first attempt. The retry loop
 ///   bumps μ via `μ ← μ·ν, ν ← 2ν` if it doesn't, capped at
-///   [`max_inner_attempts`](Self::max_inner_attempts) (default 50).
+///   [`with_max_inner_attempts`](Self::with_max_inner_attempts) (default 50).
 ///   Cap exhaustion or μ overflowing to `inf` returns
 ///   [`TerminationReason::SolverFailed`].
 /// - **Boundary starting point.** `D` is undefined where `v_i = 0`
@@ -202,7 +202,7 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     /// First-order optimality tolerance: emit
     /// [`TerminationReason::SolverConverged`] when
     /// `‖D · Jᵀr‖_∞ ≤ tol`. Set to `0.0` to disable. Default `1e-8`.
-    pub fn tol_grad(mut self, tol: F) -> Self {
+    pub fn with_tol_grad(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
         self.tol_grad = tol;
         self
@@ -211,7 +211,7 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     /// Initial damping scale `τ` in `μ₀ = τ · max diag(JᵀJ + diag(c))`.
     /// Smaller (e.g. `1e-6`) when `x₀` is believed close to the
     /// optimum; larger (e.g. `1.0`) when far from it. Default `1e-3`.
-    pub fn tau(mut self, tau: F) -> Self {
+    pub fn with_tau(mut self, tau: F) -> Self {
         assert!(tau > F::zero(), "tau must be > 0");
         self.tau = tau;
         self
@@ -220,7 +220,7 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     /// Strict-interior projection scale at `init`. Components within
     /// `rstep · max(1, |bound|)` of a finite bound are nudged inward.
     /// Default `1e-10` matches SciPy's `make_strictly_feasible`.
-    pub fn rstep(mut self, rstep: F) -> Self {
+    pub fn with_rstep(mut self, rstep: F) -> Self {
         assert!(rstep > F::zero(), "rstep must be > 0");
         self.rstep = rstep;
         self
@@ -230,7 +230,7 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     /// would land on or beyond a face, the actual step is scaled by
     /// `theta · τ_max` instead of `τ_max` to keep the iterate strictly
     /// inside. Must be in `(0, 1)`. Default `0.99995`.
-    pub fn theta(mut self, theta: F) -> Self {
+    pub fn with_theta(mut self, theta: F) -> Self {
         assert!(
             theta > F::zero() && theta < F::one(),
             "theta must be in (0, 1), got {:?}",
@@ -245,10 +245,43 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     /// bump multiplies μ by ν (initially 2) and doubles ν. Default
     /// `50` is effectively unreachable in practice (μ grows by `2^50 ≈
     /// 10¹⁵` before bailing). Default `50`.
-    pub fn max_inner_attempts(mut self, n: u32) -> Self {
+    pub fn with_max_inner_attempts(mut self, n: u32) -> Self {
         assert!(n > 0, "max_inner_attempts must be > 0");
         self.max_inner_attempts = n;
         self
+    }
+}
+
+// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
+impl<V, M, F: Scalar> Trf<V, M, F> {
+    /// Deprecated: renamed to [`with_tol_grad`](Self::with_tol_grad).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_grad`")]
+    pub fn tol_grad(self, tol: F) -> Self {
+        self.with_tol_grad(tol)
+    }
+
+    /// Deprecated: renamed to [`with_tau`](Self::with_tau).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tau`")]
+    pub fn tau(self, tau: F) -> Self {
+        self.with_tau(tau)
+    }
+
+    /// Deprecated: renamed to [`with_rstep`](Self::with_rstep).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_rstep`")]
+    pub fn rstep(self, rstep: F) -> Self {
+        self.with_rstep(rstep)
+    }
+
+    /// Deprecated: renamed to [`with_theta`](Self::with_theta).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_theta`")]
+    pub fn theta(self, theta: F) -> Self {
+        self.with_theta(theta)
+    }
+
+    /// Deprecated: renamed to [`with_max_inner_attempts`](Self::with_max_inner_attempts).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_max_inner_attempts`")]
+    pub fn max_inner_attempts(self, n: u32) -> Self {
+        self.with_max_inner_attempts(n)
     }
 }
 

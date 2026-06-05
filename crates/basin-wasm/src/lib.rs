@@ -584,7 +584,7 @@ impl Run {
                 let m = opts.lbfgs_m.max(1);
                 let stepper = Executor::new(
                     p,
-                    Lbfgs::<LbfgsUnbounded>::new().m_capacity(m),
+                    Lbfgs::<LbfgsUnbounded>::new().with_m_capacity(m),
                     LbfgsState::new(initial.clone(), m),
                 )
                 .max_iter(max_iter as u64)

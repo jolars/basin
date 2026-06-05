@@ -68,7 +68,7 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
     let (problem, initial) = fixture();
     let result = Executor::new(
         problem,
-        LevenbergMarquardt::new().tol_grad(1e-12),
+        LevenbergMarquardt::new().with_tol_grad(1e-12),
         BasicState::new(initial),
     )
     .max_iter(100)

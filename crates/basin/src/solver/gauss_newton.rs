@@ -111,10 +111,19 @@ impl<V, M, F: Scalar> GaussNewton<V, M, F> {
     /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`.
     /// Set to `0.0` to disable the check and rely solely on framework
     /// termination criteria. Default `1e-8`.
-    pub fn tol_grad(mut self, tol: F) -> Self {
+    pub fn with_tol_grad(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
         self.tol_grad = tol;
         self
+    }
+}
+
+// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
+impl<V, M, F: Scalar> GaussNewton<V, M, F> {
+    /// Deprecated: renamed to [`with_tol_grad`](Self::with_tol_grad).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_grad`")]
+    pub fn tol_grad(self, tol: F) -> Self {
+        self.with_tol_grad(tol)
     }
 }
 

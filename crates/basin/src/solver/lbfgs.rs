@@ -262,7 +262,7 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
     /// semantics, used by the iteration-wise parity test). Bounded
     /// mode only — the unbounded path doesn't compute a projected
     /// gradient.
-    pub fn tol_pg(mut self, tol_pg: F) -> Self {
+    pub fn with_tol_pg(mut self, tol_pg: F) -> Self {
         assert!(tol_pg >= F::zero(), "tol_pg must be ≥ 0");
         self.tol_pg = tol_pg;
         self
@@ -316,7 +316,7 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
     /// Override the curvature-skip threshold. Default `F::epsilon()`
     /// (= `f64::EPSILON` when `F = f64`), matching Fortran's
     /// `dr ≤ epsmch · ddum` test.
-    pub fn epsilon(mut self, epsilon: F) -> Self {
+    pub fn with_epsilon(mut self, epsilon: F) -> Self {
         assert!(epsilon >= F::zero(), "epsilon must be ≥ 0");
         self.epsilon = epsilon;
         self
@@ -330,10 +330,33 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
     /// # Panics
     ///
     /// Panics if `m_capacity == 0`.
-    pub fn m_capacity(mut self, m_capacity: usize) -> Self {
+    pub fn with_m_capacity(mut self, m_capacity: usize) -> Self {
         assert!(m_capacity >= 1, "m_capacity must be ≥ 1");
         self.m_capacity = m_capacity;
         self
+    }
+}
+
+// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
+impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
+    /// Deprecated: renamed to [`with_tol_pg`](Self::with_tol_pg).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_pg`")]
+    pub fn tol_pg(self, tol_pg: F) -> Self {
+        self.with_tol_pg(tol_pg)
+    }
+}
+
+impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
+    /// Deprecated: renamed to [`with_epsilon`](Self::with_epsilon).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_epsilon`")]
+    pub fn epsilon(self, epsilon: F) -> Self {
+        self.with_epsilon(epsilon)
+    }
+
+    /// Deprecated: renamed to [`with_m_capacity`](Self::with_m_capacity).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_m_capacity`")]
+    pub fn m_capacity(self, m_capacity: usize) -> Self {
+        self.with_m_capacity(m_capacity)
     }
 }
 

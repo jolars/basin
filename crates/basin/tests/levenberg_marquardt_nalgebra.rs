@@ -152,7 +152,7 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
 
     let result = Executor::new(
         problem,
-        LevenbergMarquardt::new().tol_grad(0.0),
+        LevenbergMarquardt::new().with_tol_grad(0.0),
         BasicState::new(initial),
     )
     .max_iter(200)
@@ -181,7 +181,9 @@ fn levenberg_marquardt_converges_via_relative_gradient_tolerance() {
 
     let result = Executor::new(
         problem,
-        LevenbergMarquardt::new().tol_grad(0.0).tol_grad_rel(1e-10),
+        LevenbergMarquardt::new()
+            .with_tol_grad(0.0)
+            .with_tol_grad_rel(1e-10),
         BasicState::new(initial),
     )
     .max_iter(200)
@@ -216,9 +218,9 @@ fn levenberg_marquardt_converges_via_ftol() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .tol_grad(0.0)
-            .tol_grad_rel(0.0)
-            .ftol(1e-10),
+            .with_tol_grad(0.0)
+            .with_tol_grad_rel(0.0)
+            .with_tol_cost_rel(1e-10),
         BasicState::new(initial),
     )
     .max_iter(200)
@@ -250,9 +252,9 @@ fn levenberg_marquardt_converges_via_xtol() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .tol_grad(0.0)
-            .tol_grad_rel(0.0)
-            .xtol(1e-10),
+            .with_tol_grad(0.0)
+            .with_tol_grad_rel(0.0)
+            .with_tol_step_rel(1e-10),
         BasicState::new(initial),
     )
     .max_iter(200)
@@ -286,7 +288,9 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
         let initial = DVector::from_vec(vec![5.0e2 * scale, -0.3]);
         Executor::new(
             problem,
-            LevenbergMarquardt::new().tol_grad(0.0).tol_grad_rel(1e-8),
+            LevenbergMarquardt::new()
+                .with_tol_grad(0.0)
+                .with_tol_grad_rel(1e-8),
             BasicState::new(initial),
         )
         .max_iter(200)
@@ -332,7 +336,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
 
     let result = Executor::new(
         problem,
-        LevenbergMarquardt::new().tol_grad(0.0),
+        LevenbergMarquardt::new().with_tol_grad(0.0),
         BasicState::new(initial),
     )
     .max_iter(3)

@@ -252,25 +252,63 @@ observer that prints the solver name is wanted.
 
 ## B. Internal consistency --- "things that chafe", cheapest pre-1.0
 
-### B1. Builder-method naming `[RECOMMEND]`
+### B1. Builder-method naming `[DONE]`
 
-Post-construction setters are inconsistent --- most use `with_*`, a few are
-bare:
+Post-construction setters were inconsistent --- most used `with_*`, but a
+sizable minority were bare. The original audit undercounted the offenders (it
+listed only `Bfgs` and `LevenbergMarquardt`); the actual set spanned seven
+solvers:
 
-  | Solver               | Bare setters (offenders)                                                            | Location                                |
-  | -------------------- | ----------------------------------------------------------------------------------- | --------------------------------------- |
-  | `Bfgs`               | `epsilon()`                                                                         | `solver/bfgs.rs:116`                    |
-  | `LevenbergMarquardt` | `tol_grad()`, `tol_grad_rel()`, `ftol()`, `xtol()`, `tau()`, `max_inner_attempts()` | `solver/levenberg_marquardt.rs:270–361` |
+  | Solver                       | Bare setters (renamed)                                                                  |
+  | ---------------------------- | --------------------------------------------------------------------------------------- |
+  | `Bfgs`                       | `epsilon`                                                                                |
+  | `Lbfgs`                      | `tol_pg`, `epsilon`, `m_capacity`                                                        |
+  | `GaussNewton`                | `tol_grad`                                                                               |
+  | `Trf`                        | `tol_grad`, `tau`, `rstep`, `theta`, `max_inner_attempts`                                |
+  | `LevenbergMarquardt`         | `tol_grad`, `tol_grad_rel`, `ftol`, `xtol`, `tau`, `max_inner_attempts`                  |
+  | `BarrierMethod`              | `reduction`, `tol`, `inner_max_iter`, `inner_grad_tol`                                   |
+  | `AugmentedLagrangianMethod`  | `rho_increase`, `feasibility_decrease`, `tol`, `inner_max_iter`, `inner_grad_tol`        |
 
-vs the `with_*` majority (`GradientDescent::with_momentum`,
-`CmaEs::with_lambda`, `BarrierMethod::with_inner_max_iter`, ...).
+**Resolved (2026-06-04).** Standardized every chained *solver* setter on
+`with_*` (`with_epsilon`, `with_tol_grad`, `with_tau`, `with_max_inner_attempts`,
+`with_tol_pg`, `with_m_capacity`, `with_reduction`, `with_tol`,
+`with_inner_max_iter`, `with_inner_grad_tol`, `with_rho_increase`,
+`with_feasibility_decrease`, ...). Constructors that take required values stay
+on `new()` / named constructors; this was purely the chained setters.
 
-**Recommend:** standardize on `with_*` for every post-construction setter.
-Rename to `with_epsilon`, `with_tol_grad`, `with_ftol`, `with_xtol`, `with_tau`,
-`with_max_inner_attempts`, etc. Keep deprecated forwarding shims only if
-existing docs/tests depend on the bare names; drop them at the 1.0 tag. (Builder
-methods that take a required value at construction stay on `new()` / named
-constructors --- this is purely about the chained setters.)
+Every old bare name shipped in v0.9.0 (verified against the tag), so each is
+kept as a `#[deprecated(since = "0.10.0")]` forwarding shim that delegates to
+the new `with_*` method --- a non-breaking rename window for downstream
+consumers (e.g. eunoia's NLLS migration). The shims live in a dedicated
+`impl` block per solver, marked for removal at 1.0, joining the existing
+`BFGS` / `LBFGS` / `LBFGSB` aliases tracked under [B3](#b3-drop-deprecated-aliases-do).
+
+Two sub-decisions:
+
+- **`ftol`/`xtol` were also renamed for clarity, not just prefixed.** The
+  MINPACK abbreviations were the lone outliers against basin's native
+  `tol_<thing>` vocabulary (`tol_grad`, `tol_grad_rel`, L-BFGS-B's `tol_pg`,
+  CMA-ES's `tol_x`). They became `with_tol_cost_rel` (MINPACK `ftol`) and
+  `with_tol_step_rel` (MINPACK `xtol`), giving LM a regular grid
+  `tol_grad` / `tol_grad_rel` / `tol_cost_rel` / `tol_step_rel`. The MINPACK
+  names are preserved verbatim in the rustdoc ("the MINPACK `ftol` test") so
+  migrants from the `levenberg-marquardt` crate can still find them. `step`
+  (not `param`) was chosen deliberately to *differentiate* from the framework's
+  [`RelativeParamTolerance`], which is a subtly different control --- the
+  solver-internal `tol_step_rel` is MINPACK-exact and can fire on attempted
+  (rejected) steps, whereas the framework criterion reads accepted
+  `‖xₖ − xₖ₋₁‖` off `State`. The struct fields and internal convergence locals
+  were renamed to match.
+
+- **Scope: solvers only.** The core builders --- `Executor::{max_iter,
+  terminate_on, run_to_end}`, `InnerExecutor::max_iter`,
+  `FiniteDiff::{gradient_method, jacobian_method, hessian_method,
+  function_precision}` --- were deliberately left alone. They use an
+  established *verb-style* driver/wrapper idiom; forcing
+  `Executor::max_iter → with_max_iter` while `terminate_on` stays would make
+  the Executor *less* consistent, not more.
+
+[`RelativeParamTolerance`]: ../crates/basin/src/core/termination.rs
 
 ### B2. Constructor convention `[DECIDE]`
 

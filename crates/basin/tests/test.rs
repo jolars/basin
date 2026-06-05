@@ -74,9 +74,9 @@ fn barrier_method_tour() {
     //    defaults, shown explicitly for the tour.
     let solver = BarrierMethod::new(inner)
         .mu0(1.0) // initial barrier weight μ
-        .reduction(10.0) // μ ← μ / 10 each outer iteration
-        .tol(1e-8) // stop once the duality gap m·μ ≤ tol
-        .inner_max_iter(50); // budget per inner barrier solve (the cost lever)
+        .with_reduction(10.0) // μ ← μ / 10 each outer iteration
+        .with_tol(1e-8) // stop once the duality gap m·μ ≤ tol
+        .with_inner_max_iter(50); // budget per inner barrier solve (the cost lever)
 
     // 4. The starting point must be *strictly feasible* (`A x₀ < b`). Here
     //    (0,0) gives slack 2 > 0. An infeasible start returns `SolverFailed`.

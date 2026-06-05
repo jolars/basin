@@ -179,7 +179,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// Panics unless `rho_increase > 1` — otherwise the penalty would not
     /// grow and a stalled iterate could never be pushed onto the feasible
     /// set.
-    pub fn rho_increase(mut self, rho_increase: F) -> Self {
+    pub fn with_rho_increase(mut self, rho_increase: F) -> Self {
         assert!(rho_increase > F::one(), "rho_increase must be > 1");
         self.rho_increase = rho_increase;
         self
@@ -192,7 +192,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// # Panics
     ///
     /// Panics unless `0 < feasibility_decrease < 1`.
-    pub fn feasibility_decrease(mut self, feasibility_decrease: F) -> Self {
+    pub fn with_feasibility_decrease(mut self, feasibility_decrease: F) -> Self {
         assert!(
             feasibility_decrease > F::zero() && feasibility_decrease < F::one(),
             "feasibility_decrease must be in (0, 1)"
@@ -207,7 +207,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// # Panics
     ///
     /// Panics unless `tol > 0`.
-    pub fn tol(mut self, tol: F) -> Self {
+    pub fn with_tol(mut self, tol: F) -> Self {
         assert!(tol > F::zero(), "tol must be > 0");
         self.tol = tol;
         self
@@ -217,7 +217,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     ///
     /// As with the barrier, a first-order inner solver on the (increasingly
     /// ill-conditioned) penalized objective typically exhausts this budget
-    /// rather than reaching [`inner_grad_tol`](Self::inner_grad_tol); the
+    /// rather than reaching [`with_inner_grad_tol`](Self::with_inner_grad_tol); the
     /// outer multiplier updates still converge from loosely-minimized
     /// subproblems. Raise it for hard / higher-dimensional problems.
     ///
@@ -225,7 +225,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     ///
     /// Panics unless `inner_max_iter ≥ 1` (a zero budget would never move the
     /// iterate).
-    pub fn inner_max_iter(mut self, inner_max_iter: u64) -> Self {
+    pub fn with_inner_max_iter(mut self, inner_max_iter: u64) -> Self {
         assert!(inner_max_iter >= 1, "inner_max_iter must be ≥ 1");
         self.inner_max_iter = inner_max_iter;
         self
@@ -237,10 +237,43 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// # Panics
     ///
     /// Panics unless `inner_grad_tol ≥ 0`.
-    pub fn inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
+    pub fn with_inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
         assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
         self.inner_grad_tol = inner_grad_tol;
         self
+    }
+}
+
+// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
+impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
+    /// Deprecated: renamed to [`with_rho_increase`](Self::with_rho_increase).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_rho_increase`")]
+    pub fn rho_increase(self, rho_increase: F) -> Self {
+        self.with_rho_increase(rho_increase)
+    }
+
+    /// Deprecated: renamed to [`with_feasibility_decrease`](Self::with_feasibility_decrease).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_feasibility_decrease`")]
+    pub fn feasibility_decrease(self, feasibility_decrease: F) -> Self {
+        self.with_feasibility_decrease(feasibility_decrease)
+    }
+
+    /// Deprecated: renamed to [`with_tol`](Self::with_tol).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_tol`")]
+    pub fn tol(self, tol: F) -> Self {
+        self.with_tol(tol)
+    }
+
+    /// Deprecated: renamed to [`with_inner_max_iter`](Self::with_inner_max_iter).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_max_iter`")]
+    pub fn inner_max_iter(self, inner_max_iter: u64) -> Self {
+        self.with_inner_max_iter(inner_max_iter)
+    }
+
+    /// Deprecated: renamed to [`with_inner_grad_tol`](Self::with_inner_grad_tol).
+    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_grad_tol`")]
+    pub fn inner_grad_tol(self, inner_grad_tol: F) -> Self {
+        self.with_inner_grad_tol(inner_grad_tol)
     }
 }
 
@@ -381,30 +414,30 @@ mod tests {
     #[test]
     #[should_panic(expected = "rho_increase must be > 1")]
     fn rejects_rho_increase_not_greater_than_one() {
-        let _ = Builder::new(()).rho_increase(1.0);
+        let _ = Builder::new(()).with_rho_increase(1.0);
     }
 
     #[test]
     #[should_panic(expected = "feasibility_decrease must be in (0, 1)")]
     fn rejects_feasibility_decrease_out_of_range() {
-        let _ = Builder::new(()).feasibility_decrease(1.0);
+        let _ = Builder::new(()).with_feasibility_decrease(1.0);
     }
 
     #[test]
     #[should_panic(expected = "tol must be > 0")]
     fn rejects_nonpositive_tol() {
-        let _ = Builder::new(()).tol(0.0);
+        let _ = Builder::new(()).with_tol(0.0);
     }
 
     #[test]
     #[should_panic(expected = "inner_max_iter must be ≥ 1")]
     fn rejects_zero_inner_max_iter() {
-        let _ = Builder::new(()).inner_max_iter(0);
+        let _ = Builder::new(()).with_inner_max_iter(0);
     }
 
     #[test]
     #[should_panic(expected = "inner_grad_tol must be ≥ 0")]
     fn rejects_negative_inner_grad_tol() {
-        let _ = Builder::new(()).inner_grad_tol(-1.0);
+        let _ = Builder::new(()).with_inner_grad_tol(-1.0);
     }
 }
