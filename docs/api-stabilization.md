@@ -327,7 +327,15 @@ presets, not the sole entry. **Decide** whether `NelderMead` gains `new()` =
 and adaptive params is intentional and there's no neutral default --- a
 defensible reason to keep named-only). Required-arg `new()` is fine where the
 parameter has no reasonable default (CMA-ES needs a mean/sigma; GD needs a
-step).
+step) --- though CMA-ES's required `mean` is really an x0-in-the-wrong-place
+symptom, addressed at its root in [B8](#b8-cma-es-distribution-dedicated-cmaesstate-vs-solver-parked-working-state-decide).
+
+The consistent rule, once decided: **`new()` is the canonical entry point and
+takes exactly the parameters that have no sensible default** (`Bfgs::new()`
+nullary; `GradientDescent::new(alpha)` because a step has no universal default;
+`NelderMead::new() = standard()` because the 1965 coefficients *are* the default,
+with `adaptive()` as a preset). Where `new()` is nullary, also `impl Default` so
+`Foo::default()` agrees.
 
 ### B3. Drop deprecated aliases `[DO]`
 
@@ -445,6 +453,86 @@ worse). Address it at the documentation / diagnostics layer:
 
 [`GradientTolerance`]: ../crates/basin/src/core/termination.rs
 
+### B8. CMA-ES distribution: dedicated `CmaEsState` vs solver-parked working state `[DECIDE]`
+
+CMA-ES is the one solver whose iterate does not live in its state. Its
+distribution parameters --- the mean `m`, step-size `σ`, covariance `C`,
+evolution paths `p_σ` / `p_c`, and the `B`/`D` eigendecomposition --- live in a
+`Working` struct *on the solver* (`solver/cma_es.rs`), while the state is a plain
+`BasicPopulationState` holding only the λ sampled candidates. The initial mean is
+threaded in through the constructor (`CmaEs::new(initial_mean, initial_sigma,
+seed)`, `:213`) and seeds `m` at `init` (`:516`); the state is built separately
+with `BasicPopulationState::with_size(λ)` --- sized, but carrying no starting
+iterate. Every other solver does the opposite: x0 lives in the state
+(`BasicState::new(x0)`), uniformly.
+
+This subsumes the CMA-ES half of [B2](#b2-constructor-convention-decide). The
+constructor asymmetry there ("`CmaEs::new` takes required args, most `new()`
+don't") is downstream of *this* choice: `mean` is in the constructor only because
+there is nowhere in the state to put it.
+
+**The "working state lives on the solver" rationale is already contradicted by
+L-BFGS.** [AGENTS.md](../AGENTS.md) records (under the observer-KV non-tenet)
+that "solver-internal working state (CMA-ES σ / covariance / evolution paths)
+lives in the *solver* struct, not the state." But `LbfgsState`
+(`state/lbfgs.rs:27`) carries the `(s,y)` history (`ws`, `wy`, `sy`, `ss`),
+`theta`, *and* an entire `LbfgsbWork` scratch struct (`:78`, ~20 internal buffers
+--- `z`, `r`, `d`, `wn`, `iwhere`, …) --- unambiguous solver working state, in a
+*dedicated state*. There is no principled line separating "L-BFGS history earns a
+state" from "CMA-ES distribution doesn't." The recorded note is descriptive of
+one solver's choice, not a rule the crate follows.
+
+**The impurity already has a visible cost.** `CmaEs::terminate` (`:802`) takes
+`_state` --- ignores it --- and reaches into `self.state` to compute the
+canonical TolX test, `σ · maxᵢ dᵢ < tol_x` (Hansen 2016 App. B.3). So CMA-ES's
+canonical convergence criterion is a hardcoded solver hook, *not* a composable
+framework [`TerminationCriterion`], because σ and the covariance axes `D` aren't
+in the state for one to bind on. The doc comment at `:112` lists Stagnation /
+TolXUp / TolFun as out of scope; those are the other canonical CMA-ES stopping
+rules, blocked the same way (they read σ/C/history the state can't see). That is
+tenet 3 --- state shape is the contract --- being quietly routed around.
+
+**What a dedicated `CmaEsState<V, M, F>` would buy.** Hold `m`, `σ`, `C`, `p_σ`,
+`p_c`, and impl `PopulationState` so the λ candidates stay exposed --- exactly as
+`QuasiNewtonState` impls `GradientState` while additionally carrying `H`. Then:
+
+- **The constructor question resolves cleanly.** `mean` becomes the state's
+  initial iterate (`CmaEsState::new(mean, sigma)`), so x0 lives in the state like
+  every other solver and `CmaEs::new()` drops to true hyperparameters --- B2's
+  CMA-ES asymmetry disappears instead of needing a documented exception.
+- **σ and `D` become visible**, so TolX / TolUpSigma / TolFun can be real
+  framework criteria binding on a `CmaEsState`-style shape (configured on the
+  Executor, like `SimplexTolerance` binds on `SimplexState`) rather than frozen
+  into a solver hook.
+- **The result can be the mean.** Canonical CMA-ES reports `m` as the recommended
+  solution; with `m` on the solver, `OptimizationResult` (final state) can only
+  surface a sampled candidate. *(Not fully traced --- what `BasicPopulationState`
+  exposes as incumbent should be confirmed before relying on this point.)*
+
+**Counter-costs (so the call is deliberate):**
+
+- A criterion binding on `CmaEsState`'s σ/C is **CMA-ES-specific** --- it doesn't
+  generalize across solvers the way `GradientTolerance` does. That's consistent
+  with the existing model (`SimplexTolerance` is simplex-only), but it does mean
+  the termination layer grows solver-family-specific criteria.
+- Real **pre-1.0 surface to design and freeze**: a state generic over `<V, M, F>`
+  with a covariance matrix plus its trait impls. L-BFGS proves it's tractable,
+  but it isn't free, and it touches the memetic CMA composition sites
+  (`ma_ls_ch_cma.rs:622`, which currently injects the mean via the constructor).
+
+**Decide:** introduce `CmaEsState` (consistency with L-BFGS/BFGS, fixes the
+constructor, unlocks σ/C termination as framework criteria) or keep the
+`BasicPopulationState` + solver-`Working` split and instead **record the
+asymmetry as a deliberate non-tenet** (CMA-ES optimizes a solver-owned sampling
+distribution; its seed and spread are solver parameters; the population state
+holds only the samples). If kept, update the AGENTS.md note so it reads as a
+choice rather than a rule the L-BFGS state already breaks. **Recommend:**
+introduce `CmaEsState` --- it's the move that makes CMA-ES consistent with the
+rest of the crate, and the only argument for the status quo is scope, not
+principle.
+
+[`TerminationCriterion`]: ../crates/basin/src/core/termination.rs
+
 --------------------------------------------------------------------------------
 
 ## C. Surface-minimization review
@@ -498,8 +586,11 @@ The `[DECIDE]` items needing a maintainer call:
       both linalg error enums; decide ObserverMode / Method).
 - [ ] A2 --- commit to no observer KV channel (recommend: yes, record as
       non-tenet).
-- [ ] B2 --- does `NelderMead` gain `new()`?
+- [ ] B2 --- does `NelderMead` gain `new()`? (recommend: yes, `= standard()`,
+      plus the "required iff no sensible default" rule + `Default`).
 - [ ] B5 --- doc-only pre-init `cost()` pass now, or defer?
+- [ ] B8 --- introduce `CmaEsState` (recommend) or record the
+      `BasicPopulationState` + solver-`Working` split as a deliberate non-tenet?
 - [ ] C1 --- `run_loop` stays public or becomes `pub(crate)`?
 
 Once ratified, A / B / C become three follow-up PRs.
