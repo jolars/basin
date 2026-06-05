@@ -405,6 +405,46 @@ C1's main reason to keep `run_loop` public.
 `reset` / factory mechanism as deferred-but-additive; revisit only when a real
 consumer hits the `MaxTime`-in-an-inner case.
 
+### B7. Gradient criteria silently no-op on NLLS solvers `[RECOMMEND]`
+
+The NLLS solvers (`LevenbergMarquardt`, `Trf`, `GaussNewton`) deliberately
+leave `state.gradient = None` — the framework's L2-squared
+[`GradientTolerance`] is the wrong metric for least squares, where the
+canonical first-order test is `‖Jᵀr‖_∞` (documented on
+`levenberg_marquardt.rs` / `trf.rs`, and the reason each solver carries its
+own `with_tol_grad`). The footgun: those solvers run on `BasicState`, which
+*does* impl `GradientState`, so a user can still attach `GradientTolerance`
+(or `RelativeGradientTolerance` / `ProjectedGradientTolerance`) to the
+executor. It **type-checks and silently never fires** — `check` reads
+`state.gradient()?`, which short-circuits to `None` on the permanent absence,
+so no termination, no panic, no warning. The compile-time guard from tenet 3
+(can't pair a gradient criterion with a derivative-free solver) doesn't catch
+this, because the NLLS state is nominally a `GradientState`; it just never
+populates the gradient. (`MaxGradientEvals` is the analogous count case: LM
+makes Jacobian calls, not gradient calls, so `gradient_evals` stays `0` and
+the budget never trips — arguably *correct* there, since no gradient work
+happens, but the same "looks wired, does nothing" shape.)
+
+A user reasonably reaching for "stop at gradient tolerance" on an LM run gets
+a criterion that quietly does nothing and falls through to `MaxIter` — the
+worst kind of silent misconfiguration.
+
+**Recommend:** no public-surface change (the asymmetry is load-bearing —
+populating a wrong-metric gradient just to satisfy the criterion would be
+worse). Address it at the documentation / diagnostics layer:
+
+- Document on each NLLS solver's `# Termination` section that the framework
+  gradient criteria are inert and the solver's own `with_tol_grad` /
+  `with_tol_grad_rel` are the gradient tests to use. (LM already half-says
+  this; make it explicit and add it to `Trf` / `GaussNewton`.)
+- Optionally, a `debug_assert!`-level nudge is *not* feasible here (the
+  criterion can't tell "not populated yet" from "never populated"), which is
+  itself the argument for the doc route. If a louder signal is ever wanted,
+  the additive path is a defaulted `TerminationCriterion::applicable(&S) ->
+  bool` introspection hook — deferred, not freeze-now.
+
+[`GradientTolerance`]: ../crates/basin/src/core/termination.rs
+
 --------------------------------------------------------------------------------
 
 ## C. Surface-minimization review
