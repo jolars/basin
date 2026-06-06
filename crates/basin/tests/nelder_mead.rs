@@ -11,7 +11,7 @@ fn nelder_mead_standard_minimises_rosenbrock() {
 
     let result = Executor::new(
         problem,
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::new(vec![-1.2, 1.0]),
     )
     .max_iter(2_000)
@@ -52,7 +52,7 @@ fn nelder_mead_hits_max_iter_when_too_few() {
 
     let result = Executor::new(
         problem,
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::new(vec![-1.2, 1.0]),
     )
     .max_iter(5)
@@ -69,7 +69,7 @@ fn nelder_mead_keeps_best_first_after_each_iter() {
     let problem = Rosenbrock::<Vec<f64>>::default();
     let result = Executor::new(
         problem,
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::new(vec![-1.2, 1.0]),
     )
     .max_iter(100)
@@ -108,7 +108,7 @@ fn simplex_tolerance_fires_when_simplex_collapses() {
 
     let result = Executor::new(
         problem,
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::new(vec![-1.2, 1.0]),
     )
     .max_iter(2_000)
@@ -144,7 +144,7 @@ fn nelder_mead_from_simplex_accepts_custom_geometry() {
 
     let result = Executor::new(
         problem,
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::from_simplex(simplex),
     )
     .max_iter(2_000)

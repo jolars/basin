@@ -397,7 +397,7 @@ mod tests {
     fn with_k_zero_panics() {
         let _ = DeInject::<NelderMead<crate::solver::nelder_mead::Unbounded, f64>, Vec<f64>, f64>::with_inner_solver(
             De::new(0),
-            NelderMead::standard(),
+            NelderMead::new(),
         )
         .with_k(0);
     }
@@ -407,7 +407,7 @@ mod tests {
     fn with_refine_every_zero_panics() {
         let _ = DeInject::<NelderMead<crate::solver::nelder_mead::Unbounded, f64>, Vec<f64>, f64>::with_inner_solver(
             De::new(0),
-            NelderMead::standard(),
+            NelderMead::new(),
         )
         .with_refine_every(0);
     }

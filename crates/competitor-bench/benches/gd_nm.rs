@@ -97,7 +97,7 @@ fn bench_nm(c: &mut Criterion) {
                     black_box(
                         Executor::new(
                             Rosenbrock::<Vec<f64>>::default(),
-                            NelderMead::standard(),
+                            NelderMead::new(),
                             BasicSimplexState::new(x0),
                         )
                         .max_iter(MAX_ITERS)

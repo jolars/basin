@@ -261,7 +261,7 @@ fn run_nm(start: &[f64]) -> Vec<(u128, f64)> {
         basin_trace(
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
-                NelderMead::standard(),
+                NelderMead::new(),
                 BasicSimplexState::new(start.to_vec()),
             ),
             BUDGET,

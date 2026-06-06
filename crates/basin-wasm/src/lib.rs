@@ -570,7 +570,7 @@ impl Run {
             SolverKind::NelderMead => {
                 let stepper = Executor::new(
                     p,
-                    NelderMead::standard(),
+                    NelderMead::new(),
                     BasicSimplexState::<Vec<f64>>::new(initial.clone()),
                 )
                 .max_iter(max_iter as u64)

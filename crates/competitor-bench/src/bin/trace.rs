@@ -358,7 +358,7 @@ fn main() {
             points: median_reps(|| {
                 basin_trace(Executor::new(
                     Rosenbrock::<Vec<f64>>::default(),
-                    NelderMead::standard(),
+                    NelderMead::new(),
                     BasicSimplexState::new(start()),
                 ))
             }),

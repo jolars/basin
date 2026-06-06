@@ -57,7 +57,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// let result = Executor::new(
 ///     Rosenbrock,
-///     NelderMead::standard(),
+///     NelderMead::new(),
 ///     BasicSimplexState::new(vec![-1.2, 1.0]),
 /// )
 /// .max_iter(1_000)
@@ -124,9 +124,18 @@ enum ParamConfig<F> {
     Fixed(Params<F>),
 }
 
+impl<F: Scalar> Default for NelderMead<Unbounded, F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F: Scalar> NelderMead<Unbounded, F> {
-    /// Standard parameters (Nelder & Mead 1965): α=1, β=2, γ=0.5, δ=0.5.
-    pub fn standard() -> Self {
+    /// Nelder-Mead with the standard parameters (Nelder & Mead 1965):
+    /// α=1, β=2, γ=0.5, δ=0.5. These coefficients *are* the default, so
+    /// this is the canonical entry point; [`adaptive`](Self::adaptive)
+    /// and [`with_params`](Self::with_params) are presets/overrides.
+    pub fn new() -> Self {
         Self {
             config: ParamConfig::Standard,
             params: None,
@@ -134,10 +143,17 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
         }
     }
 
+    /// Deprecated: the standard 1965 coefficients are the default, so this
+    /// is just [`new`](Self::new). Use that instead.
+    #[deprecated(since = "0.10.0", note = "use `NelderMead::new()` instead")]
+    pub fn standard() -> Self {
+        Self::new()
+    }
+
     /// Adaptive parameters from Gao & Han (2012), eq. (4.1):
     /// α=1, β=1+2/n, γ=0.75−1/(2n), δ=1−1/n, with `n` inferred from the
-    /// initial simplex during `Solver::init`. Coincides with `standard()`
-    /// when `n == 2`.
+    /// initial simplex during `Solver::init`. Coincides with the standard
+    /// parameters ([`new`](Self::new)) when `n == 2`.
     pub fn adaptive() -> Self {
         Self {
             config: ParamConfig::Adaptive,

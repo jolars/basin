@@ -57,7 +57,7 @@ fn main() {
 
     let r = Executor::new(
         Rosenbrock::<Vec<f64>>::default(),
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::new(start.clone()),
     )
     .max_iter(MAX_ITERS)

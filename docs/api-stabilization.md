@@ -310,32 +310,30 @@ Two sub-decisions:
 
 [`RelativeParamTolerance`]: ../crates/basin/src/core/termination.rs
 
-### B2. Constructor convention `[DECIDE]`
+### B2. Constructor convention `[RESOLVED]`
 
-`new()` is canonical for most solvers, but two things vary:
+**Decision:** `new()` is the canonical entry point and takes exactly the
+parameters that have no sensible default. Where `new()` is nullary, also
+`impl Default` so `Foo::default()` agrees. Named constructors (`adaptive`,
+`standard`) stay as *additional* presets, not the sole entry.
 
-- **`NelderMead` has no `new()`** --- only `standard()`, `adaptive()`,
-  `with_params(α, β, γ, δ)` (`solver/nelder_mead.rs:129–152`).
-- **Some `new()` take required args** (`CmaEs::new(mean, sigma, seed)`,
-  `GradientDescent::new(alpha)`) while most take none (`Bfgs::new()`,
-  `LevenbergMarquardt::new()`).
+Status across the solvers:
 
-**Recommend:** keep `new()` as the canonical entry point wherever a sensible
-default exists; keep named constructors (`adaptive`, `standard`) as *additional*
-presets, not the sole entry. **Decide** whether `NelderMead` gains `new()` =
-`standard()` (consistency) or deliberately omits it (the choice between standard
-and adaptive params is intentional and there's no neutral default --- a
-defensible reason to keep named-only). Required-arg `new()` is fine where the
-parameter has no reasonable default (CMA-ES needs a mean/sigma; GD needs a
-step) --- though CMA-ES's required `mean` is really an x0-in-the-wrong-place
-symptom, addressed at its root in [B8](#b8-cma-es-distribution-dedicated-cmaesstate-vs-solver-parked-working-state-decide).
+- **`NelderMead` now has `new()`** (the standard 1965 coefficients α=1, β=2,
+  γ=0.5, δ=0.5 *are* the default), with `impl Default`. The old `standard()`
+  is `#[deprecated]` (0.10.0) → `new()`, since once `new()` carries the
+  standard params it was pure redundancy; `adaptive()` stays as the only
+  meaningfully-named preset and `with_params(α, β, γ, δ)` as the explicit
+  override (`solver/nelder_mead.rs`). This resolves the open "gain `new()` vs
+  omit it" question in favour of consistency.
+- **`CmaEs::new(seed)`** — the required `mean`/`sigma` are gone; the initial
+  mean now comes from the state (x0 in the right place) and σ has a default,
+  fixed at the root in [B8](#b8-cma-es-distribution-dedicated-cmaesstate-vs-solver-parked-working-state-decide).
+- **`GradientDescent::new(alpha)`** keeps a required arg — a step has no
+  universal default.
+- **`Bfgs::new()` / `LevenbergMarquardt::new()`** stay nullary with `Default`.
 
-The consistent rule, once decided: **`new()` is the canonical entry point and
-takes exactly the parameters that have no sensible default** (`Bfgs::new()`
-nullary; `GradientDescent::new(alpha)` because a step has no universal default;
-`NelderMead::new() = standard()` because the 1965 coefficients *are* the default,
-with `adaptive()` as a preset). Where `new()` is nullary, also `impl Default` so
-`Foo::default()` agrees.
+Required-arg `new()` is fine where the parameter has no reasonable default.
 
 ### B3. Drop deprecated aliases `[DO]`
 
@@ -600,8 +598,9 @@ The `[DECIDE]` items needing a maintainer call:
       both linalg error enums; decide ObserverMode / Method).
 - [ ] A2 --- commit to no observer KV channel (recommend: yes, record as
       non-tenet).
-- [ ] B2 --- does `NelderMead` gain `new()`? (recommend: yes, `= standard()`,
-      plus the "required iff no sensible default" rule + `Default`).
+- [x] B2 --- `NelderMead` gains `new()` (= standard params) + `Default`;
+      `standard()` deprecated → `new()`. "Required iff no sensible default"
+      rule recorded.
 - [ ] B5 --- doc-only pre-init `cost()` pass now, or defer?
 - [ ] B8 --- introduce `CmaEsState` (recommend) or record the
       `BasicPopulationState` + solver-`Working` split as a deliberate non-tenet?

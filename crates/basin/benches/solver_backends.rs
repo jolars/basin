@@ -210,7 +210,7 @@ fn bench_nm(c: &mut Criterion) {
             Ackley,
             vec![2.0; n],
             n,
-            NelderMead::standard(),
+            NelderMead::new(),
             BasicSimplexState::new,
         );
         g.finish();

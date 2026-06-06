@@ -548,7 +548,7 @@ fn cost_evals_exceeds_iter_for_nelder_mead_shrinks() {
     // cost evals (more on shrink), so cost_evals ≥ iter + 3.
     let result = Executor::new(
         Quadratic,
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::new(vec![2.0, -3.0]),
     )
     .terminate_on(MaxIter(50))
@@ -578,7 +578,7 @@ fn max_gradient_evals_fires_before_max_iter() {
 fn max_cost_evals_fires_before_max_iter() {
     let result = Executor::new(
         Quadratic,
-        NelderMead::standard(),
+        NelderMead::new(),
         BasicSimplexState::new(vec![5.0, -2.0, 4.0]),
     )
     .max_iter(10_000)

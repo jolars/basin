@@ -1,5 +1,5 @@
 //! Integration tests for the projection-style box-constrained
-//! Nelder-Mead variant (`NelderMead::standard().projected()` etc.).
+//! Nelder-Mead variant (`NelderMead::new().projected()` etc.).
 //!
 //! Mirrors the structure of `projected_gradient_descent_vec.rs` —
 //! slack-bounds / tight-bounds / infeasible-start coverage on
@@ -22,7 +22,7 @@ fn slack_bounds_recover_unconstrained_minimum() {
 
     let result = Executor::new(
         problem,
-        NelderMead::standard().projected(),
+        NelderMead::new().projected(),
         BasicSimplexState::new(initial),
     )
     .max_iter(2_000)
@@ -56,7 +56,7 @@ fn tight_bounds_converge_to_box_corner() {
 
     let result = Executor::new(
         problem,
-        NelderMead::standard().projected(),
+        NelderMead::new().projected(),
         BasicSimplexState::new(initial),
     )
     .max_iter(2_000)
@@ -90,7 +90,7 @@ fn infeasible_initial_simplex_is_projected_at_init() {
 
     let result = Executor::new(
         problem,
-        NelderMead::standard().projected(),
+        NelderMead::new().projected(),
         BasicSimplexState::from_simplex(simplex),
     )
     .max_iter(0)
