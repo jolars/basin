@@ -86,10 +86,10 @@ Each shipped state has its own mirror rule:
   `gradient_evals = gradient + jacobian + hessian` (the NLLS convention
   preserved — residual rolls into cost, Jacobian/Hessian into gradient).
 - Derivative-free states (`BasicSimplexState`, `BasicPopulationState`,
-  `MaLsChState`): `cost_evals = total_work()` — every kind of work folded
-  in. This is what makes a CMA-ES outer with an L-BFGS inner just *work*:
-  the inner's gradient evals show up in the outer's `cost_evals` honestly,
-  with no manual cross-type fold.
+  `CmaEsState`, `MaLsChState`): `cost_evals = total_work()` — every kind of
+  work folded in. This is what makes a CMA-ES outer (which drives a
+  `CmaEsState`) with an L-BFGS inner just *work*: the inner's gradient evals
+  show up in the outer's `cost_evals` honestly, with no manual cross-type fold.
 
 User-defined state types plugging into `Executor` must impl `CountsMirror`;
 it is `pub` for exactly that reason.
@@ -107,8 +107,8 @@ inner's state, not just drive it — and inners carry different state shapes
   `seed_scaled(x, σ)` (defaults to `seed`; only Nelder-Mead's σ-scaled simplex
   overrides it). No per-trait eval-aggregation hook — same-problem composition
   shares the `Problem<P>` wrapper, and the `total_work()` fold in
-  `BasicPopulationState`'s `CountsMirror` rolls every kind of inner work into
-  the outer's single `cost_evals` automatically.
+  `CmaEsState`'s `CountsMirror` (same rule as `BasicPopulationState`) rolls
+  every kind of inner work into the outer's single `cost_evals` automatically.
 
 Two consumer families validate the split: the barrier / AL methods bound `So:
 WarmStart<V>` with `So::State: GradientState + CountsMirror` (gradient inners

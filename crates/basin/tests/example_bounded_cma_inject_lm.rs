@@ -16,7 +16,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::BoothBoxedResiduals;
-use basin::{BasicPopulationState, BoundedCmaEs, BoundedCmaInject, Executor, LevenbergMarquardt};
+use basin::{BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, LevenbergMarquardt};
 use nalgebra::{DMatrix, DVector};
 
 #[test]
@@ -36,8 +36,7 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     //    box; σ = 0.3 keeps the initial distribution inside.
     // -----------------------------------------------------------------
     let m0 = DVector::from_vec(vec![-0.5, -0.5]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
-    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 42);
+    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42);
 
     // -----------------------------------------------------------------
     // 3. Memetic wrapper: top `k = 1` candidate per generation gets
@@ -50,7 +49,7 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     // -----------------------------------------------------------------
     // 4. Drive.
     // -----------------------------------------------------------------
-    let state = BasicPopulationState::<DVector<f64>>::with_size(lambda);
+    let state = CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3);
     let result = Executor::new(problem, solver, state)
         .max_iter(100)
         .run()

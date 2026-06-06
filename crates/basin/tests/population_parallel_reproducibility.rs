@@ -11,25 +11,29 @@
 //!   This is the parallel analogue of numdiff's
 //!   `gradient_is_bitwise_reproducible_across_calls`: it catches any
 //!   nondeterminism a reordered parallel reduction could introduce.
-//! - **`cost_evals` matches a fixed `λ · (iters + 1)` formula.** The constants
-//!   below are feature-independent — CI runs this file with `--features
-//!   parallel` *and* without, and both must hit the same numbers, proving the
-//!   batched path counts exactly as the old per-candidate loop did.
+//! - **`cost_evals` matches a fixed per-solver formula.** DE / RandomSearch
+//!   hit `λ · (iters + 1)`; CMA-ES adds one `f(m)` mean evaluation per
+//!   generation, so it hits `(λ + 1) · (iters + 1)`. The constants below are
+//!   feature-independent — CI runs this file with `--features parallel` *and*
+//!   without, and both must hit the same numbers, proving the batched path
+//!   counts exactly as the old per-candidate loop did.
 //!
 //! These run on the default `Vec<f64>` backend so the file needs no LA
 //! feature; the `parallel` matrix entry exercises the rayon path.
 
 use basin::problems::{RastriginBoxed, Rosenbrock};
 use basin::{
-    BasicPopulationState, CmaEs, De, DenseMatrix, Executor, OptimizationResult, RandomSearch,
+    BasicPopulationState, CmaEs, CmaEsState, De, DenseMatrix, Executor, OptimizationResult,
+    RandomSearch, State,
 };
+use std::fmt::Debug;
 
 /// Number of `next_iter` calls a `MaxIter(m)` run performs: termination is
 /// checked before each iteration (including iter 0), so the solver completes
-/// exactly `m` iterations on top of `init`. Each of CMA-ES / DE / RandomSearch
-/// evaluates `λ` fresh candidates in `init` and `λ` again per iteration, so a
-/// run that is not cut short by a solver-internal stop performs `λ · (m + 1)`
-/// cost evaluations.
+/// exactly `m` iterations on top of `init`. DE / RandomSearch evaluate `λ`
+/// fresh candidates in `init` and `λ` again per iteration, so a run that is not
+/// cut short by a solver-internal stop performs `λ · (m + 1)` cost evaluations.
+/// (CMA-ES additionally evaluates the mean once per generation — see its test.)
 fn expected_cost_evals(lambda: u64, max_iter: u64) -> u64 {
     lambda * (max_iter + 1)
 }
@@ -45,8 +49,8 @@ fn cma_es_reproducible_and_counts_match() {
     let run = || {
         Executor::new(
             Rosenbrock::<Vec<f64>>::new(),
-            CmaEs::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3, 17),
-            BasicPopulationState::<Vec<f64>>::with_size(lambda),
+            CmaEs::<Vec<f64>, DenseMatrix>::new(17),
+            CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3),
         )
         .max_iter(max_iter)
         .run()
@@ -55,10 +59,14 @@ fn cma_es_reproducible_and_counts_match() {
     let (a, b) = (run(), run());
 
     assert_bit_identical(&a, &b);
+    // CMA-ES additionally evaluates `f(m)` (the distribution mean, reported as
+    // `param()`/`xfavorite`) once per generation, so its count is
+    // `(λ + 1)·(iters + 1)`, not `λ·(iters + 1)` like the other population
+    // solvers. Still feature-independent.
     assert_eq!(
         a.cost_evals(),
-        expected_cost_evals(lambda as u64, max_iter),
-        "CMA-ES cost_evals must equal λ·(iters+1) regardless of `parallel`"
+        (lambda as u64 + 1) * (max_iter + 1),
+        "CMA-ES cost_evals must equal (λ+1)·(iters+1) regardless of `parallel`"
     );
 }
 
@@ -114,10 +122,11 @@ fn random_search_reproducible_and_counts_match() {
     );
 }
 
-fn assert_bit_identical(
-    a: &OptimizationResult<BasicPopulationState<Vec<f64>>>,
-    b: &OptimizationResult<BasicPopulationState<Vec<f64>>>,
-) {
+fn assert_bit_identical<S: State>(a: &OptimizationResult<S>, b: &OptimizationResult<S>)
+where
+    S::Param: PartialEq + Debug,
+    S::Float: PartialEq + Debug,
+{
     assert_eq!(
         a.cost(),
         b.cost(),

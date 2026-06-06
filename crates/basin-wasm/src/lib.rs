@@ -25,9 +25,9 @@ use basin::problems::{styblinski_tang, styblinski_tang_gradient};
 use basin::solver::lbfgs::{Lbfgs, Unbounded as LbfgsUnbounded};
 use basin::{
     Backtracking, BasicPopulationState, BasicSimplexState, BasicState, BoxConstraints, CmaEs,
-    Constant, CostFunction, De, DenseMatrix, Executor, FiniteDiff, Gradient, GradientDescent,
-    LbfgsState, MoreThuente, NelderMead, PopulationState, RandomSearch, Ssga, State, StepOutcome,
-    Stepper, TerminationReason,
+    CmaEsState, Constant, CostFunction, De, DenseMatrix, Executor, FiniteDiff, Gradient,
+    GradientDescent, LbfgsState, MoreThuente, NelderMead, PopulationState, RandomSearch, Ssga,
+    State, StepOutcome, Stepper, TerminationReason,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -298,7 +298,7 @@ type LbfgsStepper = Stepper<Problem2D, LbfgsState<Vec<f64>>, Lbfgs<LbfgsUnbounde
 /// Concrete population-solver stepper aliases. Same motivation as
 /// [`LbfgsStepper`] — keep the [`Inner`] variants readable.
 type CmaEsStepper =
-    Stepper<Problem2D, BasicPopulationState<Vec<f64>>, CmaEs<Vec<f64>, DenseMatrix>>;
+    Stepper<Problem2D, CmaEsState<Vec<f64>, DenseMatrix>, CmaEs<Vec<f64>, DenseMatrix>>;
 type DeStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, De>;
 type RandomSearchStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, RandomSearch>;
 type SsgaStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, Ssga>;
@@ -602,20 +602,16 @@ impl Run {
                 } else {
                     0.25 * 0.5 * ((opts.xmax - opts.xmin) + (opts.ymax - opts.ymin))
                 };
-                let mut solver =
-                    CmaEs::<Vec<f64>, DenseMatrix>::new(initial.clone(), sigma, opts.seed);
+                let mut solver = CmaEs::<Vec<f64>, DenseMatrix>::new(opts.seed);
                 // λ < 4 is invalid for CMA-ES recombination weights; treat
                 // small overrides as "auto" and let the solver pick.
-                let lambda = if opts.cma_lambda >= 4 {
+                if opts.cma_lambda >= 4 {
                     solver = solver.with_lambda(opts.cma_lambda);
-                    opts.cma_lambda
-                } else {
-                    CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2)
-                };
+                }
                 let stepper = Executor::new(
                     p,
                     solver,
-                    BasicPopulationState::<Vec<f64>>::with_size(lambda),
+                    CmaEsState::<Vec<f64>, DenseMatrix>::new(initial.clone(), sigma),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()

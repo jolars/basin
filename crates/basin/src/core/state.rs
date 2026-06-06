@@ -18,9 +18,12 @@
 //! pipeline composes at `F = f32`, and the *Provisional choices* section of
 //! `CONTRIBUTING.md`.
 
+/// CMA-ES distribution state (`CmaEsState`).
+pub mod cma_es;
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
 
+pub use cma_es::CmaEsState;
 pub use lbfgs::LbfgsState;
 
 use crate::core::math::{MatrixIdentity, Scalar, VectorLen};
@@ -298,14 +301,20 @@ pub trait SimplexState: State {
 ///   [`costs`](Self::costs) sorted by **ascending cost** at the start
 ///   and end of every
 ///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
-///   call (and at the end of [`Solver::init`](crate::core::solver::Solver::init)).
-///   So [`State::param`] / [`State::cost`] always return the current
-///   best candidate (`candidates[0]` / `costs[0]`).
+///   call (and at the end of [`Solver::init`](crate::core::solver::Solver::init)),
+///   so `candidates[0]` / `costs[0]` are always the best sampled
+///   candidate.
 /// - **Implementor must:** sort `NaN` costs *last*, so a single bad
 ///   evaluation can't drag itself to the front and become the
 ///   "best" candidate.
 /// - **Implementor must:** keep the two slices the same length and in
 ///   parallel order — `costs[i]` is the cost at `candidates[i]`.
+/// - What [`State::param`] / [`State::cost`] return is the [`State`]
+///   impl's responsibility and need *not* equal `candidates[0]`. Most
+///   population states (e.g. [`BasicPopulationState`]) return the best
+///   candidate; distribution-based states like
+///   [`CmaEsState`] return the distribution mean
+///   (`xfavorite`) while the population stays the sampled candidates.
 pub trait PopulationState: State {
     /// All `λ` candidates, sorted by ascending cost.
     fn candidates(&self) -> &[Self::Param];

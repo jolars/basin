@@ -10,19 +10,22 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, EvalCounts, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicPopulationState, CountsMirror, PopulationState, State};
-use crate::core::termination::{MaxCostEvals, TerminationCriterion, TerminationReason};
+use crate::core::state::{CmaEsState, CountsMirror, PopulationState, State};
+use crate::core::termination::{
+    CmaEsTolerance, MaxCostEvals, TerminationCriterion, TerminationReason,
+};
 use crate::solver::cma_es::CmaEs;
 use crate::solver::ssga::{
     bga_mutate_in_place, blx_alpha_crossover, nam_select, replace_worst_if_better,
 };
 
-/// Per-individual chain snapshot: a [`CmaEs`] carrying full evolution
-/// state and the [`BasicPopulationState`] holding the last generation's
-/// candidates that the next `next_iter` needs as a recombination basis.
-/// Stored in [`MaLsChState::cma_chains`] as `Option<ChainSlot<V, M>>`
-/// (`None` for individuals that have never undergone LS).
-type ChainSlot<V, M> = (CmaEs<V, M>, BasicPopulationState<V>);
+/// Per-individual chain snapshot: a [`CmaEs`] carrying the derived
+/// constants + RNG and the [`CmaEsState`] holding the distribution plus
+/// the last generation's candidates that the next `next_iter` needs as a
+/// recombination basis. Stored in [`MaLsChState::cma_chains`] as
+/// `Option<ChainSlot<V, M>>` (`None` for individuals that have never
+/// undergone LS).
+type ChainSlot<V, M> = (CmaEs<V, M>, CmaEsState<V, M>);
 
 /// State carried by [`MaLsChCma`]: a steady-state population plus
 /// per-individual local-search chain data.
@@ -30,12 +33,11 @@ type ChainSlot<V, M> = (CmaEs<V, M>, BasicPopulationState<V>);
 /// Solver-private (declared `pub` so the impl can construct it but kept
 /// out of `core::state` per CONTRIBUTING.md tenet 4 — one consumer, no
 /// shared abstraction to design yet). Each chain entry is the saved
-/// `(CmaEs, BasicPopulationState)` pair the inner needs for a resumed
-/// run: the [`CmaEs`] carries the algorithmic-constants and evolution
-/// state (mean, sigma, covariance, paths); the
-/// [`BasicPopulationState`] carries the previous generation's λ
-/// candidates the next CMA `next_iter` needs as the `y_sorted` basis
-/// for its m/σ/C update.
+/// `(CmaEs, CmaEsState)` pair the inner needs for a resumed run: the
+/// [`CmaEs`] carries the derived constants + RNG; the [`CmaEsState`]
+/// carries the evolution state (mean, sigma, covariance, paths) and the
+/// previous generation's λ candidates the next CMA `next_iter` needs as
+/// the `y_sorted` basis for its m/σ/C update.
 pub struct MaLsChState<V, M> {
     pub(crate) candidates: Vec<V>,
     pub(crate) costs: Vec<f64>,
@@ -185,29 +187,31 @@ impl<V, M> Default for MaLsChState<V, M> {
 ///    in it; otherwise take the best individual in the whole population
 ///    (Molina §4.3 final rule, line 371 of `references/molina-2010`).
 /// 4. **Resume-or-fresh CMA-ES.**
-///    - If `c_LS` has no stored chain: construct a fresh
-///      [`CmaEs`] with `m = candidates[c_LS]`,
-///      `σ = ½ · min_{j ≠ c_LS} ‖candidates[c_LS] − candidates[j]‖`,
-///      and a per-individual seed derived from the outer RNG (§4.4.6).
-///    - Otherwise: take the saved `(CmaEs, BasicPopulationState)` out
-///      of the chain slot. The CmaEs has full evolution state; the
-///      BasicPopulationState has the previous generation's λ candidates
-///      the next CMA `next_iter` uses as the recombination basis.
-/// 5. **Drive the inner.** Reset the inner state's `cost_evals` to 0,
-///    then `run_loop(problem, state, &mut cma,
-///    &mut [MaxCostEvals(ls_intensity)], u64::MAX)`. `CmaEs::init` is
-///    idempotent (early-returns when its `state` is `Some`), so
+///    - If `c_LS` has no stored chain: construct a fresh [`CmaEs`] (seed
+///      derived from the outer RNG, §4.4.6) plus a
+///      [`CmaEsState`]`::new(m = candidates[c_LS], σ = ½ · min_{j ≠ c_LS}
+///      ‖candidates[c_LS] − candidates[j]‖)`.
+///    - Otherwise: take the saved `(CmaEs, CmaEsState)` out of the chain
+///      slot. The CmaEs carries the derived constants + RNG; the
+///      CmaEsState carries the distribution plus the previous
+///      generation's λ candidates the next CMA `next_iter` uses as the
+///      recombination basis.
+/// 5. **Drive the inner.** Reset the inner state's `iter` to 0, then
+///    `run_loop(problem, state, &mut cma, &mut [MaxCostEvals(ls_intensity),
+///    CmaEsTolerance(...)], u64::MAX)`. `CmaEs::init` is idempotent (its
+///    constants cache + the non-empty population skip re-seeding), so
 ///    resumed runs keep their evolution state across calls.
 /// 6. **Aggregate, route failures, write back.** Per CONTRIBUTING.md
 ///    "Solver composition" rules:
 ///    - Roll `inner_result.state.cost_evals()` into outer
 ///      `cost_evals` (rule 1: eval aggregation).
 ///    - Bubble `SolverFailed` (rule 3: failure routing); other
-///      reasons (`MaxCostEvals`, `SolverConverged`) are clean stops.
-///    - If `inner_result.cost() < costs[c_LS]`, write the improved
-///      param/cost back. Always update `last_ls_cost[c_LS]` and
+///      reasons (`MaxCostEvals`, `CmaEsTolerance`) are clean stops.
+///    - If `inner_result.best_cost() < costs[c_LS]`, write the improved
+///      best evaluated param/cost back (not the mean `param()` reports).
+///      Always update `last_ls_cost[c_LS]` and
 ///      `ls_application_count[c_LS]`. Store the advanced
-///      `(CmaEs, BasicPopulationState)` back in the slot.
+///      `(CmaEs, CmaEsState)` back in the slot.
 /// 7. **Resort** the population (and parallel arrays) ascending.
 ///
 /// # Default parameters
@@ -498,7 +502,7 @@ where
         + RankOneUpdate<V>
         + SymmetricEigen<V>
         + Clone,
-    CmaEs<V, M>: Solver<P, BasicPopulationState<V>, Error = P::Error>,
+    CmaEs<V, M>: Solver<P, CmaEsState<V, M>, Error = P::Error>,
 {
     type Error = P::Error;
 
@@ -613,22 +617,18 @@ where
                 (cma, s)
             }
             None => {
-                let n = state.candidates[c_ls].vec_len();
                 let sigma_init = sigma_init_for(&state.candidates, c_ls)
                     .filter(|s| *s > 0.0)
                     .unwrap_or(self.initial_sigma_fallback);
                 let derived_seed = rng.random::<u64>();
-                let mut cma =
-                    CmaEs::<V, M>::new(state.candidates[c_ls].clone(), sigma_init, derived_seed);
+                let mut cma = CmaEs::<V, M>::new(derived_seed);
                 if let Some(lam) = self.inner_lambda {
                     cma = cma.with_lambda(lam);
                 }
-                // Empty inner state — CmaEs::init will populate the
-                // first generation since `cma`'s working state is None.
-                let lambda = self
-                    .inner_lambda
-                    .unwrap_or(CmaEs::<V, M>::default_lambda(n));
-                let inner_state = BasicPopulationState::<V>::with_size(lambda);
+                // Empty inner population — CmaEs::init samples the first
+                // generation. The mean / σ live on the state now.
+                let inner_state =
+                    CmaEsState::<V, M>::new(state.candidates[c_ls].clone(), sigma_init);
                 (cma, inner_state)
             }
         };
@@ -639,8 +639,15 @@ where
         // `InnerExecutor` reuse pattern doesn't fit here since we hold
         // a different `cma` per individual). Allocation cost is one
         // box per chain segment — negligible against I_str evals.
-        let mut criteria: Vec<Box<dyn TerminationCriterion<BasicPopulationState<V>>>> =
-            vec![Box::new(MaxCostEvals(self.ls_intensity))];
+        // `CmaEsTolerance` replaces the internal TolX hook the old
+        // `CmaEs::terminate` provided; tol_x is `1e−12 ·` the segment's
+        // starting σ (Hansen's default, made per-segment-relative so it
+        // is resume-safe).
+        let tol_x = 1e-12 * inner_state.sigma();
+        let mut criteria: Vec<Box<dyn TerminationCriterion<CmaEsState<V, M>>>> = vec![
+            Box::new(MaxCostEvals(self.ls_intensity)),
+            Box::new(CmaEsTolerance::new(tol_x)),
+        ];
         let inner_result = run_loop(problem, inner_state, &mut cma, &mut criteria, u64::MAX)?;
 
         // -- Phase 5: route failures, write back. --
@@ -655,8 +662,11 @@ where
             return Ok((state, Some(inner_result.reason)));
         }
 
-        let new_cost = inner_result.cost();
-        let new_param = inner_result.param().clone();
+        // Adopt the chain's best *evaluated* point (xbest), not the
+        // distribution mean that `param()`/`cost()` now report — the
+        // memetic algorithm wants the best feasible refinement found.
+        let new_cost = inner_result.best_cost();
+        let new_param = inner_result.best_param().clone();
         // Conditional write-back: only adopt the LS result if it
         // improves on the current cost. Strict Molina §4.3 step 10 is
         // unconditional, but a conditional update is safer (CMA-ES is

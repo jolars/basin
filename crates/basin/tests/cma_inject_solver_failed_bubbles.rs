@@ -13,8 +13,8 @@
 
 use basin::problems::Sphere;
 use basin::{
-    BasicPopulationState, BasicState, ClosureInner, CmaEs, CmaInject, Executor, Problem, Solver,
-    State, TerminationReason,
+    BasicState, ClosureInner, CmaEs, CmaEsState, CmaInject, Executor, Problem, Solver, State,
+    TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -37,10 +37,8 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
 #[test]
 fn bubbles_inner_failure() {
     let m0 = DVector::from_vec(vec![1.0; 3]);
-    let n = 3usize;
-    let lambda = CmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(n);
 
-    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 5);
+    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(5);
 
     // Wrap AlwaysFails in ClosureInner with a BasicState seeder.
     let inner = ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
@@ -51,7 +49,7 @@ fn bubbles_inner_failure() {
     let result = Executor::new(
         Sphere::<DVector<f64>>::new(),
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
     )
     .max_iter(20)
     .run()

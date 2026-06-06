@@ -2,7 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BasicPopulationState, BoundedCmaEs, Executor, PopulationState, StepOutcome, TerminationReason,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
+    TerminationReason,
 };
 use faer::{Col, Mat};
 
@@ -15,12 +16,11 @@ fn same_seed_yields_identical_trajectory() {
     let lower = Col::<f64>::from_fn(2, |_| -5.0);
     let upper = Col::<f64>::from_fn(2, |_| 5.0);
     let m0 = Col::<f64>::from_fn(2, |_| 0.0);
-    let lambda = BoundedCmaEs::<Col<f64>, Mat<f64>>::default_lambda(2);
 
     let result_a = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.5, 42),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(42),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.5),
     )
     .max_iter(30)
     .run()
@@ -28,8 +28,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.5, 42),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(42),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
     )
     .max_iter(30)
     .run()
@@ -50,12 +50,11 @@ fn slack_bounds_recover_unconstrained_minimum() {
     let lower = Col::<f64>::from_fn(2, |_| -5.0);
     let upper = Col::<f64>::from_fn(2, |_| 5.0);
     let m0 = Col::<f64>::from_fn(2, |_| 0.0);
-    let lambda = BoundedCmaEs::<Col<f64>, Mat<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.5, 7),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(7),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
     )
     .max_iter(400)
     .run()
@@ -76,12 +75,11 @@ fn tight_bounds_converge_to_box_corner() {
     let lower = Col::<f64>::from_fn(2, |_| -1.0);
     let upper = Col::<f64>::from_fn(2, |_| 1.0);
     let m0 = Col::<f64>::from_fn(2, |_| 0.0);
-    let lambda = BoundedCmaEs::<Col<f64>, Mat<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.3, 11),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -103,12 +101,11 @@ fn infeasible_initial_mean_converges_to_box_corner() {
     let lower = Col::<f64>::from_fn(2, |_| -1.0);
     let upper = Col::<f64>::from_fn(2, |_| 1.0);
     let m0 = Col::<f64>::from_fn(2, |_| 10.0);
-    let lambda = BoundedCmaEs::<Col<f64>, Mat<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.3, 5),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(5),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -130,18 +127,18 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     let lower = Col::<f64>::from_fn(2, |_| -10.0);
     let upper = Col::<f64>::from_fn(2, |_| 10.0);
     let m0 = Col::<f64>::from_fn(2, |_| 0.0);
-    let lambda = BoundedCmaEs::<Col<f64>, Mat<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.3, 11),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
+    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
 /// `PopulationState` invariants survive iteration on faer.
@@ -154,8 +151,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.5, 1234).with_lambda(lambda),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(1234).with_lambda(lambda),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
     )
     .max_iter(10)
     .into_stepper()

@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::core::math::{
     ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NormSquared,
     RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
@@ -6,7 +8,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::BasicPopulationState;
+use crate::core::state::CmaEsState;
 use crate::core::termination::TerminationReason;
 
 /// `(µ/µ_W, λ)`-CMA Evolution Strategy with negative weights (aCMA-ES)
@@ -22,11 +24,12 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Algorithm
 ///
-/// At [`init`](Solver::init): set `m = initial_mean`,
-/// `σ = initial_sigma`, `p_σ = p_c = 0`, `C = I` (or `C = diag(stds²)`
-/// when [`with_stds`](Self::with_stds) is set), and sample the first
-/// generation `x_k = m + σ B (D ⊙ z_k)` with `z_k ~ N(0, I)` (which is
-/// `m + σ z_k` in the isotropic default, where `B D = I`).
+/// The initial distribution (`m`, `σ`, and `C = I` or
+/// `C = diag(stds²)`) is supplied by the caller via
+/// [`CmaEsState::new(mean, sigma)`](crate::CmaEsState::new) (optionally
+/// `.with_stds(stds)`). At [`init`](Solver::init) the solver computes
+/// its derived constants, samples the first generation
+/// `x_k = m + σ B (D ⊙ z_k)` with `z_k ~ N(0, I)`, and evaluates `f(m)`.
 ///
 /// Each [`next_iter`](Solver::next_iter) processes the previous
 /// generation's evaluations and samples a fresh generation:
@@ -65,13 +68,26 @@ use crate::core::termination::TerminationReason;
 /// the cost is dominated by `f` evaluations anyway, and the refresh
 /// frequency would change the per-iteration cost calculus.
 ///
+/// # Result — mean vs best sample
+///
+/// CMA-ES's recommended solution is the distribution mean (pycma's
+/// `xfavorite`), so [`State::param`](crate::State::param) /
+/// [`State::cost`](crate::State::cost) on [`CmaEsState`] return `m` and
+/// `f(m)` — the solver evaluates `f(m)` once per generation (so the
+/// per-generation cost budget is `λ + 1`, not `λ`). The best evaluated
+/// point ever seen (`xbest`) is available via
+/// [`State::best_param`](crate::State::best_param) /
+/// [`State::best_cost`](crate::State::best_cost), so an
+/// [`OptimizationResult`](crate::core::executor::OptimizationResult)
+/// surfaces both.
+///
 /// # Default parameters
 ///
 /// All defaults follow Hansen 2016 Table 1 (the 2016 negative-weights
-/// setting); see [`new`](Self::new) and the per-field doc comments
-/// below for the exact formulas. The user supplies only `n` (via the
-/// initial mean's length), the initial mean, the initial step-size,
-/// and the seed.
+/// setting); see the per-field doc comments below for the exact
+/// formulas. The user supplies the initial mean / step-size (via
+/// [`CmaEsState`]) and the seed (via [`new`](Self::new)); `n` is the
+/// mean's length and λ defaults to `4 + ⌊3 ln n⌋`.
 ///
 /// # Reproducibility
 ///
@@ -86,32 +102,31 @@ use crate::core::termination::TerminationReason;
 ///   on the problem. CMA-ES is derivative-free; no [`Gradient`](crate::Gradient) /
 ///   [`Jacobian`](crate::Jacobian) required.
 /// - **Caller must:** hand in a
-///   [`BasicPopulationState::with_size(λ)`](crate::BasicPopulationState::with_size)
-///   matching the solver's λ. The default
-///   λ = `4 + ⌊3 ln n⌋` is exposed via [`default_lambda`](Self::default_lambda).
-/// - **Caller must:** ensure `initial_sigma > 0`.
+///   [`CmaEsState::new(mean, sigma)`](crate::CmaEsState::new) (optionally
+///   `.with_stds(stds)`). The solver derives λ = `4 + ⌊3 ln n⌋` (override
+///   via [`with_lambda`](Self::with_lambda); the default is exposed as
+///   [`default_lambda`](Self::default_lambda)) and fills the first
+///   generation in [`init`](Solver::init).
 /// - **Implementor (this solver) must:** maintain the
 ///   [`PopulationState`](crate::core::state::PopulationState)
 ///   sorted-by-cost invariant on `state.candidates` / `state.costs`
-///   at the start and end of every iteration, and seed `state.cost()`
-///   with the best of the first sampled generation.
+///   at the start and end of every iteration.
 ///
 /// # Termination
 ///
-/// Solver-internal: `σ · max d_i < tol_x` → [`TerminationReason::SolverConverged`]
-/// (CMA-ES TolX, Hansen 2016 Appendix B.3). Defaults to
-/// `1e−12 · initial_sigma` per Hansen's recommendation (scaled by
-/// `maxᵢ stdsᵢ` when [`with_stds`](Self::with_stds) is set, to stay
-/// relative to the initial spread). Pair with the
-/// framework's [`MaxIter`](crate::core::termination::MaxIter) /
+/// The canonical TolX test (`σ · max d_i < tol_x`, Hansen 2016 Appendix
+/// B.3) is the framework criterion
+/// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance), which
+/// binds on [`CmaEsState`] and fires
+/// [`TerminationReason::CmaEsTolerance`]. Register it on the
+/// [`Executor`](crate::core::executor::Executor) — Hansen's recommended
+/// value is `1e−12 · initial_sigma` (scale by `maxᵢ stdsᵢ` when an
+/// anisotropic initial covariance is used). Pair with the framework's
+/// [`MaxIter`](crate::core::termination::MaxIter) /
 /// [`MaxCostEvals`](crate::core::termination::MaxCostEvals) for budget
-/// control; both work on
-/// [`BasicPopulationState`]
-/// without modification. Other CMA-ES termination heuristics
-/// (NoEffectAxis, NoEffectCoord, ConditionCov, EqualFunValues,
-/// Stagnation, TolXUp, TolFun) are out of scope for S8 vanilla and
-/// will land alongside the bounded variant in S9 / restart machinery
-/// in S11.
+/// control. Other CMA-ES termination heuristics (NoEffectAxis,
+/// NoEffectCoord, ConditionCov, EqualFunValues, Stagnation, TolXUp,
+/// TolFun) are out of scope for now.
 ///
 /// # Backends
 ///
@@ -129,101 +144,63 @@ use crate::core::termination::TerminationReason;
 /// # Examples
 ///
 /// See [`RandomSearch`](crate::RandomSearch) for the population-based
-/// `Executor` pattern — a `BasicPopulationState` sized to λ. Construct the
-/// solver with `CmaEs::new` and pass the same λ to the state.
+/// `Executor` pattern. Construct the solver with `CmaEs::new(seed)` and
+/// the initial distribution with `CmaEsState::new(mean, sigma)`.
 pub struct CmaEs<V, M, F = f64> {
-    initial_mean: V,
-    initial_sigma: F,
     lambda_override: Option<usize>,
-    seed: u64,
-    tol_x_override: Option<F>,
-    /// Per-coordinate initial standard deviations (pycma's `CMA_stds`).
-    /// `None` keeps the isotropic `C = I` default; `Some(stds)` seeds the
-    /// initial covariance to `diag(stds²)`. Set via [`with_stds`](Self::with_stds).
-    stds_override: Option<V>,
-
-    state: Option<Working<V, M, F>>,
+    /// Derived CMA constants, computed once at [`Solver::init`] from the
+    /// state's dimension. Cached on the solver (config-only) rather than
+    /// in the state; persists across `run_loop` re-entry so a resumed
+    /// solver skips recomputation.
+    constants: Option<CmaConstants<F>>,
+    rng: ChaCha8Rng,
+    _marker: PhantomData<(V, M)>,
 }
 
-/// Solver-internal mutable state, populated in [`Solver::init`] and
-/// updated each [`Solver::next_iter`].
-///
-/// `pub(crate)` (not public) so sibling solvers in `crate::solver` can
-/// read the post-update `m`, `σ`, `B`, `D^{-1}` they need for
-/// injection-style composition (`CmaInject` uses these to clip injected
-/// `y_i` in Mahalanobis distance per Hansen 2011 eq. 4). Not a stable
-/// public surface.
-pub(crate) struct Working<V, M, F = f64> {
-    // --- constants (computed once at init) ---
+/// Derived CMA-ES constants (Hansen 2016 Table 1), computed once at
+/// [`Solver::init`] from `n` and `λ`. Pure functions of the
+/// hyperparameters — no mutable iterate (that lives in
+/// [`CmaEsState`]).
+pub(crate) struct CmaConstants<F = f64> {
     pub(crate) n: usize,
-    lambda: usize,
-    mu: usize,
+    pub(crate) lambda: usize,
+    pub(crate) mu: usize,
     /// All λ recombination weights (sum of positives = 1; negatives
     /// scaled per Hansen Table 1 rows (50)–(53)).
-    weights: Vec<F>,
+    pub(crate) weights: Vec<F>,
     /// `µ_eff = (Σ_{i=1..µ} w_i)² / Σ_{i=1..µ} w_i² = 1 / Σ w_i²`
     /// because the positive weights sum to 1.
-    mu_eff: F,
+    pub(crate) mu_eff: F,
     /// `Σ_{i=1..λ} w_i`. Negative when negative weights are in use
     /// (default setting); the C-update scalar `1 − c_µ · sum_w`
     /// inflates rather than decays C as a result. With Hansen's
     /// `α_µ_minus = 1 + c_1/c_µ` choice, `c_1 + c_µ · sum_w ≈ 0`,
     /// so the C scalar is approximately 1 (eq. 47).
-    sum_w: F,
-    c_sigma: F,
-    d_sigma: F,
-    c_c: F,
-    c_1: F,
-    c_mu: F,
-    expected_norm: F,
+    pub(crate) sum_w: F,
+    pub(crate) c_sigma: F,
+    pub(crate) d_sigma: F,
+    pub(crate) c_c: F,
+    pub(crate) c_1: F,
+    pub(crate) c_mu: F,
+    pub(crate) expected_norm: F,
     /// `(1.4 + 2/(n+1)) · E‖N(0,I)‖` — RHS of the h_σ test (eq. 47
     /// callout footnote / Hansen 2016 p. 31).
-    h_sigma_threshold: F,
-    tol_x: F,
-
-    // --- mutable iterate ---
-    pub(crate) m: V,
-    pub(crate) sigma: F,
-    p_sigma: V,
-    p_c: V,
-    c: M,
-    /// Eigenvectors of `c` from the most recent eigendecomposition.
-    pub(crate) b: M,
-    /// Square roots of eigenvalues (the diagonal `D` in Hansen's
-    /// `B D Bᵀ` factorization).
-    d: V,
-    /// Reciprocals of `d`, used for `C^{−1/2} = B D^{−1} Bᵀ`.
-    pub(crate) d_inv: V,
-
-    rng: ChaCha8Rng,
-    /// Generation counter for the h_σ formula (Hansen 2016 p. 31:
-    /// uses `(1−c_σ)^{2(g+1)}` in the bound). Incremented at the top
-    /// of every [`Solver::next_iter`].
-    generation: u64,
+    pub(crate) h_sigma_threshold: F,
 }
 
 impl<V, M, F: Scalar> CmaEs<V, M, F> {
     /// Build a CMA-ES with the default population size
-    /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48), the default TolX
-    /// `tol_x = 1e−12 · initial_sigma`, and a seeded RNG.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `initial_sigma ≤ 0`.
-    pub fn new(initial_mean: V, initial_sigma: F, seed: u64) -> Self {
-        assert!(
-            initial_sigma > F::zero(),
-            "CmaEs requires initial_sigma > 0, got {:?}",
-            initial_sigma
-        );
+    /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48) and a seeded RNG. The
+    /// initial mean, step-size, and (optional) per-coordinate stds are
+    /// supplied via [`CmaEsState`]; TolX is the
+    /// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance)
+    /// criterion.
+    pub fn new(seed: u64) -> Self {
         Self {
-            initial_mean,
-            initial_sigma,
             lambda_override: None,
-            seed,
-            tol_x_override: None,
-            stds_override: None,
-            state: None,
+            constants: None,
+            rng: ChaCha8Rng::seed_from_u64(seed),
+            _marker: PhantomData,
         }
     }
 
@@ -249,81 +226,11 @@ impl<V, M, F: Scalar> CmaEs<V, M, F> {
         self
     }
 
-    /// Override the default TolX. The check fires when
-    /// `σ · max_i d_i < tol_x`, where `d_i` are square roots of `C`'s
-    /// eigenvalues — i.e. the largest standard deviation of any axis of
-    /// the search distribution drops below the tolerance. Hansen 2016
-    /// Appendix B.3 default is `1e−12 · initial_sigma` (scaled by
-    /// `maxᵢ stdsᵢ` when [`with_stds`](Self::with_stds) is set). An
-    /// explicit override here wins regardless of the builder-call order.
-    pub fn with_tol_x(mut self, tol_x: F) -> Self {
-        self.tol_x_override = Some(tol_x);
-        self
-    }
-
     /// Default population size for dimension `n`: `4 + ⌊3 ln n⌋`
-    /// (Hansen 2016 eq. 48). Exposed so callers building a
-    /// [`BasicPopulationState::with_size`] can match the solver's
+    /// (Hansen 2016 eq. 48). Exposed so callers can match the solver's
     /// internal default without re-deriving the formula.
     pub fn default_lambda(n: usize) -> usize {
         4 + (3.0 * (n as f64).ln()).floor() as usize
-    }
-
-    /// Read-only access to the post-update CMA-ES iterate (`m`, `σ`,
-    /// `B`, `D^{-1}`, `n`), used by sibling solvers that compose with
-    /// CMA-ES — currently only `CmaInject`, which needs `C^{-1/2} =
-    /// B D^{-1} Bᵀ` to clip injected `y_i` per Hansen 2011 eq. 4.
-    /// `None` before [`Solver::init`] has run.
-    pub(crate) fn working(&self) -> Option<&Working<V, M, F>> {
-        self.state.as_ref()
-    }
-}
-
-impl<V, M, F: Scalar> CmaEs<V, M, F>
-where
-    V: VectorLen + std::ops::Index<usize, Output = F>,
-{
-    /// Set per-coordinate initial standard deviations (pycma's
-    /// `CMA_stds`), seeding an anisotropic initial covariance
-    /// `C = diag(stds²)` instead of the isotropic default `C = I`. The
-    /// first generation then samples `m + σ · diag(stds) · N(0, I)` — i.e.
-    /// optimizing in coordinates rescaled by `1/stds`. `σ` (from
-    /// [`new`](Self::new)) remains the scalar overall step-size; `stds`
-    /// only sets the *shape*. Leaving this unset keeps `C = I`.
-    ///
-    /// Use this on problems whose parameters live on heterogeneous scales,
-    /// so the search does not have to spend generations learning the
-    /// scaling through covariance adaptation.
-    ///
-    /// When set, the default TolX also scales with the largest initial
-    /// axis: `tol_x = 1e−12 · initial_sigma · maxᵢ stdsᵢ` (so termination
-    /// stays relative to the initial spread). An explicit
-    /// [`with_tol_x`](Self::with_tol_x) overrides this regardless of order.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `stds.len() != initial_mean.len()` or if any entry is not
-    /// strictly positive (a non-positive std would make `1/stds` non-finite
-    /// in the `C^{−1/2}` factor).
-    pub fn with_stds(mut self, stds: V) -> Self {
-        let n = self.initial_mean.vec_len();
-        assert_eq!(
-            stds.vec_len(),
-            n,
-            "CmaEs::with_stds requires stds.len() == initial_mean.len(), got {} vs {}",
-            stds.vec_len(),
-            n
-        );
-        for i in 0..n {
-            assert!(
-                stds[i] > F::zero(),
-                "CmaEs::with_stds requires every std > 0, got stds[{}] = {:?}",
-                i,
-                stds[i]
-            );
-        }
-        self.stds_override = Some(stds);
-        self
     }
 }
 
@@ -402,128 +309,93 @@ pub(crate) fn compute_weights<F: Scalar>(
     (weights, mu_eff, sum_w)
 }
 
-impl<V, M, F: Scalar> CmaEs<V, M, F>
-where
-    V: VectorLen + Clone + ComponentMulAssign + std::ops::Index<usize, Output = F>,
-    M: MatrixIdentity + MatrixFromDiagonal<V>,
+/// Compute the derived CMA-ES constants (Hansen 2016 Table 1) for
+/// dimension `n` and population size `lambda`. Shared by [`CmaEs`] and
+/// [`BoundedCmaEs`](crate::solver::BoundedCmaEs)'s init.
+pub(crate) fn compute_constants<F: Scalar>(n: usize, lambda: usize) -> CmaConstants<F> {
+    let mu = lambda / 2;
+    let one = F::one();
+    let two = F::from_f64(2.0).unwrap();
+    let zero = F::zero();
+    let n_f = F::from_usize(n).unwrap();
+    let lambda_f = F::from_usize(lambda).unwrap();
+    // Hansen Table 1 rows (55)–(58).
+    let alpha_cov = two;
+    // The c_1 / c_µ formulas need µ_eff, which depends on positive
+    // weights only. Compute µ_eff once from the raw weights to feed
+    // c_1 / c_µ, then re-derive the final negative weights against
+    // those c_1 / c_µ via `compute_weights` (Hansen explains the
+    // apparent circular dependency in Appendix A: µ_eff is invariant
+    // under positive-weight rescaling, so a one-shot computation
+    // suffices).
+    let raw: Vec<F> = (1..=lambda)
+        .map(|i| ((lambda_f + one) / two).ln() - F::from_usize(i).unwrap().ln())
+        .collect();
+    let sum_pos: F = raw[..mu].iter().copied().sum();
+    let mu_eff_provisional = sum_pos * sum_pos / raw[..mu].iter().map(|w| *w * *w).sum::<F>();
+
+    let c_1 = alpha_cov
+        / ((n_f + F::from_f64(1.3).unwrap()) * (n_f + F::from_f64(1.3).unwrap())
+            + mu_eff_provisional);
+    let c_mu_unbounded = alpha_cov * (mu_eff_provisional - two + one / mu_eff_provisional)
+        / ((n_f + two) * (n_f + two) + alpha_cov * mu_eff_provisional / two);
+    let c_mu = (one - c_1).min(c_mu_unbounded);
+
+    let (weights, mu_eff, sum_w) = compute_weights::<F>(n, lambda, c_1, c_mu);
+
+    let c_sigma = (mu_eff + two) / (n_f + mu_eff + F::from_f64(5.0).unwrap());
+    // d_σ = 1 + 2 · max(0, √((µ_eff−1)/(n+1)) − 1) + c_σ
+    // (Hansen 2016 Table 1 row 55).
+    let d_sigma = {
+        let inner = ((mu_eff - one) / (n_f + one)).sqrt() - one;
+        one + two * inner.max(zero) + c_sigma
+    };
+    let c_c = (F::from_f64(4.0).unwrap() + mu_eff / n_f)
+        / (n_f + F::from_f64(4.0).unwrap() + two * mu_eff / n_f);
+
+    let expected_norm = expected_norm_n01::<F>(n);
+    let h_sigma_threshold = (F::from_f64(1.4).unwrap() + two / (n_f + one)) * expected_norm;
+
+    CmaConstants {
+        n,
+        lambda,
+        mu,
+        weights,
+        mu_eff,
+        sum_w,
+        c_sigma,
+        d_sigma,
+        c_c,
+        c_1,
+        c_mu,
+        expected_norm,
+        h_sigma_threshold,
+    }
+}
+
+/// Sample a fresh generation `x_k = m + σ B (D ⊙ z_k)` with
+/// `z_k ~ N(0, I)` into `state.candidates` (cleared first). The
+/// isotropic default (`B = I`, `D = 1`) reduces to `m + σ z_k`
+/// bit-identically, so the single general path is used throughout.
+/// Shared by [`CmaEs`] init and `next_iter`.
+pub(crate) fn sample_generation<V, M, F>(
+    state: &mut CmaEsState<V, M, F>,
+    lambda: usize,
+    rng: &mut ChaCha8Rng,
+) where
+    F: Scalar,
+    V: VectorLen + Clone + ScaledAdd<F> + ComponentMulAssign + SampleStandardNormal,
+    M: MatVec<V>,
 {
-    /// Build [`Working`] from `self`'s user-provided settings. Called
-    /// once from [`Solver::init`].
-    fn build_working(&self) -> Working<V, M, F> {
-        let n = self.initial_mean.vec_len();
-        assert!(n >= 1, "CmaEs requires the initial mean to be non-empty");
-        let lambda = self
-            .lambda_override
-            .unwrap_or_else(|| Self::default_lambda(n));
-        let mu = lambda / 2;
-        let one = F::one();
-        let two = F::from_f64(2.0).unwrap();
-        let zero = F::zero();
-        let n_f = F::from_usize(n).unwrap();
-        let lambda_f = F::from_usize(lambda).unwrap();
-        // Hansen Table 1 rows (55)–(58).
-        let alpha_cov = two;
-        // The c_1 / c_µ formulas need µ_eff, which depends on positive
-        // weights only. Compute µ_eff once from the raw weights to feed
-        // c_1 / c_µ, then re-derive the final negative weights against
-        // those c_1 / c_µ via `compute_weights` (Hansen explains the
-        // apparent circular dependency in Appendix A: µ_eff is invariant
-        // under positive-weight rescaling, so a one-shot computation
-        // suffices).
-        let raw: Vec<F> = (1..=lambda)
-            .map(|i| ((lambda_f + one) / two).ln() - F::from_usize(i).unwrap().ln())
-            .collect();
-        let sum_pos: F = raw[..mu].iter().copied().sum();
-        let mu_eff_provisional = sum_pos * sum_pos / raw[..mu].iter().map(|w| *w * *w).sum::<F>();
-
-        let c_1 = alpha_cov
-            / ((n_f + F::from_f64(1.3).unwrap()) * (n_f + F::from_f64(1.3).unwrap())
-                + mu_eff_provisional);
-        let c_mu_unbounded = alpha_cov * (mu_eff_provisional - two + one / mu_eff_provisional)
-            / ((n_f + two) * (n_f + two) + alpha_cov * mu_eff_provisional / two);
-        let c_mu = (one - c_1).min(c_mu_unbounded);
-
-        let (weights, mu_eff, sum_w) = compute_weights::<F>(n, lambda, c_1, c_mu);
-
-        let c_sigma = (mu_eff + two) / (n_f + mu_eff + F::from_f64(5.0).unwrap());
-        // d_σ = 1 + 2 · max(0, √((µ_eff−1)/(n+1)) − 1) + c_σ
-        // (Hansen 2016 Table 1 row 55).
-        let d_sigma = {
-            let inner = ((mu_eff - one) / (n_f + one)).sqrt() - one;
-            one + two * inner.max(zero) + c_sigma
-        };
-        let c_c = (F::from_f64(4.0).unwrap() + mu_eff / n_f)
-            / (n_f + F::from_f64(4.0).unwrap() + two * mu_eff / n_f);
-
-        let expected_norm = expected_norm_n01::<F>(n);
-        let h_sigma_threshold = (F::from_f64(1.4).unwrap() + two / (n_f + one)) * expected_norm;
-        // Default TolX scales with the largest initial axis std so the
-        // convergence test stays relative to the initial spread: with
-        // anisotropic stds the largest single-axis std is
-        // `initial_sigma · maxᵢ stdsᵢ`, and the terminate check is
-        // `σ · maxᵢ dᵢ < tol_x`. Reduces to `1e−12 · initial_sigma` when
-        // stds are absent (max_std = 1). An explicit override still wins.
-        let max_std: F = self
-            .stds_override
-            .as_ref()
-            .map(|s| {
-                let mut m = F::zero();
-                for i in 0..n {
-                    let v = s[i];
-                    if v > m {
-                        m = v;
-                    }
-                }
-                m
-            })
-            .unwrap_or_else(F::one);
-        let tol_x = self
-            .tol_x_override
-            .unwrap_or_else(|| F::from_f64(1e-12).unwrap() * self.initial_sigma * max_std);
-
-        // Initial covariance: isotropic `C = I` by default, or anisotropic
-        // `C = diag(stds²)` when per-coordinate stds are set. For a diagonal
-        // C the eigendecomposition is exactly `B = I`, `D = diag(stds)`, so
-        // `init` seeds (b, d, d_inv) directly without an eigensolve.
-        let c = match self.stds_override.as_ref() {
-            Some(stds) => {
-                let mut sq = stds.clone();
-                sq.component_mul_assign(stds);
-                M::from_diagonal(&sq)
-            }
-            None => M::identity(n),
-        };
-
-        // Initial mutable state. The vectors p_σ, p_c, d, d_inv are
-        // sized like `initial_mean` via clone; their values are
-        // overwritten in `init` (zeros for the paths; for the d-vectors,
-        // ones when C = I or stds when anisotropic).
-        Working {
-            n,
-            lambda,
-            mu,
-            weights,
-            mu_eff,
-            sum_w,
-            c_sigma,
-            d_sigma,
-            c_c,
-            c_1,
-            c_mu,
-            expected_norm,
-            h_sigma_threshold,
-            tol_x,
-            m: self.initial_mean.clone(),
-            sigma: self.initial_sigma,
-            p_sigma: self.initial_mean.clone(),
-            p_c: self.initial_mean.clone(),
-            c,
-            b: M::identity(n),
-            d: self.initial_mean.clone(),
-            d_inv: self.initial_mean.clone(),
-            rng: ChaCha8Rng::seed_from_u64(self.seed),
-            generation: 0,
-        }
+    state.candidates.clear();
+    for _ in 0..lambda {
+        let z_k = V::sample_standard_normal(&state.m, rng);
+        let mut bd_z = z_k;
+        bd_z.component_mul_assign(&state.d);
+        let bd_z = state.b.matvec(&bd_z);
+        let mut x_k = state.m.clone();
+        x_k.scaled_add(state.sigma, &bd_z);
+        state.candidates.push(x_k);
     }
 }
 
@@ -563,7 +435,7 @@ fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
     }
 }
 
-impl<P, V, M, F> Solver<P, BasicPopulationState<V, F>> for CmaEs<V, M, F>
+impl<P, V, M, F> Solver<P, CmaEsState<V, M, F>> for CmaEs<V, M, F>
 where
     F: Scalar + crate::core::parallel::MaybeSend,
     P: CostFunction<Param = V, Output = F> + crate::core::parallel::MaybeSync,
@@ -592,80 +464,48 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
-    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
-        // Idempotent: if a previous init already seeded the internal
-        // state, return the caller-provided state untouched. This lets
-        // chain-style outer solvers (e.g. MaLsChCma) call `run_loop`
-        // repeatedly on a paused CmaEs without clobbering its evolution
-        // state on every entry. For non-resumption use this is a no-op:
-        // a freshly constructed CmaEs has `self.state == None` and
-        // proceeds through the full setup below.
-        if self.state.is_some() {
-            return Ok(state);
+        mut state: CmaEsState<V, M, F>,
+    ) -> Result<CmaEsState<V, M, F>, Self::Error> {
+        // Compute-once constants guard (cached on the solver — config
+        // only). A resumed solver re-entered via `run_loop` already has
+        // them, so a chain-paused CmaEs is not rebuilt on every entry.
+        if self.constants.is_none() {
+            let n = state.m.vec_len();
+            assert!(n >= 1, "CmaEs requires a non-empty mean");
+            let lambda = self
+                .lambda_override
+                .unwrap_or_else(|| Self::default_lambda(n));
+            self.constants = Some(compute_constants::<F>(n, lambda));
         }
-        let mut w = self.build_working();
-        // Zero the path vectors and seed (b, d, d_inv). For the isotropic
-        // default (C = I) that is (d, d_inv) = (1, …, 1). With per-coordinate
-        // stds the covariance is the diagonal `C = diag(stds²)`, whose
-        // eigendecomposition is exactly `B = I`, `D = diag(stds)`, so we seed
-        // d = stds, d_inv = 1/stds directly (no eigensolve — a generic
-        // `try_eigh` could reorder eigenvalues and scramble the per-coordinate
-        // correspondence). b stays the identity from `build_working`.
-        w.p_sigma.scale_in_place(F::zero());
-        w.p_c.scale_in_place(F::zero());
-        if let Some(stds) = self.stds_override.as_ref() {
-            for i in 0..w.n {
-                w.d[i] = stds[i];
-                w.d_inv[i] = F::one() / stds[i];
-            }
-        } else {
-            for i in 0..w.n {
-                w.d[i] = F::one();
-                w.d_inv[i] = F::one();
-            }
-        }
+        let lambda = self.constants.as_ref().unwrap().lambda;
 
-        // First generation: x_k = m + σ B (D ⊙ z_k). The isotropic default
-        // keeps the fast path x_k = m + σ z_k (B = I, D = 1 makes the two
-        // bit-identical); the anisotropic case applies the B·D map.
-        let anisotropic = self.stds_override.is_some();
-        state.candidates.clear();
-        state.costs.clear();
-        // Sample the generation (sequential — the RNG draws define the
-        // reproducible trajectory), then evaluate the λ independent
-        // candidates in one batch (parallel under the `parallel` feature).
-        for _k in 0..w.lambda {
-            let z_k = V::sample_standard_normal(&w.m, &mut w.rng);
-            let mut x_k = w.m.clone();
-            if anisotropic {
-                let mut bd_z = z_k;
-                bd_z.component_mul_assign(&w.d);
-                let bd_z = w.b.matvec(&bd_z);
-                x_k.scaled_add(w.sigma, &bd_z);
-            } else {
-                x_k.scaled_add(w.sigma, &z_k);
-            }
-            state.candidates.push(x_k);
+        // First generation: an empty population signals a fresh state and
+        // is sampled now; a resumed / chain state arrives with a
+        // populated, sorted population (and a valid `m_cost`) and is left
+        // untouched. The distribution itself (`m`, `σ`, `C`, paths, `d`)
+        // was fully seeded by `CmaEsState::new` / `with_stds`.
+        if state.candidates.is_empty() {
+            sample_generation(&mut state, lambda, &mut self.rng);
+            state.costs = problem.cost_batch(&state.candidates)?;
+            sort_population_ascending(&mut state.candidates, &mut state.costs);
+            // Evaluate the mean — param()/cost() report `m` (xfavorite).
+            let m_cost = problem.cost(&state.m)?;
+            state.m_cost = Some(m_cost);
         }
-        state.costs = problem.cost_batch(&state.candidates)?;
-        sort_population_ascending(&mut state.candidates, &mut state.costs);
-
-        self.state = Some(w);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
-    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
-        let w = self
-            .state
-            .as_mut()
+        mut state: CmaEsState<V, M, F>,
+    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error> {
+        let k = self
+            .constants
+            .as_ref()
             .expect("CmaEs::init must run before next_iter");
 
-        w.generation += 1;
+        state.generation += 1;
 
         let one = F::one();
         let two = F::from_f64(2.0).unwrap();
@@ -679,72 +519,72 @@ where
             .iter()
             .map(|x| {
                 let mut y = x.clone();
-                y.scaled_add(-one, &w.m);
-                y.scale_in_place(one / w.sigma);
+                y.scaled_add(-one, &state.m);
+                y.scale_in_place(one / state.sigma);
                 y
             })
             .collect();
 
         // ⟨y⟩_w = Σ_{i=1..µ} w_i y_{i:λ}.
-        let mut y_w = w.m.clone();
+        let mut y_w = state.m.clone();
         y_w.scale_in_place(zero);
-        for (i, y_i) in y_sorted.iter().enumerate().take(w.mu) {
-            y_w.scaled_add(w.weights[i], y_i);
+        for (i, y_i) in y_sorted.iter().enumerate().take(k.mu) {
+            y_w.scaled_add(k.weights[i], y_i);
         }
 
         // m ← m + σ ⟨y⟩_w (c_m = 1 by default).
-        w.m.scaled_add(w.sigma, &y_w);
+        state.m.scaled_add(state.sigma, &y_w);
 
         // C^{−1/2} ⟨y⟩_w = B (D^{−1} ⊙ Bᵀ ⟨y⟩_w).
-        let mut bt_y_w = w.b.mat_transpose_vec(&y_w);
-        bt_y_w.component_mul_assign(&w.d_inv);
-        let c_invsqrt_y_w = w.b.matvec(&bt_y_w);
+        let mut bt_y_w = state.b.mat_transpose_vec(&y_w);
+        bt_y_w.component_mul_assign(&state.d_inv);
+        let c_invsqrt_y_w = state.b.matvec(&bt_y_w);
 
         // p_σ ← (1 − c_σ) p_σ + √(c_σ(2 − c_σ) µ_eff) C^{−1/2} ⟨y⟩_w.
-        w.p_sigma.scale_in_place(one - w.c_sigma);
-        let coef_sigma = (w.c_sigma * (two - w.c_sigma) * w.mu_eff).sqrt();
-        w.p_sigma.scaled_add(coef_sigma, &c_invsqrt_y_w);
+        state.p_sigma.scale_in_place(one - k.c_sigma);
+        let coef_sigma = (k.c_sigma * (two - k.c_sigma) * k.mu_eff).sqrt();
+        state.p_sigma.scaled_add(coef_sigma, &c_invsqrt_y_w);
 
         // σ ← σ exp((c_σ / d_σ) (‖p_σ‖ / E‖N(0,I)‖ − 1)).
-        let p_sigma_norm = w.p_sigma.norm_squared().sqrt();
-        let log_factor = (w.c_sigma / w.d_sigma) * (p_sigma_norm / w.expected_norm - one);
-        w.sigma = w.sigma * log_factor.exp();
+        let p_sigma_norm = state.p_sigma.norm_squared().sqrt();
+        let log_factor = (k.c_sigma / k.d_sigma) * (p_sigma_norm / k.expected_norm - one);
+        state.sigma = state.sigma * log_factor.exp();
 
         // h_σ test (Hansen 2016 p. 31, denominator uses 2(g+1)).
-        let g_for_h = (w.generation + 1) as i32;
+        let g_for_h = (state.generation + 1) as i32;
         let exponent = 2 * g_for_h;
-        let denom = (one - (one - w.c_sigma).powi(exponent)).sqrt();
-        let h_sigma = if p_sigma_norm / denom < w.h_sigma_threshold {
+        let denom = (one - (one - k.c_sigma).powi(exponent)).sqrt();
+        let h_sigma = if p_sigma_norm / denom < k.h_sigma_threshold {
             one
         } else {
             zero
         };
 
         // p_c ← (1 − c_c) p_c + h_σ √(c_c(2 − c_c) µ_eff) ⟨y⟩_w.
-        w.p_c.scale_in_place(one - w.c_c);
-        let coef_c = h_sigma * (w.c_c * (two - w.c_c) * w.mu_eff).sqrt();
-        w.p_c.scaled_add(coef_c, &y_w);
+        state.p_c.scale_in_place(one - k.c_c);
+        let coef_c = h_sigma * (k.c_c * (two - k.c_c) * k.mu_eff).sqrt();
+        state.p_c.scaled_add(coef_c, &y_w);
 
         // C update (eq. 47):
         //   C ← (1 + c_1 δ_h − c_1 − c_µ Σ w_j) C
         //       + c_1 p_c p_cᵀ
         //       + c_µ Σ_i w_i° y_{i:λ} y_{i:λ}ᵀ
         // with w_i° = w_i for w_i ≥ 0, else w_i · n / ‖C^{−1/2} y_{i:λ}‖².
-        let delta_h = (one - h_sigma) * w.c_c * (two - w.c_c);
-        let c_scale = one + w.c_1 * delta_h - w.c_1 - w.c_mu * w.sum_w;
-        w.c.scale_in_place(c_scale);
-        w.c.rank_one_update(w.c_1, &w.p_c);
+        let delta_h = (one - h_sigma) * k.c_c * (two - k.c_c);
+        let c_scale = one + k.c_1 * delta_h - k.c_1 - k.c_mu * k.sum_w;
+        state.c.scale_in_place(c_scale);
+        state.c.rank_one_update(k.c_1, &state.p_c);
         // Negative-weight path rescales by n / ‖C^{−1/2} y_i‖²;
         // positive-weight path uses w_i directly (eq. 46).
-        let n_f = F::from_usize(w.n).unwrap();
+        let n_f = F::from_usize(k.n).unwrap();
         for (i, y_i) in y_sorted.iter().enumerate() {
-            let w_i = w.weights[i];
+            let w_i = k.weights[i];
             let w_i_o = if w_i >= zero {
                 w_i
             } else {
                 // ‖C^{−1/2} y_i‖² = ‖D^{−1} ⊙ Bᵀ y_i‖² (orthogonal B).
-                let mut bt_y = w.b.mat_transpose_vec(y_i);
-                bt_y.component_mul_assign(&w.d_inv);
+                let mut bt_y = state.b.mat_transpose_vec(y_i);
+                bt_y.component_mul_assign(&state.d_inv);
                 let cinv_norm_sq = bt_y.norm_squared();
                 if cinv_norm_sq > zero {
                     w_i * n_f / cinv_norm_sq
@@ -754,77 +594,43 @@ where
                 }
             };
             if w_i_o != zero {
-                w.c.rank_one_update(w.c_mu * w_i_o, y_i);
+                state.c.rank_one_update(k.c_mu * w_i_o, y_i);
             }
         }
         // Drop y_sorted now to free memory before the eigendecomposition.
         drop(std::mem::take(&mut y_sorted));
 
         // Refresh eigendecomposition of the new C.
-        let (b_new, eigs) = match w.c.try_eigh() {
+        let (b_new, eigs) = match state.c.try_eigh() {
             Ok(pair) => pair,
             Err(_) => return Ok((state, Some(TerminationReason::SolverFailed))),
         };
-        w.b = b_new;
+        state.b = b_new;
         // d_i = √max(λ_i, 0); d_inv_i = 1/d_i. Floating-point can produce
         // tiny negative eigenvalues even when the algorithm preserves
         // positive definiteness; clamp to a small positive floor before
         // taking the square root.
         let eig_floor = F::from_f64(1e-30).unwrap();
-        for i in 0..w.n {
+        for i in 0..k.n {
             let lam = eigs[i].max(eig_floor);
             let s = lam.sqrt();
-            w.d[i] = s;
-            w.d_inv[i] = one / s;
+            state.d[i] = s;
+            state.d_inv[i] = one / s;
         }
 
         // Sample new generation: x_k = m + σ B (D ⊙ z_k). Sampling is
         // sequential (the RNG draws define the reproducible trajectory);
         // the λ independent candidates then evaluate in one batch
         // (parallel under the `parallel` feature).
-        state.candidates.clear();
-        state.costs.clear();
-        for _k in 0..w.lambda {
-            let z_k = V::sample_standard_normal(&w.m, &mut w.rng);
-            let mut bd_z = z_k;
-            bd_z.component_mul_assign(&w.d);
-            let bd_z = w.b.matvec(&bd_z);
-            let mut x_k = w.m.clone();
-            x_k.scaled_add(w.sigma, &bd_z);
-            state.candidates.push(x_k);
-        }
+        let lambda = k.lambda;
+        sample_generation(&mut state, lambda, &mut self.rng);
         state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
+        // Evaluate the mean so param()/cost() report `m` (xfavorite).
+        let m_cost = problem.cost(&state.m)?;
+        state.m_cost = Some(m_cost);
+
         Ok((state, None))
-    }
-
-    fn terminate(&self, _state: &BasicPopulationState<V, F>) -> Option<TerminationReason> {
-        let w = self.state.as_ref()?;
-        // TolX (Hansen 2016 Appendix B.3): stop when the largest
-        // standard deviation of any axis of the search distribution
-        // drops below `tol_x`. `σ · max_i d_i` is the largest
-        // single-axis standard deviation.
-        let max_d = w.d_iter_max();
-        if w.sigma * max_d < w.tol_x {
-            return Some(TerminationReason::SolverConverged);
-        }
-        None
-    }
-}
-
-impl<V, M, F: Scalar> Working<V, M, F>
-where
-    V: std::ops::Index<usize, Output = F> + VectorLen,
-{
-    fn d_iter_max(&self) -> F {
-        let mut m = F::zero();
-        for i in 0..self.n {
-            let v = self.d[i];
-            if v > m {
-                m = v;
-            }
-        }
-        m
     }
 }

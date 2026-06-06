@@ -27,9 +27,9 @@ use std::time::{Duration, Instant};
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicPopulationState, BasicSimplexState, BasicState, Bfgs, CmaEs, CountsMirror, DenseMatrix,
-    Executor, GradientDescent, LbfgsState, Lbfgsb, MoreThuente, NelderMead, QuasiNewtonState,
-    Solver, State as BasinState, StepOutcome,
+    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, CountsMirror, DenseMatrix, Executor,
+    GradientDescent, LbfgsState, Lbfgsb, MoreThuente, NelderMead, QuasiNewtonState, Solver,
+    State as BasinState, StepOutcome,
 };
 
 /// Wall-clock budget per (solver, start, rep). 20 ms gives GD room to either
@@ -296,15 +296,13 @@ fn run_lbfgs(start: &[f64]) -> Vec<(u128, f64)> {
 }
 
 fn run_cmaes(start: &[f64], seed: u64) -> Vec<(u128, f64)> {
-    let n = start.len();
     let cma_seed = CMAES_BASE_SEED.wrapping_add(seed);
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(n);
     median_reps(|| {
         basin_trace(
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
-                CmaEs::<Vec<f64>, DenseMatrix>::new(start.to_vec(), 0.3, cma_seed),
-                BasicPopulationState::<Vec<f64>>::with_size(lambda),
+                CmaEs::<Vec<f64>, DenseMatrix>::new(cma_seed),
+                CmaEsState::<Vec<f64>, DenseMatrix>::new(start.to_vec(), 0.3),
             ),
             BUDGET,
         )

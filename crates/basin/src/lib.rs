@@ -122,12 +122,12 @@ pub use crate::core::problem::{
 pub use crate::core::solver::Solver;
 pub use crate::core::state::QuasiNewtonState;
 pub use crate::core::state::{
-    BasicPopulationState, BasicSimplexState, BasicState, CountsMirror, GradientState,
+    BasicPopulationState, BasicSimplexState, BasicState, CmaEsState, CountsMirror, GradientState,
     IntoInitialSimplex, LbfgsState, PopulationState, SimplexState, State,
 };
 pub use crate::core::termination::{
-    CostTolerance, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter, MaxTime,
-    NoImprovement, ParamTolerance, ProjectedGradientTolerance, RelativeCostTolerance,
+    CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter,
+    MaxTime, NoImprovement, ParamTolerance, ProjectedGradientTolerance, RelativeCostTolerance,
     RelativeGradientTolerance, RelativeParamTolerance, SimplexTolerance, TargetCost,
     TerminationCriterion, TerminationReason,
 };

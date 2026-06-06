@@ -453,7 +453,21 @@ worse). Address it at the documentation / diagnostics layer:
 
 [`GradientTolerance`]: ../crates/basin/src/core/termination.rs
 
-### B8. CMA-ES distribution: dedicated `CmaEsState` vs solver-parked working state `[DECIDE]`
+### B8. CMA-ES distribution: dedicated `CmaEsState` vs solver-parked working state `[RESOLVED]`
+
+**Resolved:** introduced `CmaEsState<V, M, F>` (`core/state/cma_es.rs`). The
+distribution (`m`, `σ`, `C`, `B`/`D`, evolution paths) now lives in the state;
+`CmaEs` and `BoundedCmaEs` are configuration-only (derived constants + RNG
+cached on the solver). One shared state serves both solvers (bound-penalty
+bookkeeping rides along as `Option<BoundPenalty>`, mirroring
+`LbfgsState::work`). The canonical TolX test is now the composable
+`CmaEsTolerance` criterion (binding the concrete state, firing
+`TerminationReason::CmaEsTolerance`) instead of a hardcoded `terminate` hook,
+restoring tenet 3. `CmaEs::new`/`BoundedCmaEs::new` take only the seed; the
+mean/σ/stds go on `CmaEsState::new(mean, sigma).with_stds(stds)`. Per-generation
+the solver evaluates `f(m)` so `State::param`/`cost` report the mean
+(`xfavorite`) while `best_param`/`best_cost` report the best evaluated sample
+(`xbest`). The original section is kept below for the rationale.
 
 CMA-ES is the one solver whose iterate does not live in its state. Its
 distribution parameters --- the mean `m`, step-size `σ`, covariance `C`,

@@ -38,8 +38,8 @@ use std::time::Duration;
 
 use basin::problems::{Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, StyblinskiTang};
 use basin::{
-    BasicPopulationState, BasicSimplexState, BasicState, Bfgs, CmaEs, DenseMatrix, Executor,
-    GaussNewton, GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente, NelderMead,
+    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix, Executor, GaussNewton,
+    GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente, NelderMead,
     QuasiNewtonState,
 };
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
@@ -280,17 +280,16 @@ fn bench_cmaes(c: &mut Criterion) {
         let mut g = c.benchmark_group(format!("cmaes_rastrigin_n{n}"));
         // In-domain start away from the global optimum at the origin.
         let m0 = vec![3.0; n];
-        // λ is backend-independent; match the solver's internal default in the
-        // population state so the contract holds.
-        let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(n);
+        // The mean / σ live on `CmaEsState`; the state builder seeds it from the
+        // per-batch start vector and the solver derives λ internally.
 
         contestant!(
             g,
             "vec",
             || m0.clone(),
             Rastrigin<Vec<f64>>,
-            CmaEs::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3, 42),
-            |_x0| BasicPopulationState::<Vec<f64>>::with_size(lambda),
+            CmaEs::<Vec<f64>, DenseMatrix>::new(42),
+            |x0| CmaEsState::<Vec<f64>, DenseMatrix>::new(x0, 0.3),
         );
 
         let m0n = DVector::from_vec(m0.clone());
@@ -299,8 +298,8 @@ fn bench_cmaes(c: &mut Criterion) {
             "nalgebra",
             || m0n.clone(),
             Rastrigin<DVector<f64>>,
-            CmaEs::<DVector<f64>, DMatrix<f64>>::new(m0n.clone(), 0.3, 42),
-            |_x0| BasicPopulationState::<DVector<f64>>::with_size(lambda),
+            CmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
+            |x0| CmaEsState::<DVector<f64>, DMatrix<f64>>::new(x0, 0.3),
         );
 
         let m0f = Col::<f64>::from_fn(n, |i| m0[i]);
@@ -309,8 +308,8 @@ fn bench_cmaes(c: &mut Criterion) {
             "faer",
             || m0f.clone(),
             Rastrigin<Col<f64>>,
-            CmaEs::<Col<f64>, Mat<f64>>::new(m0f.clone(), 0.3, 42),
-            |_x0| BasicPopulationState::<Col<f64>>::with_size(lambda),
+            CmaEs::<Col<f64>, Mat<f64>>::new(42),
+            |x0| CmaEsState::<Col<f64>, Mat<f64>>::new(x0, 0.3),
         );
         g.finish();
     }

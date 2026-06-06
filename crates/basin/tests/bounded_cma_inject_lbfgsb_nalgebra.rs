@@ -9,7 +9,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::BoothBoxed;
-use basin::{BasicPopulationState, BoundedCmaEs, BoundedCmaInject, Executor, Lbfgsb};
+use basin::{BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, Lbfgsb};
 use nalgebra::{DMatrix, DVector};
 
 /// BoundedCmaEs + L-Bfgs-B on Booth with slack bounds `[-5, 5]²`. The
@@ -32,9 +32,8 @@ fn converges_on_booth_boxed_slack() {
     let problem = BoothBoxed::<DVector<f64>>::new(lower.clone(), upper.clone());
 
     let m0 = DVector::from_vec(vec![0.0, 2.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
-    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 19);
+    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(19);
     let solver = BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())
         .with_k(1)
         .with_inner_max_iter(50);
@@ -42,7 +41,7 @@ fn converges_on_booth_boxed_slack() {
     let result = Executor::new(
         problem,
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
     )
     .max_iter(200)
     .run()
@@ -63,10 +62,10 @@ fn converges_on_booth_boxed_slack() {
 /// `cost_evals` and `gradient_evals` into the outer state's
 /// `cost_evals`.
 ///
-/// Both vanilla and memetic disable TolX (`with_tol_x(0.0)`) so each
-/// runs the full `outer_iters` without early termination — otherwise
-/// the memetic variant converges faster on TolX and the eval-count
-/// comparison gets meaningless. The lower-bound check: per outer iter
+/// Neither vanilla nor memetic registers the `CmaEsTolerance` (TolX)
+/// criterion, so each runs the full `outer_iters` without early
+/// termination — otherwise the memetic variant converges faster on TolX
+/// and the eval-count comparison gets meaningless. The lower-bound check: per outer iter
 /// (after iter 0; CmaInject skips iter-0 injection), L-Bfgs-B init
 /// contributes 1 cost + 1 gradient eval (2 work units), and the
 /// outer's re-evaluation after clipping is 1 cost — so the floor is
@@ -77,25 +76,24 @@ fn aggregates_lbfgsb_work_into_outer() {
     let upper = DVector::from_vec(vec![5.0, 5.0]);
 
     let m0 = DVector::from_vec(vec![0.0, 2.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
     let outer_iters: u64 = 20;
     let inner_iters: u64 = 50;
     let k: usize = 1;
 
-    // Vanilla BoundedCmaEs baseline; TolX disabled so it runs the
-    // full budget.
+    // Vanilla BoundedCmaEs baseline; no TolX criterion registered so it
+    // runs the full budget.
     let vanilla = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5, 29).with_tol_x(0.0),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(29),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
-    // Memetic variant on the same seed and outer budget; TolX disabled
-    // for the same reason.
-    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 29).with_tol_x(0.0);
+    // Memetic variant on the same seed and outer budget; no TolX
+    // criterion for the same reason.
+    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(29);
     let solver = BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
@@ -103,7 +101,7 @@ fn aggregates_lbfgsb_work_into_outer() {
     let memetic = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
     )
     .max_iter(outer_iters)
     .run()

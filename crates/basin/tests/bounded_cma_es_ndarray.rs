@@ -2,7 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BasicPopulationState, BoundedCmaEs, Executor, PopulationState, StepOutcome, TerminationReason,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
+    TerminationReason,
 };
 use ndarray::{Array1, Array2};
 
@@ -14,12 +15,11 @@ fn same_seed_yields_identical_trajectory() {
     let lower = Array1::from_vec(vec![-5.0, -5.0]);
     let upper = Array1::from_vec(vec![5.0, 5.0]);
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<Array1<f64>, Array2<f64>>::default_lambda(2);
 
     let result_a = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0.clone(), 0.5, 42),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(42),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0.clone(), 0.5),
     )
     .max_iter(30)
     .run()
@@ -27,8 +27,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.5, 42),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(42),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5),
     )
     .max_iter(30)
     .run()
@@ -47,13 +47,12 @@ fn with_stds_ones_matches_default() {
     let lower = Array1::from_vec(vec![-5.0, -5.0]);
     let upper = Array1::from_vec(vec![5.0, 5.0]);
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<Array1<f64>, Array2<f64>>::default_lambda(2);
     let ones = Array1::from_elem(2, 1.0);
 
     let default = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0.clone(), 0.5, 42),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(42),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0.clone(), 0.5),
     )
     .max_iter(40)
     .run()
@@ -61,8 +60,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.5, 42).with_stds(ones),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(42),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5).with_stds(ones),
     )
     .max_iter(40)
     .run()
@@ -81,13 +80,12 @@ fn with_stds_anisotropic_recovers_minimum() {
     let lower = Array1::from_vec(vec![-5.0, -5.0]);
     let upper = Array1::from_vec(vec![5.0, 5.0]);
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<Array1<f64>, Array2<f64>>::default_lambda(2);
     let stds = Array1::from_vec(vec![0.5, 2.0]);
 
     let result = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.5, 7).with_stds(stds),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(7),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5).with_stds(stds),
     )
     .max_iter(400)
     .run()
@@ -104,11 +102,11 @@ fn with_stds_anisotropic_recovers_minimum() {
 
 /// `with_stds` panics on a length mismatch (bounded variant).
 #[test]
-#[should_panic(expected = "stds.len() == initial_mean.len()")]
+#[should_panic(expected = "stds.len() == mean.len()")]
 fn with_stds_panics_on_length_mismatch() {
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let _ = BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.5, 42)
-        .with_stds(Array1::from_vec(vec![1.0]));
+    let _ =
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5).with_stds(Array1::from_vec(vec![1.0]));
 }
 
 /// Slack bounds: the unconstrained Booth minimum (1, 3) is interior to
@@ -120,12 +118,11 @@ fn slack_bounds_recover_unconstrained_minimum() {
     let lower = Array1::from_vec(vec![-5.0, -5.0]);
     let upper = Array1::from_vec(vec![5.0, 5.0]);
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<Array1<f64>, Array2<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.5, 7),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(7),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5),
     )
     .max_iter(400)
     .run()
@@ -148,12 +145,11 @@ fn tight_bounds_converge_to_box_corner() {
     let lower = Array1::from_vec(vec![-1.0, -1.0]);
     let upper = Array1::from_vec(vec![1.0, 1.0]);
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<Array1<f64>, Array2<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.3, 11),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(11),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -177,12 +173,11 @@ fn infeasible_initial_mean_converges_to_box_corner() {
     let lower = Array1::from_vec(vec![-1.0, -1.0]);
     let upper = Array1::from_vec(vec![1.0, 1.0]);
     let m0 = Array1::from_vec(vec![10.0, 10.0]);
-    let lambda = BoundedCmaEs::<Array1<f64>, Array2<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.3, 5),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(5),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -205,18 +200,18 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     let lower = Array1::from_vec(vec![-10.0, -10.0]);
     let upper = Array1::from_vec(vec![10.0, 10.0]);
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<Array1<f64>, Array2<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.3, 11),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(11),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.3),
     )
+    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
 /// `PopulationState` invariants survive iteration on the bounded path:
@@ -233,8 +228,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(m0, 0.5, 1234).with_lambda(lambda),
-        BasicPopulationState::<Array1<f64>>::with_size(lambda),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(1234).with_lambda(lambda),
+        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5),
     )
     .max_iter(10)
     .into_stepper()

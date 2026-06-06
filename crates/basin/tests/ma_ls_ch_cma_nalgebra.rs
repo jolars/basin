@@ -140,7 +140,7 @@ fn different_seeds_yield_different_trajectories() {
 
 /// Chain mechanism is actually firing: at least one individual
 /// undergoes ≥2 LS applications over the run, which is only possible
-/// if its `(CmaEs, BasicPopulationState)` pair was correctly preserved
+/// if its `(CmaEs, CmaEsState)` pair was correctly preserved
 /// and re-entered between outer iterations. Without `CmaEs::init`
 /// idempotency the second LS application would lose its evolution
 /// state — the test would still pass (count increments unconditionally)

@@ -7,7 +7,7 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BasicPopulationState, BoundedCmaEs, DenseMatrix, Executor, PopulationState, StepOutcome,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, DenseMatrix, Executor, PopulationState, StepOutcome,
     TerminationReason,
 };
 
@@ -17,12 +17,11 @@ fn same_seed_yields_identical_trajectory() {
     let lower = vec![-5.0, -5.0];
     let upper = vec![5.0, 5.0];
     let m0 = vec![0.0, 0.0];
-    let lambda = BoundedCmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
 
     let result_a = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.5, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.5),
     )
     .max_iter(30)
     .run()
@@ -30,8 +29,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
     )
     .max_iter(30)
     .run()
@@ -48,12 +47,11 @@ fn slack_bounds_recover_unconstrained_minimum() {
     let lower = vec![-5.0, -5.0];
     let upper = vec![5.0, 5.0];
     let m0 = vec![0.0, 0.0];
-    let lambda = BoundedCmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 7),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(7),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
     )
     .max_iter(400)
     .run()
@@ -75,12 +73,11 @@ fn tight_bounds_converge_to_box_corner() {
     let lower = vec![-1.0, -1.0];
     let upper = vec![1.0, 1.0];
     let m0 = vec![0.0, 0.0];
-    let lambda = BoundedCmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.3, 11),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -103,12 +100,11 @@ fn infeasible_initial_mean_converges_to_box_corner() {
     let lower = vec![-1.0, -1.0];
     let upper = vec![1.0, 1.0];
     let m0 = vec![10.0, 10.0];
-    let lambda = BoundedCmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.3, 5),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(5),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -131,13 +127,12 @@ fn with_stds_ones_matches_default() {
     let lower = vec![-5.0, -5.0];
     let upper = vec![5.0, 5.0];
     let m0 = vec![0.0, 0.0];
-    let lambda = BoundedCmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
     let ones = vec![1.0, 1.0];
 
     let default = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.5, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.5),
     )
     .max_iter(40)
     .run()
@@ -145,8 +140,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 42).with_stds(ones),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5).with_stds(ones),
     )
     .max_iter(40)
     .run()
@@ -163,18 +158,18 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     let lower = vec![-10.0, -10.0];
     let upper = vec![10.0, 10.0];
     let m0 = vec![0.0, 0.0];
-    let lambda = BoundedCmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.3, 11),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
     )
+    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
 /// `PopulationState` invariants survive iteration on the bounded `Vec<f64>`
@@ -189,8 +184,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 1234).with_lambda(lambda),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(1234).with_lambda(lambda),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
     )
     .max_iter(10)
     .into_stepper()

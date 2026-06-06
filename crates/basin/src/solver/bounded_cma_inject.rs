@@ -8,7 +8,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicPopulationState, CountsMirror, State};
+use crate::core::state::{CmaEsState, CountsMirror, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::bounded_cma_es::{BoundedCmaEs, evaluate_with_penalty};
 use crate::solver::cma_es::sort_population_ascending;
@@ -152,7 +152,7 @@ where
     }
 }
 
-impl<P, I, V, M, F> Solver<P, BasicPopulationState<V, F>> for BoundedCmaInject<I, V, M, F>
+impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>> for BoundedCmaInject<I, V, M, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
@@ -177,37 +177,34 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    BoundedCmaEs<V, M, F>: Solver<P, BasicPopulationState<V, F>, Error = P::Error>,
+    BoundedCmaEs<V, M, F>: Solver<P, CmaEsState<V, M, F>, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V, F>,
-    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
+        state: CmaEsState<V, M, F>,
+    ) -> Result<CmaEsState<V, M, F>, Self::Error> {
         self.cma.init(problem, state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V, F>,
-    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: CmaEsState<V, M, F>,
+    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error> {
         // 1. Standard BoundedCmaEs iteration first.
         let (mut state, reason) = self.cma.next_iter(problem, state)?;
         if let Some(r) = reason {
             return Ok((state, Some(r)));
         }
 
-        // Snapshot CMA-ES internals for clipping.
-        let (n, m, sigma) = {
-            let w = self
-                .cma
-                .working()
-                .expect("BoundedCmaEs::init must run before BoundedCmaInject::next_iter");
-            (w.n, w.m.clone(), w.sigma)
-        };
+        // Snapshot the post-update distribution from the state for
+        // clipping (it lives on `CmaEsState` now, not the solver).
+        let n = state.m.vec_len();
+        let m = state.m.clone();
+        let sigma = state.sigma;
         let c_y = self.c_y_override.unwrap_or_else(|| default_c_y::<F>(n));
         let refine = self.k.min(state.candidates.len());
 
@@ -234,11 +231,10 @@ where
             y.scaled_add(-F::one(), &m);
             y.scale_in_place(F::one() / sigma);
 
-            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖ — B, D⁻¹ from the state.
             let inv_sqrt_norm = {
-                let w = self.cma.working().expect("working still populated");
-                let mut bt_y = w.b.mat_transpose_vec(&y);
-                bt_y.component_mul_assign(&w.d_inv);
+                let mut bt_y = state.b.mat_transpose_vec(&y);
+                bt_y.component_mul_assign(&state.d_inv);
                 bt_y.norm_squared().sqrt()
             };
 
@@ -265,10 +261,10 @@ where
             //     `working().gamma`.
             let lo = problem.inner().lower().clone();
             let hi = problem.inner().upper().clone();
-            let gamma = self
-                .cma
-                .working()
-                .expect("working still populated")
+            let gamma = state
+                .penalty
+                .as_ref()
+                .expect("BoundedCmaEs::init installs the penalty")
                 .gamma
                 .clone();
             let cost_new = {
@@ -285,12 +281,5 @@ where
         }
 
         Ok((state, None))
-    }
-
-    fn terminate(&self, state: &BasicPopulationState<V, F>) -> Option<TerminationReason> {
-        // TolX inherits from BoundedCmaEs unchanged.
-        <BoundedCmaEs<V, M, F> as Solver<P, BasicPopulationState<V, F>>>::terminate(
-            &self.cma, state,
-        )
     }
 }

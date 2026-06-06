@@ -50,11 +50,13 @@ the relevant files. Don't duplicate it here:
   to it, and existing `Observe` impls keep compiling via the forwarding default
   — a concrete `Kv` type keeps the trait object-safe for `Box<dyn Observe>`. So
   this is *deferred*, not foreclosed. The genuine future motivation, if it
-  comes: solver-internal working state (CMA-ES σ / covariance / evolution
-  paths, LM μ / ν / diag) lives in the *solver* struct, not the state, so the
-  "expose it on a richer state trait" answer does not cover those scalars.
-  Don't "fix" the absence of a KV channel by reflex — but don't treat it as
-  permanently closed either.
+  comes: some solver-internal working state (LM μ / ν / diag) lives in the
+  *solver* struct, not the state, so the "expose it on a richer state trait"
+  answer does not cover those scalars. (CMA-ES is *no longer* an example: its
+  σ / covariance / evolution paths moved onto `CmaEsState` so its TolX test
+  could become the composable `CmaEsTolerance` criterion — see that state's
+  rustdoc.) Don't "fix" the absence of a KV channel by reflex — but don't
+  treat it as permanently closed either.
 
 - **No `Solver::name()` introspection.** The `Solver` trait (`core/solver.rs`)
   has `type Error` + `init` / `next_iter` / `terminate` and deliberately no

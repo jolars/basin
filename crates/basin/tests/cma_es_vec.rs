@@ -9,8 +9,8 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    BasicPopulationState, CmaEs, CostFunction, DenseMatrix, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    CmaEs, CmaEsState, CmaEsTolerance, CostFunction, DenseMatrix, Executor, PopulationState,
+    StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory on the `Vec<f64>` backend. Reproducibility is
@@ -18,12 +18,11 @@ use basin::{
 #[test]
 fn same_seed_yields_identical_trajectory() {
     let m0 = vec![0.5, 0.5, 0.5, 0.5, 0.5];
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(5);
 
     let result_a = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3),
     )
     .max_iter(30)
     .run()
@@ -31,8 +30,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.3, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
     )
     .max_iter(30)
     .run()
@@ -46,12 +45,11 @@ fn same_seed_yields_identical_trajectory() {
 #[test]
 fn converges_on_sphere_5d() {
     let m0 = vec![1.0; 5];
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(5);
 
     let result = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 7),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
     )
     .max_iter(80)
     .run()
@@ -69,12 +67,11 @@ fn converges_on_sphere_5d() {
 #[test]
 fn converges_on_rosenbrock_2d() {
     let m0 = vec![-1.0, 1.0];
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
 
     let result = Executor::new(
         Rosenbrock::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.3, 17),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(17),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -89,23 +86,23 @@ fn converges_on_rosenbrock_2d() {
     );
 }
 
-/// Solver-internal TolX termination: with the default tight tolerance,
-/// CMA-ES emits `SolverConverged` on Sphere as `σ · max dᵢ` collapses.
+/// TolX termination via the `CmaEsTolerance` criterion: CMA-ES emits
+/// `CmaEsTolerance` on Sphere as `σ · max dᵢ` collapses below the tolerance.
 #[test]
 fn sphere_terminates_solver_converged_on_tol_x() {
     let m0 = vec![0.5, 0.5, 0.5];
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(3);
 
     let result = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.3, 11),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(11),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
     )
+    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
 /// `with_stds(ones)` reproduces the isotropic `C = I` default bit-for-bit on
@@ -114,13 +111,12 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 #[test]
 fn with_stds_ones_matches_default() {
     let m0 = vec![0.5, 0.5, 0.5, 0.5, 0.5];
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(5);
     let ones = vec![1.0; 5];
 
     let default = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3),
     )
     .max_iter(40)
     .run()
@@ -128,8 +124,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.3, 42).with_stds(ones),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3).with_stds(ones),
     )
     .max_iter(40)
     .run()
@@ -146,13 +142,12 @@ fn with_stds_ones_matches_default() {
 #[test]
 fn with_stds_anisotropic_converges_on_sphere() {
     let m0 = vec![1.0; 5];
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(5);
     let stds = vec![1.0, 0.1, 10.0, 0.5, 2.0];
 
     let result = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 7).with_stds(stds),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5).with_stds(stds),
     )
     .max_iter(120)
     .run()
@@ -181,13 +176,12 @@ fn with_stds_preconditions_ill_scaled_quadratic() {
     }
 
     let m0 = vec![2.0, 2.0];
-    let lambda = CmaEs::<Vec<f64>, DenseMatrix>::default_lambda(2);
     let stds = vec![1.0, 1e-3];
 
     let result = Executor::new(
         IllScaledQuadratic,
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 7).with_stds(stds),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5).with_stds(stds),
     )
     .max_iter(300)
     .run()
@@ -209,8 +203,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(m0, 0.5, 1234).with_lambda(lambda),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(1234).with_lambda(lambda),
+        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
     )
     .max_iter(10)
     .into_stepper()

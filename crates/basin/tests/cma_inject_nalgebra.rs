@@ -14,7 +14,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::{Rosenbrock, Sphere};
-use basin::{BasicPopulationState, CmaEs, CmaInject, Executor, NelderMead};
+use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
 use nalgebra::{DMatrix, DVector};
 
 /// Rosenbrock 2-D from `(-1, 1)` — the canonical non-convex banana
@@ -35,9 +35,8 @@ use nalgebra::{DMatrix, DVector};
 #[test]
 fn converges_on_rosenbrock_2d() {
     let m0 = DVector::from_vec(vec![-1.0, 1.0]);
-    let lambda = CmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
-    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 17);
+    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(17);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(1)
         .with_inner_max_iter(30);
@@ -45,7 +44,7 @@ fn converges_on_rosenbrock_2d() {
     let result = Executor::new(
         Rosenbrock::<DVector<f64>>::new(),
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
     )
     .max_iter(200)
     .run()
@@ -73,7 +72,6 @@ fn converges_on_rosenbrock_2d() {
 fn aggregates_inner_cost_evals_into_outer() {
     let m0 = DVector::from_vec(vec![1.0; 5]);
     let n = 5usize;
-    let lambda = CmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(n);
     let outer_iters: u64 = 20;
     let inner_iters: u64 = 30;
     let k: usize = 1;
@@ -81,15 +79,15 @@ fn aggregates_inner_cost_evals_into_outer() {
     // Vanilla CMA-ES baseline.
     let vanilla = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.3, 7),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.3),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
     // Memetic variant on the same seed and outer budget.
-    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 7);
+    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(7);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
@@ -97,7 +95,7 @@ fn aggregates_inner_cost_evals_into_outer() {
     let memetic = Executor::new(
         Sphere::<DVector<f64>>::new(),
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
     )
     .max_iter(outer_iters)
     .run()

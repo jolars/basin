@@ -6,8 +6,8 @@
 use web_time::{Duration, Instant};
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd};
-use crate::core::state::{GradientState, SimplexState, State};
+use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorLen};
+use crate::core::state::{CmaEsState, GradientState, SimplexState, State};
 
 /// Why the executor stopped. Returned on
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
@@ -48,6 +48,9 @@ pub enum TerminationReason {
     NoImprovement,
     /// Simplex collapsed below the configured tolerance.
     SimplexTolerance,
+    /// CMA-ES search distribution collapsed below TolX:
+    /// `σ · maxᵢ dᵢ < tol_x` (Hansen 2016 Appendix B.3).
+    CmaEsTolerance,
     /// Wall-clock time limit reached.
     MaxTime,
     /// Solver determined it has converged (e.g. fixed point reached).
@@ -573,6 +576,39 @@ where
             }
         }
         Some(TerminationReason::SimplexTolerance)
+    }
+}
+
+/// CMA-ES TolX convergence test (Hansen 2016 Appendix B.3): stop when
+/// the largest standard deviation of any axis of the search
+/// distribution drops below `tol_x`, i.e. `σ · maxᵢ dᵢ < tol_x` (where
+/// `dᵢ` are the square roots of `C`'s eigenvalues).
+///
+/// Binds on the concrete [`CmaEsState`] — the canonical convergence
+/// criterion for both [`CmaEs`](crate::solver::CmaEs) and
+/// [`BoundedCmaEs`](crate::solver::BoundedCmaEs), which share that
+/// state. The Hansen-recommended default is `1e−12 · initial_sigma`
+/// (scaled by `maxᵢ stdsᵢ` when an anisotropic initial covariance is
+/// used, to stay relative to the initial spread).
+pub struct CmaEsTolerance<F = f64> {
+    tol_x: F,
+}
+
+impl<F> CmaEsTolerance<F> {
+    /// New TolX criterion firing at `σ · maxᵢ dᵢ < tol_x`.
+    pub fn new(tol_x: F) -> Self {
+        Self { tol_x }
+    }
+}
+
+impl<V, M, F> TerminationCriterion<CmaEsState<V, M, F>> for CmaEsTolerance<F>
+where
+    F: Scalar,
+    V: VectorLen + std::ops::Index<usize, Output = F>,
+{
+    fn check(&mut self, state: &CmaEsState<V, M, F>) -> Option<TerminationReason> {
+        (state.sigma() * state.max_axis_std() < self.tol_x)
+            .then_some(TerminationReason::CmaEsTolerance)
     }
 }
 

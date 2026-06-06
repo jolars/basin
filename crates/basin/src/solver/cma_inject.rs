@@ -8,8 +8,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{
-    BasicPopulationState, BasicSimplexState, BasicState, CountsMirror, IntoInitialSimplex,
-    LbfgsState, State,
+    BasicSimplexState, BasicState, CmaEsState, CountsMirror, IntoInitialSimplex, LbfgsState, State,
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
@@ -50,7 +49,7 @@ use crate::solver::nelder_mead::NelderMead;
 ///
 /// No per-trait hook: same-problem composition shares the outer's
 /// [`Problem`] wrapper, so inner evals flow through automatically.
-/// [`BasicPopulationState`]'s [`CountsMirror`] folds every kind of work
+/// [`CmaEsState`]'s [`CountsMirror`] folds every kind of work
 /// (`cost + gradient + residual + jacobian + hessian`) into the outer's
 /// `cost_evals` via `delta.total_work()`, so a derivative-based inner
 /// (LM, L-BFGS-B) has its gradient work honestly collapse into the
@@ -267,7 +266,7 @@ where
 /// [`Problem`] wrapper, so every inner cost / gradient / Jacobian /
 /// Hessian call bumps the same
 /// [`EvalCounts`](crate::core::problem::EvalCounts) as the outer's own
-/// evaluations. [`BasicPopulationState`]'s [`CountsMirror`] folds every
+/// evaluations. [`CmaEsState`]'s [`CountsMirror`] folds every
 /// kind of work into the outer's single `cost_evals` via
 /// `delta.total_work()` — CMA-ES outer state has no `gradient_evals`
 /// field, so a derivative-based inner (LM, L-BFGS-B) has its gradient
@@ -390,7 +389,7 @@ pub(crate) fn default_c_y<F: Scalar>(n: usize) -> F {
     n.sqrt() + two * n / (n + two)
 }
 
-impl<P, I, V, M, F> Solver<P, BasicPopulationState<V, F>> for CmaInject<I, V, M, F>
+impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>> for CmaInject<I, V, M, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -413,15 +412,15 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    CmaEs<V, M, F>: Solver<P, BasicPopulationState<V, F>, Error = P::Error>,
+    CmaEs<V, M, F>: Solver<P, CmaEsState<V, M, F>, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V, F>,
-    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
+        state: CmaEsState<V, M, F>,
+    ) -> Result<CmaEsState<V, M, F>, Self::Error> {
         // Hansen's preliminary experiments inject from iter 1 onward,
         // so we delegate the initial population to vanilla CMA-ES.
         self.cma.init(problem, state)
@@ -430,8 +429,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V, F>,
-    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: CmaEsState<V, M, F>,
+    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error> {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
         //    previous generation, sample λ fresh candidates sorted by
         //    cost ascending.
@@ -440,14 +439,11 @@ where
             return Ok((state, Some(r)));
         }
 
-        // Snapshot internals for clipping.
-        let (n, m, sigma) = {
-            let w = self
-                .cma
-                .working()
-                .expect("CmaEs::init must run before CmaInject::next_iter");
-            (w.n, w.m.clone(), w.sigma)
-        };
+        // Snapshot the post-update distribution from the state for
+        // clipping (it lives on `CmaEsState` now, not the solver).
+        let n = state.m.vec_len();
+        let m = state.m.clone();
+        let sigma = state.sigma;
         let c_y = self.c_y_override.unwrap_or_else(|| default_c_y::<F>(n));
         let refine = self.k.min(state.candidates.len());
 
@@ -459,8 +455,8 @@ where
 
             // 3. Drive the inner. Same-problem composition: inner shares
             //    the outer wrapper, so its evals flow into the outer's
-            //    EvalCounts transparently and the BasicPopulationState
-            //    mirror picks them up via `total_work()`.
+            //    EvalCounts transparently and the CmaEsState mirror picks
+            //    them up via `total_work()`.
             let inner_result: OptimizationResult<I::State> =
                 self.inner.run(problem, inner_state)?;
 
@@ -478,11 +474,10 @@ where
             y.scaled_add(-F::one(), &m);
             y.scale_in_place(F::one() / sigma);
 
-            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖ — B, D⁻¹ from the state.
             let inv_sqrt_norm = {
-                let w = self.cma.working().expect("working still populated");
-                let mut bt_y = w.b.mat_transpose_vec(&y);
-                bt_y.component_mul_assign(&w.d_inv);
+                let mut bt_y = state.b.mat_transpose_vec(&y);
+                bt_y.component_mul_assign(&state.d_inv);
                 bt_y.norm_squared().sqrt()
             };
 
@@ -512,9 +507,5 @@ where
         }
 
         Ok((state, None))
-    }
-
-    fn terminate(&self, state: &BasicPopulationState<V, F>) -> Option<TerminationReason> {
-        <CmaEs<V, M, F> as Solver<P, BasicPopulationState<V, F>>>::terminate(&self.cma, state)
     }
 }

@@ -2,7 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BasicPopulationState, BoundedCmaEs, Executor, PopulationState, StepOutcome, TerminationReason,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
+    TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -14,12 +15,11 @@ fn same_seed_yields_identical_trajectory() {
     let lower = DVector::from_vec(vec![-5.0, -5.0]);
     let upper = DVector::from_vec(vec![5.0, 5.0]);
     let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
     let result_a = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5, 42),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5),
     )
     .max_iter(30)
     .run()
@@ -27,8 +27,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 42),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
     )
     .max_iter(30)
     .run()
@@ -47,13 +47,12 @@ fn with_stds_ones_matches_default() {
     let lower = DVector::from_vec(vec![-5.0, -5.0]);
     let upper = DVector::from_vec(vec![5.0, 5.0]);
     let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
     let ones = DVector::from_element(2, 1.0);
 
     let default = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5, 42),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5),
     )
     .max_iter(40)
     .run()
@@ -61,8 +60,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 42).with_stds(ones),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5).with_stds(ones),
     )
     .max_iter(40)
     .run()
@@ -81,13 +80,12 @@ fn with_stds_anisotropic_recovers_minimum() {
     let lower = DVector::from_vec(vec![-5.0, -5.0]);
     let upper = DVector::from_vec(vec![5.0, 5.0]);
     let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
     let stds = DVector::from_vec(vec![0.5, 2.0]);
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 7).with_stds(stds),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5).with_stds(stds),
     )
     .max_iter(400)
     .run()
@@ -104,10 +102,10 @@ fn with_stds_anisotropic_recovers_minimum() {
 
 /// `with_stds` panics on a length mismatch (bounded variant).
 #[test]
-#[should_panic(expected = "stds.len() == initial_mean.len()")]
+#[should_panic(expected = "stds.len() == mean.len()")]
 fn with_stds_panics_on_length_mismatch() {
     let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let _ = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 42)
+    let _ = CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5)
         .with_stds(DVector::from_vec(vec![1.0]));
 }
 
@@ -120,12 +118,11 @@ fn slack_bounds_recover_unconstrained_minimum() {
     let lower = DVector::from_vec(vec![-5.0, -5.0]);
     let upper = DVector::from_vec(vec![5.0, 5.0]);
     let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 7),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
     )
     .max_iter(400)
     .run()
@@ -148,12 +145,11 @@ fn tight_bounds_converge_to_box_corner() {
     let lower = DVector::from_vec(vec![-1.0, -1.0]);
     let upper = DVector::from_vec(vec![1.0, 1.0]);
     let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 11),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(11),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -177,12 +173,11 @@ fn infeasible_initial_mean_converges_to_box_corner() {
     let lower = DVector::from_vec(vec![-1.0, -1.0]);
     let upper = DVector::from_vec(vec![1.0, 1.0]);
     let m0 = DVector::from_vec(vec![10.0, 10.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 5),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(5),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -205,18 +200,18 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     let lower = DVector::from_vec(vec![-10.0, -10.0]);
     let upper = DVector::from_vec(vec![10.0, 10.0]);
     let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let lambda = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::default_lambda(2);
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3, 11),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(11),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
     )
+    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
 /// `PopulationState` invariants survive iteration on the bounded path:
@@ -233,8 +228,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5, 1234).with_lambda(lambda),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(1234).with_lambda(lambda),
+        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
     )
     .max_iter(10)
     .into_stepper()

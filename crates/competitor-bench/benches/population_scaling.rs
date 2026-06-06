@@ -40,8 +40,8 @@ use std::hint::black_box;
 use std::sync::Once;
 
 use basin::{
-    BasicPopulationState, BoxConstraints, CmaEs, CostFunction, De, DenseMatrix, Executor,
-    RandomSearch,
+    BasicPopulationState, BoxConstraints, CmaEs, CmaEsState, CostFunction, De, DenseMatrix,
+    Executor, RandomSearch,
 };
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -118,9 +118,8 @@ fn bench_cma_es(c: &mut Criterion) {
                     black_box(
                         Executor::new(
                             ExpensiveSphere::new(dim),
-                            CmaEs::<Vec<f64>, DenseMatrix>::new(vec![1.0; dim], 0.5, 7)
-                                .with_lambda(lambda),
-                            BasicPopulationState::<Vec<f64>>::with_size(lambda),
+                            CmaEs::<Vec<f64>, DenseMatrix>::new(7).with_lambda(lambda),
+                            CmaEsState::<Vec<f64>, DenseMatrix>::new(vec![1.0; dim], 0.5),
                         )
                         .max_iter(GENERATIONS)
                         .run(),

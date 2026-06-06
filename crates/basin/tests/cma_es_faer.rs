@@ -2,7 +2,7 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    BasicPopulationState, CmaEs, Executor, PopulationState, StepOutcome, TerminationReason,
+    CmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome, TerminationReason,
 };
 use faer::{Col, Mat};
 
@@ -17,8 +17,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.3, 42),
-        BasicPopulationState::<Col<f64>>::with_size(CmaEs::<Col<f64>, Mat<f64>>::default_lambda(5)),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.3),
     )
     .max_iter(30)
     .run()
@@ -26,8 +26,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.3, 42),
-        BasicPopulationState::<Col<f64>>::with_size(CmaEs::<Col<f64>, Mat<f64>>::default_lambda(5)),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
     .max_iter(30)
     .run()
@@ -47,12 +47,11 @@ fn same_seed_yields_identical_trajectory() {
 #[test]
 fn converges_on_sphere_5d() {
     let m0 = Col::<f64>::from_fn(5, |_| 1.0);
-    let lambda = CmaEs::<Col<f64>, Mat<f64>>::default_lambda(5);
 
     let result = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.5, 7),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        CmaEs::<Col<f64>, Mat<f64>>::new(7),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
     )
     .max_iter(80)
     .run()
@@ -69,12 +68,11 @@ fn converges_on_sphere_5d() {
 #[test]
 fn converges_on_rosenbrock_2d() {
     let m0 = Col::<f64>::from_fn(2, |i| if i == 0 { -1.0 } else { 1.0 });
-    let lambda = CmaEs::<Col<f64>, Mat<f64>>::default_lambda(2);
 
     let result = Executor::new(
         Rosenbrock::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.3, 17),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        CmaEs::<Col<f64>, Mat<f64>>::new(17),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
     .max_iter(800)
     .run()
@@ -93,18 +91,18 @@ fn converges_on_rosenbrock_2d() {
 #[test]
 fn sphere_terminates_solver_converged_on_tol_x() {
     let m0 = Col::<f64>::from_fn(3, |_| 0.5);
-    let lambda = CmaEs::<Col<f64>, Mat<f64>>::default_lambda(3);
 
     let result = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.3, 11),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        CmaEs::<Col<f64>, Mat<f64>>::new(11),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
+    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
 /// `with_stds(ones)` reproduces the isotropic default bit-for-bit on the
@@ -113,13 +111,12 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 #[test]
 fn with_stds_ones_matches_default() {
     let m0 = Col::<f64>::from_fn(5, |_| 0.5);
-    let lambda = CmaEs::<Col<f64>, Mat<f64>>::default_lambda(5);
     let ones = Col::<f64>::from_fn(5, |_| 1.0);
 
     let default = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.3, 42),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.3),
     )
     .max_iter(40)
     .run()
@@ -127,8 +124,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.3, 42).with_stds(ones),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3).with_stds(ones),
     )
     .max_iter(40)
     .run()
@@ -147,13 +144,12 @@ fn with_stds_ones_matches_default() {
 #[test]
 fn with_stds_anisotropic_converges_on_sphere() {
     let m0 = Col::<f64>::from_fn(5, |_| 1.0);
-    let lambda = CmaEs::<Col<f64>, Mat<f64>>::default_lambda(5);
     let stds = Col::<f64>::from_fn(5, |i| [1.0, 0.1, 10.0, 0.5, 2.0][i]);
 
     let result = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.5, 7).with_stds(stds),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        CmaEs::<Col<f64>, Mat<f64>>::new(7),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5).with_stds(stds),
     )
     .max_iter(120)
     .run()
@@ -174,8 +170,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(m0, 0.5, 1234).with_lambda(lambda),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        CmaEs::<Col<f64>, Mat<f64>>::new(1234).with_lambda(lambda),
+        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
     )
     .max_iter(10)
     .into_stepper()
