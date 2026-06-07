@@ -12,7 +12,7 @@ Solvers are generic over the linear-algebra backend, constraints are
 first-class, and the default build compiles to `wasm32-unknown-unknown` with no
 BLAS/LAPACK or threads.
 
-Narrative documentation lives at [basin.bz/docs]; the rustdoc reference
+Narrative documentation lives at [basin.rs/docs]; the rustdoc reference
 is at [docs.rs/basin]. There is also an in-browser [solver visualizer].
 
 ## Install
@@ -128,7 +128,7 @@ dual licensed as above, without any additional terms or conditions.
 [nalgebra]: https://nalgebra.org
 [ndarray]: https://github.com/rust-ndarray/ndarray
 [faer]: https://github.com/sarah-quinones/faer-rs
-[basin.bz/docs]: https://basin.bz/docs/
+[basin.rs/docs]: https://basin.rs/docs/
 [docs.rs/basin]: https://docs.rs/basin
-[solver visualizer]: https://basin.bz/visualizer/
-[Solvers]: https://basin.bz/docs/solvers/
+[solver visualizer]: https://basin.rs/visualizer/
+[Solvers]: https://basin.rs/docs/solvers/

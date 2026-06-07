@@ -1,10 +1,10 @@
 import { base } from "$app/paths";
 
 // Canonical production origin. The deployed site lives at the apex custom
-// domain `https://basin.bz/`, served at root — so `base` is empty in both
+// domain `https://basin.rs/`, served at root — so `base` is empty in both
 // prod and dev. Only the origin can't be derived during prerender (which
 // uses a placeholder host), hence the constant.
-const SITE_ORIGIN = "https://basin.bz";
+const SITE_ORIGIN = "https://basin.rs";
 
 // Discover every page route at build time so the sitemap can't drift when
 // routes are added or removed. Glob keys look like

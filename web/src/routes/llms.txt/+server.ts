@@ -1,10 +1,10 @@
 import { base } from '$app/paths';
 
 // Same canonical origin as sitemap.xml / robots.txt: the apex custom
-// domain `https://basin.bz/`, served at root (so `base` is empty).
+// domain `https://basin.rs/`, served at root (so `base` is empty).
 // Internal doc links are absolute so the file is useful when fetched on
 // its own.
-const SITE_ORIGIN = 'https://basin.bz';
+const SITE_ORIGIN = 'https://basin.rs';
 
 // llms.txt format: https://llmstxt.org — an H1 name, a blockquote summary,
 // then sections of `- [title](url): note` links. This is a *signpost*,

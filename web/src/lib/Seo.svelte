@@ -15,7 +15,7 @@ import { page } from "$app/state";
 // (trailingSlash: 'always') and, under the apex domain, no base prefix;
 // only the origin can't be derived during prerender (placeholder host),
 // hence the constant.
-const SITE_ORIGIN = "https://basin.bz";
+const SITE_ORIGIN = "https://basin.rs";
 
 const DEFAULT_DESCRIPTION =
     "basin is a numerical optimization library for Rust: pluggable solvers, multiple linear-algebra backends, first-class constraints, and a wasm-first design.";
