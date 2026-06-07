@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.11.0](https://github.com/jolars/basin/compare/v0.10.0...v0.11.0) (2026-06-07)
+
+### Breaking changes
+- move CMA-ES distribution into CmaEsState (B8) ([`9c48802`](https://github.com/jolars/basin/commit/9c48802778ae3901dfdaa8bd4f4a45ee36c53714))
+- mark growable public enums #[non_exhaustive] ([`8254680`](https://github.com/jolars/basin/commit/82546800198e4b70d455362e26848808069060f9))
+
+### Features
+- add per-backend QuasiNewtonState aliases (B4) ([`295fe75`](https://github.com/jolars/basin/commit/295fe7516daafe80fa6b9cbe79150445946de5e4))
+- add `new()` to NelderMead and deprecate `standard()` ([`7d3a7b2`](https://github.com/jolars/basin/commit/7d3a7b26fbaf9b47afd980fe0b8e7c40582ebc28))
+- move CMA-ES distribution into CmaEsState (B8) ([`9c48802`](https://github.com/jolars/basin/commit/9c48802778ae3901dfdaa8bd4f4a45ee36c53714))
+- mark growable public enums #[non_exhaustive] ([`8254680`](https://github.com/jolars/basin/commit/82546800198e4b70d455362e26848808069060f9))
+
+### Performance Improvements
+- parallelize population-based solvers ([`74f281d`](https://github.com/jolars/basin/commit/74f281d953a465911768af0e8251d40ba25877b9))
+- parallelize numerical gradients, jacobians, hessians ([`9fa265a`](https://github.com/jolars/basin/commit/9fa265ae8298da11fce1f6339f7f61da0215a6a0))
+
 ## [0.10.0](https://github.com/jolars/basin/compare/v0.9.0...v0.10.0) (2026-06-02)
 
 ### Breaking changes
