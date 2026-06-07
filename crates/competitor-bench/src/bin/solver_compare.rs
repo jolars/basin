@@ -27,9 +27,9 @@ use std::time::{Duration, Instant};
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, CountsMirror, DenseMatrix, Executor,
-    GradientDescent, LbfgsState, Lbfgsb, MoreThuente, NelderMead, QuasiNewtonState, Solver,
-    State as BasinState, StepOutcome,
+    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, CountsMirror, DenseMatrix,
+    DenseQuasiNewtonState, Executor, GradientDescent, LbfgsState, Lbfgsb, MoreThuente, NelderMead,
+    Solver, State as BasinState, StepOutcome,
 };
 
 /// Wall-clock budget per (solver, start, rep). 20 ms gives GD room to either
@@ -275,7 +275,7 @@ fn run_bfgs(start: &[f64]) -> Vec<(u128, f64)> {
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
                 Bfgs::new(),
-                QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(start.to_vec()),
+                DenseQuasiNewtonState::new(start.to_vec()),
             ),
             BUDGET,
         )

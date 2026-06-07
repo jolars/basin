@@ -45,10 +45,12 @@ use crate::line_search::{LineSearch, Wolfe};
 /// `Vec<f64>` backend. Quasi-Newton solvers iterate a
 /// [`QuasiNewtonState`], parameterised by the
 /// param vector and the dense matrix type — here `Vec<f64>` and
-/// [`DenseMatrix`](crate::DenseMatrix):
+/// [`DenseMatrix`](crate::DenseMatrix), bundled by the
+/// [`DenseQuasiNewtonState`](crate::DenseQuasiNewtonState) alias so the
+/// matrix type needn't be spelled:
 ///
 /// ```
-/// use basin::{BasicState, Bfgs, CostFunction, DenseMatrix, Executor, Gradient, QuasiNewtonState};
+/// use basin::{Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient};
 ///
 /// struct Rosenbrock;
 /// impl CostFunction for Rosenbrock {
@@ -72,7 +74,7 @@ use crate::line_search::{LineSearch, Wolfe};
 /// let result = Executor::new(
 ///     Rosenbrock,
 ///     Bfgs::new(),
-///     QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(vec![-1.2, 1.0]),
+///     DenseQuasiNewtonState::new(vec![-1.2, 1.0]),
 /// )
 /// .max_iter(100)
 /// .run()

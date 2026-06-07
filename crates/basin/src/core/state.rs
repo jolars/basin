@@ -743,6 +743,12 @@ impl<V: VectorLen, M: MatrixIdentity, F: Scalar> QuasiNewtonState<V, M, F> {
     /// `M` is not an argument, annotate it at the call site when it can't be
     /// inferred from context, e.g.
     /// `QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(x)`.
+    ///
+    /// For the common path, prefer the per-backend alias so neither `V` nor
+    /// `M` has to be spelled: [`DenseQuasiNewtonState`] (`Vec<f64>`),
+    /// [`NalgebraQuasiNewtonState`] (feature `nalgebra`), or
+    /// [`FaerQuasiNewtonState`] (feature `faer`) — e.g.
+    /// `DenseQuasiNewtonState::new(x)`.
     pub fn new(param: V) -> Self {
         let n = param.vec_len();
         Self {
@@ -762,6 +768,35 @@ impl<V: VectorLen, M: MatrixIdentity, F: Scalar> QuasiNewtonState<V, M, F> {
         }
     }
 }
+
+/// [`QuasiNewtonState`] pinned to the dependency-free `Vec<F>` /
+/// [`DenseMatrix`](crate::core::math::DenseMatrix) backend.
+///
+/// The common path doesn't have to spell the matrix type `M`:
+/// `DenseQuasiNewtonState::new(x)` instead of
+/// `QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(x)`. The scalar `F`
+/// defaults to `f64`.
+pub type DenseQuasiNewtonState<F = f64> =
+    QuasiNewtonState<Vec<F>, crate::core::math::DenseMatrix<F>, F>;
+
+/// [`QuasiNewtonState`] pinned to the nalgebra `DVector<F>` / `DMatrix<F>`
+/// backend (feature `nalgebra`).
+///
+/// `NalgebraQuasiNewtonState::new(x)` instead of
+/// `QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(x)`. The scalar `F`
+/// defaults to `f64`.
+#[cfg(feature = "nalgebra")]
+pub type NalgebraQuasiNewtonState<F = f64> =
+    QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
+
+/// [`QuasiNewtonState`] pinned to the faer `Col<F>` / `Mat<F>` backend
+/// (feature `faer`).
+///
+/// `FaerQuasiNewtonState::new(x)` instead of
+/// `QuasiNewtonState::<Col<f64>, Mat<f64>>::new(x)`. The scalar `F` defaults
+/// to `f64`.
+#[cfg(feature = "faer")]
+pub type FaerQuasiNewtonState<F = f64> = QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
 
 impl<V: Clone, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
     type Param = V;

@@ -7,22 +7,18 @@
 //! `MatVec` + `GeneralRankOneUpdate` on `Mat<f64>`.
 
 use basin::problems::Rosenbrock;
-use basin::{Bfgs, Executor, GradientTolerance, QuasiNewtonState, TerminationReason};
-use faer::{Col, Mat};
+use basin::{Bfgs, Executor, FaerQuasiNewtonState, GradientTolerance, TerminationReason};
+use faer::Col;
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
     let problem = Rosenbrock::<Col<f64>>::default();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<Col<f64>, Mat<f64>>::new(initial),
-    )
-    .max_iter(100)
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), FaerQuasiNewtonState::new(initial))
+        .max_iter(100)
+        .run()
+        .unwrap();
 
     assert!(
         result.cost() < 1e-8,
@@ -46,15 +42,11 @@ fn bfgs_terminates_on_gradient_tolerance() {
     let problem = Rosenbrock::<Col<f64>>::default();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<Col<f64>, Mat<f64>>::new(initial),
-    )
-    .max_iter(200)
-    .terminate_on(GradientTolerance(1e-6))
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), FaerQuasiNewtonState::new(initial))
+        .max_iter(200)
+        .terminate_on(GradientTolerance(1e-6))
+        .run()
+        .unwrap();
 
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());

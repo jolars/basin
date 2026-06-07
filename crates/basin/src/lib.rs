@@ -120,11 +120,15 @@ pub use crate::core::problem::{
     CostFunction, EvalCounts, Gradient, Hessian, Jacobian, MiniBatchGradient, Problem, Residual,
 };
 pub use crate::core::solver::Solver;
-pub use crate::core::state::QuasiNewtonState;
+#[cfg(feature = "faer")]
+pub use crate::core::state::FaerQuasiNewtonState;
+#[cfg(feature = "nalgebra")]
+pub use crate::core::state::NalgebraQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, CmaEsState, CountsMirror, GradientState,
     IntoInitialSimplex, LbfgsState, PopulationState, SimplexState, State,
 };
+pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
     CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter,
     MaxTime, NoImprovement, ParamTolerance, ProjectedGradientTolerance, RelativeCostTolerance,

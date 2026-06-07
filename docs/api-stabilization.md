@@ -342,19 +342,38 @@ Required-arg `new()` is fine where the parameter has no reasonable default.
 surface carries only `Bfgs` / `Lbfgs` / `Lbfgsb`. A 1.0 is the natural place to
 shed pre-1.0 deprecations.
 
-### B4. State generic ergonomics `[RECOMMEND]`
+### B4. State generic ergonomics `[DONE]`
 
-The richer states leak their matrix type into call-site turbofish:
-`QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(x)`,
-`LbfgsState::<DVector, DMatrix, f64>::new(...)`. `M` is hard for a new user to
-guess (DenseMatrix vs nalgebra `DMatrix` vs faer `Mat`).
+The richer states leaked their matrix type into call-site turbofish:
+`QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(x)`. `M` is hard for a new user
+to guess (DenseMatrix vs nalgebra `DMatrix` vs faer `Mat`).
 
-**Recommend:** ship per-backend type aliases (or smarter inference) so the
-common path doesn't spell `M` --- e.g. a `QuasiNewtonState`/`LbfgsState` alias
-pinned per backend behind the matching feature. Pure-additive, but the *alias
-names* enter the frozen surface, so settle them before 1.0. (Note:
-`BasicState<P, F = f64>`, `BasicSimplexState`, `BasicPopulationState` already
-read cleanly --- this is only the BFGS/L-BFGS states.)
+(Correction to the original framing: `LbfgsState` no longer carries an `M`
+generic --- it is `LbfgsState<V, F = f64>`, so its only turbofish is `V`, the
+user's own param type, not the unguessable `M`. The pain was `QuasiNewtonState`
+alone.)
+
+**Resolved (2026-06-07).** Shipped per-backend type aliases for
+`QuasiNewtonState`, each `<F = f64>` and re-exported from the crate root
+(`core/state.rs`, `lib.rs`):
+
+  | Alias                       | Pins                                         | Feature    |
+  | --------------------------- | -------------------------------------------- | ---------- |
+  | `DenseQuasiNewtonState`     | `QuasiNewtonState<Vec<F>, DenseMatrix<F>, F>`| (always)   |
+  | `NalgebraQuasiNewtonState`  | `QuasiNewtonState<DVector<F>, DMatrix<F>, F>`| `nalgebra` |
+  | `FaerQuasiNewtonState`      | `QuasiNewtonState<Col<F>, Mat<F>, F>`        | `faer`     |
+
+The common path is now `DenseQuasiNewtonState::new(x)`. No ndarray alias:
+BFGS rejects `ndarray` at compile time per tenet 5. Chose aliases over the
+"smarter inference" alternative (a `PairedMatrix` V→M trait) because a
+transparent type alias is the *lightest* frozen surface --- trivially
+deprecatable, not downstream-implementable --- whereas a public trait freezes
+heavier and only removes the turbofish at construction, not at type-annotation
+sites. `LbfgsState` deliberately gets no parallel aliases (no `M` to hide).
+The shipped tests/benches (`tests/bfgs*.rs`, `tests/lbfgsb_nalgebra.rs`,
+`benches/solver_backends.rs`) were migrated to the aliases, exercising all
+three backends. (Note: `BasicState<P, F = f64>`, `BasicSimplexState`,
+`BasicPopulationState` already read cleanly.)
 
 ### B5. Pre-init `cost()` contract `[DECIDE]` (downgraded from "type inconsistency")
 

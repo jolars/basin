@@ -9,9 +9,9 @@
 use basin::problems::BoothBoxed;
 use basin::{
     Bfgs, BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
-    MoreThuente, ProjectedGradientTolerance, QuasiNewtonState,
+    MoreThuente, NalgebraQuasiNewtonState, ProjectedGradientTolerance,
 };
-use nalgebra::{DMatrix, DVector};
+use nalgebra::DVector;
 
 struct Rosen {
     l: DVector<f64>,
@@ -136,7 +136,7 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
     let bfgs_result = Executor::new(
         basin::problems::Rosenbrock::<DVector<f64>>::default(),
         Bfgs::with_line_search(MoreThuente::new()),
-        QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial.clone()),
+        NalgebraQuasiNewtonState::new(initial.clone()),
     )
     .max_iter(200)
     .terminate_on(basin::GradientTolerance(1e-8))

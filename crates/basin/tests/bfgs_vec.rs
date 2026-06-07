@@ -6,7 +6,7 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    Bfgs, CostFunction, DenseMatrix, Executor, Gradient, GradientTolerance, QuasiNewtonState,
+    Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient, GradientTolerance,
     TerminationReason,
 };
 
@@ -15,14 +15,10 @@ fn bfgs_converges_on_rosenbrock() {
     let problem = Rosenbrock::<Vec<f64>>::default();
     let initial = vec![-1.2, 1.0];
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(initial),
-    )
-    .max_iter(100)
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), DenseQuasiNewtonState::new(initial))
+        .max_iter(100)
+        .run()
+        .unwrap();
 
     assert!(
         result.cost() < 1e-8,
@@ -46,15 +42,11 @@ fn bfgs_terminates_on_gradient_tolerance() {
     let problem = Rosenbrock::<Vec<f64>>::default();
     let initial = vec![-1.2, 1.0];
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(initial),
-    )
-    .max_iter(200)
-    .terminate_on(GradientTolerance(1e-6))
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), DenseQuasiNewtonState::new(initial))
+        .max_iter(200)
+        .terminate_on(GradientTolerance(1e-6))
+        .run()
+        .unwrap();
 
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
@@ -101,15 +93,11 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
     };
     let initial = vec![0.0; 5];
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(initial),
-    )
-    .max_iter(50)
-    .terminate_on(GradientTolerance(1e-8))
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), DenseQuasiNewtonState::new(initial))
+        .max_iter(50)
+        .terminate_on(GradientTolerance(1e-8))
+        .run()
+        .unwrap();
 
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     // Optimum: x[i] = 1 / diag[i]; cost = -½ Σ 1/diag[i].

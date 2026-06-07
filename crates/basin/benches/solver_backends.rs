@@ -38,9 +38,9 @@ use std::time::Duration;
 
 use basin::problems::{Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, StyblinskiTang};
 use basin::{
-    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix, Executor, GaussNewton,
-    GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente, NelderMead,
-    QuasiNewtonState,
+    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix, DenseQuasiNewtonState,
+    Executor, FaerQuasiNewtonState, GaussNewton, GradientDescent, LbfgsState, Lbfgsb,
+    LevenbergMarquardt, MoreThuente, NalgebraQuasiNewtonState, NelderMead,
 };
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -248,7 +248,7 @@ fn bench_bfgs(c: &mut Criterion) {
             || start.clone(),
             Levy<Vec<f64>>,
             Bfgs::new(),
-            QuasiNewtonState::<Vec<f64>, DenseMatrix>::new,
+            DenseQuasiNewtonState::new,
         );
         contestant!(
             g,
@@ -256,7 +256,7 @@ fn bench_bfgs(c: &mut Criterion) {
             || DVector::from_vec(start.clone()),
             Levy<DVector<f64>>,
             Bfgs::new(),
-            QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new,
+            NalgebraQuasiNewtonState::new,
         );
         contestant!(
             g,
@@ -264,7 +264,7 @@ fn bench_bfgs(c: &mut Criterion) {
             || Col::<f64>::from_fn(n, |i| start[i]),
             Levy<Col<f64>>,
             Bfgs::new(),
-            QuasiNewtonState::<Col<f64>, Mat<f64>>::new,
+            FaerQuasiNewtonState::new,
         );
         g.finish();
     }

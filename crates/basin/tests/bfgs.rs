@@ -3,23 +3,19 @@
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicState, Bfgs, CostFunction, Executor, Gradient, GradientDescent,
-    GradientTolerance, QuasiNewtonState, TerminationReason,
+    GradientTolerance, NalgebraQuasiNewtonState, TerminationReason,
 };
-use nalgebra::{DMatrix, DVector};
+use nalgebra::DVector;
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
     let problem = Rosenbrock::<DVector<f64>>::default();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
-    )
-    .max_iter(100)
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), NalgebraQuasiNewtonState::new(initial))
+        .max_iter(100)
+        .run()
+        .unwrap();
 
     assert!(
         result.cost() < 1e-8,
@@ -43,15 +39,11 @@ fn bfgs_terminates_on_gradient_tolerance() {
     let problem = Rosenbrock::<DVector<f64>>::default();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
-    )
-    .max_iter(200)
-    .terminate_on(GradientTolerance(1e-6))
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), NalgebraQuasiNewtonState::new(initial))
+        .max_iter(200)
+        .terminate_on(GradientTolerance(1e-6))
+        .run()
+        .unwrap();
 
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
@@ -64,7 +56,7 @@ fn bfgs_converges_faster_than_gd_with_backtracking() {
     let bfgs_result = Executor::new(
         Rosenbrock::<DVector<f64>>::default(),
         Bfgs::new(),
-        QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial.clone()),
+        NalgebraQuasiNewtonState::new(initial.clone()),
     )
     .max_iter(500)
     .terminate_on(GradientTolerance(1e-6))
@@ -142,15 +134,11 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
     };
     let initial = DVector::from_element(5, 0.0);
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
-    )
-    .max_iter(50)
-    .terminate_on(GradientTolerance(1e-8))
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), NalgebraQuasiNewtonState::new(initial))
+        .max_iter(50)
+        .terminate_on(GradientTolerance(1e-8))
+        .run()
+        .unwrap();
 
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     // Optimum: x[i] = 1 / diag[i]; cost = -½ Σ 1/diag[i].
@@ -182,15 +170,11 @@ fn bfgs_terminates_via_converged_when_at_machine_precision() {
     };
     let initial = DVector::from_element(5, 0.0);
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(initial),
-    )
-    .max_iter(200)
-    .terminate_on(GradientTolerance(1e-30))
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, Bfgs::new(), NalgebraQuasiNewtonState::new(initial))
+        .max_iter(200)
+        .terminate_on(GradientTolerance(1e-30))
+        .run()
+        .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     let expected_cost = -0.5 * (1.0 + 0.5 + 1.0 / 3.0 + 0.25 + 0.2);
