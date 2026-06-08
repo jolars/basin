@@ -48,8 +48,8 @@ use super::{
 ///
 /// The type implements [`MatVec`] (`A x`) and [`MatTransposeVec`] (`Aᵀ v`)
 /// for the linear-constraint solvers, plus [`MatrixIdentity`],
-/// [`ScaleInPlace`], and [`GeneralRankOneUpdate`] for BFGS, and
-/// [`RankOneUpdate`], [`MatrixFromDiagonal`], [`MatDiagonal`], and a Jacobi
+/// [`ScaleInPlace`], and `GeneralRankOneUpdate` for BFGS, and
+/// `RankOneUpdate`, [`MatrixFromDiagonal`], `MatDiagonal`, and a Jacobi
 /// [`SymmetricEigen`] for CMA-ES; see the module docs for why the *solve*
 /// factorization ops are deliberately absent.
 #[derive(Clone, Debug, PartialEq)]

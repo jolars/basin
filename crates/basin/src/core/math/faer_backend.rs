@@ -10,10 +10,9 @@ use super::cl_scaling::{
     project_strictly_inside_component,
 };
 use super::linalg::{
-    AddDiagonalInPlace, AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate,
-    GramMatrix, LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen,
-    SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate, GramMatrix,
+    LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen, SymmetricEigenError,
 };
 use super::sample::{SampleStandardNormal, SampleUniformBox};
 use super::{
@@ -353,22 +352,6 @@ impl<F: Scalar> MatDiagonal<Col<F>> for Mat<F> {
     }
 }
 
-impl<F: Scalar> AddDiagonalInPlace<F> for Mat<F> {
-    fn add_diagonal_in_place(&mut self, scalar: F) {
-        assert_eq!(
-            self.nrows(),
-            self.ncols(),
-            "add_diagonal_in_place: matrix must be square, got {}x{}",
-            self.nrows(),
-            self.ncols()
-        );
-        for i in 0..self.nrows() {
-            let entry = &mut self[(i, i)];
-            *entry = *entry + scalar;
-        }
-    }
-}
-
 impl<F: Scalar> AddDiagonalVectorInPlace<Col<F>> for Mat<F> {
     fn add_diagonal_vector_in_place(&mut self, diag: &Col<F>) {
         assert_eq!(
@@ -632,25 +615,12 @@ mod tests {
     }
 
     #[test]
-    fn add_diagonal_in_place_adds_to_diagonal_only() {
-        let mut a = Mat::<f64>::from_fn(3, 3, |i, j| (i * 3 + j + 1) as f64);
-        a.add_diagonal_in_place(0.5);
-        // Diagonal: 1+0.5=1.5, 5+0.5=5.5, 9+0.5=9.5; off-diagonal untouched.
-        assert!(approx_eq(a[(0, 0)], 1.5, 1e-12));
-        assert!(approx_eq(a[(1, 1)], 5.5, 1e-12));
-        assert!(approx_eq(a[(2, 2)], 9.5, 1e-12));
-        assert!(approx_eq(a[(0, 1)], 2.0, 1e-12));
-        assert!(approx_eq(a[(1, 0)], 4.0, 1e-12));
-        assert!(approx_eq(a[(2, 1)], 8.0, 1e-12));
-    }
-
-    #[test]
     fn add_diagonal_regularizes_singular_gram() {
         let a = mat2([1.0, 2.0], [2.0, 4.0]);
         let mut g = a.gram();
         let b = Col::<f64>::from_fn(2, |i| [1.0, 1.0][i]);
         assert!(g.clone().solve_spd(&b).is_err());
-        g.add_diagonal_in_place(1e-3);
+        g.add_diagonal_vector_in_place(&Col::<f64>::from_fn(2, |_| 1e-3));
         let x = g.solve_spd(&b).expect("damped gram must be SPD");
         assert_eq!(x.nrows(), 2);
     }

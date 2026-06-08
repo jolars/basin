@@ -18,8 +18,8 @@ use faer::{Accum, Col, Par, Side};
 
 use super::Scalar;
 use super::linalg::{
-    AddDiagonalInPlace, AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveLstsq,
-    LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
+    AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
+    MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
 };
 
 // As with the dense faer backend, sparse matmul / Cholesky / QR all
@@ -154,44 +154,6 @@ impl<F: Scalar> MatDiagonal<Col<F>> for SparseColMat<usize, F> {
                 .find_map(|k| (row_idx[k] == j).then_some(vals[k]))
                 .unwrap_or(F::zero())
         })
-    }
-}
-
-impl<F: Scalar> AddDiagonalInPlace<F> for SparseColMat<usize, F> {
-    fn add_diagonal_in_place(&mut self, scalar: F) {
-        let n = self.ncols();
-        assert_eq!(
-            self.nrows(),
-            n,
-            "add_diagonal_in_place: matrix must be square, got {}x{}",
-            self.nrows(),
-            n
-        );
-        // col_ptr / row_idx are immutable views of the symbolic part;
-        // val_mut needs &mut self. Faer 0.24 doesn't expose a single
-        // accessor that hands out (symbolic borrow, mutable val borrow)
-        // on the owned SparseColMat without a reborrow dance, so clone
-        // the symbolic vectors. Cost is O(nnz) of usize copies vs. the
-        // O(n³) Cholesky that follows in the LM loop — negligible.
-        let col_ptr: Vec<usize> = self.col_ptr().to_vec();
-        let row_idx: Vec<usize> = self.row_idx().to_vec();
-        let vals = self.val_mut();
-        for j in 0..n {
-            let start = col_ptr[j];
-            let end = col_ptr[j + 1];
-            let mut found = false;
-            for k in start..end {
-                if row_idx[k] == j {
-                    vals[k] = vals[k] + scalar;
-                    found = true;
-                    break;
-                }
-            }
-            assert!(
-                found,
-                "add_diagonal_in_place: diagonal entry ({j}, {j}) missing from CSC pattern"
-            );
-        }
     }
 }
 
@@ -376,27 +338,12 @@ mod tests {
     }
 
     #[test]
-    fn add_diagonal_in_place_adds_to_diagonal_only() {
-        let mut a = csc2([1.0, 2.0], [3.0, 4.0]);
-        a.add_diagonal_in_place(0.5);
-        // Original [[1,2],[3,4]] + 0.5·I = [[1.5,2],[3,4.5]].
-        let e0 = Col::<f64>::from_fn(2, |i| if i == 0 { 1.0 } else { 0.0 });
-        let e1 = Col::<f64>::from_fn(2, |i| if i == 1 { 1.0 } else { 0.0 });
-        let col0 = a.matvec(&e0);
-        let col1 = a.matvec(&e1);
-        assert!(approx_eq(col0[0], 1.5, 1e-12));
-        assert!(approx_eq(col0[1], 3.0, 1e-12));
-        assert!(approx_eq(col1[0], 2.0, 1e-12));
-        assert!(approx_eq(col1[1], 4.5, 1e-12));
-    }
-
-    #[test]
     fn add_diagonal_regularizes_singular_gram() {
         let a = csc2([1.0, 2.0], [2.0, 4.0]);
         let mut g = a.gram();
         let b = Col::<f64>::from_fn(2, |i| [1.0, 1.0][i]);
         assert!(g.clone().solve_spd(&b).is_err());
-        g.add_diagonal_in_place(1e-3);
+        g.add_diagonal_vector_in_place(&Col::<f64>::from_fn(2, |_| 1e-3));
         let x = g.solve_spd(&b).expect("damped gram must be SPD");
         assert_eq!(x.nrows(), 2);
     }

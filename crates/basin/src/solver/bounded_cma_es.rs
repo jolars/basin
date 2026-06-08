@@ -117,7 +117,7 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 ///
 /// LA-heavy: requires symmetric eigendecomposition, scalar-and-rank-1
 /// matrix updates, matrix-vector / transposed matrix-vector products,
-/// **plus** [`MatDiagonal<V>`] (extracts `diag(C)` for the σ²·diag(C)
+/// **plus** `MatDiagonal<V>` (extracts `diag(C)` for the σ²·diag(C)
 /// per-axis variances the γ-update reads). Wired and tested for the
 /// default `Vec<f64>` / [`DenseMatrix`](crate::DenseMatrix) backend
 /// (pure-Rust cyclic Jacobi eigensolver — no feature flag, `wasm`-clean),

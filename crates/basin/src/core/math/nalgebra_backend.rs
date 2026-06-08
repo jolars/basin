@@ -8,10 +8,9 @@ use super::cl_scaling::{
     project_strictly_inside_component,
 };
 use super::linalg::{
-    AddDiagonalInPlace, AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate,
-    GramMatrix, LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen,
-    SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate, GramMatrix,
+    LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen, SymmetricEigenError,
 };
 use super::sample::{SampleStandardNormal, SampleUniformBox};
 use super::{
@@ -444,24 +443,6 @@ impl<F: Scalar> MatDiagonal<DVector<F>> for DMatrix<F> {
     }
 }
 
-impl<F> AddDiagonalInPlace<F> for DMatrix<F>
-where
-    F: Scalar + nalgebra::ClosedAddAssign,
-{
-    fn add_diagonal_in_place(&mut self, scalar: F) {
-        assert_eq!(
-            self.nrows(),
-            self.ncols(),
-            "add_diagonal_in_place: matrix must be square, got {}x{}",
-            self.nrows(),
-            self.ncols()
-        );
-        for i in 0..self.nrows() {
-            self[(i, i)] += scalar;
-        }
-    }
-}
-
 impl<F> AddDiagonalVectorInPlace<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::ClosedAddAssign,
@@ -690,19 +671,6 @@ mod tests {
     }
 
     #[test]
-    fn add_diagonal_in_place_adds_to_diagonal_only() {
-        let mut a = DMatrix::from_row_slice(3, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
-        a.add_diagonal_in_place(0.5);
-        // Diagonal: 1.5, 5.5, 9.5; off-diagonal untouched.
-        assert!(approx_eq(a[(0, 0)], 1.5, 1e-12));
-        assert!(approx_eq(a[(1, 1)], 5.5, 1e-12));
-        assert!(approx_eq(a[(2, 2)], 9.5, 1e-12));
-        assert!(approx_eq(a[(0, 1)], 2.0, 1e-12));
-        assert!(approx_eq(a[(1, 0)], 4.0, 1e-12));
-        assert!(approx_eq(a[(2, 1)], 8.0, 1e-12));
-    }
-
-    #[test]
     fn add_diagonal_vector_in_place_adds_per_index() {
         let mut a = DMatrix::from_row_slice(3, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
         a.add_diagonal_vector_in_place(&DVector::from_vec(vec![10.0, 100.0, 1000.0]));
@@ -782,7 +750,7 @@ mod tests {
                 .solve_spd(&DVector::from_vec(vec![1.0, 1.0]))
                 .is_err()
         );
-        g.add_diagonal_in_place(1e-3);
+        g.add_diagonal_vector_in_place(&DVector::from_vec(vec![1e-3, 1e-3]));
         let x = g
             .solve_spd(&DVector::from_vec(vec![1.0, 1.0]))
             .expect("damped gram must be SPD");

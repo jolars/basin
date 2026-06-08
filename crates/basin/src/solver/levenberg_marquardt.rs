@@ -43,7 +43,7 @@ use crate::core::termination::TerminationReason;
 /// column-norm scaling). Columns that are exactly zero at `x₀` (a
 /// parameter with no first-order effect on any residual) would make
 /// `μ·D` vanish there and the Gram singular; following MINPACK, their
-/// scale is floored to `1` at `init` (see [`FloorZerosInPlace`]), so a
+/// scale is floored to `1` at `init` (see `FloorZerosInPlace`), so a
 /// fully-insensitive parameter stays put rather than failing Cholesky.
 ///
 /// Initial damping is `μ₀ = τ` — dimensionless, because the
@@ -138,7 +138,7 @@ use crate::core::termination::TerminationReason;
 /// `ndarray::Array1<f64>` produce a compile-time error per tenet 5.
 /// The sparse damping path requires the diagonal of `JᵀJ` to be in the
 /// CSC pattern (always true when `J` has no zero columns); see
-/// [`AddDiagonalVectorInPlace`] and [`MatDiagonal`].
+/// `AddDiagonalVectorInPlace` and `MatDiagonal`.
 ///
 /// # State convention
 ///

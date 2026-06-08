@@ -21,8 +21,8 @@ use nalgebra_sparse::{CscMatrix, SparseEntryMut};
 
 use super::Scalar;
 use super::linalg::{
-    AddDiagonalInPlace, AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveSpd,
-    MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
+    AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveSpd, MatDiagonal,
+    MatTransposeVec, MatVec, MaxDiagonal,
 };
 
 // Bound stack mirrors the dense nalgebra backend: matvec / gram routes go
@@ -147,33 +147,6 @@ impl<F: Scalar> MatDiagonal<DVector<F>> for CscMatrix<F> {
                     .into_value()
             }),
         )
-    }
-}
-
-impl<F: Scalar> AddDiagonalInPlace<F> for CscMatrix<F> {
-    fn add_diagonal_in_place(&mut self, scalar: F) {
-        assert_eq!(
-            self.nrows(),
-            self.ncols(),
-            "add_diagonal_in_place: matrix must be square, got {}x{}",
-            self.nrows(),
-            self.ncols()
-        );
-        // get_entry_mut does a binary search per column (O(log nnz_col));
-        // for our LM use case this runs once per outer iteration on the
-        // n×n Gram, so an O(n log nnz) walk is negligible next to the
-        // factorization that follows.
-        for i in 0..self.nrows() {
-            match self
-                .get_entry_mut(i, i)
-                .expect("add_diagonal_in_place: index in bounds")
-            {
-                SparseEntryMut::NonZero(v) => *v = *v + scalar,
-                SparseEntryMut::Zero => panic!(
-                    "add_diagonal_in_place: diagonal entry ({i}, {i}) missing from CSC pattern"
-                ),
-            }
-        }
     }
 }
 
@@ -324,30 +297,12 @@ mod tests {
     }
 
     #[test]
-    fn add_diagonal_in_place_adds_to_diagonal_only() {
-        // Build a CSC with all 4 entries explicit so the diagonal is in
-        // the pattern; the row==col precondition holds.
-        let mut a = csc2([1.0, 2.0], [3.0, 4.0]);
-        a.add_diagonal_in_place(0.5);
-        // Materialize as columns of the gram via SpMV-on-eᵢ.
-        let e0 = DVector::from_vec(vec![1.0, 0.0]);
-        let e1 = DVector::from_vec(vec![0.0, 1.0]);
-        let col0 = a.matvec(&e0);
-        let col1 = a.matvec(&e1);
-        // Original a = [[1,2],[3,4]]; after +0.5 on diag → [[1.5,2],[3,4.5]].
-        assert!(approx_eq(col0[0], 1.5, 1e-12));
-        assert!(approx_eq(col0[1], 3.0, 1e-12));
-        assert!(approx_eq(col1[0], 2.0, 1e-12));
-        assert!(approx_eq(col1[1], 4.5, 1e-12));
-    }
-
-    #[test]
     fn add_diagonal_regularizes_singular_gram() {
         let a = csc2([1.0, 2.0], [2.0, 4.0]);
         let mut g = a.gram();
         let b = DVector::from_vec(vec![1.0, 1.0]);
         assert!(g.clone().solve_spd(&b).is_err());
-        g.add_diagonal_in_place(1e-3);
+        g.add_diagonal_vector_in_place(&DVector::from_vec(vec![1e-3, 1e-3]));
         let x = g.solve_spd(&b).expect("damped gram must be SPD");
         assert_eq!(x.len(), 2);
     }

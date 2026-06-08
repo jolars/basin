@@ -21,7 +21,7 @@ error, not a way to freeze coverage.
 - **`linalg` tier** (`src/core/math/linalg.rs`) holds the richer matrix ops:
   `MatVec`, `MatTransposeVec`, `GramMatrix`, `SymmetricEigen<V>`,
   `RankOneUpdate<V>` / `GeneralRankOneUpdate<V>`, `LinearSolveSpd`,
-  `LinearSolveLstsq`, `MaxDiagonal`, `MatDiagonal<V>`, `AddDiagonalInPlace`,
+  `LinearSolveLstsq`, `MaxDiagonal`, `MatDiagonal<V>`,
   `AddDiagonalVectorInPlace<V>`, `MatrixIdentity`, `MatrixFromDiagonal<V>`,
   `DenseMatrixFromFn`, … A backend opts in by implementing them; LA-heavy
   solvers (Newton, trust-region, L-BFGS, CMA-ES, anything needing

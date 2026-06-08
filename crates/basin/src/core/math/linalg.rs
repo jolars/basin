@@ -214,52 +214,19 @@ pub trait MatDiagonal<V> {
     fn diagonal(&self) -> V;
 }
 
-/// In-place diagonal augmentation `A ← A + scalar · I`. The minimal
-/// op needed to express the Levenberg-Marquardt damped normal-equations
-/// matrix `JᵀJ + μI` without materializing the identity.
-///
-/// # Contract
-///
-/// - **Caller must:** pass a square `self`. Backends panic otherwise.
-/// - **Caller must (sparse precondition):** for sparse impls, every
-///   diagonal entry `(i, i)` must already exist in the sparsity
-///   pattern of `self`. The Gram matrix `G = AᵀA` of any `A` with no
-///   zero columns satisfies this (`Gᵢᵢ = ‖A·,ᵢ‖² > 0`), so callers
-///   that only invoke `add_diagonal_in_place` on a freshly computed
-///   [`GramMatrix::gram`] result are safe by construction. Backends
-///   panic on a missing diagonal entry rather than silently growing
-///   the pattern.
-/// - **Implementor must:** add `scalar` to every diagonal entry of
-///   `self` in place. Off-diagonal entries are untouched. The op is
-///   `O(n)` for an `n × n` matrix.
-///
-/// # Backends
-///
-/// Implemented for `nalgebra::DMatrix<f64>` and `faer::Mat<f64>` at the
-/// dense tier, and for `nalgebra_sparse::CscMatrix<f64>` and
-/// `faer::sparse::SparseColMat<usize, f64>` at the sparse tier — same
-/// coverage as [`GramMatrix`] / [`LinearSolveSpd`].
-///
-/// The `F` parameter is the scalar; it defaults to `f64`, matching the
-/// scalar that every current backend impl pins.
-pub trait AddDiagonalInPlace<F = f64> {
-    /// Add `scalar` to every diagonal entry of `self` in place.
-    fn add_diagonal_in_place(&mut self, scalar: F);
-}
-
-/// In-place diagonal augmentation `A ← A + diag(d)` for a vector `d`.
-/// The vector counterpart of [`AddDiagonalInPlace`]. The diagonal of
-/// the BCL trust-region-reflective subproblem is `c + μ·d²` — both
-/// vectors — and this trait expresses the addition in one in-place
-/// pass without materializing a full diagonal matrix.
+/// In-place diagonal augmentation `A ← A + diag(d)` for a vector `d`
+/// (a per-coordinate diagonal add, rather than a single scalar). The
+/// diagonal of the BCL trust-region-reflective subproblem is `c + μ·d²`
+/// — both vectors — and this trait expresses the addition in one
+/// in-place pass without materializing a full diagonal matrix.
 ///
 /// # Contract
 ///
 /// - **Caller must:** pass a square `self` and a `diag` of length
 ///   `self.nrows()`. Backends panic on shape mismatch or non-square.
 /// - **Caller must (sparse precondition):** every diagonal entry
-///   `(i, i)` must already exist in the sparsity pattern of `self`,
-///   the same precondition as scalar [`AddDiagonalInPlace`]. The Gram
+///   `(i, i)` must already exist in the sparsity pattern of `self`.
+///   The Gram
 ///   matrix `G = AᵀA` of any `A` with no zero columns satisfies this
 ///   (`Gᵢᵢ = ‖A·,ᵢ‖² > 0`); callers that only invoke
 ///   `add_diagonal_vector_in_place` on a freshly computed
@@ -270,7 +237,7 @@ pub trait AddDiagonalInPlace<F = f64> {
 ///
 /// # Backends
 ///
-/// Same coverage as [`AddDiagonalInPlace`]: dense nalgebra
+/// Implemented for dense nalgebra
 /// (`DMatrix<f64>` over `DVector<f64>`), dense faer (`Mat<f64>` over
 /// `Col<f64>`), sparse nalgebra (`CscMatrix<f64>` over
 /// `DVector<f64>`), sparse faer (`SparseColMat<usize, f64>` over
@@ -304,7 +271,7 @@ pub trait MatrixIdentity {
 
 /// `n × n` diagonal-matrix constructor from a vector: builds the matrix
 /// with `diag[i]` on the diagonal and `0` elsewhere. The constructor
-/// counterpart of [`MatDiagonal::diagonal`] (which extracts the diagonal).
+/// counterpart of `MatDiagonal::diagonal` (which extracts the diagonal).
 /// CMA-ES uses it to seed an anisotropic initial covariance
 /// `C = diag(stds²)` from a per-coordinate initial step-size vector
 /// (`CmaEs::with_stds`); the isotropic default still uses

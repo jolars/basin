@@ -105,10 +105,11 @@ pub use crate::core::constraint::{
 pub use crate::core::executor::{Executor, OptimizationResult, StepOutcome, Stepper, run_loop};
 pub use crate::core::inner::{InnerExecutor, WarmStart};
 pub use crate::core::math::{
-    AddDiagonalInPlace, AddDiagonalVectorInPlace, BoxAffineScaling, ClampInPlace, DenseMatrix,
-    DenseMatrixFromFn, Dot, GramMatrix, LinearSolveError, LinearSolveSpd, MatTransposeVec, MatVec,
-    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, SampleUniformBox, Scalar, ScaledAdd,
-    VectorIndex,
+    ClampInPlace, ComponentMulAssign, DenseMatrix, DenseMatrixFromFn, Dot, GramMatrix,
+    LinearSolveError, LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, NegInPlace, NormInfinity, NormSquared,
+    SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
+    SymmetricEigenError, VectorIndex, VectorLen,
 };
 pub use crate::core::numdiff::{
     FiniteDiff, Method, central_difference_gradient, central_difference_hessian,

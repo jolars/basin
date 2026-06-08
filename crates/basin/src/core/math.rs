@@ -148,7 +148,7 @@ pub trait ComponentMulAssign {
 /// Marquardt damping (Moré 1978): a parameter whose column curvature
 /// momentarily drops doesn't lose the damping floor accumulated from
 /// earlier iterations.
-pub trait ComponentMaxAssign {
+pub(crate) trait ComponentMaxAssign {
     /// Set `self[i]` to `max(self[i], other[i])` for every `i`, in place.
     fn component_max_assign(&mut self, other: &Self);
 }
@@ -163,7 +163,7 @@ pub trait ComponentMaxAssign {
 /// - **Caller must:** ensure `other[i] ≠ 0` for every `i`; division by a
 ///   zero divisor yields a non-finite value that propagates. (LM floors
 ///   the divisor away from zero with [`FloorZerosInPlace`] first.)
-pub trait ComponentDivAssign {
+pub(crate) trait ComponentDivAssign {
     /// Divide `self[i]` by `other[i]` for every `i`, in place.
     fn component_div_assign(&mut self, other: &Self);
 }
@@ -183,7 +183,7 @@ pub trait ComponentDivAssign {
 /// Cholesky.
 ///
 /// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
-pub trait FloorZerosInPlace<F = f64> {
+pub(crate) trait FloorZerosInPlace<F = f64> {
     /// Replace every entry `≤ 0` with `value`; leave positive entries
     /// unchanged.
     fn floor_zeros_in_place(&mut self, value: F);
@@ -237,13 +237,21 @@ mod faer_backend;
 #[cfg(feature = "faer")]
 mod faer_sparse_backend;
 
-pub use cl_scaling::BoxAffineScaling;
 pub use clamp::ClampInPlace;
 pub use dense::DenseMatrix;
 pub use linalg::{
-    AddDiagonalInPlace, AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate,
-    GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd, MatDiagonal, MatTransposeVec,
-    MatVec, MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen,
+    DenseMatrixFromFn, GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
+    MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, SymmetricEigen,
     SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
+
+// Per-solver plumbing ops: expressed as traits for backend portability, but
+// they carry no meaning outside one shipped solver's internals (diagonal
+// pokes, rank-one updates, the Coleman-Li affine scaling). Kept `pub(crate)`
+// so they stay off the frozen public surface — promote to `pub` on a concrete
+// external request (promotion is non-breaking; the reverse is not).
+pub(crate) use cl_scaling::BoxAffineScaling;
+pub(crate) use linalg::{
+    AddDiagonalVectorInPlace, GeneralRankOneUpdate, MatDiagonal, MaxDiagonal, RankOneUpdate,
+};

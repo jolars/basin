@@ -95,7 +95,7 @@ use crate::core::termination::TerminationReason;
 /// - **Boundary starting point.** `D` is undefined where `v_i = 0`
 ///   (i.e. on a finite face). [`init`](Solver::init) projects the
 ///   starting iterate strictly into `(lower, upper)` via
-///   [`BoxAffineScaling::project_strictly_inside`], so feasible-but-
+///   `BoxAffineScaling::project_strictly_inside`, so feasible-but-
 ///   on-boundary starts are silently corrected.
 ///
 /// # Termination
@@ -131,7 +131,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// The sparse damping path requires the diagonal of `JᵀJ` to be in the
 /// CSC pattern (always true when `J` has no zero columns); see
-/// [`AddDiagonalVectorInPlace`].
+/// `AddDiagonalVectorInPlace`.
 ///
 /// # State convention
 ///

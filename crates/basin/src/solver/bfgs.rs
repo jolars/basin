@@ -34,10 +34,10 @@ use crate::line_search::{LineSearch, Wolfe};
 /// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
 /// (`DVector<f64>` / `DMatrix<f64>`), and faer (`Col<f64>` / `Mat<f64>`).
 /// The dense inverse-Hessian needs only matvec, an identity constructor,
-/// scaling, and the rank-one update [`GeneralRankOneUpdate`] — no
+/// scaling, and the rank-one update `GeneralRankOneUpdate` — no
 /// factorization — so it stays backend-generic. `ndarray` is a
 /// compile-time error per tenet 5: its `Array2<f64>` implements neither
-/// [`GeneralRankOneUpdate`] nor [`MatrixIdentity`].
+/// `GeneralRankOneUpdate` nor [`MatrixIdentity`].
 ///
 /// # Examples
 ///
