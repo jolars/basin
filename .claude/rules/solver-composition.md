@@ -44,14 +44,16 @@ raw `&P`.
    contract is spelled out on `Solver::next_iter`'s rustdoc;
    `crates/basin/tests/inner_executor.rs` asserts it.
 
-2. **Inner termination criteria must be stateless across calls.** An
-   `InnerExecutor` keeps its `Vec<Box<dyn TerminationCriterion<S>>>` for its
-   whole lifetime and reuses it on every `run()`. Fine for `MaxIter`,
-   `*Tolerance`, and `MaxCostEvals` (no internal state, or state that resets
-   meaningfully each call). **Not** fine for `MaxTime`, whose internal
-   `start: Option<Instant>` is set on the first `check` and persists — on the
-   second `run()` it fires prematurely. Outer solvers needing per-run criteria
-   should call `run_loop` directly with a fresh `Vec` per call.
+2. **Inner termination criteria are reset per run.** An `InnerExecutor` keeps
+   its `Vec<Box<dyn TerminationCriterion<S>>>` for its whole lifetime and reuses
+   it on every `run()`. `run_loop` calls `TerminationCriterion::reset` on each
+   criterion at entry, so any per-run internal state is cleared before each
+   call — `MaxTime` (start instant), `RelativeGradientTolerance` (anchored
+   `‖∇f_0‖`), and `NoImprovement` (stall counter) are all safe to reuse across
+   inner runs. The contract this imposes on criterion authors: a criterion that
+   holds cross-call state MUST override `reset` to clear it (the default is a
+   no-op). Stateless criteria (`MaxIter`, `MaxCostEvals`, `GradientTolerance`,
+   …) need no override.
 
 3. **Failure routing.** `run()` returns a full `OptimizationResult` carrying a
    `TerminationReason`. Use `reason.is_failure()` (true only for
@@ -66,11 +68,12 @@ raw `&P`.
 
 Reach for `InnerExecutor` when the outer wants to expose `inner_max_iter` /
 `inner.terminate_on(...)` to its users via builder methods that mirror the
-framework. Reach for raw `run_loop` when the outer needs to reconstruct
-criteria each call (statefulness escape hatch), wants per-call criteria
+framework. Reach for raw `run_loop` when the outer wants per-call criteria
 passed through a different surface, or runs an adapter-problem inner — since
 that case constructs a fresh `Problem::new(adapter)` per outer iter rather
-than reusing the outer's wrapper.
+than reusing the outer's wrapper. (Reconstructing criteria per call is no
+longer a reason to drop to `run_loop`: stateful criteria reset per run, so an
+`InnerExecutor` reuses them safely — see contract 2.)
 
 ## Per-run state counts via `CountsMirror`
 

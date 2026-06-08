@@ -103,6 +103,19 @@ pub trait TerminationCriterion<S> {
     /// run, or `None` to continue. Called once per iteration before the
     /// solver's `next_iter`.
     fn check(&mut self, state: &S) -> Option<TerminationReason>;
+
+    /// Reset any internal per-run state so the criterion behaves as if
+    /// freshly constructed.
+    ///
+    /// The driver calls this once at the start of every run (see
+    /// [`run_loop`](crate::core::executor::run_loop)), so a single criterion
+    /// instance reused across composed inner runs — as an
+    /// [`InnerExecutor`](crate::core::inner::InnerExecutor) does — sees fresh
+    /// state each call. Stateless criteria need no override; any criterion
+    /// holding cross-call state (a start instant, an anchored initial value, a
+    /// stall counter) MUST override this to clear it, or it will misbehave when
+    /// reused. The default is a no-op.
+    fn reset(&mut self) {}
 }
 
 /// Stop after `state.iter() >= n` iterations.
@@ -224,6 +237,10 @@ where
             None
         }
     }
+
+    fn reset(&mut self) {
+        self.initial_norm_squared = None;
+    }
 }
 
 /// Stop when `‖x − π_C(x − ∇f(x))‖_∞ ≤ tol`, the canonical first-order
@@ -330,6 +347,10 @@ where
         self.last = Some(curr.clone());
         triggered.then_some(TerminationReason::ParamTolerance)
     }
+
+    fn reset(&mut self) {
+        self.last = None;
+    }
 }
 
 /// Stop when `‖x_k − x_{k−1}‖ ≤ tol · ‖x_k‖` — the scale-invariant
@@ -373,6 +394,10 @@ where
         self.last = Some(curr.clone());
         triggered.then_some(TerminationReason::RelativeParamTolerance)
     }
+
+    fn reset(&mut self) {
+        self.last = None;
+    }
 }
 
 /// Stop when `|f_k − f_{k−1}| ≤ tol`. Holds its own copy of the previous
@@ -401,6 +426,10 @@ where
             .is_some_and(|l| (l - curr).abs() <= self.tol && curr.is_finite());
         self.last = Some(curr);
         triggered.then_some(TerminationReason::CostTolerance)
+    }
+
+    fn reset(&mut self) {
+        self.last = None;
     }
 }
 
@@ -438,6 +467,10 @@ where
             .is_some_and(|l| curr.is_finite() && (l - curr).abs() <= self.tol * l.abs());
         self.last = Some(curr);
         triggered.then_some(TerminationReason::RelativeCostTolerance)
+    }
+
+    fn reset(&mut self) {
+        self.last = None;
     }
 }
 
@@ -527,6 +560,11 @@ where
             self.stalled += 1;
             (self.stalled >= self.patience).then_some(TerminationReason::NoImprovement)
         }
+    }
+
+    fn reset(&mut self) {
+        self.anchor = None;
+        self.stalled = 0;
     }
 }
 
@@ -636,5 +674,89 @@ impl<S> TerminationCriterion<S> for MaxTime {
         } else {
             None
         }
+    }
+
+    fn reset(&mut self) {
+        self.start = None;
+    }
+}
+
+#[cfg(test)]
+mod reset_tests {
+    //! `reset` must restore each stateful criterion to its
+    //! freshly-constructed behaviour, so a criterion reused across
+    //! composed inner runs (where `run_loop` calls `reset` at the start of
+    //! every run) does not carry state across calls. The assertions are
+    //! chosen so that the *unreset* behaviour would differ — i.e. each test
+    //! fails if the `reset` override is removed.
+    use super::*;
+    use crate::core::state::BasicState;
+
+    type S = BasicState<Vec<f64>>;
+
+    #[test]
+    fn relative_gradient_tolerance_reanchors_after_reset() {
+        // tol 0.1 → fires when ‖∇f_k‖² ≤ 0.01·anchor.
+        let mut c = RelativeGradientTolerance::new(0.1_f64);
+        let mut state: S = BasicState::new(vec![0.0]);
+
+        // Anchor on a large gradient (‖∇‖² = 100): doesn't fire.
+        state.gradient = Some(vec![10.0]);
+        assert!(TerminationCriterion::<S>::check(&mut c, &state).is_none());
+
+        TerminationCriterion::<S>::reset(&mut c);
+
+        // Re-anchor on a small gradient (‖∇‖² = 0.25). Relative to the new
+        // anchor the ratio is 1 ≫ 0.01, so it must NOT fire. If the anchor
+        // had carried over (100), 0.25 ≤ 0.01·100 = 1 would fire.
+        state.gradient = Some(vec![0.5]);
+        assert!(
+            TerminationCriterion::<S>::check(&mut c, &state).is_none(),
+            "reset should re-anchor ‖∇f_0‖ to this run's initial gradient"
+        );
+    }
+
+    #[test]
+    fn no_improvement_clears_stall_counter_after_reset() {
+        // patience 2: fires after 2 consecutive non-improving checks.
+        let mut c = NoImprovement::new(2, 0.0_f64);
+        let mut state: S = BasicState::new(vec![0.0]);
+        state.best_cost = 10.0;
+
+        // First check anchors at 10 (counts as improvement), second stalls
+        // once. One more stall (without a reset) would fire.
+        assert!(TerminationCriterion::<S>::check(&mut c, &state).is_none());
+        assert!(TerminationCriterion::<S>::check(&mut c, &state).is_none());
+
+        TerminationCriterion::<S>::reset(&mut c);
+
+        // After reset the anchor is cleared, so this counts as a fresh
+        // improvement → no fire. Without reset, the stall counter would
+        // reach the patience of 2 here and fire.
+        assert!(
+            TerminationCriterion::<S>::check(&mut c, &state).is_none(),
+            "reset should clear the anchor and stall counter"
+        );
+    }
+
+    #[test]
+    fn max_time_restarts_clock_after_reset() {
+        let mut c = MaxTime::new(Duration::from_millis(20));
+
+        // Prime the clock, then let it elapse past the limit so it fires.
+        assert!(TerminationCriterion::<()>::check(&mut c, &()).is_none());
+        std::thread::sleep(Duration::from_millis(40));
+        assert_eq!(
+            TerminationCriterion::<()>::check(&mut c, &()),
+            Some(TerminationReason::MaxTime)
+        );
+
+        TerminationCriterion::<()>::reset(&mut c);
+
+        // The clock restarts on the next check; ~0 ms elapsed < 20 ms limit.
+        assert!(
+            TerminationCriterion::<()>::check(&mut c, &()).is_none(),
+            "reset should restart the wall-clock from the next check"
+        );
     }
 }

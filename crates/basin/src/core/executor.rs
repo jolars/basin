@@ -368,8 +368,12 @@ where
 /// mirror computes the delta against that. Nested `run_loop` calls
 /// against the same wrapper therefore see clean per-call counters.
 ///
-/// Semantics match `Executor::run`: `init` is called once, then on each
-/// iteration framework `criteria` are checked in insertion order before
+/// Semantics match `Executor::run`: each criterion is
+/// [`reset`](crate::core::termination::TerminationCriterion::reset) at
+/// entry — so a criteria vector reused across calls (as an
+/// [`InnerExecutor`](crate::core::inner::InnerExecutor) does) sees fresh
+/// per-run state — then `init` is called once, then on each iteration
+/// framework `criteria` are checked in insertion order before
 /// the solver's own `terminate` hook, before stepping. `max_iter` is
 /// checked against `state.iter()` and exits with `TerminationReason::MaxIter`.
 /// `next_iter` may also report a mid-iter termination via its return tuple;
@@ -387,6 +391,15 @@ where
     So: Solver<P, S>,
 {
     let baseline = *problem.counts();
+    // Reset each criterion's internal per-run state before the run, so a
+    // criteria vector reused across `run_loop` calls (e.g. an
+    // `InnerExecutor` driven once per outer iter) sees fresh state each
+    // call. Stateful criteria (`MaxTime`, `RelativeGradientTolerance`,
+    // `NoImprovement`) would otherwise carry state across runs and
+    // misbehave; the default `reset` is a no-op for stateless ones.
+    for criterion in criteria.iter_mut() {
+        criterion.reset();
+    }
     // Reset best-so-far so the state always reflects per-run work,
     // matching the snapshot discipline `state.mirror` uses for eval
     // counters. This makes the same state safe to drive across

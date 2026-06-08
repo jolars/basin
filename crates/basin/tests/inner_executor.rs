@@ -8,8 +8,10 @@
 //!   1. Eval-counter aggregation. Inner cost evals flow through the
 //!      shared `Problem<P>` wrapper automatically; the outer state's
 //!      `CountsMirror` impl picks them up via the executor.
-//!   2. Criteria statelessness across calls (the `InnerExecutor`'s
-//!      single criteria vec is reused on every inner run).
+//!   2. Criteria reset per run (the `InnerExecutor`'s single criteria vec
+//!      is reused on every inner run, and `run_loop` resets each criterion
+//!      at the start of every run so stateful criteria don't carry state
+//!      across calls).
 //!   3. Failure routing (a failing inner bubbles `SolverFailed` via the
 //!      outer's mid-iter return).
 //!
@@ -23,8 +25,11 @@
 use basin::problems::Booth;
 use basin::{
     Backtracking, BasicState, CostFunction, CountsMirror, EvalCounts, Executor, Gradient,
-    GradientDescent, GradientTolerance, InnerExecutor, Problem, Solver, State, TerminationReason,
+    GradientDescent, GradientTolerance, InnerExecutor, Problem, Solver, State,
+    TerminationCriterion, TerminationReason,
 };
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Outer-solver state: `k` parallel iterates with parallel costs, kept
 /// sorted by ascending cost so [`param`](State::param) returns the best.
@@ -272,6 +277,49 @@ fn inner_executor_aggregates_cost_evals_into_outer() {
         evals >= 3 + 6,
         "expected outer to aggregate inner work; got {} cost evals (≥ 9 minimum)",
         evals
+    );
+}
+
+/// Stateful inner criterion that records how many times `reset` is
+/// invoked. Used to prove `run_loop` resets criteria once per inner run,
+/// so an `InnerExecutor`'s reused criteria vector sees fresh per-run state
+/// (contract 2). `check` never fires — termination is left to the real
+/// `GradientTolerance` alongside it.
+struct CountResets(Rc<RefCell<u32>>);
+
+impl<S> TerminationCriterion<S> for CountResets {
+    fn check(&mut self, _state: &S) -> Option<TerminationReason> {
+        None
+    }
+    fn reset(&mut self) {
+        *self.0.borrow_mut() += 1;
+    }
+}
+
+#[test]
+fn inner_executor_resets_criteria_once_per_run() {
+    let problem = Booth::<Vec<f64>>::default();
+    let starts = vec![vec![0.0, 0.0], vec![-1.0, 5.0], vec![3.0, 1.0]];
+    let outer_state = MultiStartState::new(starts);
+
+    let resets = Rc::new(RefCell::new(0u32));
+    let inner = InnerExecutor::new(GradientDescent::with_line_search(Backtracking::new()))
+        .max_iter(50)
+        .terminate_on(GradientTolerance(1e-8))
+        .terminate_on(CountResets(Rc::clone(&resets)));
+    let outer = PerVertexRefine::new(inner);
+
+    Executor::new(problem, outer, outer_state)
+        .max_iter(2)
+        .run()
+        .unwrap();
+
+    // 3 starts × 2 outer iters = 6 inner `run()` calls; `run_loop` resets
+    // each criterion once at the start of every run.
+    assert_eq!(
+        *resets.borrow(),
+        6,
+        "run_loop should reset the reused criteria vector once per inner run"
     );
 }
 

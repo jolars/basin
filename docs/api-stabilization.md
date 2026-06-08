@@ -393,42 +393,40 @@ distinction is documented consistently on each state's `cost()` and confirm no
 public path exposes a pre-init read. Decide whether that's worth a doc-only pass
 now or is already adequately covered.
 
-### B6. `InnerExecutor` criteria-reuse semantics `[REVIEW]`
+### B6. `InnerExecutor` criteria-reuse semantics `[RESOLVED]`
 
 `InnerExecutor` (`core/inner.rs`) holds one
 `Vec<Box<dyn TerminationCriterion<S>>>` for its whole lifetime and reuses it on
-every `run()`. Correct for stateless criteria (`MaxIter`, the `*Tolerance`
-family, `MaxCostEvals`); a sharp edge for stateful ones — `MaxTime` sets
-`start: Option<Instant>` on its first `check` and never clears it, so on a
-second `run()` it fires prematurely. The composition rules already document this
-as contract 2 ("inner termination criteria must be stateless across calls").
+every `run()`. This was correct for stateless criteria (`MaxIter`, `MaxCostEvals`)
+but a sharp edge for stateful ones. The original write-up flagged only `MaxTime`
+(`start: Option<Instant>` set on first `check`, never cleared → fires prematurely
+on a second `run()`); auditing the full criterion set found the gap was broader —
+`RelativeGradientTolerance` anchors `‖∇f_0‖` on the first run via `get_or_insert`
+and never re-anchors (silently wrong, not just early-stop), and `NoImprovement`'s
+`stalled` counter accumulates across runs. The `*Tolerance` "last value" criteria
+self-heal (they re-seed on the first check of each run), so they were correct only
+by luck.
 
-The footgun already shapes the codebase. The adapter-problem outer solvers
-(`BarrierMethod`, `AugmentedLagrangianMethod`) deliberately **sidestep**
-`InnerExecutor` and drive their inner via `run_loop` with a fresh criteria
-vector each outer iteration. That is partly intrinsic — they minimize a
-*changing surrogate* (shrinking μ / updated λ, ρ) against a fresh
-`Problem::new(adapter)` per outer iter, which the store-and-reuse model doesn't
-fit — but it is *also* an explicit dodge of the `MaxTime` cross-call caveat (see
-`barrier_method.rs` "Composition"). Only the same-problem injection solvers
-(`CmaInject`, `BoundedCmaInject`, `DeInject`) actually store an `InnerExecutor`.
-(This also corrects A3's original scoping, which had attributed an embedded
-`InnerExecutor` to the barrier / AL pair.)
+**Resolution (shipped):** a defaulted `fn reset(&mut self) {}` lifecycle hook on
+`TerminationCriterion`, called on each criterion at the top of `run_loop` (the
+single choke point — `InnerExecutor::run` delegates straight to it). Stateful
+criteria override `reset` to clear per-run state (`MaxTime`,
+`RelativeGradientTolerance`, `NoImprovement`, plus the self-healing `*Tolerance`
+family for a clean "reset == freshly constructed" invariant). The hook is additive
+and object-safe (defaulted body keeps `Box<dyn TerminationCriterion>` working), so
+no existing call site changed. Contract 2 in `inner.rs` /
+`.claude/rules/solver-composition.md` was rewritten from "criteria must be
+stateless" to "criteria are reset per run, so stateful ones are safe to reuse; a
+custom criterion holding cross-call state must override `reset`."
 
-**Design question (not a public-surface freeze):** should `InnerExecutor` make
-reuse safe — e.g. take a criteria *factory* rebuilt per `run()`, or add a
-defaulted `reset(&mut self)` hook to `TerminationCriterion` that `run()` calls
-before each pass — so stateful criteria can't silently misbehave? Both routes
-are additive (a defaulted trait method or a new builder method can land post-1.0
-without breaking), so this is **not** strictly freeze-now. But it is the *same
-underlying issue* as C1 (`run_loop` visibility): C1 keeps `run_loop` public
-precisely as the escape hatch for "fresh per-call criteria," so the two should
-be decided together — making `InnerExecutor` safe for stateful criteria weakens
-C1's main reason to keep `run_loop` public.
-
-**Leaning:** document the caveat as the 1.0 contract (status quo) and treat a
-`reset` / factory mechanism as deferred-but-additive; revisit only when a real
-consumer hits the `MaxTime`-in-an-inner case.
+**Interaction with C1 (`run_loop` visibility):** this removes "reconstruct
+criteria per call" as a *reason* to drop to `run_loop` (an `InnerExecutor` now
+reuses stateful criteria safely), but `run_loop` stays public as the low-level
+driver / adapter-problem entry point. The adapter-problem outer solvers
+(`BarrierMethod`, `AugmentedLagrangianMethod`) still build a fresh criteria
+vector per outer iteration — but now for the *intrinsic* reason (each outer iter
+minimizes a changing surrogate against a fresh `Problem::new(adapter)`), no longer
+as a `MaxTime` dodge; their "Composition" notes were updated to say so.
 
 ### B7. Gradient criteria silently no-op on NLLS solvers `[RECOMMEND]`
 

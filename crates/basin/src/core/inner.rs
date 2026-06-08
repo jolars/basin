@@ -104,20 +104,20 @@ pub trait WarmStart<V> {
 ///    See the [`Solver::next_iter`]
 ///    contract for the canonical wording.
 ///
-/// 2. **Criteria statelessness across calls.** Criteria registered with
+/// 2. **Criteria are reset per run.** Criteria registered with
 ///    [`terminate_on`](Self::terminate_on) live for the whole lifetime of
 ///    the `InnerExecutor` and are reused on every [`run`](Self::run)
-///    call. They MUST be stateless across runs — fine for
-///    [`MaxIter`](crate::core::termination::MaxIter),
-///    [`GradientTolerance`](crate::core::termination::GradientTolerance),
-///    and [`MaxCostEvals`](crate::core::termination::MaxCostEvals); *not*
-///    fine for
-///    [`MaxTime`](crate::core::termination::MaxTime), whose internal
-///    `start` instant carries across calls and would fire prematurely on
-///    later runs. If you need per-run criteria, build a fresh
-///    `InnerExecutor` each call (or call
-///    [`run_loop`] directly with a
-///    fresh `Vec`).
+///    call, but each is
+///    [`reset`](crate::core::termination::TerminationCriterion::reset) at
+///    the start of every run (via [`run_loop`]), so any per-run internal
+///    state is cleared first. Stateful criteria are therefore safe to
+///    reuse: [`MaxTime`](crate::core::termination::MaxTime) (start instant),
+///    [`RelativeGradientTolerance`](crate::core::termination::RelativeGradientTolerance)
+///    (anchored `‖∇f_0‖`), and
+///    [`NoImprovement`](crate::core::termination::NoImprovement) (stall
+///    counter) all behave as freshly constructed each call. A *custom*
+///    criterion holding cross-call state must override `reset` to clear it
+///    (the default is a no-op).
 ///
 /// 3. **Failure routing.** [`run`](Self::run) returns a full
 ///    [`OptimizationResult`]; classify the reason. Use

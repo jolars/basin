@@ -100,11 +100,12 @@ use crate::core::termination::{
 /// `Problem` wrapper each outer iteration
 /// (the inner is an *adapter-problem* composition — the augmented Lagrangian
 /// is a distinct type from the outer problem) with a fresh criteria vector
-/// (`MaxIter` + `GradientTolerance` on the augmented Lagrangian). Building
-/// criteria per call — rather than storing an
-/// [`InnerExecutor`](crate::core::inner::InnerExecutor) — sidesteps the
-/// `MaxTime` cross-call statelessness caveat (see `CONTRIBUTING.md` "Solver
-/// composition"). After each inner solve, the inner wrapper's
+/// (`MaxIter` + `GradientTolerance` on the augmented Lagrangian). The fresh
+/// wrapper is intrinsic here — each outer iter minimizes a *different*
+/// surrogate (updated λ, ρ), not a reuse-avoidance dodge: criteria
+/// [reset](crate::core::termination::TerminationCriterion::reset) per run, so
+/// even a stored [`InnerExecutor`](crate::core::inner::InnerExecutor) would
+/// reuse stateful criteria safely. After each inner solve, the inner wrapper's
 /// [`EvalCounts`](crate::core::problem::EvalCounts) is folded into the
 /// outer's wrapper via
 /// [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on

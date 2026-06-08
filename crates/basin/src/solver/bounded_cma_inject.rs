@@ -130,9 +130,9 @@ where
         }
     }
 
-    /// Register a stateless termination criterion on the inner loop.
+    /// Register a termination criterion on the inner loop.
     /// See [`CmaInject::inner_terminate_on`](super::CmaInject::inner_terminate_on)
-    /// for the statelessness contract.
+    /// for the reset-per-run contract (stateful criteria are safe).
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where
         C: TerminationCriterion<I::State> + 'static,

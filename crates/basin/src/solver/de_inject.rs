@@ -224,11 +224,10 @@ where
         }
     }
 
-    /// Register a stateless termination criterion on the inner loop.
-    /// Criteria are reused across every outer iteration's inner run,
-    /// so they MUST be stateless across calls — `MaxIter`, the
-    /// `*Tolerance` family, and `MaxCostEvals` are safe;
-    /// [`MaxTime`](crate::core::termination::MaxTime) is **not**.
+    /// Register a termination criterion on the inner loop.
+    /// Criteria are reused across every outer iteration's inner run, but
+    /// each is reset at the start of every run, so stateful criteria —
+    /// including [`MaxTime`](crate::core::termination::MaxTime) — are safe.
     /// See CONTRIBUTING.md "Solver composition" rule 2.
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where

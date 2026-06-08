@@ -118,10 +118,12 @@ use crate::core::termination::{
 /// Internally drives the inner solver via
 /// [`run_loop`] with a **fresh** criteria
 /// vector each outer iteration (`MaxIter` + `GradientTolerance` on the
-/// barrier objective). Building criteria per call — rather than storing an
-/// [`InnerExecutor`](crate::core::inner::InnerExecutor) — sidesteps the
-/// `MaxTime` cross-call statelessness caveat (see `CONTRIBUTING.md` "Solver
-/// composition"). The inner runs on its own `So::State` (seeded via
+/// barrier objective). The fresh vector is intrinsic here — each outer iter
+/// minimizes a *different* surrogate (`Problem::new(LogBarrier)` with a
+/// shrinking μ), not a reuse-avoidance dodge: criteria
+/// [reset](crate::core::termination::TerminationCriterion::reset) per run, so
+/// even a stored [`InnerExecutor`](crate::core::inner::InnerExecutor) would
+/// reuse stateful criteria safely. The inner runs on its own `So::State` (seeded via
 /// [`WarmStart`]) against a fresh `Problem::new(LogBarrier)`; after each
 /// solve its
 /// [`EvalCounts`](crate::core::problem::EvalCounts) are folded back into
