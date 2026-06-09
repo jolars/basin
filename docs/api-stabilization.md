@@ -341,10 +341,17 @@ Required-arg `new()` is fine where the parameter has no reasonable default.
 
 ### B3. Drop deprecated aliases `[DO]`
 
-`BFGS`, `LBFGS`, `LBFGSB` are still publicly re-exported behind
-`#[allow(deprecated)]` (`lib.rs:98–102`). Remove before 1.0 so the frozen
-surface carries only `Bfgs` / `Lbfgs` / `Lbfgsb`. A 1.0 is the natural place to
-shed pre-1.0 deprecations.
+Still open. The deprecated surface to shed before 1.0:
+
+- The screaming-case type aliases `BFGS` (`lib.rs:141`, def `bfgs.rs:271`),
+  `LBFGS` / `LBFGSB` (`lib.rs:144`, defs `lbfgs.rs:1207` / `1217`) — remove so
+  the frozen surface carries only `Bfgs` / `Lbfgs` / `Lbfgsb`.
+- `NelderMead::standard()` (`nelder_mead.rs:149`, deprecated since 0.10.0) — now
+  exactly `new()`.
+- The renamed L-BFGS builder methods `with_tol_pg` / `with_epsilon` /
+  `with_m_capacity` (`lbfgs.rs:343` / `351` / `357`, deprecated since 0.10.0).
+
+A 1.0 is the natural place to shed pre-1.0 deprecations.
 
 ### B4. State generic ergonomics `[DONE]`
 
@@ -591,30 +598,79 @@ principle.
 Every `pub` item is something 1.0 must keep. Trim what doesn't need to be
 public.
 
-### C1. `run_loop` visibility `[DECIDE]`
+### C1. `run_loop` visibility `[RESOLVED: keep public]`
 
 Both the high-level `InnerExecutor` builder and the low-level `run_loop`
-function are public (`lib.rs:68`). `run_loop` is the escape hatch for custom
-outer solvers that need fresh per-call termination criteria (the `InnerExecutor`
-reuses criteria, which misbehaves with stateful ones like `MaxTime` --- see B6,
-which asks whether `InnerExecutor` should instead be made safe for stateful
-criteria; decide the two together).
+function are public (`lib.rs:105`). The original write-up framed `run_loop` as
+the escape hatch for custom outer solvers needing *fresh per-call termination
+criteria*, because `InnerExecutor` reused criteria and that misbehaved with
+stateful ones like `MaxTime`. **B6 removed that motivation:** `run_loop` now
+`reset`s every criterion at entry and `InnerExecutor` delegates straight to it,
+so criteria reuse is safe in both. The criteria caveat is no longer a reason for
+either choice.
 
-**Decide:** keep `run_loop` public (sanction the escape hatch, document the
-criteria-reuse caveat) or make it `pub(crate)` and route everything through
-`InnerExecutor`. Fewer public items = less frozen surface; but if any realistic
-custom-solver author needs it, exposing it now avoids a later additive scramble.
-Leaning: keep public *if* the composition story is meant to be user-extensible;
-otherwise hide it.
+**Resolution:** keep `run_loop` public, as the low-level driver and the
+*adapter-problem* entry point — outer solvers that minimize a changing surrogate
+against a fresh `Problem::new(adapter)` per iteration (`BarrierMethod`,
+`AugmentedLagrangianMethod`, and future external constrained methods like a
+nonlinear-constraint penalty solver), which `InnerExecutor`'s owned-reusable-
+criteria model doesn't serve.
 
-### C2. Math-tier re-exports `[REVIEW]`
+Reasons, in increasing weight:
+
+1. **Near-zero frozen surface.** The usual "fewer public items" argument barely
+   applies: the signature is already maximally permissive — `criteria: &mut
+   [Box<dyn TerminationCriterion<S>>]` (a slice, not `&mut Vec`), and the element
+   type is already implicitly public (the trait is public; `InnerExecutor::
+   terminate_on` stores exactly `Box<dyn TerminationCriterion<S>>`). Hiding
+   `run_loop` would free essentially nothing to refactor later.
+2. **Genuine external use case.** The adapter-problem pattern (fresh
+   `Problem::new(adapter)` per outer iter, fold counts back) is what the shipped
+   barrier / AL methods do and what an external author writing a custom
+   constrained method — the deferred "nonlinear constraints" story — replicates.
+3. **Consistency with committed surface.** `WarmStart` is already `pub` and the
+   three composition contracts are documented for "every outer solver" — phrased
+   for external authors. Publishing the contract machinery while hiding the one
+   primitive an adapter-problem author needs would be incoherent; the surrounding
+   surface already answers "is composition user-extensible?" with yes.
+
+The only thing that would have flipped this to `pub(crate)` is deciding
+composition is basin-internal only — but that's a bigger call than `run_loop`
+(it would also pull `WarmStart` and the documented contracts private), and the
+shipped surface deliberately goes the other way.
+
+### C2. Math-tier re-exports `[RESOLVED]`
 
 `Scalar`, `ScaledAdd`, `Dot`, `NormSquared`, and the rest of the `core::math`
-re-exports (`lib.rs:70`) are public because user-implemented problems and custom
-solvers reference the bounds. Audit for the *minimum* set that must be public:
-any op only used internally by shipped solvers should not enter the frozen
-surface. Deliverable: a list of math items to keep `pub` (load-bearing for the
-user-facing generic bounds) vs demote to `pub(crate)`.
+re-exports were public because user-implemented problems and custom solvers
+reference the bounds. The audit asked for the *minimum* set that must stay
+public — any op used only internally by shipped solvers should not enter the
+frozen surface.
+
+**Resolution (shipped, commit `9411824`, breaking):** the curation key is that
+every math bound sits in *impl position* (`impl Solver for …`), so a trait is
+forced `pub` only when named in a genuinely public declaration; everything else
+is per-solver plumbing that can be `pub(crate)` without tripping
+`private_bounds`.
+
+- **Kept `pub` + re-exported (load-bearing):** the vector tier; the LA tier
+  (`MatVec`, `MatTransposeVec`, `GramMatrix`, `LinearSolveSpd`,
+  `LinearSolveLstsq`, `SymmetricEigen`); sampling; concrete types / errors; and
+  the traits named in public signatures (numdiff's `VectorLen` / `VectorIndex` /
+  `DenseMatrixFromFn`; `CmaEsState`'s `MatrixIdentity` / `MatrixFromDiagonal` /
+  `ComponentMulAssign`). Six load-bearing items that were missing from the
+  re-export list were added.
+- **Demoted to `pub(crate)` (impl-only plumbing):** `AddDiagonalVectorInPlace`,
+  `MaxDiagonal`, `MatDiagonal`, `RankOneUpdate`, `GeneralRankOneUpdate`,
+  `BoxAffineScaling`, `ComponentMaxAssign`, `ComponentDivAssign`,
+  `FloorZerosInPlace`.
+- **Deleted entirely:** `AddDiagonalInPlace` — the scalar diagonal op had no
+  consumer (LM / TRF use the vector form) and was only masked as "used" because
+  `pub use` re-exports escape the dead-code lint.
+
+The current re-export set lives at `lib.rs:101`. Verified across default +
+all-features build, clippy, `cargo doc`, the wasm32 build (all `-D warnings`),
+and the test suite.
 
 --------------------------------------------------------------------------------
 
@@ -631,18 +687,24 @@ user-facing generic bounds) vs demote to `pub(crate)`.
 
 ## Ratification checklist
 
-The `[DECIDE]` items needing a maintainer call:
+The items that needed a maintainer call --- all now decided and reflected in
+their sections above:
 
-- [ ] A1 --- which enums get `#[non_exhaustive]` (recommend: TerminationReason +
-      both linalg error enums; decide ObserverMode / Method).
-- [ ] A2 --- commit to no observer KV channel (recommend: yes, record as
-      non-tenet).
+- [x] A1 --- enums getting `#[non_exhaustive]`: TerminationReason + both linalg
+      error enums + ObserverMode / Method. Resolved *yes* for the config-style
+      enums.
+- [x] A2 --- no observer KV channel; recorded as a deliberate non-tenet
+      (additively reopenable post-1.0).
 - [x] B2 --- `NelderMead` gains `new()` (= standard params) + `Default`;
       `standard()` deprecated → `new()`. "Required iff no sensible default" rule
       recorded.
-- [ ] B5 --- doc-only pre-init `cost()` pass now, or defer?
-- [ ] B8 --- introduce `CmaEsState` (recommend) or record the
-      `BasicPopulationState` + solver-`Working` split as a deliberate non-tenet?
-- [ ] C1 --- `run_loop` stays public or becomes `pub(crate)`?
+- [x] B5 --- pre-init `cost()` contract documented (downgraded from "type
+      inconsistency").
+- [x] B8 --- `CmaEsState` introduced (σ / covariance / evolution paths moved off
+      `BasicPopulationState`), enabling the composable `CmaEsTolerance` criterion.
+- [x] C1 --- `run_loop` stays **public** (low-level driver + adapter-problem
+      entry point); criteria-reuse caveat retired by B6.
 
-Once ratified, A / B / C become three follow-up PRs.
+The one remaining open *action* (not a decision) is **B3** --- drop the
+deprecated aliases (`BFGS` / `LBFGS` / `LBFGSB`, `NelderMead::standard()`, the
+renamed L-BFGS builder methods) before tagging 1.0.
