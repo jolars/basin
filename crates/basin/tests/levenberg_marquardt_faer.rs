@@ -1,7 +1,7 @@
 #![cfg(feature = "faer")]
 
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
-use basin::{BasicState, Executor, LevenbergMarquardt, TerminationReason};
+use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
 use faer::Col;
 
 #[test]
@@ -9,7 +9,7 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -38,7 +38,7 @@ fn levenberg_marquardt_converges_fast_on_poorly_scaled_exponential_fit() {
     let problem = ExponentialFit::<Col<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
     let initial = Col::from_fn(2, |i| if i == 0 { 5.0e4 } else { -0.3 });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -76,7 +76,7 @@ fn levenberg_marquardt_converges_via_relative_gradient_tolerance() {
         LevenbergMarquardt::new()
             .with_tol_grad(0.0)
             .with_tol_grad_rel(1e-10),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -105,7 +105,7 @@ fn levenberg_marquardt_converges_via_ftol() {
             .with_tol_grad(0.0)
             .with_tol_grad_rel(0.0)
             .with_tol_cost_rel(1e-10),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -133,7 +133,7 @@ fn levenberg_marquardt_converges_via_xtol() {
             .with_tol_grad(0.0)
             .with_tol_grad_rel(0.0)
             .with_tol_step_rel(1e-10),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -161,7 +161,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
         _ => 1.0,
     });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -188,7 +188,7 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
         _ => 1.0,
     });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(100)
         .run()
         .unwrap();
@@ -206,7 +206,7 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(100)
         .run()
         .unwrap();

@@ -442,43 +442,48 @@ vector per outer iteration --- but now for the *intrinsic* reason (each outer
 iter minimizes a changing surrogate against a fresh `Problem::new(adapter)`), no
 longer as a `MaxTime` dodge; their "Composition" notes were updated to say so.
 
-### B7. Gradient criteria silently no-op on NLLS solvers `[RECOMMEND]`
+### B7. Gradient criteria silently no-op on NLLS solvers `[RESOLVED]`
 
 The NLLS solvers (`LevenbergMarquardt`, `Trf`, `GaussNewton`) deliberately leave
 `state.gradient = None` --- the framework's L2-squared [`GradientTolerance`] is
 the wrong metric for least squares, where the canonical first-order test is
 `‖Jᵀr‖_∞` (documented on `levenberg_marquardt.rs` / `trf.rs`, and the reason
-each solver carries its own `with_tol_grad`). The footgun: those solvers run on
-`BasicState`, which *does* impl `GradientState`, so a user can still attach
+each solver carries its own `with_tol_grad`). The footgun was: those solvers ran
+on `BasicState`, which *does* impl `GradientState`, so a user could still attach
 `GradientTolerance` (or `RelativeGradientTolerance` /
-`ProjectedGradientTolerance`) to the executor. It **type-checks and silently
-never fires** --- `check` reads `state.gradient()?`, which short-circuits to
+`ProjectedGradientTolerance`) to the executor. It **type-checked and silently
+never fired** --- `check` reads `state.gradient()?`, which short-circuits to
 `None` on the permanent absence, so no termination, no panic, no warning. The
 compile-time guard from tenet 3 (can't pair a gradient criterion with a
-derivative-free solver) doesn't catch this, because the NLLS state is nominally
-a `GradientState`; it just never populates the gradient. (`MaxGradientEvals` is
-the analogous count case: LM makes Jacobian calls, not gradient calls, so
-`gradient_evals` stays `0` and the budget never trips --- arguably *correct*
-there, since no gradient work happens, but the same "looks wired, does nothing"
-shape.)
+derivative-free solver) didn't catch this, because the NLLS state was nominally
+a `GradientState`; it just never populated the gradient.
 
-A user reasonably reaching for "stop at gradient tolerance" on an LM run gets a
-criterion that quietly does nothing and falls through to `MaxIter` --- the worst
-kind of silent misconfiguration.
+(The original audit claimed `MaxGradientEvals` was the analogous *inert* case
+--- "LM makes Jacobian calls, so `gradient_evals` stays `0` and the budget never
+trips". That was **wrong**: `BasicState`'s `CountsMirror` folded `jacobian_evals`
+*into* `gradient_evals`, and the mirror runs every step, so `MaxGradientEvals`
+on an LM run actually *did* fire, silently counting Jacobian work as gradient
+work --- a second footgun pointing the opposite way.)
 
-**Recommend:** no public-surface change (the asymmetry is load-bearing ---
-populating a wrong-metric gradient just to satisfy the criterion would be
-worse). Address it at the documentation / diagnostics layer:
+**Resolved (option B --- dedicated non-`GradientState` states).** The NLLS trio
+now runs on a new `NllsState` and `Brent` on a new `ScalarState`; neither impls
+`GradientState`. Attaching any gradient criterion (`GradientTolerance`,
+`RelativeGradientTolerance`, `ProjectedGradientTolerance`, `MaxGradientEvals`) to
+these solvers is now a **compile error** --- the same tenet-3 guard that already
+keeps gradient criteria off derivative-free solvers. This closes both footguns
+(the silent-no-op tolerance *and* the mislabeled `MaxGradientEvals` count). Notes:
 
-- Document on each NLLS solver's `# Termination` section that the framework
-  gradient criteria are inert and the solver's own `with_tol_grad` /
-  `with_tol_grad_rel` are the gradient tests to use. (LM already half-says this;
-  make it explicit and add it to `Trf` / `GaussNewton`.)
-- Optionally, a `debug_assert!`-level nudge is *not* feasible here (the
-  criterion can't tell "not populated yet" from "never populated"), which is
-  itself the argument for the doc route. If a louder signal is ever wanted, the
-  additive path is a defaulted `TerminationCriterion::applicable(&S) ->   bool`
-  introspection hook --- deferred, not freeze-now.
+- The asymmetry stays load-bearing: nothing populates a wrong-metric gradient.
+  The fix is purely at the type level (drop the `GradientState` impl by using a
+  state that never had it), so `MaxCostEvals` / `result.cost_evals()` are
+  unchanged (`NllsState` preserves the `cost_evals = cost + residual` fold).
+- `NllsState` exposes honest `residual_evals()` / `jacobian_evals()` accessors
+  (MINPACK `nfev` / `njev`) in place of the old mislabeled `gradient_evals()`.
+- Each NLLS / Brent solver's `# Termination` rustdoc now states the framework
+  gradient criteria are a compile error and points at `with_tol_grad` /
+  `with_tol_grad_rel` (the solver's own first-order tests).
+- `BasicState` retains its `GradientState` impl --- it still serves the genuine
+  gradient solvers (`GradientDescent`, `ProjectedGradientDescent`, `Sgd`).
 
 [`GradientTolerance`]: ../crates/basin/src/core/termination.rs
 

@@ -1,7 +1,7 @@
 #![cfg(feature = "faer")]
 
 use basin::problems::{PowellSingular, RosenbrockResiduals};
-use basin::{BasicState, Executor, GaussNewton, TerminationReason};
+use basin::{Executor, GaussNewton, NllsState, TerminationReason};
 use faer::Col;
 
 #[test]
@@ -9,7 +9,7 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(20)
         .run()
         .unwrap();
@@ -35,7 +35,7 @@ fn gauss_newton_single_step_matches_normal_equation_solution() {
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(1)
         .run()
         .unwrap();
@@ -59,7 +59,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -80,7 +80,7 @@ fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
         _ => 1.0,
     });
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(100)
         .run()
         .unwrap();

@@ -16,7 +16,7 @@
 use std::hint::black_box;
 
 use basin::problems::{ExponentialFit, PowellSingular};
-use basin::{BasicState, Executor, LevenbergMarquardt};
+use basin::{Executor, LevenbergMarquardt, NllsState};
 use competitor_bench::{
     LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
     vardim_start,
@@ -54,7 +54,7 @@ fn bench_exp_fit(c: &mut Criterion) {
             },
             |(p, x0)| {
                 black_box(
-                    Executor::new(p, basin_lm(), BasicState::new(x0))
+                    Executor::new(p, basin_lm(), NllsState::new(x0))
                         .max_iter(200)
                         .run(),
                 )
@@ -73,7 +73,7 @@ fn bench_exp_fit(c: &mut Criterion) {
             },
             |(p, x0)| {
                 black_box(
-                    Executor::new(p, basin_lm(), BasicState::new(x0))
+                    Executor::new(p, basin_lm(), NllsState::new(x0))
                         .max_iter(200)
                         .run(),
                 )
@@ -106,7 +106,7 @@ fn bench_powell(c: &mut Criterion) {
             },
             |(p, x0)| {
                 black_box(
-                    Executor::new(p, basin_lm(), BasicState::new(x0))
+                    Executor::new(p, basin_lm(), NllsState::new(x0))
                         .max_iter(200)
                         .run(),
                 )
@@ -125,7 +125,7 @@ fn bench_powell(c: &mut Criterion) {
             },
             |(p, x0)| {
                 black_box(
-                    Executor::new(p, basin_lm(), BasicState::new(x0))
+                    Executor::new(p, basin_lm(), NllsState::new(x0))
                         .max_iter(200)
                         .run(),
                 )
@@ -164,7 +164,7 @@ fn bench_vardim(c: &mut Criterion) {
                 },
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, basin_lm(), BasicState::new(x0))
+                        Executor::new(p, basin_lm(), NllsState::new(x0))
                             .max_iter(500)
                             .run(),
                     )
@@ -179,7 +179,7 @@ fn bench_vardim(c: &mut Criterion) {
                 || (VarDim::<Col<f64>>::new(n), Col::from_fn(n, |i| start[i])),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, basin_lm(), BasicState::new(x0))
+                        Executor::new(p, basin_lm(), NllsState::new(x0))
                             .max_iter(500)
                             .run(),
                     )
@@ -219,7 +219,7 @@ fn bench_underdet(c: &mut Criterion) {
                 },
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, basin_lm(), BasicState::new(x0))
+                        Executor::new(p, basin_lm(), NllsState::new(x0))
                             .max_iter(500)
                             .run(),
                     )
@@ -238,7 +238,7 @@ fn bench_underdet(c: &mut Criterion) {
                 },
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, basin_lm(), BasicState::new(x0))
+                        Executor::new(p, basin_lm(), NllsState::new(x0))
                             .max_iter(500)
                             .run(),
                     )

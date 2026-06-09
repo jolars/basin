@@ -86,8 +86,16 @@ Each shipped state has its own mirror rule:
 
 - Gradient states (`BasicState`, `QuasiNewtonState`, `LbfgsState`):
   `cost_evals = cost + residual`,
-  `gradient_evals = gradient + jacobian + hessian` (the NLLS convention
-  preserved — residual rolls into cost, Jacobian/Hessian into gradient).
+  `gradient_evals = gradient + jacobian + hessian`. `BasicState` now serves only
+  the genuine gradient solvers (`GradientDescent`, `ProjectedGradientDescent`,
+  `Sgd`).
+- NLLS state (`NllsState` — `LevenbergMarquardt`, `Trf`, `GaussNewton`):
+  `cost_evals = cost + residual`, plus separate `residual_evals = residual` and
+  `jacobian_evals = jacobian + hessian` accessors (MINPACK `nfev` / `njev`). It
+  does **not** impl `GradientState` (so framework gradient criteria are a compile
+  error, not a silent no-op — see api-stabilization.md B7).
+- Scalar state (`ScalarState` — `Brent` and future 1D solvers): cost-only,
+  `cost_evals = cost + residual`; no gradient, no residual/Jacobian.
 - Derivative-free states (`BasicSimplexState`, `BasicPopulationState`,
   `CmaEsState`, `MaLsChState`): `cost_evals = total_work()` — every kind of
   work folded in. This is what makes a CMA-ES outer (which drives a

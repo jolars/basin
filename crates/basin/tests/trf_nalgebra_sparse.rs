@@ -1,7 +1,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::SparseLeastSquaresBoxed;
-use basin::{BasicState, Executor, TerminationReason, Trf};
+use basin::{Executor, NllsState, TerminationReason, Trf};
 use nalgebra::DVector;
 use nalgebra_sparse::{CooMatrix, CscMatrix};
 
@@ -39,7 +39,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
         DVector::from_vec(vec![-10.0, -10.0, -10.0]),
         DVector::from_vec(vec![10.0, 10.0, 10.0]),
     );
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -71,7 +71,7 @@ fn trf_with_binding_upper_bound_converges_to_face() {
         DVector::from_vec(vec![-10.0, -10.0, -10.0]),
         DVector::from_vec(vec![10.0, 10.0, 1.5]),
     );
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -91,7 +91,7 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         DVector::from_vec(vec![-10.0, -10.0, -10.0]),
         DVector::from_vec(vec![10.0, 10.0, 10.0]),
     );
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();

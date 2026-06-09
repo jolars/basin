@@ -1,7 +1,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::{PowellSingular, RosenbrockResiduals};
-use basin::{BasicState, Executor, GaussNewton, GradientState, TerminationReason};
+use basin::{Executor, GaussNewton, NllsState, TerminationReason};
 use nalgebra::DVector;
 
 #[test]
@@ -12,7 +12,7 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(20)
         .run()
         .unwrap();
@@ -42,7 +42,7 @@ fn gauss_newton_single_step_matches_normal_equation_solution() {
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(1)
         .run()
         .unwrap();
@@ -71,7 +71,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -90,7 +90,7 @@ fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
     let problem = PowellSingular::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![1.0, 2.0, 1.0, 1.0]);
 
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(100)
         .run()
         .unwrap();
@@ -110,7 +110,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
     // (avoiding the in-`next_iter` convergence check that also evaluates
     // J on the early-exit path):
     //   - cost_evals = 1 + K
-    //   - gradient_evals = K
+    //   - jacobian_evals = K
     // Disable the internal tol_grad check so termination is purely by
     // MaxIter — keeps the assertion deterministic regardless of how
     // close Rosenbrock has driven `‖Jᵀr‖_∞` to zero.
@@ -120,7 +120,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
     let result = Executor::new(
         problem,
         GaussNewton::new().with_tol_grad(0.0),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(3)
     .run()
@@ -134,7 +134,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
         "expected init (1) + one post-step residual per iter (3) = 4"
     );
     assert_eq!(
-        result.state.gradient_evals(),
+        result.state.jacobian_evals(),
         3,
         "expected init's J reused for iter 1, then one J recompute per subsequent iter \
          (3 total)"

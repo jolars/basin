@@ -1,7 +1,7 @@
 #![cfg(feature = "faer")]
 
 use basin::problems::SparseLeastSquaresBoxed;
-use basin::{BasicState, Executor, TerminationReason, Trf};
+use basin::{Executor, NllsState, TerminationReason, Trf};
 use faer::Col;
 use faer::sparse::{SparseColMat, Triplet};
 
@@ -32,7 +32,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
         Col::<f64>::from_fn(3, |_| -10.0),
         Col::<f64>::from_fn(3, |_| 10.0),
     );
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -61,7 +61,7 @@ fn trf_with_binding_upper_bound_converges_to_face() {
         Col::<f64>::from_fn(3, |_| -10.0),
         Col::<f64>::from_fn(3, |i| if i == 2 { 1.5 } else { 10.0 }),
     );
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -80,7 +80,7 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         Col::<f64>::from_fn(3, |_| -10.0),
         Col::<f64>::from_fn(3, |_| 10.0),
     );
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();

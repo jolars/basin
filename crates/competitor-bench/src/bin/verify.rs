@@ -7,7 +7,7 @@
 //! Run: `cargo run -p lm-bench --bin verify --release`.
 
 use basin::problems::{ExponentialFit, PowellSingular};
-use basin::{BasicState, Executor, LevenbergMarquardt};
+use basin::{Executor, LevenbergMarquardt, NllsState};
 use competitor_bench::{
     LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
     vardim_start,
@@ -43,7 +43,7 @@ fn main() {
     let r = Executor::new(
         ExponentialFit::<DVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
         basin_lm(),
-        BasicState::new(DVector::from_vec(vec![5.0e4, -0.3])),
+        NllsState::new(DVector::from_vec(vec![5.0e4, -0.3])),
     )
     .max_iter(200)
     .run()
@@ -61,7 +61,7 @@ fn main() {
     let r = Executor::new(
         ExponentialFit::<Col<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
         basin_lm(),
-        BasicState::new(Col::from_fn(2, |i| if i == 0 { 5.0e4 } else { -0.3 })),
+        NllsState::new(Col::from_fn(2, |i| if i == 0 { 5.0e4 } else { -0.3 })),
     )
     .max_iter(200)
     .run()
@@ -90,7 +90,7 @@ fn main() {
     let r = Executor::new(
         PowellSingular::<DVector<f64>>::new(),
         basin_lm(),
-        BasicState::new(DVector::from_vec(vec![3.0, -1.0, 0.0, 1.0])),
+        NllsState::new(DVector::from_vec(vec![3.0, -1.0, 0.0, 1.0])),
     )
     .max_iter(200)
     .run()
@@ -111,7 +111,7 @@ fn main() {
     let r = Executor::new(
         PowellSingular::<Col<f64>>::new(),
         basin_lm(),
-        BasicState::new(Col::from_fn(4, |i| [3.0, -1.0, 0.0, 1.0][i])),
+        NllsState::new(Col::from_fn(4, |i| [3.0, -1.0, 0.0, 1.0][i])),
     )
     .max_iter(200)
     .run()
@@ -152,7 +152,7 @@ fn main() {
         let r = Executor::new(
             VarDim::<DVector<f64>>::new(n),
             basin_lm(),
-            BasicState::new(DVector::from_vec(start.clone())),
+            NllsState::new(DVector::from_vec(start.clone())),
         )
         .max_iter(500)
         .run()
@@ -172,7 +172,7 @@ fn main() {
         let r = Executor::new(
             VarDim::<Col<f64>>::new(n),
             basin_lm(),
-            BasicState::new(Col::from_fn(n, |i| start[i])),
+            NllsState::new(Col::from_fn(n, |i| start[i])),
         )
         .max_iter(500)
         .run()
@@ -210,7 +210,7 @@ fn main() {
 
         let p = UnderDet::<DVector<f64>>::new(m, n);
         let x0 = DVector::from_vec(p.start());
-        let r = Executor::new(p, basin_lm(), BasicState::new(x0))
+        let r = Executor::new(p, basin_lm(), NllsState::new(x0))
             .max_iter(500)
             .run()
             .unwrap();
@@ -226,7 +226,7 @@ fn main() {
         let p = UnderDet::<Col<f64>>::new(m, n);
         let start = p.start();
         let x0 = Col::from_fn(n, |i| start[i]);
-        let r = Executor::new(p, basin_lm(), BasicState::new(x0))
+        let r = Executor::new(p, basin_lm(), NllsState::new(x0))
             .max_iter(500)
             .run()
             .unwrap();

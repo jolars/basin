@@ -1,7 +1,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::SparseLeastSquares;
-use basin::{BasicState, Executor, GaussNewton, TerminationReason};
+use basin::{Executor, GaussNewton, NllsState, TerminationReason};
 use nalgebra::DVector;
 use nalgebra_sparse::{CooMatrix, CscMatrix};
 
@@ -34,7 +34,7 @@ fn fixture() -> (
 #[test]
 fn gauss_newton_converges_on_sparse_linear_regression() {
     let (problem, initial) = fixture();
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(20)
         .run()
         .unwrap();
@@ -64,7 +64,7 @@ fn gauss_newton_single_step_matches_closed_form() {
     // from x₀ = 0 lands on the closed-form least-squares solution
     // x* = (AᵀA)⁻¹Aᵀb = [1, 2, 3].
     let (problem, initial) = fixture();
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(1)
         .run()
         .unwrap();
@@ -91,7 +91,7 @@ fn gauss_newton_single_step_matches_closed_form() {
 #[test]
 fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
     let (problem, initial) = fixture();
-    let result = Executor::new(problem, GaussNewton::new(), BasicState::new(initial))
+    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();

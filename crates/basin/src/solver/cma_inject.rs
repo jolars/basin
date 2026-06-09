@@ -8,7 +8,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{
-    BasicSimplexState, BasicState, CmaEsState, CountsMirror, IntoInitialSimplex, LbfgsState, State,
+    BasicSimplexState, CmaEsState, CountsMirror, IntoInitialSimplex, LbfgsState, NllsState, State,
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
@@ -188,9 +188,9 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V, F>;
-    fn seed(&self, x: &V) -> BasicState<V, F> {
-        BasicState::new(x.clone())
+    type State = NllsState<V, F>;
+    fn seed(&self, x: &V) -> NllsState<V, F> {
+        NllsState::new(x.clone())
     }
 }
 

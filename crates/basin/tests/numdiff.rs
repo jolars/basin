@@ -34,7 +34,7 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
 #[cfg(feature = "nalgebra")]
 mod nalgebra {
     use basin::problems::RosenbrockResiduals;
-    use basin::{BasicState, Executor, FiniteDiff, LevenbergMarquardt, TerminationReason};
+    use basin::{Executor, FiniteDiff, LevenbergMarquardt, NllsState, TerminationReason};
     use nalgebra::DVector;
 
     #[test]
@@ -47,7 +47,7 @@ mod nalgebra {
         let analytic = Executor::new(
             RosenbrockResiduals::<DVector<f64>>::new(),
             LevenbergMarquardt::new(),
-            BasicState::new(initial.clone()),
+            NllsState::new(initial.clone()),
         )
         .max_iter(100)
         .run()
@@ -56,7 +56,7 @@ mod nalgebra {
         let fd = Executor::new(
             FiniteDiff::new(RosenbrockResiduals::<DVector<f64>>::new()),
             LevenbergMarquardt::new(),
-            BasicState::new(initial),
+            NllsState::new(initial),
         )
         .max_iter(100)
         .run()
@@ -85,7 +85,7 @@ mod nalgebra {
 #[cfg(feature = "faer")]
 mod faer {
     use basin::problems::RosenbrockResiduals;
-    use basin::{BasicState, Executor, FiniteDiff, LevenbergMarquardt, TerminationReason};
+    use basin::{Executor, FiniteDiff, LevenbergMarquardt, NllsState, TerminationReason};
     use faer::Col;
 
     #[test]
@@ -95,7 +95,7 @@ mod faer {
         let fd = Executor::new(
             FiniteDiff::new(RosenbrockResiduals::<Col<f64>>::new()),
             LevenbergMarquardt::new(),
-            BasicState::new(initial),
+            NllsState::new(initial),
         )
         .max_iter(100)
         .run()

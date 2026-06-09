@@ -4,7 +4,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
 
 /// Pure Gauss-Newton solver for nonlinear least-squares problems
@@ -52,6 +52,14 @@ use crate::core::termination::TerminationReason;
 /// `‖Jᵀr‖_∞ ≤ tol_grad` (Madsen et al. eq. 3.3a) is satisfied.
 /// Default `tol_grad = 1e-8`; set to `0.0` to disable the check.
 ///
+/// Gauss-Newton runs on [`NllsState`], which
+/// does **not** impl [`GradientState`](crate::core::state::GradientState):
+/// the framework's L2-squared
+/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is the
+/// wrong metric for NLLS, so attaching it is a **compile error** rather than a
+/// criterion that silently never fires. Use
+/// [`with_tol_grad`](Self::with_tol_grad) above for the first-order test.
+///
 /// # Backends
 ///
 /// LA-heavy: nalgebra (`DVector<f64>` / `DMatrix<f64>`) and faer
@@ -73,7 +81,7 @@ use crate::core::termination::TerminationReason;
 /// # Examples
 ///
 /// Identical setup to [`LevenbergMarquardt`](crate::LevenbergMarquardt):
-/// implement `Residual` + `Jacobian`, then drive a `BasicState` through
+/// implement `Residual` + `Jacobian`, then drive a `NllsState` through
 /// the `Executor`, swapping `LevenbergMarquardt::new()` for
 /// `GaussNewton::new()`.
 pub struct GaussNewton<V, M, F = f64> {
@@ -127,7 +135,7 @@ impl<V, M, F: Scalar> GaussNewton<V, M, F> {
     }
 }
 
-impl<P, V, M, F> Solver<P, BasicState<V, F>> for GaussNewton<V, M, F>
+impl<P, V, M, F> Solver<P, NllsState<V, F>> for GaussNewton<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
@@ -139,8 +147,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
         // Seed cost so iter-0 termination criteria see a populated
         // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
         // `next_iter` doesn't re-evaluate them at the same point.
@@ -154,8 +162,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+        mut state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
         let r = match self.r_cache.take() {
             Some(r) => r,
             None => problem.residual(&state.param)?,

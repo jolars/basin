@@ -1,7 +1,7 @@
 #![cfg(feature = "faer")]
 
 use basin::problems::BoothBoxedResiduals;
-use basin::{BasicState, Executor, MaxIter, TerminationReason, Trf};
+use basin::{Executor, MaxIter, NllsState, TerminationReason, Trf};
 use faer::Col;
 
 #[test]
@@ -12,7 +12,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
     );
     let initial = Col::<f64>::from_fn(2, |i| [0.0, 0.0][i]);
 
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -38,7 +38,7 @@ fn trf_with_tight_bounds_converges_to_box_corner() {
     );
     let initial = Col::<f64>::from_fn(2, |i| [0.0, 0.0][i]);
 
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -64,7 +64,7 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
     );
     let initial = Col::<f64>::from_fn(2, |i| [10.0, 10.0][i]);
 
-    let mut executor = Executor::new(problem, Trf::new(), BasicState::new(initial));
+    let mut executor = Executor::new(problem, Trf::new(), NllsState::new(initial));
     executor = executor.terminate_on(MaxIter(0));
     let result = executor.run().unwrap();
 
@@ -92,7 +92,7 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
     );
     let initial = Col::<f64>::from_fn(2, |i| [0.0, 0.0][i]);
 
-    let result = Executor::new(problem, Trf::new(), BasicState::new(initial))
+    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();

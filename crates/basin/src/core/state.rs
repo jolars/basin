@@ -22,9 +22,15 @@
 pub mod cma_es;
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
+/// Nonlinear least-squares state (`NllsState`).
+pub mod nlls;
+/// One-dimensional solver state (`ScalarState`).
+pub mod scalar;
 
 pub use cma_es::CmaEsState;
 pub use lbfgs::LbfgsState;
+pub use nlls::NllsState;
+pub use scalar::ScalarState;
 
 use crate::core::math::{MatrixIdentity, Scalar, VectorLen};
 use crate::core::problem::EvalCounts;

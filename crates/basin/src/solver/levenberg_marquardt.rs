@@ -5,7 +5,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
 
 /// Levenberg-Marquardt solver for nonlinear least-squares problems
@@ -123,11 +123,17 @@ use crate::core::termination::TerminationReason;
 /// stationary point is wasted); `tol_cost_rel`/`tol_step_rel` run after, since they need
 /// the attempted step and its predicted/actual reduction.
 ///
-/// LM deliberately leaves `state.gradient = None` — the framework's
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance)
-/// uses the L2 squared norm and is the wrong metric for NLLS, where
-/// the canonical first-order test is the ∞-norm of `Jᵀr`. Same choice
-/// as [`GaussNewton`](super::GaussNewton).
+/// LM runs on [`NllsState`], which does
+/// **not** impl [`GradientState`](crate::core::state::GradientState): the
+/// framework's L2-squared
+/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is the
+/// wrong metric for NLLS (the canonical first-order test is the ∞-norm of
+/// `Jᵀr`), so attaching it — or any other gradient criterion — is a **compile
+/// error** rather than a criterion that silently never fires. Use the solver's
+/// own [`with_tol_grad`](Self::with_tol_grad) /
+/// [`with_tol_grad_rel`](Self::with_tol_grad_rel) for the first-order tests.
+/// Same choice as [`GaussNewton`](super::GaussNewton) and
+/// [`Trf`](super::Trf).
 ///
 /// # Backends
 ///
@@ -160,7 +166,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// ```
 /// # #[cfg(feature = "nalgebra")] {
-/// use basin::{BasicState, Executor, Jacobian, LevenbergMarquardt, Residual};
+/// use basin::{NllsState, Executor, Jacobian, LevenbergMarquardt, Residual};
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Affine;
@@ -182,7 +188,7 @@ use crate::core::termination::TerminationReason;
 /// let result = Executor::new(
 ///     Affine,
 ///     LevenbergMarquardt::new(),
-///     BasicState::new(DVector::from_vec(vec![0.0, 0.0])),
+///     NllsState::new(DVector::from_vec(vec![0.0, 0.0])),
 /// )
 /// .max_iter(50)
 /// .run()
@@ -414,7 +420,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 }
 
-impl<P, V, M, F> Solver<P, BasicState<V, F>> for LevenbergMarquardt<V, M, F>
+impl<P, V, M, F> Solver<P, NllsState<V, F>> for LevenbergMarquardt<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
@@ -441,8 +447,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
         // Seed cost so iter-0 termination criteria see a populated
         // state. Also evaluate J(x₀) once to seed the Marquardt scaling
         // diagonal `D`. The Gram `A₀`, gradient `g₀`, and residual `r`
@@ -476,8 +482,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+        mut state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
         // `r` is at the current `state.param` after init (initial point)
         // or the previous iteration's bookkeeping (post-accept: r at the
         // new iterate; post-reject: unchanged). Only count an eval on a

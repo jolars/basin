@@ -5,7 +5,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
 
 /// Levenberg-Marquardt with box bounds (TRF — trust-region-reflective)
@@ -112,13 +112,16 @@ use crate::core::termination::TerminationReason;
 /// LM's `‖Jᵀr‖_∞` when no constraint is active. Default
 /// `tol_grad = 1e-8`; set to `0.0` to disable the check.
 ///
-/// `state.gradient = None` for the same reason as
-/// [`LevenbergMarquardt`](super::LevenbergMarquardt) — the L2-squared
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance)
-/// is the wrong metric for NLLS, and
+/// TRF runs on [`NllsState`], which does
+/// **not** impl [`GradientState`](crate::core::state::GradientState), so the
+/// framework gradient criteria are a **compile error** rather than a silent
+/// no-op — use [`with_tol_grad`](Self::with_tol_grad) above. This is the same
+/// choice as [`LevenbergMarquardt`](super::LevenbergMarquardt): the L2-squared
+/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is the
+/// wrong metric for NLLS, and
 /// [`ProjectedGradientTolerance`](crate::core::termination::ProjectedGradientTolerance)
-/// uses the unscaled projected-gradient measure rather than the scaled
-/// one we want here.
+/// uses the unscaled projected-gradient measure rather than the scaled one
+/// TRF's KKT test uses.
 ///
 /// # Backends
 ///
@@ -285,7 +288,7 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     }
 }
 
-impl<P, V, M, F> Solver<P, BasicState<V, F>> for Trf<V, M, F>
+impl<P, V, M, F> Solver<P, NllsState<V, F>> for Trf<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M> + BoxConstraints<Param = V>,
@@ -302,8 +305,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
         // Project the starting iterate strictly into (lower, upper).
         // D is undefined where v_i = 0 (a finite face), so an
         // on-boundary or infeasible start is silently corrected.
@@ -343,8 +346,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+        mut state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
         // Use cached `r` / `J` when available (set by init or by the
         // previous accept/reject branch). Only count an eval when the
         // cache misses.

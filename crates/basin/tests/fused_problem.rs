@@ -217,7 +217,7 @@ mod hessian {
 #[cfg(feature = "nalgebra")]
 mod lsq {
     use super::*;
-    use basin::{Jacobian, LevenbergMarquardt, Residual};
+    use basin::{Jacobian, LevenbergMarquardt, NllsState, Residual};
     use nalgebra::{DMatrix, DVector};
 
     /// `r(x) = (x₀ − 1, x₁ − 2)`, J = I. Minimum at (1, 2).
@@ -265,7 +265,7 @@ mod lsq {
         let problem = Affine {
             fused_calls: counter.clone(),
         };
-        let state = BasicState::new(DVector::from_vec(vec![0.0, 0.0]));
+        let state = NllsState::new(DVector::from_vec(vec![0.0, 0.0]));
         let solver: LevenbergMarquardt<DVector<f64>, DMatrix<f64>> = LevenbergMarquardt::new();
         let result = Executor::new(problem, solver, state)
             .terminate_on(MaxIter(10))

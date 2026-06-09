@@ -1,7 +1,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::SparseLeastSquares;
-use basin::{BasicState, Executor, LevenbergMarquardt, TerminationReason};
+use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
 use nalgebra::DVector;
 use nalgebra_sparse::{CooMatrix, CscMatrix};
 
@@ -35,7 +35,7 @@ fn levenberg_marquardt_converges_on_sparse_linear_regression() {
     // shrinks rapidly and the iterate lands at x* in a handful of
     // accepted steps.
     let (problem, initial) = fixture();
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -69,7 +69,7 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new().with_tol_grad(1e-12),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(100)
     .run()
@@ -82,7 +82,7 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
 #[test]
 fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let (problem, initial) = fixture();
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();

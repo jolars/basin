@@ -1,10 +1,7 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
-use basin::{
-    BasicState, Executor, GradientState, LevenbergMarquardt, RelativeCostTolerance,
-    TerminationReason,
-};
+use basin::{Executor, LevenbergMarquardt, NllsState, RelativeCostTolerance, TerminationReason};
 use nalgebra::DVector;
 
 #[test]
@@ -17,7 +14,7 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -47,7 +44,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     let problem = PowellSingular::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![1.0, 2.0, 1.0, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -73,7 +70,7 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     let problem = PowellSingular::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![3.0, -1.0, 0.0, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(100)
         .run()
         .unwrap();
@@ -94,7 +91,7 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(100)
         .run()
         .unwrap();
@@ -116,7 +113,7 @@ fn levenberg_marquardt_converges_fast_on_poorly_scaled_exponential_fit() {
     let problem = ExponentialFit::<DVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
     let initial = DVector::from_vec(vec![5.0e4, -0.3]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), BasicState::new(initial))
+    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -153,7 +150,7 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new().with_tol_grad(0.0),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(200)
     .terminate_on(RelativeCostTolerance::new(1e-10))
@@ -184,7 +181,7 @@ fn levenberg_marquardt_converges_via_relative_gradient_tolerance() {
         LevenbergMarquardt::new()
             .with_tol_grad(0.0)
             .with_tol_grad_rel(1e-10),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -221,7 +218,7 @@ fn levenberg_marquardt_converges_via_ftol() {
             .with_tol_grad(0.0)
             .with_tol_grad_rel(0.0)
             .with_tol_cost_rel(1e-10),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -255,7 +252,7 @@ fn levenberg_marquardt_converges_via_xtol() {
             .with_tol_grad(0.0)
             .with_tol_grad_rel(0.0)
             .with_tol_step_rel(1e-10),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -291,7 +288,7 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
             LevenbergMarquardt::new()
                 .with_tol_grad(0.0)
                 .with_tol_grad_rel(1e-8),
-            BasicState::new(initial),
+            NllsState::new(initial),
         )
         .max_iter(200)
         .run()
@@ -327,7 +324,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     // classical start, LM's μ-update accepts every step (no rejections),
     // so:
     //   - cost_evals = 1 (init) + K (one trial per iter)
-    //   - gradient_evals = K (init's J carries iter 1; each subsequent
+    //   - jacobian_evals = K (init's J carries iter 1; each subsequent
     //     iter re-evaluates J because the previous accept cleared the
     //     Gram/gradient cache — the last iter's accept clears it but no
     //     follow-up iter consumes it under MaxIter exit).
@@ -337,7 +334,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new().with_tol_grad(0.0),
-        BasicState::new(initial),
+        NllsState::new(initial),
     )
     .max_iter(3)
     .run()
@@ -352,10 +349,10 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
          re-evaluate the start-of-iter residual and produce 1 + 2·iters = 7"
     );
     assert!(
-        result.state.gradient_evals() <= 3,
-        "gradient_evals = {} should be ≤ iters (3): init's J carries iter 1, and \
+        result.state.jacobian_evals() <= 3,
+        "jacobian_evals = {} should be ≤ iters (3): init's J carries iter 1, and \
          rejected steps reuse J at the unchanged iterate. Uncached LM produces \
          1 + iters = 4.",
-        result.state.gradient_evals()
+        result.state.jacobian_evals()
     );
 }

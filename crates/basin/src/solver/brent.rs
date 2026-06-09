@@ -2,7 +2,7 @@ use crate::core::constraint::BoxConstraints;
 use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::ScalarState;
 use crate::core::termination::TerminationReason;
 
 /// Brent's method for 1D minimization on a closed interval `[lower, upper]`
@@ -15,6 +15,13 @@ use crate::core::termination::TerminationReason;
 /// `|x − m| + 0.5·(b − a) ≤ 2·tol`, where `m = (a+b)/2`,
 /// `tol = tol_rel·|x| + tol_abs`. NR-style defaults: `tol_rel = √ε`,
 /// `tol_abs = 1e-12`.
+///
+/// Brent runs on [`ScalarState`], the
+/// cost-only single-iterate state. It does **not** impl
+/// [`GradientState`](crate::core::state::GradientState) — a 1-D minimizer has
+/// no gradient — so attaching a gradient criterion such as
+/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is a
+/// **compile error** rather than one that silently never fires.
 ///
 /// # Backends
 ///
@@ -85,7 +92,7 @@ impl<F: Scalar> Brent<F> {
     }
 }
 
-impl<P, F> Solver<P, BasicState<F, F>> for Brent<F>
+impl<P, F> Solver<P, ScalarState<F>> for Brent<F>
 where
     F: Scalar,
     P: CostFunction<Param = F, Output = F> + BoxConstraints,
@@ -95,8 +102,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<F, F>,
-    ) -> Result<BasicState<F, F>, Self::Error> {
+        mut state: ScalarState<F>,
+    ) -> Result<ScalarState<F>, Self::Error> {
         let a = *problem.inner().lower();
         let b = *problem.inner().upper();
         assert!(
@@ -133,8 +140,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<F, F>,
-    ) -> Result<(BasicState<F, F>, Option<TerminationReason>), Self::Error> {
+        mut state: ScalarState<F>,
+    ) -> Result<(ScalarState<F>, Option<TerminationReason>), Self::Error> {
         let s = self.inner.as_mut().expect("Brent::init must run first");
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();
@@ -215,7 +222,7 @@ where
         }
 
         // Post the just-probed point (u, fu) into the state, not the
-        // retained best (s.x, s.fx). This honors `BasicState`'s
+        // retained best (s.x, s.fx). This honors `ScalarState`'s
         // documented "current iterate" semantics, so one-step change
         // tests like `CostTolerance` see real Δf signals instead of
         // firing on the unchanged s.fx after a non-improving probe
@@ -229,7 +236,7 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicState<F, F>) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &ScalarState<F>) -> Option<TerminationReason> {
         let s = self.inner.as_ref()?;
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();
@@ -276,7 +283,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 0.0, hi: 5.0 },
             Brent::new(),
-            BasicState::new(2.5),
+            ScalarState::new(2.5),
         )
         .max_iter(100)
         .run()
@@ -292,7 +299,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 0.0, hi: 5.0 },
             Brent::new(),
-            BasicState::new(42.0),
+            ScalarState::new(42.0),
         )
         .max_iter(100)
         .run()
@@ -307,7 +314,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 3.0, hi: 5.0 },
             Brent::new(),
-            BasicState::new(4.0),
+            ScalarState::new(4.0),
         )
         .max_iter(200)
         .run()
@@ -342,7 +349,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             Brent::new(),
-            BasicState::new(0.5),
+            ScalarState::new(0.5),
         )
         .max_iter(100)
         .run()
@@ -372,7 +379,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             Brent::new(),
-            BasicState::new(0.5),
+            ScalarState::new(0.5),
         )
         .max_iter(200)
         .terminate_on(CostTolerance::new(1e-12))

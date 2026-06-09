@@ -40,7 +40,7 @@ use basin::problems::{Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, S
 use basin::{
     BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix, DenseQuasiNewtonState,
     Executor, FaerQuasiNewtonState, GaussNewton, GradientDescent, LbfgsState, Lbfgsb,
-    LevenbergMarquardt, MoreThuente, NalgebraQuasiNewtonState, NelderMead,
+    LevenbergMarquardt, MoreThuente, NalgebraQuasiNewtonState, NelderMead, NllsState,
 };
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -327,7 +327,7 @@ fn bench_lm(c: &mut Criterion) {
                 || sparse_lsq_nalgebra(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, LevenbergMarquardt::new(), BasicState::new(x0))
+                        Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
                             .max_iter(MAX_ITERS)
                             .run(),
                     )
@@ -340,7 +340,7 @@ fn bench_lm(c: &mut Criterion) {
                 || sparse_lsq_faer(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, LevenbergMarquardt::new(), BasicState::new(x0))
+                        Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
                             .max_iter(MAX_ITERS)
                             .run(),
                     )
@@ -363,7 +363,7 @@ fn bench_gn(c: &mut Criterion) {
                 || sparse_lsq_nalgebra(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, GaussNewton::new(), BasicState::new(x0))
+                        Executor::new(p, GaussNewton::new(), NllsState::new(x0))
                             .max_iter(MAX_ITERS)
                             .run(),
                     )
@@ -376,7 +376,7 @@ fn bench_gn(c: &mut Criterion) {
                 || sparse_lsq_faer(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, GaussNewton::new(), BasicState::new(x0))
+                        Executor::new(p, GaussNewton::new(), NllsState::new(x0))
                             .max_iter(MAX_ITERS)
                             .run(),
                     )

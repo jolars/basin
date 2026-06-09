@@ -127,7 +127,7 @@ pub use crate::core::state::FaerQuasiNewtonState;
 pub use crate::core::state::NalgebraQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, CmaEsState, CountsMirror, GradientState,
-    IntoInitialSimplex, LbfgsState, PopulationState, SimplexState, State,
+    IntoInitialSimplex, LbfgsState, NllsState, PopulationState, ScalarState, SimplexState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{

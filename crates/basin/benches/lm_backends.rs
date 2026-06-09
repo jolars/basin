@@ -26,9 +26,7 @@
 use std::hint::black_box;
 
 use basin::problems::{ExponentialFit, PowellSingular};
-use basin::{
-    BasicState, Executor, GramMatrix, LevenbergMarquardt, LinearSolveSpd, MatTransposeVec,
-};
+use basin::{Executor, GramMatrix, LevenbergMarquardt, LinearSolveSpd, MatTransposeVec, NllsState};
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 use faer::{Col, Mat};
@@ -159,7 +157,7 @@ fn bench_full_solve(c: &mut Criterion) {
                 )
             },
             |(p, x0)| {
-                Executor::new(p, LevenbergMarquardt::new(), BasicState::new(x0))
+                Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
                     .max_iter(200)
                     .run()
             },
@@ -175,7 +173,7 @@ fn bench_full_solve(c: &mut Criterion) {
                 )
             },
             |(p, x0)| {
-                Executor::new(p, LevenbergMarquardt::new(), BasicState::new(x0))
+                Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
                     .max_iter(200)
                     .run()
             },
@@ -194,7 +192,7 @@ fn bench_full_solve(c: &mut Criterion) {
                 )
             },
             |(p, x0)| {
-                Executor::new(p, LevenbergMarquardt::new(), BasicState::new(x0))
+                Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
                     .max_iter(200)
                     .run()
             },
@@ -210,7 +208,7 @@ fn bench_full_solve(c: &mut Criterion) {
                 )
             },
             |(p, x0)| {
-                Executor::new(p, LevenbergMarquardt::new(), BasicState::new(x0))
+                Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
                     .max_iter(200)
                     .run()
             },
