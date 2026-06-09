@@ -40,8 +40,8 @@ PR-sized chunk once the `[DECIDE]` items are ratified.
 
 ### A1. `#[non_exhaustive]` on public enums `[DONE]`
 
-*Highest leverage, nearly free.* No public enum used `#[non_exhaustive]`
-before this change:
+*Highest leverage, nearly free.* No public enum used `#[non_exhaustive]` before
+this change:
 
   | Enum                   | Location                  | Grows after 1.0?                                    |
   | ---------------------- | ------------------------- | --------------------------------------------------- |
@@ -87,12 +87,13 @@ one-way door.** The original draft claimed "adding a metadata argument to
 `observe_iter` after 1.0 is breaking, so the choice must be made now." That is
 only true for the naïve route of mutating the existing method's signature. A KV
 channel can be added post-1.0 *additively*: add a new default-bodied trait
-method (`fn observe_iter_with(&mut self, state: &S, kv: &Kv) {
-self.observe_iter(state) }`), switch the executor's internal call site
-(`executor.rs:239`) to it, and every existing `Observe` impl keeps compiling via
-the forwarding default; a concrete `Kv` type keeps the trait object-safe for the
-`Box<dyn Observe<S>>` storage. So the door is *deferred open*, not closed --- the
-1.0 commitment is purely "don't build it now."
+method
+(`fn observe_iter_with(&mut self, state: &S, kv: &Kv) { self.observe_iter(state) }`),
+switch the executor's internal call site (`executor.rs:239`) to it, and every
+existing `Observe` impl keeps compiling via the forwarding default; a concrete
+`Kv` type keeps the trait object-safe for the `Box<dyn Observe<S>>` storage. So
+the door is *deferred open*, not closed --- the 1.0 commitment is purely "don't
+build it now."
 
 The genuine future motivation, if it appears: solver-internal working scalars
 that don't fit a state trait (CMA-ES σ / covariance / evolution paths, LM μ / ν
@@ -110,20 +111,21 @@ corrections to this item's original scoping) follow the rationale.
 
 **Why solvers, not just states (the observer ≠ checkpointing point).** The
 observer layer already covers the *save / monitor* half of what a checkpointing
-system would do — an `Observe` impl sees `&S` each iteration and can serialize it.
-What it does **not** cover is *resume*: (1) the hook receives only the state, not
-the solver, and (2) `Executor::run` always calls `Solver::init`, so there is no
-load-and-continue entry. Crucially, basin does **not** keep all iteration-carrying
-state in the state object — `CmaEs` holds its `Working<V, M, F>` (covariance, σ,
-mean, evolution paths) inside the *solver* struct (`solver/cma_es.rs`), and
-`LevenbergMarquardt` holds `mu` / `nu` / `diag` / the Gram caches there too
-(`solver/levenberg_marquardt.rs`). So a state-only snapshot is not a faithful
-resume point for those solvers. Conclusion: observers replace a separate
-checkpointing system **iff basin never needs to resume an interrupted run**; if
-resume is ever in scope (crash recovery on long fits; pause/resume in the
-wasm/browser target), it needs serde on *both* state and solver plus an Executor
-load path. That work is purely additive, hence safely deferrable past 1.0 — but
-the door-open check below must include solvers or the door is quietly half-closed.
+system would do --- an `Observe` impl sees `&S` each iteration and can serialize
+it. What it does **not** cover is *resume*: (1) the hook receives only the
+state, not the solver, and (2) `Executor::run` always calls `Solver::init`, so
+there is no load-and-continue entry. Crucially, basin does **not** keep all
+iteration-carrying state in the state object --- `CmaEs` holds its
+`Working<V, M, F>` (covariance, σ, mean, evolution paths) inside the *solver*
+struct (`solver/cma_es.rs`), and `LevenbergMarquardt` holds `mu` / `nu` / `diag`
+/ the Gram caches there too (`solver/levenberg_marquardt.rs`). So a state-only
+snapshot is not a faithful resume point for those solvers. Conclusion: observers
+replace a separate checkpointing system **iff basin never needs to resume an
+interrupted run**; if resume is ever in scope (crash recovery on long fits;
+pause/resume in the wasm/browser target), it needs serde on *both* state and
+solver plus an Executor load path. That work is purely additive, hence safely
+deferrable past 1.0 --- but the door-open check below must include solvers or
+the door is quietly half-closed.
 
 - **States to check:** `BasicState`, `BasicSimplexState`,
   `BasicPopulationState`, `QuasiNewtonState`, `LbfgsState` (`core/state.rs`,
@@ -135,16 +137,17 @@ the door-open check below must include solvers or the door is quietly half-close
   and the line searches they embed (`MoreThuente` / `Wolfe` carry scratch). The
   memetic/outer solvers (`CmaInject`, `BarrierMethod`,
   `AugmentedLagrangianMethod`) embed an inner solver + an `InnerExecutor`, so
-  they inherit the `InnerExecutor` blocker below — flag, don't try to resolve.
+  they inherit the `InnerExecutor` blocker below --- flag, don't try to resolve.
 - **Known blockers to document (not fix):** `InnerExecutor` holds
-  `Vec<Box<dyn TerminationCriterion>>` (`core/inner.rs`) — not serializable, but
-  it's a driver, not persisted state; a resume design would rebuild it rather
-  than deserialize it. A future closure-filter `ObserverMode` variant would also
-  block; another reason to keep `ObserverMode` as plain data (ties to A1).
+  `Vec<Box<dyn TerminationCriterion>>` (`core/inner.rs`) --- not serializable,
+  but it's a driver, not persisted state; a resume design would rebuild it
+  rather than deserialize it. A future closure-filter `ObserverMode` variant
+  would also block; another reason to keep `ObserverMode` as plain data (ties to
+  A1).
 - `PhantomData<fn() -> Mode>` type-state markers (`NelderMead`, `Lbfgs`) derive
-  serde fine — note for completeness.
+  serde fine --- note for completeness.
 
-**Also `[DO]` — done.** `CONTRIBUTING.md` listed a `serde` feature in its
+**Also `[DO]` --- done.** `CONTRIBUTING.md` listed a `serde` feature in its
 features enumeration ("nalgebra, ndarray, faer, serde, parallel, problems") that
 **does not exist** in `crates/basin/Cargo.toml` (`[features]` defines only
 `nalgebra`, `ndarray`, `ndarray-blas`, `faer`, `parallel`, `problems`). The
@@ -154,57 +157,57 @@ stray `serde` mention has been removed.
 
 Method: field-level audit of every public state and solver struct, hunting for
 fields whose type can *never* implement `Deserialize` (trait objects, fn
-pointers, closures, references) — those are the only thing that could foreclose
-adding a derive later, since a generic field is auto-bounded by serde's derive
-(`impl<T: Serialize> Serialize for Foo<T>`) and a derive is otherwise purely
-additive.
+pointers, closures, references) --- those are the only thing that could
+foreclose adding a derive later, since a generic field is auto-bounded by
+serde's derive (`impl<T: Serialize> Serialize for Foo<T>`) and a derive is
+otherwise purely additive.
 
 **Serde-clean (no field blocks a future derive; generics auto-bound):**
 
-- **All five states** — `BasicState`, `BasicSimplexState`,
+- **All five states** --- `BasicState`, `BasicSimplexState`,
   `BasicPopulationState`, `QuasiNewtonState`, `LbfgsState` (incl. nested
   `LbfgsbWork`: only `Vec<F>` / `Vec<usize>` / `Vec<i8>` / scalars). Scalars,
   `Vec`, `Option`, and generic `V` / `M` / `F` only.
-- **All four line searches** — `Constant`, `Backtracking`, `Wolfe`,
+- **All four line searches** --- `Constant`, `Backtracking`, `Wolfe`,
   `MoreThuente`. *Correction:* these are stateless scalar config; the original
-  list claimed "`MoreThuente` / `Wolfe` carry scratch" — they do not. Their
-  scratch (`stx` / `fx` / `brackt` / …) is function-local, not struct fields.
-- **Core working-state solvers** — `CmaEs` / `BoundedCmaEs` (+ their `Working`,
-  incl. `ChaCha8Rng` and `VecDeque<F>`), `LevenbergMarquardt`, `GaussNewton`,
-  `Trf`. Serde-able given backend serde bounds; `ChaCha8Rng` needs
-  `rand_chacha`'s own `serde` feature — an additive dep-feature, not a
+  list claimed "`MoreThuente` / `Wolfe` carry scratch" --- they do not. Their
+  scratch (`stx` / `fx` / `brackt` / ...) is function-local, not struct fields.
+- **Core working-state solvers** --- `CmaEs` / `BoundedCmaEs` (+ their
+  `Working`, incl. `ChaCha8Rng` and `VecDeque<F>`), `LevenbergMarquardt`,
+  `GaussNewton`, `Trf`. Serde-able given backend serde bounds; `ChaCha8Rng`
+  needs `rand_chacha`'s own `serde` feature --- an additive dep-feature, not a
   foreclosure.
-- **Solvers holding a generic line search** — `Bfgs`, `Lbfgs`,
+- **Solvers holding a generic line search** --- `Bfgs`, `Lbfgs`,
   `GradientDescent` (incl. `velocity: Option<V>`). The `line_search: S` field is
   a *generic param*, auto-bounded by serde's derive; **not** a blocker.
-- **`PhantomData<fn() -> Mode>` type-state markers** (`NelderMead`, `Lbfgs`) —
+- **`PhantomData<fn() -> Mode>` type-state markers** (`NelderMead`, `Lbfgs`) ---
   serde impls `PhantomData<T>` for all `T`; worst case the derive adds a
   spurious `Mode: Serialize` bound, fixed with a one-line `#[serde(bound = "")]`
   or by deriving serde on the zero-size marker types. Additive either way.
-- **`BarrierMethod`, `AugmentedLagrangianMethod`** — serde-clean. *Correction:*
-  the original list said all three outer solvers "embed an inner solver + an
-  `InnerExecutor` … inherit the `InnerExecutor` blocker." That is **wrong** for
-  these two: they store `inner_solver: So` + scalar config and build their
-  termination criteria with a fresh `Vec` per call via `run_loop` (they
-  explicitly *sidestep* `InnerExecutor`). No trait-object field.
+- **`BarrierMethod`, `AugmentedLagrangianMethod`** --- serde-clean.
+  *Correction:* the original list said all three outer solvers "embed an inner
+  solver + an `InnerExecutor` ... inherit the `InnerExecutor` blocker." That is
+  **wrong** for these two: they store `inner_solver: So` + scalar config and
+  build their termination criteria with a fresh `Vec` per call via `run_loop`
+  (they explicitly *sidestep* `InnerExecutor`). No trait-object field.
 
-**True non-serde fields — and why none foreclose the door:**
+**True non-serde fields --- and why none foreclose the door:**
 
 - **`InnerExecutor.criteria: Vec<Box<dyn TerminationCriterion<S>>>`**
-  (`core/inner.rs`) — trait object, not serde-able. It is a *driver*, not
+  (`core/inner.rs`) --- trait object, not serde-able. It is a *driver*, not
   persisted state; a resume design rebuilds it. *Correction to blast radius:*
   the structs that actually **store** an `InnerExecutor` are the three injection
-  solvers — `CmaInject`, `BoundedCmaInject`, `DeInject` — not the barrier / AL
-  pair. Adding serde to those later means `#[serde(skip)]` on the private
+  solvers --- `CmaInject`, `BoundedCmaInject`, `DeInject` --- not the barrier /
+  AL pair. Adding serde to those later means `#[serde(skip)]` on the private
   `inner` field plus a rebuild on load; additive, so not foreclosed. The
   top-level `Executor` carries the same `Vec<Box<dyn …>>` criteria/observers and
   has the same driver status (never in the persisted-state set).
-- **`ClosureInner.seed_fn: Box<dyn Fn(&V, F) -> S>`** (`solver/cma_inject.rs`) —
-  a closure. `ClosureInner` is publicly exported but documented as a one-off
+- **`ClosureInner.seed_fn: Box<dyn Fn(&V, F) -> S>`** (`solver/cma_inject.rs`)
+  --- a closure. `ClosureInner` is publicly exported but documented as a one-off
   experiment / contract-test escape hatch that wraps user logic; it is
   intrinsically non-serializable (any closure-holding type is), and it carries
   no iteration state. Not in scope for resume, and nothing about it foreclosed
-  by a 1.0 choice — the non-serde-ness is inherent to "wraps a closure."
+  by a 1.0 choice --- the non-serde-ness is inherent to "wraps a closure."
 - A future **closure-filter `ObserverMode`** variant would also be non-serde;
   another reason to keep `ObserverMode` plain data (ties to A1, where it was
   kept a plain `#[non_exhaustive]` enum).
@@ -225,19 +228,20 @@ The model: per-trait associated `type Error`; `LineSearch` constrains
 soft-reject (`Ok(f64::INFINITY)` rejects a point) vs hard-abort (`Err(_)` ends
 the solve). It is load-bearing and internally consistent.
 
-**Decision: ratified as-is for 1.0** — no code change to the model. The action
+**Decision: ratified as-is for 1.0** --- no code change to the model. The action
 item was documentation, and it is done: a prominent, stable-guarantee
 `# Error model` section now lives in the crate-level docs (`lib.rs`),
 consolidating what was spread across per-trait rustdoc. It names *three*
-outcomes rather than two — soft-reject (`Ok(f64::INFINITY)`, one point), **clean
-stop** (a `TerminationReason` via `Executor::run`'s `Ok(OptimizationResult)`,
-which is *not* an error), and hard-abort (`Err(_)`, bubbles out as
-`Result<_, P::Error>`) — plus the "one error type, threaded through" plumbing
-(`CostFunction::Error` / `Residual::Error` chosen once; `Solver::Error` and
-`LineSearch::Error` mirror `P::Error`; `Infallible` for the zero-cost happy
-path). The per-trait docs remain the detailed reference. (The clean-stop channel
-was added explicitly because the original two-channel framing omitted it, and it
-is exactly the distinction downstream is most likely to rely on.)
+outcomes rather than two --- soft-reject (`Ok(f64::INFINITY)`, one point),
+**clean stop** (a `TerminationReason` via `Executor::run`'s
+`Ok(OptimizationResult)`, which is *not* an error), and hard-abort (`Err(_)`,
+bubbles out as `Result<_, P::Error>`) --- plus the "one error type, threaded
+through" plumbing (`CostFunction::Error` / `Residual::Error` chosen once;
+`Solver::Error` and `LineSearch::Error` mirror `P::Error`; `Infallible` for the
+zero-cost happy path). The per-trait docs remain the detailed reference. (The
+clean-stop channel was added explicitly because the original two-channel framing
+omitted it, and it is exactly the distinction downstream is most likely to rely
+on.)
 
 ### A5. `Solver::name()` introspection `[DONE — deferred]`
 
@@ -259,29 +263,29 @@ sizable minority were bare. The original audit undercounted the offenders (it
 listed only `Bfgs` and `LevenbergMarquardt`); the actual set spanned seven
 solvers:
 
-  | Solver                       | Bare setters (renamed)                                                                  |
-  | ---------------------------- | --------------------------------------------------------------------------------------- |
-  | `Bfgs`                       | `epsilon`                                                                                |
-  | `Lbfgs`                      | `tol_pg`, `epsilon`, `m_capacity`                                                        |
-  | `GaussNewton`                | `tol_grad`                                                                               |
-  | `Trf`                        | `tol_grad`, `tau`, `rstep`, `theta`, `max_inner_attempts`                                |
-  | `LevenbergMarquardt`         | `tol_grad`, `tol_grad_rel`, `ftol`, `xtol`, `tau`, `max_inner_attempts`                  |
-  | `BarrierMethod`              | `reduction`, `tol`, `inner_max_iter`, `inner_grad_tol`                                   |
-  | `AugmentedLagrangianMethod`  | `rho_increase`, `feasibility_decrease`, `tol`, `inner_max_iter`, `inner_grad_tol`        |
+  | Solver                      | Bare setters (renamed)                                                            |
+  | --------------------------- | --------------------------------------------------------------------------------- |
+  | `Bfgs`                      | `epsilon`                                                                         |
+  | `Lbfgs`                     | `tol_pg`, `epsilon`, `m_capacity`                                                 |
+  | `GaussNewton`               | `tol_grad`                                                                        |
+  | `Trf`                       | `tol_grad`, `tau`, `rstep`, `theta`, `max_inner_attempts`                         |
+  | `LevenbergMarquardt`        | `tol_grad`, `tol_grad_rel`, `ftol`, `xtol`, `tau`, `max_inner_attempts`           |
+  | `BarrierMethod`             | `reduction`, `tol`, `inner_max_iter`, `inner_grad_tol`                            |
+  | `AugmentedLagrangianMethod` | `rho_increase`, `feasibility_decrease`, `tol`, `inner_max_iter`, `inner_grad_tol` |
 
 **Resolved (2026-06-04).** Standardized every chained *solver* setter on
-`with_*` (`with_epsilon`, `with_tol_grad`, `with_tau`, `with_max_inner_attempts`,
-`with_tol_pg`, `with_m_capacity`, `with_reduction`, `with_tol`,
-`with_inner_max_iter`, `with_inner_grad_tol`, `with_rho_increase`,
+`with_*` (`with_epsilon`, `with_tol_grad`, `with_tau`,
+`with_max_inner_attempts`, `with_tol_pg`, `with_m_capacity`, `with_reduction`,
+`with_tol`, `with_inner_max_iter`, `with_inner_grad_tol`, `with_rho_increase`,
 `with_feasibility_decrease`, ...). Constructors that take required values stay
 on `new()` / named constructors; this was purely the chained setters.
 
 Every old bare name shipped in v0.9.0 (verified against the tag), so each is
 kept as a `#[deprecated(since = "0.10.0")]` forwarding shim that delegates to
 the new `with_*` method --- a non-breaking rename window for downstream
-consumers (e.g. eunoia's NLLS migration). The shims live in a dedicated
-`impl` block per solver, marked for removal at 1.0, joining the existing
-`BFGS` / `LBFGS` / `LBFGSB` aliases tracked under [B3](#b3-drop-deprecated-aliases-do).
+consumers (e.g. eunoia's NLLS migration). The shims live in a dedicated `impl`
+block per solver, marked for removal at 1.0, joining the existing `BFGS` /
+`LBFGS` / `LBFGSB` aliases tracked under [B3](#b3-drop-deprecated-aliases-do).
 
 Two sub-decisions:
 
@@ -289,24 +293,23 @@ Two sub-decisions:
   MINPACK abbreviations were the lone outliers against basin's native
   `tol_<thing>` vocabulary (`tol_grad`, `tol_grad_rel`, L-BFGS-B's `tol_pg`,
   CMA-ES's `tol_x`). They became `with_tol_cost_rel` (MINPACK `ftol`) and
-  `with_tol_step_rel` (MINPACK `xtol`), giving LM a regular grid
-  `tol_grad` / `tol_grad_rel` / `tol_cost_rel` / `tol_step_rel`. The MINPACK
-  names are preserved verbatim in the rustdoc ("the MINPACK `ftol` test") so
-  migrants from the `levenberg-marquardt` crate can still find them. `step`
-  (not `param`) was chosen deliberately to *differentiate* from the framework's
+  `with_tol_step_rel` (MINPACK `xtol`), giving LM a regular grid `tol_grad` /
+  `tol_grad_rel` / `tol_cost_rel` / `tol_step_rel`. The MINPACK names are
+  preserved verbatim in the rustdoc ("the MINPACK `ftol` test") so migrants from
+  the `levenberg-marquardt` crate can still find them. `step` (not `param`) was
+  chosen deliberately to *differentiate* from the framework's
   [`RelativeParamTolerance`], which is a subtly different control --- the
   solver-internal `tol_step_rel` is MINPACK-exact and can fire on attempted
-  (rejected) steps, whereas the framework criterion reads accepted
-  `‖xₖ − xₖ₋₁‖` off `State`. The struct fields and internal convergence locals
-  were renamed to match.
+  (rejected) steps, whereas the framework criterion reads accepted `‖xₖ − xₖ₋₁‖`
+  off `State`. The struct fields and internal convergence locals were renamed to
+  match.
 
-- **Scope: solvers only.** The core builders --- `Executor::{max_iter,
-  terminate_on, run_to_end}`, `InnerExecutor::max_iter`,
-  `FiniteDiff::{gradient_method, jacobian_method, hessian_method,
-  function_precision}` --- were deliberately left alone. They use an
-  established *verb-style* driver/wrapper idiom; forcing
-  `Executor::max_iter → with_max_iter` while `terminate_on` stays would make
-  the Executor *less* consistent, not more.
+- **Scope: solvers only.** The core builders ---
+  `Executor::{max_iter,   terminate_on, run_to_end}`, `InnerExecutor::max_iter`,
+  `FiniteDiff::{gradient_method, jacobian_method, hessian_method,   function_precision}`
+  --- were deliberately left alone. They use an established *verb-style*
+  driver/wrapper idiom; forcing `Executor::max_iter → with_max_iter` while
+  `terminate_on` stays would make the Executor *less* consistent, not more.
 
 [`RelativeParamTolerance`]: ../crates/basin/src/core/termination.rs
 
@@ -320,16 +323,17 @@ parameters that have no sensible default. Where `new()` is nullary, also
 Status across the solvers:
 
 - **`NelderMead` now has `new()`** (the standard 1965 coefficients α=1, β=2,
-  γ=0.5, δ=0.5 *are* the default), with `impl Default`. The old `standard()`
-  is `#[deprecated]` (0.10.0) → `new()`, since once `new()` carries the
-  standard params it was pure redundancy; `adaptive()` stays as the only
+  γ=0.5, δ=0.5 *are* the default), with `impl Default`. The old `standard()` is
+  `#[deprecated]` (0.10.0) → `new()`, since once `new()` carries the standard
+  params it was pure redundancy; `adaptive()` stays as the only
   meaningfully-named preset and `with_params(α, β, γ, δ)` as the explicit
   override (`solver/nelder_mead.rs`). This resolves the open "gain `new()` vs
   omit it" question in favour of consistency.
-- **`CmaEs::new(seed)`** — the required `mean`/`sigma` are gone; the initial
+- **`CmaEs::new(seed)`** --- the required `mean`/`sigma` are gone; the initial
   mean now comes from the state (x0 in the right place) and σ has a default,
-  fixed at the root in [B8](#b8-cma-es-distribution-dedicated-cmaesstate-vs-solver-parked-working-state-decide).
-- **`GradientDescent::new(alpha)`** keeps a required arg — a step has no
+  fixed at the root in
+  [B8](#b8-cma-es-distribution-dedicated-cmaesstate-vs-solver-parked-working-state-decide).
+- **`GradientDescent::new(alpha)`** keeps a required arg --- a step has no
   universal default.
 - **`Bfgs::new()` / `LevenbergMarquardt::new()`** stay nullary with `Default`.
 
@@ -357,25 +361,25 @@ alone.)
 `QuasiNewtonState`, each `<F = f64>` and re-exported from the crate root
 (`core/state.rs`, `lib.rs`):
 
-  | Alias                       | Pins                                         | Feature    |
-  | --------------------------- | -------------------------------------------- | ---------- |
-  | `DenseQuasiNewtonState`     | `QuasiNewtonState<Vec<F>, DenseMatrix<F>, F>`| (always)   |
-  | `NalgebraQuasiNewtonState`  | `QuasiNewtonState<DVector<F>, DMatrix<F>, F>`| `nalgebra` |
-  | `FaerQuasiNewtonState`      | `QuasiNewtonState<Col<F>, Mat<F>, F>`        | `faer`     |
+  | Alias                      | Pins                                          | Feature    |
+  | -------------------------- | --------------------------------------------- | ---------- |
+  | `DenseQuasiNewtonState`    | `QuasiNewtonState<Vec<F>, DenseMatrix<F>, F>` | (always)   |
+  | `NalgebraQuasiNewtonState` | `QuasiNewtonState<DVector<F>, DMatrix<F>, F>` | `nalgebra` |
+  | `FaerQuasiNewtonState`     | `QuasiNewtonState<Col<F>, Mat<F>, F>`         | `faer`     |
 
-The common path is now `DenseQuasiNewtonState::new(x)`. No ndarray alias:
-BFGS rejects `ndarray` at compile time per tenet 5. Chose aliases over the
-"smarter inference" alternative (a `PairedMatrix` V→M trait) because a
-transparent type alias is the *lightest* frozen surface --- trivially
-deprecatable, not downstream-implementable --- whereas a public trait freezes
-heavier and only removes the turbofish at construction, not at type-annotation
-sites. `LbfgsState` deliberately gets no parallel aliases (no `M` to hide).
-The shipped tests/benches (`tests/bfgs*.rs`, `tests/lbfgsb_nalgebra.rs`,
-`benches/solver_backends.rs`) were migrated to the aliases, exercising all
-three backends. (Note: `BasicState<P, F = f64>`, `BasicSimplexState`,
+The common path is now `DenseQuasiNewtonState::new(x)`. No ndarray alias: BFGS
+rejects `ndarray` at compile time per tenet 5. Chose aliases over the "smarter
+inference" alternative (a `PairedMatrix` V→M trait) because a transparent type
+alias is the *lightest* frozen surface --- trivially deprecatable, not
+downstream-implementable --- whereas a public trait freezes heavier and only
+removes the turbofish at construction, not at type-annotation sites.
+`LbfgsState` deliberately gets no parallel aliases (no `M` to hide). The shipped
+tests/benches (`tests/bfgs*.rs`, `tests/lbfgsb_nalgebra.rs`,
+`benches/solver_backends.rs`) were migrated to the aliases, exercising all three
+backends. (Note: `BasicState<P, F = f64>`, `BasicSimplexState`,
 `BasicPopulationState` already read cleanly.)
 
-### B5. Pre-init `cost()` contract `[DECIDE]` (downgraded from "type inconsistency")
+### B5. Pre-init `cost()` contract `[DONE]` (downgraded from "type inconsistency")
 
 Correction to an earlier finding: the public `State::cost()` is **uniformly
 `-> Self::Float`** across all states (`core/state.rs:127` trait; impls at
@@ -397,34 +401,34 @@ now or is already adequately covered.
 lazily-populated states (`BasicState`, `QuasiNewtonState`, `LbfgsState`,
 `CmaEsState`); the construction-populated states (`BasicSimplexState`,
 `BasicPopulationState`) never panic. The trait-level `State::cost()` doc was
-stale — it listed `BasicSimplexState` as panicking (it doesn't), qualified
+stale --- it listed `BasicSimplexState` as panicking (it doesn't), qualified
 `QuasiNewtonState` as nalgebra-only (panics on every backend post-B4), and
-omitted `LbfgsState` / `CmaEsState` — now corrected to enumerate the lazy set
-accurately and note the populated-at-construction states. No public path
-exposes a pre-init read.
+omitted `LbfgsState` / `CmaEsState` --- now corrected to enumerate the lazy set
+accurately and note the populated-at-construction states. No public path exposes
+a pre-init read.
 
 ### B6. `InnerExecutor` criteria-reuse semantics `[RESOLVED]`
 
 `InnerExecutor` (`core/inner.rs`) holds one
 `Vec<Box<dyn TerminationCriterion<S>>>` for its whole lifetime and reuses it on
-every `run()`. This was correct for stateless criteria (`MaxIter`, `MaxCostEvals`)
-but a sharp edge for stateful ones. The original write-up flagged only `MaxTime`
-(`start: Option<Instant>` set on first `check`, never cleared → fires prematurely
-on a second `run()`); auditing the full criterion set found the gap was broader —
-`RelativeGradientTolerance` anchors `‖∇f_0‖` on the first run via `get_or_insert`
-and never re-anchors (silently wrong, not just early-stop), and `NoImprovement`'s
-`stalled` counter accumulates across runs. The `*Tolerance` "last value" criteria
-self-heal (they re-seed on the first check of each run), so they were correct only
-by luck.
+every `run()`. This was correct for stateless criteria (`MaxIter`,
+`MaxCostEvals`) but a sharp edge for stateful ones. The original write-up
+flagged only `MaxTime` (`start: Option<Instant>` set on first `check`, never
+cleared → fires prematurely on a second `run()`); auditing the full criterion
+set found the gap was broader --- `RelativeGradientTolerance` anchors `‖∇f_0‖`
+on the first run via `get_or_insert` and never re-anchors (silently wrong, not
+just early-stop), and `NoImprovement`'s `stalled` counter accumulates across
+runs. The `*Tolerance` "last value" criteria self-heal (they re-seed on the
+first check of each run), so they were correct only by luck.
 
 **Resolution (shipped):** a defaulted `fn reset(&mut self) {}` lifecycle hook on
 `TerminationCriterion`, called on each criterion at the top of `run_loop` (the
-single choke point — `InnerExecutor::run` delegates straight to it). Stateful
+single choke point --- `InnerExecutor::run` delegates straight to it). Stateful
 criteria override `reset` to clear per-run state (`MaxTime`,
 `RelativeGradientTolerance`, `NoImprovement`, plus the self-healing `*Tolerance`
-family for a clean "reset == freshly constructed" invariant). The hook is additive
-and object-safe (defaulted body keeps `Box<dyn TerminationCriterion>` working), so
-no existing call site changed. Contract 2 in `inner.rs` /
+family for a clean "reset == freshly constructed" invariant). The hook is
+additive and object-safe (defaulted body keeps `Box<dyn TerminationCriterion>`
+working), so no existing call site changed. Contract 2 in `inner.rs` /
 `.claude/rules/solver-composition.md` was rewritten from "criteria must be
 stateless" to "criteria are reset per run, so stateful ones are safe to reuse; a
 custom criterion holding cross-call state must override `reset`."
@@ -434,47 +438,47 @@ criteria per call" as a *reason* to drop to `run_loop` (an `InnerExecutor` now
 reuses stateful criteria safely), but `run_loop` stays public as the low-level
 driver / adapter-problem entry point. The adapter-problem outer solvers
 (`BarrierMethod`, `AugmentedLagrangianMethod`) still build a fresh criteria
-vector per outer iteration — but now for the *intrinsic* reason (each outer iter
-minimizes a changing surrogate against a fresh `Problem::new(adapter)`), no longer
-as a `MaxTime` dodge; their "Composition" notes were updated to say so.
+vector per outer iteration --- but now for the *intrinsic* reason (each outer
+iter minimizes a changing surrogate against a fresh `Problem::new(adapter)`), no
+longer as a `MaxTime` dodge; their "Composition" notes were updated to say so.
 
 ### B7. Gradient criteria silently no-op on NLLS solvers `[RECOMMEND]`
 
-The NLLS solvers (`LevenbergMarquardt`, `Trf`, `GaussNewton`) deliberately
-leave `state.gradient = None` — the framework's L2-squared
-[`GradientTolerance`] is the wrong metric for least squares, where the
-canonical first-order test is `‖Jᵀr‖_∞` (documented on
-`levenberg_marquardt.rs` / `trf.rs`, and the reason each solver carries its
-own `with_tol_grad`). The footgun: those solvers run on `BasicState`, which
-*does* impl `GradientState`, so a user can still attach `GradientTolerance`
-(or `RelativeGradientTolerance` / `ProjectedGradientTolerance`) to the
-executor. It **type-checks and silently never fires** — `check` reads
-`state.gradient()?`, which short-circuits to `None` on the permanent absence,
-so no termination, no panic, no warning. The compile-time guard from tenet 3
-(can't pair a gradient criterion with a derivative-free solver) doesn't catch
-this, because the NLLS state is nominally a `GradientState`; it just never
-populates the gradient. (`MaxGradientEvals` is the analogous count case: LM
-makes Jacobian calls, not gradient calls, so `gradient_evals` stays `0` and
-the budget never trips — arguably *correct* there, since no gradient work
-happens, but the same "looks wired, does nothing" shape.)
+The NLLS solvers (`LevenbergMarquardt`, `Trf`, `GaussNewton`) deliberately leave
+`state.gradient = None` --- the framework's L2-squared [`GradientTolerance`] is
+the wrong metric for least squares, where the canonical first-order test is
+`‖Jᵀr‖_∞` (documented on `levenberg_marquardt.rs` / `trf.rs`, and the reason
+each solver carries its own `with_tol_grad`). The footgun: those solvers run on
+`BasicState`, which *does* impl `GradientState`, so a user can still attach
+`GradientTolerance` (or `RelativeGradientTolerance` /
+`ProjectedGradientTolerance`) to the executor. It **type-checks and silently
+never fires** --- `check` reads `state.gradient()?`, which short-circuits to
+`None` on the permanent absence, so no termination, no panic, no warning. The
+compile-time guard from tenet 3 (can't pair a gradient criterion with a
+derivative-free solver) doesn't catch this, because the NLLS state is nominally
+a `GradientState`; it just never populates the gradient. (`MaxGradientEvals` is
+the analogous count case: LM makes Jacobian calls, not gradient calls, so
+`gradient_evals` stays `0` and the budget never trips --- arguably *correct*
+there, since no gradient work happens, but the same "looks wired, does nothing"
+shape.)
 
-A user reasonably reaching for "stop at gradient tolerance" on an LM run gets
-a criterion that quietly does nothing and falls through to `MaxIter` — the
-worst kind of silent misconfiguration.
+A user reasonably reaching for "stop at gradient tolerance" on an LM run gets a
+criterion that quietly does nothing and falls through to `MaxIter` --- the worst
+kind of silent misconfiguration.
 
-**Recommend:** no public-surface change (the asymmetry is load-bearing —
+**Recommend:** no public-surface change (the asymmetry is load-bearing ---
 populating a wrong-metric gradient just to satisfy the criterion would be
 worse). Address it at the documentation / diagnostics layer:
 
 - Document on each NLLS solver's `# Termination` section that the framework
   gradient criteria are inert and the solver's own `with_tol_grad` /
-  `with_tol_grad_rel` are the gradient tests to use. (LM already half-says
-  this; make it explicit and add it to `Trf` / `GaussNewton`.)
+  `with_tol_grad_rel` are the gradient tests to use. (LM already half-says this;
+  make it explicit and add it to `Trf` / `GaussNewton`.)
 - Optionally, a `debug_assert!`-level nudge is *not* feasible here (the
   criterion can't tell "not populated yet" from "never populated"), which is
-  itself the argument for the doc route. If a louder signal is ever wanted,
-  the additive path is a defaulted `TerminationCriterion::applicable(&S) ->
-  bool` introspection hook — deferred, not freeze-now.
+  itself the argument for the doc route. If a louder signal is ever wanted, the
+  additive path is a defaulted `TerminationCriterion::applicable(&S) ->   bool`
+  introspection hook --- deferred, not freeze-now.
 
 [`GradientTolerance`]: ../crates/basin/src/core/termination.rs
 
@@ -497,29 +501,30 @@ the solver evaluates `f(m)` so `State::param`/`cost` report the mean
 CMA-ES is the one solver whose iterate does not live in its state. Its
 distribution parameters --- the mean `m`, step-size `σ`, covariance `C`,
 evolution paths `p_σ` / `p_c`, and the `B`/`D` eigendecomposition --- live in a
-`Working` struct *on the solver* (`solver/cma_es.rs`), while the state is a plain
-`BasicPopulationState` holding only the λ sampled candidates. The initial mean is
-threaded in through the constructor (`CmaEs::new(initial_mean, initial_sigma,
-seed)`, `:213`) and seeds `m` at `init` (`:516`); the state is built separately
-with `BasicPopulationState::with_size(λ)` --- sized, but carrying no starting
+`Working` struct *on the solver* (`solver/cma_es.rs`), while the state is a
+plain `BasicPopulationState` holding only the λ sampled candidates. The initial
+mean is threaded in through the constructor
+(`CmaEs::new(initial_mean, initial_sigma, seed)`, `:213`) and seeds `m` at
+`init` (`:516`); the state is built separately with
+`BasicPopulationState::with_size(λ)` --- sized, but carrying no starting
 iterate. Every other solver does the opposite: x0 lives in the state
 (`BasicState::new(x0)`), uniformly.
 
 This subsumes the CMA-ES half of [B2](#b2-constructor-convention-decide). The
 constructor asymmetry there ("`CmaEs::new` takes required args, most `new()`
-don't") is downstream of *this* choice: `mean` is in the constructor only because
-there is nowhere in the state to put it.
+don't") is downstream of *this* choice: `mean` is in the constructor only
+because there is nowhere in the state to put it.
 
 **The "working state lives on the solver" rationale is already contradicted by
 L-BFGS.** [AGENTS.md](../AGENTS.md) records (under the observer-KV non-tenet)
 that "solver-internal working state (CMA-ES σ / covariance / evolution paths)
 lives in the *solver* struct, not the state." But `LbfgsState`
 (`state/lbfgs.rs:27`) carries the `(s,y)` history (`ws`, `wy`, `sy`, `ss`),
-`theta`, *and* an entire `LbfgsbWork` scratch struct (`:78`, ~20 internal buffers
---- `z`, `r`, `d`, `wn`, `iwhere`, …) --- unambiguous solver working state, in a
-*dedicated state*. There is no principled line separating "L-BFGS history earns a
-state" from "CMA-ES distribution doesn't." The recorded note is descriptive of
-one solver's choice, not a rule the crate follows.
+`theta`, *and* an entire `LbfgsbWork` scratch struct (`:78`, \~20 internal
+buffers --- `z`, `r`, `d`, `wn`, `iwhere`, ...) --- unambiguous solver working
+state, in a *dedicated state*. There is no principled line separating "L-BFGS
+history earns a state" from "CMA-ES distribution doesn't." The recorded note is
+descriptive of one solver's choice, not a rule the crate follows.
 
 **The impurity already has a visible cost.** `CmaEs::terminate` (`:802`) takes
 `_state` --- ignores it --- and reaches into `self.state` to compute the
@@ -532,31 +537,33 @@ rules, blocked the same way (they read σ/C/history the state can't see). That i
 tenet 3 --- state shape is the contract --- being quietly routed around.
 
 **What a dedicated `CmaEsState<V, M, F>` would buy.** Hold `m`, `σ`, `C`, `p_σ`,
-`p_c`, and impl `PopulationState` so the λ candidates stay exposed --- exactly as
-`QuasiNewtonState` impls `GradientState` while additionally carrying `H`. Then:
+`p_c`, and impl `PopulationState` so the λ candidates stay exposed --- exactly
+as `QuasiNewtonState` impls `GradientState` while additionally carrying `H`.
+Then:
 
 - **The constructor question resolves cleanly.** `mean` becomes the state's
-  initial iterate (`CmaEsState::new(mean, sigma)`), so x0 lives in the state like
-  every other solver and `CmaEs::new()` drops to true hyperparameters --- B2's
-  CMA-ES asymmetry disappears instead of needing a documented exception.
+  initial iterate (`CmaEsState::new(mean, sigma)`), so x0 lives in the state
+  like every other solver and `CmaEs::new()` drops to true hyperparameters ---
+  B2's CMA-ES asymmetry disappears instead of needing a documented exception.
 - **σ and `D` become visible**, so TolX / TolUpSigma / TolFun can be real
   framework criteria binding on a `CmaEsState`-style shape (configured on the
   Executor, like `SimplexTolerance` binds on `SimplexState`) rather than frozen
   into a solver hook.
-- **The result can be the mean.** Canonical CMA-ES reports `m` as the recommended
-  solution; with `m` on the solver, `OptimizationResult` (final state) can only
-  surface a sampled candidate. *(Not fully traced --- what `BasicPopulationState`
-  exposes as incumbent should be confirmed before relying on this point.)*
+- **The result can be the mean.** Canonical CMA-ES reports `m` as the
+  recommended solution; with `m` on the solver, `OptimizationResult` (final
+  state) can only surface a sampled candidate. *(Not fully traced --- what
+  `BasicPopulationState` exposes as incumbent should be confirmed before relying
+  on this point.)*
 
 **Counter-costs (so the call is deliberate):**
 
-- A criterion binding on `CmaEsState`'s σ/C is **CMA-ES-specific** --- it doesn't
-  generalize across solvers the way `GradientTolerance` does. That's consistent
-  with the existing model (`SimplexTolerance` is simplex-only), but it does mean
-  the termination layer grows solver-family-specific criteria.
-- Real **pre-1.0 surface to design and freeze**: a state generic over `<V, M, F>`
-  with a covariance matrix plus its trait impls. L-BFGS proves it's tractable,
-  but it isn't free, and it touches the memetic CMA composition sites
+- A criterion binding on `CmaEsState`'s σ/C is **CMA-ES-specific** --- it
+  doesn't generalize across solvers the way `GradientTolerance` does. That's
+  consistent with the existing model (`SimplexTolerance` is simplex-only), but
+  it does mean the termination layer grows solver-family-specific criteria.
+- Real **pre-1.0 surface to design and freeze**: a state generic over
+  `<V, M, F>` with a covariance matrix plus its trait impls. L-BFGS proves it's
+  tractable, but it isn't free, and it touches the memetic CMA composition sites
   (`ma_ls_ch_cma.rs:622`, which currently injects the mean via the constructor).
 
 **Decide:** introduce `CmaEsState` (consistency with L-BFGS/BFGS, fixes the
@@ -626,8 +633,8 @@ The `[DECIDE]` items needing a maintainer call:
 - [ ] A2 --- commit to no observer KV channel (recommend: yes, record as
       non-tenet).
 - [x] B2 --- `NelderMead` gains `new()` (= standard params) + `Default`;
-      `standard()` deprecated → `new()`. "Required iff no sensible default"
-      rule recorded.
+      `standard()` deprecated → `new()`. "Required iff no sensible default" rule
+      recorded.
 - [ ] B5 --- doc-only pre-init `cost()` pass now, or defer?
 - [ ] B8 --- introduce `CmaEsState` (recommend) or record the
       `BasicPopulationState` + solver-`Working` split as a deliberate non-tenet?
