@@ -30,6 +30,10 @@ trailing note cites the paper it implements (or the source it ports).
 - **[`Brent`](https://docs.rs/basin/latest/basin/solver/struct.Brent.html)** —
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in _Numerical Recipes_ §10.2); also used inside line searches.
+- **[`GoldenSection`](https://docs.rs/basin/latest/basin/solver/struct.GoldenSection.html)**
+  — golden-section search: 1-D minimization on a bracketed interval, the robust
+  linearly-converging companion to `Brent` (Kiefer, 1953; _Numerical Recipes_
+  §10.1).
 
 ## Quasi-Newton
 
@@ -137,6 +141,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `ProjectedGradientDescent` | First-order | ✓ | ✓ | ✓ | ✓ |
 | `NelderMead` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Brent` | Derivative-free | — | — | — | — |
+| `GoldenSection` | Derivative-free | — | — | — | — |
 | `BFGS` | Quasi-Newton | ✓ | ✓ | ✗ | ✓ |
 | `LBFGS` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `LBFGSB` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
@@ -155,8 +160,8 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `BarrierMethod` | Constrained | ✓ | ✓ | ✓ | ✓ |
 | `AugmentedLagrangianMethod` | Constrained | ✓ | ✓ | ✓ | ✓ |
 
-`Brent` minimizes over a scalar `f64` interval (1-D), so the vector-backend
-choice does not apply.
+`Brent` and `GoldenSection` minimize over a scalar `f64` interval (1-D), so the
+vector-backend choice does not apply.
 
 † `DeInject` is itself backend-generic, but its effective coverage is the
 intersection of `De` and the chosen inner solver: a `LevenbergMarquardt` or

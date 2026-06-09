@@ -29,6 +29,8 @@ pub mod de;
 pub mod de_inject;
 /// Pure Gauss-Newton solver for nonlinear least squares.
 pub mod gauss_newton;
+/// Golden-section search (1D minimization on a bracketed interval).
+pub mod golden_section;
 /// Steepest-descent solver with a pluggable line search and optional
 /// heavy-ball momentum.
 pub mod gradient_descent;
@@ -73,6 +75,7 @@ pub use cma_inject::{ClosureInner, CmaInject, MemeticInner};
 pub use de::De;
 pub use de_inject::DeInject;
 pub use gauss_newton::GaussNewton;
+pub use golden_section::GoldenSection;
 pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;
 pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
