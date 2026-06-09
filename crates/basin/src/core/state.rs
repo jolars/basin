@@ -119,14 +119,16 @@ pub trait State {
     ///
     /// # Panics
     ///
-    /// Concrete states ([`BasicState`], [`BasicSimplexState`], and
-    /// `QuasiNewtonState` under the `nalgebra` feature) panic if
-    /// `cost()` is read before
+    /// States that cache cost lazily ([`BasicState`], `QuasiNewtonState`,
+    /// [`LbfgsState`], and [`CmaEsState`]) panic if `cost()`
+    /// is read before
     /// [`Solver::init`](crate::core::solver::Solver::init) has populated
     /// the cached cost. By contract the executor calls `init` before any
     /// termination criterion check, so reads from criteria and from
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
-    /// are safe.
+    /// are safe. Sorted-simplex / sorted-population states
+    /// ([`BasicSimplexState`], [`BasicPopulationState`]) are populated at
+    /// construction and never panic.
     fn cost(&self) -> Self::Float;
 
     /// Best [`param`](Self::param) ever observed by the executor's

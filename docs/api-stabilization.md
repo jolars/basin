@@ -393,6 +393,16 @@ distinction is documented consistently on each state's `cost()` and confirm no
 public path exposes a pre-init read. Decide whether that's worth a doc-only pass
 now or is already adequately covered.
 
+**Resolved (doc-only).** Per-impl `# Panics` sections now cover all four
+lazily-populated states (`BasicState`, `QuasiNewtonState`, `LbfgsState`,
+`CmaEsState`); the construction-populated states (`BasicSimplexState`,
+`BasicPopulationState`) never panic. The trait-level `State::cost()` doc was
+stale — it listed `BasicSimplexState` as panicking (it doesn't), qualified
+`QuasiNewtonState` as nalgebra-only (panics on every backend post-B4), and
+omitted `LbfgsState` / `CmaEsState` — now corrected to enumerate the lazy set
+accurately and note the populated-at-construction states. No public path
+exposes a pre-init read.
+
 ### B6. `InnerExecutor` criteria-reuse semantics `[RESOLVED]`
 
 `InnerExecutor` (`core/inner.rs`) holds one
