@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.0](https://github.com/jolars/basin/compare/v0.11.0...v0.12.0) (2026-06-09)
+
+### Breaking changes
+- add `NllsState` and `ScalarState` ([`7dfdaff`](https://github.com/jolars/basin/commit/7dfdaffc55fbef5e50271f4f6006d3de5743f427))
+- **math:** curate the public math-tier surface for 1.0 (C2) ([`9411824`](https://github.com/jolars/basin/commit/9411824d603e4c14293cdc4cfb4ddb4c0fd62bca))
+
+### Features
+- **solver:** add `GoldenSection` 1D solver ([`f4bc284`](https://github.com/jolars/basin/commit/f4bc28491cf977bbb9d2496ccaf4a33431fa6bfe))
+- add `NllsState` and `ScalarState` ([`7dfdaff`](https://github.com/jolars/basin/commit/7dfdaffc55fbef5e50271f4f6006d3de5743f427))
+- add `TerminationCriterion::reset` hook for safe inner-criteria reuse ([`3e56bae`](https://github.com/jolars/basin/commit/3e56baea01695e2891c296556440efd4f4793dea))
+
 ## [0.11.0](https://github.com/jolars/basin/compare/v0.10.0...v0.11.0) (2026-06-07)
 
 ### Breaking changes
