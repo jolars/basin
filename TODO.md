@@ -131,15 +131,19 @@ harder to fix as more code piles on.
       genuinely share nothing beyond the three CONTRIBUTING.md composition
       contracts (+ `WarmStart` for some)? Resolve by either writing the trait or
       writing the honest "no" comment in `core/inner.rs`.
-- [ ] **Workspace wasm build broken by `competitor-bench` transitive dep.**
-      `cargo build --target wasm32-unknown-unknown` at the workspace level fails
-      inside `levenberg-marquardt` (via `getrandom 0.3` needing
-      `--cfg getrandom_backend="wasm_js"`). The library itself is clean ---
-      `cargo build --target wasm32-unknown-unknown -p basin -p basin-wasm`
-      succeeds --- so the wasm tenet holds for the two crates that need it.
-      Options: exclude `competitor-bench` from the wasm CI step, gate its
-      `levenberg-marquardt` dep behind a non-default feature, or set the
-      `getrandom_backend` cfg in `.cargo/config.toml`.
+- [x] **Workspace wasm build broken by `competitor-bench` transitive dep.**
+      Resolved (2026-06-10) by setting `default-members = ["crates/basin",
+      "crates/basin-wasm"]` in the workspace manifest, so the bare
+      `cargo build` / `cargo build --target wasm32-unknown-unknown` builds only
+      the two shippable, wasm-clean crates. `competitor-bench` (which links
+      `levenberg-marquardt` → `getrandom 0.3`, with no wasm backend unless its
+      `wasm_js` feature is enabled) stays a `members` entry, so `--workspace`
+      clippy/tests still cover it; it's just out of the *default* build set. A
+      `getrandom_backend` cfg in `.cargo/config.toml` was ruled out: the cfg
+      alone doesn't satisfy getrandom 0.3 (the `wasm_js` backend also needs its
+      feature, which a bench crate has no business pulling). CI gained a
+      regression guard running the bare workspace wasm build (ci.yml `wasm` job,
+      `default` matrix entry), which now also exercises `basin-wasm` on wasm.
 
 See `CONTRIBUTING.md` for the design tenets and constraints that shape these
 decisions.

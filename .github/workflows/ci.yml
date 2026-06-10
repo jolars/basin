@@ -97,6 +97,13 @@ jobs:
         with:
           key: wasm-${{ matrix.features }}
       - run: cargo build -p basin --target wasm32-unknown-unknown ${{ matrix.flags }}
+      # Regression guard: the bare workspace command (no `-p`) must build on wasm
+      # too. It builds the `default-members` set (basin + basin-wasm), which keeps
+      # `competitor-bench` — a native-only bench crate whose `getrandom 0.3` dep
+      # has no wasm backend — out of the default build. Run once (default entry).
+      - name: Bare workspace wasm build
+        if: matrix.features == 'default'
+        run: cargo build --target wasm32-unknown-unknown
 
   snippets:
     name: playground snippets compile

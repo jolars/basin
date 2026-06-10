@@ -5,6 +5,18 @@ members = [
     "crates/basin-wasm",
     "crates/competitor-bench",
 ]
+# `competitor-bench` is excluded from the default set so a bare
+# `cargo build` / `cargo build --target wasm32-unknown-unknown` builds only the
+# two shippable crates. The bench crate links native competitor libraries
+# (`levenberg-marquardt` → `getrandom 0.3`, which has no wasm32-unknown-unknown
+# backend unless its `wasm_js` feature is enabled) and has no reason to target
+# wasm; excluding it keeps the WASM-as-a-hard-constraint guarantee
+# (CONTRIBUTING.md) intact for the default build. `--workspace` still includes
+# it, so clippy/tests cover it.
+default-members = [
+    "crates/basin",
+    "crates/basin-wasm",
+]
 # Lockfile lives at the workspace root; member crates share dependency
 # resolution. Per CONTRIBUTING.md tenet 2 (no per-version backend feature gates),
 # all members must agree on a single major version per backend.
