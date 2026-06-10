@@ -6,7 +6,7 @@ use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
 };
-use super::sample::{SampleStandardNormal, SampleUniformBox};
+use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
     FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared, ScaleInPlace, ScaledAdd, VectorIndex,
@@ -142,6 +142,7 @@ impl<F: Scalar + SampleUniform> SampleUniformBox for Vec<F> {
             upper.len(),
             "sample_uniform_box: bounds length mismatch"
         );
+        assert_finite_box(lower, upper);
         let n = lower.len();
         let mut out = Self::with_capacity(n);
         for i in 0..n {
@@ -280,6 +281,19 @@ mod tests {
             // Pinned coordinate is exactly its single bound.
             assert_eq!(x[1], 0.5);
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "sample_uniform_box requires finite bounds")]
+    fn sample_uniform_box_rejects_non_finite_bounds() {
+        // A `±∞` bound (e.g. a periodic coordinate left unbounded for
+        // `Trf` / `BoundedCmaEs` and then reused for `De`) must surface a
+        // clear basin-level precondition panic naming the coordinate,
+        // not `rand`'s opaque internal `NonFinite` unwrap. See issue #41.
+        let lower = vec![0.0, f64::NEG_INFINITY, 0.0];
+        let upper = vec![1.0, f64::INFINITY, 1.0];
+        let mut rng = ChaCha8Rng::seed_from_u64(1);
+        let _ = Vec::<f64>::sample_uniform_box(&lower, &upper, &mut rng);
     }
 
     #[test]

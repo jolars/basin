@@ -70,6 +70,15 @@ use crate::solver::cma_es::sort_population_ascending;
 ///   bounded-search method by construction (uniform initialization in
 ///   the box and per-coordinate bound repair both require `lower` /
 ///   `upper`).
+/// - **Caller must:** supply **finite** bounds on every coordinate.
+///   Uniform initialization (and bound repair) over an unbounded
+///   interval is mathematically undefined, so a non-finite (`±∞`) bound
+///   is a contract violation — [`init`](Solver::init) panics naming the
+///   offending coordinate. Note `BoxConstraints` is shared with solvers
+///   that *do* tolerate `±∞` entries (e.g. [`Trf`](crate::solver::Trf),
+///   [`BoundedCmaEs`](crate::solver::BoundedCmaEs), which Gaussian-sample
+///   with a boundary penalty); reusing such a problem with DE requires
+///   replacing each infinite bound with a finite surrogate first.
 /// - **Caller must:** hand in a
 ///   [`BasicPopulationState::with_size(λ)`](crate::BasicPopulationState::with_size)
 ///   with `λ ≥ 1`; the actual population size is the solver's

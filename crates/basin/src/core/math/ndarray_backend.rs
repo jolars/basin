@@ -7,7 +7,7 @@ use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
 };
-use super::sample::{SampleStandardNormal, SampleUniformBox};
+use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
     FloorZerosInPlace, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity,
@@ -79,6 +79,7 @@ impl<F: Scalar + SampleUniform> SampleUniformBox for Array1<F> {
             upper.len(),
             "sample_uniform_box: bounds length mismatch"
         );
+        assert_finite_box(lower, upper);
         Array1::from_shape_fn(lower.len(), |i| rng.random_range(lower[i]..=upper[i]))
     }
 }

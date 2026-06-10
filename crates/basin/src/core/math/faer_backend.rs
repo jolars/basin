@@ -14,7 +14,7 @@ use super::linalg::{
     LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
     MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen, SymmetricEigenError,
 };
-use super::sample::{SampleStandardNormal, SampleUniformBox};
+use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
     FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared, ScaleInPlace, ScaledAdd, VectorIndex,
@@ -66,6 +66,7 @@ impl<F: Scalar + SampleUniform> SampleUniformBox for Col<F> {
             upper.nrows(),
             "sample_uniform_box: bounds length mismatch"
         );
+        assert_finite_box(lower, upper);
         Self::from_fn(lower.nrows(), |i| rng.random_range(lower[i]..=upper[i]))
     }
 }
