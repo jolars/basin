@@ -112,12 +112,6 @@ these pins are fixed.
 The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
 and BLAS-backed paths are behind opt-in features (`parallel`).
 
-## Status
-
-The public API is still iterating and breaking changes are expected. WebAssembly
-bindings (`basin-wasm`) power the visualizer but are not published to a package
-registry yet.
-
 ## Acknowledgements
 
 Basin owes a substantial intellectual debt to [argmin]: the overall shape of the
