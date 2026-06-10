@@ -245,39 +245,6 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     }
 }
 
-// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
-impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
-    /// Deprecated: renamed to [`with_rho_increase`](Self::with_rho_increase).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_rho_increase`")]
-    pub fn rho_increase(self, rho_increase: F) -> Self {
-        self.with_rho_increase(rho_increase)
-    }
-
-    /// Deprecated: renamed to [`with_feasibility_decrease`](Self::with_feasibility_decrease).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_feasibility_decrease`")]
-    pub fn feasibility_decrease(self, feasibility_decrease: F) -> Self {
-        self.with_feasibility_decrease(feasibility_decrease)
-    }
-
-    /// Deprecated: renamed to [`with_tol`](Self::with_tol).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_tol`")]
-    pub fn tol(self, tol: F) -> Self {
-        self.with_tol(tol)
-    }
-
-    /// Deprecated: renamed to [`with_inner_max_iter`](Self::with_inner_max_iter).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_max_iter`")]
-    pub fn inner_max_iter(self, inner_max_iter: u64) -> Self {
-        self.with_inner_max_iter(inner_max_iter)
-    }
-
-    /// Deprecated: renamed to [`with_inner_grad_tol`](Self::with_inner_grad_tol).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_grad_tol`")]
-    pub fn inner_grad_tol(self, inner_grad_tol: F) -> Self {
-        self.with_inner_grad_tol(inner_grad_tol)
-    }
-}
-
 impl<P, V, M, So, F> Solver<P, BasicState<V, F>> for AugmentedLagrangianMethod<So, V, F>
 where
     F: Scalar,

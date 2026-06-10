@@ -126,15 +126,6 @@ impl<V, M, F: Scalar> GaussNewton<V, M, F> {
     }
 }
 
-// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
-impl<V, M, F: Scalar> GaussNewton<V, M, F> {
-    /// Deprecated: renamed to [`with_tol_grad`](Self::with_tol_grad).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_grad`")]
-    pub fn tol_grad(self, tol: F) -> Self {
-        self.with_tol_grad(tol)
-    }
-}
-
 impl<P, V, M, F> Solver<P, NllsState<V, F>> for GaussNewton<V, M, F>
 where
     F: Scalar,

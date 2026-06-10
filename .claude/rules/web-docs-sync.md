@@ -36,7 +36,7 @@ references of a solver, update this page in the same change.
 
 - Solvers: `https://docs.rs/basin/latest/basin/solver/struct.<Name>.html`
 - Line searches: `https://docs.rs/basin/latest/basin/line_search/struct.<Name>.html`
-- `LBFGS` / `LBFGSB` are type aliases over the `Lbfgs` struct → link both to
+- `Lbfgsb` is a type alias over the `Lbfgs` struct → link both to
   `…/solver/struct.Lbfgs.html`.
 
 **Caveat for newly added solvers:** `docs.rs/.../latest` resolves to the most

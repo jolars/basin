@@ -23,17 +23,17 @@ sibling traits (see below):
 
 - **`BoxConstraints`** (interval bounds) — kept feasible by *projection* /
   clamping (`ClampInPlace`). Used by `Brent` (1D), `ProjectedGradientDescent`,
-  `LBFGSB`, `Trf`, `BoundedCmaEs`.
+  `Lbfgsb`, `Trf`, `BoundedCmaEs`.
 - **`LinearInequalityConstraints`** (`A x ≤ b`, exposing `a()` / `b()`) — kept
   feasible by a *barrier*, no projection. Used by the log-barrier
   `BarrierMethod` (`src/solver/barrier_method.rs`) via the `LogBarrier` adapter
   (`src/core/barrier.rs`). `BarrierMethod` is a `constrOptim`-style continuation
   loop over **any gradient inner solver** (bound `So: WarmStart<V>` with
-  `So::State: GradientState`: `GradientDescent`, `BFGS`, or unbounded `LBFGS`;
+  `So::State: GradientState`: `GradientDescent`, `Bfgs`, or unbounded `Lbfgs`;
   seeded at the current iterate via `WarmStart::seed`). v1 requires a strictly
   feasible start (phase 1 deferred) and an Armijo-backtracking inner line search
   — the barrier's `+∞` wall is the only feasibility guard, so a
-  Wolfe/More-Thuente inner can step through it; pair `BFGS`/`LBFGS` with
+  Wolfe/More-Thuente inner can step through it; pair `Bfgs`/`Lbfgs` with
   `Backtracking` for the barrier.
 - **`LinearEqualityConstraints`** (`A x = b`, exposing `a()` / `b()` — same
   *shape* as the inequality trait but a distinct *type*, so `≤` and `=` can't be

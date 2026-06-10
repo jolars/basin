@@ -337,29 +337,6 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
     }
 }
 
-// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
-impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
-    /// Deprecated: renamed to [`with_tol_pg`](Self::with_tol_pg).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_pg`")]
-    pub fn tol_pg(self, tol_pg: F) -> Self {
-        self.with_tol_pg(tol_pg)
-    }
-}
-
-impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
-    /// Deprecated: renamed to [`with_epsilon`](Self::with_epsilon).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_epsilon`")]
-    pub fn epsilon(self, epsilon: F) -> Self {
-        self.with_epsilon(epsilon)
-    }
-
-    /// Deprecated: renamed to [`with_m_capacity`](Self::with_m_capacity).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_m_capacity`")]
-    pub fn m_capacity(self, m_capacity: usize) -> Self {
-        self.with_m_capacity(m_capacity)
-    }
-}
-
 impl<P, V, S, F> Solver<P, LbfgsState<V, F>> for Lbfgs<Bounded, S, F>
 where
     F: Scalar,
@@ -1195,26 +1172,6 @@ fn try_restart_after_lnsrch<V, F: Scalar>(
     }
     true
 }
-
-/// Deprecated all-caps alias preserved for downstream code that imported
-/// the original [`LBFGS`] name. Resolves to [`Lbfgs`]; will be removed in
-/// a future release after the rename window closes.
-#[deprecated(
-    since = "0.8.0",
-    note = "use `Lbfgs` (PascalCase) — the all-caps alias will be removed in a future release"
-)]
-#[allow(non_camel_case_types)]
-pub type LBFGS<Mode = Bounded, S = MoreThuente> = Lbfgs<Mode, S>;
-
-/// Deprecated all-caps alias preserved for downstream code that imported
-/// the original [`LBFGSB`] name. Resolves to [`Lbfgsb`]; will be removed
-/// in a future release after the rename window closes.
-#[deprecated(
-    since = "0.8.0",
-    note = "use `Lbfgsb` (PascalCase) — the all-caps alias will be removed in a future release"
-)]
-#[allow(non_camel_case_types)]
-pub type LBFGSB<S = MoreThuente> = Lbfgsb<S>;
 
 #[cfg(test)]
 mod tests {

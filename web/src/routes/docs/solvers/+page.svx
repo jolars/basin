@@ -42,12 +42,12 @@ trailing note cites the paper it implements (or the source it ports).
 
 ## Quasi-Newton
 
-- **[`BFGS`](https://docs.rs/basin/latest/basin/solver/struct.BFGS.html)** —
+- **[`Bfgs`](https://docs.rs/basin/latest/basin/solver/struct.Bfgs.html)** —
   dense quasi-Newton with a full approximate Hessian (Nocedal & Wright, 2006).
-- **[`LBFGS`](https://docs.rs/basin/latest/basin/solver/struct.Lbfgs.html)** —
+- **[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/struct.Lbfgs.html)** —
   limited-memory BFGS for larger problems (two-loop recursion, Nocedal &
   Wright Alg. 7.4).
-- **[`LBFGSB`](https://docs.rs/basin/latest/basin/solver/struct.Lbfgs.html)** —
+- **[`Lbfgsb`](https://docs.rs/basin/latest/basin/solver/struct.Lbfgs.html)** —
   L-BFGS with box bounds; a faithful port of the Nocedal–Zhu L-BFGS-B v3.0
   Fortran source (Byrd, Lu & Nocedal, 1995; Zhu, Byrd, Lu & Nocedal, 1997,
   ACM TOMS Alg. 778).
@@ -148,9 +148,9 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Brent` | Derivative-free | — | — | — | — |
 | `GoldenSection` | Derivative-free | — | — | — | — |
 | `BrentDerivative` | First-order | — | — | — | — |
-| `BFGS` | Quasi-Newton | ✓ | ✓ | ✗ | ✓ |
-| `LBFGS` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
-| `LBFGSB` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
+| `Bfgs` | Quasi-Newton | ✓ | ✓ | ✗ | ✓ |
+| `Lbfgs` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
+| `Lbfgsb` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `GaussNewton` | Least squares | ✗ | ✓ | ✗ | ✓ |
 | `LevenbergMarquardt` | Least squares | ✗ | ✓ | ✗ | ✓ |
 | `Trf` | Least squares | ✗ | ✓ | ✗ | ✓ |
@@ -171,7 +171,7 @@ interval (1-D), so the vector-backend choice does not apply.
 
 † `DeInject` is itself backend-generic, but its effective coverage is the
 intersection of `De` and the chosen inner solver: a `LevenbergMarquardt` or
-`LBFGSB` inner narrows it to nalgebra / faer.
+`Lbfgsb` inner narrows it to nalgebra / faer.
 
 Each solver's page on [docs.rs](https://docs.rs/basin) carries a **Backends**
 note listing exactly which parameter types it supports.

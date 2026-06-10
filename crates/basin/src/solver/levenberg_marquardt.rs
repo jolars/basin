@@ -372,54 +372,6 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 }
 
-// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
-// `ftol`/`xtol` carried the MINPACK names; their replacements also changed stem.
-impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
-    /// Deprecated: renamed to [`with_tol_grad`](Self::with_tol_grad).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_grad`")]
-    pub fn tol_grad(self, tol: F) -> Self {
-        self.with_tol_grad(tol)
-    }
-
-    /// Deprecated: renamed to [`with_tol_grad_rel`](Self::with_tol_grad_rel).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_tol_grad_rel`")]
-    pub fn tol_grad_rel(self, tol: F) -> Self {
-        self.with_tol_grad_rel(tol)
-    }
-
-    /// Deprecated: the MINPACK `ftol` test, renamed to
-    /// [`with_tol_cost_rel`](Self::with_tol_cost_rel).
-    #[deprecated(
-        since = "0.10.0",
-        note = "renamed to `with_tol_cost_rel` (MINPACK ftol)"
-    )]
-    pub fn ftol(self, tol: F) -> Self {
-        self.with_tol_cost_rel(tol)
-    }
-
-    /// Deprecated: the MINPACK `xtol` test, renamed to
-    /// [`with_tol_step_rel`](Self::with_tol_step_rel).
-    #[deprecated(
-        since = "0.10.0",
-        note = "renamed to `with_tol_step_rel` (MINPACK xtol)"
-    )]
-    pub fn xtol(self, tol: F) -> Self {
-        self.with_tol_step_rel(tol)
-    }
-
-    /// Deprecated: renamed to [`with_tau`](Self::with_tau).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_tau`")]
-    pub fn tau(self, tau: F) -> Self {
-        self.with_tau(tau)
-    }
-
-    /// Deprecated: renamed to [`with_max_inner_attempts`](Self::with_max_inner_attempts).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_max_inner_attempts`")]
-    pub fn max_inner_attempts(self, n: u32) -> Self {
-        self.with_max_inner_attempts(n)
-    }
-}
-
 impl<P, V, M, F> Solver<P, NllsState<V, F>> for LevenbergMarquardt<V, M, F>
 where
     F: Scalar,

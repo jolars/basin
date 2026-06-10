@@ -122,15 +122,6 @@ impl<S, F: Scalar> Bfgs<S, F> {
     }
 }
 
-// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
-impl<S, F: Scalar> Bfgs<S, F> {
-    /// Deprecated: renamed to [`with_epsilon`](Self::with_epsilon).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_epsilon`")]
-    pub fn epsilon(self, epsilon: F) -> Self {
-        self.with_epsilon(epsilon)
-    }
-}
-
 impl<P, S, V, M, F> Solver<P, QuasiNewtonState<V, M, F>> for Bfgs<S, F>
 where
     F: Scalar,
@@ -259,13 +250,3 @@ where
         QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(x.clone())
     }
 }
-
-/// Deprecated all-caps alias preserved for downstream code that imported
-/// the original [`BFGS`] name. Resolves to [`Bfgs`]; will be removed in
-/// a future release after the rename window closes.
-#[deprecated(
-    since = "0.8.0",
-    note = "use `Bfgs` (PascalCase) — the all-caps alias will be removed in a future release"
-)]
-#[allow(non_camel_case_types)]
-pub type BFGS<S = Wolfe> = Bfgs<S>;

@@ -339,19 +339,27 @@ Status across the solvers:
 
 Required-arg `new()` is fine where the parameter has no reasonable default.
 
-### B3. Drop deprecated aliases `[DO]`
+### B3. Drop deprecated aliases `[DONE]`
 
-Still open. The deprecated surface to shed before 1.0:
+Resolved (2026-06-10). Every `#[deprecated]` item was removed — the full set
+turned out broader than the three originally itemized here, because B1's `with_*`
+rename left a forwarding shim on *seven* solvers (LM, TRF, Gauss-Newton, BFGS,
+L-BFGS, barrier, AL), all marked "remove at 1.0". Removed:
 
-- The screaming-case type aliases `BFGS` (`lib.rs:141`, def `bfgs.rs:271`),
-  `LBFGS` / `LBFGSB` (`lib.rs:144`, defs `lbfgs.rs:1207` / `1217`) — remove so
-  the frozen surface carries only `Bfgs` / `Lbfgs` / `Lbfgsb`.
-- `NelderMead::standard()` (`nelder_mead.rs:149`, deprecated since 0.10.0) — now
-  exactly `new()`.
-- The renamed L-BFGS builder methods `with_tol_pg` / `with_epsilon` /
-  `with_m_capacity` (`lbfgs.rs:343` / `351` / `357`, deprecated since 0.10.0).
+- The screaming-case type aliases `BFGS`, `LBFGS`, `LBFGSB` (and their
+  `#[allow(deprecated)]` re-exports in `lib.rs` / `solver.rs`) — the frozen
+  surface now carries only `Bfgs` / `Lbfgs` / `Lbfgsb`.
+- `NelderMead::standard()` — was exactly `new()`.
+- Every bare-name builder shim from the B1 rename: `epsilon` / `tol_pg` /
+  `m_capacity` (BFGS/L-BFGS), `tol_grad` / `tol_grad_rel` / `ftol` / `xtol` /
+  `tau` / `rstep` / `theta` / `max_inner_attempts` (NLLS family), and the
+  barrier / AL `reduction` / `tol` / `inner_max_iter` / `inner_grad_tol` /
+  `rho_increase` / `feasibility_decrease`.
 
-A 1.0 is the natural place to shed pre-1.0 deprecations.
+No internal consumer (tests, benches, examples, `basin-wasm`) referenced any
+removed item; the only non-source fixups were the web solver catalogue
+(`web/.../docs/solvers/+page.svx`, names + docs.rs links) and two `.claude/rules`
+files. Verified: build, clippy `-D warnings`, `cargo doc`, full test suite.
 
 ### B4. State generic ergonomics `[DONE]`
 
@@ -704,7 +712,7 @@ their sections above:
       `BasicPopulationState`), enabling the composable `CmaEsTolerance` criterion.
 - [x] C1 --- `run_loop` stays **public** (low-level driver + adapter-problem
       entry point); criteria-reuse caveat retired by B6.
+- [x] B3 --- all `#[deprecated]` aliases and `with_*`-rename shims dropped
+      (2026-06-10). The frozen surface carries only the PascalCase names.
 
-The one remaining open *action* (not a decision) is **B3** --- drop the
-deprecated aliases (`BFGS` / `LBFGS` / `LBFGSB`, `NelderMead::standard()`, the
-renamed L-BFGS builder methods) before tagging 1.0.
+Every audit item is now resolved; the public surface is ready to freeze for 1.0.

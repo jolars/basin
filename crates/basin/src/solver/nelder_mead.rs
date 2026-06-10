@@ -19,7 +19,7 @@ use crate::core::termination::TerminationReason;
 /// `NelderMead` is generic over a type-state [`Mode`](Unbounded) marker
 /// that switches between the unconstrained algorithm ([`Unbounded`], the
 /// default) and the projection-style box-constrained variant
-/// ([`Projected`]). Construct unbounded NM with [`standard`](Self::standard),
+/// ([`Projected`]). Construct unbounded NM with [`new`](Self::new),
 /// [`adaptive`](Self::adaptive), or [`with_params`](Self::with_params), then
 /// transition with [`projected`](Self::projected) when the problem carries
 /// box bounds. The projected `Solver` impl requires `P: BoxConstraints`
@@ -141,13 +141,6 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
             params: None,
             _mode: PhantomData,
         }
-    }
-
-    /// Deprecated: the standard 1965 coefficients are the default, so this
-    /// is just [`new`](Self::new). Use that instead.
-    #[deprecated(since = "0.10.0", note = "use `NelderMead::new()` instead")]
-    pub fn standard() -> Self {
-        Self::new()
     }
 
     /// Adaptive parameters from Gao & Han (2012), eq. (4.1):

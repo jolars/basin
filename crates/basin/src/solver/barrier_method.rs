@@ -253,33 +253,6 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     }
 }
 
-// Deprecated setter aliases from the B1 `with_*` rename (0.10.0); remove at 1.0.
-impl<So, F: Scalar> BarrierMethod<So, F> {
-    /// Deprecated: renamed to [`with_reduction`](Self::with_reduction).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_reduction`")]
-    pub fn reduction(self, reduction: F) -> Self {
-        self.with_reduction(reduction)
-    }
-
-    /// Deprecated: renamed to [`with_tol`](Self::with_tol).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_tol`")]
-    pub fn tol(self, tol: F) -> Self {
-        self.with_tol(tol)
-    }
-
-    /// Deprecated: renamed to [`with_inner_max_iter`](Self::with_inner_max_iter).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_max_iter`")]
-    pub fn inner_max_iter(self, inner_max_iter: u64) -> Self {
-        self.with_inner_max_iter(inner_max_iter)
-    }
-
-    /// Deprecated: renamed to [`with_inner_grad_tol`](Self::with_inner_grad_tol).
-    #[deprecated(since = "0.10.0", note = "renamed to `with_inner_grad_tol`")]
-    pub fn inner_grad_tol(self, inner_grad_tol: F) -> Self {
-        self.with_inner_grad_tol(inner_grad_tol)
-    }
-}
-
 impl<P, V, M, So, F> Solver<P, BasicState<V, F>> for BarrierMethod<So, F>
 where
     F: Scalar,
