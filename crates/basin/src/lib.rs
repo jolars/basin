@@ -85,6 +85,24 @@
 //! so the happy path stays zero-cost.
 //!
 //! The [`problem`](crate::core::problem) module docs carry the per-trait detail.
+//!
+//! # Backends
+//!
+//! Parameters and linear algebra are generic over the backend. `Vec<f64>` needs
+//! no features; nalgebra, ndarray, and faer are enabled one feature each, each
+//! pinning a single major version. basin pins one major version per backend;
+//! each basin 1.x release supports exactly these versions:
+//!
+//! | Backend    | Feature      | Version                            |
+//! | ---------- | ------------ | ---------------------------------- |
+//! | nalgebra   | `nalgebra`   | 0.34 (with `nalgebra-sparse` 0.11) |
+//! | ndarray    | `ndarray`    | 0.17                               |
+//! | faer       | `faer`       | 0.24                               |
+//!
+//! `Vec<f64>` is the built-in default backend, so no feature is needed for that.
+//!
+//! A backend major-version bump is a breaking change and ships only in a basin
+//! major release; within the 1.x series these pins are fixed.
 #![cfg_attr(docsrs, feature(doc_cfg), doc(auto_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]

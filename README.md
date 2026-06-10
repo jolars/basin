@@ -96,6 +96,19 @@ pinning a single major version. First-order and derivative-free solvers run on
 any backend; linear-algebra-heavy solvers may require a specific one and say so
 in their docs.
 
+basin pins one major version per backend. Each basin 1.x release supports
+exactly these versions:
+
+  | Backend    | Feature    | Version                            |
+  | ---------- | ---------- | ---------------------------------- |
+  | [nalgebra] | `nalgebra` | 0.34 (with `nalgebra-sparse` 0.11) |
+  | [ndarray]  | `ndarray`  | 0.17                               |
+  | [faer]     | `faer`     | 0.24                               |
+
+`Vec<f64>` is built in and needs no features. A backend major-version bump is a
+breaking change and ships only in a basin major release; within the 1.x series
+these pins are fixed.
+
 The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
 and BLAS-backed paths are behind opt-in features (`parallel`).
 

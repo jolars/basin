@@ -9,7 +9,7 @@ authors.workspace = true
 description = "Numerical optimization in pure Rust, with pluggable linear-algebra backends and WASM support."
 homepage = "https://basin.rs"
 documentation = "https://docs.rs/basin"
-readme = "README.md"
+readme.workspace = true
 keywords = ["optimization", "math", "numerics", "solver", "nonlinear"]
 categories = ["mathematics", "science", "algorithms"]
 

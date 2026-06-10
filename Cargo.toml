@@ -27,6 +27,9 @@ rust-version = "1.87.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jolars/basin"
 authors = ["Johan Larsson <johan@jolars.co>"]
+# Inherited `readme` resolves relative to the workspace root, so this points at
+# the repo-root README — the single source of truth shared with GitHub.
+readme = "README.md"
 
 [profile.release]
 lto = "thin"
