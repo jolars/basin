@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0](https://github.com/jolars/basin/compare/v0.12.0...v1.0.0) (2026-06-10)
+
+### Breaking changes
+- remove deprecated solver aliases and builder shims ([`d3ebd30`](https://github.com/jolars/basin/commit/d3ebd309edc1c680b4ed1fb593645224fa593193))
+
+### Features
+- **backends:** enable `Vec<F>` backend on LM and GaussNewton ([`6735709`](https://github.com/jolars/basin/commit/6735709adcc9c1c1d48a217ffedd922c4e441c70))
+- remove deprecated solver aliases and builder shims ([`d3ebd30`](https://github.com/jolars/basin/commit/d3ebd309edc1c680b4ed1fb593645224fa593193))
+- **solvers:** add `BrentDerivative` 1D solver ([`161cb67`](https://github.com/jolars/basin/commit/161cb6709cb4e981c60d7ff744c90273762dc619))
+
+### Bug Fixes
+- **math:** clear panic on non-finite bounds in sample_uniform_box ([`53e189b`](https://github.com/jolars/basin/commit/53e189bb83ccdb9b96ea46d11d1890d384d4f8a7)), closes [#41](https://github.com/jolars/basin/issues/41)
+
+### Performance Improvements
+- fuse cost and gradient computations in More-Thuente line search ([`3dc0201`](https://github.com/jolars/basin/commit/3dc02018ebc70b6392896c22e5ebd75b26824cf0))
+
 ## [0.12.0](https://github.com/jolars/basin/compare/v0.11.0...v0.12.0) (2026-06-09)
 
 ### Breaking changes
