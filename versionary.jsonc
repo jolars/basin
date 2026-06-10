@@ -1,9 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/jolars/versionary/main/schemas/config.json",
   "version": 1,
-  "review-mode": "review",
   "release-type": "rust",
-  "bump-minor-pre-major": true,
+  "allow-stable-major": true,
   "include-commit-authors": true,
   "release-reference-comments": "best-effort"
 }
