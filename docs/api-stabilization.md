@@ -1,9 +1,11 @@
 # Pre-1.0 API stabilization audit
 
-Status: **draft for review.** This is a decision checklist, not an
-implementation. basin is heading toward 1.0.0 with API stabilization as the
-focus and an explicit "no new solvers or features unless they probe what the API
-should be" constraint.
+Status: **landed in 1.0.0.** This was the decision checklist that shaped basin's
+1.0 surface, produced under an explicit "no new solvers or features unless they
+probe what the API should be" constraint. It is kept as a historical record of
+why the 1.0 API looks the way it does; the `[DECIDE]` / `[RECOMMEND]` / `[DO]` /
+`[REVIEW]` tags below reflect each item's status *at audit time*, not open
+questions.
 
 A 1.0 release freezes the public trait/struct/enum surface into a compatibility
 promise. The highest-value work right now is settling the *shape* of that

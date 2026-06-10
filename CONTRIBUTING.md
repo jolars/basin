@@ -2,8 +2,12 @@
 
 ## State
 
-This is very early-stage alpha code. The public API is a moving target and
-breaking changes are expected.
+basin follows [semantic versioning]. As of 1.0.0 the public API is stable:
+breaking changes ship only in a major release, while new solvers, backends, and
+opt-in features arrive in minor releases. The audit that shaped the 1.0 surface
+is recorded in `docs/api-stabilization.md`.
+
+[semantic versioning]: https://semver.org/
 
 ## What this is
 
