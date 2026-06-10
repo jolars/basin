@@ -25,7 +25,7 @@
 use core::marker::PhantomData;
 
 use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
-use crate::{CostFunction, Residual};
+use crate::{CostFunction, DenseMatrix, Jacobian, Residual};
 
 /// Catalogue entry for Powell's singular function.
 pub static POWELL_SINGULAR_SPEC: ProblemSpec = ProblemSpec {
@@ -131,9 +131,10 @@ pub fn powell_singular_jacobian(x: &[f64], out: &mut [f64]) {
 /// (`nalgebra::DVector<f64>`, `ndarray::Array1<f64>`, `faer::Col<f64>`)
 /// are gated behind their respective features.
 ///
-/// `Jacobian` is implemented for the LA-heavy backends (nalgebra
-/// `DMatrix<f64>` and faer `Mat<f64>`) only; see the trait's
-/// `# Backends` note for why `Vec` and `ndarray` are excluded.
+/// `Jacobian` is implemented for the `Vec<f64>` default backend (over the
+/// hand-rolled [`DenseMatrix<f64>`](crate::DenseMatrix)) and the LA-heavy
+/// backends (nalgebra `DMatrix<f64>`, faer `Mat<f64>`); see the trait's
+/// `# Backends` note for why `ndarray` is excluded.
 pub struct PowellSingular<P = Vec<f64>>(PhantomData<fn() -> P>);
 
 impl<P> PowellSingular<P> {
@@ -168,6 +169,17 @@ impl Residual for PowellSingular<Vec<f64>> {
         let mut out = vec![0.0; 4];
         powell_singular_residuals(x, &mut out);
         Ok(out)
+    }
+}
+
+impl Jacobian for PowellSingular<Vec<f64>> {
+    type Jacobian = DenseMatrix<f64>;
+    fn jacobian(&self, x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
+        let mut buf = [0.0_f64; 16];
+        powell_singular_jacobian(x, &mut buf);
+        // `from_row_slice` interprets `buf` in row-major order, matching
+        // the layout `powell_singular_jacobian` produces.
+        Ok(DenseMatrix::from_row_slice(4, 4, &buf))
     }
 }
 

@@ -16,25 +16,28 @@
 //! [`MatrixFromDiagonal`](super::MatrixFromDiagonal),
 //! [`MatDiagonal`](super::MatDiagonal), and — the load-bearing op — a pure-Rust
 //! symmetric eigendecomposition [`SymmetricEigen`](super::SymmetricEigen) via a
-//! cyclic Jacobi solver (`dense_eig`). What is *not yet* implemented is the
-//! *solve* factorization layer: no Cholesky / QR
-//! ([`LinearSolveSpd`](super::LinearSolveSpd),
-//! [`LinearSolveLstsq`](super::LinearSolveLstsq),
-//! [`GramMatrix`](super::GramMatrix)), so the LA-heavy least-squares / Newton
-//! solvers that need them (Gauss-Newton, Levenberg-Marquardt, TRF) are
-//! currently a compile-time error on `Vec<f64>`. That is a "not yet," not a
-//! permanent design choice (tenet 5): no solver has motivated a pure-Rust
-//! `DenseMatrix` solve yet, but — like the Jacobi eigensolver above — one would
-//! be welcome if it can be done honestly (pure-Rust, wasm-clean, no
-//! BLAS/LAPACK).
+//! cyclic Jacobi solver (`dense_eig`). The SPD *solve* layer is also here:
+//! [`GramMatrix`](super::GramMatrix) (`JᵀJ`),
+//! [`AddDiagonalVectorInPlace`](super::AddDiagonalVectorInPlace) (Marquardt
+//! damping), and the load-bearing [`LinearSolveSpd`](super::LinearSolveSpd) via
+//! a pure-Rust Cholesky (`dense_chol`), so the normal-equations least-squares
+//! solvers (Gauss-Newton, Levenberg-Marquardt) run on `Vec<f64>` too. What is
+//! *not yet* implemented is the QR least-squares solve
+//! [`LinearSolveLstsq`](super::LinearSolveLstsq) and the trust-region-reflective
+//! [`MaxDiagonal`](super::MaxDiagonal), so TRF stays a compile-time error on
+//! `Vec<f64>`. That is a "not yet," not a permanent design choice (tenet 5): no
+//! solver has motivated a pure-Rust `DenseMatrix` QR yet, but — like the
+//! Cholesky and Jacobi solvers above — one would be welcome if it can be done
+//! honestly (pure-Rust, wasm-clean, no BLAS/LAPACK).
 //!
 //! The scalar `F` defaults to `f64` so existing `DenseMatrix` references keep
 //! resolving to `DenseMatrix<f64>` unchanged.
 
 use super::Scalar;
 use super::{
-    GeneralRankOneUpdate, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity,
-    RankOneUpdate, ScaleInPlace, SymmetricEigen, SymmetricEigenError,
+    AddDiagonalVectorInPlace, GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveSpd,
+    MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, RankOneUpdate,
+    ScaleInPlace, SymmetricEigen, SymmetricEigenError,
 };
 
 /// Row-major dense matrix — the matrix companion to `Vec<F>` as the param
@@ -50,8 +53,10 @@ use super::{
 /// for the linear-constraint solvers, plus [`MatrixIdentity`],
 /// [`ScaleInPlace`], and `GeneralRankOneUpdate` for BFGS, and
 /// `RankOneUpdate`, [`MatrixFromDiagonal`], `MatDiagonal`, and a Jacobi
-/// [`SymmetricEigen`] for CMA-ES; see the module docs for why the *solve*
-/// factorization ops are deliberately absent.
+/// [`SymmetricEigen`] for CMA-ES, and the SPD-solve trio [`GramMatrix`],
+/// `AddDiagonalVectorInPlace`, and a Cholesky [`LinearSolveSpd`] for
+/// Gauss-Newton / Levenberg-Marquardt; see the module docs for why the QR
+/// least-squares ops are deliberately absent.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DenseMatrix<F = f64> {
     /// Row-major entries: `data[i * cols + j] = A[i, j]`.
@@ -257,6 +262,71 @@ impl<F: Scalar> SymmetricEigen<Vec<F>> for DenseMatrix<F> {
     }
 }
 
+impl<F: Scalar> GramMatrix for DenseMatrix<F> {
+    fn gram(&self) -> Self {
+        // G = AᵀA: an `n × n` matrix with G[i][j] = Σ_k A[k][i] · A[k][j].
+        let n = self.cols;
+        let mut data = vec![F::zero(); n * n];
+        for col in self.data.chunks_exact(self.cols) {
+            // Each row `col` of `A` contributes the rank-one outer product
+            // colᵀ·col to `G`.
+            for (i, &ci) in col.iter().enumerate() {
+                let grow = &mut data[i * n..(i + 1) * n];
+                for (gij, &cj) in grow.iter_mut().zip(col.iter()) {
+                    *gij = *gij + ci * cj;
+                }
+            }
+        }
+        Self {
+            data,
+            rows: n,
+            cols: n,
+        }
+    }
+}
+
+impl<F: Scalar> AddDiagonalVectorInPlace<Vec<F>> for DenseMatrix<F> {
+    fn add_diagonal_vector_in_place(&mut self, diag: &Vec<F>) {
+        assert_eq!(
+            self.rows, self.cols,
+            "add_diagonal_vector_in_place: matrix must be square, got {}x{}",
+            self.rows, self.cols
+        );
+        assert_eq!(
+            self.rows,
+            diag.len(),
+            "add_diagonal_vector_in_place: matrix is {}x{} but diag has length {}",
+            self.rows,
+            self.cols,
+            diag.len()
+        );
+        for (i, &di) in diag.iter().enumerate() {
+            let entry = &mut self.data[i * self.cols + i];
+            *entry = *entry + di;
+        }
+    }
+}
+
+impl<F: Scalar> LinearSolveSpd<Vec<F>> for DenseMatrix<F> {
+    fn solve_spd(&self, b: &Vec<F>) -> Result<Vec<F>, LinearSolveError> {
+        assert_eq!(
+            self.rows, self.cols,
+            "solve_spd: matrix must be square, got {}x{}",
+            self.rows, self.cols
+        );
+        assert_eq!(
+            self.rows,
+            b.len(),
+            "solve_spd: matrix is {}x{} but rhs has length {}",
+            self.rows,
+            self.cols,
+            b.len()
+        );
+        super::dense_chol::cholesky_solve_spd(&self.data, self.rows, b)
+            .ok_or(LinearSolveError::NotPositiveDefinite)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -383,5 +453,84 @@ mod tests {
     fn general_rank_one_update_rejects_non_square() {
         let mut a = fixture(); // 2×3
         a.general_rank_one_update(1.0, &vec![1.0, 1.0], &vec![1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn gram_computes_a_transpose_a() {
+        // A = [[1, 2, 3], [4, 5, 6]] ⇒ AᵀA is the 3×3 column-Gram:
+        //   [[17, 22, 27], [22, 29, 36], [27, 36, 45]].
+        let g = fixture().gram();
+        assert_eq!(g.nrows(), 3);
+        assert_eq!(g.ncols(), 3);
+        assert_eq!(
+            g,
+            DenseMatrix::from_row_slice(
+                3,
+                3,
+                &[17.0, 22.0, 27.0, 22.0, 29.0, 36.0, 27.0, 36.0, 45.0]
+            )
+        );
+    }
+
+    #[test]
+    fn gram_is_symmetric_positive_semidefinite_diagonal() {
+        // Diagonal entries Gⱼⱼ = ‖A·,ⱼ‖² must be the column norms-squared.
+        let g = fixture().gram();
+        // column 0 of A is (1, 4) ⇒ 17; column 2 is (3, 6) ⇒ 45.
+        assert_eq!(g.get(0, 0), 17.0);
+        assert_eq!(g.get(2, 2), 45.0);
+        // Symmetry.
+        assert_eq!(g.get(0, 2), g.get(2, 0));
+    }
+
+    #[test]
+    fn add_diagonal_vector_adds_to_diagonal_only() {
+        let mut a = DenseMatrix::from_row_slice(2, 2, &[1.0, 2.0, 3.0, 4.0]);
+        a.add_diagonal_vector_in_place(&vec![10.0, 20.0]);
+        assert_eq!(
+            a,
+            DenseMatrix::from_row_slice(2, 2, &[11.0, 2.0, 3.0, 24.0])
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "add_diagonal_vector_in_place")]
+    fn add_diagonal_vector_rejects_non_square() {
+        let mut a = fixture(); // 2×3
+        a.add_diagonal_vector_in_place(&vec![1.0, 1.0]);
+    }
+
+    #[test]
+    fn solve_spd_round_trips() {
+        // [[4, 1], [1, 3]] x = (1, 2) ⇒ x = (1/11, 7/11).
+        let a: DenseMatrix = DenseMatrix::from_row_slice(2, 2, &[4.0, 1.0, 1.0, 3.0]);
+        let x = a.solve_spd(&vec![1.0, 2.0]).unwrap();
+        assert!((x[0] - 1.0 / 11.0).abs() < 1e-12, "x[0] = {}", x[0]);
+        assert!((x[1] - 7.0 / 11.0).abs() < 1e-12, "x[1] = {}", x[1]);
+    }
+
+    #[test]
+    fn solve_spd_rejects_non_positive_definite() {
+        // Indefinite matrix ⇒ NotPositiveDefinite.
+        let a: DenseMatrix = DenseMatrix::from_row_slice(2, 2, &[1.0, 2.0, 2.0, 1.0]);
+        assert_eq!(
+            a.solve_spd(&vec![1.0, 1.0]),
+            Err(LinearSolveError::NotPositiveDefinite)
+        );
+    }
+
+    /// The damped normal-equations path LM exercises: `gram()`, then
+    /// `add_diagonal_vector_in_place`, then `solve_spd`, end to end.
+    #[test]
+    fn gram_damp_solve_pipeline() {
+        // A 3×2 Jacobian with rank 2 ⇒ AᵀA is 2×2 SPD.
+        let j: DenseMatrix = DenseMatrix::from_row_slice(3, 2, &[1.0, 0.0, 1.0, 1.0, 0.0, 1.0]);
+        let mut g = j.gram(); // [[2, 1], [1, 2]]
+        assert_eq!(g, DenseMatrix::from_row_slice(2, 2, &[2.0, 1.0, 1.0, 2.0]));
+        g.add_diagonal_vector_in_place(&vec![1.0, 1.0]); // [[3, 1], [1, 3]]
+        let x = g.solve_spd(&vec![1.0, 0.0]).unwrap();
+        // [[3, 1], [1, 3]] x = (1, 0) ⇒ x = (3/8, -1/8).
+        assert!((x[0] - 3.0 / 8.0).abs() < 1e-12, "x[0] = {}", x[0]);
+        assert!((x[1] + 1.0 / 8.0).abs() < 1e-12, "x[1] = {}", x[1]);
     }
 }

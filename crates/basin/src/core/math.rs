@@ -18,8 +18,12 @@
 //!   linear-constraint solvers run on every backend. [`SymmetricEigen`] is
 //!   a second exception: [`DenseMatrix`] implements it via a pure-Rust
 //!   cyclic Jacobi eigensolver (`dense_eig`), so CMA-ES runs on the default
-//!   backend too. The *solve* factorizations ([`LinearSolveSpd`],
-//!   [`LinearSolveLstsq`], [`GramMatrix`]) stay nalgebra/faer-only.
+//!   backend too. The SPD solve [`LinearSolveSpd`] and its companion
+//!   [`GramMatrix`] (plus the `pub(crate)` `AddDiagonalVectorInPlace`) are a
+//!   third: [`DenseMatrix`] implements them via a pure-Rust Cholesky
+//!   (`dense_chol`), so Gauss-Newton and Levenberg-Marquardt run on the
+//!   default backend. The QR least-squares solve [`LinearSolveLstsq`] (and the
+//!   trust-region-reflective `MaxDiagonal`) stay nalgebra/faer-only.
 
 /// Scalar element type for vectors and matrices in the math layer.
 ///
@@ -216,6 +220,7 @@ pub trait VectorIndex<F = f64> {
 mod cl_scaling;
 mod clamp;
 mod dense;
+mod dense_chol;
 mod dense_eig;
 mod linalg;
 mod sample;

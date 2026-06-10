@@ -151,8 +151,8 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Bfgs` | Quasi-Newton | ✓ | ✓ | ✗ | ✓ |
 | `Lbfgs` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `Lbfgsb` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
-| `GaussNewton` | Least squares | ✗ | ✓ | ✗ | ✓ |
-| `LevenbergMarquardt` | Least squares | ✗ | ✓ | ✗ | ✓ |
+| `GaussNewton` | Least squares | ✓ | ✓ | ✗ | ✓ |
+| `LevenbergMarquardt` | Least squares | ✓ | ✓ | ✗ | ✓ |
 | `Trf` | Least squares | ✗ | ✓ | ✗ | ✓ |
 | `CmaEs` | Global | ✓ | ✓ | ✓ | ✓ |
 | `BoundedCmaEs` | Global | ✓ | ✓ | ✓ | ✓ |

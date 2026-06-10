@@ -8,7 +8,7 @@
 use core::marker::PhantomData;
 
 use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
-use crate::{CostFunction, Gradient, Residual};
+use crate::{CostFunction, DenseMatrix, Gradient, Jacobian, Residual};
 
 /// Catalogue entry for the Rosenbrock function.
 pub static ROSENBROCK_SPEC: ProblemSpec = ProblemSpec {
@@ -244,9 +244,10 @@ pub fn rosenbrock_residuals_jacobian(x: &[f64], out: &mut [f64]) {
 /// the same function. Restricted to `param.len() == 2`; passing any
 /// other length will trip a debug assertion in the raw functions.
 ///
-/// `Jacobian` is implemented for the LA-heavy backends (nalgebra
-/// `DMatrix<f64>` and faer `Mat<f64>`); see the trait's `# Backends`
-/// note for why `Vec` and `ndarray` are excluded.
+/// `Jacobian` is implemented for the `Vec<f64>` default backend (over the
+/// hand-rolled [`DenseMatrix<f64>`](crate::DenseMatrix)) and the LA-heavy
+/// backends (nalgebra `DMatrix<f64>`, faer `Mat<f64>`); see the trait's
+/// `# Backends` note for why `ndarray` is excluded.
 pub struct RosenbrockResiduals<P = Vec<f64>>(PhantomData<fn() -> P>);
 
 impl<P> RosenbrockResiduals<P> {
@@ -285,6 +286,15 @@ impl Residual for RosenbrockResiduals<Vec<f64>> {
         let mut out = vec![0.0; 2];
         rosenbrock_residuals(x, &mut out);
         Ok(out)
+    }
+}
+
+impl Jacobian for RosenbrockResiduals<Vec<f64>> {
+    type Jacobian = DenseMatrix<f64>;
+    fn jacobian(&self, x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
+        let mut buf = [0.0_f64; 4];
+        rosenbrock_residuals_jacobian(x, &mut buf);
+        Ok(DenseMatrix::from_row_slice(2, 2, &buf))
     }
 }
 
