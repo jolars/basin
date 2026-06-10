@@ -14,6 +14,8 @@ pub mod bounded_cma_es;
 pub mod bounded_cma_inject;
 /// Brent's method (1D root / minimum bracketing).
 pub mod brent;
+/// Brent's method using first derivatives ("dbrent", 1D minimization).
+pub mod brent_derivative;
 /// Hansen 2016 (µ/µ_W, λ)-CMA-ES with negative weights.
 pub mod cma_es;
 /// Memetic CMA-ES with Hansen-2011 injection. Inners: Nelder-Mead,
@@ -70,6 +72,7 @@ pub use bfgs::Bfgs;
 pub use bounded_cma_es::BoundedCmaEs;
 pub use bounded_cma_inject::BoundedCmaInject;
 pub use brent::Brent;
+pub use brent_derivative::BrentDerivative;
 pub use cma_es::CmaEs;
 pub use cma_inject::{ClosureInner, CmaInject, MemeticInner};
 pub use de::De;

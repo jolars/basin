@@ -26,11 +26,14 @@ pub mod lbfgs;
 pub mod nlls;
 /// One-dimensional solver state (`ScalarState`).
 pub mod scalar;
+/// One-dimensional gradient-carrying solver state (`ScalarGradientState`).
+pub mod scalar_gradient;
 
 pub use cma_es::CmaEsState;
 pub use lbfgs::LbfgsState;
 pub use nlls::NllsState;
 pub use scalar::ScalarState;
+pub use scalar_gradient::ScalarGradientState;
 
 use crate::core::math::{MatrixIdentity, Scalar, VectorLen};
 use crate::core::problem::EvalCounts;

@@ -19,6 +19,11 @@ trailing note cites the paper it implements (or the source it ports).
 - **[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/struct.ProjectedGradientDescent.html)**
   — gradient descent for box-constrained problems, projecting each step back
   onto the feasible box.
+- **[`BrentDerivative`](https://docs.rs/basin/latest/basin/solver/struct.BrentDerivative.html)**
+  — Brent's method using first derivatives ("dbrent"): 1-D minimization on a
+  bracketed interval, the gradient-using sibling of `Brent` / `GoldenSection`
+  (uses the sign of `f'` to bracket and secant extrapolation on `f'` to step;
+  Brent, 1973, as transcribed in _Numerical Recipes_ §10.3).
 
 ## Derivative-free
 
@@ -142,6 +147,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `NelderMead` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Brent` | Derivative-free | — | — | — | — |
 | `GoldenSection` | Derivative-free | — | — | — | — |
+| `BrentDerivative` | First-order | — | — | — | — |
 | `BFGS` | Quasi-Newton | ✓ | ✓ | ✗ | ✓ |
 | `LBFGS` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `LBFGSB` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
@@ -160,8 +166,8 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `BarrierMethod` | Constrained | ✓ | ✓ | ✓ | ✓ |
 | `AugmentedLagrangianMethod` | Constrained | ✓ | ✓ | ✓ | ✓ |
 
-`Brent` and `GoldenSection` minimize over a scalar `f64` interval (1-D), so the
-vector-backend choice does not apply.
+`Brent`, `GoldenSection`, and `BrentDerivative` minimize over a scalar `f64`
+interval (1-D), so the vector-backend choice does not apply.
 
 † `DeInject` is itself backend-generic, but its effective coverage is the
 intersection of `De` and the chosen inner solver: a `LevenbergMarquardt` or

@@ -127,7 +127,8 @@ pub use crate::core::state::FaerQuasiNewtonState;
 pub use crate::core::state::NalgebraQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, CmaEsState, CountsMirror, GradientState,
-    IntoInitialSimplex, LbfgsState, NllsState, PopulationState, ScalarState, SimplexState, State,
+    IntoInitialSimplex, LbfgsState, NllsState, PopulationState, ScalarGradientState, ScalarState,
+    SimplexState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
@@ -144,8 +145,8 @@ pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{LBFGS, LBFGSB};
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::{
-    AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent, ClosureInner,
-    CmaEs, CmaInject, De, DeInject, GaussNewton, GoldenSection, GradientDescent,
-    LevenbergMarquardt, MaLsChCma, MaLsChState, MemeticInner, NelderMead, ProjectedGradientDescent,
-    RandomSearch, Sgd, Ssga, Trf,
+    AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent,
+    BrentDerivative, ClosureInner, CmaEs, CmaInject, De, DeInject, GaussNewton, GoldenSection,
+    GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState, MemeticInner, NelderMead,
+    ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
 };
