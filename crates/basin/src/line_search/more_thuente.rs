@@ -196,8 +196,7 @@ where
             // Evaluate f(stp), g(stp) — Fortran `task = 'FG'` callback.
             let mut trial = param.clone();
             trial.scaled_add(stp, direction);
-            let f = problem.cost(&trial)?;
-            let g_full = problem.gradient(&trial)?;
+            let (f, g_full) = problem.cost_and_gradient(&trial)?;
             let g = g_full.dot(direction);
 
             // Stage transition (Fortran lines 3572–3574).
