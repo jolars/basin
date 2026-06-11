@@ -1,0 +1,14 @@
+# pnpm 11 reads project settings from here, not the package.json "pnpm" field.
+
+# esbuild (pulled in by vite) ships a postinstall that links its native
+# binary; pnpm blocks dependency build scripts by default and fails the
+# install unless they're explicitly approved here.
+allowBuilds:
+  esbuild: true
+
+# Don't auto-run a deps-status `pnpm install` before every `pnpm run <script>`.
+# That implicit install re-evaluates the supply-chain freshness gate
+# (minimumReleaseAge) and can't be passed an override, so a fresh dependabot
+# bump makes `pnpm dev` / `pnpm run build` fail until the package ages out.
+# Installs stay explicit (`pnpm install`), where the gate still applies.
+verifyDepsBeforeRun: false
