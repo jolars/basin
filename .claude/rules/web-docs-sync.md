@@ -34,10 +34,23 @@ references of a solver, update this page in the same change.
 
 ## docs.rs link convention
 
-- Solvers: `https://docs.rs/basin/latest/basin/solver/struct.<Name>.html`
-- Line searches: `https://docs.rs/basin/latest/basin/line_search/struct.<Name>.html`
+Each solver / line search lives in its own `pub mod` submodule (`pub mod
+gradient_descent;`), so rustdoc does **not** inline the crate-root re-export —
+the canonical struct page lives under the submodule, not at the `solver` /
+`line_search` module root. Include the submodule segment, which is the snake_case
+name of the file the struct is defined in:
+
+- Solvers: `https://docs.rs/basin/latest/basin/solver/<module>/struct.<Name>.html`
+  (e.g. `…/solver/gradient_descent/struct.GradientDescent.html`,
+  `…/solver/levenberg_marquardt/struct.LevenbergMarquardt.html`).
+- Line searches: `https://docs.rs/basin/latest/basin/line_search/<module>/struct.<Name>.html`
+  (e.g. `…/line_search/more_thuente/struct.MoreThuente.html`).
 - `Lbfgsb` is a type alias over the `Lbfgs` struct → link both to
-  `…/solver/struct.Lbfgs.html`.
+  `…/solver/lbfgs/struct.Lbfgs.html`.
+
+The `…/solver/struct.<Name>.html` form (no submodule segment) **404s** — that is
+*not* the canonical page. Cross-check the submodule name against
+`grep -nE "pub mod" crates/basin/src/solver.rs`.
 
 **Caveat for newly added solvers:** `docs.rs/.../latest` resolves to the most
 recent *published* release. A solver added since that release will 404 until the
