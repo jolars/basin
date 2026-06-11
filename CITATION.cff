@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: "Basin: Numerical Optimization in Rust"
+version: 1.0.0
+license: "MIT or Apache-2.0"
+type: software
+abstract: "Numerical optimization in pure Rust, with pluggable linear-algebra backends and WASM support."
+message: "If you use this software, please cite it as below."
+authors:
+  - given-names: Johan
+    family-names: Larsson
+    affiliation: Univeristy of Copenhagen
+    orcid: "https://orcid.org/0000-0002-4029-5945"
+keywords:
+  - optimization
+  - nonlinear least squares
+  - quasi-Newton methods
