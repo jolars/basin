@@ -3,10 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.5.1",
   "scripts": {
     "build:wasm": "wasm-pack build ../crates/basin-wasm --target web --out-name basin_wasm --out-dir ../../web/src/lib/basin-wasm",
-    "dev": "npm run build:wasm && vite dev",
-    "build": "npm run build:wasm && vite build",
+    "dev": "pnpm run build:wasm && vite dev",
+    "build": "pnpm run build:wasm && vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:snippets": "tsx scripts/check-snippets.ts",

@@ -113,20 +113,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: snippets
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-      - name: Install npm dependencies
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install dependencies
         working-directory: web
-        run: npm ci
+        # See web.yml for why the freshness gate is disabled in CI.
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
       # Generates every snippet the landing-page playground can produce and
       # builds them against the in-repo basin crate, so the demo can't drift
       # from the real API.
       - name: Compile generated snippets
         working-directory: web
-        run: npm run check:snippets
+        run: pnpm run check:snippets
 
   versionary:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
