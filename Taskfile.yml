@@ -4,6 +4,12 @@ version: "3"
 # Run `task --list` to see available recipes.
 
 tasks:
+  lint:
+    desc: "Lint the Rust codebase (clippy) and the web app (eslint)."
+    cmds:
+      - cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - cd web && pnpm check
+
   logo:
     desc: "Watch the logo example; rebuild day + dark SVG/PNGs and sync to web/static on save."
     summary: |
