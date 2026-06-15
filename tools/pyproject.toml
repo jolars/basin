@@ -12,8 +12,33 @@ dependencies = [
   # math fidelity matters — see ../README and the ingest-paper skill.
   "marker-pdf",
   "cma",
+  # Direct dep (marker pulls it transitively) so the ROCm [tool.uv.sources]
+  # routing below actually applies. Capped below the ROCm channel's ceiling so
+  # uv picks the ROCm wheel (2.9.1+rocm6.4) instead of the newer CUDA wheel from
+  # PyPI. marker-pdf needs torch>=2.7, which 2.9.x satisfies.
+  "torch<2.10",
 ]
 
 [tool.uv]
 # Don't try to package this — it's just a dependency container.
 package = false
+# Pull torch from the ROCm index so marker's second pass runs on the AMD GPU
+# (Radeon RX 9060 XT / RDNA4) instead of CPU. We use the rocm6.4 channel rather
+# than rocm7.0: the 7.0 torch wheel declares a dep on pytorch-triton-rocm==3.6.0
+# which that index doesn't publish (tops out at 3.5.1), so 7.0 is unresolvable.
+# rocm6.4 already supports RDNA4 and is self-consistent (torch 2.9.1 + triton
+# 3.5.1). unsafe-best-match lets uv mix the ROCm index with PyPI for everything
+# else. On a non-AMD box, swap the index URL (e.g. /whl/cpu) or drop this block.
+index-strategy = "unsafe-best-match"
+# ROCm wheels are Linux-only; restrict the lock so uv doesn't try (and fail) to
+# resolve torch for macOS/Windows. This tools env only ever runs on the
+# maintainer's Linux box.
+environments = ["sys_platform == 'linux'"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-rocm" }]
+pytorch-triton-rocm = [{ index = "pytorch-rocm" }]
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm6.4"

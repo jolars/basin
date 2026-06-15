@@ -1,8 +1,22 @@
 {
   pkgs,
+  lib,
   ...
 }:
 {
+  # The ROCm torch wheel (used by marker's GPU second pass, see tools/) is a
+  # manylinux binary that dynaically links a handful of base system libs absent
+  # from NixOS's default loader path. Exposed as a scoped variable (not a global
+  # LD_LIBRARY_PATH, which would shadow libs for the Rust/R/gcc toolchains) and
+  # applied only to the marker command in Taskfile.yml's ingest-paper-pages.
+  env.TORCH_ROCM_LIB_PATH = lib.makeLibraryPath [
+    pkgs.zstd
+    pkgs.bzip2
+    pkgs.xz
+    pkgs.zlib
+    pkgs.stdenv.cc.cc.lib
+  ];
+
   packages = with pkgs; [
     go-task
     llvmPackages.bintools

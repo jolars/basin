@@ -193,20 +193,47 @@ tasks:
       Output:
         references/<NAME>/source.marker.md    marker-parsed markdown for those pages
 
-      Marker is ML-based and slow on CPU (~minutes per page). Run only on pages
-      where pymupdf4llm's output is unusable (dense equations, critical figures).
+      Marker is ML-based and slow (~minutes per page). Run only on pages where
+      pymupdf4llm's output is unusable (dense equations, critical figures).
+
+      Pages are processed ONE AT A TIME in separate marker processes, then
+      concatenated, so memory is released between pages. This is required on the
+      16 GB AMD card: surya's recognition encoder accumulates ~3 GB/page and
+      ROCm's scaled_dot_product_attention falls back to the math backend (no
+      flash/mem-efficient kernel), so a multi-page process OOMs. Per-page keeps
+      peak VRAM bounded regardless of how many pages are requested.
     requires:
       vars: [NAME, PAGES]
     cmds:
-      - >
-        uv run --project tools marker_single
-        references/{{.NAME}}/source.pdf
-        --config_json tools/marker_config.json
-        --page_range "{{.PAGES}}"
-        --output_dir references/{{.NAME}}/
-      # marker writes to references/<NAME>/source/source.md by default; flatten:
-      - mv references/{{.NAME}}/source/source.md references/{{.NAME}}/source.marker.md
-      - rm -rf references/{{.NAME}}/source
+      # LD_LIBRARY_PATH (scoped to this command) lets the ROCm torch wheel find
+      # its base system libs so marker runs on the AMD GPU; TORCH_ROCM_LIB_PATH is
+      # set by devenv.nix (empty/harmless elsewhere). The batch caps +
+      # expandable_segments keep surya's models within the 16 GB card.
+      - |
+        set -eu
+        # Expand PAGES ("3", "7-31", "3,7-8") into a 0-indexed page list.
+        pages=""
+        for tok in $(echo "{{.PAGES}}" | tr ',' ' '); do
+          case "$tok" in
+            *-*) for p in $(seq "${tok%-*}" "${tok#*-}"); do pages="$pages $p"; done ;;
+            *)   pages="$pages $tok" ;;
+          esac
+        done
+        work=$(mktemp -d)
+        : > references/{{.NAME}}/source.marker.md
+        for p in $pages; do
+          echo ">>> marker page $p"
+          LD_LIBRARY_PATH="${TORCH_ROCM_LIB_PATH:-}" \
+          PYTORCH_ALLOC_CONF=expandable_segments:True \
+          RECOGNITION_BATCH_SIZE=8 DETECTOR_BATCH_SIZE=1 LAYOUT_BATCH_SIZE=1 \
+          OCR_ERROR_BATCH_SIZE=8 TABLE_REC_BATCH_SIZE=1 \
+          uv run --project tools marker_single references/{{.NAME}}/source.pdf \
+            --config_json tools/marker_config.json \
+            --page_range "$p" --output_dir "$work/$p/"
+          cat "$work/$p/source/source.md" >> references/{{.NAME}}/source.marker.md
+          printf '\n' >> references/{{.NAME}}/source.marker.md
+        done
+        rm -rf "$work"
 
   web-dev:
     desc: Start Svelte development server
