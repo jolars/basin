@@ -103,6 +103,20 @@ the previous lands.
       transformers (gradient clipping etc.) stay as problem-adapter wrappers,
       not observer hooks, mirroring how constraints attach problem-side.
 
+- [ ] **Powell-family model-based DFO: NEWUOA → BOBYQA → LINCOA.** Add Powell's
+      least-Frobenius-norm, trust-region, model-based derivative-free solvers.
+      NEWUOA (unconstrained) first; BOBYQA (box) and LINCOA (linear) reuse a
+      shared `QuadraticModel` core (interpolation set + `Γ`/`γ` model + factored
+      inverse-KKT `H` via `Ξ`/`Υ`/`Ω` + the least-Frobenius `H`-update + ρ/Δ
+      schedule) and only swap the trust-region subproblem (TRSAPP → TRSBOX →
+      projected-Krylov) --- which maps onto tenet 4 (BOBYQA = `BoxConstraints`,
+      LINCOA = `LinearInequalityConstraints`, both already modeled). All five
+      Powell papers are ingested under `references/` (math in `source.marker.md`
+      + per-paper `NOTES.md`). **Full plan, design seam, basin-infra reuse,
+      build order, and PRIMA/NLopt validation strategy:
+      `docs/newuoa-roadmap.md`.** Paper-anchored --- implement from the papers,
+      cross-check against PRIMA.
+
 ## Cleanup / design debt (review notes)
 
 Surfaced while implementing the termination layer. Not blocking, but each gets
