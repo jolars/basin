@@ -7,7 +7,7 @@ use web_time::{Duration, Instant};
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorLen};
-use crate::core::state::{CmaEsState, GradientState, NewuoaState, SimplexState, State};
+use crate::core::state::{CmaEsState, GradientState, RhoState, SimplexState, State};
 
 /// Why the executor stopped. Returned on
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
@@ -652,14 +652,18 @@ where
     }
 }
 
-/// Stop NEWUOA once its trust-region radius `ρ` shrinks to `rho_end`.
+/// Stop a Powell-family DFO solver once its trust-region radius `ρ` shrinks to
+/// `rho_end`.
 ///
-/// Binds on the concrete [`NewuoaState`]. This is NEWUOA's natural convergence
-/// test; [`Newuoa`](crate::solver::Newuoa) already self-terminates when `ρ`
-/// reaches the `ρ_end` it was configured with (it drives the eq-7.6 schedule),
-/// so this criterion is mainly useful to stop **early** at a coarser `ρ` than
-/// the configured floor — e.g. a quick low-accuracy solve. The threshold should
-/// satisfy `rho_end ≥` the solver's configured `ρ_end` to fire first.
+/// Binds on any [`RhoState`] ([`NewuoaState`](crate::core::state::NewuoaState),
+/// [`BobyqaState`](crate::core::state::BobyqaState)). This is the
+/// natural convergence test of these solvers; both
+/// [`Newuoa`](crate::solver::Newuoa) and [`Bobyqa`](crate::solver::Bobyqa)
+/// already self-terminate when `ρ` reaches the `ρ_end` they were configured with
+/// (which drives Powell's schedule), so this criterion is mainly useful to stop
+/// **early** at a coarser `ρ` than the configured floor — e.g. a quick
+/// low-accuracy solve. The threshold should satisfy `rho_end ≥` the solver's
+/// configured `ρ_end` to fire first.
 pub struct RhoTolerance<F = f64> {
     rho_end: F,
 }
@@ -671,12 +675,12 @@ impl<F> RhoTolerance<F> {
     }
 }
 
-impl<V, F> TerminationCriterion<NewuoaState<V, F>> for RhoTolerance<F>
+impl<S> TerminationCriterion<S> for RhoTolerance<S::Float>
 where
-    F: Scalar,
-    V: Clone,
+    S: RhoState,
+    S::Float: Scalar,
 {
-    fn check(&mut self, state: &NewuoaState<V, F>) -> Option<TerminationReason> {
+    fn check(&mut self, state: &S) -> Option<TerminationReason> {
         (state.rho() <= self.rho_end).then_some(TerminationReason::RhoTolerance)
     }
 }

@@ -62,13 +62,7 @@ pub(crate) mod bigden;
 pub(crate) mod biglag;
 pub(crate) mod driver;
 pub(crate) mod init;
-pub(crate) mod model;
-pub(crate) mod origin;
 pub(crate) mod trsapp;
-pub(crate) mod update;
-
-#[cfg(test)]
-mod kkt;
 
 #[cfg(test)]
 mod parity;

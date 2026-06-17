@@ -44,8 +44,8 @@
 //! the ordinary [`prepare_update`](QuadraticModel::prepare_update) /
 //! [`update_params`](QuadraticModel::update_params) path.
 
-use super::model::QuadraticModel;
 use crate::core::math::Scalar;
+use crate::solver::powell::QuadraticModel;
 
 /// Test-only counter of how many times [`bigden`](QuadraticModel::bigden) has
 /// run, so a test can assert the eq. 6.17 fallback is actually exercised.
@@ -453,7 +453,7 @@ fn fill_harmonics<F: Scalar>(par: &mut [F; 9], angle: F) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solver::newuoa::model::QuadraticModel;
+    use crate::solver::powell::QuadraticModel;
 
     fn rosen(x: &[f64]) -> f64 {
         (1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0] * x[0]).powi(2)

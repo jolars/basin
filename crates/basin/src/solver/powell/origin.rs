@@ -21,8 +21,8 @@
 //! dominated by the `Y Ω` / `Y Ω Yᵀ` products, so the driver only shifts on the
 //! small fraction of iterations that trip eq. 7.10.
 
-use super::model::QuadraticModel;
 use crate::core::math::Scalar;
+use crate::solver::powell::model::QuadraticModel;
 
 impl<F: Scalar> QuadraticModel<F> {
     /// Re-centre `x0` on the current best point `x_opt` (Powell 2006, §7). The
@@ -152,8 +152,8 @@ fn dot<F: Scalar>(a: &[F], b: &[F]) -> F {
 
 #[cfg(test)]
 mod tests {
-    use crate::solver::newuoa::kkt::assert_h_matches_inverse;
-    use crate::solver::newuoa::model::QuadraticModel;
+    use crate::solver::powell::kkt::assert_h_matches_inverse;
+    use crate::solver::powell::model::QuadraticModel;
 
     /// A quadratic whose minimizer sits well away from the sampling origin, so
     /// the initial best interpolation point `x_opt` differs from `x0`.

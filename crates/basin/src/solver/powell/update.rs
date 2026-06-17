@@ -73,7 +73,10 @@ impl<F: Scalar> QuadraticModel<F> {
     /// ```
     ///
     /// with `Ω v_λ = Σ_k sₖ zₖ (zₖ·v_λ)` from the stored factorization.
-    fn apply_h(&self, v_lambda: &[F], v_g: &[F]) -> (Vec<F>, Vec<F>) {
+    ///
+    /// `pub(crate)` so RESCUE (the `bobyqa::rescue` module) can reuse it to
+    /// form `vlag = H·(w−v)` against the rebuilt provisional `H`.
+    pub(crate) fn apply_h(&self, v_lambda: &[F], v_g: &[F]) -> (Vec<F>, Vec<F>) {
         let n = self.n;
         let m = self.m;
         let rank = m - n - 1;
@@ -547,8 +550,9 @@ impl<F: Scalar> QuadraticModel<F> {
     /// Givens-style rotation of two `Z` columns `c1`, `c2`:
     /// `z_{c1} ← c·z_{c1} + s·z_{c2}`, `z_{c2} ← −s·z_{c1} + c·z_{c2}`
     /// (Powell 2006, eq. 4.17). Valid only when the two columns share a sign,
-    /// which preserves `Ω`.
-    fn rotate_zmat_cols(&mut self, c1: usize, c2: usize, cos: F, sin: F) {
+    /// which preserves `Ω`. `pub(crate)` so RESCUE's `updateh_rsc` can reuse it
+    /// for the `planerot` collapse of the `knew`-th row of `Z`.
+    pub(crate) fn rotate_zmat_cols(&mut self, c1: usize, c2: usize, cos: F, sin: F) {
         for i in 0..self.m {
             let z1 = self.zmat.get(i, c1);
             let z2 = self.zmat.get(i, c2);
@@ -567,7 +571,7 @@ fn dot<F: Scalar>(a: &[F], b: &[F]) -> F {
 mod tests {
     use super::*;
     use crate::core::math::DenseMatrix;
-    use crate::solver::newuoa::kkt::{assert_h_matches_inverse, build_w_dense, invert_dense};
+    use crate::solver::powell::kkt::{assert_h_matches_inverse, build_w_dense, invert_dense};
 
     /// Build the full `(m+n+1)` vector `w` (Powell 2006, eq. 4.10) for a new
     /// displacement `xnew`, in the *unsuppressed* index order
@@ -889,7 +893,7 @@ mod tests {
     /// for both the `β ≥ 0` (eq. 4.19) and `β < 0` (eq. 4.20) sub-branches.
     #[test]
     fn cancellation_branch_satisfies_rank2_identity() {
-        use crate::solver::newuoa::kkt::omega_from_factorization;
+        use crate::solver::powell::kkt::omega_from_factorization;
         use std::sync::atomic::Ordering;
 
         let n = 1;

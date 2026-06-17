@@ -24,7 +24,7 @@ use super::model::QuadraticModel;
 ///
 /// where `P` is `m × (n+1)` with `P[i,0] = 1` (the `c` column) and
 /// `P[i,1+k] = (xᵢ−x0)_k` (the `g` columns).
-pub(super) fn build_w_dense(model: &QuadraticModel<f64>) -> DenseMatrix<f64> {
+pub(crate) fn build_w_dense(model: &QuadraticModel<f64>) -> DenseMatrix<f64> {
     let n = model.n();
     let m = model.m();
     let dim = m + n + 1;
@@ -60,7 +60,7 @@ pub(super) fn build_w_dense(model: &QuadraticModel<f64>) -> DenseMatrix<f64> {
 /// Invert a square matrix by Gauss-Jordan elimination with partial pivoting.
 /// Returns `None` if the matrix is singular to working precision. Test-only;
 /// intended for the small (`m + n + 1 ≤ ~12`) systems the oracle builds.
-pub(super) fn invert_dense(a: &DenseMatrix<f64>) -> Option<DenseMatrix<f64>> {
+pub(crate) fn invert_dense(a: &DenseMatrix<f64>) -> Option<DenseMatrix<f64>> {
     let n = a.nrows();
     assert_eq!(n, a.ncols(), "invert_dense: matrix must be square");
     // Augmented [A | I] in a flat row-major buffer of width 2n.
@@ -122,7 +122,7 @@ pub(super) fn invert_dense(a: &DenseMatrix<f64>) -> Option<DenseMatrix<f64>> {
 
 /// Reconstruct the dense `Ω = Σ_k sₖ zₖ zₖᵀ` (`m × m`) from the model's stored
 /// factorization (columns of `zmat`, signs `zsign`).
-pub(super) fn omega_from_factorization(model: &QuadraticModel<f64>) -> DenseMatrix<f64> {
+pub(crate) fn omega_from_factorization(model: &QuadraticModel<f64>) -> DenseMatrix<f64> {
     let m = model.m();
     let n = model.n();
     let rank = m - n - 1;
@@ -152,7 +152,7 @@ pub(super) fn omega_from_factorization(model: &QuadraticModel<f64>) -> DenseMatr
 /// `tol` is a *mixed* tolerance: the threshold for each entry is
 /// `tol·(1 + |want|)`. A purely absolute tolerance is unfair when ill-conditioned
 /// (near-coincident) interpolation points blow `H` up to large magnitudes.
-pub(super) fn assert_h_matches_inverse(model: &QuadraticModel<f64>, tol: f64) {
+pub(crate) fn assert_h_matches_inverse(model: &QuadraticModel<f64>, tol: f64) {
     let n = model.n();
     let m = model.m();
     let w = build_w_dense(model);

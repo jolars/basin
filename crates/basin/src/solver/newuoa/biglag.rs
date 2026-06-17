@@ -28,8 +28,8 @@
 //! recomputed update scalars after each BIGLAG step and substitutes BIGDEN's `d`
 //! when it fires — a rare event in practice (Powell 2006, §6).
 
-use super::model::QuadraticModel;
 use crate::core::math::Scalar;
+use crate::solver::powell::QuadraticModel;
 
 /// Result of one BIGLAG solve (Powell 2006, §6).
 pub(crate) struct BiglagResult<F = f64> {
@@ -244,7 +244,7 @@ fn norm<F: Scalar>(v: &[F]) -> F {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solver::newuoa::model::QuadraticModel;
+    use crate::solver::powell::QuadraticModel;
 
     /// A smooth test objective whose model `initialize` can interpolate.
     fn quad(x: &[f64]) -> f64 {
