@@ -32,6 +32,12 @@ trailing note cites the paper it implements (or the source it ports).
   `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
   uses the dimension-aware coefficients of Gao & Han (2012), and the projected
   variant follows Luersen & Le Riche (2004).
+- **[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**
+  — Powell's model-based trust-region method: maintains a quadratic surrogate
+  interpolating the objective on `2n+1` points and updates it by the
+  least-Frobenius-norm rule, so each iteration needs only one new value. Needs
+  only a `CostFunction`. Implements Powell (2006), cross-validated against
+  PRIMA v0.7.2.
 - **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)** —
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in _Numerical Recipes_ §10.2); also used inside line searches.
@@ -145,6 +151,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Sgd` | First-order | ✓ | ✓ | ✓ | ✓ |
 | `ProjectedGradientDescent` | First-order | ✓ | ✓ | ✓ | ✓ |
 | `NelderMead` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
+| `Newuoa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Brent` | Derivative-free | — | — | — | — |
 | `GoldenSection` | Derivative-free | — | — | — | — |
 | `BrentDerivative` | First-order | — | — | — | — |

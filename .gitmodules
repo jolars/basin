@@ -1,0 +1,3 @@
+[submodule "tools/prima"]
+	path = tools/prima
+	url = https://github.com/libprima/prima
