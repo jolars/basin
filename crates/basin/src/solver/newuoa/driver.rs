@@ -24,7 +24,7 @@
 //!
 //! Before each Box-5 update the §7 origin shift (eq. 7.10) re-centres `x0` on
 //! `x_opt` when the step is small relative to the drift `‖x_opt − x0‖`, keeping
-//! the `H` algebra accurate over long far-drifting runs (see [`super::origin`]).
+//! the `H` algebra accurate over long far-drifting runs (see [`crate::solver::powell::origin`]).
 //!
 //! # Qint robustness modification (§8)
 //!
@@ -53,8 +53,9 @@
 //!
 //! [`adopt_alt_model`]: QuadraticModel::adopt_alt_model
 
-use super::model::QuadraticModel;
+use super::trsapp::Trsapp;
 use crate::core::math::Scalar;
+use crate::solver::powell::{QuadraticModel, TrustRegionSubproblem};
 
 /// Configuration for a standalone NEWUOA run via [`minimize`].
 ///
@@ -208,8 +209,10 @@ impl<F: Scalar> NewuoaWork<F> {
 
         let mut evaluated: Vec<(Vec<F>, F)> = Vec::new();
 
-        // Box 2: trust-region subproblem (TRSAPP, §5).
-        let trs = self.model.trust_region_step(self.delta);
+        // Box 2: trust-region subproblem. NEWUOA's strategy is TRSAPP (§5); the
+        // call goes through the shared `TrustRegionSubproblem` seam (BOBYQA swaps
+        // in TRSBOX here).
+        let trs = Trsapp.solve(&self.model, self.delta, &());
         let d = trs.d;
         let dnorm = norm(&d);
         let crvmin = trs.crvmin;
@@ -602,7 +605,7 @@ fn apply_move_update<F: Scalar>(
 
     // t* = argmax_t w_t |σ_t| over T (eq. 7.4). T excludes kopt when the step
     // does not strictly improve, to keep the best point (eq. 7.2 preamble).
-    let mut chosen: Option<(usize, super::update::UpdateScalars<F>, F)> = None;
+    let mut chosen: Option<(usize, crate::solver::powell::update::UpdateScalars<F>, F)> = None;
     for t in 0..m {
         if f_new >= f_opt && t == kopt {
             continue;
@@ -778,7 +781,7 @@ mod tests {
     /// fired (a positive `QINT_ADOPTIONS` delta).
     #[test]
     fn vardim_8d() {
-        use crate::solver::newuoa::update::QINT_ADOPTIONS;
+        use crate::solver::powell::update::QINT_ADOPTIONS;
         use std::sync::atomic::Ordering;
 
         let n = 8;

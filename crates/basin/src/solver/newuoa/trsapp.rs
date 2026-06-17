@@ -19,36 +19,33 @@
 //! by [`QuadraticModel::hessian_matvec`] (eq. 5.3), so no `n × n` matrix is ever
 //! materialized.
 
-use super::model::QuadraticModel;
 use crate::core::math::Scalar;
+use crate::solver::powell::{QuadraticModel, TrustRegionStep, TrustRegionSubproblem};
 
-/// Result of one TRSAPP solve (Powell 2006, §5).
-pub(crate) struct TrsappResult<F = f64> {
-    /// The step `d`, length `n`, expressed **relative to `x_opt`**. The driver
-    /// maps it to absolute coordinates as `x_opt + d = x0 + (xⱼ − x0) + d` with
-    /// `j = kopt`.
-    pub(crate) d: Vec<F>,
-    /// CRVMIN — the least curvature `sᵢᵀ∇²Q sᵢ / ‖sᵢ‖²` seen on the *interior*
-    /// CG path (eq. 5.14), or `0` if the path ever reached the trust-region
-    /// boundary. The driver's "Box 14" ρ-reduction test reads this.
-    pub(crate) crvmin: F,
-    /// The predicted reduction `Q(x_opt) − Q(x_opt + d) ≥ 0`, accumulated from
-    /// the per-segment decreases (eq. 5.8). The driver's RATIO accept/reject
-    /// test divides the actual reduction by this.
-    pub(crate) predicted_reduction: F,
+/// TRSAPP: NEWUOA's unconstrained trust-region subproblem strategy (Powell
+/// 2006, §5). The unit value carries no state; the model is borrowed per solve.
+pub(crate) struct Trsapp;
+
+impl<F: Scalar> TrustRegionSubproblem<F> for Trsapp {
+    /// TRSAPP is unconstrained — the trust ball is its only feasible region.
+    type Region = ();
+
+    fn solve(&self, model: &QuadraticModel<F>, delta: F, _region: &()) -> TrustRegionStep<F> {
+        model.trust_region_step(delta)
+    }
 }
 
 impl<F: Scalar> QuadraticModel<F> {
     /// Approximately minimize `Q(x_opt + d)` over `‖d‖ ≤ delta` by truncated
     /// conjugate gradients (Powell 2006, §5: subroutine TRSAPP).
     ///
-    /// Returns the step `d` (relative to `x_opt`), [`CRVMIN`](TrsappResult::crvmin),
-    /// and the [predicted reduction](TrsappResult::predicted_reduction).
+    /// Returns the step `d` (relative to `x_opt`), [`CRVMIN`](TrustRegionStep::crvmin),
+    /// and the [predicted reduction](TrustRegionStep::predicted_reduction).
     ///
     /// # Panics
     ///
     /// Panics unless `delta > 0`.
-    pub(crate) fn trust_region_step(&self, delta: F) -> TrsappResult<F> {
+    pub(crate) fn trust_region_step(&self, delta: F) -> TrustRegionStep<F> {
         assert!(
             delta > F::zero(),
             "trust_region_step: delta must be positive"
@@ -83,7 +80,7 @@ impl<F: Scalar> QuadraticModel<F> {
         // Stationary point of Q at x_opt: nothing to do (eq. 5.5, j = 1 with a
         // zero initial gradient truncates the path at its start).
         if gnorm0_sq <= F::zero() {
-            return TrsappResult {
+            return TrustRegionStep {
                 d,
                 crvmin,
                 predicted_reduction,
@@ -165,7 +162,7 @@ impl<F: Scalar> QuadraticModel<F> {
             // or this segment's decrease small relative to the total so far.
             let new_gnorm_sq = dot(&g, &g);
             if new_gnorm_sq <= tol_gsq || seg_drop <= tol * predicted_reduction {
-                return TrsappResult {
+                return TrustRegionStep {
                     d,
                     crvmin,
                     predicted_reduction,
@@ -178,7 +175,7 @@ impl<F: Scalar> QuadraticModel<F> {
 
         if !hit_boundary {
             // Fell out via the j = n cap while still interior.
-            return TrsappResult {
+            return TrustRegionStep {
                 d,
                 crvmin,
                 predicted_reduction,
@@ -278,7 +275,7 @@ impl<F: Scalar> QuadraticModel<F> {
             }
         }
 
-        TrsappResult {
+        TrustRegionStep {
             d,
             crvmin,
             predicted_reduction,

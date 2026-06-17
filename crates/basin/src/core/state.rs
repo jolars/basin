@@ -18,6 +18,8 @@
 //! pipeline composes at `F = f32`, and the *Provisional choices* section of
 //! `CONTRIBUTING.md`.
 
+/// BOBYQA solver state (`BobyqaState`).
+pub mod bobyqa;
 /// CMA-ES distribution state (`CmaEsState`).
 pub mod cma_es;
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
@@ -31,6 +33,7 @@ pub mod scalar;
 /// One-dimensional gradient-carrying solver state (`ScalarGradientState`).
 pub mod scalar_gradient;
 
+pub use bobyqa::BobyqaState;
 pub use cma_es::CmaEsState;
 pub use lbfgs::LbfgsState;
 pub use newuoa::NewuoaState;
@@ -335,6 +338,17 @@ pub trait PopulationState: State {
     /// Costs in parallel with [`candidates`](Self::candidates), sorted
     /// ascending.
     fn costs(&self) -> &[Self::Float];
+}
+
+/// State that carries a trust-region radius `ρ`, the minimum shape the
+/// [`RhoTolerance`](crate::core::termination::RhoTolerance) criterion binds on
+/// (tenet 3). Implemented by the Powell-family DFO states
+/// ([`NewuoaState`], [`BobyqaState`]); their `ρ` shrinks from `ρ_beg` toward
+/// `ρ_end` on Powell's schedule, and the criterion fires once it reaches the
+/// configured floor.
+pub trait RhoState: State {
+    /// The current trust-region radius `ρ`.
+    fn rho(&self) -> Self::Float;
 }
 
 /// Default state for single-iterate solvers (gradient descent,

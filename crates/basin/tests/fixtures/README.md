@@ -118,8 +118,9 @@ PRIMA's Fortran, so per-eval trajectory parity is not expected past init):
    `{x0, x0 ± ρ_beg eₖ}` (§3), compared as a set (PRIMA emits all `+` then all
    `−`; basin interleaves).
 3. **Final output** — basin converges (ρ reached) to the same minimizer: `f` to
-   `1e-6` relative, `x` to `1e-4` in `‖·‖∞`, `nf` within a 25% same-ballpark
-   margin (not exact).
+   `1e-6·(1 + |f*|)` (absolute `~1e-6` when the optimum is near zero, relative
+   otherwise), `x` to `1e-4` in `‖·‖∞`, `nf` within a 25% same-ballpark margin
+   (not exact).
 
 ## Regenerating
 
@@ -155,3 +156,88 @@ gfortran -O2 -o /tmp/newuoa_gen /tmp/newuoa_gen.o \
 `tools/prima/build/` is build output (not committed). The objective functions in
 `newuoa_prima_driver.c` and in `parity.rs` must stay textually mirrored; the
 tier-1 check enforces it.
+
+# BOBYQA parity fixtures
+
+`bobyqa_<problem>_<n>d.tsv` are reference runs of **PRIMA's** BOBYQA, the
+bound-constrained sibling of NEWUOA (same vendored submodule, v0.7.2), used by
+`crates/basin/src/solver/bobyqa/parity.rs` to cross-validate basin's BOBYQA
+port. Unlike NEWUOA, BOBYQA has a public `Bobyqa` solver, so the parity test
+drives the public `Executor` surface (recording the eval trace through a
+problem wrapper) rather than a `pub(crate)` `minimize`; it still lives in-crate
+to sit beside `newuoa/parity.rs` and read these files via `include_str!`.
+
+Committed fixtures (`problem`, `n`, box, start `x0`, `rho_beg`):
+
+- `bobyqa_rosenbrock_2d.tsv` — Rosenbrock 2D (basin form), box `[-5,5]²`,
+  `x0=(-1.2, 1)`, `rho_beg=0.5`. Interior minimizer `(1,1)` with ≥ `2·rho_beg`
+  slack on every coordinate, so bounds never bind and the initial design is the
+  plain coordinate cross — confirms boxing doesn't perturb the unconstrained
+  trajectory.
+- `bobyqa_sphere_2d.tsv` — shifted sphere `Σ (xᵢ−3)²`, box `[-2,2]²`,
+  `x0=(0,0)`, `rho_beg=0.5`. The unconstrained minimizer `(3,3)` lies *outside*
+  the box, so the solution is the active corner `(2,2)` — exercises the TRSBOX
+  active-set path and bound-aware ALTMOV.
+- `bobyqa_chrosen_5d.tsv` — chained Rosenbrock 5D, wide box `[-10,10]⁵`,
+  `x0=(-1,…)`, `rho_beg=0.5`. Interior minimizer, bounds never bind; a
+  dimensional-scaling check.
+
+All use `rho_end=1e-6`, `npt=2n+1`, `maxfun=500n`. Problems are chosen so PRIMA
+and basin reach the *same* minimizer (see the NEWUOA chrosen_5d note above for
+the multi-basin caveat that informs this choice). The locked inputs — now
+including the box — live in the fixture itself (`# config` / `# x0` / `# xl` /
+`# xu`), so the test recomputes nothing.
+
+## Format
+
+As NEWUOA's, plus two metadata lines recording the box (BOBYQA is
+bound-constrained):
+
+```
+# config problem=<p> n=<n> rho_beg=<..> rho_end=<..> maxfun=<..> npt=<..>
+# x0 <x0_0> ... <x0_{n-1}>
+# xl <xl_0> ... <xl_{n-1}>
+# xu <xu_0> ... <xu_{n-1}>
+<evalindex> <f> <x_0> ... <x_{n-1}>     # one per call, PRIMA's eval order
+...
+# final nf=<nf> rc=<rc> f=<f> x= <x_0> ... <x_{n-1}>
+```
+
+## What the test asserts
+
+The same three tiers as NEWUOA, with one BOBYQA adaptation in tier 2:
+
+1. **Objective equivalence** — the Rust objective recomputed at every traced
+   point matches the fixture `f` to `1e-12` relative.
+2. **Initial design** — basin's first `npt` samples equal PRIMA's first `npt`
+   samples *as a set* (within `1e-12`). BOBYQA's initial design is bound-aware,
+   so this compares against the fixture rather than reconstructing the
+   coordinate cross analytically (PRIMA emits all `+` then all `−`; basin
+   interleaves).
+3. **Final output** — basin converges (`SolverConverged`, ρ reached) to the
+   same minimizer: `f` to `1e-6·(1 + |f*|)` (absolute `~1e-6` near a zero
+   optimum, relative otherwise), `x` to `1e-4` in `‖·‖∞`, `nf` within a 25%
+   same-ballpark margin.
+
+## Regenerating
+
+Same recipe as NEWUOA — build `libprima` once (step 1 above), then compile,
+link, and run `bobyqa_prima_driver.c`:
+
+```bash
+# Compile + link the BOBYQA generator (reuses the libprima build from above).
+gcc -std=c99 -O2 -ffp-contract=off -DPRIMAC_STATIC \
+    -I tools/prima/c/include \
+    -c crates/basin/tests/fixtures/bobyqa_prima_driver.c -o /tmp/bobyqa_gen.o
+gfortran -O2 -o /tmp/bobyqa_gen /tmp/bobyqa_gen.o \
+    tools/prima/build/c/libprimac.a tools/prima/build/fortran/libprimaf.a -lm
+
+# Regenerate each fixture (run from crates/basin/tests/fixtures/).
+/tmp/bobyqa_gen rosenbrock 2 > bobyqa_rosenbrock_2d.tsv
+/tmp/bobyqa_gen sphere     2 > bobyqa_sphere_2d.tsv
+/tmp/bobyqa_gen chrosen    5 > bobyqa_chrosen_5d.tsv
+```
+
+As with NEWUOA, CI never rebuilds these; the committed `.tsv` files are the
+artifacts, and the objective fns in `bobyqa_prima_driver.c` and `parity.rs`
+must stay textually mirrored (the tier-1 check enforces it).

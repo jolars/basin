@@ -1,6 +1,7 @@
 //! The [`QuadraticModel`] struct and its read surface (model evaluation, the
-//! implicit-Hessian matvec, accessors). Initialization lives in
-//! [`super::init`]; the least-Frobenius-norm update in [`super::update`].
+//! implicit-Hessian matvec, accessors). Initialization is solver-specific (each
+//! solver places its own interpolation set); the least-Frobenius-norm update is
+//! in [`super::update`].
 
 use crate::core::math::{DenseMatrix, Scalar};
 

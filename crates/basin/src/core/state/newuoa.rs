@@ -23,7 +23,7 @@
 
 use crate::core::math::Scalar;
 use crate::core::problem::EvalCounts;
-use crate::core::state::{CountsMirror, State};
+use crate::core::state::{CountsMirror, RhoState, State};
 
 /// Solver state for [`Newuoa`](crate::solver::Newuoa).
 ///
@@ -149,6 +149,12 @@ impl<V: Clone, F: Scalar> State for NewuoaState<V, F> {
         self.best_cost = F::infinity();
         self.best_iter = 0;
         self.best_cost_evals = 0;
+    }
+}
+
+impl<V: Clone, F: Scalar> RhoState for NewuoaState<V, F> {
+    fn rho(&self) -> F {
+        self.rho
     }
 }
 

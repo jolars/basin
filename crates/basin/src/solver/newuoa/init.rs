@@ -10,7 +10,7 @@
 
 use crate::core::math::{DenseMatrix, Scalar};
 
-use super::model::QuadraticModel;
+use crate::solver::powell::QuadraticModel;
 
 impl<F: Scalar> QuadraticModel<F> {
     /// Build the initial model from the coordinate-offset sample set (Powell
@@ -203,7 +203,7 @@ impl<F: Scalar> QuadraticModel<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::solver::newuoa::kkt::assert_h_matches_inverse;
+    use crate::solver::powell::kkt::assert_h_matches_inverse;
 
     /// T1: n=1, m=3 (=2n+1). An exact 1-D quadratic `F = a + b·x + ½c·x²` must
     /// be recovered: `∇Q(x0) = b + c·x0`, `Γ = [c]`, `γ ≡ 0`, and

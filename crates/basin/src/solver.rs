@@ -51,6 +51,11 @@ pub mod nelder_mead;
 /// NEWUOA (Powell 2006) — model-based derivative-free trust-region solver
 /// (quadratic surrogate + least-Frobenius-norm update).
 pub mod newuoa;
+/// Shared core of the Powell-family DFO solvers (NEWUOA, BOBYQA, …): the
+/// least-Frobenius-norm [`QuadraticModel`](powell::QuadraticModel), its `H`
+/// update and origin shift, and the swappable
+/// [`TrustRegionSubproblem`](powell::TrustRegionSubproblem) seam.
+pub(crate) mod powell;
 /// Projected gradient descent for box-constrained problems.
 pub mod projected_gradient_descent;
 /// Elitist (1+λ) random search over a feasible box.
@@ -67,9 +72,14 @@ pub mod trf;
 /// faer).
 pub mod bfgs;
 
+/// BOBYQA (Powell 2009) — bound-constrained model-based derivative-free
+/// trust-region solver (shared Powell core + TRSBOX + ALTMOV + RESCUE).
+pub mod bobyqa;
+
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
 pub use bfgs::Bfgs;
+pub use bobyqa::Bobyqa;
 pub use bounded_cma_es::BoundedCmaEs;
 pub use bounded_cma_inject::BoundedCmaInject;
 pub use brent::Brent;
