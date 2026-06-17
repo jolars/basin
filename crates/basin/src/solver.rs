@@ -48,6 +48,9 @@ pub mod levenberg_marquardt;
 pub mod ma_ls_ch_cma;
 /// Nelder-Mead derivative-free simplex solver.
 pub mod nelder_mead;
+/// NEWUOA (Powell 2006) — model-based derivative-free trust-region solver
+/// (quadratic surrogate + least-Frobenius-norm update).
+pub mod newuoa;
 /// Projected gradient descent for box-constrained problems.
 pub mod projected_gradient_descent;
 /// Elitist (1+λ) random search over a feasible box.
@@ -81,6 +84,7 @@ pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;
 pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
+pub use newuoa::Newuoa;
 pub use projected_gradient_descent::ProjectedGradientDescent;
 pub use random_search::RandomSearch;
 pub use sgd::Sgd;

@@ -7,7 +7,7 @@ use web_time::{Duration, Instant};
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorLen};
-use crate::core::state::{CmaEsState, GradientState, SimplexState, State};
+use crate::core::state::{CmaEsState, GradientState, NewuoaState, SimplexState, State};
 
 /// Why the executor stopped. Returned on
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
@@ -51,6 +51,8 @@ pub enum TerminationReason {
     /// CMA-ES search distribution collapsed below TolX:
     /// `σ · maxᵢ dᵢ < tol_x` (Hansen 2016 Appendix B.3).
     CmaEsTolerance,
+    /// NEWUOA trust-region radius reached the configured floor: `ρ ≤ rho_end`.
+    RhoTolerance,
     /// Wall-clock time limit reached.
     MaxTime,
     /// Solver determined it has converged (e.g. fixed point reached).
@@ -647,6 +649,35 @@ where
     fn check(&mut self, state: &CmaEsState<V, M, F>) -> Option<TerminationReason> {
         (state.sigma() * state.max_axis_std() < self.tol_x)
             .then_some(TerminationReason::CmaEsTolerance)
+    }
+}
+
+/// Stop NEWUOA once its trust-region radius `ρ` shrinks to `rho_end`.
+///
+/// Binds on the concrete [`NewuoaState`]. This is NEWUOA's natural convergence
+/// test; [`Newuoa`](crate::solver::Newuoa) already self-terminates when `ρ`
+/// reaches the `ρ_end` it was configured with (it drives the eq-7.6 schedule),
+/// so this criterion is mainly useful to stop **early** at a coarser `ρ` than
+/// the configured floor — e.g. a quick low-accuracy solve. The threshold should
+/// satisfy `rho_end ≥` the solver's configured `ρ_end` to fire first.
+pub struct RhoTolerance<F = f64> {
+    rho_end: F,
+}
+
+impl<F> RhoTolerance<F> {
+    /// New criterion firing at `ρ ≤ rho_end`.
+    pub fn new(rho_end: F) -> Self {
+        Self { rho_end }
+    }
+}
+
+impl<V, F> TerminationCriterion<NewuoaState<V, F>> for RhoTolerance<F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    fn check(&mut self, state: &NewuoaState<V, F>) -> Option<TerminationReason> {
+        (state.rho() <= self.rho_end).then_some(TerminationReason::RhoTolerance)
     }
 }
 

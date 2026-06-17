@@ -126,6 +126,43 @@ impl<F: Scalar> DenseMatrix<F> {
         );
         self.data[i * self.cols + j]
     }
+
+    /// Write entry `A[i, j] = value`.
+    ///
+    /// Companion to [`get`](Self::get) for the in-place, element-level fills the
+    /// NEWUOA model core performs on its small dense matrices (the `from_fn` /
+    /// `get`-only API can't express a single-entry write).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i >= nrows()` or `j >= ncols()`.
+    pub(crate) fn set(&mut self, i: usize, j: usize, value: F) {
+        assert!(
+            i < self.rows && j < self.cols,
+            "DenseMatrix::set: index ({i}, {j}) out of bounds for a {}×{} matrix",
+            self.rows,
+            self.cols
+        );
+        self.data[i * self.cols + j] = value;
+    }
+
+    /// Shared view of row `i` as a contiguous `&[F]` of length `ncols()`.
+    ///
+    /// Row-major storage makes a row a contiguous slice; the NEWUOA model core
+    /// reads interpolation-point displacements (rows of `xpt`) this way.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i >= nrows()`.
+    pub(crate) fn row(&self, i: usize) -> &[F] {
+        assert!(
+            i < self.rows,
+            "DenseMatrix::row: row {i} out of bounds for a {}×{} matrix",
+            self.rows,
+            self.cols
+        );
+        &self.data[i * self.cols..(i + 1) * self.cols]
+    }
 }
 
 impl<F: Scalar> MatVec<Vec<F>> for DenseMatrix<F> {
@@ -349,6 +386,37 @@ mod tests {
         assert_eq!(a.ncols(), 3);
         assert_eq!(a.get(0, 2), 3.0);
         assert_eq!(a.get(1, 0), 4.0);
+    }
+
+    #[test]
+    fn set_writes_single_entry() {
+        let mut a = fixture();
+        a.set(1, 2, 60.0);
+        assert_eq!(a.get(1, 2), 60.0);
+        // Neighbors untouched.
+        assert_eq!(a.get(1, 1), 5.0);
+        assert_eq!(a.get(0, 2), 3.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "DenseMatrix::set")]
+    fn set_rejects_out_of_bounds() {
+        let mut a = fixture(); // 2×3
+        a.set(2, 0, 1.0);
+    }
+
+    #[test]
+    fn row_exposes_contiguous_row() {
+        let a = fixture();
+        assert_eq!(a.row(0), &[1.0, 2.0, 3.0]);
+        assert_eq!(a.row(1), &[4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "DenseMatrix::row")]
+    fn row_rejects_out_of_bounds() {
+        let a = fixture(); // 2 rows
+        let _ = a.row(2);
     }
 
     #[test]

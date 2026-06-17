@@ -145,14 +145,14 @@ pub use crate::core::state::FaerQuasiNewtonState;
 pub use crate::core::state::NalgebraQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, CmaEsState, CountsMirror, GradientState,
-    IntoInitialSimplex, LbfgsState, NllsState, PopulationState, ScalarGradientState, ScalarState,
-    SimplexState, State,
+    IntoInitialSimplex, LbfgsState, NewuoaState, NllsState, PopulationState, ScalarGradientState,
+    ScalarState, SimplexState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
     CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter,
     MaxTime, NoImprovement, ParamTolerance, ProjectedGradientTolerance, RelativeCostTolerance,
-    RelativeGradientTolerance, RelativeParamTolerance, SimplexTolerance, TargetCost,
+    RelativeGradientTolerance, RelativeParamTolerance, RhoTolerance, SimplexTolerance, TargetCost,
     TerminationCriterion, TerminationReason,
 };
 pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
@@ -161,6 +161,6 @@ pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, BoundedCmaEs, BoundedCmaInject, Brent,
     BrentDerivative, ClosureInner, CmaEs, CmaInject, De, DeInject, GaussNewton, GoldenSection,
-    GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState, MemeticInner, NelderMead,
+    GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState, MemeticInner, NelderMead, Newuoa,
     ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
 };

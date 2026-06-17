@@ -22,6 +22,8 @@
 pub mod cma_es;
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
+/// NEWUOA solver state (`NewuoaState`).
+pub mod newuoa;
 /// Nonlinear least-squares state (`NllsState`).
 pub mod nlls;
 /// One-dimensional solver state (`ScalarState`).
@@ -31,6 +33,7 @@ pub mod scalar_gradient;
 
 pub use cma_es::CmaEsState;
 pub use lbfgs::LbfgsState;
+pub use newuoa::NewuoaState;
 pub use nlls::NllsState;
 pub use scalar::ScalarState;
 pub use scalar_gradient::ScalarGradientState;
