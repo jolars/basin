@@ -241,3 +241,30 @@ gfortran -O2 -o /tmp/bobyqa_gen /tmp/bobyqa_gen.o \
 As with NEWUOA, CI never rebuilds these; the committed `.tsv` files are the
 artifacts, and the objective fns in `bobyqa_prima_driver.c` and `parity.rs`
 must stay textually mirrored (the tier-1 check enforces it).
+
+## LINCOA fixtures
+
+Same recipe — build `libprima` once (step 1 above), then compile, link, and run
+`lincoa_prima_driver.c`. The problems are linear-inequality-constrained only
+(`xl`/`xu` passed as `±INFINITY`, no equalities), so PRIMA's folded constraint
+system equals the explicit `A x ≤ b` that basin's `Lincoa` folds.
+
+```bash
+# Compile + link the LINCOA generator (reuses the libprima build from above).
+gcc -std=c99 -O2 -ffp-contract=off -DPRIMAC_STATIC \
+    -I tools/prima/c/include \
+    -c crates/basin/tests/fixtures/lincoa_prima_driver.c -o /tmp/lincoa_gen.o
+gfortran -O2 -o /tmp/lincoa_gen /tmp/lincoa_gen.o \
+    tools/prima/build/c/libprimac.a tools/prima/build/fortran/libprimaf.a -lm
+
+# Regenerate each fixture (run from crates/basin/tests/fixtures/).
+/tmp/lincoa_gen proj2   > lincoa_proj2_2d.tsv     # (x0-2)²+(x1-2)² s.t. x0+x1≤2
+/tmp/lincoa_gen crosen2 > lincoa_crosen2_2d.tsv   # 2D Rosenbrock s.t. x0≤0.5
+/tmp/lincoa_gen cquad3  > lincoa_cquad3_3d.tsv    # Σ(xᵢ-2)² s.t. x0+x1+x2≤3
+```
+
+The fixture carries the `A x ≤ b` system (`# aineq` / `# bineq`) and the final
+`cstrv`; `solver/lincoa/parity.rs` rebuilds the same problem, recomputes the
+objective at every traced point (tier 1), and asserts the converged `x`/`f`,
+feasibility, and `nf` against PRIMA. The objective + constraint definitions in
+`lincoa_prima_driver.c` and `parity.rs` must stay textually mirrored.

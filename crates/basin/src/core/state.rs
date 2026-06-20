@@ -24,6 +24,8 @@ pub mod bobyqa;
 pub mod cma_es;
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
+/// LINCOA solver state (`LincoaState`).
+pub mod lincoa;
 /// NEWUOA solver state (`NewuoaState`).
 pub mod newuoa;
 /// Nonlinear least-squares state (`NllsState`).
@@ -36,6 +38,7 @@ pub mod scalar_gradient;
 pub use bobyqa::BobyqaState;
 pub use cma_es::CmaEsState;
 pub use lbfgs::LbfgsState;
+pub use lincoa::LincoaState;
 pub use newuoa::NewuoaState;
 pub use nlls::NllsState;
 pub use scalar::ScalarState;

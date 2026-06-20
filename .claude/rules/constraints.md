@@ -70,7 +70,7 @@ and the whole adapter model collapses. (Contrast `FiniteDiff`, which *adds* a
 capability and therefore *forwards* `BoxConstraints`.) Load-bearing and
 non-obvious; preserve it deliberately.
 
-## No `Constraint` supertrait until ≥2 fundamentally different solvers share more than `a()`/`b()`
+## No `Constraint` *parent* supertrait over the three sibling kinds
 
 Three constraint kinds have landed and *keep confirming* the wait rather than
 ending it. Each keeps feasibility by a different mechanism: box by *projection*
@@ -80,10 +80,33 @@ but to assemble `∇L_ρ`, not a barrier). The two linear families share the sam
 *carrier ops* but no *feasibility* operation, and their data accessors
 (`a()`/`b()`) are the only common surface — so `BoxConstraints`,
 `LinearInequalityConstraints`, and `LinearEqualityConstraints` stay sibling
-traits with no supertrait. A shared abstraction waits for a kind (nonlinear)
-that genuinely shares a feasibility-check or projection op. One-member (or
-no-shared-op multi-member) hierarchies are overhead with no value; designing on
-paper without a solver to validate against tends to need redoing.
+traits with **no common parent**. A shared *parent* abstraction waits for a kind
+(nonlinear) that genuinely shares a feasibility-check or projection op.
+One-member (or no-shared-op multi-member) hierarchies are overhead with no
+value; designing on paper without a solver to validate against tends to need
+redoing.
+
+### `LinearConstraints` is an aggregator, not that parent
+
+`LinearConstraints` (the binding of `Lincoa`, `src/solver/lincoa.rs`) is a
+*separate* trait, not the forbidden parent. LINCOA is the first solver to consume
+**more than one kind at once** — box bounds + linear equalities + linear
+inequalities together (PRIMA's `get_lincon` form). It folds all of them into a
+**single** `A x ≤ b` system handled by **one** active-set feasibility mechanism
+(`trstep`/`getact`), so for LINCOA there is exactly one feasibility op, and the
+three kinds are just data to fold (`fold_constraints` in `lincoa/init.rs`).
+
+`LinearConstraints` exposes optional `inequalities()` / `equalities()` /
+`lower()` / `upper()` accessors (all defaulting to `None`); a problem implements
+only the blocks it has. It is **standalone**: not a supertrait of the three
+siblings, and deliberately **no blanket impl** bridges from them — a blanket
+`impl<P: LinearInequalityConstraints> LinearConstraints for P` could only forward
+the inequality block, silently dropping any box/equality data the problem also
+carries, and would block a manual impl by coherence. The siblings remain the
+right surface for their *single-kind* consumers (barrier on
+`LinearInequalityConstraints`, augmented-Lagrangian on
+`LinearEqualityConstraints`). So the "no parent over the siblings" rule above
+still stands; LINCOA validated an aggregator, not a hierarchy.
 
 ## Constraints live on the problem, never on state
 

@@ -2,7 +2,8 @@
 //!
 //! The framework lives in [`core`]: problem traits the user implements
 //! ([`CostFunction`], [`Gradient`], [`BoxConstraints`],
-//! [`LinearInequalityConstraints`], [`LinearEqualityConstraints`]), state shapes
+//! [`LinearInequalityConstraints`], [`LinearEqualityConstraints`],
+//! [`LinearConstraints`]), state shapes
 //! solvers iterate over ([`State`], [`GradientState`], [`SimplexState`]),
 //! the [`Solver`] trait, a pluggable termination layer
 //! ([`TerminationCriterion`]), and a read-only observer layer
@@ -118,7 +119,7 @@ pub mod solver;
 pub use crate::core::augmented_lagrangian::AugmentedLagrangian;
 pub use crate::core::barrier::LogBarrier;
 pub use crate::core::constraint::{
-    BoxConstraints, LinearEqualityConstraints, LinearInequalityConstraints,
+    BoxConstraints, LinearConstraints, LinearEqualityConstraints, LinearInequalityConstraints,
 };
 pub use crate::core::executor::{Executor, OptimizationResult, StepOutcome, Stepper, run_loop};
 pub use crate::core::inner::{InnerExecutor, WarmStart};
@@ -145,8 +146,8 @@ pub use crate::core::state::FaerQuasiNewtonState;
 pub use crate::core::state::NalgebraQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, BobyqaState, CmaEsState, CountsMirror,
-    GradientState, IntoInitialSimplex, LbfgsState, NewuoaState, NllsState, PopulationState,
-    RhoState, ScalarGradientState, ScalarState, SimplexState, State,
+    GradientState, IntoInitialSimplex, LbfgsState, LincoaState, NewuoaState, NllsState,
+    PopulationState, RhoState, ScalarGradientState, ScalarState, SimplexState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
@@ -161,6 +162,6 @@ pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent,
     BrentDerivative, ClosureInner, CmaEs, CmaInject, De, DeInject, GaussNewton, GoldenSection,
-    GradientDescent, LevenbergMarquardt, MaLsChCma, MaLsChState, MemeticInner, NelderMead, Newuoa,
-    ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
+    GradientDescent, LevenbergMarquardt, Lincoa, MaLsChCma, MaLsChState, MemeticInner, NelderMead,
+    Newuoa, ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
 };

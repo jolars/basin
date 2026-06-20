@@ -76,6 +76,10 @@ pub mod bfgs;
 /// trust-region solver (shared Powell core + TRSBOX + ALTMOV + RESCUE).
 pub mod bobyqa;
 
+/// LINCOA (Powell 2015) — linearly-constrained model-based derivative-free
+/// trust-region solver (shared Powell core + TRSTEP projected-CG + GETACT).
+pub mod lincoa;
+
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
 pub use bfgs::Bfgs;
@@ -92,6 +96,7 @@ pub use gauss_newton::GaussNewton;
 pub use golden_section::GoldenSection;
 pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;
+pub use lincoa::Lincoa;
 pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
 pub use newuoa::Newuoa;

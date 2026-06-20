@@ -44,6 +44,13 @@ trailing note cites the paper it implements (or the source it ports).
   step (ALTMOV), plus the RESCUE restoration procedure. Needs a `CostFunction`
   and `BoxConstraints`. Implements Powell (2009), cross-validated against
   PRIMA v0.7.2.
+- **[`Lincoa`](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)**
+  — the linearly-constrained sibling of `Newuoa`: the same least-Frobenius-norm
+  quadratic model, with a projected truncated-CG trust-region step (TRSTEP) and
+  active-set QR (GETACT) that keep every iterate feasible under `A x ≤ b`. Needs
+  a `CostFunction` and `LinearConstraints` (the general linear form: box bounds,
+  equalities, and inequalities, all folded into `A x ≤ b`). Implements Powell
+  (2015), ported from PRIMA v0.7.2.
 - **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)** —
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in _Numerical Recipes_ §10.2); also used inside line searches.
@@ -159,6 +166,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `NelderMead` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Newuoa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Bobyqa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
+| `Lincoa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Brent` | Derivative-free | — | — | — | — |
 | `GoldenSection` | Derivative-free | — | — | — | — |
 | `BrentDerivative` | First-order | — | — | — | — |

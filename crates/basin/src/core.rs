@@ -15,8 +15,11 @@
 //!   [`Hessian`](problem::Hessian) to a problem that only exposes
 //!   function values.
 //! - [`constraint`] — constraint markers carried on the problem (tenet 4
-//!   in `CONTRIBUTING.md`): [`BoxConstraints`](constraint::BoxConstraints) and
-//!   [`LinearInequalityConstraints`](constraint::LinearInequalityConstraints).
+//!   in `CONTRIBUTING.md`): [`BoxConstraints`](constraint::BoxConstraints),
+//!   [`LinearInequalityConstraints`](constraint::LinearInequalityConstraints),
+//!   [`LinearEqualityConstraints`](constraint::LinearEqualityConstraints), and
+//!   the general-form [`LinearConstraints`](constraint::LinearConstraints)
+//!   aggregator consumed by LINCOA.
 //! - [`barrier`] — the [`LogBarrier`](barrier::LogBarrier) adapter that
 //!   rewrites a linearly-constrained problem as the unconstrained
 //!   log-barrier objective consumed by the
