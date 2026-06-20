@@ -180,6 +180,26 @@ impl<F: Scalar> QuadraticModel<F> {
         (0..self.n).map(|i| galt0[i] + hd[i]).collect()
     }
 
+    /// The §8 alternative model's *change* `Q_int(x_opt + d) − Q_int(x_opt)`.
+    ///
+    /// LINCOA's `tryqalt` compares the alternative model's prediction error
+    /// against the current model's (PRIMA `quadinc(d, xpt, galt, pqalt)`), unlike
+    /// NEWUOA/BOBYQA which compare gradients. `Q_int` carries no explicit `Γ`
+    /// part, so its Hessian is the rank-one sum keyed by `γ_alt = Ω·r` (with
+    /// `rᵢ = F(xᵢ) − F(x_opt)`, [`alt_rhs`](Self::alt_rhs)); its gradient at
+    /// `x_opt` is `Ξ·r + ∇²Q_int·(x_opt − x0)`.
+    pub(crate) fn alt_model_change(&self, d: &[F]) -> F {
+        let r = self.alt_rhs();
+        let zeros = vec![F::zero(); self.n];
+        let (pqalt, galt0) = self.apply_h(&r, &zeros);
+        let xopt = self.xpt.row(self.kopt).to_vec();
+        let hxopt = self.lagrange_hessian_matvec(&pqalt, &xopt);
+        let gopt: Vec<F> = (0..self.n).map(|i| galt0[i] + hxopt[i]).collect();
+        let hd = self.lagrange_hessian_matvec(&pqalt, d);
+        let half = F::from_f64(0.5).expect("0.5 representable");
+        dot(&gopt, d) + half * dot(d, &hd)
+    }
+
     /// Replace `Q` by the §8 alternative model `Q_int` (Powell 2006, eq. 8.3):
     /// the least-Frobenius-Hessian interpolant of the current function values.
     ///

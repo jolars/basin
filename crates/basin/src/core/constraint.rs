@@ -4,14 +4,24 @@
 //! log-barrier method), and [`LinearEqualityConstraints`] (`A x = b`,
 //! consumed by the augmented-Lagrangian method).
 //!
-//! These are deliberately *sibling* traits, not members of a `Constraint`
-//! supertrait/hierarchy. Per tenet 4, a shared abstraction waits until ≥2
-//! constrained solvers share more than data accessors — and they don't:
-//! the box family keeps feasibility by *projection*, the linear-inequality
-//! family by a *barrier*, and the linear-equality family by a *penalty plus
-//! multipliers* (the augmented Lagrangian). Three feasibility mechanisms,
-//! and the traits share no operation beyond `lower()` / `upper()` resp.
-//! `a()` / `b()`, so a one-member hierarchy would still be pure overhead.
+//! These three are deliberately *sibling* traits, not members of a
+//! `Constraint` supertrait/hierarchy. Per tenet 4, a shared *parent*
+//! abstraction waits until ≥2 constrained solvers share more than data
+//! accessors — and they don't: the box family keeps feasibility by
+//! *projection*, the linear-inequality family by a *barrier*, and the
+//! linear-equality family by a *penalty plus multipliers* (the augmented
+//! Lagrangian). Three feasibility mechanisms, and the traits share no
+//! operation beyond `lower()` / `upper()` resp. `a()` / `b()`, so a
+//! one-member hierarchy would still be pure overhead.
+//!
+//! [`LinearConstraints`] is a different beast: a standalone *aggregator* of
+//! the general linearly-constrained problem (box bounds, linear equalities,
+//! and linear inequalities at once), consumed by [`Lincoa`](crate::Lincoa),
+//! which folds all three kinds into one `A x ≤ b` system handled by one
+//! active-set feasibility mechanism. It is *not* a parent of the three
+//! siblings above — it neither extends them nor is extended by them — so the
+//! "no `Constraint` parent" decision still stands (see
+//! [`LinearConstraints`] and `.claude/rules/constraints.md`).
 
 use crate::core::problem::CostFunction;
 
@@ -155,4 +165,125 @@ pub trait LinearEqualityConstraints: CostFunction {
     fn a(&self) -> &Self::Matrix;
     /// The right-hand side `b ∈ ℝᵐ`.
     fn b(&self) -> &Self::Param;
+}
+
+/// The general linearly-constrained problem: box bounds, linear equalities,
+/// and linear inequalities together.
+///
+/// This is the constraint surface of [`Lincoa`](crate::Lincoa), which
+/// minimizes a smooth objective over the feasible set
+///
+/// ```text
+/// { x ∈ ℝⁿ :  lower ≤ x ≤ upper,   A_eq x = b_eq,   A_ineq x ≤ b_ineq }
+/// ```
+///
+/// using only objective values. Every accessor is **optional** (defaulting to
+/// `None`), so a problem implements only the blocks it actually has — an
+/// inequality-only problem overrides just [`inequalities`](Self::inequalities),
+/// a box-bounded one just [`lower`](Self::lower) / [`upper`](Self::upper), and
+/// so on. LINCOA folds whatever is present into a single unit-normalized
+/// `A x ≤ b` system (bounds as `±eᵢ` rows, an equality `aᵀx = β` as the pair
+/// `aᵀx ≤ β`, `−aᵀx ≤ −β`) and keeps every iterate feasible with one
+/// active-set projection.
+///
+/// # Not a parent of the sibling constraint traits
+///
+/// Despite the family-resembling name, `LinearConstraints` is **standalone**:
+/// it is *not* a supertrait of [`LinearInequalityConstraints`] /
+/// [`LinearEqualityConstraints`] / [`BoxConstraints`], and there are no
+/// blanket impls bridging from them. A problem that wants LINCOA implements
+/// `LinearConstraints` directly. This is deliberate — a blanket
+/// `impl<P: LinearInequalityConstraints> LinearConstraints for P` could only
+/// forward the inequality block, silently dropping any box/equality data the
+/// problem also carries, and would block a manual impl by coherence. Keeping
+/// it standalone makes the full general form expressible. The sibling traits
+/// remain the right surface for their single-kind consumers (the log-barrier
+/// [`BarrierMethod`](crate::solver::BarrierMethod) on
+/// [`LinearInequalityConstraints`], the
+/// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod) on
+/// [`LinearEqualityConstraints`]); see `.claude/rules/constraints.md`.
+///
+/// # Shapes
+///
+/// The iterate lives in `ℝⁿ`. [`lower`](Self::lower) / [`upper`](Self::upper)
+/// share the parameter type and length `n`; non-finite entries mean that
+/// coordinate is unbounded on that side. Each linear block returns its matrix
+/// paired with its right-hand side `b ∈ ℝᵐ` (one entry per row), where `m` is
+/// that block's own row count — `m` need not match `n` or the other block's
+/// row count. The matrix and its `b` are returned **together** as a tuple so
+/// they cannot fall out of sync.
+///
+/// # Matrix type and consumers
+///
+/// Like the sibling traits, this leaves [`Matrix`](Self::Matrix) free of math
+/// bounds; the consumer adds what it needs. LINCOA reads each constraint
+/// normal as `Aᵀ eⱼ`, so it requires `Matrix: MatTransposeVec<Param>` (never a
+/// linear solve), which every backend's matrix type provides (`DenseMatrix`
+/// for `Vec<f64>`, `Array2`, `DMatrix`, `Mat`) — so LINCOA works on all four.
+///
+/// # Examples
+///
+/// A box-bounded problem (no matrix blocks) handed to LINCOA:
+///
+/// ```
+/// use basin::CostFunction;
+/// use basin::core::constraint::LinearConstraints;
+///
+/// struct BoundedSphere { lower: Vec<f64>, upper: Vec<f64> }
+/// impl CostFunction for BoundedSphere {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = std::convert::Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+///         Ok(x.iter().map(|xi| xi * xi).sum())
+///     }
+/// }
+/// impl LinearConstraints for BoundedSphere {
+///     type Matrix = basin::DenseMatrix<f64>; // unused: no equality/inequality blocks
+///     fn lower(&self) -> Option<&Vec<f64>> { Some(&self.lower) }
+///     fn upper(&self) -> Option<&Vec<f64>> { Some(&self.upper) }
+/// }
+///
+/// let p = BoundedSphere { lower: vec![0.5, 0.5], upper: vec![2.0, 2.0] };
+/// assert_eq!(p.lower(), Some(&vec![0.5, 0.5]));
+/// assert!(p.inequalities().is_none());
+/// ```
+pub trait LinearConstraints: CostFunction {
+    /// The constraint-matrix type for the equality / inequality blocks.
+    /// LINCOA bounds it on
+    /// [`MatTransposeVec<Param>`](crate::core::math::MatTransposeVec) (each
+    /// constraint normal is `Aᵀ eⱼ`); never a linear solve.
+    type Matrix;
+
+    /// Linear inequalities `A_ineq x ≤ b_ineq` as `(A_ineq, b_ineq)`, or
+    /// `None` (the default) when the problem has no inequality constraints.
+    fn inequalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
+        None
+    }
+
+    /// Linear equalities `A_eq x = b_eq` as `(A_eq, b_eq)`, or `None` (the
+    /// default) when the problem has no equality constraints.
+    ///
+    /// Each equality folds to the inequality pair `aᵀx ≤ β`, `−aᵀx ≤ −β`. If the
+    /// start point is *not* on the equality (`aᵀx0 ≠ β`), both folded rows are
+    /// relaxed independently to keep `x0` feasible, so the equality is widened to
+    /// the slab between `β` and `aᵀx0` rather than re-projected onto the line
+    /// (Powell's behavior). Start on the equality for it to bind exactly.
+    fn equalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
+        None
+    }
+
+    /// Element-wise lower bound on the iterate (length `n`), or `None` (the
+    /// default) when unbounded below. Non-finite entries leave that coordinate
+    /// unbounded below.
+    fn lower(&self) -> Option<&Self::Param> {
+        None
+    }
+
+    /// Element-wise upper bound on the iterate (length `n`), or `None` (the
+    /// default) when unbounded above. Non-finite entries leave that coordinate
+    /// unbounded above.
+    fn upper(&self) -> Option<&Self::Param> {
+        None
+    }
 }
