@@ -47,6 +47,7 @@ pub mod schaffer;
 pub mod sparse_least_squares;
 pub mod spec;
 pub mod sphere;
+pub mod step;
 pub mod styblinski_tang;
 pub mod three_hump_camel;
 pub mod zero;
@@ -96,6 +97,7 @@ pub use sparse_least_squares::{
 };
 pub use spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
 pub use sphere::{SPHERE_SPEC, Sphere, sphere, sphere_gradient};
+pub use step::{STEP_SPEC, Step, step};
 pub use styblinski_tang::{
     STYBLINSKI_TANG_SPEC, StyblinskiTang, StyblinskiTangBoxed, styblinski_tang,
     styblinski_tang_gradient,
@@ -116,6 +118,7 @@ pub static ALL_SPECS: &[&ProblemSpec] = &[
     &EQUALITY_CONSTRAINED_QUADRATIC_SPEC,
     &MATYAS_SPEC,
     &MCCORMICK_SPEC,
+    &STEP_SPEC,
     &GOLDSTEIN_PRICE_SPEC,
     &POWELL_SINGULAR_SPEC,
     &RASTRIGIN_SPEC,

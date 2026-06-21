@@ -147,15 +147,16 @@ pub use crate::core::state::FaerQuasiNewtonState;
 pub use crate::core::state::NalgebraQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, BobyqaState, CmaEsState, CobylaState,
-    CountsMirror, GradientState, IntoInitialSimplex, LbfgsState, LincoaState, NewuoaState,
-    NllsState, PopulationState, RhoState, ScalarGradientState, ScalarState, SimplexState, State,
+    ConstrainedMadsState, CountsMirror, GradientState, IntoInitialSimplex, LbfgsState, LincoaState,
+    MadsState, MeshState, NewuoaState, NllsState, PopulationState, RhoState, ScalarGradientState,
+    ScalarState, SimplexState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
     CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter,
-    MaxTime, NoImprovement, ParamTolerance, ProjectedGradientTolerance, RelativeCostTolerance,
-    RelativeGradientTolerance, RelativeParamTolerance, RhoTolerance, SimplexTolerance, TargetCost,
-    TerminationCriterion, TerminationReason,
+    MaxTime, MeshTolerance, NoImprovement, ParamTolerance, ProjectedGradientTolerance,
+    RelativeCostTolerance, RelativeGradientTolerance, RelativeParamTolerance, RhoTolerance,
+    SimplexTolerance, TargetCost, TerminationCriterion, TerminationReason,
 };
 pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
 pub use crate::solver::Bfgs;
@@ -163,6 +164,6 @@ pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent,
     BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton,
-    GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsChCma, MaLsChState,
+    GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsChCma, MaLsChState, Mads,
     MemeticInner, NelderMead, Newuoa, ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
 };

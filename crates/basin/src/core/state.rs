@@ -28,6 +28,8 @@ pub mod cobyla;
 pub mod lbfgs;
 /// LINCOA solver state (`LincoaState`).
 pub mod lincoa;
+/// MADS solver state (`MadsState`).
+pub mod mads;
 /// NEWUOA solver state (`NewuoaState`).
 pub mod newuoa;
 /// Nonlinear least-squares state (`NllsState`).
@@ -42,6 +44,7 @@ pub use cma_es::CmaEsState;
 pub use cobyla::CobylaState;
 pub use lbfgs::LbfgsState;
 pub use lincoa::LincoaState;
+pub use mads::{ConstrainedMadsState, MadsState};
 pub use newuoa::NewuoaState;
 pub use nlls::NllsState;
 pub use scalar::ScalarState;
@@ -355,6 +358,20 @@ pub trait PopulationState: State {
 pub trait RhoState: State {
     /// The current trust-region radius `ρ`.
     fn rho(&self) -> Self::Float;
+}
+
+/// State that carries a mesh adaptive direct search **poll size** `Δᵖ` and mesh
+/// index `ℓ`, the minimum shape the
+/// [`MeshTolerance`](crate::core::termination::MeshTolerance) criterion binds on
+/// (tenet 3). Implemented by [`MadsState`]; the poll size shrinks
+/// (≈ halving on unsuccessful iterations) toward a configured floor, and the
+/// criterion fires once it reaches that floor.
+pub trait MeshState: State {
+    /// The current poll size `Δᵖ` (bounds the distance from the incumbent to the
+    /// poll trial points).
+    fn poll_size(&self) -> Self::Float;
+    /// The current mesh index `ℓ` (OrthoMADS eq. (1)).
+    fn mesh_index(&self) -> i32;
 }
 
 /// Default state for single-iterate solvers (gradient descent,
