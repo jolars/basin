@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0](https://github.com/jolars/basin/compare/v1.0.0...v1.1.0) (2026-06-21)
+
+### Features
+- **solvers:** add MADS (OrthoMADS) derivative-free solver ([`fc5b065`](https://github.com/jolars/basin/commit/fc5b065ce37fd6e84b32b190d4258fd45bdf4344))
+- **solvers:** add COBYLA (nonlinear-constrained DFO) ([`115f368`](https://github.com/jolars/basin/commit/115f368800ae3c55976a628c207a93e5384076d4))
+- **solvers:** add LINCOA (linearly-constrained model-based DFO solver) ([`e181ab3`](https://github.com/jolars/basin/commit/e181ab32750ee263781f8b09e5e56ea53efc638c))
+- **solvers:** add BOBYQA bound-constrained model-based DFO (#46) ([`1274ac3`](https://github.com/jolars/basin/commit/1274ac3e177d9f3a59f204e2e6355732439d5c6e))
+- **solvers:** add Powell's NEWUOA derivative-free solver (#44) ([`d81a28e`](https://github.com/jolars/basin/commit/d81a28e392a6bf2fd904238e5142f27cfbe88598))
+
 ## [1.0.0](https://github.com/jolars/basin/compare/v0.12.0...v1.0.0) (2026-06-10)
 
 ### Breaking changes
