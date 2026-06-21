@@ -12,9 +12,9 @@
 //! convergence curve and let the chart show both how fast each library
 //! drives down the objective and how much wall time it spends.
 //!
-//! Cases (all Rosenbrock, `n = 2`, classic start `(−1.2, 1.0)`, matched
-//! configs mirroring `benches/gd_nm.rs`, a fixed `MAX_ITERS` budget with
-//! no early stop on any side):
+//! GD / NM / L-BFGS run on Rosenbrock, `n = 2`, classic start `(−1.2, 1.0)`,
+//! matched configs mirroring `benches/gd_nm.rs`, a fixed `MAX_ITERS` budget
+//! with no early stop on any side:
 //!   * GD     — steepest descent + More-Thuente line search. basin vs argmin.
 //!   * NM     — standard coefficients and a bit-identical initial simplex
 //!     (basin's `IntoInitialSimplex`, relative step 0.05) for basin/argmin;
@@ -25,6 +25,13 @@
 //!     gradient/cost tolerances are zeroed so it runs the full budget.
 //!     gomez has no L-BFGS, so the third comparator is nlopt's `Lbfgs`
 //!     (NLopt's own L-BFGS — limited memory, no line-search knob exposed).
+//!   * NEWUOA — Powell's model-based derivative-free method: the *same*
+//!     algorithm in two implementations, basin vs nlopt's `LN_NEWUOA`. Unlike
+//!     the cases above (different implementations of the same *family*), here
+//!     ρ_beg / ρ_end and `npt = 2n+1` are matched as closely as the two APIs
+//!     allow. Run on Styblinski–Tang at `n = 10` from the origin (higher `n`,
+//!     where the model-based method is more interesting); both sides converge
+//!     on ρ rather than running the fixed iteration budget the others use.
 //!
 //! Timing: the solvers are deterministic, so the cost sequence is identical
 //! every run and only timing jitters. We run `REPS` reps per (case, library)
@@ -51,10 +58,13 @@ use argmin::solver::gradientdescent::SteepestDescent;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use argmin::solver::quasinewton::LBFGS as ArgminLBFGS;
-use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
+use basin::problems::{
+    Rosenbrock, StyblinskiTang, rosenbrock, rosenbrock_gradient, styblinski_tang,
+};
 use basin::{
     BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent, IntoInitialSimplex,
-    LbfgsState, Lbfgsb, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome,
+    LbfgsState, Lbfgsb, MoreThuente, NelderMead, Newuoa, NewuoaState, Solver, State as BasinState,
+    StepOutcome,
 };
 use competitor_bench::{ArgminProblem, GomezProblem};
 use gomez::OptimizerDriver;
@@ -72,25 +82,65 @@ const FLOOR: f64 = 1e-16;
 /// Problem dimension (classic 2-D Rosenbrock).
 const N: usize = 2;
 
+/// Dimension for the NEWUOA-vs-NEWUOA Styblinski–Tang case. Higher `n` than
+/// the Rosenbrock cases, where the model-based DFO method is more interesting.
+const N_ST: usize = 10;
+
+/// Matched trust-region schedule for the NEWUOA case: initial radius ρ_beg
+/// (basin's `with_rho_beg` / nlopt's initial step) and final radius ρ_end
+/// (basin's `with_rho_end` / nlopt's `xtol_abs`).
+const ST_RHO_BEG: f64 = 0.5;
+const ST_RHO_END: f64 = 1e-6;
+/// Safety budget for the NEWUOA case — basin's iteration cap and nlopt's eval
+/// cap (≈ the same on NEWUOA, ~1 eval/iter after the `2n+1` init). Both sides
+/// converge on ρ well before this, so it just bounds a pathological run; the
+/// case does *not* use the fixed `MAX_ITERS` budget the other cases do.
+const ST_BUDGET: u64 = 1000;
+
 /// classic Rosenbrock start.
 fn start() -> Vec<f64> {
     vec![-1.2, 1.0]
+}
+
+/// Styblinski–Tang start: the origin sits in the global well's basin, so both
+/// NEWUOA implementations descend to the global minimum (rather than stalling
+/// in one of the `2ⁿ` local wells), giving an honest convergence-to-`f*` curve.
+fn st_start() -> Vec<f64> {
+    vec![0.0; N_ST]
+}
+
+/// Styblinski–Tang optimum `f*` for dimension `n`. The library's `MINIMIZER`
+/// (`-2.903534`) is only 6-digit accurate — coarser than the solvers' final
+/// accuracy, which would float `f*` above the true minimum and floor the
+/// suboptimality tail dishonestly. Newton-refine the per-coordinate minimizer
+/// (root of `g'(t) = 2t³ − 16t + 2.5`) to machine precision first.
+fn st_fopt(n: usize) -> f64 {
+    let mut t = -2.903534_f64;
+    for _ in 0..8 {
+        let g1 = 2.0 * t * t * t - 16.0 * t + 2.5;
+        let g2 = 6.0 * t * t - 16.0;
+        t -= g1 / g2;
+    }
+    styblinski_tang(&vec![t; n])
 }
 
 // ---------------------------------------------------------------------
 // basin side: step the `Stepper`, timestamping after each iteration.
 // ---------------------------------------------------------------------
 
-/// Run a basin solve to the fixed budget, returning `(elapsed_ns, cost)`
-/// at iter 0 and after every completed iteration.
-fn basin_trace<P, S, So>(exec: Executor<P, S, So>) -> Vec<(u128, f64)>
+/// Run a basin solve to `max_iter`, returning `(elapsed_ns, cost)` at iter 0
+/// and after every completed iteration. `max_iter` is a cap, not a target:
+/// the GD/NM/L-BFGS cases run the full `MAX_ITERS` budget, but NEWUOA stops
+/// earlier on its own ρ-convergence, so it passes a generous cap that only
+/// bounds a pathological run.
+fn basin_trace<P, S, So>(exec: Executor<P, S, So>, max_iter: u64) -> Vec<(u128, f64)>
 where
     S: BasinState<Float = f64> + CountsMirror,
     So: Solver<P, S>,
     So::Error: std::fmt::Debug,
 {
-    let mut stepper = exec.max_iter(MAX_ITERS).into_stepper().unwrap();
-    let mut pts = Vec::with_capacity(MAX_ITERS as usize + 1);
+    let mut stepper = exec.max_iter(max_iter).into_stepper().unwrap();
+    let mut pts = Vec::with_capacity(max_iter as usize + 1);
     pts.push((0u128, stepper.state().cost()));
     let t0 = Instant::now();
     while stepper.step().unwrap() == StepOutcome::Continue {
@@ -255,6 +305,48 @@ fn nlopt_trace(
     opt.recover_user_data().points
 }
 
+/// nlopt's `LN_NEWUOA` on the Styblinski–Tang case, configured to match
+/// basin's NEWUOA: initial step = ρ_beg and `xtol_abs` = ρ_end — the two
+/// libraries' nearest analogs of NEWUOA's initial/final trust-region radius —
+/// plus the same generous eval cap, so both sides converge on ρ rather than
+/// running a fixed iteration budget. Like `nlopt_trace`, NLopt exposes no
+/// per-iteration hook, so the curve is a per-eval best-so-far trace.
+fn nlopt_newuoa_trace(f0: f64) -> Vec<(u128, f64)> {
+    let state = NloptState {
+        start: None,
+        best: f0,
+        points: vec![(0u128, f0)],
+    };
+    let obj = move |x: &[f64], _g: Option<&mut [f64]>, st: &mut NloptState| -> f64 {
+        let f = styblinski_tang(x);
+        let t = match st.start {
+            Some(t0) => t0.elapsed().as_nanos(),
+            None => {
+                st.start = Some(Instant::now());
+                0
+            }
+        };
+        if f < st.best {
+            st.best = f;
+            st.points.push((t, st.best));
+        }
+        f
+    };
+    let mut opt = nlopt::Nlopt::new(
+        nlopt::Algorithm::Newuoa,
+        N_ST,
+        obj,
+        nlopt::Target::Minimize,
+        state,
+    );
+    let _ = opt.set_initial_step1(ST_RHO_BEG);
+    let _ = opt.set_xtol_abs1(ST_RHO_END);
+    let _ = opt.set_maxeval(ST_BUDGET as u32);
+    let mut x = st_start();
+    let _ = opt.optimize(&mut x);
+    opt.recover_user_data().points
+}
+
 // ---------------------------------------------------------------------
 // median over reps
 // ---------------------------------------------------------------------
@@ -279,6 +371,9 @@ fn median_reps(mut run: impl FnMut() -> Vec<(u128, f64)>) -> Vec<(u128, f64)> {
 
 struct Trace {
     solver: &'static str,
+    problem: &'static str,
+    n: usize,
+    f_opt: f64,
     library: &'static str,
     points: Vec<(u128, f64)>,
 }
@@ -287,14 +382,14 @@ fn print_traces(traces: &[Trace]) {
     let mut out = String::from("[\n");
     for (ti, t) in traces.iter().enumerate() {
         out.push_str(&format!(
-            "  {{\"solver\":\"{}\",\"problem\":\"rosenbrock\",\"n\":{},\"library\":\"{}\",\"points\":[",
-            t.solver, N, t.library
+            "  {{\"solver\":\"{}\",\"problem\":\"{}\",\"n\":{},\"library\":\"{}\",\"points\":[",
+            t.solver, t.problem, t.n, t.library
         ));
         // Skip any non-finite point so the emitted JSON is always valid
         // (`finite_start` already handles argmin's leading +∞).
         let mut first = true;
         for &(t_ns, cost) in &t.points {
-            let diff = cost - F_OPT;
+            let diff = cost - t.f_opt;
             if !diff.is_finite() {
                 continue;
             }
@@ -321,17 +416,26 @@ fn main() {
         // ---- gradient descent (steepest + More-Thuente) ----
         Trace {
             solver: "gd",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "basin",
             points: median_reps(|| {
-                basin_trace(Executor::new(
-                    Rosenbrock::<Vec<f64>>::default(),
-                    GradientDescent::with_line_search(MoreThuente::new()),
-                    BasicState::new(start()),
-                ))
+                basin_trace(
+                    Executor::new(
+                        Rosenbrock::<Vec<f64>>::default(),
+                        GradientDescent::with_line_search(MoreThuente::new()),
+                        BasicState::new(start()),
+                    ),
+                    MAX_ITERS,
+                )
             }),
         },
         Trace {
             solver: "gd",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "argmin",
             points: finite_start(
                 median_reps(|| {
@@ -354,17 +458,26 @@ fn main() {
         // ---- Nelder-Mead (standard coeffs, identical initial simplex) ----
         Trace {
             solver: "nm",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "basin",
             points: median_reps(|| {
-                basin_trace(Executor::new(
-                    Rosenbrock::<Vec<f64>>::default(),
-                    NelderMead::new(),
-                    BasicSimplexState::new(start()),
-                ))
+                basin_trace(
+                    Executor::new(
+                        Rosenbrock::<Vec<f64>>::default(),
+                        NelderMead::new(),
+                        BasicSimplexState::new(start()),
+                    ),
+                    MAX_ITERS,
+                )
             }),
         },
         Trace {
             solver: "nm",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "argmin",
             points: finite_start(
                 median_reps(|| {
@@ -385,11 +498,17 @@ fn main() {
         },
         Trace {
             solver: "nm",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "gomez",
             points: median_reps(|| gomez_trace_nm(f0)),
         },
         Trace {
             solver: "nm",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "nlopt",
             points: median_reps(|| {
                 nlopt_trace(nlopt::Algorithm::Neldermead, rosenbrock, noop_grad, f0)
@@ -398,17 +517,26 @@ fn main() {
         // ---- L-BFGS (limited memory m = 10, More-Thuente) ----
         Trace {
             solver: "lbfgs",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "basin",
             points: median_reps(|| {
-                basin_trace(Executor::new(
-                    Rosenbrock::<Vec<f64>>::default(),
-                    Lbfgsb::new().unbounded(),
-                    LbfgsState::new(start(), 10),
-                ))
+                basin_trace(
+                    Executor::new(
+                        Rosenbrock::<Vec<f64>>::default(),
+                        Lbfgsb::new().unbounded(),
+                        LbfgsState::new(start(), 10),
+                    ),
+                    MAX_ITERS,
+                )
             }),
         },
         Trace {
             solver: "lbfgs",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "argmin",
             points: finite_start(
                 median_reps(|| {
@@ -432,10 +560,44 @@ fn main() {
         },
         Trace {
             solver: "lbfgs",
+            problem: "rosenbrock",
+            n: N,
+            f_opt: F_OPT,
             library: "nlopt",
             points: median_reps(|| {
                 nlopt_trace(nlopt::Algorithm::Lbfgs, rosenbrock, rosenbrock_gradient, f0)
             }),
+        },
+        // ---- NEWUOA (Powell's model-based DFO) — same algorithm, two
+        //      implementations: basin vs nlopt's `LN_NEWUOA`, matched ρ_beg /
+        //      ρ_end and `npt = 2n+1`, on Styblinski–Tang at n = 10 from the
+        //      origin. Both run to natural ρ-convergence (not the iter cap). ----
+        Trace {
+            solver: "newuoa",
+            problem: "styblinski",
+            n: N_ST,
+            f_opt: st_fopt(N_ST),
+            library: "basin",
+            points: median_reps(|| {
+                basin_trace(
+                    Executor::new(
+                        StyblinskiTang::<Vec<f64>>::default(),
+                        Newuoa::new()
+                            .with_rho_beg(ST_RHO_BEG)
+                            .with_rho_end(ST_RHO_END),
+                        NewuoaState::new(st_start()),
+                    ),
+                    ST_BUDGET,
+                )
+            }),
+        },
+        Trace {
+            solver: "newuoa",
+            problem: "styblinski",
+            n: N_ST,
+            f_opt: st_fopt(N_ST),
+            library: "nlopt",
+            points: median_reps(|| nlopt_newuoa_trace(styblinski_tang(&st_start()))),
         },
     ];
 

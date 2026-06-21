@@ -44,7 +44,7 @@ function seriesFor(solver: Solver, problem: string) {
         <span class="text-slate-400 dark:text-slate-600">/</span> Competitors
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Competitors — basin vs argmin and gomez, convergence over time
+        Competitors — basin vs argmin, gomez, and nlopt, convergence over time
     </h1>
     <p class="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
         basin against <a
@@ -52,19 +52,27 @@ function seriesFor(solver: Solver, problem: string) {
             href="https://argmin-rs.org/"
             target="_blank"
             rel="noreferrer">argmin</a
-        >
-        and <a
+        >,
+        <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
             href="https://docs.rs/gomez/"
             target="_blank"
             rel="noreferrer">gomez</a
-        >
-        on the same problem from the same start. Each library has only the
-        algorithms it ships, so coverage varies — argmin lines up on GD, NM,
-        and L-BFGS, gomez on derivative-free NM only. Because no two
-        implementations share a code path, a single mean solve time would hide
-        the differences in path and per-iteration cost. Instead each chart
-        plots <strong>suboptimality</strong>
+        >, and
+        <a
+            class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
+            href="https://nlopt.readthedocs.io/"
+            target="_blank"
+            rel="noreferrer">nlopt</a
+        >. Each library has only the algorithms it ships, so coverage varies —
+        argmin lines up on GD, NM, and L-BFGS, gomez on derivative-free NM only,
+        and nlopt on NM, L-BFGS, and NEWUOA. Most cases pit different
+        implementations of the same family against each other; the NEWUOA case
+        is the exception — basin and nlopt run the <em>same</em> Powell
+        algorithm (matched ρ_beg/ρ_end), and it's the only case off Rosenbrock
+        (Styblinski–Tang at n = 10). Because no two implementations share a code
+        path, a single mean solve time would hide the differences in path and
+        per-iteration cost. Instead each chart plots <strong>suboptimality</strong>
         <code class="font-mono">f(x) − f*</code>
         against <strong>wall-clock time</strong> on log–log axes: how far down the
         objective each library gets, and how long it spends getting there. Lower
@@ -100,14 +108,17 @@ function seriesFor(solver: Solver, problem: string) {
         ({data.env.os}/{data.env.arch}). All libraries run on the
         <code class="font-mono">Vec&lt;f64&gt;</code> backend (gomez through its
         own bundled
-        <code class="font-mono">nalgebra::DVector&lt;f64&gt;</code>), from the
-        classic Rosenbrock start, to a {data.iterations}-iteration cap (a cap —
-        the quasi-Newton case converges first, and gomez's NM hits its internal
-        no-progress stop before the budget). Each point is the median
-        wall-clock time per iteration over repeated runs; the solvers are
-        deterministic, so only the timing varies. Absolute times are
-        machine-specific — compare the curves within a chart, not across
-        machines.
+        <code class="font-mono">nalgebra::DVector&lt;f64&gt;</code>). The GD, NM,
+        and L-BFGS cases run from the classic Rosenbrock start to a
+        {data.iterations}-iteration cap (a cap — the quasi-Newton case converges
+        first, and gomez's NM hits its internal no-progress stop before the
+        budget); the NEWUOA case instead runs on Styblinski–Tang (n = 10) from
+        the origin to natural ρ-convergence. Each point is the median wall-clock
+        time per iteration over repeated runs (nlopt, which exposes no
+        per-iteration hook, is sampled per function evaluation as a best-so-far
+        curve); the solvers are deterministic, so only the timing varies.
+        Absolute times are machine-specific — compare the curves within a chart,
+        not across machines.
     </p>
 
     <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">

@@ -8,8 +8,9 @@
  */
 import rawData from './backend-benchmarks.json';
 
-/** Solvers exercised by the curated backend cases. */
-export type Solver = 'gd' | 'nm' | 'lbfgs' | 'bfgs' | 'cmaes' | 'lm' | 'gn';
+/** Solvers exercised by the curated backend cases (plus `newuoa`, which
+ * appears only on the competitor page, not the backend benchmarks). */
+export type Solver = 'gd' | 'nm' | 'lbfgs' | 'bfgs' | 'cmaes' | 'lm' | 'gn' | 'newuoa';
 /** Linear-algebra backends. */
 export type Backend = 'vec' | 'nalgebra' | 'ndarray' | 'faer';
 
@@ -47,6 +48,7 @@ export const SOLVER_LABELS: Record<Solver, string> = {
     cmaes: 'CMA-ES',
     lm: 'Levenberg–Marquardt',
     gn: 'Gauss–Newton',
+    newuoa: 'NEWUOA',
 };
 
 /** Display names for the problems referenced by the curated cases. */
