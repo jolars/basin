@@ -51,6 +51,13 @@ trailing note cites the paper it implements (or the source it ports).
   a `CostFunction` and `LinearConstraints` (the general linear form: box bounds,
   equalities, and inequalities, all folded into `A x ≤ b`). Implements Powell
   (2015), ported from PRIMA v0.7.2.
+- **[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**
+  — the nonlinearly-constrained Powell solver, and the odd one out: instead of a
+  quadratic model it builds **linear** models by interpolation at the `n+1`
+  vertices of a simplex and steers by an L-infinity exact-penalty merit function,
+  so it is the only one handling general nonlinear inequality constraints
+  `c(x) ≤ 0`. Needs a `CostFunction` and `NonlinearInequalityConstraints`.
+  Implements Powell (1994), ported from PRIMA.
 - **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)** —
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in _Numerical Recipes_ §10.2); also used inside line searches.
@@ -167,6 +174,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Newuoa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Bobyqa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Lincoa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
+| `Cobyla` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Brent` | Derivative-free | — | — | — | — |
 | `GoldenSection` | Derivative-free | — | — | — | — |
 | `BrentDerivative` | First-order | — | — | — | — |

@@ -1,5 +1,5 @@
 ---
-description: Detail for basin's first-class constraints (tenet 4) — the three shipped constraint kinds and their feasibility mechanisms, the adapter-asymmetry rule, why there's no Constraint supertrait, and why constraints live on the problem and never on state.
+description: Detail for basin's first-class constraints (tenet 4) — the four shipped constraint kinds and their feasibility mechanisms, the adapter-asymmetry rule, why there's no Constraint supertrait, and why constraints live on the problem and never on state.
 paths:
   - "crates/basin/src/core/constraint.rs"
   - "crates/basin/src/core/barrier.rs"
@@ -7,6 +7,7 @@ paths:
   - "crates/basin/src/solver/barrier_method.rs"
   - "crates/basin/src/solver/augmented_lagrangian_method.rs"
   - "crates/basin/src/solver/projected_gradient_descent.rs"
+  - "crates/basin/src/solver/cobyla.rs"
 ---
 
 # Constraints (tenet 4 detail)
@@ -16,7 +17,7 @@ support via traits; a constrained problem handed to an unconstrained solver is
 a compile error, with opt-in adapters to wrap unconstrained solvers. This file
 holds the detail behind that tenet.
 
-## The three shipped kinds (all in `src/core/constraint.rs`)
+## The four shipped kinds (all in `src/core/constraint.rs`)
 
 Each keeps feasibility by a *different* mechanism — that is why they stay
 sibling traits (see below):
@@ -50,12 +51,28 @@ sibling traits (see below):
   (tenet 3: a framework-level `FeasibilityTolerance` waits for a 2nd equality
   solver).
 
+- **`NonlinearInequalityConstraints`** (`c(x) ≤ 0` for an arbitrary
+  vector-valued `c`, exposing `constraints(x)` + `num_constraints()`) — kept
+  feasible by an *exact-penalty merit function with a geometry/acceptance test*
+  (Φ = F + μ·[maxᵢ cᵢ]₊), no projection, no barrier, no multipliers. Used by
+  the derivative-free `Cobyla` (`src/solver/cobyla.rs`). Unlike the three other
+  kinds the constraint is a **function evaluated at the iterate**, not
+  matrix/vector data, so the trait carries an evaluator rather than `a()`/`b()`
+  accessors. Sign convention is `cᵢ(x) ≤ 0` (feasible), matching the
+  linear-inequality `≤` direction and PRIMA's modern COBYLA; Powell's 1994 paper
+  writes `cᵢ ≥ 0` (negate to convert). Function-valued ⇒ needs only vector-tier
+  ops, so it runs on **every backend** and wasm.
+
 Both linear families run on **every backend**: they need only `MatVec` +
 `MatTransposeVec` (never a solve), shipped for `Vec<f64>` (via the hand-rolled
 `DenseMatrix` in `src/core/math/dense.rs`), nalgebra, faer, and ndarray.
 
-Nonlinear equality and nonlinear (in)equality constraint kinds are not yet
-designed.
+Nonlinear *equality* constraints are not yet designed (express `g(x) = 0` as the
+pair `g ≤ 0`, `−g ≤ 0` through `NonlinearInequalityConstraints` for now). A
+`NonlinearConstraints` *aggregator* (folding nonlinear + linear-ineq/eq + box
+into one `c(x) ≤ 0` vector, PRIMA's `get_nlcon`/full-COBYLA form — see "deferred
+aggregator" below) is **wanted but deliberately deferred**: COBYLA ships first on
+the single-kind inequality trait.
 
 ## Adapters must not re-implement the constraint trait they consumed
 
@@ -70,18 +87,23 @@ and the whole adapter model collapses. (Contrast `FiniteDiff`, which *adds* a
 capability and therefore *forwards* `BoxConstraints`.) Load-bearing and
 non-obvious; preserve it deliberately.
 
-## No `Constraint` *parent* supertrait over the three sibling kinds
+## No `Constraint` *parent* supertrait over the four sibling kinds
 
-Three constraint kinds have landed and *keep confirming* the wait rather than
+Four constraint kinds have landed and *keep confirming* the wait rather than
 ending it. Each keeps feasibility by a different mechanism: box by *projection*
 (`ClampInPlace`), linear-inequality by a *barrier* (`MatVec`/`MatTransposeVec`),
 linear-equality by a *penalty plus multipliers* (also `MatVec`/`MatTransposeVec`,
-but to assemble `∇L_ρ`, not a barrier). The two linear families share the same
-*carrier ops* but no *feasibility* operation, and their data accessors
-(`a()`/`b()`) are the only common surface — so `BoxConstraints`,
-`LinearInequalityConstraints`, and `LinearEqualityConstraints` stay sibling
-traits with **no common parent**. A shared *parent* abstraction waits for a kind
-(nonlinear) that genuinely shares a feasibility-check or projection op.
+but to assemble `∇L_ρ`, not a barrier), and nonlinear-inequality by an
+*exact-penalty merit + geometry/acceptance test* (COBYLA — a derivative-free
+mechanism that shares nothing with the other three). The arrival of the
+nonlinear kind is the case the earlier note anticipated ("a shared parent waits
+for a *nonlinear* kind") — and it landed with **yet another distinct feasibility
+mechanism**, so it *still* doesn't justify a parent: there is no
+feasibility-check or projection op common to all four. The two linear families
+share *carrier ops* but no *feasibility* op; the nonlinear kind doesn't even
+share the carrier (it's function-valued, not matrix data). So `BoxConstraints`,
+`LinearInequalityConstraints`, `LinearEqualityConstraints`, and
+`NonlinearInequalityConstraints` stay sibling traits with **no common parent**.
 One-member (or no-shared-op multi-member) hierarchies are overhead with no
 value; designing on paper without a solver to validate against tends to need
 redoing.
@@ -107,6 +129,22 @@ right surface for their *single-kind* consumers (barrier on
 `LinearInequalityConstraints`, augmented-Lagrangian on
 `LinearEqualityConstraints`). So the "no parent over the siblings" rule above
 still stands; LINCOA validated an aggregator, not a hierarchy.
+
+### Deferred: a `NonlinearConstraints` aggregator for COBYLA
+
+PRIMA's full COBYLA folds nonlinear inequalities + linear ineq/eq + box bounds
+into one `constr(x) ≤ 0` vector. The maintainer wants the same eventually: a
+`NonlinearConstraints` aggregator that mirrors `LinearConstraints` — a required
+nonlinear block plus optional `inequalities()`/`equalities()`/`lower()`/`upper()`
+blocks, all folded into the constraint vector COBYLA's merit function sees. It is
+**deliberately deferred** (COBYLA ships first on the single-kind
+`NonlinearInequalityConstraints`), not foreclosed. Like `LinearConstraints` it
+must be **standalone**: not a parent of the sibling kinds and **no blanket impl**
+bridging from them (a blanket impl could only forward the nonlinear block and
+would silently drop linear/box data). Adding it later is purely additive and
+breaks nothing — the single-kind trait stays the right surface for the
+inequality-only consumer. See the `NonlinearInequalityConstraints` rustdoc
+("Future direction").
 
 ## Constraints live on the problem, never on state
 

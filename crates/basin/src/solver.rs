@@ -80,6 +80,10 @@ pub mod bobyqa;
 /// trust-region solver (shared Powell core + TRSTEP projected-CG + GETACT).
 pub mod lincoa;
 
+/// COBYLA (Powell 1994) — nonlinearly-constrained derivative-free solver
+/// (simplex linear models + L-infinity merit + `trstlp`).
+pub mod cobyla;
+
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
 pub use bfgs::Bfgs;
@@ -90,6 +94,7 @@ pub use brent::Brent;
 pub use brent_derivative::BrentDerivative;
 pub use cma_es::CmaEs;
 pub use cma_inject::{ClosureInner, CmaInject, MemeticInner};
+pub use cobyla::Cobyla;
 pub use de::De;
 pub use de_inject::DeInject;
 pub use gauss_newton::GaussNewton;

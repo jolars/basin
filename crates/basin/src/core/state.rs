@@ -22,6 +22,8 @@
 pub mod bobyqa;
 /// CMA-ES distribution state (`CmaEsState`).
 pub mod cma_es;
+/// COBYLA solver state (`CobylaState`).
+pub mod cobyla;
 /// Limited-memory BFGS / L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
 /// LINCOA solver state (`LincoaState`).
@@ -37,6 +39,7 @@ pub mod scalar_gradient;
 
 pub use bobyqa::BobyqaState;
 pub use cma_es::CmaEsState;
+pub use cobyla::CobylaState;
 pub use lbfgs::LbfgsState;
 pub use lincoa::LincoaState;
 pub use newuoa::NewuoaState;
@@ -346,7 +349,7 @@ pub trait PopulationState: State {
 /// State that carries a trust-region radius `ρ`, the minimum shape the
 /// [`RhoTolerance`](crate::core::termination::RhoTolerance) criterion binds on
 /// (tenet 3). Implemented by the Powell-family DFO states
-/// ([`NewuoaState`], [`BobyqaState`]); their `ρ` shrinks from `ρ_beg` toward
+/// ([`NewuoaState`], [`BobyqaState`], [`LincoaState`], [`CobylaState`]); their `ρ` shrinks from `ρ_beg` toward
 /// `ρ_end` on Powell's schedule, and the criterion fires once it reaches the
 /// configured floor.
 pub trait RhoState: State {
