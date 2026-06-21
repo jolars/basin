@@ -32,6 +32,17 @@ trailing note cites the paper it implements (or the source it ports).
   `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
   uses the dimension-aware coefficients of Gao & Han (2012), and the projected
   variant follows Luersen & Le Riche (2004).
+- **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**
+  — mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
+  positive spanning set of `2n` directions on a shrinking mesh, generated from
+  the Halton sequence and a scaled Householder reflection. Unlike Nelder-Mead it
+  has a convergence guarantee on nonsmooth / non-continuous objectives, a
+  box-constrained variant (`Mads::bounded()`) via the extreme barrier, and a
+  nonlinearly-constrained variant (`Mads::constrained()`) handling `c(x) ≤ 0`
+  via the progressive barrier (which tolerates an infeasible start). Needs only
+  a `CostFunction` (plus `NonlinearInequalityConstraints` for the constrained
+  mode). Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
+  Le Digabel 2009), and the progressive barrier (Audet & Dennis 2009).
 - **[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**
   — Powell's model-based trust-region method: maintains a quadratic surrogate
   interpolating the objective on `2n+1` points and updates it by the
@@ -171,6 +182,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Sgd` | First-order | ✓ | ✓ | ✓ | ✓ |
 | `ProjectedGradientDescent` | First-order | ✓ | ✓ | ✓ | ✓ |
 | `NelderMead` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
+| `Mads` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Newuoa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Bobyqa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |
 | `Lincoa` | Derivative-free | ✓ | ✓ | ✓ | ✓ |

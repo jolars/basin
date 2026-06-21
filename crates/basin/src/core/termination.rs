@@ -7,7 +7,7 @@ use web_time::{Duration, Instant};
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorLen};
-use crate::core::state::{CmaEsState, GradientState, RhoState, SimplexState, State};
+use crate::core::state::{CmaEsState, GradientState, MeshState, RhoState, SimplexState, State};
 
 /// Why the executor stopped. Returned on
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
@@ -53,6 +53,8 @@ pub enum TerminationReason {
     CmaEsTolerance,
     /// NEWUOA trust-region radius reached the configured floor: `ρ ≤ rho_end`.
     RhoTolerance,
+    /// MADS poll size reached the configured floor: `Δᵖ ≤ poll_size_min`.
+    MeshTolerance,
     /// Wall-clock time limit reached.
     MaxTime,
     /// Solver determined it has converged (e.g. fixed point reached).
@@ -682,6 +684,35 @@ where
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         (state.rho() <= self.rho_end).then_some(TerminationReason::RhoTolerance)
+    }
+}
+
+/// Stop a MADS solver once its poll size `Δᵖ` shrinks to `poll_size_min`.
+///
+/// Binds on any [`MeshState`] ([`MadsState`](crate::core::state::MadsState)).
+/// This is the natural convergence test of MADS: [`Mads`](crate::solver::Mads)
+/// already self-terminates when `Δᵖ` reaches the floor it was configured with,
+/// so this criterion is mainly useful to stop **early** at a coarser poll size
+/// than the configured floor — e.g. a quick low-accuracy solve. The threshold
+/// should satisfy `poll_size_min ≥` the solver's configured floor to fire first.
+pub struct MeshTolerance<F = f64> {
+    poll_size_min: F,
+}
+
+impl<F> MeshTolerance<F> {
+    /// New criterion firing at `Δᵖ ≤ poll_size_min`.
+    pub fn new(poll_size_min: F) -> Self {
+        Self { poll_size_min }
+    }
+}
+
+impl<S> TerminationCriterion<S> for MeshTolerance<S::Float>
+where
+    S: MeshState,
+    S::Float: Scalar,
+{
+    fn check(&mut self, state: &S) -> Option<TerminationReason> {
+        (state.poll_size() <= self.poll_size_min).then_some(TerminationReason::MeshTolerance)
     }
 }
 

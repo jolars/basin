@@ -114,6 +114,12 @@ export const SOLVERS: SolverMeta[] = [
         options: [],
     },
     {
+        kind: SolverKind.Mads,
+        label: 'MADS (mesh adaptive direct search)',
+        blurb: 'Deterministic OrthoMADS poll on a shrinking mesh; converges on nonsmooth objectives.',
+        options: [],
+    },
+    {
         kind: SolverKind.Lbfgs,
         label: 'L-BFGS (limited-memory quasi-Newton)',
         blurb: 'Two-loop recursion with a Moré–Thuente line search.',

@@ -46,6 +46,9 @@ pub mod lbfgs;
 pub mod levenberg_marquardt;
 /// MA-LSCh-CMA — memetic algorithm with LS chains (inner: CMA-ES).
 pub mod ma_ls_ch_cma;
+/// MADS (Audet & Dennis 2006) — mesh adaptive direct search (deterministic
+/// OrthoMADS instance) for nonsmooth / non-continuous objectives.
+pub mod mads;
 /// Nelder-Mead derivative-free simplex solver.
 pub mod nelder_mead;
 /// NEWUOA (Powell 2006) — model-based derivative-free trust-region solver
@@ -103,6 +106,7 @@ pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;
 pub use lincoa::Lincoa;
 pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
+pub use mads::{Bounded, Constrained, Mads};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
 pub use newuoa::Newuoa;
 pub use projected_gradient_descent::ProjectedGradientDescent;

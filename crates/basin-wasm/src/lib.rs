@@ -26,8 +26,8 @@ use basin::solver::lbfgs::{Lbfgs, Unbounded as LbfgsUnbounded};
 use basin::{
     Backtracking, BasicPopulationState, BasicSimplexState, BasicState, BoxConstraints, CmaEs,
     CmaEsState, Constant, CostFunction, De, DenseMatrix, Executor, FiniteDiff, Gradient,
-    GradientDescent, LbfgsState, MoreThuente, NelderMead, PopulationState, RandomSearch, Ssga,
-    State, StepOutcome, Stepper, TerminationReason,
+    GradientDescent, LbfgsState, Mads, MadsState, MoreThuente, NelderMead, PopulationState,
+    RandomSearch, Ssga, State, StepOutcome, Stepper, TerminationReason,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -68,6 +68,7 @@ pub enum SolverKind {
     De = 4,
     RandomSearch = 5,
     Ssga = 6,
+    Mads = 7,
 }
 
 /// Solver-specific knobs, marshaled across the wasm boundary as a single
@@ -312,6 +313,7 @@ enum Inner {
         Stepper<Problem2D, BasicState<Vec<f64>>, GradientDescent<Backtracking, Vec<f64>>>,
     ),
     NelderMead(Stepper<Problem2D, BasicSimplexState<Vec<f64>>, NelderMead>),
+    Mads(Stepper<Problem2D, MadsState<Vec<f64>>, Mads>),
     // Boxed: `LbfgsState` carries the limited-memory history buffers, so
     // this variant is several times larger than the others — boxing keeps
     // `Inner` small (clippy::large_enum_variant). Auto-deref means the
@@ -332,6 +334,7 @@ impl Inner {
             Self::GdConstant(s) => s.step().unwrap(),
             Self::GdBacktracking(s) => s.step().unwrap(),
             Self::NelderMead(s) => s.step().unwrap(),
+            Self::Mads(s) => s.step().unwrap(),
             Self::Lbfgs(s) => s.step().unwrap(),
             Self::CmaEs(s) => s.step().unwrap(),
             Self::De(s) => s.step().unwrap(),
@@ -349,6 +352,7 @@ impl Inner {
             Self::GdConstant(s) => s.state().param(),
             Self::GdBacktracking(s) => s.state().param(),
             Self::NelderMead(s) => s.state().param(),
+            Self::Mads(s) => s.state().param(),
             Self::Lbfgs(s) => s.state().param(),
             Self::CmaEs(s) => s.state().param(),
             Self::De(s) => s.state().param(),
@@ -363,6 +367,7 @@ impl Inner {
             Self::GdConstant(s) => s.state().cost(),
             Self::GdBacktracking(s) => s.state().cost(),
             Self::NelderMead(s) => s.state().cost(),
+            Self::Mads(s) => s.state().cost(),
             Self::Lbfgs(s) => s.state().cost(),
             Self::CmaEs(s) => s.state().cost(),
             Self::De(s) => s.state().cost(),
@@ -577,6 +582,14 @@ impl Run {
                 .into_stepper()
                 .unwrap();
                 Inner::NelderMead(stepper)
+            }
+            SolverKind::Mads => {
+                let stepper =
+                    Executor::new(p, Mads::new(), MadsState::<Vec<f64>>::new(initial.clone()))
+                        .max_iter(max_iter as u64)
+                        .into_stepper()
+                        .unwrap();
+                Inner::Mads(stepper)
             }
             SolverKind::Lbfgs => {
                 // `m_capacity` asserts `>= 1`; clamp so a stray `0` from

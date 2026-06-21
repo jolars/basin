@@ -22,12 +22,16 @@ the previous lands.
       hand-rolled `DenseMatrix`), nalgebra, faer, and `ndarray` (`Array2`) ---
       so both methods run on the default backend with no external LA crate.
       Nonlinear inequalities `c(x) ≤ 0` shipped
-      (`NonlinearInequalityConstraints`, consumed directly by `Cobyla` --- the
+      (`NonlinearInequalityConstraints`, consumed by `Cobyla` --- the
       derivative-free COBYLA, Powell 1994, ported from PRIMA --- via an
-      L-infinity exact-penalty merit function; function-valued so it needs only
-      vector-tier ops, hence all backends + wasm). Remaining: phase-1
-      feasibility (the barrier needs a strictly feasible start today; the
-      augmented Lagrangian and COBYLA do not); a framework-level
+      L-infinity exact-penalty merit function, and by `Mads<Constrained>`
+      (`Mads::constrained()`) via the *progressive barrier* (Audet & Dennis
+      2009, an aggregate violation `h(x) = Σⱼ max(cⱼ, 0)²` and a threshold driven
+      to zero around two incumbents; tolerates an infeasible start);
+      function-valued so it needs only vector-tier ops, hence all backends +
+      wasm). Remaining: phase-1 feasibility (the barrier needs a strictly
+      feasible start today; the augmented Lagrangian, COBYLA, and the MADS
+      progressive barrier do not); a framework-level
       `FeasibilityTolerance` once a 2nd nonlinear/equality-constrained solver
       justifies it (tenet 3); nonlinear *equality* constraints; and a
       `NonlinearConstraints` aggregator (nonlinear + linear + box, PRIMA's full

@@ -55,7 +55,12 @@ sibling traits (see below):
   vector-valued `c`, exposing `constraints(x)` + `num_constraints()`) — kept
   feasible by an *exact-penalty merit function with a geometry/acceptance test*
   (Φ = F + μ·[maxᵢ cᵢ]₊), no projection, no barrier, no multipliers. Used by
-  the derivative-free `Cobyla` (`src/solver/cobyla.rs`). Unlike the three other
+  the derivative-free `Cobyla` (`src/solver/cobyla.rs`). Also consumed by
+  `Mads<Constrained>` (`Mads::constrained()`, `src/solver/mads.rs`), which keeps
+  the *same trait* feasible by a **different mechanism** — the *progressive
+  barrier* (Audet & Dennis 2009): an aggregate violation `h(x) = Σⱼ max(cⱼ, 0)²`
+  and a threshold driven to zero around two incumbents. So the consumer↔mechanism
+  map is many-to-many; the trait is just the data contract. Unlike the three other
   kinds the constraint is a **function evaluated at the iterate**, not
   matrix/vector data, so the trait carries an evaluator rather than `a()`/`b()`
   accessors. Sign convention is `cᵢ(x) ≤ 0` (feasible), matching the
