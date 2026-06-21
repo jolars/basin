@@ -268,3 +268,85 @@ The fixture carries the `A x ≤ b` system (`# aineq` / `# bineq`) and the final
 objective at every traced point (tier 1), and asserts the converged `x`/`f`,
 feasibility, and `nf` against PRIMA. The objective + constraint definitions in
 `lincoa_prima_driver.c` and `parity.rs` must stay textually mirrored.
+
+## COBYLA fixtures
+
+`cobyla_<problem>_<n>d.tsv` are reference runs of **PRIMA's** COBYLA, the
+nonlinearly-constrained Powell solver (same vendored submodule, v0.7.2), used by
+`crates/basin/src/solver/cobyla/parity.rs` to cross-validate basin's COBYLA port.
+The parity test drives the `pub(crate)` `CobylaWork` directly and reads these
+files via `include_str!`.
+
+Committed fixtures (`problem`, `n`, `m_nlcon`, start `x0`):
+
+- `cobyla_disk_2d.tsv` — Powell (B): `min x0·x1 s.t. x0²+x1²−1 ≤ 0`, `F*=−0.5`.
+  Started at the *asymmetric* feasible point `(0.7, −0.3)`: this objective has
+  two sign-symmetric minima `(+,−)` and `(−,+)`, so a start off the symmetry
+  axis keeps PRIMA and basin in the same basin (both reach `(√½, −√½)`).
+- `cobyla_fletcher_2d.tsv` — Powell (F): `min −x0−x1 s.t. x0²−x1 ≤ 0,
+  x0²+x1²−1 ≤ 0`, `F*=−√2`, `x0=(0.5, 0.5)`. Two active nonlinear constraints
+  at the solution.
+- `cobyla_ballsphere_3d.tsv` — convex sanity: `min Σ(xᵢ−2)² s.t. Σxᵢ²−1 ≤ 0`,
+  `x0=(0.5, 0.5, 0.5)`. Unique minimizer on the unit sphere at `(1/√3)·𝟙`.
+
+All use `rho_beg=0.5`, `rho_end=1e-6`, `maxfun=500n`, and a strictly feasible
+start. Problems are chosen so PRIMA and basin reach the *same* minimizer (see the
+NEWUOA chrosen_5d note above for the multi-basin caveat that motivates the disk
+start). The locked inputs live in the fixture itself, so the test recomputes
+nothing.
+
+### Format
+
+Differs from the linear-constraint fixtures: COBYLA's constraints are
+*functions* (recomputed in Rust, not stored as matrix data), the simplex is
+always `n+1` vertices (no `npt`), and each eval row carries the constraint
+violation `cstrv = [maxᵢ cᵢ(x)]₊` so tier 1 can guard the constraint functions
+too. Whitespace-separated, `%.17e`:
+
+```
+# config problem=<p> n=<n> m_nlcon=<m> rho_beg=<..> rho_end=<..> maxfun=<..>
+# x0 <x0_0> ... <x0_{n-1}>
+<evalindex> <f> <cstrv> <x_0> ... <x_{n-1}>   # one per calcfc call, PRIMA's order
+...
+# final nf=<nf> rc=<rc> f=<f> cstrv=<cstrv> x= <x_0> ... <x_{n-1}>
+```
+
+### What the test asserts
+
+The same three tiers as the siblings, with COBYLA's constraints folded into
+tier 1:
+
+1. **Function equivalence** — the Rust objective *and* the constraint violation
+   recomputed at every traced point match the fixture `f` / `cstrv` to `1e-12`
+   (catches C↔Rust drift in either function).
+2. **Initial design** — basin's first `n+1` samples equal PRIMA's first `n+1`
+   samples *as a set* (within `1e-12`). COBYLA's simplex is built cumulatively
+   with pole swaps, so this compares against the fixture rather than
+   reconstructing a coordinate cross.
+3. **Final output** — basin converges (ρ reached) to the same minimizer: `f` to
+   `1e-6·(1+|f*|)`, `x` to `1e-4` in `‖·‖∞`, the returned point feasible
+   (`cstrv ≤ 1e-6`), `nf` within a same-ballpark margin.
+
+### Regenerating
+
+Same recipe — build `libprima` once (step 1 above), then compile, link, and run
+`cobyla_prima_driver.c`. The problems use only the nonlinear block (`m_ineq =
+m_eq = 0`, `xl`/`xu = ±INFINITY`), matching basin's trait-only path.
+
+```bash
+# Compile + link the COBYLA generator (reuses the libprima build from above).
+gcc -std=c99 -O2 -ffp-contract=off -DPRIMAC_STATIC \
+    -I tools/prima/c/include \
+    -c crates/basin/tests/fixtures/cobyla_prima_driver.c -o /tmp/cobyla_gen.o
+gfortran -O2 -o /tmp/cobyla_gen /tmp/cobyla_gen.o \
+    tools/prima/build/c/libprimac.a tools/prima/build/fortran/libprimaf.a -lm
+
+# Regenerate each fixture (run from crates/basin/tests/fixtures/).
+/tmp/cobyla_gen disk       > cobyla_disk_2d.tsv        # x0·x1 s.t. x0²+x1²≤1
+/tmp/cobyla_gen fletcher   > cobyla_fletcher_2d.tsv    # −x0−x1 s.t. x0²≤x1, ‖x‖≤1
+/tmp/cobyla_gen ballsphere > cobyla_ballsphere_3d.tsv  # Σ(xᵢ−2)² s.t. ‖x‖≤1
+```
+
+As with the others, CI never rebuilds these; the committed `.tsv` files are the
+artifacts, and the objective + constraint fns in `cobyla_prima_driver.c` and
+`parity.rs` must stay textually mirrored (the tier-1 check enforces it).

@@ -21,12 +21,20 @@ the previous lands.
       `MatVec`/`MatTransposeVec` ship for every backend --- `Vec<f64>` (via the
       hand-rolled `DenseMatrix`), nalgebra, faer, and `ndarray` (`Array2`) ---
       so both methods run on the default backend with no external LA crate.
-      Remaining: phase-1 feasibility (the barrier needs a strictly feasible
-      start today; the augmented Lagrangian does not); a framework-level
-      `FeasibilityTolerance` once a 2nd equality-constrained solver justifies it
-      (tenet 3); nonlinear equality and nonlinear (in)equality constraints. Keep
-      deferring a `Constraint` supertrait --- box (projection),
-      linear-inequality (barrier), and linear-equality (penalty+multipliers)
+      Nonlinear inequalities `c(x) ≤ 0` shipped
+      (`NonlinearInequalityConstraints`, consumed directly by `Cobyla` --- the
+      derivative-free COBYLA, Powell 1994, ported from PRIMA --- via an
+      L-infinity exact-penalty merit function; function-valued so it needs only
+      vector-tier ops, hence all backends + wasm). Remaining: phase-1
+      feasibility (the barrier needs a strictly feasible start today; the
+      augmented Lagrangian and COBYLA do not); a framework-level
+      `FeasibilityTolerance` once a 2nd nonlinear/equality-constrained solver
+      justifies it (tenet 3); nonlinear *equality* constraints; and a
+      `NonlinearConstraints` aggregator (nonlinear + linear + box, PRIMA's full
+      COBYLA form) --- deferred-but-wanted, must be standalone like
+      `LinearConstraints` (see `.claude/rules/constraints.md`). Keep deferring a
+      `Constraint` supertrait --- box (projection), linear-inequality (barrier),
+      linear-equality (penalty+multipliers), and nonlinear-inequality (merit)
       still share no feasibility op beyond accessors (tenet 4).
 - [ ] **Broaden backend coverage (tenet 5).** Ongoing: most solvers should run
       on most backends (`Vec<f64>`, nalgebra, ndarray, faer), gated only by

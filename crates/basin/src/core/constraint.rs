@@ -1,18 +1,21 @@
 //! Constraint markers carried on the problem (tenet 4 in `CONTRIBUTING.md`).
 //! [`BoxConstraints`] (interval bounds, consumed by projection-based
 //! solvers), [`LinearInequalityConstraints`] (`A x ≤ b`, consumed by the
-//! log-barrier method), and [`LinearEqualityConstraints`] (`A x = b`,
-//! consumed by the augmented-Lagrangian method).
+//! log-barrier method), [`LinearEqualityConstraints`] (`A x = b`, consumed by
+//! the augmented-Lagrangian method), and [`NonlinearInequalityConstraints`]
+//! (`c(x) ≤ 0` for an arbitrary vector-valued `c`, consumed by COBYLA).
 //!
-//! These three are deliberately *sibling* traits, not members of a
+//! These four are deliberately *sibling* traits, not members of a
 //! `Constraint` supertrait/hierarchy. Per tenet 4, a shared *parent*
 //! abstraction waits until ≥2 constrained solvers share more than data
 //! accessors — and they don't: the box family keeps feasibility by
-//! *projection*, the linear-inequality family by a *barrier*, and the
+//! *projection*, the linear-inequality family by a *barrier*, the
 //! linear-equality family by a *penalty plus multipliers* (the augmented
-//! Lagrangian). Three feasibility mechanisms, and the traits share no
-//! operation beyond `lower()` / `upper()` resp. `a()` / `b()`, so a
-//! one-member hierarchy would still be pure overhead.
+//! Lagrangian), and the nonlinear-inequality family by an *exact-penalty merit
+//! function with a geometry/acceptance test* (COBYLA). Four feasibility
+//! mechanisms, and the traits share no operation beyond `lower()` / `upper()`
+//! resp. `a()` / `b()` resp. `constraints()`, so a one-member hierarchy would
+//! still be pure overhead.
 //!
 //! [`LinearConstraints`] is a different beast: a standalone *aggregator* of
 //! the general linearly-constrained problem (box bounds, linear equalities,
@@ -165,6 +168,95 @@ pub trait LinearEqualityConstraints: CostFunction {
     fn a(&self) -> &Self::Matrix;
     /// The right-hand side `b ∈ ℝᵐ`.
     fn b(&self) -> &Self::Param;
+}
+
+/// Nonlinear inequality constraints `c(x) ≤ 0` for an arbitrary vector-valued
+/// constraint function `c : ℝⁿ → ℝᵐ`.
+///
+/// `x` is feasible iff every component satisfies `cᵢ(x) ≤ 0`; the *constraint
+/// violation* is `[ maxᵢ cᵢ(x) ]₊` (zero when feasible). Unlike the three
+/// linear sibling traits, the constraint here is a **function** evaluated at the
+/// iterate, not matrix/vector data — so this trait carries a
+/// [`constraints`](Self::constraints) evaluator rather than `a()` / `b()`
+/// accessors. Like the siblings, the constraints live on the *problem* side
+/// (tenet 4 in `CONTRIBUTING.md`): the derivative-free solver that handles them
+/// ([`Cobyla`](crate::Cobyla)) binds on this trait, so handing it an
+/// unconstrained problem is a compile error.
+///
+/// `NonlinearInequalityConstraints` is a supertrait of [`CostFunction`] so the
+/// `Param` / `Error` types are shared automatically.
+///
+/// # Sign convention
+///
+/// The feasible direction is `cᵢ(x) ≤ 0`, matching the linear-inequality
+/// sibling's `A x ≤ b` and PRIMA's modern COBYLA interface
+/// (`min F(x) s.t. constr(x) ≤ 0`). Powell's 1994 paper writes the constraints
+/// as `cᵢ(x) ≥ 0`; negate to convert (`basin`'s `cᵢ` is Powell's `−cᵢ`). An
+/// equality `g(x) = 0` is expressed as the pair `g(x) ≤ 0`, `−g(x) ≤ 0`.
+///
+/// # Shapes
+///
+/// The iterate lives in `ℝⁿ` ([`Param`](CostFunction::Param)); the value
+/// returned by [`constraints`](Self::constraints) lives in `ℝᵐ` — one entry per
+/// constraint, length [`num_constraints`](Self::num_constraints) — but shares
+/// the parameter's vector *type*. `m` and `n` need not match.
+///
+/// # Future direction: a `NonlinearConstraints` aggregator (deferred)
+///
+/// This trait is the *single-kind* surface (nonlinear inequalities only),
+/// matching Powell's 1994 paper. PRIMA's modern COBYLA additionally folds
+/// linear inequalities, linear equalities, and box bounds into the same
+/// `constr(x) ≤ 0` vector. A planned `NonlinearConstraints` *aggregator*
+/// (analogous to [`LinearConstraints`], which does this for the linear kinds)
+/// will expose the nonlinear block plus optional linear/box blocks and fold
+/// them together — letting a problem hand COBYLA all four constraint kinds at
+/// once. That is **deliberately deferred**, not foreclosed: like
+/// [`LinearConstraints`] it will be *standalone* (not a parent of this trait,
+/// no blanket bridge — a blanket impl could only forward the nonlinear block
+/// and would silently drop the linear/box data), so adding it later is purely
+/// additive and breaks nothing here. This single-kind trait remains the right
+/// surface for the inequality-only consumer.
+///
+/// # Examples
+///
+/// A problem feasible inside the unit disk, `x₁² + x₂² ≤ 1`, written as the
+/// single constraint `c(x) = x₁² + x₂² − 1 ≤ 0`:
+///
+/// ```
+/// use basin::{CostFunction, NonlinearInequalityConstraints};
+///
+/// struct InDisk;
+/// impl CostFunction for InDisk {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = std::convert::Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+///         Ok(x[0] * x[1]) // minimize x1*x2 over the disk
+///     }
+/// }
+/// impl NonlinearInequalityConstraints for InDisk {
+///     fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+///         Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
+///     }
+///     fn num_constraints(&self) -> usize { 1 }
+/// }
+///
+/// let p = InDisk;
+/// assert_eq!(p.constraints(&vec![0.0, 0.0]).unwrap(), vec![-1.0]); // interior: feasible
+/// assert_eq!(p.num_constraints(), 1);
+/// ```
+pub trait NonlinearInequalityConstraints: CostFunction {
+    /// Evaluate the constraint function `c(x) ∈ ℝᵐ`. The point is feasible iff
+    /// every returned component is `≤ 0`; the constraint violation is
+    /// `[ maxᵢ cᵢ(x) ]₊`. The returned vector has length
+    /// [`num_constraints`](Self::num_constraints) and shares the parameter's
+    /// vector type.
+    fn constraints(&self, x: &Self::Param) -> Result<Self::Param, Self::Error>;
+
+    /// The number of constraints `m` (length of the
+    /// [`constraints`](Self::constraints) vector). Lets a solver size its
+    /// per-constraint model storage before the first evaluation.
+    fn num_constraints(&self) -> usize;
 }
 
 /// The general linearly-constrained problem: box bounds, linear equalities,

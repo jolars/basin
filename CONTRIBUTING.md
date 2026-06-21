@@ -15,11 +15,13 @@ is recorded in `docs/api-stabilization.md`.
 `argmin`. It pairs a small generic core --- problem traits you implement, a
 pluggable termination layer, and an `Executor` driver loop --- with a growing
 set of solvers spanning first-order / quasi-Newton (gradient descent, BFGS,
-L-BFGS / L-BFGS-B), derivative-free (Nelder-Mead, Brent), nonlinear least
+L-BFGS / L-BFGS-B), derivative-free (Nelder-Mead, Brent, and Powell's
+model-based family NEWUOA / BOBYQA / LINCOA / COBYLA), nonlinear least
 squares (Gauss-Newton, Levenberg-Marquardt, trust-region-reflective), global /
 stochastic (random search, CMA-ES, a steady-state GA, memetic combinations), and
 constrained methods (projected gradient, bounded Nelder-Mead / L-BFGS-B /
-CMA-ES, log-barrier, augmented Lagrangian). Solvers are generic over the
+CMA-ES, log-barrier, augmented Lagrangian, and COBYLA for nonlinear inequality
+constraints). Solvers are generic over the
 linear-algebra backend (`Vec<f64>`, nalgebra, ndarray, faer).
 
 ## Commands
