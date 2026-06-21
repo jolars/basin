@@ -70,7 +70,7 @@ function seriesFor(solver: Solver, problem: string) {
         implementations of the same family against each other; the NEWUOA case
         is the exception — basin and nlopt run the <em>same</em> Powell
         algorithm (matched ρ_beg/ρ_end), and it's the only case off Rosenbrock
-        (Styblinski–Tang at n = 10). Because no two implementations share a code
+        (Styblinski–Tang at n = 5). Because no two implementations share a code
         path, a single mean solve time would hide the differences in path and
         per-iteration cost. Instead each chart plots <strong>suboptimality</strong>
         <code class="font-mono">f(x) − f*</code>
@@ -112,7 +112,7 @@ function seriesFor(solver: Solver, problem: string) {
         and L-BFGS cases run from the classic Rosenbrock start to a
         {data.iterations}-iteration cap (a cap — the quasi-Newton case converges
         first, and gomez's NM hits its internal no-progress stop before the
-        budget); the NEWUOA case instead runs on Styblinski–Tang (n = 10) from
+        budget); the NEWUOA case instead runs on Styblinski–Tang (n = 5) from
         the origin to natural ρ-convergence. Each point is the median wall-clock
         time per iteration over repeated runs (nlopt, which exposes no
         per-iteration hook, is sampled per function evaluation as a best-so-far

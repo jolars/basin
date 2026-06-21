@@ -36,7 +36,7 @@ type Library = (typeof LIBRARY_ORDER)[number];
  * lines up with the derivative-free NM case; nlopt joins NM, L-BFGS, and the
  * NEWUOA case (where it and basin are the same algorithm) but has no GD entry
  * (its `Lbfgs` is the closest first-order analog). The NEWUOA case is the only
- * one off Rosenbrock — Styblinski–Tang at n = 10. Keep in sync with
+ * one off Rosenbrock — Styblinski–Tang at n = 5. Keep in sync with
  * `COMPETITOR_CASES` in `src/lib/data/competitors.ts` and the cases in the
  * `trace` bench (`crates/competitor-bench/src/bin/trace.rs`).
  */

@@ -29,9 +29,11 @@
 //!     algorithm in two implementations, basin vs nlopt's `LN_NEWUOA`. Unlike
 //!     the cases above (different implementations of the same *family*), here
 //!     ρ_beg / ρ_end and `npt = 2n+1` are matched as closely as the two APIs
-//!     allow. Run on Styblinski–Tang at `n = 10` from the origin (higher `n`,
-//!     where the model-based method is more interesting); both sides converge
-//!     on ρ rather than running the fixed iteration budget the others use.
+//!     allow. Run on Styblinski–Tang at `n = 5` from the origin — a multimodal
+//!     problem (2ⁿ local wells) where the quadratic-model method has more to
+//!     chew on than on Rosenbrock, and both implementations descend to the
+//!     global minimum; both sides converge on ρ rather than running the fixed
+//!     iteration budget the others use.
 //!
 //! Timing: the solvers are deterministic, so the cost sequence is identical
 //! every run and only timing jitters. We run `REPS` reps per (case, library)
@@ -82,9 +84,11 @@ const FLOOR: f64 = 1e-16;
 /// Problem dimension (classic 2-D Rosenbrock).
 const N: usize = 2;
 
-/// Dimension for the NEWUOA-vs-NEWUOA Styblinski–Tang case. Higher `n` than
-/// the Rosenbrock cases, where the model-based DFO method is more interesting.
-const N_ST: usize = 10;
+/// Dimension for the NEWUOA-vs-NEWUOA Styblinski–Tang case. A modest `n` where
+/// both implementations descend to the global minimum and track closely; the
+/// multimodal Styblinski–Tang gives the model-based DFO method more to chew on
+/// than Rosenbrock does.
+const N_ST: usize = 5;
 
 /// Matched trust-region schedule for the NEWUOA case: initial radius ρ_beg
 /// (basin's `with_rho_beg` / nlopt's initial step) and final radius ρ_end
@@ -570,7 +574,7 @@ fn main() {
         },
         // ---- NEWUOA (Powell's model-based DFO) — same algorithm, two
         //      implementations: basin vs nlopt's `LN_NEWUOA`, matched ρ_beg /
-        //      ρ_end and `npt = 2n+1`, on Styblinski–Tang at n = 10 from the
+        //      ρ_end and `npt = 2n+1`, on Styblinski–Tang at n = 5 from the
         //      origin. Both run to natural ρ-convergence (not the iter cap). ----
         Trace {
             solver: "newuoa",

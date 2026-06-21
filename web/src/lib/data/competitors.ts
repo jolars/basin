@@ -95,7 +95,7 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
     {
         solver: "newuoa",
         problem: "styblinski",
-        blurb: "Powell's model-based derivative-free NEWUOA — the same algorithm in two implementations: basin vs nlopt's LN_NEWUOA, with matched ρ_beg / ρ_end and npt = 2n+1. The only case off Rosenbrock — Styblinski–Tang at n = 10 from the origin, where the quadratic-model method has more to chew on. Both run to natural ρ-convergence (not the iteration cap). nlopt's curve is a per-eval best-so-far trace; basin's is per-iteration.",
+        blurb: "Powell's model-based derivative-free NEWUOA — the same algorithm in two implementations: basin vs nlopt's LN_NEWUOA, with matched ρ_beg / ρ_end and npt = 2n+1. The only case off Rosenbrock — the multimodal Styblinski–Tang at n = 5 from the origin, where the quadratic-model method has more to chew on and both implementations descend to the global minimum. Both run to natural ρ-convergence (not the iteration cap). nlopt's curve is a per-eval best-so-far trace; basin's is per-iteration.",
     },
 ];
 
