@@ -1,4 +1,4 @@
-use crate::core::inner::WarmStart;
+use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{NegInPlace, Scalar, ScaleInPlace, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -204,7 +204,7 @@ where
 /// (e.g. [`BarrierMethod`](crate::solver::BarrierMethod) /
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)),
 /// seeding a fresh [`BasicState`] at the warm-start point.
-impl<L, V, F> WarmStart<V> for GradientDescent<L, V, F>
+impl<L, V, F> InitialState<V> for GradientDescent<L, V, F>
 where
     F: Scalar,
     V: Clone,
@@ -213,6 +213,13 @@ where
     fn seed(&self, x: &V) -> BasicState<V, F> {
         BasicState::new(x.clone())
     }
+}
+
+impl<L, V, F> WarmStart<V> for GradientDescent<L, V, F>
+where
+    F: Scalar,
+    V: Clone,
+{
 }
 
 #[cfg(test)]

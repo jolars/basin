@@ -4,7 +4,7 @@ use rand_distr::uniform::SampleUniform;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::executor::OptimizationResult;
-use crate::core::inner::{InnerExecutor, WarmStart};
+use crate::core::inner::{InitialState, InnerExecutor};
 use crate::core::math::{SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -274,7 +274,7 @@ impl<P, I, V, F> Solver<P, BasicPopulationState<V, F>> for DeInject<I, V, F>
 where
     F: Scalar + SampleUniform,
     P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
-    I: MemeticInner<V, F> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
+    I: MemeticInner<V, F> + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone

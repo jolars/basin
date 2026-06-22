@@ -204,8 +204,26 @@ harder to fix as more code piles on.
       regression guard running the bare workspace wasm build (ci.yml `wasm` job,
       `default` matrix entry), which now also exercises `basin-wasm` on wasm.
 
-- [ ] **State construction surface: hide the state zoo behind the solver (or
-      honest "no").** The state taxonomy (`BasicState`, `QuasiNewtonState`,
+- [x] **State construction surface: hide the state zoo behind the solver (or
+      honest "no").** *Resolved: added `Executor::from_start(problem, solver,
+      x0)` (`core/executor.rs`), which seeds the solver's natural state from a
+      bare starting vector via a new public `InitialState<V>` trait
+      (`core/inner.rs`); `WarmStart<V>: InitialState<V>` is now an empty marker
+      for composition-safe inners, so non-inner solvers (TrustRegion, Powell /
+      MADS families, barrier / AL) are seedable without being blessed as inners.
+      The three-arg `Executor::new` stays as the explicit / custom-seed form
+      (caveat (a): coexistence). CMA-ES (needs σ), the population GA / DE /
+      random-search solvers (sample the box), and the bracketing scalar solvers
+      (Brent, golden-section) deliberately don't implement `InitialState` — a
+      compile error directs callers to `new`. Closed the BFGS `Vec`/faer seed
+      gap (`WarmStart` was nalgebra-only). Added the solver→state→`from_start`
+      table to the crate-root rustdoc and a getting-started section in the web
+      docs; round-trip equivalence + per-backend BFGS + f32 tests in
+      `tests/from_start_round_trip.rs`. Note on caveat (b): no shipped solver
+      genuinely exercises `Solver<P, S>` openness, but the seed capability still
+      lives on a separate `InitialState` trait (not an associated `Solver::State`),
+      as the caveat preferred.* The state taxonomy (`BasicState`,
+      `QuasiNewtonState`,
       `LbfgsState`, `NllsState`, `BasicSimplexState`, `BasicPopulationState`,
       `CmaEsState`, `ScalarState`, …) is three layers, and only one is worth
       revisiting. **Layer 1 — the capability traits** (`GradientState` /

@@ -28,6 +28,7 @@ mod parity;
 mod tests;
 
 use crate::core::constraint::NonlinearInequalityConstraints;
+use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -164,6 +165,17 @@ where
         v[i] = x;
     }
     v
+}
+
+impl<V, F> InitialState<V> for Cobyla<F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = CobylaState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        CobylaState::new(x.clone())
+    }
 }
 
 impl<P, V, F> Solver<P, CobylaState<V, F>> for Cobyla<F>

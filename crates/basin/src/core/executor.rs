@@ -489,6 +489,33 @@ where
         }
     }
 
+    /// Build an executor seeding the solver's natural initial state at the
+    /// starting point `x0`, instead of constructing the [`State`] by hand.
+    ///
+    /// `Executor::from_start(problem, solver, x0)` calls
+    /// [`InitialState::seed`](crate::core::inner::InitialState::seed), so the
+    /// caller never names the concrete state type — the common case reads
+    /// `Executor::from_start(problem, TrustRegion::new(), x0).run()`. The
+    /// seeded state uses the solver's natural default scale (identity inverse
+    /// Hessian, default simplex edge, the solver's default trust radius, …).
+    ///
+    /// Use [`new`](Self::new) directly to supply a custom initial state (a
+    /// pre-built simplex, a warm-started inverse Hessian, an anisotropic
+    /// CMA-ES covariance). Solvers whose natural initialization needs more
+    /// than a point — CMA-ES (step-size σ), the population GA / DE / random
+    /// search (they sample the box), and the bracketing scalar solvers
+    /// (Brent, golden-section) — deliberately do not implement
+    /// [`InitialState`](crate::core::inner::InitialState), so calling
+    /// `from_start` with one is a compile error pointing back to
+    /// [`new`](Self::new).
+    pub fn from_start<V>(problem: P, solver: So, x0: V) -> Self
+    where
+        So: crate::core::inner::InitialState<V, State = S>,
+    {
+        let state = solver.seed(&x0);
+        Self::new(problem, solver, state)
+    }
+
     /// Convenience setter for the default `MaxIter` criterion. Equivalent
     /// effect to `terminate_on(MaxIter(n))` but mutates a dedicated field
     /// so subsequent calls replace rather than stack.

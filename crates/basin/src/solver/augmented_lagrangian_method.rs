@@ -3,7 +3,7 @@
 use crate::core::augmented_lagrangian::AugmentedLagrangian;
 use crate::core::constraint::LinearEqualityConstraints;
 use crate::core::executor::run_loop;
-use crate::core::inner::WarmStart;
+use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
     Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
 };
@@ -31,7 +31,7 @@ use crate::core::termination::{
 /// The method is generic over the inner solver `So`: any gradient-based
 /// solver that implements [`WarmStart`] and
 /// iterates over its own [`GradientState`], seeded at the current iterate via
-/// [`WarmStart::seed`]. That covers
+/// [`InitialState::seed`]. That covers
 /// [`GradientDescent`](crate::solver::GradientDescent) ([`BasicState`]),
 /// [`Bfgs`](crate::solver::Bfgs)
 /// ([`QuasiNewtonState`](crate::core::state::QuasiNewtonState)), and unbounded
@@ -242,6 +242,17 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
         assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
         self.inner_grad_tol = inner_grad_tol;
         self
+    }
+}
+
+impl<So, V, F> InitialState<V> for AugmentedLagrangianMethod<So, V, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = BasicState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        BasicState::new(x.clone())
     }
 }
 

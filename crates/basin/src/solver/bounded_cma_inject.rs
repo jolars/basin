@@ -1,6 +1,6 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::executor::OptimizationResult;
-use crate::core::inner::{InnerExecutor, WarmStart};
+use crate::core::inner::{InitialState, InnerExecutor};
 use crate::core::math::{
     ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
     MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace,
@@ -156,7 +156,7 @@ impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>> for BoundedCmaInject<I, V, M,
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
-    I: MemeticInner<V, F> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
+    I: MemeticInner<V, F> + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone

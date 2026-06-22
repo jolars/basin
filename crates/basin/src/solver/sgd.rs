@@ -1,5 +1,6 @@
 use rand::seq::SliceRandom;
 
+use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, ScaleInPlace, ScaledAdd};
 use crate::core::problem::{CostFunction, MiniBatchGradient, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
@@ -263,6 +264,17 @@ impl<V, F: Scalar> Sgd<V, F> {
         assert!(period > 0, "Sgd: cost_eval_every period must be > 0");
         self.cost_eval_every = Some(period);
         self
+    }
+}
+
+impl<V, F> InitialState<V> for Sgd<V, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = BasicState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        BasicState::new(x.clone())
     }
 }
 

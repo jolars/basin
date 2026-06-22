@@ -1,5 +1,4 @@
-#[cfg(feature = "nalgebra")]
-use crate::core::inner::WarmStart;
+use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
     Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity, NegInPlace, NormSquared, Scalar,
     ScaleInPlace, ScaledAdd, VectorLen,
@@ -237,11 +236,27 @@ where
 /// seeding a fresh [`QuasiNewtonState`] (identity inverse-Hessian) at the
 /// warm-start point.
 ///
-/// nalgebra only for now — the composed (barrier / AL) solvers seed their
-/// inner on the nalgebra backend. A `Vec<f64>` / faer `WarmStart` is a
-/// follow-up if a `Vec`-backed barrier inner is wanted.
+/// Implemented for every backend BFGS itself runs on — `Vec<f64>` (via the
+/// hand-rolled [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra,
+/// and faer — so [`Executor::from_start`](crate::Executor::from_start) and
+/// the composed (barrier / AL) inners seed uniformly regardless of backend.
+/// `ndarray` is excluded for the same reason BFGS itself is: `Array2`
+/// implements neither `GeneralRankOneUpdate` nor the rank-one update BFGS
+/// needs (see the `# Backends` note above).
+impl<S, F> InitialState<Vec<F>> for Bfgs<S, F>
+where
+    F: Scalar,
+{
+    type State = QuasiNewtonState<Vec<F>, crate::core::math::DenseMatrix<F>, F>;
+    fn seed(&self, x: &Vec<F>) -> Self::State {
+        QuasiNewtonState::<Vec<F>, crate::core::math::DenseMatrix<F>, F>::new(x.clone())
+    }
+}
+
+impl<S, F> WarmStart<Vec<F>> for Bfgs<S, F> where F: Scalar {}
+
 #[cfg(feature = "nalgebra")]
-impl<S, F> WarmStart<nalgebra::DVector<F>> for Bfgs<S, F>
+impl<S, F> InitialState<nalgebra::DVector<F>> for Bfgs<S, F>
 where
     F: Scalar + nalgebra::Scalar + num_traits::Zero,
 {
@@ -250,3 +265,23 @@ where
         QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(x.clone())
     }
 }
+
+#[cfg(feature = "nalgebra")]
+impl<S, F> WarmStart<nalgebra::DVector<F>> for Bfgs<S, F> where
+    F: Scalar + nalgebra::Scalar + num_traits::Zero
+{
+}
+
+#[cfg(feature = "faer")]
+impl<S, F> InitialState<faer::Col<F>> for Bfgs<S, F>
+where
+    F: Scalar + faer_traits::ComplexField,
+{
+    type State = QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
+    fn seed(&self, x: &faer::Col<F>) -> Self::State {
+        QuasiNewtonState::<faer::Col<F>, faer::Mat<F>, F>::new(x.clone())
+    }
+}
+
+#[cfg(feature = "faer")]
+impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where F: Scalar + faer_traits::ComplexField {}

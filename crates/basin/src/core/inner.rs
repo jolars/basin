@@ -20,37 +20,51 @@ use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
 use crate::core::termination::TerminationCriterion;
 
-/// Construct a fresh inner-solver [`State`] seeded at a point.
+/// Marks a solver as eligible to be the *inner* of a composed solver.
 ///
-/// Implemented by solvers that can serve as the *inner* of a composed
-/// solver — one that repeatedly minimizes a wrapped subproblem starting
-/// from the current outer iterate (e.g.
-/// [`BarrierMethod`](crate::solver::BarrierMethod) and
+/// Composed solvers — [`BarrierMethod`](crate::solver::BarrierMethod) and
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)
 /// re-solving their barrier / augmented-Lagrangian subproblem at each
-/// continuation step). The outer solver calls [`seed`](Self::seed) to
-/// build a private inner state at the warm-start point, drives the inner
-/// over it, then reads the refined iterate back via
-/// [`State::param`].
+/// continuation step, or the CMA-injection family via the
+/// [`MemeticInner`](crate::solver::MemeticInner) sub-trait — repeatedly seed
+/// a fresh inner state at the current outer iterate, drive the inner over it,
+/// then read the refined iterate back via [`State::param`].
 ///
-/// [`seed`](Self::seed) uses the solver's *natural default scale*: there
-/// is no outer step-size to track, so a simplex solver picks its own
-/// default edge, a Hessian-history solver starts from the identity, and so
-/// on. The CMA-flavored, step-size-scaled variant lives on the
-/// [`MemeticInner`](crate::solver::MemeticInner) sub-trait, which extends
-/// this one.
+/// The seed/state machinery itself lives on the [`InitialState`] supertrait
+/// (which also powers the top-level
+/// [`Executor::from_start`](crate::core::executor::Executor::from_start)
+/// convenience constructor). `WarmStart` adds no items — it is a marker
+/// certifying that a solver's natural [`seed`](InitialState::seed) is
+/// *composition-safe*. A solver can build a default initial state
+/// ([`InitialState`]) without being a blessed inner: e.g. `TrustRegion` and
+/// the Powell / MADS families implement `InitialState` but not `WarmStart`.
+pub trait WarmStart<V>: InitialState<V> {}
+
+/// Build a solver's natural initial [`State`] from a starting point.
+///
+/// `seed(&self, x)` returns a fresh state whose [`State::param`] equals `x`,
+/// using the solver's *natural default scale*: there is no outer step-size to
+/// track, so a simplex solver picks its own default edge, a Hessian-history
+/// solver starts from the identity, a trust-region solver uses its default
+/// radius, and so on.
+///
+/// This is the capability behind
+/// [`Executor::from_start`](crate::core::executor::Executor::from_start) —
+/// `Executor::from_start(problem, solver, x0)` calls
+/// [`seed`](Self::seed) so the caller never names the concrete state type.
+/// The composition layer reaches it through the [`WarmStart`] subtrait
+/// (which marks a solver as a validated inner); plain `InitialState` callers
+/// get the front-door constructor without that promise.
 ///
 /// # Contract
 ///
-/// **Implementor must:** return a state whose
-/// [`State::param`] equals `x` (a fresh
-/// seed, not a continuation of any previous solve), so the outer solver's
-/// warm start is honored.
-pub trait WarmStart<V> {
+/// **Implementor must:** return a state whose [`State::param`] equals `x`
+/// (a fresh seed, not a continuation of any previous solve).
+pub trait InitialState<V> {
     /// State shape this solver iterates against.
     type State: State<Param = V>;
 
-    /// Build a fresh inner state seeded at `x` using the solver's natural
+    /// Build a fresh state seeded at `x` using the solver's natural
     /// default scale.
     fn seed(&self, x: &V) -> Self::State;
 }
@@ -166,7 +180,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
 
     /// Read-only access to the inner solver. Lets composed outer
     /// solvers dispatch on the inner before [`run`](Self::run) — e.g. to
-    /// build an inner state via [`WarmStart::seed`] or
+    /// build an inner state via [`InitialState::seed`] or
     /// `MemeticInner::seed_scaled`. Mutable access goes through
     /// [`run`](Self::run), which already takes `&mut self`.
     pub fn solver(&self) -> &So {

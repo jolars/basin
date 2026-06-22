@@ -1,5 +1,5 @@
 use crate::core::executor::OptimizationResult;
-use crate::core::inner::{InnerExecutor, WarmStart};
+use crate::core::inner::{InitialState, InnerExecutor, WarmStart};
 use crate::core::math::{
     ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NormSquared,
     RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
@@ -19,9 +19,9 @@ use crate::solver::nelder_mead::NelderMead;
 /// An inner solver eligible to plug into a CMA-ES injection wrapper
 /// ([`CmaInject`] / [`BoundedCmaInject`](crate::solver::BoundedCmaInject)).
 ///
-/// Extends [`WarmStart`], which supplies the associated
-/// [`State`](WarmStart::State) shape and the σ-free
-/// [`seed`](WarmStart::seed). `MemeticInner` adds the step-size-scaled
+/// Extends [`WarmStart`] (and thus [`InitialState`]), which supplies the
+/// associated [`State`](InitialState::State) shape and the σ-free
+/// [`seed`](InitialState::seed). `MemeticInner` adds the step-size-scaled
 /// seed CMA-ES injection needs: given a candidate `x` and the current
 /// CMA step-size `σ`, build a fresh inner state whose default scale
 /// tracks the outer distribution's spread.
@@ -30,7 +30,7 @@ use crate::solver::nelder_mead::NelderMead;
 ///
 /// Shipped impls for [`NelderMead`], [`LevenbergMarquardt`], and
 /// [`Lbfgsb`](crate::Lbfgsb). To plug in something else, either impl this trait (plus
-/// [`WarmStart`]) on your solver, or wrap a `Solver<P, S>` in
+/// [`WarmStart`] and [`InitialState`]) on your solver, or wrap a `Solver<P, S>` in
 /// [`ClosureInner`] with an inline seeder closure (escape hatch for
 /// one-off experiments and the `AlwaysFails`-style failure-bubbling
 /// tests).
@@ -40,7 +40,7 @@ use crate::solver::nelder_mead::NelderMead;
 /// Each inner has a natural state shape: NM wants a simplex (`n + 1`
 /// vertices), LM wants a single iterate with cached residual / Jacobian,
 /// L-BFGS-B wants the limited-memory history. Tying
-/// [`State`](WarmStart::State) to [`WarmStart`] lets the memetic factory
+/// [`State`](InitialState::State) to [`InitialState`] lets the memetic factory
 /// write `BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())`
 /// without the caller having to spell out `LbfgsState<V>` in turbofish —
 /// `I` determines it.
@@ -63,7 +63,7 @@ where
     /// by the current step-size `sigma`. Called once per refined
     /// candidate per outer generation.
     ///
-    /// Defaults to the σ-free [`WarmStart::seed`]; only inners whose
+    /// Defaults to the σ-free [`seed`](InitialState::seed); only inners whose
     /// state scales with σ (Nelder-Mead's simplex edge) override it.
     fn seed_scaled(&self, x: &V, _sigma: F) -> Self::State {
         self.seed(x)
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<I, S, V, F> WarmStart<V> for ClosureInner<I, S, V, F>
+impl<I, S, V, F> InitialState<V> for ClosureInner<I, S, V, F>
 where
     F: Scalar,
     S: State<Param = V>,
@@ -130,6 +130,13 @@ where
         // is acceptable here where it is not in the native impls.
         (self.seed_fn)(x, F::zero())
     }
+}
+
+impl<I, S, V, F> WarmStart<V> for ClosureInner<I, S, V, F>
+where
+    F: Scalar,
+    S: State<Param = V>,
+{
 }
 
 impl<I, S, V, F> MemeticInner<V, F> for ClosureInner<I, S, V, F>
@@ -146,7 +153,7 @@ where
 // WarmStart + MemeticInner impls for the three shipped inners.
 // -----------------------------------------------------------------------
 
-impl<Mode, V, F> WarmStart<V> for NelderMead<Mode, F>
+impl<Mode, V, F> InitialState<V> for NelderMead<Mode, F>
 where
     F: Scalar,
     V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = F>,
@@ -158,6 +165,13 @@ where
         // track (e.g. a barrier / AL inner).
         BasicSimplexState::new(x.clone())
     }
+}
+
+impl<Mode, V, F> WarmStart<V> for NelderMead<Mode, F>
+where
+    F: Scalar,
+    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = F>,
+{
 }
 
 impl<Mode, V, F> MemeticInner<V, F> for NelderMead<Mode, F>
@@ -183,7 +197,7 @@ where
     }
 }
 
-impl<V, M, F> WarmStart<V> for LevenbergMarquardt<V, M, F>
+impl<V, M, F> InitialState<V> for LevenbergMarquardt<V, M, F>
 where
     F: Scalar,
     V: Clone,
@@ -192,6 +206,13 @@ where
     fn seed(&self, x: &V) -> NllsState<V, F> {
         NllsState::new(x.clone())
     }
+}
+
+impl<V, M, F> WarmStart<V> for LevenbergMarquardt<V, M, F>
+where
+    F: Scalar,
+    V: Clone,
+{
 }
 
 impl<V, M, F> MemeticInner<V, F> for LevenbergMarquardt<V, M, F>
@@ -206,7 +227,7 @@ where
 // used as a CMA inner) and `Lbfgs<Unbounded>` (used as a barrier / AL
 // inner) seed the same `LbfgsState`. `MemeticInner` stays on the bounded
 // alias only — CMA injection pairs with the bounded variant.
-impl<Mode, S, V, F> WarmStart<V> for Lbfgs<Mode, S, F>
+impl<Mode, S, V, F> InitialState<V> for Lbfgs<Mode, S, F>
 where
     F: Scalar,
     V: Clone,
@@ -215,6 +236,13 @@ where
     fn seed(&self, x: &V) -> LbfgsState<V, F> {
         LbfgsState::new(x.clone(), self.m_capacity)
     }
+}
+
+impl<Mode, S, V, F> WarmStart<V> for Lbfgs<Mode, S, F>
+where
+    F: Scalar,
+    V: Clone,
+{
 }
 
 impl<S, V, F> MemeticInner<V, F> for Lbfgs<Bounded, S, F>
@@ -392,7 +420,7 @@ impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>> for CmaInject<I, V, M, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    I: MemeticInner<V, F> + Solver<P, <I as WarmStart<V>>::State, Error = P::Error>,
+    I: MemeticInner<V, F> + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone

@@ -50,6 +50,53 @@
 //! assert!(result.cost() < 1e-12);
 //! ```
 //!
+//! # Seeding the initial state
+//!
+//! [`Executor::new`] takes a fully-built [`State`] so you control the initial
+//! iterate (a custom simplex, a warm-started inverse Hessian, an anisotropic
+//! CMA-ES covariance). For the common case — start at a point, use the
+//! solver's natural defaults — [`Executor::from_start`] takes the bare
+//! starting vector instead and builds the state for you via
+//! [`InitialState::seed`], so you never name the concrete state type:
+//!
+//! ```
+//! use basin::{Executor, MaxIter, NelderMead};
+//! # struct Sphere;
+//! # impl basin::CostFunction for Sphere {
+//! #     type Param = Vec<f64>;
+//! #     type Output = f64;
+//! #     type Error = std::convert::Infallible;
+//! #     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+//! #         Ok(x.iter().map(|xi| xi * xi).sum())
+//! #     }
+//! # }
+//! let result = Executor::from_start(Sphere, NelderMead::new(), vec![1.0, 1.0])
+//!     .terminate_on(MaxIter(500))
+//!     .run()
+//!     .unwrap();
+//! ```
+//!
+//! Most solvers support `from_start`; the few whose natural initialization
+//! needs more than a point do not implement [`InitialState`], so calling
+//! `from_start` with one is a compile error (use [`Executor::new`] with an
+//! explicit state). The map:
+//!
+//! | Solver | State | `from_start` |
+//! | ------ | ----- | ------------ |
+//! | `GradientDescent`, `Sgd` | `BasicState` | ✓ |
+//! | `ProjectedGradientDescent` | `BasicState` | ✓ (`f64` only) |
+//! | `Bfgs` | `QuasiNewtonState` | ✓ (`Vec`/nalgebra/faer) |
+//! | `Lbfgs`, `Lbfgsb` | `LbfgsState` | ✓ |
+//! | `TrustRegion` | `BasicState` | ✓ |
+//! | `GaussNewton`, `LevenbergMarquardt`, `Trf` | `NllsState` | ✓ |
+//! | `NelderMead` | `BasicSimplexState` | ✓ |
+//! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState` / … | ✓ |
+//! | `Mads` | `MadsState` / `ConstrainedMadsState` | ✓ |
+//! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
+//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma` | `CmaEsState` | ✗ — needs a step-size σ |
+//! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ — sample the box, ignore a point |
+//! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ — bracket, not a point |
+//!
 //! # Error model
 //!
 //! basin distinguishes *three* outcomes a run can produce. The split is a
@@ -123,7 +170,7 @@ pub use crate::core::constraint::{
     NonlinearInequalityConstraints,
 };
 pub use crate::core::executor::{Executor, OptimizationResult, StepOutcome, Stepper, run_loop};
-pub use crate::core::inner::{InnerExecutor, WarmStart};
+pub use crate::core::inner::{InitialState, InnerExecutor, WarmStart};
 pub use crate::core::math::{
     ClampInPlace, ComponentMulAssign, DenseMatrix, DenseMatrixFromFn, Dot, GramMatrix,
     LinearSolveError, LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,

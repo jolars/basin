@@ -1,3 +1,4 @@
+use crate::core::inner::InitialState;
 use crate::core::math::{
     GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity, NormSquared, Scalar,
     ScaledAdd,
@@ -124,6 +125,17 @@ impl<V, M, F: Scalar> GaussNewton<V, M, F> {
         assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
         self.tol_grad = tol;
         self
+    }
+}
+
+impl<V, M, F> InitialState<V> for GaussNewton<V, M, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = NllsState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        NllsState::new(x.clone())
     }
 }
 

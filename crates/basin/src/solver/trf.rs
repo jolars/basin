@@ -1,4 +1,5 @@
 use crate::core::constraint::BoxConstraints;
+use crate::core::inner::InitialState;
 use crate::core::math::{
     AddDiagonalVectorInPlace, BoxAffineScaling, Dot, GramMatrix, LinearSolveSpd, MatTransposeVec,
     MaxDiagonal, NegInPlace, NormSquared, Scalar, ScaledAdd,
@@ -252,6 +253,17 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
         assert!(n > 0, "max_inner_attempts must be > 0");
         self.max_inner_attempts = n;
         self
+    }
+}
+
+impl<V, M, F> InitialState<V> for Trf<V, M, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = NllsState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        NllsState::new(x.clone())
     }
 }
 

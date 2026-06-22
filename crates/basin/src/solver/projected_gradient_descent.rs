@@ -1,4 +1,5 @@
 use crate::core::constraint::BoxConstraints;
+use crate::core::inner::InitialState;
 use crate::core::math::{ClampInPlace, NegInPlace, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -140,6 +141,21 @@ impl<S> ProjectedGradientDescent<S> {
     /// regimes where many components hit their bounds.
     pub fn with_line_search(line_search: S) -> Self {
         Self { line_search }
+    }
+}
+
+// `ProjectedGradientDescent<S>` carries neither the param type `V` nor the
+// scalar `F` on the struct (unlike `GradientDescent<L, V, F>`), so a fully
+// scalar-generic `InitialState` impl would leave `F` unconstrained (E0207).
+// Pin the seed to the crate's `f64` default — the common case; `f32` users
+// build the `BasicState` explicitly via `Executor::new`.
+impl<S, V> InitialState<V> for ProjectedGradientDescent<S>
+where
+    V: Clone,
+{
+    type State = BasicState<V, f64>;
+    fn seed(&self, x: &V) -> Self::State {
+        BasicState::new(x.clone())
     }
 }
 

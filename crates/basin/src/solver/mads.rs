@@ -63,6 +63,7 @@ pub(crate) mod progressive_barrier;
 use std::marker::PhantomData;
 
 use crate::core::constraint::{BoxConstraints, NonlinearInequalityConstraints};
+use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -265,6 +266,39 @@ fn out_of_box<F: Scalar>(x: &[F], lower: &[F], upper: &[F]) -> bool {
         .zip(lower)
         .zip(upper)
         .any(|((&xi, &lo), &up)| xi < lo || xi > up)
+}
+
+impl<V, F> InitialState<V> for Mads<Unbounded, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = MadsState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        MadsState::new(x.clone())
+    }
+}
+
+impl<V, F> InitialState<V> for Mads<Bounded, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = MadsState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        MadsState::new(x.clone())
+    }
+}
+
+impl<V, F> InitialState<V> for Mads<Constrained, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = ConstrainedMadsState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        ConstrainedMadsState::new(x.clone())
+    }
 }
 
 impl<P, V, F> Solver<P, MadsState<V, F>> for Mads<Unbounded, F>

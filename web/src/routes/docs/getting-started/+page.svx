@@ -68,6 +68,28 @@ fn main() {
 }
 ```
 
+## Seeding from a point
+
+`Executor::new` takes a fully-built state, so you control the initial iterate.
+For the common case — start at a point with the solver's natural defaults —
+`Executor::from_start` takes the bare starting vector and builds the state for
+you, so you never name the concrete state type:
+
+```rust
+use basin::{Executor, GradientDescent, GradientTolerance};
+
+let result = Executor::from_start(Rosenbrock, GradientDescent::new(1e-3), vec![-1.2, 1.0])
+    .terminate_on(GradientTolerance(1e-6))
+    .run()
+    .unwrap();
+```
+
+Most solvers support `from_start`. The few whose natural initialization needs
+more than a point — CMA-ES (a step-size σ), the population GA / DE / random
+search (they sample a box), and the bracketing scalar solvers (Brent,
+golden-section) — don't implement it, so calling `from_start` with one is a
+compile error; build the state explicitly and use `Executor::new` instead.
+
 ## Termination criteria
 
 `max_iter` is one stopping condition; the others are pluggable and composed via

@@ -50,6 +50,7 @@ pub(crate) mod trstep;
 mod parity;
 
 use crate::core::constraint::LinearConstraints;
+use crate::core::inner::InitialState;
 use crate::core::math::{MatTransposeVec, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -206,6 +207,17 @@ where
         v[i] = x;
     }
     v
+}
+
+impl<V, F> InitialState<V> for Lincoa<F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = LincoaState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        LincoaState::new(x.clone())
+    }
 }
 
 impl<P, V, F> Solver<P, LincoaState<V, F>> for Lincoa<F>

@@ -4,7 +4,7 @@
 use crate::core::barrier::LogBarrier;
 use crate::core::constraint::LinearInequalityConstraints;
 use crate::core::executor::run_loop;
-use crate::core::inner::WarmStart;
+use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
     MatTransposeVec, MatVec, NegInPlace, NormSquared, Scalar, ScaledAdd, VectorIndex, VectorLen,
 };
@@ -28,7 +28,7 @@ use crate::core::termination::{
 /// The method is generic over the inner solver `So`: any gradient-based
 /// solver that implements [`WarmStart`] and
 /// iterates over its own [`GradientState`]. The inner state is seeded at the
-/// current iterate via [`WarmStart::seed`],
+/// current iterate via [`InitialState::seed`],
 /// so each of [`GradientDescent`](crate::solver::GradientDescent)
 /// ([`BasicState`]), [`Bfgs`](crate::solver::Bfgs)
 /// ([`QuasiNewtonState`](crate::core::state::QuasiNewtonState)), and unbounded
@@ -250,6 +250,17 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
         assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
         self.inner_grad_tol = inner_grad_tol;
         self
+    }
+}
+
+impl<So, V, F> InitialState<V> for BarrierMethod<So, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = BasicState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        BasicState::new(x.clone())
     }
 }
 

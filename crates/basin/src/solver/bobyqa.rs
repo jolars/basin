@@ -24,6 +24,7 @@ mod parity;
 use std::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
+use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -182,6 +183,17 @@ where
     F: Copy,
 {
     (0..n).map(|i| v[i]).collect()
+}
+
+impl<V, F> InitialState<V> for Bobyqa<Bounded, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = BobyqaState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        BobyqaState::new(x.clone())
+    }
 }
 
 impl<P, V, F> Solver<P, BobyqaState<V, F>> for Bobyqa<Bounded, F>

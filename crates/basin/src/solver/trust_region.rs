@@ -31,6 +31,7 @@ pub mod steihaug;
 pub use dogleg::Dogleg;
 pub use steihaug::Steihaug;
 
+use crate::core::inner::InitialState;
 use crate::core::math::{Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Hessian, Problem};
 use crate::core::solver::Solver;
@@ -329,6 +330,17 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F> {
         assert!(n >= 1, "max inner attempts must be ≥ 1");
         self.max_inner = n;
         self
+    }
+}
+
+impl<Sub, V, F> InitialState<V> for TrustRegion<Sub, F>
+where
+    F: Scalar,
+    V: Clone,
+{
+    type State = BasicState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        BasicState::new(x.clone())
     }
 }
 
