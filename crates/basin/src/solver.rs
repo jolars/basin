@@ -87,6 +87,10 @@ pub mod lincoa;
 /// (simplex linear models + L-infinity merit + `trstlp`).
 pub mod cobyla;
 
+/// Trust-region Newton solver (Nocedal & Wright Algorithm 4.1) with
+/// pluggable subproblem strategies (Steihaug-CG, dogleg, Cauchy point).
+pub mod trust_region;
+
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
 pub use bfgs::Bfgs;
@@ -114,3 +118,4 @@ pub use random_search::RandomSearch;
 pub use sgd::Sgd;
 pub use ssga::Ssga;
 pub use trf::Trf;
+pub use trust_region::{CauchyPoint, Dogleg, Steihaug, TrustRegion};
