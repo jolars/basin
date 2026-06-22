@@ -161,6 +161,7 @@ pub use crate::core::termination::{
 pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
+pub use crate::solver::trust_region::{CauchyPoint, Dogleg, Steihaug, TrustRegion};
 pub use crate::solver::{
     AugmentedLagrangianMethod, BarrierMethod, Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent,
     BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton,

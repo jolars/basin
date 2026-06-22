@@ -33,9 +33,36 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra {
-    use basin::problems::RosenbrockResiduals;
-    use basin::{Executor, FiniteDiff, LevenbergMarquardt, NllsState, TerminationReason};
+    use basin::problems::{Rosenbrock, RosenbrockResiduals};
+    use basin::{
+        BasicState, Executor, FiniteDiff, GradientTolerance, LevenbergMarquardt, Method, NllsState,
+        TerminationReason, TrustRegion,
+    };
     use nalgebra::DVector;
+
+    #[test]
+    fn trust_region_on_finite_diff_hessian_minimizes_rosenbrock() {
+        // Rosenbrock exposes only `cost`; `FiniteDiff` supplies both the
+        // gradient and the (central-difference) Hessian the trust-region
+        // Newton solver consumes. The FD Hessian is only ~√ε accurate, so a
+        // strong-but-not-machine-precision bound is the honest check.
+        let problem =
+            FiniteDiff::new(Rosenbrock::<DVector<f64>>::new()).hessian_method(Method::Central);
+
+        let result = Executor::new(
+            problem,
+            TrustRegion::new(),
+            BasicState::new(DVector::from_vec(vec![-1.2, 1.0])),
+        )
+        .max_iter(300)
+        .terminate_on(GradientTolerance(1e-6))
+        .run()
+        .unwrap();
+
+        assert!(result.cost() < 1e-8, "cost = {}", result.cost());
+        assert!((result.param()[0] - 1.0).abs() < 1e-3);
+        assert!((result.param()[1] - 1.0).abs() < 1e-3);
+    }
 
     #[test]
     fn levenberg_marquardt_on_finite_diff_jacobian_matches_analytic() {
