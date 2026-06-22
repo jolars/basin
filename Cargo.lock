@@ -96,7 +96,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "basin"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "criterion",
  "faer",
@@ -116,7 +116,7 @@ dependencies = [
 
 [[package]]
 name = "basin-wasm"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "basin",
  "console_error_panic_hook",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "competitor-bench"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "argmin",
  "argmin-math",
@@ -1400,9 +1400,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.45"
+version = "1.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
+checksum = "dfbc457d0c7a0759a614551b11a6409e5951f6c7537be1f1b7682b9ae9230368"
 dependencies = [
  "proc-macro2",
 ]

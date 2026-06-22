@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/jolars/basin/compare/v1.1.0...v1.2.0) (2026-06-22)
+
+### Features
+- **executor:** add from_start convenience constructor ([`ea1164b`](https://github.com/jolars/basin/commit/ea1164bf52f458f230d268d39be28d31ea7134d0))
+- **solver:** add trust-region Newton solver ([`7cbd2d4`](https://github.com/jolars/basin/commit/7cbd2d46f70164f4ce16794223c905a40d53794b))
+- **backends:** add nalgebra-lapack feature for LAPACK-backed factorizations ([`1742321`](https://github.com/jolars/basin/commit/1742321469ab8e75beadb3951ac4b9131892e7dd))
+- **bench:** add basin-vs-nlopt NEWUOA convergence comparison ([`1e2eb46`](https://github.com/jolars/basin/commit/1e2eb465ca776d28f30912fe6fe6fdcd9711f060))
+
 ## [1.1.0](https://github.com/jolars/basin/compare/v1.0.0...v1.1.0) (2026-06-21)
 
 ### Features
