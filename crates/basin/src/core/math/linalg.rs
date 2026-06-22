@@ -123,7 +123,9 @@ pub trait GramMatrix {
 /// Cholesky (`L Lᵀ`); the `DenseMatrix` impl is a pure-Rust Cholesky
 /// (`dense_chol`), wasm-clean with no BLAS/LAPACK. Pivoting variants live
 /// in the backend crates if needed. `ndarray::Array2<f64>` does not
-/// implement it (matvec only).
+/// implement it (matvec only). With the opt-in `nalgebra-lapack` feature the
+/// nalgebra `DMatrix` impl routes through LAPACK's Cholesky instead (f32/f64
+/// only); see the feature note in `Cargo.toml`.
 pub trait LinearSolveSpd<V> {
     /// Solve `self · x = b` assuming `self` is SPD. Returns
     /// [`LinearSolveError::NotPositiveDefinite`] when factorization
@@ -374,7 +376,10 @@ pub trait DenseMatrixFromFn<F = f64>: Sized {
 /// `faer::linalg::evd::self_adjoint_evd`, and for
 /// [`DenseMatrix`](super::DenseMatrix) (with `V = Vec<f64>`) via a
 /// pure-Rust cyclic Jacobi solver — so CMA-ES runs on the default
-/// backend. The `DenseMatrix` impl is the worked precedent for tenet 5's
+/// backend. With the opt-in `nalgebra-lapack` feature the nalgebra `DMatrix`
+/// impl routes through LAPACK's `dsyev`/`ssyev` instead (f32/f64 only); see the
+/// feature note in `Cargo.toml`. The `DenseMatrix` impl is the worked precedent
+/// for tenet 5's
 /// "broaden backend coverage when an op can be done honestly": the *solve*
 /// factorizations ([`LinearSolveSpd`] / [`GramMatrix`]) are simply not yet
 /// implemented for `Vec<f64>`, not categorically off-limits.

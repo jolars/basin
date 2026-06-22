@@ -132,7 +132,11 @@ dependencies, not a feature. CI enforces it
   the time-based criterion. No rayon / parallelism in default features (gate
   behind `parallel`).
 - nalgebra and ndarray are wasm-fine in pure-Rust configs; pick those when both
-  exist. ndarray's BLAS backing is opt-in (`ndarray-blas`, off by default).
+  exist. LAPACK/BLAS acceleration of either is opt-in and off by default:
+  `ndarray-blas` (forwards `ndarray/blas`) and `nalgebra-lapack` (swaps the
+  nalgebra backend's Cholesky / symmetric eigendecomposition for LAPACK-backed
+  ones). Both link a Fortran/BLAS toolchain, so neither builds for wasm and
+  neither is in the wasm CI matrix.
 - If a solver can't realistically run on wasm, document that in a per-solver
   compat note rather than weakening the guarantee.
 

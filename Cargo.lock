@@ -103,6 +103,7 @@ dependencies = [
  "faer-traits",
  "generativity",
  "nalgebra 0.34.2",
+ "nalgebra-lapack",
  "nalgebra-sparse",
  "ndarray",
  "num-traits",
@@ -129,6 +130,26 @@ name = "bitflags"
 version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
+
+[[package]]
+name = "blas"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "280f3f48ac4edf086d59c7aa71fb28b78df2b14db8f591fb4eb29b88b77ac6ad"
+dependencies = [
+ "blas-sys",
+ "libc",
+ "num-complex",
+]
+
+[[package]]
+name = "blas-sys"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b49cc48acc7ead5c33d2e3cac9c47e55bfd04c929abd1456459084a8c8cdf2cb"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "bumpalo"
@@ -904,6 +925,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "lapack"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "508f7f48955e5e4ec3feb771a4d981c6e59ff2400d750cf41733a3350fdb2dc4"
+dependencies = [
+ "lapack-sys",
+ "libc",
+ "num-complex",
+]
+
+[[package]]
+name = "lapack-sys"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "314b879030845b68571809a6978e52d3b67ac5fba07e77b1b317b484092e2fb5"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1025,6 +1066,21 @@ dependencies = [
  "num-traits",
  "simba 0.9.1",
  "typenum",
+]
+
+[[package]]
+name = "nalgebra-lapack"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c3fada944cb81d198c5e9f2c04168c7bbade833ec6eefa0b518be92ae9bbb8a"
+dependencies = [
+ "blas",
+ "lapack",
+ "nalgebra 0.34.2",
+ "num-complex",
+ "num-traits",
+ "simba 0.9.1",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

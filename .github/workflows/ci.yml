@@ -74,6 +74,28 @@ jobs:
       - run: cargo build -p basin ${{ matrix.flags }}
       - run: cargo test -p basin ${{ matrix.flags }}
 
+  # `nalgebra-lapack` is the one feature that links a system LAPACK, so it gets
+  # its own job rather than a matrix row (and is absent from the wasm matrix —
+  # it must never build for wasm). The feature forwards `lapack-custom`, so the
+  # LAPACK symbols are supplied here at link time by Ubuntu's LP64 OpenBLAS
+  # (`libopenblas-dev`). The integer width matters: the LP64 build (32-bit int)
+  # matches `lapack-sys`; the ILP64 build segfaults at runtime.
+  lapack:
+    name: test (nalgebra-lapack)
+    runs-on: ubuntu-latest
+    env:
+      # Override the workflow-level RUSTFLAGS (job env replaces, not merges), so
+      # keep `-D warnings` and append the OpenBLAS link directive.
+      RUSTFLAGS: "-D warnings -l openblas"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install OpenBLAS (LP64)
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: nalgebra-lapack
+      - run: cargo test -p basin --features nalgebra-lapack --test lapack_nalgebra
+
   wasm:
     name: wasm build (${{ matrix.features }})
     runs-on: ubuntu-latest

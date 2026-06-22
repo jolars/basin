@@ -489,6 +489,10 @@ impl<F: Scalar> DenseMatrixFromFn<F> for DVector<F> {
     }
 }
 
+// Pure-Rust symmetric eigendecomposition (default), generic over every
+// `F: RealField`. Swapped for the LAPACK impl below under `nalgebra-lapack`;
+// the two are mutually exclusive (`#[cfg]`).
+#[cfg(not(feature = "nalgebra-lapack"))]
 impl<F> SymmetricEigen<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::RealField,
@@ -512,6 +516,44 @@ where
             .ok_or(SymmetricEigenError::Failed)
     }
 }
+
+// LAPACK-backed symmetric eigendecomposition (`nalgebra-lapack` feature).
+// Behaviorally interchangeable with the pure-Rust impl above for the LAPACK
+// scalar set: same square assertion, same `Failed` mapping on non-convergence,
+// same `(eigenvectors, eigenvalues)` return shape (eigenvalues unsorted, as the
+// trait contract permits). Concrete per-scalar (f64 / f32) rather than generic
+// because `nalgebra_lapack`'s scalar trait `SymmetricEigenScalar` is not
+// re-exported (only the `SymmetricEigen` struct is), so it cannot be named in a
+// bound — unlike `CholeskyScalar` above. f64 and f32 are the only scalars
+// LAPACK's `dsyev`/`ssyev` cover; see the `nalgebra-lapack` feature note in
+// `Cargo.toml`.
+#[cfg(feature = "nalgebra-lapack")]
+macro_rules! lapack_symmetric_eigen_impl {
+    ($scalar:ty) => {
+        impl SymmetricEigen<DVector<$scalar>> for DMatrix<$scalar> {
+            fn try_eigh(&self) -> Result<(Self, DVector<$scalar>), SymmetricEigenError> {
+                assert_eq!(
+                    self.nrows(),
+                    self.ncols(),
+                    "try_eigh: matrix must be square, got {}x{}",
+                    self.nrows(),
+                    self.ncols()
+                );
+                // LAPACK's symmetric eigensolver (`dsyev`/`ssyev`) is direct,
+                // not iterated; `try_new` returns `None` only on internal
+                // non-convergence.
+                nalgebra_lapack::SymmetricEigen::try_new(self.clone())
+                    .map(|eig| (eig.eigenvectors, eig.eigenvalues))
+                    .ok_or(SymmetricEigenError::Failed)
+            }
+        }
+    };
+}
+
+#[cfg(feature = "nalgebra-lapack")]
+lapack_symmetric_eigen_impl!(f64);
+#[cfg(feature = "nalgebra-lapack")]
+lapack_symmetric_eigen_impl!(f32);
 
 impl<F> RankOneUpdate<DVector<F>, F> for DMatrix<F>
 where
@@ -572,6 +614,10 @@ where
     }
 }
 
+// Pure-Rust Cholesky (default). Generic over every `F: ComplexField`. Swapped
+// out for the LAPACK impl below when the `nalgebra-lapack` feature is on; the
+// two are mutually exclusive (`#[cfg]`) so coherence is never violated.
+#[cfg(not(feature = "nalgebra-lapack"))]
 impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::ComplexField,
@@ -597,6 +643,41 @@ where
             .cholesky()
             .ok_or(LinearSolveError::NotPositiveDefinite)
             .map(|chol| chol.solve(b))
+    }
+}
+
+// LAPACK-backed Cholesky (`nalgebra-lapack` feature). Behaviorally
+// interchangeable with the pure-Rust impl above for the LAPACK scalar set:
+// same assertions, same `NotPositiveDefinite` mapping when factorization fails.
+// The bound narrows from any `F: ComplexField` to `nalgebra_lapack`'s
+// `CholeskyScalar` (f32 / f64 and their complex counterparts) — see the
+// `nalgebra-lapack` feature note in `Cargo.toml`.
+#[cfg(feature = "nalgebra-lapack")]
+impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
+where
+    F: Scalar + nalgebra_lapack::CholeskyScalar + num_traits::Zero,
+{
+    fn solve_spd(&self, b: &DVector<F>) -> Result<DVector<F>, LinearSolveError> {
+        assert_eq!(
+            self.nrows(),
+            self.ncols(),
+            "solve_spd: matrix must be square, got {}x{}",
+            self.nrows(),
+            self.ncols()
+        );
+        assert_eq!(
+            self.nrows(),
+            b.len(),
+            "solve_spd: A.nrows ({}) != b.len ({})",
+            self.nrows(),
+            b.len()
+        );
+        // `Cholesky::new` consumes the matrix (clone unavoidable). `None` from
+        // `new` is a failed factorization (not SPD); `None` from `solve` can
+        // only follow a degenerate factor, so both map to `NotPositiveDefinite`.
+        let chol = nalgebra_lapack::Cholesky::new(self.clone())
+            .ok_or(LinearSolveError::NotPositiveDefinite)?;
+        chol.solve(b).ok_or(LinearSolveError::NotPositiveDefinite)
     }
 }
 
@@ -725,7 +806,10 @@ mod tests {
     fn symmetric_eigen_recovers_factorization() {
         // C = [[2, 1], [1, 2]] has eigenvalues 1, 3 and eigenvectors
         // ([1, -1]/√2, [1, 1]/√2). Verify B Λ Bᵀ ≈ C.
-        let c = DMatrix::from_row_slice(2, 2, &[2.0, 1.0, 1.0, 2.0]);
+        // Anchor to f64: under the `nalgebra-lapack` feature `try_eigh` has
+        // concrete f32/f64 impls, so the matrix element type can't be inferred
+        // from the literals alone.
+        let c = DMatrix::<f64>::from_row_slice(2, 2, &[2.0, 1.0, 1.0, 2.0]);
         let (b, lambda) = c.try_eigh().expect("eigendecomposition");
         // B Λ Bᵀ
         let mut lambda_diag = DMatrix::<f64>::zeros(2, 2);

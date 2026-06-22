@@ -39,10 +39,31 @@ ndarray = ["dep:ndarray"]
 # toolchain story most basin users don't need. This feature only flips
 # ndarray's `blas` switch; the consumer is still responsible for picking
 # a BLAS source crate (`openblas-src`, `netlib-src`, `intel-mkl-src`,
-# `accelerate-src`, ...) and adding it as a direct dependency. No analogue
-# exists for nalgebra (0.34 has no `blas` feature; its BLAS path lives in
-# the separate `nalgebra-lapack` crate) or for faer (pure-Rust by design).
+# `accelerate-src`, ...) and adding it as a direct dependency. The nalgebra
+# analogue is `nalgebra-lapack` below (nalgebra 0.34 has no `blas` feature; its
+# LAPACK path lives in the separate `nalgebra-lapack` crate); faer has none
+# (pure-Rust by design).
 ndarray-blas = ["ndarray", "ndarray/blas"]
+# Opt-in LAPACK-backed nalgebra. The nalgebra analogue of `ndarray-blas`:
+# swaps the nalgebra backend's pure-Rust Cholesky / symmetric eigendecomposition
+# (`LinearSolveSpd`, `SymmetricEigen`) for LAPACK-backed ones from the separate
+# `nalgebra-lapack` crate. Off by default and WASM-incompatible (LAPACK links a
+# Fortran/BLAS toolchain), same as `ndarray-blas`. We forward
+# `nalgebra-lapack/lapack-custom`: that crate has an `enforce_exactly_one_
+# feature_selected!` macro requiring exactly one `lapack-*` backend even to
+# compile, and `lapack-custom` is the only one that pulls NO provider crate
+# (its `extern crate lapack_src` is cfg'd off). So the rlib / `cargo doc` /
+# `cargo clippy` builds compile without linking or building OpenBLAS, keeping
+# `--all-features` green on docs.rs and CI. The flip side of `lapack-custom`:
+# the LAPACK symbols (`dpotrf_`, `dsyev_`, ...) must be supplied at *final link*
+# time by the consumer — add a `-src` crate (`openblas-src` / `netlib-src`,
+# `extern crate`d in your binary) or link a system BLAS/LAPACK via link args,
+# exactly like `ndarray-blas`'s "bring your own BLAS source" story. With this
+# feature on, the two factorization ops narrow from any `F: ComplexField` /
+# `RealField` to the LAPACK scalar set (f32/f64). Acceleration only pays off for
+# large dense systems (e.g. large-n CMA-ES); for small/medium problems
+# nalgebra's pure-Rust factorizations are competitive.
+nalgebra-lapack = ["nalgebra", "dep:nalgebra-lapack", "nalgebra-lapack/lapack-custom"]
 # `generativity` and `faer-traits` are transitive deps of faer, surfaced
 # here so they only enter the graph when `faer` is enabled. `faer-traits`
 # is the home of `ComplexField` / `RealField` — bounds the faer-backend
@@ -71,6 +92,13 @@ problems = []
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
 nalgebra = { version = "0.34", optional = true }
 nalgebra-sparse = { version = "0.11", optional = true }
+# LAPACK-backed nalgebra decompositions, behind the opt-in `nalgebra-lapack`
+# feature. Pinned to 0.27 because that is the release tracking nalgebra 0.34
+# (0.28 moved to nalgebra 0.35); keeping them in lockstep preserves tenet 2's
+# single-version-per-backend story. `default-features = false` drops the
+# default `openblas` provider so the rlib builds without linking or building a
+# BLAS source — see the feature comment above. Non-default + WASM-incompatible.
+nalgebra-lapack = { version = "0.27", optional = true, default-features = false }
 # Pure-Rust (no BLAS feature) so it stays wasm-compatible per the WASM hard
 # constraint in CONTRIBUTING.md.
 ndarray = { version = "0.17", optional = true, default-features = false }
