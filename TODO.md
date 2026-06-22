@@ -197,5 +197,45 @@ harder to fix as more code piles on.
       regression guard running the bare workspace wasm build (ci.yml `wasm` job,
       `default` matrix entry), which now also exercises `basin-wasm` on wasm.
 
+- [ ] **State construction surface: hide the state zoo behind the solver (or
+      honest "no").** The state taxonomy (`BasicState`, `QuasiNewtonState`,
+      `LbfgsState`, `NllsState`, `BasicSimplexState`, `BasicPopulationState`,
+      `CmaEsState`, `ScalarState`, …) is three layers, and only one is worth
+      revisiting. **Layer 1 — the capability traits** (`GradientState` /
+      `SimplexState` / `PopulationState`, which termination criteria bind on per
+      tenet 3): keep unconditionally --- a criterion *reads* its data off the
+      state, so binding `GradientTolerance` on `S: GradientState` binds it on
+      exactly what it consumes; argmin's single `IterState` with `Option` fields
+      is the weaker alternative (runtime `.is_some()`, silent no-op on
+      mismatch). **Layer 2 — the concrete state types**: the multiplicity is
+      mostly intrinsic (L-BFGS history, CMA σ/covariance/paths, NLLS nfev/njev,
+      simplex vertices are real working memory) and self-documenting; collapsing
+      into one `IterState<Shape>` would worsen error messages and erase the
+      "why is L-BFGS different" signal --- don't. **Layer 3 — construction is
+      the only real friction.** The zoo is exposed at the front door
+      (`Executor::new(problem, solver, state)`) yet the user touches state
+      almost only at construction; afterward access is trait-method-mediated.
+      The machinery to hide it already exists: `WarmStart::seed(&self, x) ->
+      Self::State` (`core/inner.rs`) is a solver constructing its own natural
+      initial state, built for inner solvers. Surfacing it as a top-level
+      convenience --- a two-arg `Executor::new(problem, solver)` that seeds from
+      the problem's `x0` --- would let the common case read
+      `Executor::new(problem, TrustRegion::new()).run()`, with the state types
+      receding to advanced/custom-seed surface and Layers 1+2 fully intact.
+      **Purely additive** (the three-arg form stays for custom initial
+      iterates), so no tenet spent and no 1.0 freeze pressure. Two caveats
+      before reaching for it: (a) explicit state construction is not pure cost
+      --- it's where `x0` lives and it makes the solver↔state pairing visible,
+      so the answer is *coexistence*, with the explicit form still the one the
+      docs teach; (b) the clean seed-from-solver shape is an associated
+      `Solver::State`, but that forecloses `Solver<P, S>`'s openness (one solver
+      over multiple states) --- check whether any shipped solver actually
+      exercises that openness before assuming it's free to drop; if not, prefer
+      a separate `InitialState` / `WarmStart`-style trait powering the
+      convenience ctor over an associated type on `Solver`. Resolve by either
+      adding the convenience constructor or writing the honest "no" (with a
+      one-glance solver→state→criteria table in the crate-root rustdoc + web
+      docs as the cheaper UX win regardless).
+
 See `CONTRIBUTING.md` for the design tenets and constraints that shape these
 decisions.
