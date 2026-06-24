@@ -142,7 +142,15 @@ formulas and as the cross-validation oracle. PRIMA is distributed under the
 BSD 3-Clause License; its notice is retained in
 [COPYRIGHT](https://github.com/jolars/basin/blob/main/crates/basin/COPYRIGHT).
 
+The bound-constrained L-BFGS-B solver is a port of the [L-BFGS-B] version 3.0
+Fortran code by Ciyou Zhu, Richard H. Byrd, Peihuang Lu, and Jorge Nocedal
+(ACM TOMS Algorithm 778), with the v3.0 improvements by José Luis Morales and
+Jorge Nocedal. It is released under the New BSD (BSD 3-Clause) License; its
+notice is likewise retained in
+[COPYRIGHT](https://github.com/jolars/basin/blob/main/crates/basin/COPYRIGHT).
+
 [PRIMA]: https://github.com/libprima/prima
+[L-BFGS-B]: https://users.iems.northwestern.edu/~nocedal/lbfgsb.html
 
 ## License
 

@@ -63,7 +63,9 @@ use self::subsm::subsm;
 /// with the Nocedal–Morales 2011 v3.0 directional-derivative + bound-
 /// backtracking deviation in subspace minimization. Iteration-wise
 /// parity with the Fortran v3.0 reference (`references/lbfgsb-v3.0/`)
-/// is verified by `tests/lbfgsb_iter_parity.rs`.
+/// is verified by `tests/lbfgsb_iter_parity.rs`. The L-BFGS-B 3.0 code is
+/// New BSD (BSD 3-Clause) licensed; its required notice is retained in the
+/// crate's `COPYRIGHT` file.
 ///
 /// `Lbfgs<Unbounded>` is unconstrained limited-memory BFGS via
 /// Nocedal–Wright's two-loop recursion (Algorithm 7.4). It reuses the
