@@ -75,16 +75,21 @@ surprise.
 
 ## Solvers
 
-- **First-order/quasi-Newton:** gradient descent (with momentum and pluggable
-  line searches), BFGS, L-BFGS, L-BFGS-B.
-- **Derivative-free:** Nelder-Mead, Brent (1D).
+- **First-order/quasi-Newton/Newton:** gradient descent (with momentum and
+  pluggable line searches), SGD, BFGS, L-BFGS, L-BFGS-B, and a Newton
+  trust-region method.
+- **Derivative-free:** Nelder-Mead; Brent, Brent-with-derivatives, and
+  golden-section search (1D); Powell's model-based family (NEWUOA, BOBYQA,
+  LINCOA, COBYLA); and MADS (OrthoMADS).
 - **Nonlinear least squares:** Gauss-Newton, Levenberg-Marquardt, trust-region
   reflective.
-- **Global/stochastic:** random search, CMA-ES, a steady-state genetic
-  algorithm, and memetic combinations.
+- **Global/stochastic:** random search, CMA-ES, differential evolution, a
+  steady-state genetic algorithm, and memetic combinations (MA-LS-Chain, plus
+  CMA-ES/DE injection wrappers).
 - **Constrained:** box bounds via projected gradient descent, bounded
-  Nelder-Mead, L-BFGS-B, and bounded CMA-ES; log-barrier and augmented
-  Lagrangian wrappers for more general constraints.
+  Nelder-Mead, L-BFGS-B, and bounded CMA-ES; LINCOA for linear constraints and
+  COBYLA for nonlinear inequalities; log-barrier and augmented Lagrangian
+  wrappers for more general constraints.
 
 See [Solvers] for which backends each one supports.
 
