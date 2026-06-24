@@ -69,7 +69,7 @@ println!("x = {:?}, f = {}, stopped: {:?}", result.param(), result.cost(), resul
 ```
 
 Termination criteria are framework-level: the same ones compose across solvers,
-and they are bound to the state a solver actually exposes --- so asking for a
+and they are bound to the state a solver actually exposes, so asking for a
 gradient tolerance on a derivative-free solver is a compile error, not a runtime
 surprise.
 
@@ -77,13 +77,13 @@ surprise.
 
 - **First-order/quasi-Newton:** gradient descent (with momentum and pluggable
   line searches), BFGS, L-BFGS, L-BFGS-B.
-- **Derivative-free:** Nelder--Mead, Brent (1D).
-- **Nonlinear least squares:** Gauss--Newton, Levenberg--Marquardt, trust-region
+- **Derivative-free:** Nelder-Mead, Brent (1D).
+- **Nonlinear least squares:** Gauss-Newton, Levenberg-Marquardt, trust-region
   reflective.
 - **Global/stochastic:** random search, CMA-ES, a steady-state genetic
   algorithm, and memetic combinations.
 - **Constrained:** box bounds via projected gradient descent, bounded
-  Nelder--Mead, L-BFGS-B, and bounded CMA-ES; log-barrier and augmented
+  Nelder-Mead, L-BFGS-B, and bounded CMA-ES; log-barrier and augmented
   Lagrangian wrappers for more general constraints.
 
 See [Solvers] for which backends each one supports.
@@ -115,11 +115,10 @@ and BLAS-backed paths are behind opt-in features (`parallel`).
 ## Acknowledgements
 
 Basin owes a substantial intellectual debt to [argmin]: the overall shape of the
-crate: the `Executor` driver loop, the `Solver` / `Problem` trait split,
-per-solver `State`, and the pluggable termination layer is borrowed from it, and
-several solver implementations and test-problem conventions were modeled on
-argmin's. Thanks to the argmin authors and contributors for a library that is a
-pleasure to learn from.
+crate: the `Executor` driver loop, the `Solver`/`Problem` trait split, and
+per-solver `State` are borrowed from it, and several solver implementations and
+test-problem conventions were modeled on argmin's. Thanks to the argmin authors
+and contributors for a library that is a pleasure to learn from.
 
 ## License
 
