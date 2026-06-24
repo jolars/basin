@@ -135,6 +135,15 @@ per-solver `State` are borrowed from it, and several solver implementations and
 test-problem conventions were modeled on argmin's. Thanks to the argmin authors
 and contributors for a library that is a pleasure to learn from.
 
+The Powell-family derivative-free solvers (COBYLA, NEWUOA, BOBYQA, LINCOA) are
+derived from [PRIMA], Zaikun Zhang's modern-Fortran reference implementation of
+M. J. D. Powell's methods, used as the authoritative source for the exact
+formulas and as the cross-validation oracle. PRIMA is distributed under the
+BSD 3-Clause License; its notice is retained in
+[COPYRIGHT](https://github.com/jolars/basin/blob/main/crates/basin/COPYRIGHT).
+
+[PRIMA]: https://github.com/libprima/prima
+
 ## License
 
 Licensed under either of

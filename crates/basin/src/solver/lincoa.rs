@@ -146,7 +146,9 @@ use init::fold_constraints;
 ///
 /// M. J. D. Powell, *On fast trust region methods for quadratic models with
 /// linear constraints*, Math. Program. Comput. 7:237–267 (2015). Cross-validated
-/// against [PRIMA](https://github.com/libprima/prima) v0.7.2.
+/// against [PRIMA](https://github.com/libprima/prima) v0.7.2, the authoritative
+/// source for the exact formulas. PRIMA is BSD 3-Clause licensed; its required
+/// notice is retained in the crate's `COPYRIGHT` file.
 ///
 /// [`CostFunction`]: crate::core::problem::CostFunction
 /// [`TerminationReason::SolverConverged`]: crate::TerminationReason::SolverConverged

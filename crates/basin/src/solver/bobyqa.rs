@@ -113,7 +113,9 @@ pub struct Bounded;
 ///
 /// M. J. D. Powell, *The BOBYQA algorithm for bound constrained optimization
 /// without derivatives*, DAMTP report 2009/NA06, University of Cambridge.
-/// Cross-validated against [PRIMA](https://github.com/libprima/prima) v0.7.2.
+/// Cross-validated against [PRIMA](https://github.com/libprima/prima) v0.7.2,
+/// the authoritative source for the exact formulas. PRIMA is BSD 3-Clause
+/// licensed; its required notice is retained in the crate's `COPYRIGHT` file.
 pub struct Bobyqa<Mode = Bounded, F = f64> {
     rho_beg: F,
     rho_end: F,

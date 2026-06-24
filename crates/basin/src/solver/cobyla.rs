@@ -12,6 +12,8 @@
 //!
 //! Ported from [PRIMA](https://github.com/libprima/prima)'s modern COBYLA
 //! (`cobylb`/`trstlp`/`geostep`/`update`), anchored to Powell's 1994 paper.
+//! PRIMA is BSD 3-Clause licensed; its required notice is retained in the
+//! crate's `COPYRIGHT` file.
 
 pub(crate) mod driver;
 pub(crate) mod filter;

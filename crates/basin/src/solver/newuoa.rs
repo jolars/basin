@@ -127,7 +127,9 @@ use driver::{NewuoaWork, Transition};
 ///
 /// M. J. D. Powell, *The NEWUOA software for unconstrained optimization without
 /// derivatives*, in Large-Scale Nonlinear Optimization (2006), pp. 255–297.
-/// Cross-validated against [PRIMA](https://github.com/libprima/prima) v0.7.2.
+/// Cross-validated against [PRIMA](https://github.com/libprima/prima) v0.7.2,
+/// the authoritative source for the exact formulas. PRIMA is BSD 3-Clause
+/// licensed; its required notice is retained in the crate's `COPYRIGHT` file.
 pub struct Newuoa<F = f64> {
     rho_beg: F,
     rho_end: F,
