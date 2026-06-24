@@ -31,12 +31,11 @@ use crate::line_search::{LineSearch, Wolfe};
 ///
 /// Runs on `Vec<f64>` (via the hand-rolled
 /// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
-/// (`DVector<f64>` / `DMatrix<f64>`), and faer (`Col<f64>` / `Mat<f64>`).
-/// The dense inverse-Hessian needs only matvec, an identity constructor,
-/// scaling, and the rank-one update `GeneralRankOneUpdate` — no
-/// factorization — so it stays backend-generic. `ndarray` is a
-/// compile-time error per tenet 5: its `Array2<f64>` implements neither
-/// `GeneralRankOneUpdate` nor [`MatrixIdentity`].
+/// (`DVector<f64>` / `DMatrix<f64>`), ndarray (`Array1<f64>` /
+/// `Array2<f64>`), and faer (`Col<f64>` / `Mat<f64>`). The dense
+/// inverse-Hessian needs only matvec, an identity constructor, scaling, and
+/// the rank-one update `GeneralRankOneUpdate` — no factorization — so it
+/// stays backend-generic.
 ///
 /// # Examples
 ///
@@ -238,11 +237,9 @@ where
 ///
 /// Implemented for every backend BFGS itself runs on — `Vec<f64>` (via the
 /// hand-rolled [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra,
-/// and faer — so [`Executor::from_start`](crate::Executor::from_start) and
-/// the composed (barrier / AL) inners seed uniformly regardless of backend.
-/// `ndarray` is excluded for the same reason BFGS itself is: `Array2`
-/// implements neither `GeneralRankOneUpdate` nor the rank-one update BFGS
-/// needs (see the `# Backends` note above).
+/// ndarray, and faer — so
+/// [`Executor::from_start`](crate::Executor::from_start) and the composed
+/// (barrier / AL) inners seed uniformly regardless of backend.
 impl<S, F> InitialState<Vec<F>> for Bfgs<S, F>
 where
     F: Scalar,
@@ -285,3 +282,17 @@ where
 
 #[cfg(feature = "faer")]
 impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where F: Scalar + faer_traits::ComplexField {}
+
+#[cfg(feature = "ndarray")]
+impl<S, F> InitialState<ndarray::Array1<F>> for Bfgs<S, F>
+where
+    F: Scalar,
+{
+    type State = QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
+    fn seed(&self, x: &ndarray::Array1<F>) -> Self::State {
+        QuasiNewtonState::<ndarray::Array1<F>, ndarray::Array2<F>, F>::new(x.clone())
+    }
+}
+
+#[cfg(feature = "ndarray")]
+impl<S, F> WarmStart<ndarray::Array1<F>> for Bfgs<S, F> where F: Scalar {}

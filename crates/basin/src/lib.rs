@@ -85,7 +85,7 @@
 //! | ------ | ----- | ------------ |
 //! | `GradientDescent`, `Sgd` | `BasicState` | ✓ |
 //! | `ProjectedGradientDescent` | `BasicState` | ✓ (`f64` only) |
-//! | `Bfgs` | `QuasiNewtonState` | ✓ (`Vec`/nalgebra/faer) |
+//! | `Bfgs` | `QuasiNewtonState` | ✓ (`Vec`/nalgebra/ndarray/faer) |
 //! | `Lbfgs`, `Lbfgsb` | `LbfgsState` | ✓ |
 //! | `TrustRegion` | `BasicState` | ✓ |
 //! | `GaussNewton`, `LevenbergMarquardt`, `Trf` | `NllsState` | ✓ |
@@ -204,6 +204,8 @@ pub use crate::core::solver::Solver;
 pub use crate::core::state::FaerQuasiNewtonState;
 #[cfg(feature = "nalgebra")]
 pub use crate::core::state::NalgebraQuasiNewtonState;
+#[cfg(feature = "ndarray")]
+pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, BobyqaState, CmaEsState, CobylaState,
     ConstrainedMadsState, CountsMirror, GradientState, IntoInitialSimplex, LbfgsState, LincoaState,

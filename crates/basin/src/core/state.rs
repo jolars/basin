@@ -797,7 +797,8 @@ impl<V: VectorLen, M: MatrixIdentity, F: Scalar> QuasiNewtonState<V, M, F> {
     ///
     /// For the common path, prefer the per-backend alias so neither `V` nor
     /// `M` has to be spelled: [`DenseQuasiNewtonState`] (`Vec<f64>`),
-    /// [`NalgebraQuasiNewtonState`] (feature `nalgebra`), or
+    /// [`NalgebraQuasiNewtonState`] (feature `nalgebra`),
+    /// [`NdarrayQuasiNewtonState`] (feature `ndarray`), or
     /// [`FaerQuasiNewtonState`] (feature `faer`) — e.g.
     /// `DenseQuasiNewtonState::new(x)`.
     pub fn new(param: V) -> Self {
@@ -848,6 +849,16 @@ pub type NalgebraQuasiNewtonState<F = f64> =
 /// to `f64`.
 #[cfg(feature = "faer")]
 pub type FaerQuasiNewtonState<F = f64> = QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
+
+/// [`QuasiNewtonState`] pinned to the ndarray `Array1<F>` / `Array2<F>`
+/// backend (feature `ndarray`).
+///
+/// `NdarrayQuasiNewtonState::new(x)` instead of
+/// `QuasiNewtonState::<Array1<f64>, Array2<f64>>::new(x)`. The scalar `F`
+/// defaults to `f64`.
+#[cfg(feature = "ndarray")]
+pub type NdarrayQuasiNewtonState<F = f64> =
+    QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
 
 impl<V: Clone, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
     type Param = V;

@@ -10,9 +10,9 @@ use super::cl_scaling::{
 use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
-    FloorZerosInPlace, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity,
-    NegInPlace, NormInfinity, NormSquared, RankOneUpdate, ScaleInPlace, ScaledAdd, SymmetricEigen,
-    SymmetricEigenError, VectorIndex, VectorLen,
+    FloorZerosInPlace, GeneralRankOneUpdate, MatDiagonal, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, NegInPlace, NormInfinity, NormSquared, RankOneUpdate,
+    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
 };
 
 impl<F, S, D> ScaledAdd<F> for ArrayBase<S, D>
@@ -160,6 +160,37 @@ impl<F: Scalar> MatDiagonal<Array1<F>> for Array2<F> {
             self.ncols()
         );
         self.diag().to_owned()
+    }
+}
+
+impl<F: Scalar> GeneralRankOneUpdate<Array1<F>, F> for Array2<F> {
+    fn general_rank_one_update(&mut self, alpha: F, u: &Array1<F>, v: &Array1<F>) {
+        assert_eq!(
+            self.nrows(),
+            u.len(),
+            "general_rank_one_update: matrix is {}x{} but u has length {}",
+            self.nrows(),
+            self.ncols(),
+            u.len()
+        );
+        assert_eq!(
+            self.ncols(),
+            v.len(),
+            "general_rank_one_update: matrix is {}x{} but v has length {}",
+            self.nrows(),
+            self.ncols(),
+            v.len()
+        );
+        // self[i, j] ← self[i, j] + α · u[i] · v[j]. Explicit double-loop
+        // matches the `DenseMatrix` pattern; ndarray's `outer` / broadcasting
+        // forms would allocate.
+        for i in 0..self.nrows() {
+            let au = alpha * u[i];
+            let mut row = self.row_mut(i);
+            for (entry, &vj) in row.iter_mut().zip(v.iter()) {
+                *entry = *entry + au * vj;
+            }
+        }
     }
 }
 

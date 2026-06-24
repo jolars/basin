@@ -199,7 +199,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Brent` | Derivative-free | — | — | — | — |
 | `GoldenSection` | Derivative-free | — | — | — | — |
 | `BrentDerivative` | First-order | — | — | — | — |
-| `Bfgs` | Quasi-Newton | ✓ | ✓ | ✗ | ✓ |
+| `Bfgs` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `Lbfgs` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `Lbfgsb` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `TrustRegion` | Trust region | ✓ | ✓ | ✓‡ | ✓ |
