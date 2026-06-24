@@ -22,9 +22,9 @@
 //! carries its data (`t`, `y`) on the struct. With exact data
 //! (`yᵢ = a* · exp(b* · tᵢ)`) the global minimum sits at `(a*, b*)`
 //! with `f = 0`. The generic parameter `V` pins the parameter vector
-//! backend; `Jacobian` is implemented for the LA-heavy backends
-//! (nalgebra `DVector<f64>` → `DMatrix<f64>`, faer `Col<f64>` →
-//! `Mat<f64>`) only, like the rest of the residual corpus.
+//! backend; `Jacobian` is implemented for every dense backend (nalgebra
+//! `DVector<f64>` → `DMatrix<f64>`, faer `Col<f64>` → `Mat<f64>`, and
+//! ndarray `Array1<f64>` → `Array2<f64>`).
 
 use core::marker::PhantomData;
 
@@ -114,11 +114,10 @@ pub fn exponential_fit_jacobian(params: &[f64], t: &[f64], out: &mut [f64]) {
 /// Carries the data `(t, y)` on the struct; the generic parameter `V`
 /// pins the parameter-vector backend. Construct with [`new`](Self::new).
 ///
-/// `Jacobian` is implemented for the LA-heavy backends (nalgebra
-/// `DVector<f64>` and faer `Col<f64>`) only; `Vec<f64>` and `ndarray`
-/// supply [`CostFunction`](crate::CostFunction) and
-/// [`Residual`](crate::Residual) but not [`Jacobian`](crate::Jacobian),
-/// matching the rest of the corpus.
+/// `Jacobian` is implemented for the feature-gated backends (nalgebra
+/// `DVector<f64>`, faer `Col<f64>`, and ndarray `Array1<f64>`); the
+/// default `Vec<f64>` backend supplies [`CostFunction`](crate::CostFunction)
+/// and [`Residual`](crate::Residual) but not [`Jacobian`](crate::Jacobian).
 pub struct ExponentialFit<V = Vec<f64>> {
     /// Sample abscissae `tᵢ`.
     pub t: Vec<f64>,
@@ -221,9 +220,11 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{ExponentialFit, exponential_fit, exponential_fit_residuals};
-    use crate::{CostFunction, Residual};
-    use ndarray::Array1;
+    use super::{
+        ExponentialFit, exponential_fit, exponential_fit_jacobian, exponential_fit_residuals,
+    };
+    use crate::{CostFunction, Jacobian, Residual};
+    use ndarray::{Array1, Array2};
 
     impl CostFunction for ExponentialFit<Array1<f64>> {
         type Param = Array1<f64>;
@@ -251,6 +252,22 @@ mod ndarray_impl {
                 out.as_slice_mut().expect("Array1 is contiguous"),
             );
             Ok(out)
+        }
+    }
+
+    impl Jacobian for ExponentialFit<Array1<f64>> {
+        type Jacobian = Array2<f64>;
+        fn jacobian(&self, x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+            let m = self.t.len();
+            let mut buf = vec![0.0_f64; m * 2];
+            exponential_fit_jacobian(
+                x.as_slice().expect("Array1 is contiguous"),
+                &self.t,
+                &mut buf,
+            );
+            // Row-major buffer, m×2 layout — the default C-order
+            // `from_shape_vec` matches the nalgebra `from_row_slice` mirror.
+            Ok(Array2::from_shape_vec((m, 2), buf).expect("m*2 entries for an m×2"))
         }
     }
 }

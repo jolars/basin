@@ -9,10 +9,11 @@ use super::cl_scaling::{
 };
 use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
 use super::{
-    ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
-    FloorZerosInPlace, GeneralRankOneUpdate, MatDiagonal, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, NegInPlace, NormInfinity, NormSquared, RankOneUpdate,
-    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
+    AddDiagonalVectorInPlace, ClampInPlace, ComponentDivAssign, ComponentMaxAssign,
+    ComponentMulAssign, Dot, FloorZerosInPlace, GeneralRankOneUpdate, GramMatrix, LinearSolveError,
+    LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity,
+    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, RankOneUpdate, ScaleInPlace, ScaledAdd,
+    SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
 };
 
 impl<F, S, D> ScaledAdd<F> for ArrayBase<S, D>
@@ -252,6 +253,95 @@ impl<F: Scalar> SymmetricEigen<Array1<F>> for Array2<F> {
         let b =
             Array2::from_shape_vec((n, n), eigenvectors).expect("jacobi_eigen returns n*n entries");
         Ok((b, Array1::from_vec(eigenvalues)))
+    }
+}
+
+impl<F: Scalar> GramMatrix for Array2<F> {
+    fn gram(&self) -> Self {
+        // G = AᵀA: an `n × n` matrix with G[i][j] = Σ_k A[k][i] · A[k][j].
+        // Row-outer-product accumulation matches the `DenseMatrix` impl; using
+        // ndarray's `.t().dot(self)` would drag in the recursive `Dot`/`Not`
+        // trait bounds the matvec impls deliberately avoid.
+        let n = self.ncols();
+        let mut g = Array2::zeros((n, n));
+        for row in self.rows() {
+            for (i, &ci) in row.iter().enumerate() {
+                let mut grow = g.row_mut(i);
+                for (gij, &cj) in grow.iter_mut().zip(row.iter()) {
+                    *gij = *gij + ci * cj;
+                }
+            }
+        }
+        g
+    }
+}
+
+impl<F: Scalar> AddDiagonalVectorInPlace<Array1<F>> for Array2<F> {
+    fn add_diagonal_vector_in_place(&mut self, diag: &Array1<F>) {
+        assert_eq!(
+            self.nrows(),
+            self.ncols(),
+            "add_diagonal_vector_in_place: matrix must be square, got {}x{}",
+            self.nrows(),
+            self.ncols()
+        );
+        assert_eq!(
+            self.nrows(),
+            diag.len(),
+            "add_diagonal_vector_in_place: matrix is {}x{} but diag has length {}",
+            self.nrows(),
+            self.ncols(),
+            diag.len()
+        );
+        let mut d = self.diag_mut();
+        for (entry, &di) in d.iter_mut().zip(diag.iter()) {
+            *entry = *entry + di;
+        }
+    }
+}
+
+impl<F: Scalar> MaxDiagonal<F> for Array2<F> {
+    fn max_diagonal(&self) -> F {
+        assert_eq!(
+            self.nrows(),
+            self.ncols(),
+            "max_diagonal: matrix must be square, got {}x{}",
+            self.nrows(),
+            self.ncols()
+        );
+        self.diag().iter().copied().fold(F::neg_infinity(), F::max)
+    }
+}
+
+impl<F: Scalar> LinearSolveSpd<Array1<F>> for Array2<F> {
+    fn solve_spd(&self, b: &Array1<F>) -> Result<Array1<F>, LinearSolveError> {
+        assert_eq!(
+            self.nrows(),
+            self.ncols(),
+            "solve_spd: matrix must be square, got {}x{}",
+            self.nrows(),
+            self.ncols()
+        );
+        assert_eq!(
+            self.nrows(),
+            b.len(),
+            "solve_spd: matrix is {}x{} but rhs has length {}",
+            self.nrows(),
+            self.ncols(),
+            b.len()
+        );
+        let n = self.nrows();
+        // `cholesky_solve_spd` takes a row-major `&[F]`. `as_standard_layout`
+        // returns a contiguous C-order view — borrowing when `self` is already
+        // standard, otherwise cloning — exactly like the `SymmetricEigen` impl.
+        let standard = self.as_standard_layout();
+        let slice = standard
+            .as_slice()
+            .expect("as_standard_layout produces a contiguous row-major slice");
+        let b_slice = b.as_slice().expect("Array1 right-hand side is contiguous");
+        super::dense_chol::cholesky_solve_spd(slice, n, b_slice)
+            .map(Array1::from_vec)
+            .ok_or(LinearSolveError::NotPositiveDefinite)
     }
 }
 

@@ -12,7 +12,7 @@
 use core::marker::PhantomData;
 
 use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
-use crate::{BoxConstraints, CostFunction, Gradient, Residual};
+use crate::{BoxConstraints, CostFunction, DenseMatrix, Gradient, Jacobian, Residual};
 
 /// Evaluates the Booth function at `x`. Requires `x.len() == 2`.
 pub fn booth(x: &[f64]) -> f64 {
@@ -259,6 +259,17 @@ impl Residual for BoothResiduals<Vec<f64>> {
     }
 }
 
+impl Jacobian for BoothResiduals<Vec<f64>> {
+    type Jacobian = DenseMatrix<f64>;
+    fn jacobian(&self, _x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
+        // Constant 2×2 Jacobian — independent of x. `buf` is row-major,
+        // which is `DenseMatrix`'s native layout.
+        let mut buf = [0.0_f64; 4];
+        booth_residuals_jacobian(&mut buf);
+        Ok(DenseMatrix::from_row_slice(2, 2, &buf))
+    }
+}
+
 impl CostFunction for BoothBoxedResiduals<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -276,6 +287,15 @@ impl Residual for BoothBoxedResiduals<Vec<f64>> {
         let mut out = vec![0.0; 2];
         booth_residuals(x, &mut out);
         Ok(out)
+    }
+}
+
+impl Jacobian for BoothBoxedResiduals<Vec<f64>> {
+    type Jacobian = DenseMatrix<f64>;
+    fn jacobian(&self, _x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
+        let mut buf = [0.0_f64; 4];
+        booth_residuals_jacobian(&mut buf);
+        Ok(DenseMatrix::from_row_slice(2, 2, &buf))
     }
 }
 
@@ -413,9 +433,12 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{Booth, BoothBoxed, booth, booth_gradient};
-    use crate::{BoxConstraints, CostFunction, Gradient};
-    use ndarray::Array1;
+    use super::{
+        Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth, booth_gradient,
+        booth_residuals, booth_residuals_jacobian,
+    };
+    use crate::{BoxConstraints, CostFunction, Gradient, Jacobian, Residual};
+    use ndarray::{Array1, Array2};
 
     impl CostFunction for Booth<Array1<f64>> {
         type Param = Array1<f64>;
@@ -460,6 +483,82 @@ mod ndarray_impl {
     }
 
     impl BoxConstraints for BoothBoxed<Array1<f64>> {
+        fn lower(&self) -> &Array1<f64> {
+            &self.lower
+        }
+        fn upper(&self) -> &Array1<f64> {
+            &self.upper
+        }
+    }
+
+    impl CostFunction for BoothResiduals<Array1<f64>> {
+        type Param = Array1<f64>;
+        type Output = f64;
+        type Error = std::convert::Infallible;
+        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+            Ok(booth(x.as_slice().expect("Array1 is contiguous")))
+        }
+    }
+
+    impl Residual for BoothResiduals<Array1<f64>> {
+        type Param = Array1<f64>;
+        type Output = Array1<f64>;
+        type Error = std::convert::Infallible;
+        fn residual(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+            let mut out = Array1::zeros(2);
+            booth_residuals(
+                x.as_slice().expect("Array1 is contiguous"),
+                out.as_slice_mut().expect("Array1 is contiguous"),
+            );
+            Ok(out)
+        }
+    }
+
+    impl Jacobian for BoothResiduals<Array1<f64>> {
+        type Jacobian = Array2<f64>;
+        fn jacobian(&self, _x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+            // Constant 2×2 Jacobian — independent of x. `buf` is row-major,
+            // so the default C-order `from_shape_vec` matches the nalgebra
+            // `from_row_slice` mirror.
+            let mut buf = [0.0_f64; 4];
+            booth_residuals_jacobian(&mut buf);
+            Ok(Array2::from_shape_vec((2, 2), buf.to_vec()).expect("4 entries for a 2×2"))
+        }
+    }
+
+    impl CostFunction for BoothBoxedResiduals<Array1<f64>> {
+        type Param = Array1<f64>;
+        type Output = f64;
+        type Error = std::convert::Infallible;
+        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+            Ok(booth(x.as_slice().expect("Array1 is contiguous")))
+        }
+    }
+
+    impl Residual for BoothBoxedResiduals<Array1<f64>> {
+        type Param = Array1<f64>;
+        type Output = Array1<f64>;
+        type Error = std::convert::Infallible;
+        fn residual(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+            let mut out = Array1::zeros(2);
+            booth_residuals(
+                x.as_slice().expect("Array1 is contiguous"),
+                out.as_slice_mut().expect("Array1 is contiguous"),
+            );
+            Ok(out)
+        }
+    }
+
+    impl Jacobian for BoothBoxedResiduals<Array1<f64>> {
+        type Jacobian = Array2<f64>;
+        fn jacobian(&self, _x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+            let mut buf = [0.0_f64; 4];
+            booth_residuals_jacobian(&mut buf);
+            Ok(Array2::from_shape_vec((2, 2), buf.to_vec()).expect("4 entries for a 2×2"))
+        }
+    }
+
+    impl BoxConstraints for BoothBoxedResiduals<Array1<f64>> {
         fn lower(&self) -> &Array1<f64> {
             &self.lower
         }

@@ -139,11 +139,11 @@ use crate::core::termination::TerminationReason;
 ///
 /// LA-heavy: the default `Vec<f64>` backend (over the hand-rolled
 /// [`DenseMatrix<f64>`](crate::DenseMatrix), via a pure-Rust Cholesky),
-/// nalgebra (`DVector<f64>` / `DMatrix<f64>`), and faer (`Col<f64>` /
-/// `Mat<f64>`) at the dense tier; nalgebra-sparse (`DVector<f64>` /
-/// `CscMatrix<f64>`) and faer-sparse (`Col<f64>` /
-/// `SparseColMat<usize, f64>`) at the sparse tier. `ndarray::Array1<f64>`
-/// produces a compile-time error per tenet 5 (no honest dense matrix type).
+/// nalgebra (`DVector<f64>` / `DMatrix<f64>`), faer (`Col<f64>` /
+/// `Mat<f64>`), and ndarray (`Array1<f64>` / `Array2<f64>`, the latter over
+/// the same pure-Rust Cholesky) at the dense tier; nalgebra-sparse
+/// (`DVector<f64>` / `CscMatrix<f64>`) and faer-sparse (`Col<f64>` /
+/// `SparseColMat<usize, f64>`) at the sparse tier.
 /// The sparse damping path requires the diagonal of `JᵀJ` to be in the
 /// CSC pattern (always true when `J` has no zero columns); see
 /// `AddDiagonalVectorInPlace` and `MatDiagonal`.

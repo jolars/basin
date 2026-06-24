@@ -244,15 +244,15 @@ pub fn rosenbrock_residuals_jacobian(x: &[f64], out: &mut [f64]) {
 /// the same function. Restricted to `param.len() == 2`; passing any
 /// other length will trip a debug assertion in the raw functions.
 ///
-/// `Jacobian` is implemented for the `Vec<f64>` default backend (over the
-/// hand-rolled [`DenseMatrix<f64>`](crate::DenseMatrix)) and the LA-heavy
-/// backends (nalgebra `DMatrix<f64>`, faer `Mat<f64>`); see the trait's
-/// `# Backends` note for why `ndarray` is excluded.
+/// `Jacobian` is implemented for every dense backend: the `Vec<f64>` default
+/// (over the hand-rolled [`DenseMatrix<f64>`](crate::DenseMatrix)), nalgebra
+/// (`DMatrix<f64>`), faer (`Mat<f64>`), and ndarray (`Array2<f64>`); see the
+/// trait's `# Backends` note for the param→Jacobian pairings.
 pub struct RosenbrockResiduals<P = Vec<f64>>(PhantomData<fn() -> P>);
 
 impl<P> RosenbrockResiduals<P> {
     /// Build a freshly typed Rosenbrock-as-residuals instance. Pair with
-    /// the LA-heavy backend impls (nalgebra, faer) that supply the
+    /// the dense backend impls (Vec, nalgebra, faer, ndarray) that supply the
     /// `Jacobian` matrix type.
     pub const fn new() -> Self {
         Self(PhantomData)
@@ -338,9 +338,11 @@ mod nalgebra_residuals_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_residuals_impl {
-    use super::{RosenbrockResiduals, rosenbrock, rosenbrock_residuals};
-    use crate::{CostFunction, Residual};
-    use ndarray::Array1;
+    use super::{
+        RosenbrockResiduals, rosenbrock, rosenbrock_residuals, rosenbrock_residuals_jacobian,
+    };
+    use crate::{CostFunction, Jacobian, Residual};
+    use ndarray::{Array1, Array2};
 
     impl CostFunction for RosenbrockResiduals<Array1<f64>> {
         type Param = Array1<f64>;
@@ -362,6 +364,17 @@ mod ndarray_residuals_impl {
                 out.as_slice_mut().expect("Array1 is contiguous"),
             );
             Ok(out)
+        }
+    }
+
+    impl Jacobian for RosenbrockResiduals<Array1<f64>> {
+        type Jacobian = Array2<f64>;
+        fn jacobian(&self, x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+            let mut buf = [0.0_f64; 4];
+            rosenbrock_residuals_jacobian(x.as_slice().expect("Array1 is contiguous"), &mut buf);
+            // `buf` is row-major (2×2); the default C-order `from_shape_vec`
+            // matches the nalgebra `from_row_slice` mirror above.
+            Ok(Array2::from_shape_vec((2, 2), buf.to_vec()).expect("4 entries for a 2×2"))
         }
     }
 }

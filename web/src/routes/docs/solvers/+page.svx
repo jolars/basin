@@ -203,9 +203,9 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 | `Lbfgs` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `Lbfgsb` | Quasi-Newton | ✓ | ✓ | ✓ | ✓ |
 | `TrustRegion` | Trust region | ✓ | ✓ | ✓‡ | ✓ |
-| `GaussNewton` | Least squares | ✓ | ✓ | ✗ | ✓ |
-| `LevenbergMarquardt` | Least squares | ✓ | ✓ | ✗ | ✓ |
-| `Trf` | Least squares | ✗ | ✓ | ✗ | ✓ |
+| `GaussNewton` | Least squares | ✓ | ✓ | ✓ | ✓ |
+| `LevenbergMarquardt` | Least squares | ✓ | ✓ | ✓ | ✓ |
+| `Trf` | Least squares | ✓ | ✓ | ✓ | ✓ |
 | `CmaEs` | Global | ✓ | ✓ | ✓ | ✓ |
 | `BoundedCmaEs` | Global | ✓ | ✓ | ✓ | ✓ |
 | `De` | Global | ✓ | ✓ | ✓ | ✓ |
@@ -228,7 +228,7 @@ intersection of `De` and the chosen inner solver: a `LevenbergMarquardt` or
 ‡ `TrustRegion`'s coverage depends on the subproblem strategy: `Steihaug`
 (the default) and `CauchyPoint` need only matrix-vector products, so they run
 on every backend; `Dogleg` additionally needs a Cholesky solve
-(`LinearSolveSpd`), which `ndarray` does not provide. On `ndarray` the Hessian
+(`LinearSolveSpd`), now available on all four backends. On `ndarray` the Hessian
 must be supplied analytically as an `Array2<f64>` — `FiniteDiff` cannot
 synthesize one there (no dense-matrix constructor).
 

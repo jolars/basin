@@ -131,16 +131,16 @@ pub fn powell_singular_jacobian(x: &[f64], out: &mut [f64]) {
 /// (`nalgebra::DVector<f64>`, `ndarray::Array1<f64>`, `faer::Col<f64>`)
 /// are gated behind their respective features.
 ///
-/// `Jacobian` is implemented for the `Vec<f64>` default backend (over the
-/// hand-rolled [`DenseMatrix<f64>`](crate::DenseMatrix)) and the LA-heavy
-/// backends (nalgebra `DMatrix<f64>`, faer `Mat<f64>`); see the trait's
-/// `# Backends` note for why `ndarray` is excluded.
+/// `Jacobian` is implemented for every dense backend: the `Vec<f64>` default
+/// (over the hand-rolled [`DenseMatrix<f64>`](crate::DenseMatrix)), nalgebra
+/// (`DMatrix<f64>`), faer (`Mat<f64>`), and ndarray (`Array2<f64>`); see the
+/// trait's `# Backends` note for the param→Jacobian pairings.
 pub struct PowellSingular<P = Vec<f64>>(PhantomData<fn() -> P>);
 
 impl<P> PowellSingular<P> {
     /// Build a freshly typed Powell-singular instance. Pair with one of
-    /// the backend-specific impl blocks; only the LA-heavy backends
-    /// (nalgebra, faer) supply the `Jacobian` matrix type.
+    /// the backend-specific impl blocks; every dense backend (Vec, nalgebra,
+    /// faer, ndarray) supplies the `Jacobian` matrix type.
     pub const fn new() -> Self {
         Self(PhantomData)
     }
@@ -225,9 +225,11 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{PowellSingular, powell_singular, powell_singular_residuals};
-    use crate::{CostFunction, Residual};
-    use ndarray::Array1;
+    use super::{
+        PowellSingular, powell_singular, powell_singular_jacobian, powell_singular_residuals,
+    };
+    use crate::{CostFunction, Jacobian, Residual};
+    use ndarray::{Array1, Array2};
 
     // Array1 owns a contiguous buffer, so `as_slice` always succeeds.
     impl CostFunction for PowellSingular<Array1<f64>> {
@@ -250,6 +252,17 @@ mod ndarray_impl {
                 out.as_slice_mut().expect("Array1 is contiguous"),
             );
             Ok(out)
+        }
+    }
+
+    impl Jacobian for PowellSingular<Array1<f64>> {
+        type Jacobian = Array2<f64>;
+        fn jacobian(&self, x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+            let mut buf = [0.0_f64; 16];
+            powell_singular_jacobian(x.as_slice().expect("Array1 is contiguous"), &mut buf);
+            // `buf` is row-major (4×4); the default C-order `from_shape_vec`
+            // matches the nalgebra `from_row_slice` mirror above.
+            Ok(Array2::from_shape_vec((4, 4), buf.to_vec()).expect("16 entries for a 4×4"))
         }
     }
 }

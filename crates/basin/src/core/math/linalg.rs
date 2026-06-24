@@ -89,9 +89,10 @@ pub trait MatTransposeVec<V> {
 /// # Backends
 ///
 /// nalgebra (`DMatrix<f64>`), faer (`Mat<f64>`), their sparse
-/// counterparts, and the default `Vec<f64>` backend over
-/// [`DenseMatrix`](super::DenseMatrix). `ndarray::Array2<f64>` does not
-/// implement it (matvec only), so it carries no `GramMatrix`-bound solver.
+/// counterparts, the default `Vec<f64>` backend over
+/// [`DenseMatrix`](super::DenseMatrix), and `ndarray::Array2<f64>` — the
+/// latter via a pure-Rust row-outer-product accumulation, wasm-clean with no
+/// BLAS/LAPACK.
 pub trait GramMatrix {
     /// Compute `Aᵀ A` and return the freshly allocated SPD matrix.
     fn gram(&self) -> Self;
@@ -118,12 +119,12 @@ pub trait GramMatrix {
 /// # Backends
 ///
 /// nalgebra (`DMatrix<f64>`) and faer (`Mat<f64>`) at the dense tier,
-/// their sparse counterparts, and the default `Vec<f64>` backend over
-/// [`DenseMatrix`](super::DenseMatrix). All use a dense (or sparse)
-/// Cholesky (`L Lᵀ`); the `DenseMatrix` impl is a pure-Rust Cholesky
-/// (`dense_chol`), wasm-clean with no BLAS/LAPACK. Pivoting variants live
-/// in the backend crates if needed. `ndarray::Array2<f64>` does not
-/// implement it (matvec only). With the opt-in `nalgebra-lapack` feature the
+/// their sparse counterparts, the default `Vec<f64>` backend over
+/// [`DenseMatrix`](super::DenseMatrix), and `ndarray::Array2<f64>`. All use a
+/// dense (or sparse) Cholesky (`L Lᵀ`); the `DenseMatrix` and `Array2` impls
+/// share the same pure-Rust Cholesky (`dense_chol`), wasm-clean with no
+/// BLAS/LAPACK. Pivoting variants live in the backend crates if needed. With
+/// the opt-in `nalgebra-lapack` feature the
 /// nalgebra `DMatrix` impl routes through LAPACK's Cholesky instead (f32/f64
 /// only); see the feature note in `Cargo.toml`.
 pub trait LinearSolveSpd<V> {
@@ -249,9 +250,9 @@ pub trait MatDiagonal<V> {
 /// Implemented for the default `Vec<f64>` backend
 /// ([`DenseMatrix`](super::DenseMatrix) over `Vec<f64>`), dense nalgebra
 /// (`DMatrix<f64>` over `DVector<f64>`), dense faer (`Mat<f64>` over
-/// `Col<f64>`), sparse nalgebra (`CscMatrix<f64>` over
-/// `DVector<f64>`), sparse faer (`SparseColMat<usize, f64>` over
-/// `Col<f64>`).
+/// `Col<f64>`), `ndarray::Array2<f64>` (over `Array1<f64>`), sparse nalgebra
+/// (`CscMatrix<f64>` over `DVector<f64>`), sparse faer
+/// (`SparseColMat<usize, f64>` over `Col<f64>`).
 pub trait AddDiagonalVectorInPlace<V> {
     /// Add `diag[i]` to `self[(i, i)]` for every `i`, in place.
     fn add_diagonal_vector_in_place(&mut self, diag: &V);

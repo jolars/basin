@@ -424,22 +424,25 @@ pub trait Residual {
 ///
 /// # Backends
 ///
-/// Wired up for the LA-heavy backends only:
+/// Every dense backend pairs its param vector with an honest matrix type:
 ///
+/// - `Param = Vec<f64>` → `Jacobian = `[`DenseMatrix<f64>`](crate::DenseMatrix),
+///   the default backend; its [`LinearSolveSpd`](crate::core::math::LinearSolveSpd)
+///   is a pure-Rust Cholesky, wasm-clean with no BLAS/LAPACK.
 /// - `Param = nalgebra::DVector<f64>` → `Jacobian = nalgebra::DMatrix<f64>`
 ///   (dense) or `nalgebra_sparse::CscMatrix<f64>` (sparse). Both ride
 ///   on the `nalgebra` feature.
 /// - `Param = faer::Col<f64>` → `Jacobian = faer::Mat<f64>` (dense) or
 ///   `faer::sparse::SparseColMat<usize, f64>` (sparse). Both ride on
 ///   the `faer` feature.
+/// - `Param = ndarray::Array1<f64>` → `Jacobian = ndarray::Array2<f64>`,
+///   on the `ndarray` feature; `Array2` reuses the same pure-Rust Cholesky
+///   as `DenseMatrix` (no `ndarray-linalg` / BLAS, so the wasm-default tenet
+///   holds).
 ///
-/// `Vec<f64>` deliberately does not implement `Jacobian` — there is no
-/// honest matrix type to pair with it. `ndarray::Array1<f64>` likewise
-/// has no `Jacobian` impl: `ndarray-linalg` requires system BLAS/LAPACK
-/// and breaks the wasm-default tenet, so there's no honest
-/// [`LinearSolveSpd`](crate::core::math::LinearSolveSpd) to back it.
-/// Per tenet 5 in `CONTRIBUTING.md`, missing backend coverage is a
-/// compile-time error rather than a runtime surprise.
+/// Per tenet 5 in `CONTRIBUTING.md`, a backend that lacks the matrix ops a
+/// least-squares solver needs is a compile-time error rather than a runtime
+/// surprise.
 ///
 /// # Examples
 ///

@@ -47,15 +47,18 @@ the previous lands.
   backend it is. The canonical per-solver record is the matrix in
   `web/src/routes/docs/solvers/+page.svx` plus each solver's "Backends" doc
   note --- this entry is just the roadmap pointer. Recently landed: `BFGS`
-  on `Vec<f64>` + faer; `LBFGS`/`LBFGSB` on ndarray (now all four backends);
-  `CmaEs`/`BoundedCmaEs` on `Vec<f64>` via the pure-Rust cyclic-Jacobi
-  eigensolver (`dense_eig.rs`); `CmaEs`/`BoundedCmaEs` on ndarray (same
-  Jacobi solver wired through `as_standard_layout()` on `Array2`). Remaining
-  honest (pure-Rust, no BLAS) gaps: `BFGS` on ndarray (rank-one update ops
-  on `Array2` --- the last `✗` in its row); the least-squares family
-  (`GaussNewton`/`LevenbergMarquardt`/`Trf`) on `Vec<f64>` + ndarray (a
-  pure-Rust `LinearSolveLstsq`/QR on `DenseMatrix` + `Array2`, explicitly
-  blessed by the backends rule); the memetic family
+  on `Vec<f64>` + faer + ndarray (now all four backends); `LBFGS`/`LBFGSB`
+  on ndarray (now all four backends); `CmaEs`/`BoundedCmaEs` on `Vec<f64>`
+  via the pure-Rust cyclic-Jacobi eigensolver (`dense_eig.rs`);
+  `CmaEs`/`BoundedCmaEs` on ndarray (same Jacobi solver wired through
+  `as_standard_layout()` on `Array2`); the least-squares family
+  (`GaussNewton`/`LevenbergMarquardt`/`Trf`) on ndarray, plus `Trf` on
+  `Vec<f64>` (now all four backends each) --- the whole family is the
+  normal-equations path (`JᵀJ` via `GramMatrix` + a pure-Rust Cholesky
+  `LinearSolveSpd`, the same `dense_chol` reused on `Array2` through
+  `as_standard_layout()`, with `AddDiagonalVectorInPlace` / `MaxDiagonal`
+  for the LM/Trf damping), *not* QR, so no `LinearSolveLstsq` was needed.
+  Remaining honest (pure-Rust, no BLAS) gaps: the memetic family
   (`CmaInject`/`BoundedCmaInject`/`MaLsChCma`) on `Vec<f64>` + ndarray ---
   now that the CMA family covers both backends, the matrix bounds resolve on
   `Array2<f64>`; ndarray coverage just needs wiring tests + a

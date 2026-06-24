@@ -65,10 +65,10 @@ use crate::core::termination::TerminationReason;
 ///
 /// LA-heavy: the default `Vec<f64>` backend (over the hand-rolled
 /// [`DenseMatrix<f64>`](crate::DenseMatrix), via a pure-Rust Cholesky),
-/// nalgebra (`DVector<f64>` / `DMatrix<f64>`), and faer (`Col<f64>` /
-/// `Mat<f64>`), plus the nalgebra-sparse / faer-sparse matrices.
-/// `ndarray::Array1<f64>` produces a compile-time error per tenet 5 — it
-/// has no honest [`Jacobian`] impl (no dense matrix type).
+/// nalgebra (`DVector<f64>` / `DMatrix<f64>`), faer (`Col<f64>` /
+/// `Mat<f64>`), and ndarray (`Array1<f64>` / `Array2<f64>`, the latter over
+/// the same pure-Rust Cholesky), plus the nalgebra-sparse / faer-sparse
+/// matrices.
 ///
 /// # State convention
 ///

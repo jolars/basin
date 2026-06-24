@@ -21,14 +21,16 @@
 //! [`AddDiagonalVectorInPlace`](super::AddDiagonalVectorInPlace) (Marquardt
 //! damping), and the load-bearing [`LinearSolveSpd`](super::LinearSolveSpd) via
 //! a pure-Rust Cholesky (`dense_chol`), so the normal-equations least-squares
-//! solvers (Gauss-Newton, Levenberg-Marquardt) run on `Vec<f64>` too. What is
-//! *not yet* implemented is the QR least-squares solve
-//! [`LinearSolveLstsq`](super::LinearSolveLstsq) and the trust-region-reflective
-//! [`MaxDiagonal`](super::MaxDiagonal), so TRF stays a compile-time error on
-//! `Vec<f64>`. That is a "not yet," not a permanent design choice (tenet 5): no
-//! solver has motivated a pure-Rust `DenseMatrix` QR yet, but — like the
-//! Cholesky and Jacobi solvers above — one would be welcome if it can be done
-//! honestly (pure-Rust, wasm-clean, no BLAS/LAPACK).
+//! solvers all run on `Vec<f64>`: Gauss-Newton, Levenberg-Marquardt, and —
+//! with the diagonal-scaling op [`MaxDiagonal`](super::MaxDiagonal) — the
+//! trust-region-reflective TRF. The whole family is normal-equations
+//! (`JᵀJ` + Cholesky), so none of them touch the QR least-squares solve
+//! [`LinearSolveLstsq`](super::LinearSolveLstsq); that op stays *not yet*
+//! implemented for `DenseMatrix`, but that is a separate, currently-unmotivated
+//! "not yet" (tenet 5), not what gated TRF. No solver has motivated a pure-Rust
+//! `DenseMatrix` QR yet, but — like the Cholesky and Jacobi solvers above —
+//! one would be welcome if it can be done honestly (pure-Rust, wasm-clean, no
+//! BLAS/LAPACK).
 //!
 //! The scalar `F` defaults to `f64` so existing `DenseMatrix` references keep
 //! resolving to `DenseMatrix<f64>` unchanged.
@@ -36,8 +38,8 @@
 use super::Scalar;
 use super::{
     AddDiagonalVectorInPlace, GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveSpd,
-    MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, RankOneUpdate,
-    ScaleInPlace, SymmetricEigen, SymmetricEigenError,
+    MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, MaxDiagonal,
+    RankOneUpdate, ScaleInPlace, SymmetricEigen, SymmetricEigenError,
 };
 
 /// Row-major dense matrix — the matrix companion to `Vec<F>` as the param
@@ -53,10 +55,11 @@ use super::{
 /// for the linear-constraint solvers, plus [`MatrixIdentity`],
 /// [`ScaleInPlace`], and `GeneralRankOneUpdate` for BFGS, and
 /// `RankOneUpdate`, [`MatrixFromDiagonal`], `MatDiagonal`, and a Jacobi
-/// [`SymmetricEigen`] for CMA-ES, and the SPD-solve trio [`GramMatrix`],
-/// `AddDiagonalVectorInPlace`, and a Cholesky [`LinearSolveSpd`] for
-/// Gauss-Newton / Levenberg-Marquardt; see the module docs for why the QR
-/// least-squares ops are deliberately absent.
+/// [`SymmetricEigen`] for CMA-ES, and the SPD-solve quartet [`GramMatrix`],
+/// `AddDiagonalVectorInPlace`, `MaxDiagonal`, and a Cholesky
+/// [`LinearSolveSpd`] for the normal-equations least-squares family
+/// (Gauss-Newton, Levenberg-Marquardt, TRF); see the module docs for why the
+/// QR least-squares ops are deliberately absent.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DenseMatrix<F = f64> {
     /// Row-major entries: `data[i * cols + j] = A[i, j]`.
@@ -275,6 +278,19 @@ impl<F: Scalar> MatDiagonal<Vec<F>> for DenseMatrix<F> {
         (0..self.rows)
             .map(|i| self.data[i * self.cols + i])
             .collect()
+    }
+}
+
+impl<F: Scalar> MaxDiagonal<F> for DenseMatrix<F> {
+    fn max_diagonal(&self) -> F {
+        assert_eq!(
+            self.rows, self.cols,
+            "max_diagonal: matrix must be square, got {}x{}",
+            self.rows, self.cols
+        );
+        (0..self.rows)
+            .map(|i| self.data[i * self.cols + i])
+            .fold(F::neg_infinity(), F::max)
     }
 }
 
