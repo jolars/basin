@@ -151,6 +151,18 @@
 //!
 //! A backend major-version bump is a breaking change and ships only in a basin
 //! major release; within the 1.x series these pins are fixed.
+//!
+//! Two backends have opt-in, BLAS/LAPACK-backed acceleration. Both are off by
+//! default and not wasm-compatible (each links a Fortran/BLAS toolchain), and
+//! both expect you to bring your own BLAS/LAPACK source crate:
+//!
+//! | Feature           | Effect                                                                                        |
+//! | ----------------- | --------------------------------------------------------------------------------------------- |
+//! | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                |
+//! | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky / symmetric eigendecomposition for LAPACK-backed ones.   |
+//!
+//! The default build is wasm-friendly: no BLAS/LAPACK and no threads.
+//! Parallelism is behind the opt-in `parallel` feature.
 #![cfg_attr(docsrs, feature(doc_cfg), doc(auto_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]

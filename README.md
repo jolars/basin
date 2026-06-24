@@ -96,7 +96,7 @@ pinning a single major version. First-order and derivative-free solvers run on
 any backend; linear-algebra-heavy solvers may require a specific one and say so
 in their docs.
 
-basin pins one major version per backend. Each basin 1.x release supports
+Basin pins one major version per backend. Each basin 1.x release supports
 exactly these versions:
 
   | Backend    | Feature    | Version                            |
@@ -109,8 +109,18 @@ exactly these versions:
 breaking change and ships only in a basin major release; within the 1.x series
 these pins are fixed.
 
+Two backends have opt-in, BLAS/LAPACK-backed acceleration. Both are off by
+default and not wasm-compatible (each links a Fortran/BLAS toolchain), and both
+expect you to bring your own BLAS/LAPACK source crate:
+
+  | Feature           | Effect                                                                                       |
+  | ----------------- | -------------------------------------------------------------------------------------------- |
+  | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                              |
+  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky / symmetric eigendecomposition for LAPACK-backed ones. |
+
 The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
-and BLAS-backed paths are behind opt-in features (`parallel`).
+is behind the opt-in `parallel` feature; BLAS/LAPACK acceleration is behind
+`ndarray-blas` and `nalgebra-lapack`.
 
 ## Acknowledgements
 
