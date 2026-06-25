@@ -15,6 +15,7 @@ updates:
     ignore:
       - dependency-name: "nalgebra"
       - dependency-name: "nalgebra-sparse"
+      - dependency-name: "nalgebra-lapack"
       - dependency-name: "ndarray"
       - dependency-name: "faer"
   - package-ecosystem: "uv"
