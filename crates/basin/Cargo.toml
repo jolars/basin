@@ -98,7 +98,7 @@ nalgebra-sparse = { version = "0.11", optional = true }
 # single-version-per-backend story. `default-features = false` drops the
 # default `openblas` provider so the rlib builds without linking or building a
 # BLAS source — see the feature comment above. Non-default + WASM-incompatible.
-nalgebra-lapack = { version = "0.27", optional = true, default-features = false }
+nalgebra-lapack = { version = "0.28", optional = true, default-features = false }
 # Pure-Rust (no BLAS feature) so it stays wasm-compatible per the WASM hard
 # constraint in CONTRIBUTING.md.
 ndarray = { version = "0.17", optional = true, default-features = false }
