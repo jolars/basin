@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.0](https://github.com/jolars/basin/compare/v1.2.0...v1.3.0) (2026-06-25)
+
+### Features
+- add the least-squares family to ndarray (+ Trf on Vec<f64>) ([`67b38d8`](https://github.com/jolars/basin/commit/67b38d81b5d55ee4dfbaa198acb910e561c3b181))
+- add Bfgs support for the ndarray backend ([`f2c50ba`](https://github.com/jolars/basin/commit/f2c50ba5b7bc5e2538f520c043b8951a678326c0))
+
+### Bug Fixes
+- **security:** bump esbuild ([`60c2b73`](https://github.com/jolars/basin/commit/60c2b73fe6dd1ea40bf7141e0e75368a34e2857d))
+
 ## [1.2.0](https://github.com/jolars/basin/compare/v1.1.0...v1.2.0) (2026-06-22)
 
 ### Features
