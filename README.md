@@ -30,6 +30,10 @@ opt-in, one feature each:
 cargo add basin --features nalgebra  # or: ndarray, faer
 ```
 
+Basin's minimum supported Rust version (MSRV) is **1.87.0**. It is held
+deliberately conservative to keep the planned CRAN (R) bindings buildable, so it
+moves rarely and only after checking downstream toolchains.
+
 ## Example
 
 Implement `CostFunction` (and `Gradient`, when the solver needs derivatives),
@@ -118,10 +122,10 @@ Two backends have opt-in, BLAS/LAPACK-backed acceleration. Both are off by
 default and not wasm-compatible (each links a Fortran/BLAS toolchain), and both
 expect you to bring your own BLAS/LAPACK source crate:
 
-  | Feature           | Effect                                                                                       |
-  | ----------------- | -------------------------------------------------------------------------------------------- |
-  | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                              |
-  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky / symmetric eigendecomposition for LAPACK-backed ones. |
+  | Feature           | Effect                                                                                                                                                         |
+  | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                                                                                |
+  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky / symmetric eigendecomposition for LAPACK-backed ones (pins `nalgebra-lapack` 0.27, the release tracking nalgebra 0.34). |
 
 The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
 is behind the opt-in `parallel` feature; BLAS/LAPACK acceleration is behind
@@ -138,15 +142,15 @@ and contributors for a library that is a pleasure to learn from.
 The Powell-family derivative-free solvers (COBYLA, NEWUOA, BOBYQA, LINCOA) are
 derived from [PRIMA], Zaikun Zhang's modern-Fortran reference implementation of
 M. J. D. Powell's methods, used as the authoritative source for the exact
-formulas and as the cross-validation oracle. PRIMA is distributed under the
-BSD 3-Clause License; its notice is retained in
+formulas and as the cross-validation oracle. PRIMA is distributed under the BSD
+3-Clause License; its notice is retained in
 [COPYRIGHT](https://github.com/jolars/basin/blob/main/crates/basin/COPYRIGHT).
 
 The bound-constrained L-BFGS-B solver is a port of the [L-BFGS-B] version 3.0
-Fortran code by Ciyou Zhu, Richard H. Byrd, Peihuang Lu, and Jorge Nocedal
-(ACM TOMS Algorithm 778), with the v3.0 improvements by José Luis Morales and
-Jorge Nocedal. It is released under the New BSD (BSD 3-Clause) License; its
-notice is likewise retained in
+Fortran code by Ciyou Zhu, Richard H. Byrd, Peihuang Lu, and Jorge Nocedal (ACM
+TOMS Algorithm 778), with the v3.0 improvements by José Luis Morales and Jorge
+Nocedal. It is released under the New BSD (BSD 3-Clause) License; its notice is
+likewise retained in
 [COPYRIGHT](https://github.com/jolars/basin/blob/main/crates/basin/COPYRIGHT).
 
 [PRIMA]: https://github.com/libprima/prima
@@ -161,7 +165,7 @@ Licensed under either of
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or
   <https://opensource.org/licenses/MIT>)
 
-at your option.
+at your convenience.
 
 ### Contribution
 
