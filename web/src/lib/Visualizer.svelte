@@ -1,17 +1,17 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount } from "svelte";
     import init, {
         ProblemKind,
         SolverKind,
         Run,
         evalGrid,
-    } from '$lib/basin-wasm/basin_wasm';
-    import { PROBLEMS, problemByKind, SUBOPT_TARGET } from '$lib/problems';
-    import { SOLVERS, defaultOptionValues } from '$lib/solvers';
-    import ContourPlot from '$lib/ContourPlot.svelte';
-    import CostChart from '$lib/CostChart.svelte';
-    import Controls from '$lib/Controls.svelte';
-    import { theme } from '$lib/theme.svelte';
+    } from "$lib/basin-wasm/basin_wasm";
+    import { PROBLEMS, problemByKind, SUBOPT_TARGET } from "$lib/problems";
+    import { SOLVERS, defaultOptionValues } from "$lib/solvers";
+    import ContourPlot from "$lib/ContourPlot.svelte";
+    import CostChart from "$lib/CostChart.svelte";
+    import Controls from "$lib/Controls.svelte";
+    import { theme } from "$lib/theme.svelte";
 
     // Wasm boot. The viz waits on this once; everything downstream assumes
     // the module is already loaded.
@@ -25,7 +25,7 @@
     ): Record<string, string | number> {
         const meta = SOLVERS.find((s) => s.kind === sk)!;
         const vals = defaultOptionValues(meta);
-        if ('gdAlpha' in vals) vals.gdAlpha = problemByKind(pk).gdAlphaDefault;
+        if ("gdAlpha" in vals) vals.gdAlpha = problemByKind(pk).gdAlphaDefault;
         return vals;
     }
 
@@ -53,7 +53,7 @@
     // SSGA). Empty Float64Array for the local solvers — the contour plot
     // skips rendering when length is zero.
     let population: Float64Array<ArrayBufferLike> = $state(new Float64Array(0));
-    let reason = $state('');
+    let reason = $state("");
 
     let problemMeta = $derived(problemByKind(problemKind));
     let solverMeta = $derived(SOLVERS.find((s) => s.kind === solverKind)!);
@@ -96,7 +96,7 @@
         // needs; reading the fields here tracks them as effect deps.
         const d = problemMeta.domain;
         const opts = {
-            gdLineSearch: optionValues.gdLineSearch ?? 'constant',
+            gdLineSearch: optionValues.gdLineSearch ?? "constant",
             gdAlpha: optionValues.gdAlpha ?? problemMeta.gdAlphaDefault,
             // β = 0: the visualizer has no momentum knob (the landing-page
             // playground does). Plain steepest descent for the GD solver.
@@ -139,7 +139,7 @@
         trajectory = run.trajectoryXy();
         costs = run.costs();
         population = run.populationXy();
-        reason = '';
+        reason = "";
 
         // Generation-based solvers (CMA-ES / DE / RS) advance one full
         // generation per `next_iter`, so 8/frame races through the run in
@@ -169,7 +169,7 @@
                 costs = run.costs();
                 population = run.populationXy();
                 if (result.done) {
-                    reason = result.reason ?? '';
+                    reason = result.reason ?? "";
                     frameId = null;
                     return;
                 }
@@ -207,7 +207,10 @@
         solverKind?: SolverKind;
         maxIter?: number;
     }) {
-        if (patch.problemKind !== undefined && patch.problemKind !== problemKind) {
+        if (
+            patch.problemKind !== undefined &&
+            patch.problemKind !== problemKind
+        ) {
             problemKind = patch.problemKind;
             // Re-center start and reset the α default for the new problem.
             const d = problemByKind(problemKind).domain;
@@ -215,7 +218,7 @@
                 x: d.xmin + 0.25 * (d.xmax - d.xmin),
                 y: d.ymin + 0.75 * (d.ymax - d.ymin),
             };
-            if ('gdAlpha' in optionValues) {
+            if ("gdAlpha" in optionValues) {
                 optionValues = {
                     ...optionValues,
                     gdAlpha: problemByKind(problemKind).gdAlphaDefault,
@@ -261,7 +264,9 @@
     {#if !wasmReady}
         <p class="text-slate-500 dark:text-slate-400">Loading wasm…</p>
     {:else}
-        <div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 flex-1 min-h-0">
+        <div
+            class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 flex-1 min-h-0"
+        >
             <div
                 class="relative bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden aspect-square lg:aspect-auto lg:min-h-[360px]"
             >

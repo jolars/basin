@@ -20,21 +20,24 @@
  * `.dark`/`.light` class in sync after hydration.
  */
 
-export type ThemePreference = 'auto' | 'light' | 'dark';
-export type EffectiveTheme = 'light' | 'dark';
+export type ThemePreference = "auto" | "light" | "dark";
+export type EffectiveTheme = "light" | "dark";
 
-const STORAGE_KEY = 'basin.theme';
+const STORAGE_KEY = "basin.theme";
 
 function readPreference(): ThemePreference {
-    if (typeof localStorage === 'undefined') return 'auto';
+    if (typeof localStorage === "undefined") return "auto";
     const v = localStorage.getItem(STORAGE_KEY);
-    return v === 'light' || v === 'dark' || v === 'auto' ? v : 'auto';
+    return v === "light" || v === "dark" || v === "auto" ? v : "auto";
 }
 
 function systemPrefersDark(): boolean {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function')
+    if (
+        typeof window === "undefined" ||
+        typeof window.matchMedia !== "function"
+    )
         return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
 class ThemeStore {
@@ -43,31 +46,31 @@ class ThemeStore {
     private systemDark: boolean = $state(systemPrefersDark());
 
     effective: EffectiveTheme = $derived(
-        this.preference === 'auto'
+        this.preference === "auto"
             ? this.systemDark
-                ? 'dark'
-                : 'light'
+                ? "dark"
+                : "light"
             : this.preference,
     );
 
     constructor() {
         if (
-            typeof window !== 'undefined' &&
-            typeof window.matchMedia === 'function'
+            typeof window !== "undefined" &&
+            typeof window.matchMedia === "function"
         ) {
-            const mq = window.matchMedia('(prefers-color-scheme: dark)');
+            const mq = window.matchMedia("(prefers-color-scheme: dark)");
             const onChange = (e: MediaQueryListEvent) => {
                 this.systemDark = e.matches;
             };
             // `addEventListener` is the modern API; old Safari needs
             // `addListener`. We support modern browsers only.
-            mq.addEventListener('change', onChange);
+            mq.addEventListener("change", onChange);
         }
     }
 
     set(pref: ThemePreference) {
         this.preference = pref;
-        if (typeof localStorage !== 'undefined') {
+        if (typeof localStorage !== "undefined") {
             try {
                 localStorage.setItem(STORAGE_KEY, pref);
             } catch {

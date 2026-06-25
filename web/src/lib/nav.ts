@@ -1,12 +1,14 @@
-// Shared navigation model. `href` is always relative to the SvelteKit
-// `base` (it starts with `/` and is prefixed with `base` at the call
-// site) — never hardcode `/basin`. `section` is the first path segment,
-// used for active-state matching across a whole section (e.g. any
-// `/docs/*` page lights up the "Docs" link).
+// Shared navigation model. `href` is a base-independent app pathname
+// (it starts with `/` and is passed through `resolve()` at the call
+// site, which prefixes the base) — never hardcode `/basin`. `section`
+// is the first path segment, used for active-state matching across a
+// whole section (e.g. any `/docs/*` page lights up the "Docs" link).
+
+import type { Pathname } from "$app/types";
 
 export type NavLink = {
     label: string;
-    href: string;
+    href: Pathname;
     /** First path segment for active-state matching. Omit for external links. */
     section?: string;
     external?: boolean;
@@ -18,29 +20,30 @@ export type NavLink = {
 
 /** Top-level site navigation, shown in the header. */
 export const NAV_LINKS: NavLink[] = [
-    { label: 'Docs', href: '/docs/getting-started/', section: 'docs' },
-    { label: 'Visualizer', href: '/visualizer/', section: 'visualizer' },
-    { label: 'Benchmarks', href: '/benchmarks/', section: 'benchmarks' },
+    { label: "Docs", href: "/docs/getting-started/", section: "docs" },
+    { label: "Visualizer", href: "/visualizer/", section: "visualizer" },
+    { label: "Benchmarks", href: "/benchmarks/", section: "benchmarks" },
 ];
 
 /** Sidebar links for the docs section. */
 export const DOCS_LINKS: NavLink[] = [
-    { label: 'Overview', href: '/docs/', section: 'docs' },
+    { label: "Overview", href: "/docs/", section: "docs" },
     {
-        label: 'Getting started',
-        href: '/docs/getting-started/',
-        section: 'docs',
+        label: "Getting started",
+        href: "/docs/getting-started/",
+        section: "docs",
     },
-    { label: 'Solvers', href: '/docs/solvers/', section: 'docs' },
+    { label: "Solvers", href: "/docs/solvers/", section: "docs" },
 ];
 
 /**
- * The active section for a pathname, independent of the `base` prefix.
- * Returns the first path segment (`'docs'`, `'visualizer'`, …) or `''`
- * for the landing page.
+ * The active section for a route. Returns the first path segment
+ * (`'docs'`, `'visualizer'`, …) or `''` for the landing page.
+ *
+ * Derived from `page.route.id`, which is already base-independent
+ * (`/docs/solvers`, never `/basin/...`), so there's no `base` prefix to
+ * strip — unlike `page.url.pathname`.
  */
-export function activeSection(pathname: string, base: string): string {
-    const rel =
-        base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
-    return rel.split('/')[1] ?? '';
+export function activeSection(routeId: string | null): string {
+    return (routeId ?? "").split("/")[1] ?? "";
 }

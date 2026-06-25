@@ -11,10 +11,10 @@
  * Lives under `data/` because `web/src/lib/solvers.ts` is already taken by
  * the visualizer's knobs module.
  */
-import rawData from './solver-benchmarks.json';
+import rawData from "./solver-benchmarks.json";
 
 /** The solver lineup, in display order. */
-export const SOLVER_ORDER = ['gd', 'nm', 'bfgs', 'lbfgs', 'cmaes'] as const;
+export const SOLVER_ORDER = ["gd", "nm", "bfgs", "lbfgs", "cmaes"] as const;
 export type Solver = (typeof SOLVER_ORDER)[number];
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
@@ -52,27 +52,27 @@ export interface SolverBenchmarks {
 export const SOLVER_BENCHMARKS = rawData as SolverBenchmarks;
 
 export const SOLVER_LABELS: Record<Solver, string> = {
-    gd: 'Gradient Descent',
-    nm: 'Nelder–Mead',
-    bfgs: 'BFGS',
-    lbfgs: 'L-BFGS',
-    cmaes: 'CMA-ES',
+    gd: "Gradient Descent",
+    nm: "Nelder–Mead",
+    bfgs: "BFGS",
+    lbfgs: "L-BFGS",
+    cmaes: "CMA-ES",
 };
 
 /** Line / legend colors per solver — mid-tone hues legible on both light and
  * dark backgrounds. Distinct from the backend palette (Vec is indigo there)
  * to avoid cross-page color confusion. */
 export const SOLVER_COLORS: Record<Solver, string> = {
-    gd: '#0ea5e9', // sky
-    nm: '#f59e0b', // amber
-    bfgs: '#10b981', // emerald
-    lbfgs: '#8b5cf6', // violet
-    cmaes: '#f43f5e', // rose
+    gd: "#0ea5e9", // sky
+    nm: "#f59e0b", // amber
+    bfgs: "#10b981", // emerald
+    lbfgs: "#8b5cf6", // violet
+    cmaes: "#f43f5e", // rose
 };
 
 /** Problem display labels, used in headings. */
 export const PROBLEM_LABELS: Record<string, string> = {
-    rosenbrock: 'Rosenbrock',
+    rosenbrock: "Rosenbrock",
 };
 
 /** One panel: a (problem, n, seed) configuration the page draws a chart for. */
@@ -138,7 +138,8 @@ export const BY_PROBLEM: ProblemSection[] = (() => {
 export function seriesFor(problem: string, seed: number) {
     return SOLVER_ORDER.flatMap((solver) => {
         const r = SOLVER_BENCHMARKS.results.find(
-            (r) => r.solver === solver && r.problem === problem && r.seed === seed,
+            (r) =>
+                r.solver === solver && r.problem === problem && r.seed === seed,
         );
         return r
             ? [

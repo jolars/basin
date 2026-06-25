@@ -55,13 +55,20 @@ function isotonic(values: number[]): number[] {
  * If the labels physically can't fit (`(n − 1)·gap > hi − lo`) they're spread
  * evenly across the range as a best effort.
  */
-export function placeLabels(targets: number[], gap: number, lo: number, hi: number): number[] {
+export function placeLabels(
+    targets: number[],
+    gap: number,
+    lo: number,
+    hi: number,
+): number[] {
     const n = targets.length;
     if (n === 0) return [];
     if (n === 1) return [Math.min(Math.max(targets[0], lo), hi)];
 
     // Sort by target, remembering where each came from.
-    const order = targets.map((_, i) => i).sort((a, b) => targets[a] - targets[b]);
+    const order = targets
+        .map((_, i) => i)
+        .sort((a, b) => targets[a] - targets[b]);
 
     // Doesn't fit: spread evenly, in target order.
     if ((n - 1) * gap > hi - lo) {

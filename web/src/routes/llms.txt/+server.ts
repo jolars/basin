@@ -1,10 +1,8 @@
-import { base } from '$app/paths';
-
 // Same canonical origin as sitemap.xml / robots.txt: the apex custom
-// domain `https://basin.rs/`, served at root (so `base` is empty).
-// Internal doc links are absolute so the file is useful when fetched on
-// its own.
-const SITE_ORIGIN = 'https://basin.rs';
+// domain `https://basin.rs/`, served at root (so there is no base path to
+// prefix). Internal doc links are absolute so the file is useful when
+// fetched on its own.
+const SITE_ORIGIN = "https://basin.rs";
 
 // llms.txt format: https://llmstxt.org — an H1 name, a blockquote summary,
 // then sections of `- [title](url): note` links. This is a *signpost*,
@@ -14,7 +12,7 @@ const SITE_ORIGIN = 'https://basin.rs';
 export const prerender = true;
 
 export function GET() {
-    const docs = `${SITE_ORIGIN}${base}/docs`;
+    const docs = `${SITE_ORIGIN}/docs`;
 
     const body = `# basin
 
@@ -38,7 +36,7 @@ export function GET() {
 
     return new Response(body, {
         headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
+            "Content-Type": "text/plain; charset=utf-8",
         },
     });
 }

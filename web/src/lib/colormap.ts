@@ -42,7 +42,7 @@ export function viridis(t: number): [number, number, number, number] {
  */
 export function normalizeCosts(
     costs: Float64Array,
-    intensity: 'linear' | 'sqrt' | 'log1p',
+    intensity: "linear" | "sqrt" | "log1p",
 ): Float64Array {
     const out = new Float64Array(costs.length);
     let max = 0;
@@ -56,12 +56,12 @@ export function normalizeCosts(
     return out;
 }
 
-function transform(c: number, intensity: 'linear' | 'sqrt' | 'log1p') {
+function transform(c: number, intensity: "linear" | "sqrt" | "log1p") {
     if (!Number.isFinite(c) || c < 0) return 0;
     switch (intensity) {
-        case 'sqrt':
+        case "sqrt":
             return Math.sqrt(c);
-        case 'log1p':
+        case "log1p":
             return Math.log1p(c);
         default:
             return c;

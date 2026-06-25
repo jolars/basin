@@ -6,7 +6,7 @@
  * Keep palette keys aligned across themes so callers can index by name
  * without conditionals.
  */
-export type Theme = 'light' | 'dark';
+export type Theme = "light" | "dark";
 
 export type Palette = {
     /** Canvas background fill. */
@@ -61,16 +61,16 @@ function viridisAt(t: number): [number, number, number] {
 }
 
 export function paletteFor(theme: Theme): Palette {
-    if (theme === 'dark') {
+    if (theme === "dark") {
         return {
-            surface: 'rgb(15, 23, 42)',
-            axis: 'rgba(148, 163, 184, 0.4)',
-            text: 'rgba(203, 213, 225, 0.85)',
-            trajectory: 'rgba(255, 255, 255, 0.95)',
-            startMarker: 'rgb(255, 255, 255)',
-            minimum: 'rgb(248, 113, 113)',
-            cost: 'rgb(56, 189, 248)',
-            reason: 'rgba(250, 204, 21, 0.95)',
+            surface: "rgb(15, 23, 42)",
+            axis: "rgba(148, 163, 184, 0.4)",
+            text: "rgba(203, 213, 225, 0.85)",
+            trajectory: "rgba(255, 255, 255, 0.95)",
+            startMarker: "rgb(255, 255, 255)",
+            minimum: "rgb(248, 113, 113)",
+            cost: "rgb(56, 189, 248)",
+            reason: "rgba(250, 204, 21, 0.95)",
             // On dark: brightest viridis (yellow) for inner, darkest
             // (purple) for outer.
             contour: (t) => {
@@ -80,14 +80,14 @@ export function paletteFor(theme: Theme): Palette {
         };
     }
     return {
-        surface: 'rgb(248, 250, 252)',
-        axis: 'rgba(71, 85, 105, 0.5)',
-        text: 'rgba(30, 41, 59, 0.85)',
-        trajectory: 'rgba(15, 23, 42, 0.95)',
-        startMarker: 'rgb(15, 23, 42)',
-        minimum: 'rgb(220, 38, 38)',
-        cost: 'rgb(2, 132, 199)',
-        reason: 'rgba(202, 138, 4, 0.95)',
+        surface: "rgb(248, 250, 252)",
+        axis: "rgba(71, 85, 105, 0.5)",
+        text: "rgba(30, 41, 59, 0.85)",
+        trajectory: "rgba(15, 23, 42, 0.95)",
+        startMarker: "rgb(15, 23, 42)",
+        minimum: "rgb(220, 38, 38)",
+        cost: "rgb(2, 132, 199)",
+        reason: "rgba(202, 138, 4, 0.95)",
         // On light: invert the viridis ramp so the inner (low-cost)
         // contour is the *darkest* purple-blue and the outer is a
         // muted teal/yellow. Both ends still have ample contrast on a

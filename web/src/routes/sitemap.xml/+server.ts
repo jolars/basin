@@ -1,9 +1,9 @@
-import { base } from "$app/paths";
-
 // Canonical production origin. The deployed site lives at the apex custom
-// domain `https://basin.rs/`, served at root — so `base` is empty in both
-// prod and dev. Only the origin can't be derived during prerender (which
-// uses a placeholder host), hence the constant.
+// domain `https://basin.rs/`, served at root — so there is no base path to
+// prefix here (a base-prefixed deploy would have a different origin too,
+// making these canonical URLs wrong regardless). Only the origin can't be
+// derived during prerender (which uses a placeholder host), hence the
+// constant.
 const SITE_ORIGIN = "https://basin.rs";
 
 // Discover every page route at build time so the sitemap can't drift when
@@ -34,11 +34,11 @@ export const prerender = true;
 
 export function GET() {
     const urls = routePaths().map((path) => {
-        // origin + base + path, with a trailing slash to match
+        // origin + path, with a trailing slash to match
         // `trailingSlash: 'always'` (root `+layout.ts`) and avoid a
         // redirect hop. Paths are clean (no `&`/query), so no XML escaping
         // is needed in <loc>.
-        const loc = `${SITE_ORIGIN}${base}${path}`.replace(/\/?$/, "/");
+        const loc = `${SITE_ORIGIN}${path}`.replace(/\/?$/, "/");
         return `  <url>\n    <loc>${loc}</loc>\n  </url>`;
     });
 

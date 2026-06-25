@@ -1,8 +1,8 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount } from "svelte";
 
-    import { paletteFor, type Theme } from './palette';
-    import { SUBOPT_TARGET } from './problems';
+    import { paletteFor, type Theme } from "./palette";
+    import { SUBOPT_TARGET } from "./problems";
 
     type Props = {
         costs: Float64Array;
@@ -57,7 +57,7 @@
         cv.height = Math.floor(h * dpr);
         cv.style.width = `${w}px`;
         cv.style.height = `${h}px`;
-        const ctx = cv.getContext('2d');
+        const ctx = cv.getContext("2d");
         if (!ctx) return;
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, w, h);
@@ -100,11 +100,11 @@
         ctx.lineTo(padL + innerW, padT + innerH);
         ctx.stroke();
 
-        ctx.font = '11px sans-serif';
+        ctx.font = "11px sans-serif";
 
         // y-axis: decade gridlines + labels, thinned to ~6 across the range.
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
         const kLo = Math.ceil(yLo);
         const kHi = Math.floor(yHi);
         const step = Math.max(1, Math.ceil((kHi - kLo) / 6));
@@ -123,11 +123,11 @@
 
         // Captions: y quantity (top-left), termination reason (top-right).
         ctx.fillStyle = pal.text;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText('f − f*', padL, padT - 5);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText("f − f*", padL, padT - 5);
         if (reason) {
-            ctx.textAlign = 'right';
+            ctx.textAlign = "right";
             ctx.fillStyle = pal.reason;
             ctx.fillText(reason, w - padR, padT - 5);
         }
@@ -138,13 +138,13 @@
         // the polyline appear to compress as new points arrived).
         const xRange = Math.max(xMax, 1);
         ctx.fillStyle = pal.text;
-        ctx.textBaseline = 'top';
-        ctx.textAlign = 'left';
-        ctx.fillText('0', padL, padT + innerH + 5);
-        ctx.textAlign = 'right';
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        ctx.fillText("0", padL, padT + innerH + 5);
+        ctx.textAlign = "right";
         ctx.fillText(`${xRange}`, padL + innerW, padT + innerH + 5);
-        ctx.textAlign = 'center';
-        ctx.fillText('iteration', padL + innerW / 2, padT + innerH + 18);
+        ctx.textAlign = "center";
+        ctx.fillText("iteration", padL + innerW / 2, padT + innerH + 18);
 
         // Polyline.
         ctx.beginPath();

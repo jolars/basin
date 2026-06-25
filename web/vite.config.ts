@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
+import Icons from "unplugin-icons/vite";
 import { defineConfig } from "vite";
 import wasm from "vite-plugin-wasm";
-import Icons from "unplugin-icons/vite";
 
 // Read the basin crate version from Cargo.toml at config time so the
 // site footer can show what version the docs/playground are pinned to.

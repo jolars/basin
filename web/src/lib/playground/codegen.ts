@@ -99,7 +99,7 @@ export function rustFloat(n: number): string {
     let s = String(n);
     // `String(1)` → "1"; Rust wants "1.0". Scientific/decimal forms already
     // read as floats. (Our slider values never reach JS exponential range.)
-    if (!/[.eE]/.test(s)) s += '.0';
+    if (!/[.eE]/.test(s)) s += ".0";
     return s;
 }
 
@@ -107,7 +107,7 @@ export function rustFloat(n: number): string {
 export function rustInt(n: number): string {
     return Math.round(n)
         .toString()
-        .replace(/\B(?=(\d{3})+(?!\d))/g, '_');
+        .replace(/\B(?=(\d{3})+(?!\d))/g, "_");
 }
 
 /**
@@ -145,26 +145,26 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
 
     return (
         [
-            'use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};',
-            '',
-            'struct Rosenbrock;',
-            '',
+            "use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};",
+            "",
+            "struct Rosenbrock;",
+            "",
             COST_IMPL,
-            '',
+            "",
             GRADIENT_IMPL,
-            '',
-            'fn main() {',
+            "",
+            "fn main() {",
             `    let solver = ${solverExpr};`,
             `    let state = BasicState::new(${startVec});`,
-            '',
+            "",
             `    let result = Executor::new(Rosenbrock, solver, state)`,
             `        .max_iter(${rustInt(cfg.maxIter)})`,
-            '        .run()',
-            '        .unwrap();',
-            '',
-            `    println!("${buildOutputLine('{:?}', '{}')}", result.param(), result.cost());`,
-            '}',
-        ].join('\n') + '\n'
+            "        .run()",
+            "        .unwrap();",
+            "",
+            `    println!("${buildOutputLine("{:?}", "{}")}", result.param(), result.cost());`,
+            "}",
+        ].join("\n") + "\n"
     );
 }
 
@@ -181,7 +181,10 @@ export interface NamedConfig {
  */
 export function enumerateConfigs(): NamedConfig[] {
     return [
-        { name: 'rosenbrock_gd', config: { ...DEFAULT_CONFIG, beta: 0 } },
-        { name: 'rosenbrock_gd_momentum', config: { ...DEFAULT_CONFIG, beta: 0.9 } },
+        { name: "rosenbrock_gd", config: { ...DEFAULT_CONFIG, beta: 0 } },
+        {
+            name: "rosenbrock_gd_momentum",
+            config: { ...DEFAULT_CONFIG, beta: 0.9 },
+        },
     ];
 }

@@ -137,7 +137,7 @@ export function isoContour(
  */
 export function chooseLevels(
     grid: Float64Array | ArrayLike<number>,
-    intensity: 'linear' | 'sqrt' | 'log1p',
+    intensity: "linear" | "sqrt" | "log1p",
     n: number,
 ): number[] {
     let cmin = Infinity;
@@ -175,7 +175,9 @@ export function chooseLevels(
  * Each returned chain is a flat `[x0, y0, x1, y1, ...]` array. Closed
  * loops repeat the starting point at the end.
  */
-export function chainSegments(segs: Float64Array | ArrayLike<number>): number[][] {
+export function chainSegments(
+    segs: Float64Array | ArrayLike<number>,
+): number[][] {
     const n = segs.length >> 2;
     if (n === 0) return [];
     const key = (x: number, y: number) => `${x},${y}`;
@@ -287,23 +289,26 @@ export function smoothChaikin(chain: number[], iterations: number): number[] {
     return pts;
 }
 
-export function transform(c: number, intensity: 'linear' | 'sqrt' | 'log1p'): number {
+export function transform(
+    c: number,
+    intensity: "linear" | "sqrt" | "log1p",
+): number {
     if (!Number.isFinite(c) || c < 0) return 0;
     switch (intensity) {
-        case 'sqrt':
+        case "sqrt":
             return Math.sqrt(c);
-        case 'log1p':
+        case "log1p":
             return Math.log1p(c);
         default:
             return c;
     }
 }
 
-function invert(t: number, intensity: 'linear' | 'sqrt' | 'log1p'): number {
+function invert(t: number, intensity: "linear" | "sqrt" | "log1p"): number {
     switch (intensity) {
-        case 'sqrt':
+        case "sqrt":
             return t * t;
-        case 'log1p':
+        case "log1p":
             return Math.expm1(t);
         default:
             return t;

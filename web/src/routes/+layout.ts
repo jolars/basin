@@ -9,4 +9,4 @@ export const prerender = true;
 // in dev, `preview`, and under the `/basin` base path on GitHub Pages —
 // without it, `trailingSlash: 'never'` resolves `../foo` against the
 // wrong directory.
-export const trailingSlash = 'always';
+export const trailingSlash = "always";

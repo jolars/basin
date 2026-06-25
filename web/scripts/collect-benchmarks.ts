@@ -14,21 +14,42 @@
  * The pipeline is deliberately off CI — timings are machine-specific and
  * shared runners are noisy. Refresh locally and commit the regenerated JSON.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { cpus } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+    existsSync,
+    mkdirSync,
+    readdirSync,
+    readFileSync,
+    writeFileSync,
+} from "node:fs";
+import { cpus } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const scriptDir = fileURLToPath(new URL('.', import.meta.url));
-const repoRoot = resolve(scriptDir, '..', '..');
-const criterionDir = join(repoRoot, 'target', 'criterion');
-const outFile = resolve(scriptDir, '..', 'src', 'lib', 'data', 'backend-benchmarks.json');
+const scriptDir = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = resolve(scriptDir, "..", "..");
+const criterionDir = join(repoRoot, "target", "criterion");
+const outFile = resolve(
+    scriptDir,
+    "..",
+    "src",
+    "lib",
+    "data",
+    "backend-benchmarks.json",
+);
 
 /** Iteration budget the bench runs each solve for (`MAX_ITERS`). */
 const ITERATIONS = 200;
 
-const SOLVER_ORDER = ['gd', 'nm', 'lbfgs', 'bfgs', 'cmaes', 'lm', 'gn'] as const;
-const BACKEND_ORDER = ['vec', 'nalgebra', 'ndarray', 'faer'] as const;
+const SOLVER_ORDER = [
+    "gd",
+    "nm",
+    "lbfgs",
+    "bfgs",
+    "cmaes",
+    "lm",
+    "gn",
+] as const;
+const BACKEND_ORDER = ["vec", "nalgebra", "ndarray", "faer"] as const;
 
 type Solver = (typeof SOLVER_ORDER)[number];
 type Backend = (typeof BACKEND_ORDER)[number];
@@ -40,13 +61,13 @@ type Backend = (typeof BACKEND_ORDER)[number];
  * `count` is the expected `dims × backends` rows for that case.
  */
 const CASE_ORDER: { solver: Solver; problem: string; count: number }[] = [
-    { solver: 'gd', problem: 'rosenbrock', count: 5 * 4 },
-    { solver: 'nm', problem: 'ackley', count: 5 * 4 },
-    { solver: 'lbfgs', problem: 'styblinski', count: 5 * 4 },
-    { solver: 'bfgs', problem: 'levy', count: 5 * 3 },
-    { solver: 'cmaes', problem: 'rastrigin', count: 5 * 3 },
-    { solver: 'lm', problem: 'sparselsq', count: 5 * 2 },
-    { solver: 'gn', problem: 'sparselsq', count: 5 * 2 },
+    { solver: "gd", problem: "rosenbrock", count: 5 * 4 },
+    { solver: "nm", problem: "ackley", count: 5 * 4 },
+    { solver: "lbfgs", problem: "styblinski", count: 5 * 4 },
+    { solver: "bfgs", problem: "levy", count: 5 * 3 },
+    { solver: "cmaes", problem: "rastrigin", count: 5 * 3 },
+    { solver: "lm", problem: "sparselsq", count: 5 * 2 },
+    { solver: "gn", problem: "sparselsq", count: 5 * 2 },
 ];
 
 const caseIndex = (solver: Solver, problem: string) =>
@@ -67,8 +88,8 @@ type BenchResult = {
 if (!existsSync(criterionDir)) {
     console.error(`✗ no criterion output at ${criterionDir}`);
     console.error(
-        '  run the bench first:\n' +
-            '  cargo bench --features nalgebra,ndarray,faer --bench solver_backends',
+        "  run the bench first:\n" +
+            "  cargo bench --features nalgebra,ndarray,faer --bench solver_backends",
     );
     process.exit(1);
 }
@@ -79,7 +100,7 @@ function findEstimates(dir: string, out: string[] = []): string[] {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) {
             findEstimates(full, out);
-        } else if (entry.name === 'estimates.json' && basename(dir) === 'new') {
+        } else if (entry.name === "estimates.json" && basename(dir) === "new") {
             out.push(full);
         }
     }
@@ -93,10 +114,10 @@ const results: BenchResult[] = [];
 
 for (const estimatesPath of findEstimates(criterionDir)) {
     const dir = dirname(estimatesPath);
-    const benchPath = join(dir, 'benchmark.json');
+    const benchPath = join(dir, "benchmark.json");
     if (!existsSync(benchPath)) continue;
 
-    const bench = JSON.parse(readFileSync(benchPath, 'utf8')) as {
+    const bench = JSON.parse(readFileSync(benchPath, "utf8")) as {
         group_id: string;
         function_id: string | null;
         value_str: string | null;
@@ -111,10 +132,10 @@ for (const estimatesPath of findEstimates(criterionDir)) {
     // left by an earlier bench layout (e.g. a previous `nm_rosenbrock_n*`).
     if (caseIndex(solver, problem) < 0) continue;
 
-    const backend = (bench.value_str ?? bench.function_id ?? '') as Backend;
+    const backend = (bench.value_str ?? bench.function_id ?? "") as Backend;
     if (!BACKEND_ORDER.includes(backend)) continue;
 
-    const est = JSON.parse(readFileSync(estimatesPath, 'utf8')) as {
+    const est = JSON.parse(readFileSync(estimatesPath, "utf8")) as {
         mean: {
             point_estimate: number;
             confidence_interval: { lower_bound: number; upper_bound: number };
@@ -134,8 +155,8 @@ for (const estimatesPath of findEstimates(criterionDir)) {
 
 if (results.length === 0) {
     console.error(
-        '✗ found criterion output but no solver_backends groups — run:\n' +
-            '  cargo bench --features nalgebra,ndarray,faer --bench solver_backends',
+        "✗ found criterion output but no solver_backends groups — run:\n" +
+            "  cargo bench --features nalgebra,ndarray,faer --bench solver_backends",
     );
     process.exit(1);
 }
@@ -154,7 +175,7 @@ const data = {
     env: {
         os: process.platform,
         arch: process.arch,
-        cpu: cpus()[0]?.model.trim() ?? 'unknown',
+        cpu: cpus()[0]?.model.trim() ?? "unknown",
     },
     iterations: ITERATIONS,
     results,
@@ -169,6 +190,6 @@ console.log(`✓ wrote ${results.length} result(s) to ${outFile}`);
 if (results.length !== expected) {
     console.warn(
         `  note: expected ${expected} rows across ${CASE_ORDER.length} curated cases; ` +
-            'is the bench run complete?',
+            "is the bench run complete?",
     );
 }

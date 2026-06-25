@@ -1,19 +1,19 @@
 <script lang="ts">
-import { onMount } from "svelte";
-import type { Component } from "svelte";
-import Seo from "$lib/Seo.svelte";
+    import { onMount } from "svelte";
+    import type { Component } from "svelte";
+    import Seo from "$lib/Seo.svelte";
 
-// The visualizer is browser-only: it loads the wasm module and drives a
-// requestAnimationFrame loop, so it can't render on the server. The
-// heavy component lives in `$lib/Visualizer.svelte` and is pulled in via
-// a dynamic import on mount — so this route stays SSR-safe and
-// prerenders a real <title>/og: head for crawlers (see `+page.ts`),
-// while the wasm module is never imported on the server.
-let Visualizer = $state<Component | null>(null);
+    // The visualizer is browser-only: it loads the wasm module and drives a
+    // requestAnimationFrame loop, so it can't render on the server. The
+    // heavy component lives in `$lib/Visualizer.svelte` and is pulled in via
+    // a dynamic import on mount — so this route stays SSR-safe and
+    // prerenders a real <title>/og: head for crawlers (see `+page.ts`),
+    // while the wasm module is never imported on the server.
+    let Visualizer = $state<Component | null>(null);
 
-onMount(async () => {
-    Visualizer = (await import("$lib/Visualizer.svelte")).default;
-});
+    onMount(async () => {
+        Visualizer = (await import("$lib/Visualizer.svelte")).default;
+    });
 </script>
 
 <Seo

@@ -1,7 +1,7 @@
 <script lang="ts">
-    import { ProblemKind, SolverKind } from './basin-wasm/basin_wasm';
-    import { PROBLEMS } from './problems';
-    import { SOLVERS, type SolverOption } from './solvers';
+    import { ProblemKind, SolverKind } from "./basin-wasm/basin_wasm";
+    import { PROBLEMS } from "./problems";
+    import { SOLVERS, type SolverOption } from "./solvers";
 
     type Patch = {
         problemKind?: ProblemKind;
@@ -34,14 +34,14 @@
     }: Props = $props();
 
     const labelCls =
-        'text-slate-700 dark:text-slate-300 uppercase text-xs tracking-wide';
+        "text-slate-700 dark:text-slate-300 uppercase text-xs tracking-wide";
     const selectCls =
-        'bg-white text-slate-900 border border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 rounded px-2 py-1';
-    const valueCls = 'font-mono text-slate-900 dark:text-slate-100';
+        "bg-white text-slate-900 border border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 rounded px-2 py-1";
+    const valueCls = "font-mono text-slate-900 dark:text-slate-100";
 
     // A `logSlider` is hidden unless its `showIf` option currently matches.
     function visible(opt: SolverOption): boolean {
-        if (opt.kind !== 'logSlider' || !opt.showIf) return true;
+        if (opt.kind !== "logSlider" || !opt.showIf) return true;
         return optionValues[opt.showIf.id] === opt.showIf.equals;
     }
 </script>
@@ -85,7 +85,7 @@
 
     <!-- Solver-specific options, rendered from the solver's schema. -->
     {#each solverOptions as opt (opt.id)}
-        {#if opt.kind === 'select'}
+        {#if opt.kind === "select"}
             <label class="flex flex-col gap-1">
                 <span class={labelCls}>{opt.label}</span>
                 <select
@@ -102,7 +102,7 @@
                     {/each}
                 </select>
             </label>
-        {:else if opt.kind === 'logSlider'}
+        {:else if opt.kind === "logSlider"}
             {#if visible(opt)}
                 <label class="flex flex-col gap-1">
                     <span class={labelCls}
@@ -135,7 +135,7 @@
                     />
                 </label>
             {/if}
-        {:else if opt.kind === 'intSlider'}
+        {:else if opt.kind === "intSlider"}
             <label class="flex flex-col gap-1">
                 <span class={labelCls}
                     >{opt.label}:
@@ -152,20 +152,18 @@
                     oninput={(e) =>
                         onOptionChange(
                             opt.id,
-                            Number(
-                                (e.currentTarget as HTMLInputElement).value,
-                            ),
+                            Number((e.currentTarget as HTMLInputElement).value),
                         )}
                 />
             </label>
-        {:else if opt.kind === 'linearSlider'}
+        {:else if opt.kind === "linearSlider"}
             <label class="flex flex-col gap-1">
                 <span class={labelCls}
                     >{opt.label}:
                     <span class={valueCls}
-                        >{Number(
-                            optionValues[opt.id] ?? opt.default,
-                        ).toFixed(2)}</span
+                        >{Number(optionValues[opt.id] ?? opt.default).toFixed(
+                            2,
+                        )}</span
                     ></span
                 >
                 <input
@@ -177,13 +175,11 @@
                     oninput={(e) =>
                         onOptionChange(
                             opt.id,
-                            Number(
-                                (e.currentTarget as HTMLInputElement).value,
-                            ),
+                            Number((e.currentTarget as HTMLInputElement).value),
                         )}
                 />
             </label>
-        {:else if opt.kind === 'seedField'}
+        {:else if opt.kind === "seedField"}
             <label class="flex flex-col gap-1">
                 <span class={labelCls}>{opt.label}</span>
                 <span class="flex gap-2 items-center">
@@ -200,8 +196,9 @@
                                     0,
                                     Math.floor(
                                         Number(
-                                            (e.currentTarget as HTMLInputElement)
-                                                .value,
+                                            (
+                                                e.currentTarget as HTMLInputElement
+                                            ).value,
                                         ),
                                     ),
                                 ),

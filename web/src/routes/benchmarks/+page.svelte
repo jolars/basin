@@ -1,28 +1,34 @@
 <script lang="ts">
-import { base } from "$app/paths";
-import Seo from "$lib/Seo.svelte";
+    import { resolve } from "$app/paths";
+    import type { Pathname } from "$app/types";
+    import Seo from "$lib/Seo.svelte";
 
-// The three-axis overview. Each card links to its subpage when live.
-const axes = [
-    {
-        title: "Backends",
-        status: "Live",
-        href: "/benchmarks/backends/",
-        body: "A curated set of solver + problem pairs across Vec, nalgebra, ndarray, and faer — isolating the cost of the linear-algebra layer, and showing where a backend can't run a solver at all.",
-    },
-    {
-        title: "Solvers",
-        status: "Live",
-        href: "/benchmarks/solvers/",
-        body: "Head-to-head runs of GD, Nelder–Mead, BFGS, L-BFGS, and CMA-ES on Rosenbrock from six starting points — suboptimality against wall-clock time under a fixed time budget per run.",
-    },
-    {
-        title: "Competitors",
-        status: "Live",
-        href: "/benchmarks/competitors/",
-        body: "basin against established crates such as argmin on matched problems — suboptimality against wall-clock time, since the implementations differ.",
-    },
-];
+    // The three-axis overview. Each card links to its subpage when live.
+    const axes: {
+        title: string;
+        status: string;
+        href: Pathname;
+        body: string;
+    }[] = [
+        {
+            title: "Backends",
+            status: "Live",
+            href: "/benchmarks/backends/",
+            body: "A curated set of solver + problem pairs across Vec, nalgebra, ndarray, and faer — isolating the cost of the linear-algebra layer, and showing where a backend can't run a solver at all.",
+        },
+        {
+            title: "Solvers",
+            status: "Live",
+            href: "/benchmarks/solvers/",
+            body: "Head-to-head runs of GD, Nelder–Mead, BFGS, L-BFGS, and CMA-ES on Rosenbrock from six starting points — suboptimality against wall-clock time under a fixed time budget per run.",
+        },
+        {
+            title: "Competitors",
+            status: "Live",
+            href: "/benchmarks/competitors/",
+            body: "basin against established crates such as argmin on matched problems — suboptimality against wall-clock time, since the implementations differ.",
+        },
+    ];
 </script>
 
 <Seo
@@ -31,7 +37,9 @@ const axes = [
 />
 
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
-    <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">Benchmarks</h1>
+    <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">
+        Benchmarks
+    </h1>
     <p class="mt-4 max-w-2xl text-slate-600 dark:text-slate-300">
         Basin's benchmark suite is built along three axes: <strong
             >backends</strong
@@ -45,7 +53,7 @@ const axes = [
             {@const Tag = axis.href ? "a" : "div"}
             <svelte:element
                 this={Tag}
-                href={axis.href ? `${base}${axis.href}` : undefined}
+                href={axis.href ? resolve(axis.href) : undefined}
                 class="block rounded-xl border border-slate-200 dark:border-slate-800 p-5 {axis.href
                     ? 'transition-colors hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40'
                     : ''}"

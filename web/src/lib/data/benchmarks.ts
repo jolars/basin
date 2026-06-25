@@ -6,13 +6,21 @@
  * This module just types it and adds display metadata, mirroring the
  * typed-data-module idiom of `solvers.ts` / `problems.ts`.
  */
-import rawData from './backend-benchmarks.json';
+import rawData from "./backend-benchmarks.json";
 
 /** Solvers exercised by the curated backend cases (plus `newuoa`, which
  * appears only on the competitor page, not the backend benchmarks). */
-export type Solver = 'gd' | 'nm' | 'lbfgs' | 'bfgs' | 'cmaes' | 'lm' | 'gn' | 'newuoa';
+export type Solver =
+    | "gd"
+    | "nm"
+    | "lbfgs"
+    | "bfgs"
+    | "cmaes"
+    | "lm"
+    | "gn"
+    | "newuoa";
 /** Linear-algebra backends. */
-export type Backend = 'vec' | 'nalgebra' | 'ndarray' | 'faer';
+export type Backend = "vec" | "nalgebra" | "ndarray" | "faer";
 
 export interface BenchResult {
     solver: Solver;
@@ -37,28 +45,36 @@ export interface BackendBenchmarks {
 
 export const BACKEND_BENCHMARKS = rawData as BackendBenchmarks;
 
-export const SOLVER_ORDER: Solver[] = ['gd', 'nm', 'lbfgs', 'bfgs', 'cmaes', 'lm', 'gn'];
-export const BACKEND_ORDER: Backend[] = ['vec', 'nalgebra', 'ndarray', 'faer'];
+export const SOLVER_ORDER: Solver[] = [
+    "gd",
+    "nm",
+    "lbfgs",
+    "bfgs",
+    "cmaes",
+    "lm",
+    "gn",
+];
+export const BACKEND_ORDER: Backend[] = ["vec", "nalgebra", "ndarray", "faer"];
 
 export const SOLVER_LABELS: Record<Solver, string> = {
-    gd: 'Gradient Descent',
-    nm: 'Nelder–Mead',
-    lbfgs: 'L-BFGS',
-    bfgs: 'BFGS',
-    cmaes: 'CMA-ES',
-    lm: 'Levenberg–Marquardt',
-    gn: 'Gauss–Newton',
-    newuoa: 'NEWUOA',
+    gd: "Gradient Descent",
+    nm: "Nelder–Mead",
+    lbfgs: "L-BFGS",
+    bfgs: "BFGS",
+    cmaes: "CMA-ES",
+    lm: "Levenberg–Marquardt",
+    gn: "Gauss–Newton",
+    newuoa: "NEWUOA",
 };
 
 /** Display names for the problems referenced by the curated cases. */
 export const PROBLEM_LABELS: Record<string, string> = {
-    rosenbrock: 'Rosenbrock',
-    ackley: 'Ackley',
-    styblinski: 'Styblinski–Tang',
-    levy: 'Levy',
-    rastrigin: 'Rastrigin',
-    sparselsq: 'Sparse least-squares',
+    rosenbrock: "Rosenbrock",
+    ackley: "Ackley",
+    styblinski: "Styblinski–Tang",
+    levy: "Levy",
+    rastrigin: "Rastrigin",
+    sparselsq: "Sparse least-squares",
 };
 
 /** One curated (solver, problem) benchmark case. */
@@ -80,39 +96,39 @@ export interface Case {
  */
 export const CASES: Case[] = [
     {
-        solver: 'gd',
-        problem: 'rosenbrock',
-        blurb: 'First-order, vector tier only — runs on all four backends.',
+        solver: "gd",
+        problem: "rosenbrock",
+        blurb: "First-order, vector tier only — runs on all four backends.",
     },
     {
-        solver: 'nm',
-        problem: 'ackley',
-        blurb: 'Derivative-free simplex, vector tier only — all four backends on a multimodal landscape.',
+        solver: "nm",
+        problem: "ackley",
+        blurb: "Derivative-free simplex, vector tier only — all four backends on a multimodal landscape.",
     },
     {
-        solver: 'lbfgs',
-        problem: 'styblinski',
-        blurb: 'Quasi-Newton in compact form (no dense matrix) — all four backends.',
+        solver: "lbfgs",
+        problem: "styblinski",
+        blurb: "Quasi-Newton in compact form (no dense matrix) — all four backends.",
     },
     {
-        solver: 'bfgs',
-        problem: 'levy',
-        blurb: 'Dense O(n²) rank-2 inverse-Hessian update. No ndarray: Array2 implements neither the general rank-1 update nor a matrix identity.',
+        solver: "bfgs",
+        problem: "levy",
+        blurb: "Dense O(n²) rank-2 inverse-Hessian update. No ndarray: Array2 implements neither the general rank-1 update nor a matrix identity.",
     },
     {
-        solver: 'cmaes',
-        problem: 'rastrigin',
-        blurb: 'Stochastic, multimodal; a per-generation symmetric eigendecomposition. No ndarray (no eigensolver); Vec works via a hand-rolled cyclic-Jacobi solver.',
+        solver: "cmaes",
+        problem: "rastrigin",
+        blurb: "Stochastic, multimodal; a per-generation symmetric eigendecomposition. No ndarray (no eigensolver); Vec works via a hand-rolled cyclic-Jacobi solver.",
     },
     {
-        solver: 'lm',
-        problem: 'sparselsq',
-        blurb: 'Sparse least-squares: damped normal equations with a sparse JᵀJ and sparse Cholesky. Only nalgebra and faer carry sparse matrices, so Vec/ndarray are out.',
+        solver: "lm",
+        problem: "sparselsq",
+        blurb: "Sparse least-squares: damped normal equations with a sparse JᵀJ and sparse Cholesky. Only nalgebra and faer carry sparse matrices, so Vec/ndarray are out.",
     },
     {
-        solver: 'gn',
-        problem: 'sparselsq',
-        blurb: 'Undamped Gauss–Newton on the same sparse, zero-residual design (full column rank ⇒ JᵀJ stays SPD). nalgebra + faer only.',
+        solver: "gn",
+        problem: "sparselsq",
+        blurb: "Undamped Gauss–Newton on the same sparse, zero-residual design (full column rank ⇒ JᵀJ stays SPD). nalgebra + faer only.",
     },
 ];
 
@@ -122,26 +138,27 @@ export const CASES: Case[] = [
 export function backendsFor(solver: Solver, problem: string): Backend[] {
     return BACKEND_ORDER.filter((b) =>
         BACKEND_BENCHMARKS.results.some(
-            (r) => r.solver === solver && r.problem === problem && r.backend === b,
+            (r) =>
+                r.solver === solver && r.problem === problem && r.backend === b,
         ),
     );
 }
 
 export const BACKEND_LABELS: Record<Backend, string> = {
-    vec: 'Vec<f64>',
-    nalgebra: 'nalgebra',
-    ndarray: 'ndarray',
-    faer: 'faer',
+    vec: "Vec<f64>",
+    nalgebra: "nalgebra",
+    ndarray: "ndarray",
+    faer: "faer",
 };
 
 /** Line/legend colors per backend — mid-tone hues legible on both light and
  * dark backgrounds (indigo / sky / amber / rose). Shared by the chart lines
  * and the legend so they never drift. */
 export const BACKEND_COLORS: Record<Backend, string> = {
-    vec: '#6366f1',
-    nalgebra: '#0ea5e9',
-    ndarray: '#f59e0b',
-    faer: '#f43f5e',
+    vec: "#6366f1",
+    nalgebra: "#0ea5e9",
+    ndarray: "#f59e0b",
+    faer: "#f43f5e",
 };
 
 /** Format a nanosecond duration with an appropriate unit. */

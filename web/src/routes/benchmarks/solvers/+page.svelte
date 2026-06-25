@@ -1,23 +1,23 @@
 <script lang="ts">
-import { base } from "$app/paths";
-import ConvergenceChart from "$lib/ConvergenceChart.svelte";
-import Seo from "$lib/Seo.svelte";
-import { formatDuration } from "$lib/data/benchmarks";
-import {
-    BY_PROBLEM,
-    SOLVER_BENCHMARKS as data,
-    SOLVER_COLORS,
-    SOLVER_LABELS,
-    SOLVER_ORDER,
-    seriesFor,
-} from "$lib/data/solvers";
+    import { resolve } from "$app/paths";
+    import ConvergenceChart from "$lib/ConvergenceChart.svelte";
+    import Seo from "$lib/Seo.svelte";
+    import { formatDuration } from "$lib/data/benchmarks";
+    import {
+        BY_PROBLEM,
+        SOLVER_BENCHMARKS as data,
+        SOLVER_COLORS,
+        SOLVER_LABELS,
+        SOLVER_ORDER,
+        seriesFor,
+    } from "$lib/data/solvers";
 
-function fmtF0(v: number): string {
-    if (!Number.isFinite(v)) return "?";
-    if (v >= 100) return v.toFixed(0);
-    if (v >= 1) return v.toFixed(2);
-    return v.toExponential(2);
-}
+    function fmtF0(v: number): string {
+        if (!Number.isFinite(v)) return "?";
+        if (v >= 100) return v.toFixed(0);
+        if (v >= 1) return v.toFixed(2);
+        return v.toExponential(2);
+    }
 </script>
 
 <Seo
@@ -29,7 +29,7 @@ function fmtF0(v: number): string {
     <p class="text-sm text-slate-500 dark:text-slate-400">
         <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
-            href="{base}/benchmarks/">Benchmarks</a
+            href={resolve("/benchmarks/")}>Benchmarks</a
         >
         <span class="text-slate-400 dark:text-slate-600">/</span> Solvers
     </p>
@@ -125,11 +125,11 @@ function fmtF0(v: number): string {
         Measured {data.generatedAt} on {data.env.cpu}
         ({data.env.os}/{data.env.arch}). Every solver runs on the
         <code class="font-mono">Vec&lt;f64&gt;</code> backend, capped at
-        {formatDuration(data.budgetNs)} per (solver, seed) run. Each
-        per-iteration timestamp is the median over 11 repetitions of the same
-        deterministic run; absolute times are machine-specific — compare curves
-        within a panel, not across machines. Some seeds land in the basin of
-        Rosenbrock's spurious local minimum near
+        {formatDuration(data.budgetNs)} per (solver, seed) run. Each per-iteration
+        timestamp is the median over 11 repetitions of the same deterministic run;
+        absolute times are machine-specific — compare curves within a panel, not across
+        machines. Some seeds land in the basin of Rosenbrock's spurious local minimum
+        near
         <code class="font-mono">(−1, 1, …, 1)</code> (which appears for
         <code class="font-mono">n ≥ 4</code>); a line that flattens around
         <code class="font-mono">f ≈ 4</code> is a solver caught in that trap.
@@ -138,17 +138,17 @@ function fmtF0(v: number): string {
     <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
         For the basin-versus-other-libraries view, see the <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
-            href="{base}/benchmarks/competitors/">competitors</a
+            href={resolve("/benchmarks/competitors/")}>competitors</a
         >
         axis; for backend cost on the same solvers, see the
         <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
-            href="{base}/benchmarks/backends/">backends</a
+            href={resolve("/benchmarks/backends/")}>backends</a
         >
         axis. To watch the same solvers converge interactively, try the
         <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
-            href="{base}/visualizer/">visualizer</a
+            href={resolve("/visualizer/")}>visualizer</a
         >.
     </p>
 </section>

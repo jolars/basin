@@ -14,17 +14,24 @@
  * timings are machine-specific. Refresh locally and commit the regenerated
  * JSON.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { cpus } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpus } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const scriptDir = fileURLToPath(new URL('.', import.meta.url));
-const repoRoot = resolve(scriptDir, '..', '..');
-const tracesFile = join(repoRoot, 'target', 'solver-traces.json');
-const outFile = resolve(scriptDir, '..', 'src', 'lib', 'data', 'solver-benchmarks.json');
+const scriptDir = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = resolve(scriptDir, "..", "..");
+const tracesFile = join(repoRoot, "target", "solver-traces.json");
+const outFile = resolve(
+    scriptDir,
+    "..",
+    "src",
+    "lib",
+    "data",
+    "solver-benchmarks.json",
+);
 
-const SOLVER_ORDER = ['gd', 'nm', 'bfgs', 'lbfgs', 'cmaes'] as const;
+const SOLVER_ORDER = ["gd", "nm", "bfgs", "lbfgs", "cmaes"] as const;
 type Solver = (typeof SOLVER_ORDER)[number];
 
 type TracePoint = { tNs: number; subopt: number };
@@ -41,19 +48,21 @@ type SolverResult = {
 if (!existsSync(tracesFile)) {
     console.error(`✗ no trace output at ${tracesFile}`);
     console.error(
-        '  run the harness first:\n' +
-            '  cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json',
+        "  run the harness first:\n" +
+            "  cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json",
     );
     process.exit(1);
 }
 
-const raw = JSON.parse(readFileSync(tracesFile, 'utf8')) as SolverResult[];
+const raw = JSON.parse(readFileSync(tracesFile, "utf8")) as SolverResult[];
 
 // Keep only known solvers (robust to stale trace files from a future lineup).
 const results = raw.filter((r) => SOLVER_ORDER.includes(r.solver));
 
 if (results.length === 0) {
-    console.error('✗ trace file had no rows matching the curated solver set — is it stale?');
+    console.error(
+        "✗ trace file had no rows matching the curated solver set — is it stale?",
+    );
     process.exit(1);
 }
 
@@ -66,7 +75,8 @@ for (const r of raw) {
 }
 results.sort(
     (a, b) =>
-        startOrder.indexOf(startKey(a.start)) - startOrder.indexOf(startKey(b.start)) ||
+        startOrder.indexOf(startKey(a.start)) -
+            startOrder.indexOf(startKey(b.start)) ||
         SOLVER_ORDER.indexOf(a.solver) - SOLVER_ORDER.indexOf(b.solver),
 );
 
@@ -76,7 +86,7 @@ const data = {
     env: {
         os: process.platform,
         arch: process.arch,
-        cpu: cpus()[0]?.model.trim() ?? 'unknown',
+        cpu: cpus()[0]?.model.trim() ?? "unknown",
     },
     budgetNs,
     results,
@@ -91,6 +101,6 @@ console.log(`✓ wrote ${results.length} result(s) to ${outFile}`);
 if (results.length !== expected) {
     console.warn(
         `  note: expected ${expected} rows (${expectedStarts} starts × ${SOLVER_ORDER.length} solvers); ` +
-            'is the harness run complete?',
+            "is the harness run complete?",
     );
 }

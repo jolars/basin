@@ -13,20 +13,27 @@
  * machine-specific and shared runners are noisy. Refresh locally and commit
  * the regenerated JSON.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { cpus } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpus } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const scriptDir = fileURLToPath(new URL('.', import.meta.url));
-const repoRoot = resolve(scriptDir, '..', '..');
-const tracesFile = join(repoRoot, 'target', 'competitor-traces.json');
-const outFile = resolve(scriptDir, '..', 'src', 'lib', 'data', 'competitor-benchmarks.json');
+const scriptDir = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = resolve(scriptDir, "..", "..");
+const tracesFile = join(repoRoot, "target", "competitor-traces.json");
+const outFile = resolve(
+    scriptDir,
+    "..",
+    "src",
+    "lib",
+    "data",
+    "competitor-benchmarks.json",
+);
 
 /** Iteration budget the harness caps each solve at (`MAX_ITERS`). */
 const ITERATIONS = 200;
 
-const LIBRARY_ORDER = ['basin', 'argmin', 'gomez', 'nlopt'] as const;
+const LIBRARY_ORDER = ["basin", "argmin", "gomez", "nlopt"] as const;
 type Library = (typeof LIBRARY_ORDER)[number];
 
 /**
@@ -40,19 +47,35 @@ type Library = (typeof LIBRARY_ORDER)[number];
  * `COMPETITOR_CASES` in `src/lib/data/competitors.ts` and the cases in the
  * `trace` bench (`crates/competitor-bench/src/bin/trace.rs`).
  */
-const CASE_ORDER: { solver: string; problem: string; libraries: Library[] }[] = [
-    { solver: 'gd', problem: 'rosenbrock', libraries: ['basin', 'argmin'] },
-    { solver: 'nm', problem: 'rosenbrock', libraries: ['basin', 'argmin', 'gomez', 'nlopt'] },
-    { solver: 'lbfgs', problem: 'rosenbrock', libraries: ['basin', 'argmin', 'nlopt'] },
-    { solver: 'newuoa', problem: 'styblinski', libraries: ['basin', 'nlopt'] },
-];
+const CASE_ORDER: { solver: string; problem: string; libraries: Library[] }[] =
+    [
+        { solver: "gd", problem: "rosenbrock", libraries: ["basin", "argmin"] },
+        {
+            solver: "nm",
+            problem: "rosenbrock",
+            libraries: ["basin", "argmin", "gomez", "nlopt"],
+        },
+        {
+            solver: "lbfgs",
+            problem: "rosenbrock",
+            libraries: ["basin", "argmin", "nlopt"],
+        },
+        {
+            solver: "newuoa",
+            problem: "styblinski",
+            libraries: ["basin", "nlopt"],
+        },
+    ];
 
 const caseIndex = (solver: string, problem: string) =>
     CASE_ORDER.findIndex((c) => c.solver === solver && c.problem === problem);
 
 const caseAllowsLibrary = (solver: string, problem: string, lib: Library) =>
     CASE_ORDER.some(
-        (c) => c.solver === solver && c.problem === problem && c.libraries.includes(lib),
+        (c) =>
+            c.solver === solver &&
+            c.problem === problem &&
+            c.libraries.includes(lib),
     );
 
 type TracePoint = { tNs: number; subopt: number };
@@ -67,13 +90,13 @@ type CompetitorResult = {
 if (!existsSync(tracesFile)) {
     console.error(`✗ no trace output at ${tracesFile}`);
     console.error(
-        '  run the harness first:\n' +
-            '  cargo run -p competitor-bench --release --bin trace > target/competitor-traces.json',
+        "  run the harness first:\n" +
+            "  cargo run -p competitor-bench --release --bin trace > target/competitor-traces.json",
     );
     process.exit(1);
 }
 
-const raw = JSON.parse(readFileSync(tracesFile, 'utf8')) as CompetitorResult[];
+const raw = JSON.parse(readFileSync(tracesFile, "utf8")) as CompetitorResult[];
 
 // Keep only curated (solver, problem, library) rows — robust to stale traces
 // from an earlier case layout.
@@ -85,7 +108,9 @@ const results = raw.filter(
 );
 
 if (results.length === 0) {
-    console.error('✗ trace file had no curated (solver, problem, library) rows — is it stale?');
+    console.error(
+        "✗ trace file had no curated (solver, problem, library) rows — is it stale?",
+    );
     process.exit(1);
 }
 
@@ -102,7 +127,7 @@ const data = {
     env: {
         os: process.platform,
         arch: process.arch,
-        cpu: cpus()[0]?.model.trim() ?? 'unknown',
+        cpu: cpus()[0]?.model.trim() ?? "unknown",
     },
     iterations: ITERATIONS,
     results,
@@ -116,6 +141,6 @@ console.log(`✓ wrote ${results.length} result(s) to ${outFile}`);
 if (results.length !== expected) {
     console.warn(
         `  note: expected ${expected} rows (sum of curated libraries per case); ` +
-            'is the harness run complete?',
+            "is the harness run complete?",
     );
 }

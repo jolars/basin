@@ -1,33 +1,33 @@
 <script lang="ts">
-import { base } from "$app/paths";
-import ConvergenceChart from "$lib/ConvergenceChart.svelte";
-import Seo from "$lib/Seo.svelte";
-import {
-    COMPETITOR_BENCHMARKS as data,
-    COMPETITOR_CASES,
-    LIBRARY_COLORS,
-    LIBRARY_LABELS,
-    PROBLEM_LABELS,
-    SOLVER_LABELS,
-    librariesFor,
-    type Solver,
-} from "$lib/data/competitors";
+    import { resolve } from "$app/paths";
+    import ConvergenceChart from "$lib/ConvergenceChart.svelte";
+    import Seo from "$lib/Seo.svelte";
+    import {
+        COMPETITOR_BENCHMARKS as data,
+        COMPETITOR_CASES,
+        LIBRARY_COLORS,
+        LIBRARY_LABELS,
+        PROBLEM_LABELS,
+        SOLVER_LABELS,
+        librariesFor,
+        type Solver,
+    } from "$lib/data/competitors";
 
-// One convergence trace per library present for a case: suboptimality vs
-// wall-clock time, the curve each library actually walked.
-function seriesFor(solver: Solver, problem: string) {
-    return librariesFor(solver, problem).map((library) => ({
-        label: LIBRARY_LABELS[library],
-        color: LIBRARY_COLORS[library],
-        points:
-            data.results.find(
-                (r) =>
-                    r.solver === solver &&
-                    r.problem === problem &&
-                    r.library === library,
-            )?.points ?? [],
-    }));
-}
+    // One convergence trace per library present for a case: suboptimality vs
+    // wall-clock time, the curve each library actually walked.
+    function seriesFor(solver: Solver, problem: string) {
+        return librariesFor(solver, problem).map((library) => ({
+            label: LIBRARY_LABELS[library],
+            color: LIBRARY_COLORS[library],
+            points:
+                data.results.find(
+                    (r) =>
+                        r.solver === solver &&
+                        r.problem === problem &&
+                        r.library === library,
+                )?.points ?? [],
+        }));
+    }
 </script>
 
 <Seo
@@ -39,7 +39,7 @@ function seriesFor(solver: Solver, problem: string) {
     <p class="text-sm text-slate-500 dark:text-slate-400">
         <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
-            href="{base}/benchmarks/">Benchmarks</a
+            href={resolve("/benchmarks/")}>Benchmarks</a
         >
         <span class="text-slate-400 dark:text-slate-600">/</span> Competitors
     </p>
@@ -72,11 +72,12 @@ function seriesFor(solver: Solver, problem: string) {
         algorithm (matched ρ_beg/ρ_end), and it's the only case off Rosenbrock
         (Styblinski–Tang at n = 5). Because no two implementations share a code
         path, a single mean solve time would hide the differences in path and
-        per-iteration cost. Instead each chart plots <strong>suboptimality</strong>
+        per-iteration cost. Instead each chart plots
+        <strong>suboptimality</strong>
         <code class="font-mono">f(x) − f*</code>
         against <strong>wall-clock time</strong> on log–log axes: how far down the
-        objective each library gets, and how long it spends getting there. Lower
-        and further left is better.
+        objective each library gets, and how long it spends getting there. Lower and
+        further left is better.
     </p>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
@@ -108,8 +109,8 @@ function seriesFor(solver: Solver, problem: string) {
         ({data.env.os}/{data.env.arch}). All libraries run on the
         <code class="font-mono">Vec&lt;f64&gt;</code> backend (gomez through its
         own bundled
-        <code class="font-mono">nalgebra::DVector&lt;f64&gt;</code>). The GD, NM,
-        and L-BFGS cases run from the classic Rosenbrock start to a
+        <code class="font-mono">nalgebra::DVector&lt;f64&gt;</code>). The GD,
+        NM, and L-BFGS cases run from the classic Rosenbrock start to a
         {data.iterations}-iteration cap (a cap — the quasi-Newton case converges
         first, and gomez's NM hits its internal no-progress stop before the
         budget); the NEWUOA case instead runs on Styblinski–Tang (n = 5) from
@@ -124,7 +125,7 @@ function seriesFor(solver: Solver, problem: string) {
     <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
         To watch basin's solvers converge interactively, try the <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
-            href="{base}/visualizer/">visualizer</a
+            href={resolve("/visualizer/")}>visualizer</a
         >.
     </p>
 </section>

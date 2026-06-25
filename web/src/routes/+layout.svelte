@@ -1,48 +1,48 @@
 <script lang="ts">
-import "../app.css";
-import { base } from "$app/paths";
-import { page } from "$app/state";
-import { afterNavigate } from "$app/navigation";
-import IconMenu from "~icons/lucide/menu";
-import IconClose from "~icons/lucide/x";
-import IconGithub from "~icons/simple-icons/github";
-import IconRust from "~icons/simple-icons/rust";
-import IconBook from "~icons/lucide/book-open";
-import ThemeToggle from "$lib/ThemeToggle.svelte";
-import { theme } from "$lib/theme.svelte";
-import { NAV_LINKS, activeSection } from "$lib/nav";
+    import "../app.css";
+    import { resolve } from "$app/paths";
+    import { page } from "$app/state";
+    import { afterNavigate } from "$app/navigation";
+    import IconMenu from "~icons/lucide/menu";
+    import IconClose from "~icons/lucide/x";
+    import IconGithub from "~icons/simple-icons/github";
+    import IconRust from "~icons/simple-icons/rust";
+    import IconBook from "~icons/lucide/book-open";
+    import ThemeToggle from "$lib/ThemeToggle.svelte";
+    import { theme } from "$lib/theme.svelte";
+    import { NAV_LINKS, activeSection } from "$lib/nav";
 
-let { children } = $props();
+    let { children } = $props();
 
-let current = $derived(activeSection(page.url.pathname, base));
+    let current = $derived(activeSection(page.route.id));
 
-// Mobile nav disclosure. The links live inline at `md+`; below that
-// they collapse behind a menu button into the panel under the header.
-// Close on navigation (afterNavigate also fires once on mount) and on
-// Escape so the panel never lingers across pages or traps focus.
-let menuOpen = $state(false);
-afterNavigate(() => {
-    menuOpen = false;
-});
+    // Mobile nav disclosure. The links live inline at `md+`; below that
+    // they collapse behind a menu button into the panel under the header.
+    // Close on navigation (afterNavigate also fires once on mount) and on
+    // Escape so the panel never lingers across pages or traps focus.
+    let menuOpen = $state(false);
+    afterNavigate(() => {
+        menuOpen = false;
+    });
 
-// Reflect the resolved (light/dark) theme onto `<html>` so Tailwind
-// dark: variants apply everywhere. Lives in the root layout so it
-// runs on every page (the inline script in app.html handles the
-// pre-hydration paint; this keeps the class in sync afterwards).
-// Effects only run in the browser, but the guard is kept for clarity.
-$effect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    if (theme.effective === "dark") {
-        root.classList.add("dark");
-        root.classList.remove("light");
-        root.style.colorScheme = "dark";
-    } else {
-        root.classList.add("light");
-        root.classList.remove("dark");
-        root.style.colorScheme = "light";
-    }
-});
+    // Reflect the resolved (light/dark) theme onto `<html>` so Tailwind
+    // dark: variants apply everywhere. Lives in the root layout so it
+    // runs on every page (the inline script in app.html handles the
+    // pre-hydration paint; this keeps the class in sync afterwards).
+    // Effects only run in the browser, but the guard is kept for clarity.
+    $effect(() => {
+        if (typeof document === "undefined") return;
+        const root = document.documentElement;
+        if (theme.effective === "dark") {
+            root.classList.add("dark");
+            root.classList.remove("light");
+            root.style.colorScheme = "dark";
+        } else {
+            root.classList.add("light");
+            root.classList.remove("dark");
+            root.style.colorScheme = "light";
+        }
+    });
 </script>
 
 <svelte:window
@@ -68,7 +68,7 @@ $effect(() => {
                 </a>
             {:else}
                 <a
-                    href="{base}{link.href}"
+                    href={resolve(link.href)}
                     aria-current={current === link.section ? "page" : undefined}
                     class="{extra} px-3 py-1.5 rounded-md transition-colors {current ===
                     link.section
@@ -91,9 +91,9 @@ $effect(() => {
         >
             <!-- Logo slot. Swap this wordmark for an <img> once a logo
                  asset lands in `static/` (e.g.
-                 `<img src="{base}/logo.svg" alt="basin" class="h-6" />`). -->
+                 `<img src={asset("/logo.svg")} alt="basin" class="h-6" />`). -->
             <a
-                href="{base}/"
+                href={resolve("/")}
                 class="font-semibold tracking-tight text-lg hover:text-slate-600 dark:hover:text-slate-300"
             >
                 Basin
@@ -149,9 +149,7 @@ $effect(() => {
         {@render children()}
     </main>
 
-    <footer
-        class="border-t border-slate-200 dark:border-slate-800 mt-auto"
-    >
+    <footer class="border-t border-slate-200 dark:border-slate-800 mt-auto">
         <div
             class="max-w-screen-2xl mx-auto px-4 md:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-500"
         >
@@ -176,21 +174,30 @@ $effect(() => {
                     target="_blank"
                     rel="noreferrer"
                     class="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-200"
-                    ><IconGithub class="w-3.5 h-3.5" aria-hidden="true" />GitHub</a
+                    ><IconGithub
+                        class="w-3.5 h-3.5"
+                        aria-hidden="true"
+                    />GitHub</a
                 >
                 <a
                     href="https://docs.rs/basin"
                     target="_blank"
                     rel="noreferrer"
                     class="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-200"
-                    ><IconBook class="w-3.5 h-3.5" aria-hidden="true" />docs.rs</a
+                    ><IconBook
+                        class="w-3.5 h-3.5"
+                        aria-hidden="true"
+                    />docs.rs</a
                 >
                 <a
                     href="https://crates.io/crates/basin"
                     target="_blank"
                     rel="noreferrer"
                     class="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-200"
-                    ><IconRust class="w-3.5 h-3.5" aria-hidden="true" />crates.io</a
+                    ><IconRust
+                        class="w-3.5 h-3.5"
+                        aria-hidden="true"
+                    />crates.io</a
                 >
             </div>
         </div>

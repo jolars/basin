@@ -1,0 +1,7 @@
+# Generated / build output (also gitignored).
+.svelte-kit
+build
+.vite
+src/lib/basin-wasm
+# Generated benchmark data (refreshed by the `collect:*` scripts).
+src/lib/data

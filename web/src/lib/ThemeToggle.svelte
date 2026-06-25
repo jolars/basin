@@ -1,7 +1,7 @@
 <script lang="ts">
-    import { theme } from './theme.svelte';
-    import IconSun from '~icons/lucide/sun';
-    import IconMoon from '~icons/lucide/moon';
+    import { theme } from "./theme.svelte";
+    import IconSun from "~icons/lucide/sun";
+    import IconMoon from "~icons/lucide/moon";
 
     // Single-button toggle: the icon shows the *current* effective theme
     // and clicking flips to the explicit opposite. There's no "auto"
@@ -17,13 +17,13 @@
 <button
     type="button"
     class="inline-flex items-center justify-center rounded-md p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 transition-colors"
-    aria-label={theme.effective === 'dark'
-        ? 'Switch to light theme'
-        : 'Switch to dark theme'}
-    title={theme.effective === 'dark'
-        ? 'Switch to light theme'
-        : 'Switch to dark theme'}
-    onclick={() => theme.set(theme.effective === 'dark' ? 'light' : 'dark')}
+    aria-label={theme.effective === "dark"
+        ? "Switch to light theme"
+        : "Switch to dark theme"}
+    title={theme.effective === "dark"
+        ? "Switch to light theme"
+        : "Switch to dark theme"}
+    onclick={() => theme.set(theme.effective === "dark" ? "light" : "dark")}
 >
     <IconSun
         width="18"

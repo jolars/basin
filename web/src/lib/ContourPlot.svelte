@@ -1,14 +1,14 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount } from "svelte";
     import {
         chainSegments,
         chooseLevels,
         isoContour,
         smoothChaikin,
         transform,
-    } from './contours';
-    import { paletteFor, type Theme } from './palette';
-    import type { Domain, ProblemMeta } from './problems';
+    } from "./contours";
+    import { paletteFor, type Theme } from "./palette";
+    import type { Domain, ProblemMeta } from "./problems";
 
     type Props = {
         problem: ProblemMeta;
@@ -48,9 +48,9 @@
     // grey heatmap fill. `t` is unused — depth comes from the per-level
     // line width in `renderContours`.
     function whiteEdge(_t: number): string {
-        return theme === 'dark'
-            ? 'rgba(255, 255, 255, 0.35)'
-            : 'rgba(255, 255, 255, 0.9)';
+        return theme === "dark"
+            ? "rgba(255, 255, 255, 0.35)"
+            : "rgba(255, 255, 255, 0.9)";
     }
     let contourStroke = $derived(monochrome ? whiteEdge : palette.contour);
 
@@ -70,11 +70,11 @@
         const tmin = transform(Math.max(cmin, 0), problem.intensity);
         const tmax = transform(cmax, problem.intensity);
         const span = tmax - tmin || 1;
-        const dark = theme === 'dark';
-        const off = document.createElement('canvas');
+        const dark = theme === "dark";
+        const off = document.createElement("canvas");
         off.width = nx;
         off.height = ny;
-        const octx = off.getContext('2d');
+        const octx = off.getContext("2d");
         if (!octx) return;
         const img = octx.createImageData(nx, ny);
         for (let j = 0; j < ny; j++) {
@@ -146,7 +146,13 @@
     // Render contours when contours, sizing, theme, or domain change.
     $effect(() => {
         if (!canvas) return;
-        renderContours(canvas, problem.domain, isoLines, palette, contourStroke);
+        renderContours(
+            canvas,
+            problem.domain,
+            isoLines,
+            palette,
+            contourStroke,
+        );
     });
 
     // Trajectory + markers go on a separate overlay so they redraw cheaply
@@ -218,7 +224,7 @@
         cv.height = Math.floor(h * dpr);
         cv.style.width = `${w}px`;
         cv.style.height = `${h}px`;
-        const ctx = cv.getContext('2d');
+        const ctx = cv.getContext("2d");
         if (!ctx) return;
         ctx.scale(dpr, dpr);
 
@@ -231,8 +237,8 @@
 
         if (lines.length === 0) return;
 
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
 
         // Draw outermost-first so the brightest (innermost) strokes win
         // when contours crowd. `t = 0` is the outermost, `t = 1` the
@@ -280,7 +286,7 @@
         cv.height = Math.floor(h * dpr);
         cv.style.width = `${w}px`;
         cv.style.height = `${h}px`;
-        const ctx = cv.getContext('2d');
+        const ctx = cv.getContext("2d");
         if (!ctx) return;
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, w, h);
@@ -290,9 +296,9 @@
         // read as "the swarm" vs the white/accent trajectory line.
         if (pop.length >= 2) {
             ctx.fillStyle =
-                theme === 'dark'
-                    ? 'rgba(56, 189, 248, 0.55)' // sky-400
-                    : 'rgba(2, 132, 199, 0.55)'; // sky-600
+                theme === "dark"
+                    ? "rgba(56, 189, 248, 0.55)" // sky-400
+                    : "rgba(2, 132, 199, 0.55)"; // sky-600
             for (let i = 0; i < pop.length; i += 2) {
                 const [px, py] = dataToPixel(pop[i], pop[i + 1], d, w, h);
                 ctx.beginPath();
@@ -337,7 +343,7 @@
             ctx.beginPath();
             ctx.arc(mx, my, 8, 0, Math.PI * 2);
             ctx.lineWidth = 2.5;
-            ctx.strokeStyle = 'rgb(249, 115, 22)'; // orange-500
+            ctx.strokeStyle = "rgb(249, 115, 22)"; // orange-500
             ctx.stroke();
         } else {
             ctx.lineWidth = 2;
@@ -356,13 +362,7 @@
         const rect = overlay.getBoundingClientRect();
         const px = ev.clientX - rect.left;
         const py = ev.clientY - rect.top;
-        const p = pixelToData(
-            px,
-            py,
-            problem.domain,
-            rect.width,
-            rect.height,
-        );
+        const p = pixelToData(px, py, problem.domain, rect.width, rect.height);
         onPick(p);
     }
 </script>

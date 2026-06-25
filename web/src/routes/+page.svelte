@@ -1,35 +1,35 @@
 <script lang="ts">
-import { base } from "$app/paths";
-import IconGithub from "~icons/simple-icons/github";
-import Seo from "$lib/Seo.svelte";
-import Playground from "$lib/playground/Playground.svelte";
+    import { asset, resolve } from "$app/paths";
+    import IconGithub from "~icons/simple-icons/github";
+    import Seo from "$lib/Seo.svelte";
+    import Playground from "$lib/playground/Playground.svelte";
 
-const features = [
-    {
-        title: "Pluggable solvers",
-        body: "Gradient descent, Nelder–Mead, L-BFGS / L-BFGS-B, Gauss–Newton, Levenberg–Marquardt, CMA-ES and more — driven by one shared executor loop.",
-    },
-    {
-        title: "Multiple backends",
-        body: "Run on plain Vec<f64>, nalgebra, ndarray, or faer. Each backend sits behind a single feature — no per-version feature explosion.",
-    },
-    {
-        title: "First-class constraints",
-        body: "Box bounds are part of the problem and enforced at the type level: handing a constrained problem to an unconstrained solver is a compile error.",
-    },
-    {
-        title: "Composable termination",
-        body: "Gradient, parameter, and cost tolerances, iteration and time budgets — configured uniformly across solvers, bound to the state each one exposes.",
-    },
-    {
-        title: "Runs in the browser",
-        body: "wasm-first by design: the default build pulls in no BLAS/LAPACK or threads, so basin compiles to wasm32 out of the box.",
-    },
-    {
-        title: "Paper-anchored",
-        body: "Solvers track published algorithms (Nocedal’s L-BFGS-B, Nielsen’s LM damping, Hansen’s CMA-ES) rather than ad-hoc variants.",
-    },
-];
+    const features = [
+        {
+            title: "Pluggable solvers",
+            body: "Gradient descent, Nelder–Mead, L-BFGS / L-BFGS-B, Gauss–Newton, Levenberg–Marquardt, CMA-ES and more — driven by one shared executor loop.",
+        },
+        {
+            title: "Multiple backends",
+            body: "Run on plain Vec<f64>, nalgebra, ndarray, or faer. Each backend sits behind a single feature — no per-version feature explosion.",
+        },
+        {
+            title: "First-class constraints",
+            body: "Box bounds are part of the problem and enforced at the type level: handing a constrained problem to an unconstrained solver is a compile error.",
+        },
+        {
+            title: "Composable termination",
+            body: "Gradient, parameter, and cost tolerances, iteration and time budgets — configured uniformly across solvers, bound to the state each one exposes.",
+        },
+        {
+            title: "Runs in the browser",
+            body: "wasm-first by design: the default build pulls in no BLAS/LAPACK or threads, so basin compiles to wasm32 out of the box.",
+        },
+        {
+            title: "Paper-anchored",
+            body: "Solvers track published algorithms (Nocedal’s L-BFGS-B, Nielsen’s LM damping, Hansen’s CMA-ES) rather than ad-hoc variants.",
+        },
+    ];
 </script>
 
 <Seo
@@ -46,14 +46,16 @@ const features = [
      no flash): the daytime scene in light mode, the moonlit one in dark.
      Tailwind preflight renders <img> as `display: block`, so `dark:hidden` /
      `hidden dark:block` toggle visibility without changing the layout. -->
-<section class="max-w-screen-2xl mx-auto px-4 md:px-8 pt-16 pb-12 md:pt-24 md:pb-16 flow-root">
+<section
+    class="max-w-screen-2xl mx-auto px-4 md:px-8 pt-16 pb-12 md:pt-24 md:pb-16 flow-root"
+>
     <img
-        src="{base}/logo.svg"
+        src={asset("/logo.svg")}
         alt="Visualization of optimization trajectories on the Rosenbrock function, a common test problem in optimization."
         class="mx-auto mb-8 w-3/4 max-w-sm h-auto md:float-right md:mx-0 md:mb-4 md:ml-10 md:w-2/5 md:max-w-sm dark:hidden"
     />
     <img
-        src="{base}/logo-dark.svg"
+        src={asset("/logo-dark.svg")}
         alt="Visualization of optimization trajectories on the Rosenbrock function, a common test problem in optimization."
         class="hidden dark:block mx-auto mb-8 w-3/4 max-w-sm h-auto md:float-right md:mx-0 md:mb-4 md:ml-10 md:w-2/5 md:max-w-sm"
     />
@@ -62,23 +64,27 @@ const features = [
     >
         Alpha · Rust
     </span>
-    <h1 class="mt-3 text-4xl md:text-6xl font-semibold tracking-tight text-balance">
+    <h1
+        class="mt-3 text-4xl md:text-6xl font-semibold tracking-tight text-balance"
+    >
         Numerical Optimization in Rust
     </h1>
-    <p class="mt-5 max-w-2xl text-lg md:text-xl text-slate-600 dark:text-slate-300 text-pretty">
-        <span class="font-semibold">Basin</span> is a solver framework with a
-        generic executor loop over pluggable solvers, multiple linear-algebra
-        backends, first-class constraints, and a wasm-first design.
+    <p
+        class="mt-5 max-w-2xl text-lg md:text-xl text-slate-600 dark:text-slate-300 text-pretty"
+    >
+        <span class="font-semibold">Basin</span> is a solver framework with a generic
+        executor loop over pluggable solvers, multiple linear-algebra backends, first-class
+        constraints, and a wasm-first design.
     </p>
     <div class="mt-8 flex flex-wrap gap-3">
         <a
-            href="{base}/docs/getting-started/"
+            href={resolve("/docs/getting-started/")}
             class="px-5 py-2.5 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white transition-colors"
         >
             Get started
         </a>
         <a
-            href="{base}/visualizer/"
+            href={resolve("/visualizer/")}
             class="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         >
             Open the visualizer
@@ -101,7 +107,7 @@ const features = [
         Want to see it move? The
         <a
             class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
-            href="{base}/visualizer/">visualizer</a
+            href={resolve("/visualizer/")}>visualizer</a
         >
         animates these trajectories live, compiled to wasm.
     </p>
@@ -145,13 +151,13 @@ const features = [
         </div>
         <div class="flex flex-wrap gap-3">
             <a
-                href="{base}/docs/getting-started/"
+                href={resolve("/docs/getting-started/")}
                 class="px-5 py-2.5 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white transition-colors"
             >
                 Read the docs
             </a>
             <a
-                href="{base}/benchmarks/"
+                href={resolve("/benchmarks/")}
                 class="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
                 Benchmarks

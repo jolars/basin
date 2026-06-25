@@ -1,4 +1,4 @@
-import { SolverKind } from './basin-wasm/basin_wasm';
+import { SolverKind } from "./basin-wasm/basin_wasm";
 
 /**
  * A single solver-specific control, rendered generically by `Controls`.
@@ -11,14 +11,14 @@ import { SolverKind } from './basin-wasm/basin_wasm';
 export type SolverOption =
     | {
           id: string;
-          kind: 'select';
+          kind: "select";
           label: string;
           choices: { value: string; label: string }[];
           default: string;
       }
     | {
           id: string;
-          kind: 'logSlider';
+          kind: "logSlider";
           label: string;
           /** Slider bounds are in log10 space (the stored value is 10^slider). */
           min: number;
@@ -30,7 +30,7 @@ export type SolverOption =
       }
     | {
           id: string;
-          kind: 'intSlider';
+          kind: "intSlider";
           label: string;
           min: number;
           max: number;
@@ -42,7 +42,7 @@ export type SolverOption =
            *  Used for DE's F and CR — both want linear sliders.
            */
           id: string;
-          kind: 'linearSlider';
+          kind: "linearSlider";
           label: string;
           min: number;
           max: number;
@@ -55,7 +55,7 @@ export type SolverOption =
            *  `onOptionChange`. Default `0` keeps the first-load run
            *  reproducible. */
           id: string;
-          kind: 'seedField';
+          kind: "seedField";
           label: string;
           default: number;
       };
@@ -81,53 +81,53 @@ export type SolverMeta = {
 export const SOLVERS: SolverMeta[] = [
     {
         kind: SolverKind.GradientDescent,
-        label: 'Gradient Descent',
-        blurb: 'Steepest descent with a fixed step or Armijo backtracking.',
+        label: "Gradient Descent",
+        blurb: "Steepest descent with a fixed step or Armijo backtracking.",
         options: [
             {
-                id: 'gdLineSearch',
-                kind: 'select',
-                label: 'Step strategy',
+                id: "gdLineSearch",
+                kind: "select",
+                label: "Step strategy",
                 choices: [
-                    { value: 'constant', label: 'Constant α' },
-                    { value: 'backtracking', label: 'Backtracking' },
+                    { value: "constant", label: "Constant α" },
+                    { value: "backtracking", label: "Backtracking" },
                 ],
-                default: 'constant',
+                default: "constant",
             },
             {
-                id: 'gdAlpha',
-                kind: 'logSlider',
-                label: 'Step size α',
+                id: "gdAlpha",
+                kind: "logSlider",
+                label: "Step size α",
                 min: -5,
                 max: 0,
                 step: 0.05,
                 // Overridden per-problem by the visualizer (gdAlphaDefault).
                 default: 0.01,
-                showIf: { id: 'gdLineSearch', equals: 'constant' },
+                showIf: { id: "gdLineSearch", equals: "constant" },
             },
         ],
     },
     {
         kind: SolverKind.NelderMead,
-        label: 'Nelder–Mead (simplex, derivative-free)',
-        blurb: 'Standard reflection / expansion / contraction simplex.',
+        label: "Nelder–Mead (simplex, derivative-free)",
+        blurb: "Standard reflection / expansion / contraction simplex.",
         options: [],
     },
     {
         kind: SolverKind.Mads,
-        label: 'MADS (mesh adaptive direct search)',
-        blurb: 'Deterministic OrthoMADS poll on a shrinking mesh; converges on nonsmooth objectives.',
+        label: "MADS (mesh adaptive direct search)",
+        blurb: "Deterministic OrthoMADS poll on a shrinking mesh; converges on nonsmooth objectives.",
         options: [],
     },
     {
         kind: SolverKind.Lbfgs,
-        label: 'L-BFGS (limited-memory quasi-Newton)',
-        blurb: 'Two-loop recursion with a Moré–Thuente line search.',
+        label: "L-BFGS (limited-memory quasi-Newton)",
+        blurb: "Two-loop recursion with a Moré–Thuente line search.",
         options: [
             {
-                id: 'lbfgsM',
-                kind: 'intSlider',
-                label: 'History size m',
+                id: "lbfgsM",
+                kind: "intSlider",
+                label: "History size m",
                 min: 1,
                 max: 20,
                 step: 1,
@@ -137,14 +137,14 @@ export const SOLVERS: SolverMeta[] = [
     },
     {
         kind: SolverKind.CmaEs,
-        label: 'CMA-ES (covariance matrix adaptation)',
-        blurb: 'Hansen–Ostermeier evolution strategy with rank-µ + rank-1.',
+        label: "CMA-ES (covariance matrix adaptation)",
+        blurb: "Hansen–Ostermeier evolution strategy with rank-µ + rank-1.",
         itersPerFrame: 1,
         options: [
             {
-                id: 'cmaSigma',
-                kind: 'logSlider',
-                label: 'Initial σ',
+                id: "cmaSigma",
+                kind: "logSlider",
+                label: "Initial σ",
                 min: -2,
                 max: 1,
                 step: 0.05,
@@ -153,92 +153,92 @@ export const SOLVERS: SolverMeta[] = [
                 default: 0.5,
             },
             {
-                id: 'cmaLambda',
-                kind: 'intSlider',
-                label: 'Population λ (0 = auto)',
+                id: "cmaLambda",
+                kind: "intSlider",
+                label: "Population λ (0 = auto)",
                 min: 0,
                 max: 50,
                 step: 1,
                 default: 0,
             },
-            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
+            { id: "seed", kind: "seedField", label: "Seed", default: 0 },
         ],
     },
     {
         kind: SolverKind.De,
-        label: 'Differential Evolution',
-        blurb: 'Storn–Price DE/rand/1/bin in the viewport box.',
+        label: "Differential Evolution",
+        blurb: "Storn–Price DE/rand/1/bin in the viewport box.",
         // ½ gen / frame ≈ 30 gens / sec. DE on Sphere finishes in ~30 gens,
         // so the cluster contraction reads as a deliberate animation rather
         // than a flash.
         itersPerFrame: 0.5,
         options: [
             {
-                id: 'dePopSize',
-                kind: 'intSlider',
-                label: 'Population (0 = 10n)',
+                id: "dePopSize",
+                kind: "intSlider",
+                label: "Population (0 = 10n)",
                 min: 0,
                 max: 100,
                 step: 1,
                 default: 0,
             },
             {
-                id: 'deF',
-                kind: 'linearSlider',
-                label: 'F (differential weight)',
+                id: "deF",
+                kind: "linearSlider",
+                label: "F (differential weight)",
                 min: 0.1,
                 max: 2,
                 step: 0.05,
                 default: 0.8,
             },
             {
-                id: 'deCr',
-                kind: 'linearSlider',
-                label: 'CR (crossover probability)',
+                id: "deCr",
+                kind: "linearSlider",
+                label: "CR (crossover probability)",
                 min: 0,
                 max: 1,
                 step: 0.05,
                 default: 0.9,
             },
-            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
+            { id: "seed", kind: "seedField", label: "Seed", default: 0 },
         ],
     },
     {
         kind: SolverKind.RandomSearch,
-        label: 'Random Search (elitist 1+λ)',
-        blurb: 'Uniform samples in the viewport box; keeps the best.',
+        label: "Random Search (elitist 1+λ)",
+        blurb: "Uniform samples in the viewport box; keeps the best.",
         // RS resamples uniformly each generation, so the dots are just
         // noise that refreshes. Slow it way down (≈ 6 gens / sec) so each
         // cloud can be read before the next one replaces it.
         itersPerFrame: 0.1,
         options: [
             {
-                id: 'rsLambda',
-                kind: 'intSlider',
-                label: 'Samples per step λ',
+                id: "rsLambda",
+                kind: "intSlider",
+                label: "Samples per step λ",
                 min: 1,
                 max: 100,
                 step: 1,
                 default: 16,
             },
-            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
+            { id: "seed", kind: "seedField", label: "Seed", default: 0 },
         ],
     },
     {
         kind: SolverKind.Ssga,
-        label: 'Steady-state GA',
-        blurb: 'Real-coded GA with BLX-α crossover and BGA mutation.',
+        label: "Steady-state GA",
+        blurb: "Real-coded GA with BLX-α crossover and BGA mutation.",
         options: [
             {
-                id: 'ssgaPopSize',
-                kind: 'intSlider',
-                label: 'Population (0 = default)',
+                id: "ssgaPopSize",
+                kind: "intSlider",
+                label: "Population (0 = default)",
                 min: 0,
                 max: 100,
                 step: 1,
                 default: 0,
             },
-            { id: 'seed', kind: 'seedField', label: 'Seed', default: 0 },
+            { id: "seed", kind: "seedField", label: "Seed", default: 0 },
         ],
     },
 ];

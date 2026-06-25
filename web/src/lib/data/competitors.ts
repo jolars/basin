@@ -8,10 +8,11 @@
  * hand-edited. This module just types it and adds display metadata, reusing
  * the solver/problem vocabulary from `./benchmarks`.
  */
-import rawData from "./competitor-benchmarks.json";
-import { type Solver, SOLVER_LABELS, PROBLEM_LABELS } from "./benchmarks";
 
-export { type Solver, SOLVER_LABELS, PROBLEM_LABELS };
+import { PROBLEM_LABELS, SOLVER_LABELS, type Solver } from "./benchmarks";
+import rawData from "./competitor-benchmarks.json";
+
+export { PROBLEM_LABELS, SOLVER_LABELS, type Solver };
 
 /** Competing libraries a case is run against. */
 export type Library = "basin" | "argmin" | "gomez" | "nlopt";
