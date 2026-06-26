@@ -3,7 +3,7 @@
 //!
 //! LINCOA seeds the **same** coordinate-cross interpolation set and `H`
 //! factorization as NEWUOA (so this reuses
-//! [`try_initialize`](QuadraticModel::try_initialize) verbatim — PRIMA's `inith`
+//! [`try_initialize`](QuadraticModel::try_initialize) verbatim—PRIMA's `inith`
 //! is the NEWUOA initialization), then layers the linear-constraint machinery on
 //! top:
 //!
@@ -19,7 +19,7 @@
 //!    **feasible** interpolation points only (PRIMA `initxf`).
 //!
 //! Equality constraints `a·x = β` are folded as the pair `a·x ≤ β`, `−a·x ≤ −β`
-//! (PRIMA's deliberately naive treatment — no special permanently-active
+//! (PRIMA's deliberately naive treatment—no special permanently-active
 //! handling), so the driver works on a pure inequality system.
 
 use crate::core::math::Scalar;
@@ -42,8 +42,8 @@ pub(crate) struct LinearSetup<F = f64> {
 /// Wrap box, equality, and inequality constraints into a single unit-normalized
 /// inequality system `A x ≤ b` in **absolute** coordinates (PRIMA `get_lincon`).
 ///
-/// Columns are laid out `[lower bounds, upper bounds, equalities (±), inequalities]`
-/// — `n × m` column-major. The right-hand side is relaxed so `x0` is feasible
+/// Columns are laid out `[lower bounds, upper bounds, equalities (±), inequalities]`—
+/// `n × m` column-major. The right-hand side is relaxed so `x0` is feasible
 /// (`b_j ← max(b_j, a_jᵀ x0)`, computed with the *un-normalized* normals, exactly
 /// as Powell's code does), then every column and its `b` entry are divided by the
 /// normal's Euclidean norm. Constraints with a zero gradient are dropped (PRIMA

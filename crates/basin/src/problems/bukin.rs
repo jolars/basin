@@ -50,7 +50,7 @@ impl<P> Default for BukinN6<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static BUKIN_N6_SPEC: ProblemSpec = ProblemSpec {
     name: "Bukin N.6",
     dim: Dimensionality::Fixed(2),
@@ -74,7 +74,7 @@ pub static BUKIN_N6_SPEC: ProblemSpec = ProblemSpec {
                   at (x, y) = (−10, 1), value 0, along a sharp non-differentiable \
                   ridge y = 0.01·x². Standard domain is the asymmetric box \
                   x ∈ [-15, -5], y ∈ [-3, 3]; pathological for first-order \
-                  methods, a target for derivative-free / global solvers.",
+                  methods, a target for derivative-free and global solvers.",
 };
 
 impl<P> HasSpec for BukinN6<P> {

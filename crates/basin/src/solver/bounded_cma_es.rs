@@ -26,7 +26,7 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 /// [`CmaEs`'s docs and source](super::cma_es::CmaEs) for the algorithm
 /// summary and Hansen 2016 fixture.
 ///
-/// # Bound handling — adaptive quadratic penalty
+/// # Bound handling—adaptive quadratic penalty
 ///
 /// Per generation, for each sample `x_k`:
 ///
@@ -41,7 +41,7 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 /// learns "don't go that way"); the **penalized** `f_pen` is what the
 /// population is sorted by. `γ ∈ R^n` is initialized to `1` and adapted
 /// each generation from the IQR of recent fitness values and the per-
-/// coordinate variances `σ² · diag(C)` — see
+/// coordinate variances `σ² · diag(C)`—see
 /// `references/pycma-bound-handling/NOTES.md` for the full rule.
 ///
 /// ## Why this strategy and not the others
@@ -52,7 +52,7 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 ///   the rejection rate explodes when the optimum sits on a face of the
 ///   feasible box, and the implicit sampling distribution is distorted
 ///   by truncation. Bad default.
-/// - **Reflection / clipping**. Cheap, unprincipled. Clipping puts a
+/// - **Reflection/clipping**. Cheap, unprincipled. Clipping puts a
 ///   delta on the distribution that fights covariance adaptation;
 ///   reflection aliases multimodally near corners.
 /// - **Adaptive quadratic penalty** (this solver, Hansen / pycma).
@@ -66,7 +66,7 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 /// Adaptive penalty is the only one with a serious reference
 /// implementation (pycma) and a self-adapting coefficient. **BIPOP**
 /// is sometimes lumped with these but is a population-restart scheme,
-/// orthogonal to bound handling — it's reserved for restart machinery
+/// orthogonal to bound handling—it's reserved for restart machinery
 /// (S11).
 ///
 /// # Contract
@@ -85,7 +85,7 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 ///   is installed into the state by [`init`](Solver::init).
 /// - **Implementor (this solver) must:** maintain the
 ///   [`PopulationState`](crate::core::state::PopulationState)
-///   sorted-by-cost invariant on `state.candidates` / `state.costs`,
+///   sorted-by-cost invariant on `state.candidates`/`state.costs`,
 ///   where `state.costs` carries the **penalized** fitness values
 ///   (raw fitness is held in `state.penalty` for the γ-update IQR). The
 ///   initial mean is projected onto `[lower, upper]` once at iter 0 so
@@ -116,15 +116,15 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 /// # Backends
 ///
 /// LA-heavy: requires symmetric eigendecomposition, scalar-and-rank-1
-/// matrix updates, matrix-vector / transposed matrix-vector products,
+/// matrix updates, matrix-vector/transposed matrix-vector products,
 /// **plus** `MatDiagonal<V>` (extracts `diag(C)` for the σ²·diag(C)
 /// per-axis variances the γ-update reads). Wired and tested for the
 /// default `Vec<f64>` / [`DenseMatrix`](crate::DenseMatrix) backend
-/// (pure-Rust cyclic Jacobi eigensolver — no feature flag, `wasm`-clean),
-/// `nalgebra::DVector<f64>` / `nalgebra::DMatrix<f64>` (feature
-/// `nalgebra`), `ndarray::Array1<f64>` / `ndarray::Array2<f64>` (feature
-/// `ndarray`, also wired to the cyclic Jacobi solver — `wasm`-clean),
-/// and `faer::Col<f64>` / `faer::Mat<f64>` (feature `faer`) — same
+/// (pure-Rust cyclic Jacobi eigensolver—no feature flag, `wasm`-clean),
+/// `nalgebra::DVector<f64>`/`nalgebra::DMatrix<f64>` (feature
+/// `nalgebra`), `ndarray::Array1<f64>`/`ndarray::Array2<f64>` (feature
+/// `ndarray`, also wired to the cyclic Jacobi solver—`wasm`-clean),
+/// and `faer::Col<f64>`/`faer::Mat<f64>` (feature `faer`)—same
 /// coverage as [`CmaEs`](super::cma_es::CmaEs).
 ///
 /// # Examples
@@ -161,7 +161,7 @@ pub(crate) struct BoundedCmaConstants<F = f64> {
 impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
     /// Build a bounded CMA-ES with the default population size
     /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48) and a seeded RNG. The
-    /// initial mean / step-size / stds are supplied via [`CmaEsState`];
+    /// initial mean/step-size/stds are supplied via [`CmaEsState`];
     /// TolX is the
     /// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance)
     /// criterion.
@@ -238,7 +238,7 @@ fn compute_bounded_constants<F: Scalar>(n: usize, lambda: usize) -> BoundedCmaCo
 ///
 /// `pub(crate)` so [`BoundedCmaInject`](crate::solver::BoundedCmaInject)
 /// can rank injected candidates by the same penalized fitness regular
-/// samples are sorted on — using raw cost on injection would let an
+/// samples are sorted on—using raw cost on injection would let an
 /// out-of-box LM/L-BFGS-B refinement (e.g. landing at the unconstrained
 /// minimum) skip the penalty and pollute `state.costs`.
 pub(crate) fn evaluate_with_penalty<P, V, F>(
@@ -354,7 +354,7 @@ fn update_gamma<P, V, M, F>(
     let dfit = hsorted[hsorted.len() / 2];
 
     // Initialize γ on the first generation that sees an infeasible mean.
-    // (We skip pycma's `countiter == 2` re-init path — see
+    // (We skip pycma's `countiter == 2` re-init path—see
     // references/pycma-bound-handling/NOTES.md "Implementation deltas".)
     if any_violation && !pen.weights_initialized {
         let init_val = two * dfit;
@@ -475,7 +475,7 @@ where
         problem: &mut Problem<P>,
         mut state: CmaEsState<V, M, F>,
     ) -> Result<CmaEsState<V, M, F>, Self::Error> {
-        // Constants compute-once guard (cached on the solver — config
+        // Constants compute-once guard (cached on the solver—config
         // only; persists across `run_loop` re-entry for chain resumption).
         if self.constants.is_none() {
             let n = state.m.vec_len();
@@ -546,7 +546,7 @@ where
 
         // Recombination uses the un-repaired samples. y_{i:λ} = (x_{i:λ} − m) / σ
         // for the *previous* m, σ. (state.candidates carries the most recent
-        // generation's x's, sorted ascending by *penalized* cost — for
+        // generation's x's, sorted ascending by *penalized* cost—for
         // recombination only the rank order matters.)
         let mut y_sorted: Vec<V> = state
             .candidates
@@ -639,10 +639,10 @@ where
             state.d_inv[i] = one / s;
         }
 
-        // γ adaptation — runs after the m / σ / C update so it sees the
+        // γ adaptation—runs after the m / σ / C update so it sees the
         // post-recombination state, before the new generation is sampled.
         // Consumes `state.penalty.raw_costs` (previous generation's raw
-        // fitness, in sample order — γ-update only needs the IQR).
+        // fitness, in sample order—γ-update only needs the IQR).
         update_gamma(&mut state, k, problem.inner());
 
         // Sample the new generation, evaluate at repaired points.

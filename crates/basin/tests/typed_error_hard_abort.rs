@@ -10,7 +10,7 @@ use std::mem::size_of;
 
 use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent, MaxIter};
 
-/// `Result<f64, Infallible>` must be the same size as `f64` — the entire
+/// `Result<f64, Infallible>` must be the same size as `f64`—the entire
 /// rationale for choosing `Infallible` as the default error in the
 /// migration is that the happy path stays zero-cost.
 #[test]
@@ -28,7 +28,7 @@ enum BailReason {
 /// Problem that runs as the standard sphere for the first `bail_after`
 /// `cost` calls and then returns `Err(BailReason::BatchCancelled)`. The
 /// gradient never aborts, so the only way Executor sees `Err` is via
-/// `cost` — exercising the most common HFT-style early-stop pattern.
+/// `cost`, exercising the most common HFT-style early-stop pattern.
 struct BailingSphere {
     bail_after: u32,
     calls: Cell<u32>,
@@ -61,7 +61,7 @@ impl Gradient for BailingSphere {
 fn cost_err_bubbles_out_of_executor_run_with_same_error() {
     let problem = BailingSphere {
         // Allow a few normal evaluations (init seeds, plus a couple of
-        // iterations) before the abort fires — confirms the executor
+        // iterations) before the abort fires, confirming the executor
         // *was* running, not failing before the loop began.
         bail_after: 5,
         calls: Cell::new(0),
@@ -104,7 +104,7 @@ fn cost_err_at_init_bubbles_out_of_executor_run() {
     }
 }
 
-/// Soft reject (`Ok(f64::INFINITY)`) must NOT abort the run — line search
+/// Soft reject (`Ok(f64::INFINITY)`) must NOT abort the run—line search
 /// retreats off the infeasible region just like before the typed-error
 /// migration. This pins the soft/hard split.
 #[test]

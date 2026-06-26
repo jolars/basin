@@ -5,7 +5,7 @@
 //! Smooth function that is almost entirely flat (≈ 0) except for a single
 //! narrow, deep spike at `(x, y) = (π, π)` where `f = −1`. The tiny basin makes
 //! it a hard target for solvers without good initialization or a global search
-//! phase — a first-order method started far away sees a near-zero gradient and
+//! phase—a first-order method started far away sees a near-zero gradient and
 //! drifts. Usual search domain is `x, y ∈ [-100, 100]`.
 
 use core::marker::PhantomData;
@@ -61,7 +61,7 @@ impl<P> Default for Easom<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static EASOM_SPEC: ProblemSpec = ProblemSpec {
     name: "Easom",
     dim: Dimensionality::Fixed(2),
@@ -69,7 +69,7 @@ pub static EASOM_SPEC: ProblemSpec = ProblemSpec {
         smooth: true,
         differentiable: true,
         convex: false,
-        // A single minimum, but vast flat regions with near-zero gradient —
+        // A single minimum, but vast flat regions with near-zero gradient—
         // keep the conservative call rather than claiming clean unimodality.
         unimodal: false,
         separable: false,

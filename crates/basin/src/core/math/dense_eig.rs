@@ -4,7 +4,7 @@
 //! but it has no external linear-algebra crate behind it. CMA-ES factors its
 //! covariance every iteration (the [`SymmetricEigen`](super::SymmetricEigen)
 //! op), so to run CMA-ES on the default backend we need an honest, pure-Rust
-//! symmetric eigensolver — one with no BLAS/LAPACK dependency, so it stays
+//! symmetric eigensolver: one with no BLAS/LAPACK dependency, so it stays
 //! `wasm`-clean.
 //!
 //! This module implements the classic **cyclic Jacobi** algorithm (Golub & Van
@@ -12,7 +12,7 @@
 //! simplest correct symmetric eigensolver: a sequence of plane rotations that
 //! drive the off-diagonal mass to zero, accumulating the eigenvectors in an
 //! orthogonal matrix. It is slower than the tridiagonal-QR method the
-//! nalgebra/faer backends use, but `Vec<F>` is the convenience backend —
+//! nalgebra/faer backends use, but `Vec<F>` is the convenience backend;
 //! callers wanting speed at large `n` reach for faer.
 
 use super::Scalar;
@@ -46,7 +46,7 @@ fn off_diagonal_sum_sq<F: Scalar>(m: &[F], n: usize) -> F {
 /// rotations leave them on the diagonal).
 ///
 /// Returns `None` if the sweep budget is exhausted before the off-diagonal mass
-/// falls below tolerance — a failure the caller maps to
+/// falls below tolerance: a failure the caller maps to
 /// [`SymmetricEigenError::Failed`](super::SymmetricEigenError::Failed).
 pub(super) fn jacobi_eigen<F: Scalar>(a: &[F], n: usize) -> Option<(Vec<F>, Vec<F>)> {
     debug_assert_eq!(a.len(), n * n, "jacobi_eigen: expected an n×n buffer");

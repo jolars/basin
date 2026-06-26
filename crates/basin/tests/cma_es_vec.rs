@@ -106,7 +106,7 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 }
 
 /// `with_stds(ones)` reproduces the isotropic `C = I` default bit-for-bit on
-/// the `Vec<f64>` backend — the `MatrixFromDiagonal` seeding of `diag(1²)`
+/// the `Vec<f64>` backend; the `MatrixFromDiagonal` seeding of `diag(1²)`
 /// must equal the `MatrixIdentity` default.
 #[test]
 fn with_stds_ones_matches_default() {

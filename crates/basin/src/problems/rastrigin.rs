@@ -6,13 +6,13 @@
 //! ripple of amplitude `A` creates a dense lattice of local minima on
 //! integer offsets. The global minimum sits at `x = (0, …, 0)` with
 //! `f = 0`. Separable (the sum decomposes per coordinate), which is a
-//! useful diagnostic — solvers that exploit separability handle it far
+//! useful diagnostic—solvers that exploit separability handle it far
 //! better than non-separable multimodal functions like Schwefel or
 //! Ackley.
 //!
 //! The canonical search domain is `[−5.12, 5.12]^n`, set by Mühlenbein
 //! et al. (1991) when they generalized Rastrigin's original 2D
-//! formulation to arbitrary `n`. This is what the GA / evolutionary
+//! formulation to arbitrary `n`. This is what the GA and evolutionary
 //! optimization literature has used ever since (CEC competitions,
 //! Bergmeir's MA-LSCh-CMA paper, etc.).
 //!
@@ -72,7 +72,7 @@ impl<P> Default for Rastrigin<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static RASTRIGIN_SPEC: ProblemSpec = ProblemSpec {
     name: "Rastrigin",
     dim: Dimensionality::NDimensional { min: 1 },
@@ -81,7 +81,7 @@ pub static RASTRIGIN_SPEC: ProblemSpec = ProblemSpec {
         differentiable: true,
         // Non-convex: the cosine term creates many bumps.
         convex: false,
-        // Highly multimodal — many local minima on an integer lattice.
+        // Highly multimodal—many local minima on an integer lattice.
         unimodal: false,
         // f(x) = Σᵢ gᵢ(xᵢ) with gᵢ(t) = A + t² − A·cos(2π·t); the
         // additive constant A·n is shared across coordinates but the
@@ -197,7 +197,7 @@ mod faer_impl {
 /// Rastrigin function with explicit element-wise box bounds, suitable
 /// for solvers that require [`BoxConstraints`] (e.g. CMA-ES variants
 /// like MA-LSCh-CMA). Carries the bounds as data on the problem (tenet
-/// 4 in `crate::core` / `CONTRIBUTING.md`) and routes the cost through the
+/// 4 in `crate::core` and `CONTRIBUTING.md`) and routes the cost through the
 /// same raw [`rastrigin`] free function as the unconstrained
 /// [`Rastrigin`].
 ///
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn boxed_form_reuses_rastrigin_spec() {
         let spec = <RastriginBoxed<Vec<f64>> as HasSpec>::SPEC;
-        // Same static — both wrappers point at the one Rastrigin entry.
+        // Same static—both wrappers point at the one Rastrigin entry.
         assert!(core::ptr::eq(spec, &RASTRIGIN_SPEC));
     }
 }

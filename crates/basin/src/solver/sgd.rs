@@ -18,7 +18,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Sampling
 ///
-/// Epoch-shuffle without replacement (the standard PyTorch / JAX / Bottou
+/// Epoch-shuffle without replacement (the standard PyTorch/JAX/Bottou
 /// 2012 convention):
 ///
 /// 1. At [`Solver::init`], the solver builds a permutation
@@ -27,7 +27,7 @@ use crate::core::termination::TerminationReason;
 /// 2. Each [`Solver::next_iter`] consumes the next contiguous slice of
 ///    `batch_size` indices from `perm`.
 /// 3. When fewer than `batch_size` indices remain in the current epoch,
-///    the solver reshuffles `perm` and starts a new epoch — `drop_last`
+///    the solver reshuffles `perm` and starts a new epoch—`drop_last`
 ///    behavior (the short tail is discarded). Keeps every step's batch
 ///    size *exactly* `batch_size`, so the learning-rate interpretation is
 ///    stable across the run.
@@ -54,7 +54,7 @@ use crate::core::termination::TerminationReason;
 /// cancels noisy oscillations across iterations and accelerates
 /// convergence along consistent gradient directions. A too-large
 /// effective step (roughly `α / (1 − β)`) diverges, so reduce `α` when
-/// adding momentum — same stability caveat as the full-batch case.
+/// adding momentum—same stability caveat as the full-batch case.
 ///
 /// # Cost tracking
 ///
@@ -62,7 +62,7 @@ use crate::core::termination::TerminationReason;
 /// the starting iterate, then refreshed by a full evaluation every
 /// **epoch boundary** by default (`batches_per_epoch` iters, where
 /// `batches_per_epoch = n_samples / batch_size`). This matches the
-/// standard ML rhythm — full loss reported once per epoch — and keeps
+/// standard ML rhythm (full loss reported once per epoch) and keeps
 /// per-iter cost overhead well under 1 % for typical batch sizes.
 ///
 /// Two consequences flow from this default:
@@ -81,17 +81,17 @@ use crate::core::termination::TerminationReason;
 ///   if they need it sharper.
 ///
 /// Use [`with_cost_eval_every`](Self::with_cost_eval_every) to override
-/// the refresh period — pass `1` for per-iter cost (debugging, plotting,
+/// the refresh period—pass `1` for per-iter cost (debugging, plotting,
 /// tight termination), or a larger value to amortize even more
 /// aggressively on huge datasets.
 ///
 /// The mini-batch gradient is not cached on the state
 /// (`state.gradient` stays `None`), so gradient-based termination
-/// criteria do not fire — by design, since the batch estimate is noisy.
+/// criteria do not fire—by design, since the batch estimate is noisy.
 ///
 /// # Backends
 ///
-/// Backend-generic — works with any `V` implementing
+/// Backend-generic—works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
 /// [`ScaleInPlace<F>`] + `Clone`. With the default `F = f64` that covers
 /// `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
@@ -246,14 +246,14 @@ impl<V, F: Scalar> Sgd<V, F> {
     ///
     /// - `period = 1`: per-iter refresh. Most accurate per-step cost,
     ///   but adds one full-data pass per iteration on top of the
-    ///   mini-batch gradient — closer to full-batch GD overhead.
+    ///   mini-batch gradient—closer to full-batch GD overhead.
     ///   Pick this for debugging, plotting per-iter convergence curves,
     ///   tight cost-based termination (`TargetCost` with small `eps`,
     ///   `NoImprovement` with short patience), or when the dataset is
     ///   small enough that the extra cost passes are negligible.
     /// - `period = batches_per_epoch`: the default if this builder is
-    ///   not called. One full-cost pass per epoch — matches the
-    ///   PyTorch / JAX "report training loss per epoch" rhythm and
+    ///   not called. One full-cost pass per epoch—matches the
+    ///   PyTorch/JAX "report training loss per epoch" rhythm and
     ///   keeps the cost overhead well under 1 % for typical batch
     ///   sizes.
     /// - Larger `period`: even less overhead, at the cost of staler
@@ -319,7 +319,7 @@ where
         // Seed cost at the initial param so iter-0 termination checks
         // (e.g. `TargetCost` on a near-optimal start) and
         // `OptimizationResult::cost()` see a defined value. The mini-batch
-        // gradient is *not* cached — `state.gradient` stays `None`.
+        // gradient is *not* cached—`state.gradient` stays `None`.
         let cost = problem.cost(&state.param)?;
         state.cost = Some(cost);
         Ok(state)
@@ -352,7 +352,7 @@ where
         if self.beta == F::zero() {
             // No momentum: x ← x − α·g. One fused pass via
             // `scaled_add(-α, &g)`, instead of materializing `direction = −g`
-            // and stepping `x ← x + α·direction` — the latter touched the
+            // and stepping `x ← x + α·direction`—the latter touched the
             // dim-sized buffer twice per step.
             state.param.scaled_add(-self.alpha, &grad);
         } else {
@@ -473,7 +473,7 @@ mod tests {
     #[test]
     fn converges_to_centroid_without_momentum() {
         // SGD with a *constant* learning rate has an O(α) noise floor
-        // around the optimum (the well-known constant-LR SGD result — see
+        // around the optimum (the well-known constant-LR SGD result—see
         // Bottou 2012). It does not converge *to* the optimum without LR
         // decay, but it does enter and stay in a small neighborhood
         // proportional to α. Use a small batch_size to keep the test
@@ -622,7 +622,7 @@ mod tests {
     fn cost_refresh_default_is_epoch_boundary() {
         // n_samples = 5, batch_size = 2 → batches_per_epoch = 2.
         // After 1 iter (still mid-epoch), state.cost must equal the
-        // *initial* cost — the default schedule does not refresh until
+        // *initial* cost—the default schedule does not refresh until
         // the second iter wraps an epoch.
         let problem = problem_5_centers();
         let initial_cost = problem.cost(&vec![10.0, 10.0]).unwrap();

@@ -15,14 +15,14 @@
 //! geometry-improving step. This version implements that branch (Boxes 7–9):
 //! Box 7/8 picks the furthest point `x_t` and tests `DIST = ‖x_t − x_opt‖ ≥ 2Δ`;
 //! Box 9 calls [BIGLAG](super::biglag) to maximize `|ℓ_t(x_opt + d)|` over
-//! `‖d‖ ≤ Δ̄` (eq. 6.16) — falling back to [BIGDEN](QuadraticModel::bigden) when
+//! `‖d‖ ≤ Δ̄` (eq. 6.16)—falling back to [BIGDEN](QuadraticModel::bigden) when
 //! the BIGLAG step would leave the update denominator ill-conditioned
-//! (`|σ| < 0.8 τ²`, eq. 6.17) — and folds the new point in with `MOVE = t`
+//! (`|σ| < 0.8 τ²`, eq. 6.17)—and folds the new point in with `MOVE = t`
 //! fixed. The short-step Box-14 test (eq. 7.7) gates whether the work at the
 //! current `ρ` is complete, using `CRVMIN` and the model errors `|F − Q|` of the
 //! 3 most recent updates.
 //!
-//! Before each Box-5 update the §7 origin shift (eq. 7.10) re-centres `x0` on
+//! Before each Box-5 update the §7 origin shift (eq. 7.10) re-centers `x0` on
 //! `x_opt` when the step is small relative to the drift `‖x_opt − x0‖`, keeping
 //! the `H` algebra accurate over long far-drifting runs (see [`crate::solver::powell::origin`]).
 //!
@@ -34,9 +34,9 @@
 //! wholesale with the alternative interpolant `Q_int` (the quadratic minimizing
 //! `‖∇²Q‖_F` subject to the current conditions; eq. 8.3) once it is persistently
 //! the better model. Each Box-5 trust-region update that drops a point sets a
-//! flag — here in PRIMA v0.7.2's tuned form of eq. 8.4 (`tryqalt`): `RATIO ≤ 0.1`
+//! flag—here in PRIMA v0.7.2's tuned form of eq. 8.4 (`tryqalt`): `RATIO ≤ 0.1`
 //! **and** `‖∇Q_int(x_opt)‖² ≤ 0.1·‖∇Q(x_opt)‖²` (gradients at `x_opt`; Powell's
-//! paper states `0.01` / `100×` at `x0`, which PRIMA re-tuned). After three
+//! paper states `0.01`/`100×` at `x0`, which PRIMA re-tuned). After three
 //! consecutive YES flags `Q` is adopted from `Q_int` (see [`adopt_alt_model`]).
 //! Geometry steps (Box 9, `RATIO := 1`) fail the flag, so they reset the counter.
 //!
@@ -59,8 +59,8 @@ use crate::solver::powell::{QuadraticModel, TrustRegionSubproblem};
 
 /// Configuration for a standalone NEWUOA run via [`minimize`].
 ///
-/// The public [`Newuoa`](crate::solver::Newuoa) solver does not use this — it
-/// configures `ρ_beg` / `ρ_end` / `npt` on the solver and delegates the budget
+/// The public [`Newuoa`](crate::solver::Newuoa) solver does not use this—it
+/// configures `ρ_beg`/`ρ_end`/`npt` on the solver and delegates the budget
 /// to framework termination ([`MaxCostEvals`](crate::MaxCostEvals)).
 pub(crate) struct NewuoaConfig<F = f64> {
     /// Initial trust-region radius `ρ_beg` (also the initial `Δ`).
@@ -107,15 +107,15 @@ pub(crate) enum Transition {
     Continue,
     /// The work at this `ρ` finished and `ρ` was reduced (eq. 7.6).
     RhoReduced,
-    /// `ρ` reached `ρ_end` and the work there is complete — converged.
+    /// `ρ` reached `ρ_end` and the work there is complete—converged.
     Converged,
 }
 
 /// The result of one [`NewuoaWork::step`]: the schedule transition and the
 /// objective values sampled during the step.
 ///
-/// `evaluated` holds 0, 1, or 2 `(x_absolute, F(x))` pairs in evaluation order
-/// — a trust-region step (Box 4) can be followed by a geometry step (Box 9) in
+/// `evaluated` holds 0, 1, or 2 `(x_absolute, F(x))` pairs in evaluation order—
+/// a trust-region step (Box 4) can be followed by a geometry step (Box 9) in
 /// the same iteration, so a step can sample `F` twice. The caller folds these
 /// into its best-so-far tracking; in the framework path the [`Problem`] wrapper
 /// also counts each call.
@@ -130,10 +130,10 @@ pub(crate) struct StepOutcome<F = f64> {
 /// ρ/Δ schedule, the Box-14 model-error history, and the §8 Qint counter.
 ///
 /// Shared by the standalone [`minimize`] driver and the public
-/// [`Newuoa`](crate::solver::Newuoa) solver — see the module docs.
+/// [`Newuoa`](crate::solver::Newuoa) solver—see the module docs.
 pub(crate) struct NewuoaWork<F = f64> {
     model: QuadraticModel<F>,
-    /// Final radius `ρ_end` — drives the eq-7.6 schedule and the convergence
+    /// Final radius `ρ_end`—drives the eq-7.6 schedule and the convergence
     /// stop. The model itself stays solver-side (not on the state).
     rho_end: F,
     /// Current trust-region radius `ρ`.
@@ -228,7 +228,7 @@ impl<F: Scalar> NewuoaWork<F> {
             // happened here and the 3 most recent each had ‖d‖ ≤ ρ and a model
             // error ≤ ⅛ρ²·CRVMIN. This is PRIMA v0.7.2's `accurate_mod`
             // (newuob.f90); Powell's paper eq. 7.7 additionally gates on the
-            // predicted reduction, a term PRIMA drops — we track PRIMA here.
+            // predicted reduction, a term PRIMA drops—we track PRIMA here.
             let thr = eighth * self.rho * self.rho * crvmin;
             let box14_y = self.history.len() >= 3
                 && self
@@ -302,7 +302,7 @@ impl<F: Scalar> NewuoaWork<F> {
         };
         self.delta = revise_delta(self.delta, dnorm, ratio, self.rho, half, c01, c07, c15, two);
 
-        // §7 origin shift (eq. 7.10): if x_opt has drifted far from x0, re-centre
+        // §7 origin shift (eq. 7.10): if x_opt has drifted far from x0, re-center
         // before the update so the §4 algebra stays accurate. The shift moves x0
         // onto x_opt, so x_opt's displacement becomes 0 and x⁺ = x_opt + d has
         // displacement d (the absolute point is unchanged, so f_new / pred still
@@ -499,8 +499,8 @@ fn far_point<F: Scalar>(model: &QuadraticModel<F>) -> (usize, F) {
 /// Box 7). Returns the evaluated absolute point and its value (the caller folds
 /// it into best-so-far tracking) and pushes the Box-14 history entry.
 ///
-/// If the BIGLAG step would leave the update denominator ill-conditioned —
-/// `|σ| < 0.8 τ²` (eq. 6.17) — the step is replaced by [`bigden`], which
+/// If the BIGLAG step would leave the update denominator ill-conditioned—
+/// `|σ| < 0.8 τ²` (eq. 6.17)—the step is replaced by [`bigden`], which
 /// maximizes `|σ|` directly (eq. 6.18). This is rare in practice (Powell 2006,
 /// §6), so the quartic BIGDEN search runs almost never.
 ///
@@ -525,7 +525,7 @@ fn do_geometry<F: Scalar, E>(
 
     // §7 origin shift (eq. 7.10) before the Box-5 update, as in the TR path.
     // `t` and `kopt` are preserved by the shift; x_opt's displacement becomes 0.
-    // `d` is relative to x_opt, so the re-centring leaves it unchanged.
+    // `d` is relative to x_opt, so the re-centering leaves it unchanged.
     maybe_shift_origin(model, norm(&d));
 
     let kopt = model.kopt();
@@ -565,7 +565,7 @@ fn do_geometry<F: Scalar, E>(
     Ok((xabs, f_new))
 }
 
-/// §7 origin shift (Powell 2006, eq. 7.10): re-centre `x0` on `x_opt` when the
+/// §7 origin shift (Powell 2006, eq. 7.10): re-center `x0` on `x_opt` when the
 /// step is small relative to the drift `‖x_opt − x0‖`, keeping the `H` algebra
 /// accurate. Returns whether the model was shifted (in which case `x_opt` now
 /// sits at `x0`, so its displacement is the zero vector).
@@ -755,7 +755,7 @@ mod tests {
     /// The iterate drifts several units from the base point `x0` along the
     /// valley, and the geometry steps do many extra `H`-updates. Without the §7
     /// origin shifts (eq. 7.10) the `H` matrix accumulates rounding error there
-    /// and the run stalls at ~3 digits; with them re-centring `x0` on `x_opt`,
+    /// and the run stalls at ~3 digits; with them re-centering `x0` on `x_opt`,
     /// the run reaches the minimizer to ~6 digits.
     #[test]
     fn chained_rosenbrock_6d() {

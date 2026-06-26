@@ -8,13 +8,13 @@
 //! These four are deliberately *sibling* traits, not members of a
 //! `Constraint` supertrait/hierarchy. Per tenet 4, a shared *parent*
 //! abstraction waits until ≥2 constrained solvers share more than data
-//! accessors — and they don't: the box family keeps feasibility by
+//! accessors, and they don't: the box family keeps feasibility by
 //! *projection*, the linear-inequality family by a *barrier*, the
 //! linear-equality family by a *penalty plus multipliers* (the augmented
 //! Lagrangian), and the nonlinear-inequality family by an *exact-penalty merit
 //! function with a geometry/acceptance test* (COBYLA). Four feasibility
-//! mechanisms, and the traits share no operation beyond `lower()` / `upper()`
-//! resp. `a()` / `b()` resp. `constraints()`, so a one-member hierarchy would
+//! mechanisms, and the traits share no operation beyond `lower()`/`upper()`
+//! resp. `a()`/`b()` resp. `constraints()`, so a one-member hierarchy would
 //! still be pure overhead.
 //!
 //! [`LinearConstraints`] is a different beast: a standalone *aggregator* of
@@ -22,7 +22,7 @@
 //! and linear inequalities at once), consumed by [`Lincoa`](crate::Lincoa),
 //! which folds all three kinds into one `A x ≤ b` system handled by one
 //! active-set feasibility mechanism. It is *not* a parent of the three
-//! siblings above — it neither extends them nor is extended by them — so the
+//! siblings above (it neither extends them nor is extended by them), so the
 //! "no `Constraint` parent" decision still stands (see
 //! [`LinearConstraints`] and `.claude/rules/constraints.md`).
 
@@ -36,7 +36,7 @@ use crate::core::problem::CostFunction;
 /// a compile error rather than a silent runtime issue.
 ///
 /// `BoxConstraints` is a supertrait of `CostFunction` so the `Param` type
-/// is shared automatically — solver bounds read
+/// is shared automatically: solver bounds read
 /// `P: BoxConstraints<Param = f64>` instead of repeating the parameter
 /// type across two trait bounds.
 ///
@@ -48,9 +48,9 @@ use crate::core::problem::CostFunction;
 ///
 /// Attach box bounds to a problem so a bounded solver (e.g.
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent))
-/// will accept it. The equality / inequality sibling traits
+/// will accept it. The equality/inequality sibling traits
 /// ([`LinearEqualityConstraints`], [`LinearInequalityConstraints`]) are
-/// implemented the same way, exposing `a()` / `b()` instead:
+/// implemented the same way, exposing `a()`/`b()` instead:
 ///
 /// ```
 /// use basin::{BoxConstraints, CostFunction};
@@ -97,7 +97,7 @@ pub trait BoxConstraints: CostFunction {
 /// # Shapes
 ///
 /// `b` shares the parameter's vector *type* ([`Param`](CostFunction::Param))
-/// but lives in `ℝᵐ` — one entry per constraint row — whereas the iterate
+/// but lives in `ℝᵐ` (one entry per constraint row), whereas the iterate
 /// lives in `ℝⁿ`. `m` and `n` need not match.
 ///
 /// # Matrix type and consumers
@@ -107,7 +107,7 @@ pub trait BoxConstraints: CostFunction {
 /// [`ClampInPlace`](crate::core::math::ClampInPlace). Consumers add the
 /// operations they actually need: the barrier requires
 /// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and
-/// `Aᵀ v`) — a strict subset of the LA tier that never includes a linear
+/// `Aᵀ v`)—a strict subset of the LA tier that never includes a linear
 /// solve. With those bounds the barrier is available on the matrix-capable
 /// backends (nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`); `Vec<f64>`
 /// and `ndarray` produce a compile-time error until they grow the two
@@ -135,7 +135,7 @@ pub trait LinearInequalityConstraints: CostFunction {
 ///
 /// This is a **distinct trait** from [`LinearInequalityConstraints`] even
 /// though the data shape (`A`, `b`) is identical: the semantics differ
-/// (`= b` vs `≤ b`), so the type system must keep them apart — an
+/// (`= b` vs `≤ b`), so the type system must keep them apart: an
 /// `A x ≤ b` problem must not be silently accepted by an equality solver,
 /// and vice versa.
 ///
@@ -145,7 +145,7 @@ pub trait LinearInequalityConstraints: CostFunction {
 /// # Shapes
 ///
 /// `b` shares the parameter's vector *type* ([`Param`](CostFunction::Param))
-/// but lives in `ℝᵐ` — one entry per constraint row — whereas the iterate
+/// but lives in `ℝᵐ` (one entry per constraint row), whereas the iterate
 /// lives in `ℝⁿ`. `m` and `n` need not match.
 ///
 /// # Matrix type and consumers
@@ -153,7 +153,7 @@ pub trait LinearInequalityConstraints: CostFunction {
 /// The trait stays free of math bounds on [`Matrix`](Self::Matrix), the
 /// same way the sibling traits leave their carriers unbounded. Consumers add
 /// the operations they actually need: the augmented Lagrangian requires
-/// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and `Aᵀ v`) —
+/// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and `Aᵀ v`)—
 /// a strict subset of the LA tier that never includes a linear solve. With
 /// those bounds the method is available on the matrix-capable backends
 /// (nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`); `Vec<f64>` and
@@ -176,15 +176,15 @@ pub trait LinearEqualityConstraints: CostFunction {
 /// `x` is feasible iff every component satisfies `cᵢ(x) ≤ 0`; the *constraint
 /// violation* is `[ maxᵢ cᵢ(x) ]₊` (zero when feasible). Unlike the three
 /// linear sibling traits, the constraint here is a **function** evaluated at the
-/// iterate, not matrix/vector data — so this trait carries a
-/// [`constraints`](Self::constraints) evaluator rather than `a()` / `b()`
+/// iterate, not matrix/vector data, so this trait carries a
+/// [`constraints`](Self::constraints) evaluator rather than `a()`/`b()`
 /// accessors. Like the siblings, the constraints live on the *problem* side
 /// (tenet 4 in `CONTRIBUTING.md`): the derivative-free solver that handles them
 /// ([`Cobyla`](crate::Cobyla)) binds on this trait, so handing it an
 /// unconstrained problem is a compile error.
 ///
 /// `NonlinearInequalityConstraints` is a supertrait of [`CostFunction`] so the
-/// `Param` / `Error` types are shared automatically.
+/// `Param`/`Error` types are shared automatically.
 ///
 /// # Sign convention
 ///
@@ -197,8 +197,8 @@ pub trait LinearEqualityConstraints: CostFunction {
 /// # Shapes
 ///
 /// The iterate lives in `ℝⁿ` ([`Param`](CostFunction::Param)); the value
-/// returned by [`constraints`](Self::constraints) lives in `ℝᵐ` — one entry per
-/// constraint, length [`num_constraints`](Self::num_constraints) — but shares
+/// returned by [`constraints`](Self::constraints) lives in `ℝᵐ` (one entry per
+/// constraint, length [`num_constraints`](Self::num_constraints)) but shares
 /// the parameter's vector *type*. `m` and `n` need not match.
 ///
 /// # Future direction: a `NonlinearConstraints` aggregator (deferred)
@@ -209,10 +209,10 @@ pub trait LinearEqualityConstraints: CostFunction {
 /// `constr(x) ≤ 0` vector. A planned `NonlinearConstraints` *aggregator*
 /// (analogous to [`LinearConstraints`], which does this for the linear kinds)
 /// will expose the nonlinear block plus optional linear/box blocks and fold
-/// them together — letting a problem hand COBYLA all four constraint kinds at
+/// them together, letting a problem hand COBYLA all four constraint kinds at
 /// once. That is **deliberately deferred**, not foreclosed: like
 /// [`LinearConstraints`] it will be *standalone* (not a parent of this trait,
-/// no blanket bridge — a blanket impl could only forward the nonlinear block
+/// no blanket bridge: a blanket impl could only forward the nonlinear block
 /// and would silently drop the linear/box data), so adding it later is purely
 /// additive and breaks nothing here. This single-kind trait remains the right
 /// surface for the inequality-only consumer.
@@ -270,9 +270,9 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 /// ```
 ///
 /// using only objective values. Every accessor is **optional** (defaulting to
-/// `None`), so a problem implements only the blocks it actually has — an
+/// `None`), so a problem implements only the blocks it actually has: an
 /// inequality-only problem overrides just [`inequalities`](Self::inequalities),
-/// a box-bounded one just [`lower`](Self::lower) / [`upper`](Self::upper), and
+/// a box-bounded one just [`lower`](Self::lower)/[`upper`](Self::upper), and
 /// so on. LINCOA folds whatever is present into a single unit-normalized
 /// `A x ≤ b` system (bounds as `±eᵢ` rows, an equality `aᵀx = β` as the pair
 /// `aᵀx ≤ β`, `−aᵀx ≤ −β`) and keeps every iterate feasible with one
@@ -281,10 +281,10 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 /// # Not a parent of the sibling constraint traits
 ///
 /// Despite the family-resembling name, `LinearConstraints` is **standalone**:
-/// it is *not* a supertrait of [`LinearInequalityConstraints`] /
-/// [`LinearEqualityConstraints`] / [`BoxConstraints`], and there are no
+/// it is *not* a supertrait of [`LinearInequalityConstraints`]/
+/// [`LinearEqualityConstraints`]/[`BoxConstraints`], and there are no
 /// blanket impls bridging from them. A problem that wants LINCOA implements
-/// `LinearConstraints` directly. This is deliberate — a blanket
+/// `LinearConstraints` directly. This is deliberate: a blanket
 /// `impl<P: LinearInequalityConstraints> LinearConstraints for P` could only
 /// forward the inequality block, silently dropping any box/equality data the
 /// problem also carries, and would block a manual impl by coherence. Keeping
@@ -297,11 +297,11 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 ///
 /// # Shapes
 ///
-/// The iterate lives in `ℝⁿ`. [`lower`](Self::lower) / [`upper`](Self::upper)
+/// The iterate lives in `ℝⁿ`. [`lower`](Self::lower)/[`upper`](Self::upper)
 /// share the parameter type and length `n`; non-finite entries mean that
 /// coordinate is unbounded on that side. Each linear block returns its matrix
 /// paired with its right-hand side `b ∈ ℝᵐ` (one entry per row), where `m` is
-/// that block's own row count — `m` need not match `n` or the other block's
+/// that block's own row count; `m` need not match `n` or the other block's
 /// row count. The matrix and its `b` are returned **together** as a tuple so
 /// they cannot fall out of sync.
 ///
@@ -311,7 +311,7 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 /// bounds; the consumer adds what it needs. LINCOA reads each constraint
 /// normal as `Aᵀ eⱼ`, so it requires `Matrix: MatTransposeVec<Param>` (never a
 /// linear solve), which every backend's matrix type provides (`DenseMatrix`
-/// for `Vec<f64>`, `Array2`, `DMatrix`, `Mat`) — so LINCOA works on all four.
+/// for `Vec<f64>`, `Array2`, `DMatrix`, `Mat`), so LINCOA works on all four.
 ///
 /// # Examples
 ///
@@ -341,7 +341,7 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 /// assert!(p.inequalities().is_none());
 /// ```
 pub trait LinearConstraints: CostFunction {
-    /// The constraint-matrix type for the equality / inequality blocks.
+    /// The constraint-matrix type for the equality/inequality blocks.
     /// LINCOA bounds it on
     /// [`MatTransposeVec<Param>`](crate::core::math::MatTransposeVec) (each
     /// constraint normal is `Aᵀ eⱼ`); never a linear solve.

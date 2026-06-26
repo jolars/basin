@@ -183,7 +183,7 @@ impl<F: Scalar> GeneralRankOneUpdate<Array1<F>, F> for Array2<F> {
             v.len()
         );
         // self[i, j] ← self[i, j] + α · u[i] · v[j]. Explicit double-loop
-        // matches the `DenseMatrix` pattern; ndarray's `outer` / broadcasting
+        // matches the `DenseMatrix` pattern; ndarray's `outer`/broadcasting
         // forms would allocate.
         for i in 0..self.nrows() {
             let au = alpha * u[i];
@@ -212,9 +212,9 @@ impl<F: Scalar> RankOneUpdate<Array1<F>, F> for Array2<F> {
             self.ncols(),
             v.len()
         );
-        // self[i, j] ← self[i, j] + α · v[i] · v[j] — the symmetric `u == v`
+        // self[i, j] ← self[i, j] + α · v[i] · v[j]—the symmetric `u == v`
         // case of `general_rank_one_update`. Explicit double-loop matches the
-        // `DenseMatrix` pattern; ndarray's `outer` / broadcasting forms would
+        // `DenseMatrix` pattern; ndarray's `outer`/broadcasting forms would
         // allocate.
         let n = self.nrows();
         for i in 0..n {
@@ -239,7 +239,7 @@ impl<F: Scalar> SymmetricEigen<Array1<F>> for Array2<F> {
         );
         let n = self.nrows();
         // `jacobi_eigen` takes a row-major `&[F]`. `as_standard_layout`
-        // returns a `CowArray` that is contiguous in row-major (C) order —
+        // returns a `CowArray` that is contiguous in row-major (C) order—
         // borrowing when `self` is already standard, otherwise cloning.
         let standard = self.as_standard_layout();
         let slice = standard
@@ -248,7 +248,7 @@ impl<F: Scalar> SymmetricEigen<Array1<F>> for Array2<F> {
         let (eigenvalues, eigenvectors) =
             super::dense_eig::jacobi_eigen(slice, n).ok_or(SymmetricEigenError::Failed)?;
         // `jacobi_eigen` returns the eigenvectors row-major with column `k`
-        // the eigenvector for `eigenvalues[k]` — exactly what
+        // the eigenvector for `eigenvalues[k]`—exactly what
         // `Array2::from_shape_vec` with the default C-order produces.
         let b =
             Array2::from_shape_vec((n, n), eigenvectors).expect("jacobi_eigen returns n*n entries");
@@ -332,8 +332,8 @@ impl<F: Scalar> LinearSolveSpd<Array1<F>> for Array2<F> {
         );
         let n = self.nrows();
         // `cholesky_solve_spd` takes a row-major `&[F]`. `as_standard_layout`
-        // returns a contiguous C-order view — borrowing when `self` is already
-        // standard, otherwise cloning — exactly like the `SymmetricEigen` impl.
+        // returns a contiguous C-order view—borrowing when `self` is already
+        // standard, otherwise cloning—exactly like the `SymmetricEigen` impl.
         let standard = self.as_standard_layout();
         let slice = standard
             .as_slice()

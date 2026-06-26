@@ -9,8 +9,8 @@ use crate::core::state::{CountsMirror, State};
 /// cost, and cost-evaluation counters. `Param` and `Float` are the same
 /// scalar `F`.
 ///
-/// This is the leanest single-iterate state — only cost evaluations, no
-/// gradient and no residual / Jacobian. It deliberately does **not** impl
+/// This is the leanest single-iterate state: only cost evaluations, no
+/// gradient and no residual/Jacobian. It deliberately does **not** impl
 /// [`GradientState`](crate::core::state::GradientState): a 1D minimizer has no
 /// gradient to populate, so attaching
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance) is a

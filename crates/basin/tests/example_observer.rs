@@ -20,7 +20,7 @@ use basin::{
     GradientTolerance, Observe, ObserverMode, State, TerminationReason,
 };
 
-/// f(x) = ½ ‖x‖² — convex quadratic, min at origin, gradient = x. Cheap
+/// f(x) = ½ ‖x‖²: convex quadratic, min at origin, gradient = x. Cheap
 /// to optimize, so the example stays focused on the observer mechanics
 /// rather than solver tuning.
 struct Quadratic;
@@ -44,14 +44,14 @@ impl Gradient for Quadratic {
 }
 
 // -----------------------------------------------------------------
-// Observer 1 — trajectory recorder.
+// Observer 1: trajectory recorder.
 //
 // Stores a `Vec` of `(iter, cost, gradient_norm)` records, owned via
 // `Rc<RefCell<_>>` so the test body can read it out *after* the run
 // hands ownership of the observer to the executor.
 //
 // The trait bound `S: GradientState` is what couples this observer to
-// the gradient family — handing it to a derivative-free solver is a
+// the gradient family; handing it to a derivative-free solver is a
 // compile error, not a runtime no-op. That's tenet 3 in action.
 // -----------------------------------------------------------------
 struct TrajectoryRecorder {
@@ -80,16 +80,16 @@ where
         ));
     }
 
-    // observe_final left as the default no-op — the trajectory is
+    // observe_final left as the default no-op; the trajectory is
     // already complete after the last observe_iter call.
 }
 
 // -----------------------------------------------------------------
-// Observer 2 — progress logger.
+// Observer 2: progress logger.
 //
-// Plain `&dyn State` is enough to read iter / cost, so this observer
+// Plain `&dyn State` is enough to read iter and cost, so this observer
 // binds on the minimum shape and works with any solver. Only `Every(N)`
-// gates iter callbacks; `observe_init` / `observe_final` always fire,
+// gates iter callbacks; `observe_init` and `observe_final` always fire,
 // so the user gets a banner at the start and a summary at the end
 // regardless of mode.
 // -----------------------------------------------------------------

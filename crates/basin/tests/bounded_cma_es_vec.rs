@@ -2,7 +2,7 @@
 //!
 //! Mirrors the box-constrained subset of `tests/bounded_cma_es_nalgebra.rs`,
 //! confirming the generic `Solver` impl runs on the hand-rolled `DenseMatrix`
-//! covariance — including the extra `MatDiagonal` (diagonal extraction) the
+//! covariance, including the extra `MatDiagonal` (diagonal extraction) the
 //! adaptive boundary penalty needs.
 
 use basin::problems::BoothBoxed;

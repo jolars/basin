@@ -22,8 +22,8 @@ use super::{
 };
 
 // The vector-tier ops used here (`Col::iter`, `Col::from_fn`, indexing, the
-// `faer::zip!` / `faer::unzip!` macros) don't require `faer_traits::ComplexField`
-// — only the linalg-tier kernels (`Col::zeros`, `matmul`, factorizations) do.
+// `faer::zip!`/`faer::unzip!` macros) don't require `faer_traits::ComplexField`,
+// only the linalg-tier kernels (`Col::zeros`, `matmul`, factorizations) do.
 // So `F: Scalar` is the only bound needed at these impl sites.
 
 impl<F: Scalar> ScaledAdd<F> for Col<F> {
@@ -252,8 +252,8 @@ impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
 }
 
 // ----------------------------------------------------------------------
-// linalg tier — dense ops on Mat<f64> with V = Col<f64>.
-// faer 0.24 has no `*` operator on Mat/Col — go through `matmul` directly.
+// linalg tier: dense ops on Mat<f64> with V = Col<f64>.
+// faer 0.24 has no `*` operator on Mat/Col, so go through `matmul` directly.
 // ----------------------------------------------------------------------
 
 impl<F> MatVec<Col<F>> for Mat<F>

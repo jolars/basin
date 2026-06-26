@@ -7,9 +7,9 @@ use basin::{
 use faer::{Col, Mat};
 
 /// Same seed → same trajectory, on the faer backend. Reproducibility
-/// across faer's `Col<f64>` / `Mat<f64>` types is independent of the
+/// across faer's `Col<f64>` and `Mat<f64>` types is independent of the
 /// nalgebra trajectory (different eigendecomposition routine, possibly
-/// different eigenvector ordering) — same-backend reproducibility is
+/// different eigenvector ordering)—same-backend reproducibility is
 /// the load-bearing contract.
 #[test]
 fn same_seed_yields_identical_trajectory() {
@@ -106,7 +106,7 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 }
 
 /// `with_stds(ones)` reproduces the isotropic default bit-for-bit on the
-/// faer backend (the identity matvec / unit component-mul are exact, so
+/// faer backend (the identity matvec and unit component-mul are exact, so
 /// the `m + σ B (D ⊙ z)` path equals `m + σ z`).
 #[test]
 fn with_stds_ones_matches_default() {

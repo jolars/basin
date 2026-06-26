@@ -30,7 +30,7 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
 
 #[test]
 fn gauss_newton_single_step_matches_normal_equation_solution() {
-    // Mirrors the nalgebra single-step verification — see that file for the
+    // Mirrors the nalgebra single-step verification; see that file for the
     // hand-computed derivation of x_new = (1.0, −3.84).
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
@@ -69,7 +69,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
 
 #[test]
 fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
-    // See nalgebra suite for the rationale — at x = (1, 2, 1, 1) Powell's
+    // See nalgebra suite for the rationale: at x = (1, 2, 1, 1) Powell's
     // J has rank 2 < 4 so J^T J is singular and Cholesky fails. Pure GN
     // returns SolverFailed; LM's damping in S4 will recover.
     let problem = PowellSingular::<Col<f64>>::new();

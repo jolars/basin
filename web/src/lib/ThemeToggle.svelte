@@ -5,7 +5,7 @@
 
     // Single-button toggle: the icon shows the *current* effective theme
     // and clicking flips to the explicit opposite. There's no "auto"
-    // button — `auto` (follow the OS) is the default for first-time
+    // button: `auto` (follow the OS) is the default for first-time
     // visitors and stays in effect until the first click overrides it.
     //
     // Icon visibility is driven by the `dark:` variant (i.e. the `.dark`

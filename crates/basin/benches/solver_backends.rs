@@ -2,15 +2,15 @@
 //! only the linear-algebra backend, isolating the cost of the LA layer.
 //!
 //! A *curated* set of (solver, problem) cases chosen so backend coverage
-//! *narrows* as the solver's linear-algebra needs grow — and for different
+//! *narrows* as the solver's linear-algebra needs grow, and for different
 //! reasons. Every case scales in the problem size `n`, so each renders as a
 //! time-vs-`n` curve, one line per backend. Each group is named
 //! `{solver}_{problem}_n{N}` with one `bench_function` per backend it supports:
 //!
 //! | solver        | problem          | backends         | why a backend is absent  |
 //! |---------------|------------------|------------------|--------------------------|
-//! | gradient desc | Rosenbrock       | vec/nalg/nd/faer | vector tier — all four   |
-//! | Nelder–Mead   | Ackley           | vec/nalg/nd/faer | vector tier — all four   |
+//! | gradient desc | Rosenbrock       | vec/nalg/nd/faer | vector tier, all four    |
+//! | Nelder–Mead   | Ackley           | vec/nalg/nd/faer | vector tier, all four    |
 //! | L-Bfgs        | Styblinski–Tang  | vec/nalg/nd/faer | compact form, all four   |
 //! | Bfgs          | Levy             | vec/nalg/faer    | ndarray lacks the dense  |
 //! |               |                  |                  | rank-1 update + identity |
@@ -20,7 +20,7 @@
 //! | Gauss–Newton  | sparse least-sq. | nalgebra/faer    | sparse matrices          |
 //!
 //! The least-squares cases use a scalable sparse `SparseLeastSquares` fixture
-//! (the dense residual problems — Rosenbrock, Powell, Booth — are all fixed
+//! (the dense residual problems Rosenbrock, Powell, and Booth are all fixed
 //! size, so they can't drive an `n`-scaling chart).
 //!
 //! A *fixed* iteration budget with no tolerance criterion (`MAX_ITERS`) means
@@ -50,7 +50,7 @@ use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::{CooMatrix, CscMatrix};
 use ndarray::Array1;
 
-/// Fixed budget, no early stop — identical work across backends (a cap for the
+/// Fixed budget, no early stop: identical work across backends (a cap for the
 /// solvers that converge sooner; see the module docs).
 const MAX_ITERS: u64 = 200;
 
@@ -139,7 +139,7 @@ macro_rules! backends_all4 {
 /// block stacked on `n−1` adjacent-pair coupling rows (`m = 2n−1` residuals,
 /// `3n−2` nonzeros). With `b = A·x*` for `x*ᵢ = i+1` the minimum is at `x*`
 /// with zero residual, and the identity block keeps `A` full column rank so
-/// `JᵀJ` is SPD — Gauss-Newton and LM both converge.
+/// `JᵀJ` is SPD, so Gauss-Newton and LM both converge.
 fn sparse_pattern(n: usize) -> (Vec<(usize, usize, f64)>, Vec<f64>) {
     let xstar: Vec<f64> = (0..n).map(|i| (i + 1) as f64).collect();
     let mut entries = Vec::with_capacity(3 * n - 2);
@@ -183,7 +183,7 @@ fn sparse_lsq_faer(n: usize) -> (FaerSparseLsq, Col<f64>) {
     (problem, Col::zeros(n))
 }
 
-/// Gradient descent (More-Thuente line search) on Rosenbrock — all four
+/// Gradient descent (More-Thuente line search) on Rosenbrock, all four
 /// backends, vector tier only.
 fn bench_gd(c: &mut Criterion) {
     for n in DIMS {
@@ -200,7 +200,7 @@ fn bench_gd(c: &mut Criterion) {
     }
 }
 
-/// Nelder–Mead (standard simplex) on multimodal Ackley — all four backends,
+/// Nelder–Mead (standard simplex) on multimodal Ackley, all four backends,
 /// vector tier only, derivative-free.
 fn bench_nm(c: &mut Criterion) {
     for n in DIMS {
@@ -217,7 +217,7 @@ fn bench_nm(c: &mut Criterion) {
     }
 }
 
-/// Unconstrained L-Bfgs on multimodal Styblinski–Tang — all four backends,
+/// Unconstrained L-Bfgs on multimodal Styblinski–Tang, all four backends,
 /// compact form (no dense matrix).
 fn bench_lbfgs(c: &mut Criterion) {
     for n in DIMS {
@@ -234,10 +234,10 @@ fn bench_lbfgs(c: &mut Criterion) {
     }
 }
 
-/// Bfgs on multimodal Levy — dense O(n²) rank-2 inverse-Hessian update. No
+/// Bfgs on multimodal Levy: dense O(n²) rank-2 inverse-Hessian update. No
 /// ndarray: `Array2` implements neither `GeneralRankOneUpdate` nor
 /// `MatrixIdentity`, so that pairing is a compile error. The dense matrix type
-/// pairs with each vector backend (`DenseMatrix` / `DMatrix` / `Mat`).
+/// pairs with each vector backend (`DenseMatrix`/`DMatrix`/`Mat`).
 fn bench_bfgs(c: &mut Criterion) {
     for n in DIMS {
         let mut g = c.benchmark_group(format!("bfgs_levy_n{n}"));
@@ -270,9 +270,9 @@ fn bench_bfgs(c: &mut Criterion) {
     }
 }
 
-/// CMA-ES on multimodal Rastrigin — derivative-free, population-based, with a
+/// CMA-ES on multimodal Rastrigin: derivative-free, population-based, with a
 /// per-generation symmetric eigendecomposition. No ndarray: `Array2` lacks
-/// `SymmetricEigen` / `RankOneUpdate`. `Vec<f64>` works via the hand-rolled
+/// `SymmetricEigen`/`RankOneUpdate`. `Vec<f64>` works via the hand-rolled
 /// cyclic-Jacobi eigensolver. A fixed `seed` makes the sampling identical
 /// across backends, so the comparison is pure per-iteration backend cost.
 fn bench_cmaes(c: &mut Criterion) {
@@ -280,7 +280,7 @@ fn bench_cmaes(c: &mut Criterion) {
         let mut g = c.benchmark_group(format!("cmaes_rastrigin_n{n}"));
         // In-domain start away from the global optimum at the origin.
         let m0 = vec![3.0; n];
-        // The mean / σ live on `CmaEsState`; the state builder seeds it from the
+        // The mean and σ live on `CmaEsState`; the state builder seeds it from the
         // per-batch start vector and the solver derives λ internally.
 
         contestant!(
@@ -315,7 +315,7 @@ fn bench_cmaes(c: &mut Criterion) {
     }
 }
 
-/// Levenberg–Marquardt on a scalable sparse least-squares problem — damped
+/// Levenberg–Marquardt on a scalable sparse least-squares problem: damped
 /// normal equations with a sparse `JᵀJ` and sparse Cholesky. Only nalgebra and
 /// faer carry sparse matrices, so Vec/ndarray are out by construction. The
 /// fixture is rebuilt in `iter_batched` setup, off the timed path.
@@ -352,7 +352,7 @@ fn bench_lm(c: &mut Criterion) {
     }
 }
 
-/// Gauss–Newton on the same scalable sparse least-squares problem — undamped,
+/// Gauss–Newton on the same scalable sparse least-squares problem: undamped,
 /// but the design is full column rank and zero-residual so `JᵀJ` stays SPD and
 /// the solver converges. nalgebra + faer only (sparse matrices).
 fn bench_gn(c: &mut Criterion) {
@@ -390,7 +390,7 @@ fn bench_gn(c: &mut Criterion) {
 
 /// Trimmed criterion budget: 30 samples × 2 s measurement (default is 100 × 5 s)
 /// with 1 s warm-up (default 3 s). Cuts per-bench overhead by ~3× without
-/// meaningfully widening the mean's confidence interval — the chart consumes
+/// meaningfully widening the mean's confidence interval; the chart consumes
 /// the mean only, and the 5-dim × {2..4}-backend grid (≈110 contestants)
 /// otherwise pushes total wall-clock past 30 min on a 12-core desktop.
 fn bench_config() -> Criterion {

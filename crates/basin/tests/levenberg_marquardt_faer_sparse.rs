@@ -58,7 +58,7 @@ fn levenberg_marquardt_converges_on_sparse_linear_regression() {
 
 #[test]
 fn levenberg_marquardt_handles_sparse_diagonal_damping() {
-    // Exercises the faer-sparse Marquardt-damping path end-to-end —
+    // Exercises the faer-sparse Marquardt-damping path end-to-end,
     // verifies the col_ptr/row_idx diagonal extraction (`MatDiagonal`)
     // and the `μ·D` `add_diagonal_vector_in_place` value mutation
     // compose correctly with the sparse Cholesky solve.

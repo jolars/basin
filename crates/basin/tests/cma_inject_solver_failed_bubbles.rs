@@ -4,7 +4,7 @@
 //!
 //! Uses the `AlwaysFails` harness (sibling of the one in
 //! `tests/inner_executor.rs`) wrapped in [`ClosureInner`] for the
-//! seeder closure — `AlwaysFails` is a one-off fixture that doesn't
+//! seeder closure; `AlwaysFails` is a one-off fixture that doesn't
 //! have a dedicated [`MemeticInner`] impl. This is the S11-era
 //! deferred test promoted to a real fixture (S11 hardwired NelderMead
 //! and NelderMead never returns `SolverFailed`).

@@ -3,7 +3,7 @@
 // blanket-allowed here.
 #![allow(clippy::needless_range_loop)]
 
-//! LINCOA (Powell 2015) — linearly-constrained model-based derivative-free
+//! LINCOA (Powell 2015)—linearly-constrained model-based derivative-free
 //! optimization.
 //!
 //! [`Lincoa`] reuses the shared Powell quadratic-model core (the crate-internal
@@ -63,9 +63,9 @@ use init::fold_constraints;
 /// LINCOA (Powell 2015): linearly-constrained model-based derivative-free
 /// trust-region optimization.
 ///
-/// LINCOA minimizes a smooth objective subject to linear constraints — box
+/// LINCOA minimizes a smooth objective subject to linear constraints—box
 /// bounds, linear equalities, and linear inequalities, all reduced internally to
-/// `A x ≤ b` — using only objective values, no derivatives. It maintains the same
+/// `A x ≤ b`—using only objective values, no derivatives. It maintains the same
 /// least-Frobenius-norm quadratic surrogate as [`Newuoa`](crate::Newuoa) /
 /// [`Bobyqa`](crate::Bobyqa), and keeps every trust-region iterate feasible via a
 /// projected truncated-CG subproblem with an active-set QR.
@@ -79,7 +79,7 @@ use init::fold_constraints;
 /// use basin::core::constraint::LinearConstraints;
 ///
 /// // min ‖x − (2, 2)‖²  s.t.  x0 + x1 ≤ 2   (optimum: the projection (1, 1)).
-/// // The pure-Rust `DenseMatrix` / `Vec<f64>` carriers need no backend feature.
+/// // The pure-Rust `DenseMatrix`/`Vec<f64>` carriers need no backend feature.
 /// struct Proj { a: DenseMatrix<f64>, b: Vec<f64> }
 /// impl CostFunction for Proj {
 ///     type Param = Vec<f64>;
@@ -109,11 +109,11 @@ use init::fold_constraints;
 ///
 /// # Configuration
 ///
-/// - [`with_rho_beg`](Self::with_rho_beg) — initial trust-region radius `ρ_beg`
+/// - [`with_rho_beg`](Self::with_rho_beg): initial trust-region radius `ρ_beg`
 ///   (a reasonable initial change to the variables; default `1.0`).
-/// - [`with_rho_end`](Self::with_rho_end) — final radius `ρ_end`, the required
+/// - [`with_rho_end`](Self::with_rho_end): final radius `ρ_end`, the required
 ///   accuracy (default `1e-6`); must satisfy `ρ_beg > ρ_end > 0`.
-/// - [`with_npt`](Self::with_npt) — interpolation-set size `npt`, in
+/// - [`with_npt`](Self::with_npt): interpolation-set size `npt`, in
 ///   `[n+2, ½(n+1)(n+2)]` (default `2n+1`).
 ///
 /// # Constraints
@@ -122,8 +122,8 @@ use init::fold_constraints;
 /// [`LinearConstraints`]: a problem
 /// exposes any combination of box bounds, linear equalities, and linear
 /// inequalities (each accessor is optional). All present blocks are folded into
-/// one unit-normalized `A x ≤ b` system — bounds as `±eᵢ` rows, an equality
-/// `aᵀx = β` as the pair `aᵀx ≤ β`, `−aᵀx ≤ −β` — and every iterate is kept
+/// one unit-normalized `A x ≤ b` system—bounds as `±eᵢ` rows, an equality
+/// `aᵀx = β` as the pair `aᵀx ≤ β`, `−aᵀx ≤ −β`—and every iterate is kept
 /// feasible by the active-set projection. The start point should be feasible;
 /// if not, LINCOA relaxes `b` to make it feasible (Powell's behavior).
 ///
@@ -139,7 +139,7 @@ use init::fold_constraints;
 /// Backend-generic: the parameter vector needs only [`Clone`], [`VectorLen`], and
 /// indexing, and the constraint matrix is read via
 /// [`MatTransposeVec`] (`Aᵀ eⱼ`), which every
-/// backend's matrix type implements — so `Vec<f64>`, nalgebra, ndarray, and faer
+/// backend's matrix type implements—so `Vec<f64>`, nalgebra, ndarray, and faer
 /// all work. wasm-clean (the model algebra is pure-Rust `Vec<f64>` scratch).
 ///
 /// # References

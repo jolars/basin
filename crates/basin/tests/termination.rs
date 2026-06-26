@@ -7,7 +7,7 @@ use basin::{
 };
 use std::time::Duration;
 
-/// f(x) = ½ ‖x‖² — convex quadratic with minimum at origin, gradient = x.
+/// f(x) = ½ ‖x‖²: convex quadratic with minimum at origin, gradient = x.
 struct Quadratic;
 
 impl CostFunction for Quadratic {
@@ -277,7 +277,7 @@ fn target_cost_fires_when_cost_drops_to_target() {
 
 #[test]
 fn target_cost_does_not_fire_when_target_unreachable() {
-    // Target below the global min (f ≥ 0) — should never fire, MaxIter
+    // Target below the global min (f ≥ 0); should never fire, MaxIter
     // wins.
     let result = Executor::new(
         Quadratic,
@@ -315,7 +315,7 @@ fn no_improvement_fires_after_patience_stalled_iters() {
 
 #[test]
 fn no_improvement_does_not_fire_under_monotone_decrease() {
-    // Quadratic with GD(α=0.5) gives f_k = 0.25^k — strictly
+    // Quadratic with GD(α=0.5) gives f_k = 0.25^k, strictly
     // decreasing. With tol = 0.0 every iteration is "an improvement",
     // so the patience counter never advances and MaxIter wins.
     let result = Executor::new(
@@ -339,7 +339,7 @@ fn no_improvement_resets_counter_on_real_improvement() {
     // drops count as improvements (resetting `stalled` to 0 each
     // time), then drops 3+ all fall below tol. So stalled increments
     // from iter 3 onward; with patience = 3 the criterion fires at
-    // iter 5 — not iter 3, which is what it would do without the
+    // iter 5, not iter 3, which is what it would do without the
     // reset-on-improvement behavior.
     let result = Executor::new(
         Quadratic,

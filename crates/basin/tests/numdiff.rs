@@ -12,7 +12,7 @@ use basin::{
 fn gradient_descent_on_finite_diff_sphere_converges() {
     // Sphere exposes only `cost`; `FiniteDiff` supplies the gradient by
     // central differences. Gradient descent should still march to the
-    // origin — the FD gradient is accurate enough to drive a first-order
+    // origin; the FD gradient is accurate enough to drive a first-order
     // solver and routes through the backend-generic `V: ScaledAdd + …`
     // bounds.
     let problem = FiniteDiff::new(Sphere::<Vec<f64>>::new());

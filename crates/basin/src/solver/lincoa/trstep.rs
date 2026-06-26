@@ -14,7 +14,7 @@
 //! truncated at the trust boundary or when a new constraint becomes active. It is
 //! the linearly-constrained analogue of the shared
 //! [`TrustRegionSubproblem`](crate::solver::powell::TrustRegionSubproblem)
-//! strategies — TRSAPP (NEWUOA) and TRSBOX (BOBYQA) are the no-constraint and
+//! strategies—TRSAPP (NEWUOA) and TRSBOX (BOBYQA) are the no-constraint and
 //! box-only special cases.
 //!
 //! Unlike NEWUOA/BOBYQA, LINCOA does **not** implement the `TrustRegionSubproblem`
@@ -68,11 +68,11 @@ fn max3<F: Scalar>(a: F, b: F, c: F) -> F {
 ///
 /// `amat` is the `n × m` column-major matrix of unit constraint normals and
 /// `rescon` the length-`m` residuals (`b − A x_opt`). Returns the step `d = s`
-/// (relative to `x_opt`), `crvmin = 0` (LINCOA tracks no interior curvature —
+/// (relative to `x_opt`), `crvmin = 0` (LINCOA tracks no interior curvature—
 /// the driver's accurate-model test does not use it), and the predicted
 /// reduction `Q(x_opt) − Q(x_opt + s) ≥ 0`, paired with `ngetact`, the number of
 /// [`getact`] invocations (PRIMA's `ngetact`; the driver's short-step test uses
-/// it — `ngetact ≥ 2` means the active set changed during the CG).
+/// it—`ngetact ≥ 2` means the active set changed during the CG).
 pub(crate) fn trstep<F: Scalar>(
     model: &QuadraticModel<F>,
     delta: F,

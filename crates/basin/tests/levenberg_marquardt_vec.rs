@@ -45,7 +45,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     // point. At x = (1, 2, 1, 1) Powell's quadratic-residual rows r₂, r₃
     // have vanishing Jacobian rows (J has rank 2 < 4), so JᵀJ is singular
     // and pure GN fails Cholesky. LM's damping makes (JᵀJ + μI) SPD by
-    // construction, so it converges cleanly — the canonical demonstration
+    // construction, so it converges cleanly, the canonical demonstration
     // that LM strictly subsumes GN, here on the pure-Rust Cholesky path.
     let problem = PowellSingular::<Vec<f64>>::new();
     let initial = vec![1.0, 2.0, 1.0, 1.0];

@@ -4,8 +4,8 @@
 //! but it has no external linear-algebra crate behind it. The least-squares
 //! solvers form the normal equations `(JᵀJ + μD) x = −g` and solve them by
 //! Cholesky every iteration (the [`LinearSolveSpd`](super::LinearSolveSpd) op),
-//! so to run Gauss-Newton / Levenberg-Marquardt on the default backend we need
-//! an honest, pure-Rust SPD solve — one with no BLAS/LAPACK dependency, so it
+//! so to run Gauss-Newton/Levenberg-Marquardt on the default backend we need
+//! an honest, pure-Rust SPD solve: one with no BLAS/LAPACK dependency, so it
 //! stays `wasm`-clean.
 //!
 //! This module implements the classic **Cholesky–Banachiewicz** factorization
@@ -15,7 +15,7 @@
 //! triangular solves, with no pivoting (SPD matrices need none). It is the
 //! solve-layer sibling of the cyclic Jacobi eigensolver in
 //! [`dense_eig`](super::dense_eig); like that module, `Vec<F>` is the
-//! convenience backend — callers wanting speed at large `n` reach for faer.
+//! convenience backend; callers wanting speed at large `n` reach for faer.
 
 use super::Scalar;
 
@@ -26,7 +26,7 @@ use super::Scalar;
 /// [`SymmetricEigen`](super::SymmetricEigen) lower-triangle-authoritative
 /// contract. `b` has length `n`. Returns the solution `x` of length `n`.
 ///
-/// Returns `None` when the factorization hits a non-positive pivot — the matrix
+/// Returns `None` when the factorization hits a non-positive pivot: the matrix
 /// is not positive definite (e.g. `A = JᵀJ` with rank-deficient `J`). The
 /// caller maps this to
 /// [`LinearSolveError::NotPositiveDefinite`](super::LinearSolveError::NotPositiveDefinite).
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn rejects_positive_semidefinite_singular() {
-        // Rank-1 PSD (not PD): [[1, 1], [1, 1]] — the second pivot is exactly 0.
+        // Rank-1 PSD (not PD): [[1, 1], [1, 1]]—the second pivot is exactly 0.
         let a = vec![1.0, 1.0, 1.0, 1.0];
         let b = vec![1.0, 1.0];
         assert!(cholesky_solve_spd::<f64>(&a, 2, &b).is_none());

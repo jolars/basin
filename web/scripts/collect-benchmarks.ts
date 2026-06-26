@@ -4,14 +4,14 @@
  *
  * Reads criterion's output under `target/criterion/`, keeps only the
  * `{solver}_{problem}_n*` groups produced by the `solver_backends` bench
- * (ignoring the `lm_backends` microbench groups — `lm_gram` / `lm_full_solve`
- * / … — and competitor groups), and writes the headline timings to
+ * (ignoring the `lm_backends` microbench groups—`lm_gram`/`lm_full_solve`/…—and
+ * competitor groups), and writes the headline timings to
  * `web/src/lib/data/backend-benchmarks.json`.
  *
  * Run with: `npm run collect:benchmarks` (uses tsx). Run the bench first:
  *   cargo bench --features nalgebra,ndarray,faer --bench solver_backends
  *
- * The pipeline is deliberately off CI — timings are machine-specific and
+ * The pipeline is deliberately off CI—timings are machine-specific and
  * shared runners are noisy. Refresh locally and commit the regenerated JSON.
  */
 import {
@@ -128,7 +128,7 @@ for (const estimatesPath of findEstimates(criterionDir)) {
 
     const solver = match[1] as Solver;
     const problem = match[2];
-    // Skip any group not in the curated set — robust to stale criterion dirs
+    // Skip any group not in the curated set—robust to stale criterion dirs
     // left by an earlier bench layout (e.g. a previous `nm_rosenbrock_n*`).
     if (caseIndex(solver, problem) < 0) continue;
 
@@ -155,7 +155,7 @@ for (const estimatesPath of findEstimates(criterionDir)) {
 
 if (results.length === 0) {
     console.error(
-        "✗ found criterion output but no solver_backends groups — run:\n" +
+        "✗ found criterion output but no solver_backends groups—run:\n" +
             "  cargo bench --features nalgebra,ndarray,faer --bench solver_backends",
     );
     process.exit(1);

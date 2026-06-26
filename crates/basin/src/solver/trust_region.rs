@@ -8,20 +8,20 @@
 //! the model's prediction, and grows or shrinks the radius `Δ` accordingly
 //! (Nocedal & Wright, *Numerical Optimization*, 2e, Algorithm 4.1).
 //!
-//! The trust-region *subproblem* — the constrained quadratic minimization —
+//! The trust-region *subproblem*, the constrained quadratic minimization,
 //! is solved by a pluggable strategy implementing the crate-internal
 //! `Subproblem` seam. Three ship today, mirroring the standard textbook
 //! set:
 //!
-//! - [`Steihaug`] — truncated conjugate gradient (the default). Matrix-free
+//! - [`Steihaug`]: truncated conjugate gradient (the default). Matrix-free
 //!   (needs only Hessian-vector products), handles indefinite `B` by
 //!   following a negative-curvature direction to the boundary. The
 //!   large-scale-capable workhorse; runs on every backend.
-//! - [`Dogleg`] — the Cauchy/Newton dogleg path (N&W eq. 4.16). Needs a
+//! - [`Dogleg`]: the Cauchy/Newton dogleg path (N&W eq. 4.16). Needs a
 //!   Cholesky solve for the Newton step, so it requires a backend with
 //!   [`LinearSolveSpd`](crate::core::math::LinearSolveSpd); it falls back to
 //!   the Cauchy point when `B` is not positive definite.
-//! - [`CauchyPoint`] — the steepest-descent-to-boundary closed form (N&W
+//! - [`CauchyPoint`]: the steepest-descent-to-boundary closed form (N&W
 //!   eq. 4.11–4.12). A bulletproof baseline with only linear convergence;
 //!   mostly a reference strategy.
 
@@ -48,7 +48,7 @@ pub(crate) struct Step<V, F> {
     /// for the shipped strategies. Zero only when `d = 0` (gradient already
     /// negligible), which the driver reads as convergence.
     pub(crate) predicted_reduction: F,
-    /// `true` when `‖d‖ ≈ Δ` — the constraint is active. Only then may the
+    /// `true` when `‖d‖ ≈ Δ`—the constraint is active. Only then may the
     /// driver grow the radius on a very good step (N&W Algorithm 4.1).
     pub(crate) hit_boundary: bool,
 }
@@ -58,9 +58,9 @@ pub(crate) struct Step<V, F> {
 ///
 /// Crate-internal: the shipped strategies ([`Steihaug`], [`Dogleg`],
 /// [`CauchyPoint`]) are the closed set for now. Each binds `M` (the Hessian
-/// matrix type) on only the ops it needs — [`MatVec`] for the matrix-free
+/// matrix type) on only the ops it needs—[`MatVec`] for the matrix-free
 /// strategies, plus [`LinearSolveSpd`](crate::core::math::LinearSolveSpd)
-/// for [`Dogleg`] — so a backend missing an op is a compile error for that
+/// for [`Dogleg`]—so a backend missing an op is a compile error for that
 /// strategy alone (tenet 5). Promoting this trait to public is an additive,
 /// non-breaking change if user-defined subproblem solvers are ever wanted.
 pub(crate) trait Subproblem<V, M, F> {
@@ -109,7 +109,7 @@ where
 /// the model along `−g` within the region: `τ = 1` when the curvature
 /// `gᵀBg ≤ 0` (the model decreases without bound, so go to the boundary),
 /// otherwise `τ = min(‖g‖³ / (Δ gᵀBg), 1)`. Robust but only linearly
-/// convergent — it ignores all curvature off the gradient direction. Useful
+/// convergent—it ignores all curvature off the gradient direction. Useful
 /// as a baseline, and as [`Dogleg`]'s fallback when the Hessian is not
 /// positive definite.
 #[derive(Debug, Clone, Copy, Default)]
@@ -166,14 +166,14 @@ where
 /// when `ρ` is poor (`< ¼`), grows when `ρ` is excellent (`> ¾`) and the
 /// step is constrained by the boundary, and the step is accepted when
 /// `ρ > η`. A rejected step shrinks `Δ` and re-solves the subproblem with
-/// the *same* gradient and Hessian — no extra derivative evaluations — up to
+/// the *same* gradient and Hessian (no extra derivative evaluations) up to
 /// [`with_max_inner_attempts`](Self::with_max_inner_attempts) times per
 /// outer iteration (the same reuse pattern as
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)).
 ///
 /// The subproblem strategy defaults to [`Steihaug`] (truncated CG); choose
 /// another with [`with_subproblem`](Self::with_subproblem). The radius `Δ`
-/// is solver-internal working state — there are no framework termination
+/// is solver-internal working state—there are no framework termination
 /// knobs for it; pair the solver with
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance) /
 /// [`MaxIter`](crate::core::termination::MaxIter) like any first-order
@@ -394,7 +394,7 @@ where
         for _ in 0..self.max_inner {
             let step = self.subproblem.solve(&g, &b, self.radius);
 
-            // Predicted reduction ≤ 0 means the model cannot decrease — for
+            // Predicted reduction ≤ 0 means the model cannot decrease—for
             // the shipped strategies this only happens at a stationary point
             // (g ≈ 0). Report a clean convergence stop.
             if step.predicted_reduction <= F::zero() {

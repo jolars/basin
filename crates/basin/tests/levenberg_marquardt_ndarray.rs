@@ -1,11 +1,11 @@
 #![cfg(feature = "ndarray")]
 
-//! Levenberg-Marquardt over the `ndarray` backend (`Array1<f64>` /
+//! Levenberg-Marquardt over the `ndarray` backend (`Array1<f64>`/
 //! `Array2<f64>`). Mirrors `tests/levenberg_marquardt_nalgebra.rs`: `Array2`'s
 //! `GramMatrix`, `AddDiagonalVectorInPlace`, and `LinearSolveSpd` route through
 //! the same pure-Rust Cholesky as the `DenseMatrix` backend, so the Marquardt
 //! damping dynamics, rank-deficiency recovery, and MINPACK-style termination
-//! are backend-independent — the assertions match the nalgebra mirror exactly.
+//! are backend-independent; the assertions match the nalgebra mirror exactly.
 
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
 use basin::{Executor, LevenbergMarquardt, NllsState, RelativeCostTolerance, TerminationReason};
@@ -16,7 +16,7 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     // LM should converge on Rosenbrock-as-residuals from the classical
     // start. Unlike GN's exact two-step convergence (the linear model
     // is exact along y at fixed x), LM takes a few extra iterations
-    // because the damping starts non-zero — but it still reaches the
+    // because the damping starts non-zero, but it still reaches the
     // optimum cleanly and emits SolverConverged.
     let problem = RosenbrockResiduals::<Array1<f64>>::new();
     let initial = Array1::from_vec(vec![-1.2, 1.0]);
@@ -46,8 +46,8 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     // point. At x = (1, 2, 1, 1) Powell's quadratic-residual rows
     // r₂, r₃ have vanishing Jacobian rows (J has rank 2 < 4), so JᵀJ
     // is singular and pure GN fails Cholesky. LM's damping makes
-    // (JᵀJ + μI) SPD by construction, so it should converge cleanly
-    // — the canonical demonstration that LM strictly subsumes GN.
+    // (JᵀJ + μI) SPD by construction, so it should converge cleanly,
+    // the canonical demonstration that LM strictly subsumes GN.
     let problem = PowellSingular::<Array1<f64>>::new();
     let initial = Array1::from_vec(vec![1.0, 2.0, 1.0, 1.0]);
 
@@ -110,12 +110,12 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
 fn levenberg_marquardt_converges_fast_on_poorly_scaled_exponential_fit() {
     // Regression guard for Marquardt diagonal damping (issue #6). The
     // exponential model ŷ = a·exp(b·t) has wildly disparate Jacobian
-    // column scales — ∂r/∂b ≈ a·t·exp(b·t) is ~10⁵× larger than
+    // column scales: ∂r/∂b ≈ a·t·exp(b·t) is ~10⁵× larger than
     // ∂r/∂a = exp(b·t) at amplitude a = 1e5. Marquardt scaling
     // (μ·diag(JᵀJ)) is invariant to that and reaches the global minimum
     // (1e5, −1) in a handful of iterations; the old isotropic μI damping
     // converges to the *same* point but needs ~27 iterations (≈4× the
-    // count — the wall-time penalty the issue reported). The tight iter
+    // count, the wall-time penalty the issue reported). The tight iter
     // bound below fails under isotropic damping, so it locks the fix in.
     let problem = ExponentialFit::<Array1<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
     let initial = Array1::from_vec(vec![5.0e4, -0.3]);
@@ -213,8 +213,8 @@ fn levenberg_marquardt_converges_via_ftol() {
     // The MINPACK `ftol` test (issue #8): converge when both the actual
     // and the *predicted* per-iteration reduction in ½‖r‖² are tiny
     // relative to the cost. Disable both gradient tests so only `ftol`
-    // (or MaxIter) can stop the run — SolverConverged then implies `ftol`
-    // fired — and confirm it lands on the global optimum of the
+    // (or MaxIter) can stop the run (SolverConverged then implies `ftol`
+    // fired), and confirm it lands on the global optimum of the
     // poorly-scaled exponential fit rather than stopping short.
     let problem = ExponentialFit::<Array1<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
     let initial = Array1::from_vec(vec![5.0e4, -0.3]);
@@ -284,8 +284,8 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
     // The point of the cosine measure: scaling the residuals by a
     // constant doesn't move the convergence point. Scaling both the
     // amplitude a and the data y by `c` multiplies every residual by `c`
-    // (the model is linear in a), so the per-column cosine is identical
-    // — the relative gtol must stop at the same iteration for both,
+    // (the model is linear in a), so the per-column cosine is identical,
+    // so the relative gtol must stop at the same iteration for both,
     // where the absolute ‖Jᵀr‖∞ would not (it scales with c²).
     let solve = |scale: f64| {
         let problem = ExponentialFit::<Array1<f64>>::sampled(1.0e3 * scale, -1.0, 10, 0.4);
@@ -317,11 +317,11 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
 #[test]
 fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     // Regression test for the Madsen-Nielsen caching contract (Alg.
-    // 3.16, line 13: J — and so A = JᵀJ, g = Jᵀr — recomputed only
+    // 3.16, line 13: J (and so A = JᵀJ, g = Jᵀr) recomputed only
     // after acceptance). At the top of each `next_iter`, LM reuses the
     // residual stashed by `init`/the previous iter, and on a rejected
-    // step reuses the cached Gram and gradient at the unchanged iterate
-    // — re-evaluating J or reforming A there is wasted work.
+    // step reuses the cached Gram and gradient at the unchanged iterate;
+    // re-evaluating J or reforming A there is wasted work.
     //
     // Disable the internal `‖Jᵀr‖_∞ ≤ tol_grad` check so termination
     // is purely by MaxIter; the early-exit path otherwise evaluates J
@@ -333,7 +333,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     //   - cost_evals = 1 (init) + K (one trial per iter)
     //   - jacobian_evals = K (init's J carries iter 1; each subsequent
     //     iter re-evaluates J because the previous accept cleared the
-    //     Gram/gradient cache — the last iter's accept clears it but no
+    //     Gram/gradient cache; the last iter's accept clears it but no
     //     follow-up iter consumes it under MaxIter exit).
     let problem = RosenbrockResiduals::<Array1<f64>>::new();
     let initial = Array1::from_vec(vec![-1.2, 1.0]);
@@ -352,7 +352,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     assert_eq!(
         result.cost_evals(),
         4,
-        "expected init (1) + one trial per iter (3) = 4 — uncached LM would also \
+        "expected init (1) + one trial per iter (3) = 4—uncached LM would also \
          re-evaluate the start-of-iter residual and produce 1 + 2·iters = 7"
     );
     assert!(

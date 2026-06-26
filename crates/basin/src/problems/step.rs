@@ -40,7 +40,7 @@ impl<P> Default for Step<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static STEP_SPEC: ProblemSpec = ProblemSpec {
     name: "Step",
     dim: Dimensionality::NDimensional { min: 1 },
@@ -66,7 +66,7 @@ pub static STEP_SPEC: ProblemSpec = ProblemSpec {
     description: "Discontinuous staircase f(x) = Σ ⌊xᵢ + 0.5⌋² (De Jong's step \
                   function). Global minimum 0 on the central cube xᵢ ∈ [−0.5, \
                   0.5). Piecewise-constant plateaus make it a target for \
-                  direct-search / derivative-free solvers and a trap for the \
+                  direct-search/derivative-free solvers and a trap for the \
                   Nelder-Mead simplex, which degenerates on a plateau.",
 };
 

@@ -4,8 +4,8 @@
 //!
 //! # Canonical iteration ordering
 //!
-//! [`Executor::run`] (and the equivalent [`Stepper`] / [`run_loop`]
-//! paths) drive the solver through this exact sequence — every
+//! [`Executor::run`] (and the equivalent [`Stepper`]/[`run_loop`]
+//! paths) drive the solver through this exact sequence—every
 //! contract elsewhere in the framework cross-links here:
 //!
 //! 1. [`Solver::init`] is called **once**, on the initial state. The
@@ -18,7 +18,7 @@
 //!       [`TerminationReason::MaxIter`].
 //!    2. Each registered [`TerminationCriterion`] is checked **in
 //!       insertion order**. The **first to return `Some(reason)` halts
-//!       the run** — later criteria do not run that iteration.
+//!       the run**—later criteria do not run that iteration.
 //!    3. The solver's own [`Solver::terminate`] hook is checked.
 //!       `Some(_)` halts the run.
 //! 3. If nothing fired, [`Solver::next_iter`] is called. It may itself
@@ -38,10 +38,10 @@ use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 
-/// Outcome of an optimisation run.
+/// Outcome of an optimization run.
 ///
 /// Owns the final solver state plus the reason the executor stopped.
-/// Delegates `param()` / `cost()` / `iter()` to the underlying state so
+/// Delegates `param()`/`cost()`/`iter()` to the underlying state so
 /// callers don't need to import `State` for the common reads.
 pub struct OptimizationResult<S> {
     /// Final solver state at termination.
@@ -71,8 +71,8 @@ impl<S: State> OptimizationResult<S> {
         self.state.cost_evals()
     }
 
-    /// Best iterate observed during the run — the lowest-cost point
-    /// the executor ever saw. For sorted-simplex / sorted-population
+    /// Best iterate observed during the run—the lowest-cost point
+    /// the executor ever saw. For sorted-simplex/sorted-population
     /// states this coincides with [`param`](Self::param); for non-
     /// monotone single-iterate runs (Brent's probes, future SA) the
     /// two diverge.
@@ -91,7 +91,7 @@ impl<S: State> OptimizationResult<S> {
     }
 
     /// Cumulative cost evaluations at the moment
-    /// [`best_param`](Self::best_param) was found — answers "how many
+    /// [`best_param`](Self::best_param) was found—answers "how many
     /// evals until the solver hit its best?".
     pub fn best_cost_evals(&self) -> u64 {
         self.state.best_cost_evals()
@@ -122,8 +122,8 @@ pub enum StepOutcome {
 ///
 /// Owns the problem, state, solver and termination criteria, runs
 /// `solver.init` exactly once on construction, and exposes
-/// [`step`](Self::step) / [`run_to_end`](Self::run_to_end) so callers can
-/// interleave their own work between iterations — recording trajectories,
+/// [`step`](Self::step)/[`run_to_end`](Self::run_to_end) so callers can
+/// interleave their own work between iterations—recording trajectories,
 /// animating from a UI, pausing on a button press, evaluating a custom
 /// budget, etc.
 ///
@@ -150,7 +150,7 @@ pub struct Stepper<P, S, So> {
     // `Option<S>` because `Solver::next_iter` consumes the state by
     // value. Take it out, hand it to the solver, put the returned state
     // back. The slot is `Some` whenever a caller can observe it (between
-    // `step` calls and at construction / drop), so `state()` and
+    // `step` calls and at construction/drop), so `state()` and
     // `into_state` can unwrap without checks.
     state: Option<S>,
     solver: So,
@@ -172,9 +172,9 @@ where
             .expect("state slot is Some between steps")
     }
 
-    /// Wrapper-side evaluation counters. These are authoritative —
+    /// Wrapper-side evaluation counters. These are authoritative—
     /// solvers can only call into the user's problem through the
-    /// wrapper, so every cost / gradient / residual / Jacobian /
+    /// wrapper, so every cost/gradient/residual/Jacobian /
     /// Hessian call is reflected here. The state mirror under
     /// [`state`](Self::state) is refreshed after every successful
     /// [`Solver::init`] /
@@ -209,8 +209,8 @@ where
     /// [`observer`](crate::core::observer) module for the lifecycle.
     ///
     /// Returns `Err` when the underlying problem returns `Err` from any
-    /// cost / gradient / residual / Jacobian / Hessian call during the
-    /// step. The stepper is *not* made sticky on `Err` — the typical
+    /// cost/gradient/residual/Jacobian/Hessian call during the
+    /// step. The stepper is *not* made sticky on `Err`—the typical
     /// downstream pattern is to surface the error and drop the stepper,
     /// but callers may inspect [`state`](Self::state) and try again.
     /// Observers do *not* fire on the `Err` path (the state has been
@@ -279,7 +279,7 @@ where
 ///
 /// The `baseline` captures the wrapper count at the start of the
 /// containing run so the state mirror always reflects *per-run* work:
-/// for [`Stepper::step`] / [`Executor::run`] it is
+/// for [`Stepper::step`]/[`Executor::run`] it is
 /// [`EvalCounts::default`] (fresh wrapper), for nested
 /// [`run_loop`] calls it is the wrapper count at run-loop entry.
 ///
@@ -325,7 +325,7 @@ where
             // invariant even on the error path; we lost `prev` to
             // `next_iter` (which took it by value), so there's nothing to
             // put back. Mid-iter hard-aborts therefore leave the slot
-            // empty and the stepper consumes itself — this is the
+            // empty and the stepper consumes itself—this is the
             // intentional shape: typed Err is terminal, the typical
             // caller bubbles it out and drops the stepper. The wrapper's
             // own counts are still authoritative on the Err path; see
@@ -352,7 +352,7 @@ where
 ///
 /// `Executor` is a thin owning wrapper over this. Composed solvers
 /// (e.g. CG inside CMA, NM inside DE) call `run_loop` directly so the
-/// inner solver shares the outer's wrapper — inner cost / gradient
+/// inner solver shares the outer's wrapper—inner cost/gradient
 /// calls bump the same [`EvalCounts`] as outer calls, so the eval
 /// aggregation contract (`CONTRIBUTING.md` "Solver composition" rule 1) is
 /// satisfied automatically for same-problem inners. For composed
@@ -363,16 +363,16 @@ where
 /// [`EvalCounts::add`] on [`Problem::counts_mut`].
 ///
 /// The inner state's [`State::cost_evals`] (mirrored via
-/// [`CountsMirror`]) reflects only *per-run* work — `run_loop` takes
+/// [`CountsMirror`]) reflects only *per-run* work—`run_loop` takes
 /// a baseline snapshot of [`Problem::counts`] at entry, and the state
 /// mirror computes the delta against that. Nested `run_loop` calls
 /// against the same wrapper therefore see clean per-call counters.
 ///
 /// Semantics match `Executor::run`: each criterion is
 /// [`reset`](crate::core::termination::TerminationCriterion::reset) at
-/// entry — so a criteria vector reused across calls (as an
+/// entry—so a criteria vector reused across calls (as an
 /// [`InnerExecutor`](crate::core::inner::InnerExecutor) does) sees fresh
-/// per-run state — then `init` is called once, then on each iteration
+/// per-run state—then `init` is called once, then on each iteration
 /// framework `criteria` are checked in insertion order before
 /// the solver's own `terminate` hook, before stepping. `max_iter` is
 /// checked against `state.iter()` and exits with `TerminationReason::MaxIter`.
@@ -476,7 +476,7 @@ where
     So: Solver<P, S>,
 {
     /// Build an executor from a problem, solver, and initial state. The
-    /// default `MaxIter` budget is 1000 — override with
+    /// default `MaxIter` budget is 1000—override with
     /// [`max_iter`](Self::max_iter).
     pub fn new(problem: P, solver: So, state: S) -> Self {
         Self {
@@ -494,7 +494,7 @@ where
     ///
     /// `Executor::from_start(problem, solver, x0)` calls
     /// [`InitialState::seed`](crate::core::inner::InitialState::seed), so the
-    /// caller never names the concrete state type — the common case reads
+    /// caller never names the concrete state type—the common case reads
     /// `Executor::from_start(problem, TrustRegion::new(), x0).run()`. The
     /// seeded state uses the solver's natural default scale (identity inverse
     /// Hessian, default simplex edge, the solver's default trust radius, …).
@@ -502,9 +502,9 @@ where
     /// Use [`new`](Self::new) directly to supply a custom initial state (a
     /// pre-built simplex, a warm-started inverse Hessian, an anisotropic
     /// CMA-ES covariance). Solvers whose natural initialization needs more
-    /// than a point — CMA-ES (step-size σ), the population GA / DE / random
+    /// than a point—CMA-ES (step-size σ), the population GA, DE, or random
     /// search (they sample the box), and the bracketing scalar solvers
-    /// (Brent, golden-section) — deliberately do not implement
+    /// (Brent, golden-section)—deliberately do not implement
     /// [`InitialState`](crate::core::inner::InitialState), so calling
     /// `from_start` with one is a compile error pointing back to
     /// [`new`](Self::new).
@@ -537,7 +537,7 @@ where
     }
 
     /// Register an [`Observe`] hook. Observers fire in registration order;
-    /// `mode` gates [`Observe::observe_iter`] only —
+    /// `mode` gates [`Observe::observe_iter`] only—
     /// [`Observe::observe_init`] and [`Observe::observe_final`] always
     /// fire. See the [`observer`](crate::core::observer) module for the
     /// lifecycle.
@@ -576,7 +576,7 @@ where
         state.reset_best();
         let mut state = solver.init(&mut problem, state)?;
         // Mirror init's work onto the state before any termination
-        // check. Baseline is zero — this is a fresh top-level wrapper.
+        // check. Baseline is zero—this is a fresh top-level wrapper.
         state.mirror(problem.counts());
         state.update_best();
         for (observer, _mode) in observers.iter_mut() {
@@ -597,7 +597,7 @@ where
     /// [`OptimizationResult`].
     ///
     /// Returns `Err` when the underlying problem returns `Err` from any
-    /// cost / gradient / residual / Jacobian / Hessian call (the
+    /// cost/gradient/residual/Jacobian/Hessian call (the
     /// `P::Error`-flavored hard-abort path; see the
     /// [`problem`](crate::core::problem) module docs).
     pub fn run(self) -> Result<OptimizationResult<S>, So::Error> {

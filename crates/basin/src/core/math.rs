@@ -3,12 +3,12 @@
 //! Two tiers per `CONTRIBUTING.md` tenet 5:
 //!
 //! - **Vector tier** (this module): small ops every backend can implement
-//!   well — [`ScaledAdd`], [`NormSquared`], [`NormInfinity`], [`Dot`],
+//!   well: [`ScaledAdd`], [`NormSquared`], [`NormInfinity`], [`Dot`],
 //!   [`NegInPlace`]. Backend-generic solvers (gradient descent,
 //!   Nelder-Mead) bound on these.
-//! - **`linalg` tier**: LA-heavy ops — [`MatVec`],
+//! - **`linalg` tier**: LA-heavy ops ([`MatVec`],
 //!   [`MatTransposeVec`], [`GramMatrix`], [`LinearSolveSpd`],
-//!   [`LinearSolveLstsq`] — that only the matrix-capable backends
+//!   [`LinearSolveLstsq`]) that only the matrix-capable backends
 //!   (nalgebra, faer; sparse counterparts in S2b) implement. LA-heavy
 //!   solvers (Gauss-Newton, LM) bound on these so other backends
 //!   produce compile-time errors instead of runtime surprises. The two
@@ -34,19 +34,19 @@
 ///
 /// The constituent bounds:
 ///
-/// - [`num_traits::Float`] — arithmetic, `epsilon`, `infinity`, `is_finite`,
+/// - [`num_traits::Float`]: arithmetic, `epsilon`, `infinity`, `is_finite`,
 ///   `sqrt`, `powf`, … plus `Copy` and `PartialOrd` transitively.
-/// - [`num_traits::FromPrimitive`] — `from_f64(...)` so tolerance defaults
+/// - [`num_traits::FromPrimitive`]: `from_f64(...)` so tolerance defaults
 ///   (`1e-4`, `1e-8`, …) can be expressed at any `F` without sprinkling
 ///   `as` casts. Use [`F::from_f64(lit).unwrap()`](num_traits::FromPrimitive::from_f64)
 ///   at the construction site of any literal that doesn't have a Float
 ///   constructor of its own (e.g. `F::epsilon()` is fine as-is).
-/// - [`std::iter::Sum`] — for the natural `.iter().map(...).sum()` pattern
+/// - [`std::iter::Sum`]: for the natural `.iter().map(...).sum()` pattern
 ///   used in raw test-problem functions (Sphere, Rosenbrock, …).
-/// - [`std::fmt::Debug`] — so solver / state structs can `#[derive(Debug)]`.
-/// - [`Default`] — matches `f64`'s `Default = 0.0` so generic states can
+/// - [`std::fmt::Debug`]: so solver/state structs can `#[derive(Debug)]`.
+/// - [`Default`]: matches `f64`'s `Default = 0.0` so generic states can
 ///   `Option<F>::default()` cleanly.
-/// - `'static` — matches `f64`'s implicit `'static` so the bound doesn't
+/// - `'static`: matches `f64`'s implicit `'static` so the bound doesn't
 ///   force lifetime plumbing through every solver.
 pub trait Scalar:
     num_traits::Float + num_traits::FromPrimitive + std::iter::Sum + std::fmt::Debug + Default + 'static
@@ -159,7 +159,7 @@ pub(crate) trait ComponentMaxAssign {
 
 /// In-place componentwise division `self[i] ← self[i] / other[i]`. The
 /// counterpart of [`ComponentMulAssign`]. Levenberg-Marquardt forms the
-/// MINPACK `gtol` measure — the per-column cosine `g_j² / (JᵀJ)ⱼⱼ` —
+/// MINPACK `gtol` measure (the per-column cosine `g_j² / (JᵀJ)ⱼⱼ`)
 /// with this.
 ///
 /// # Contract
@@ -178,7 +178,7 @@ pub(crate) trait ComponentDivAssign {
 ///
 /// This is *not* a blanket lower-clamp: a legitimately small positive
 /// entry keeps its value. It exists for MINPACK's zero-column guard in
-/// Marquardt-scaled Levenberg-Marquardt — a Jacobian column that is
+/// Marquardt-scaled Levenberg-Marquardt: a Jacobian column that is
 /// entirely zero gives `diag(JᵀJ)ⱼ = 0`, which would make the damping
 /// `μ·D` vanish on that coordinate and leave the normal-equations
 /// matrix singular there. MINPACK sets such a column's scale to `1`
@@ -198,10 +198,10 @@ pub(crate) trait FloorZerosInPlace<F = f64> {
 /// of a parameter vector and read derivative values back out
 /// ([`crate::core::numdiff`]).
 ///
-/// Methods are named `get_scalar` / `set_scalar` rather than `get` / `set`
+/// Methods are named `get_scalar`/`set_scalar` rather than `get`/`set`
 /// to dodge the inherent `slice::get -> Option<&T>` (which would shadow a
-/// trait `get` at call sites on a concrete `Vec`) and the `Index` /
-/// `IndexMut` traits — the same defensive convention as
+/// trait `get` at call sites on a concrete `Vec`) and the `Index`/
+/// `IndexMut` traits, the same defensive convention as
 /// [`VectorLen::vec_len`].
 ///
 /// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
@@ -254,7 +254,7 @@ pub use sample::{SampleStandardNormal, SampleUniformBox};
 // Per-solver plumbing ops: expressed as traits for backend portability, but
 // they carry no meaning outside one shipped solver's internals (diagonal
 // pokes, rank-one updates, the Coleman-Li affine scaling). Kept `pub(crate)`
-// so they stay off the frozen public surface — promote to `pub` on a concrete
+// so they stay off the frozen public surface; promote to `pub` on a concrete
 // external request (promotion is non-breaking; the reverse is not).
 pub(crate) use cl_scaling::BoxAffineScaling;
 pub(crate) use linalg::{

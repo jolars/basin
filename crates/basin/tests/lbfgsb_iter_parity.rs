@@ -2,12 +2,12 @@
 //! Fortran reference.
 //!
 //! Reads `tests/fixtures/lbfgsb_rosenbrock_5d.tsv` (dumped from a
-//! gfortran build of `references/lbfgsb-v3.0/` — see
+//! gfortran build of `references/lbfgsb-v3.0/`; see
 //! `tests/fixtures/README.md`) and drives basin's `Lbfgsb` through
 //! the same iterates, asserting per-step agreement on `x`, `f`, and
 //! `g`.
 //!
-//! This is the load-bearing correctness signal for the port — the
+//! This is the load-bearing correctness signal for the port; the
 //! point of mirroring the Fortran scalar arithmetic line-for-line is
 //! that the trajectories must match. Tolerance is `~1e-10` per
 //! component, which gives some slack for compiler-level
@@ -110,7 +110,7 @@ fn rosenbrock_5d_matches_fortran_trajectory() {
     let initial = vec![-1.0, 2.0, -1.0, 2.0, -1.0];
     let state = LbfgsState::new(initial, 5);
 
-    // Match Fortran driver: `factr = 0`, `pgtol = 0` — disable both
+    // Match Fortran driver: `factr = 0`, `pgtol = 0`, disabling both
     // convergence tolerances so the parity comparator runs all 30
     // iterations regardless of how small the projected gradient gets.
     let mut stepper = Executor::new(problem, Lbfgsb::new().with_tol_pg(0.0), state)

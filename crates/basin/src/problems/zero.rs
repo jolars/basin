@@ -1,6 +1,6 @@
 //! N-dimensional Zero function: `f(x) = 0` everywhere.
 //!
-//! A degenerate sanity / termination edge case. The cost is identically zero
+//! A degenerate sanity/termination edge case. The cost is identically zero
 //! and the gradient is the zero vector, so *every* point is a global minimizer
 //! (value 0). Useful for exercising solver bookkeeping in the limit: a solver
 //! should terminate immediately on a gradient- or step-tolerance criterion
@@ -44,7 +44,7 @@ impl<P> Default for Zero<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static ZERO_SPEC: ProblemSpec = ProblemSpec {
     name: "Zero",
     dim: Dimensionality::NDimensional { min: 1 },
@@ -53,21 +53,21 @@ pub static ZERO_SPEC: ProblemSpec = ProblemSpec {
         differentiable: true,
         // A constant function is (degenerately) convex.
         convex: true,
-        // A continuum of minimizers — not a single isolated minimum.
+        // A continuum of minimizers—not a single isolated minimum.
         unimodal: false,
         separable: true,
         scalable: true,
     },
     references: &[Reference {
         citation: "basin test corpus",
-        title: "Zero (constant) function — termination / sanity edge case",
+        title: "Zero (constant) function—termination/sanity edge case",
         source: "basin (internal); no published origin",
         doi: None,
         url: None,
     }],
     description: "Constant function f(x) = 0 everywhere; the gradient is \
-                  identically zero. A degenerate sanity / termination edge \
-                  case — every point is a global minimizer (value 0), so any \
+                  identically zero. A degenerate sanity/termination edge \
+                  case—every point is a global minimizer (value 0), so any \
                   solver should terminate immediately on a gradient or step \
                   tolerance. Defined for any n ≥ 1.",
 };

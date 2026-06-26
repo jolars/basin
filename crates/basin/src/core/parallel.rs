@@ -6,15 +6,15 @@
 //! `parallel` feature is on, while staying allocation- and result-identical to
 //! the sequential path when it is off.
 //!
-//! # `MaybeSync` / `MaybeSend`
+//! # `MaybeSync`/`MaybeSend`
 //!
-//! Auto-trait *shims*. With `parallel` on they alias [`Sync`] / [`Send`]; with
+//! Auto-trait *shims*. With `parallel` on they alias [`Sync`]/[`Send`]; with
 //! it off they are blanket-implemented for every type, so a bound like
 //! `P: MaybeSync` imposes nothing. This lets one set of function signatures
 //! carry the thread-safety bounds the `rayon` path needs without forcing them
-//! — and breaking the wasm / no-threads build — on the sequential path.
+//! (and breaking the wasm/no-threads build) on the sequential path.
 //!
-//! # `try_map_range_with` / `try_map_slice_with`
+//! # `try_map_range_with`/`try_map_slice_with`
 //!
 //! Fallible indexed maps that collect `Result`s in input order. Each task gets
 //! its own reusable scratch value via an `init` closure (a per-thread probe

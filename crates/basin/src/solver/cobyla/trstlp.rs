@@ -1,7 +1,7 @@
 //! COBYLA trust-region linear-programming step (`trstlp`) and radius update
 //! (`trrad`).
 //!
-//! Direct port of PRIMA's `trustregion.f90` (`trstlp` / `trstlp_sub` / `trrad`).
+//! Direct port of PRIMA's `trustregion.f90` (`trstlp`/`trstlp_sub`/`trrad`).
 //! `trstlp` finds the step `d` by two stages: stage 1 minimizes the L-infinity
 //! violation of the linearized constraints `Aᵀd ≤ b` subject to `‖d‖ ≤ Δ`; stage
 //! 2 spends any remaining freedom minimizing the linearized objective `gᵀd`
@@ -210,7 +210,7 @@ fn trstlp_sub<F: Scalar>(
     let one = F::one();
     let eps = F::epsilon();
     let realmax = F::max_value();
-    // `m` (1-based in PRIMA): number of "real" constraints — all of them in
+    // `m` (1-based in PRIMA): number of "real" constraints—all of them in
     // stage 1, all-but-the-objective in stage 2.
     let m_real = if stage == 1 { mcon } else { mcon - 1 };
 

@@ -6,13 +6,13 @@
 //! creature and a sun/moon, the favicon keeps only the essentials:
 //!
 //! - a coarse-faceted bowl (a quadratic basin with damped ripple ridges on its
-//!   walls, the floor left clean) — the canonical optimization landscape,
-//! - a low-poly pool at its floor — carved into the *mesh* itself (the bowl
+//!   walls, the floor left clean): the canonical optimization landscape,
+//! - a low-poly pool at its floor, carved into the *mesh* itself (the bowl
 //!   triangles clipped at the water line), not a shape laid on top,
 //! - a single river: a thin water ribbon laid along an actual [`GradientDescent`]
-//!   trajectory — real mesh that rides on the surface and is lit per facet by the
+//!   trajectory, real mesh that rides on the surface and is lit per facet by the
 //!   slope, so it reads as flowing water on the terrain, not a flat sticker, and
-//! - one small conifer on the bank for flavour.
+//! - one small conifer on the bank for flavor.
 //!
 //! Like the logo there are two themes; the night palette is derived from the
 //! day one by the same Oklab [`moonlight`] transform. Output is a square,
@@ -29,9 +29,9 @@
 //!
 //! The `adaptive` mode ships *both* palettes in one file, switched by
 //! `prefers-color-scheme`, so a single `<link rel="icon">` covers light and
-//! dark tab chrome — this is the form linked as the site favicon (one SVG, as
+//! dark tab chrome; this is the form linked as the site favicon (one SVG, as
 //! RealFaviconGenerator expects for a dual light/dark icon). The standalone
-//! `day` / `night` renders remain the raster source for the `.ico` / PNG
+//! `day` and `night` renders remain the raster source for the `.ico`/PNG
 //! fallbacks, where CSS can't adapt.
 
 use std::fmt::Write as _;
@@ -54,9 +54,9 @@ const Y0: f64 = -3.0;
 const Y1: f64 = 3.0;
 
 /// Surface shape. A quadratic bowl `K·(u² + ASPECT·v²)` in coordinates rotated by
-/// `BOWL_ROT` about the centre, so the basin can be round (`ASPECT = 1`) or an
-/// oval tilted to taste. On top rides a damped sinusoidal **ripple** — organic
-/// low-poly ridges on the walls — that fades to zero on the floor, so the pool
+/// `BOWL_ROT` about the center, so the basin can be round (`ASPECT = 1`) or an
+/// oval tilted to taste. On top rides a damped sinusoidal **ripple** (organic
+/// low-poly ridges on the walls) that fades to zero on the floor, so the pool
 /// and the river's descent stay clean (see [`ripple`]). Tune:
 ///   - `BOWL_K` overall steepness; `BOWL_ASPECT` ovalness; `BOWL_ROT` tilt;
 ///   - `RIPPLE_AMP` ridge height (0 = smooth dome), `RIPPLE_FREQ` ridge frequency
@@ -74,7 +74,7 @@ const RIPPLE_AMP: f64 = 0.22;
 const RIPPLE_FREQ: f64 = 1.4;
 const RIPPLE_FADE: f64 = 0.7;
 
-/// Water line as a normalised height above the basin floor. The lake is every
+/// Water line as a normalized height above the basin floor. The lake is every
 /// point below it; because the inlet valley floor also dips below it, the lake
 /// reaches up the valley as the river arm. Higher = bigger lake + longer arm.
 const WATER_LEVEL: f64 = 0.02;
@@ -91,7 +91,7 @@ const Z_WORLD: f64 = 16.0; // height gain for facet-normal lighting (grid units)
 const LIGHT: [f64; 3] = [0.5, -0.35, 0.79];
 
 /// River = gradient descent on the bowl, started **on the window boundary** so
-/// the stream enters from the rim (its head is cut by the tile edge — water
+/// the stream enters from the rim (its head is cut by the tile edge, water
 /// flowing in from beyond the basin) rather than materialising mid-slope. Small
 /// step, no momentum: a clean run down into the pool.
 const RIVER_START: [f64; 2] = [-3.4, -2.5];
@@ -137,7 +137,7 @@ const TREE_LIT: Rgb = Rgb(92, 138, 122); // canopy lit side
 const TRUNK: Rgb = Rgb(52, 46, 39);
 
 // ---------------------------------------------------------------------------
-// theme (day / night)
+// theme (day or night)
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -146,19 +146,19 @@ enum Theme {
     Night,
 }
 
-/// Pale, cool full-moon tint — used only to lift the night water toward a
+/// Pale, cool full-moon tint, used only to lift the night water toward a
 /// moonlit sheen so the pool/river don't sink into the dark terrain.
 const MOON: Rgb = hex("#d8dcec");
 
-/// Re-tint a daytime colour for the night palette: darken, desaturate, and cool
-/// toward moonlit blue — all in Oklab so the shift stays perceptually even. The
+/// Re-tint a daytime color for the night palette: darken, desaturate, and cool
+/// toward moonlit blue, all in Oklab so the shift stays perceptually even. The
 /// same transform the logo uses, so the two stay in sync.
 fn moonlight(c: Rgb) -> Rgb {
     let [l, a, b] = rgb_to_oklab(c);
     oklab_to_rgb([l * 0.75 + 0.035, a * 0.76, b * 0.46 - 0.018])
 }
 
-/// All theme-dependent colours, resolved once up front.
+/// All theme-dependent colors, resolved once up front.
 struct Palette {
     terrain: Vec<Rgb>,
     water: Rgb,
@@ -209,7 +209,7 @@ fn raw_height(x: f64, y: f64) -> f64 {
 /// Damped low-poly ripple in the rotated bowl coordinates: a sum of a few
 /// sinusoids (so the ridges read as irregular, not a regular corrugation),
 /// scaled by `damp = clamp(bowl / RIPPLE_FADE, 0, 1)` so it vanishes on the floor
-/// and grows up the walls — keeping the pool and the descent clean.
+/// and grows up the walls, keeping the pool and the descent clean.
 fn ripple(u: f64, v: f64, bowl: f64) -> f64 {
     let damp = (bowl / RIPPLE_FADE).min(1.0);
     damp * RIPPLE_AMP
@@ -218,7 +218,7 @@ fn ripple(u: f64, v: f64, bowl: f64) -> f64 {
             + 0.5 * (0.9 * RIPPLE_FREQ * (u + v)).sin())
 }
 
-/// Normalisation + water level for the surface, sampled once.
+/// Normalization + water level for the surface, sampled once.
 struct Surface {
     hmin: f64,
     hmax: f64,
@@ -246,13 +246,13 @@ impl Surface {
         }
     }
 
-    /// Normalised height in `[0, 1]`.
+    /// Normalized height in `[0, 1]`.
     fn hn(&self, x: f64, y: f64) -> f64 {
         ((raw_height(x, y) - self.hmin) / (self.hmax - self.hmin)).clamp(0.0, 1.0)
     }
 
     /// On-surface screen position of a problem point, lifted by `lift`
-    /// (normalised units) so the river/tree ride just above their facets.
+    /// (normalized units) so the river/tree ride just above their facets.
     fn surface_point(&self, x: f64, y: f64, lift: f64) -> (f64, f64) {
         let gx = (x - X0) / (X1 - X0) * GRID as f64;
         let gy = (y - Y0) / (Y1 - Y0) * GRID as f64;
@@ -261,7 +261,7 @@ impl Surface {
 }
 
 /// Isometric projection: grid coords `(gx, gy)` on the ground plane, plus
-/// normalised height `h`.
+/// normalized height `h`.
 fn project(gx: f64, gy: f64, h: f64) -> (f64, f64) {
     let sx = (gx - gy) * TILE_W;
     let sy = (gx + gy) * TILE_H - h * Z_SCREEN;
@@ -340,9 +340,9 @@ fn main() {
     let out_path = args.next().unwrap_or_else(|| "basin-favicon.svg".into());
     // Second arg selects the palette. `adaptive`/`auto` ships *both* day and
     // night in one file, switched by `prefers-color-scheme` (the form linked as
-    // the site favicon — a single self-adapting SVG); `dark`/`night` a lone
+    // the site favicon, a single self-adapting SVG); `dark`/`night` a lone
     // night render; anything else day. The single-theme renders are the raster
-    // source for the `.ico` / PNG fallbacks, which can't adapt.
+    // source for the `.ico`/PNG fallbacks, which can't adapt.
     let mode = args.next().unwrap_or_default();
 
     let surf = Surface::new();
@@ -381,7 +381,7 @@ fn main() {
 
 /// Render the full favicon scene (terrain + bank tree) into a fresh [`Svg`] with
 /// `pal`. Geometry is palette-independent, so the day and night renders share
-/// identical vertices — only the fills differ, which is what lets
+/// identical vertices, only the fills differ, which is what lets
 /// [`compose_adaptive`] stack them in one self-adapting file.
 fn render_scene(surf: &Surface, river: &[[f64; 2]], pal: &Palette) -> Svg {
     let mut svg = Svg::new();
@@ -396,7 +396,7 @@ fn render_scene(surf: &Surface, river: &[[f64; 2]], pal: &Palette) -> Svg {
 
 /// Fuse a day and a night render (identical geometry, different fills) into one
 /// self-adapting favicon: both palettes ship in a single file, wrapped in
-/// `#light-icon` / `#dark-icon` groups and toggled by `prefers-color-scheme`, so
+/// `#light-icon`/`#dark-icon` groups and toggled by `prefers-color-scheme`, so
 /// one `<link rel="icon">` covers light and dark tab chrome. `#light-icon` is
 /// the default, so any renderer that ignores the media query (e.g. resvg
 /// rasterising the `.ico`) gets the day art. This mirrors the markup
@@ -438,17 +438,17 @@ struct Facet {
 ///   - clip at the water plane `z = wl`: the below-water piece is the **lake**,
 ///     drawn flat at the water line (one flat shade); the above-water piece is
 ///     **terrain**, elevation-tinted and slope-shaded;
-///   - intersect the triangle's ground footprint with the **river ribbon** — a
+///   - intersect the triangle's ground footprint with the **river ribbon**, a
 ///     smooth, finely-tessellated strip of convex polygons along the trajectory
-///     ([`river_shapes`]) — and draw each intersection piece at the terrain
+///     ([`river_shapes`]), and draw each intersection piece at the terrain
 ///     height (barycentric) shaded by the triangle's own slope normal. So the
 ///     river is real mesh that follows the ground's curvature and is lit like it,
 ///     but its *edge* is as smooth as the ribbon, independent of `GRID`.
 ///
 /// Three back-to-front passes (terrain, river, lake): the river is drawn over the
-/// full terrain (same plane, so it just colours its footprint), and the lake last
+/// full terrain (same plane, so it just colors its footprint), and the lake last
 /// covers any river that dips below the water line. Each facet is stroked in its
-/// own fill to hide the anti-aliasing seams between same-colour neighbours.
+/// own fill to hide the anti-aliasing seams between same-color neighbors.
 fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]) {
     let wl = surf.water;
     let ht: Vec<Vec<f64>> = (0..=GRID)
@@ -591,7 +591,7 @@ fn node_xy(i: usize, j: usize) -> (f64, f64) {
 /// The river footprint as a strip of convex polygons in **grid coordinates**,
 /// each paired with its bounding box `[minx, miny, maxx, maxy]` for cheap
 /// culling. The strip follows the descent trajectory (tessellated to `RIVER_SEGS`
-/// segments — its edges are smooth regardless of the terrain grid), tapering from
+/// segments, its edges are smooth regardless of the terrain grid), tapering from
 /// `RIVER_W_SRC` at the source to `RIVER_W_MOUTH` toward the mouth (problem
 /// units). If `SPRING_R > 0`, a round source pool is appended. [`draw_terrain`]
 /// intersects each terrain triangle with these to carve the river into the mesh.
@@ -761,7 +761,7 @@ fn bary_height(p: [f64; 2], verts: &[[f64; 3]; 3]) -> f64 {
 }
 
 /// A small low-poly conifer: stacked triangle tiers over a short trunk, each
-/// tier split lit/shadow down the centre seam. Copied from the logo.
+/// tier split lit/shadow down the center seam. Copied from the logo.
 fn draw_tree(svg: &mut Svg, pal: &Palette, base: (f64, f64)) {
     let (bx, by) = base;
     let w = 13.0;
@@ -871,7 +871,7 @@ impl Svg {
     }
 
     /// The square viewBox `(min_x, min_y, side)`: the longer bbox axis plus
-    /// padding sets the side, and the basin is centred within it (shorter axis
+    /// padding sets the side, and the basin is centered within it (shorter axis
     /// gets symmetric transparent margins). Shared by [`finish`](Self::finish)
     /// and [`compose_adaptive`] so the stacked day/night renders frame alike.
     fn viewbox(&self) -> (f64, f64, f64) {
@@ -884,7 +884,7 @@ impl Svg {
     }
 
     /// Frame to a **square** viewBox and emit the standalone SVG document.
-    /// Transparent canvas — no background rect.
+    /// Transparent canvas, no background rect.
     fn finish(self) -> String {
         let (vx, vy, side) = self.viewbox();
         let mut out = String::new();
@@ -901,7 +901,7 @@ impl Svg {
 }
 
 // ---------------------------------------------------------------------------
-// small color helper (Oklab blending — shared with the logo)
+// small color helper (Oklab blending, shared with the logo)
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy)]
@@ -928,7 +928,7 @@ impl Rgb {
     }
 }
 
-/// Sample a continuous colour ramp at `t ∈ [0, 1]` between equally-spaced stops.
+/// Sample a continuous color ramp at `t ∈ [0, 1]` between equally-spaced stops.
 fn ramp_sample(stops: &[Rgb], t: f64) -> Rgb {
     let t = t.clamp(0.0, 1.0);
     if stops.len() < 2 {
@@ -980,7 +980,7 @@ fn oklab_to_rgb(lab: [f64; 3]) -> Rgb {
     Rgb(q(r), q(g), q(b))
 }
 
-/// Parse an HTML hex colour — `"#52796f"` or `"52796f"` — into an [`Rgb`]. A
+/// Parse an HTML hex color (`"#52796f"` or `"52796f"`) into an [`Rgb`]. A
 /// `const fn`, so it works inside `const` palette tables.
 const fn hex(s: &str) -> Rgb {
     let b = s.as_bytes();

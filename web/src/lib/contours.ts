@@ -3,13 +3,13 @@
  * `nx × ny` scalar grid sampled on `[xmin, xmax] × [ymin, ymax]`.
  *
  * Returns a flat array of segment endpoints in *data* coordinates:
- * `[x0, y0, x1, y1, x0, y0, x1, y1, ...]`. Drawing them as `moveTo` /
- * `lineTo` pairs gives the iso-contour at value `level`.
+ * `[x0, y0, x1, y1, x0, y0, x1, y1, ...]`. Drawing them as `moveTo`/`lineTo`
+ * pairs gives the iso-contour at value `level`.
  *
  * The implementation is the standard 16-case marching-squares table
  * with linear interpolation along edges. Saddle ambiguity (cases 5 and
- * 10) is resolved by comparing the cell's average value to `level` —
- * the simplest disambiguation that doesn't introduce visible artifacts
+ * 10) is resolved by comparing the cell's average value to `level`—the
+ * simplest disambiguation that doesn't introduce visible artifacts
  * for smooth functions.
  *
  * Grid layout assumption: `grid[j * nx + i]` is the value at
@@ -128,7 +128,7 @@ export function isoContour(
 /**
  * Pick `n` iso-levels that visually space the contours by the same
  * intensity transform used for the (now retired) heatmap. Spacing the
- * levels in transform-space — `sqrt(c)` or `log1p(c)` — keeps the
+ * levels in transform-space (`sqrt(c)` or `log1p(c)`) keeps the
  * contours roughly equidistant for both gentle (Booth) and steep
  * (Rosenbrock, Beale) surfaces.
  *
@@ -255,7 +255,7 @@ export function chainSegments(
 /**
  * Chaikin corner-cutting: replace each pair of adjacent vertices with
  * two new vertices at 1/4 and 3/4 along the edge. Two iterations is
- * the sweet spot for iso-contours — enough to kill the stair-step from
+ * the sweet spot for iso-contours—enough to kill the stair-step from
  * marching-squares without flattening real curvature.
  *
  * Closed chains (first point repeated as last) are handled by treating

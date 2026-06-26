@@ -53,7 +53,7 @@ impl<P> Default for Matyas<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static MATYAS_SPEC: ProblemSpec = ProblemSpec {
     name: "Matyas",
     dim: Dimensionality::Fixed(2),

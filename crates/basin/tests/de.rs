@@ -6,7 +6,7 @@ use basin::{
 /// Convergence on Rastrigin(D=5) within the [-5.12, 5.12] standard box.
 /// DE/rand/1/bin is a global optimizer and Rastrigin is its canonical
 /// multimodal stress test; with NP=30, F=0.8, CR=0.9 and 12_000 cost
-/// evals (~400 generations) the elite reliably drops below 5 — most
+/// evals (~400 generations) the elite reliably drops below 5; most
 /// seeds end well under 1, with seed 42 hitting ~1e-3. The threshold
 /// is the deterministic-CI floor across the seeds sampled, not the
 /// typical performance. DE evaluates NP trials per generation, so it
@@ -86,7 +86,7 @@ fn different_seeds_yield_different_trajectories() {
 /// Greedy selection ensures `state.cost()` is non-increasing across
 /// generations: index 0 is the sorted best, and trials only replace
 /// targets when their cost is `≤`. Same monotonicity contract as
-/// `RandomSearch` / `Ssga` so framework `CostTolerance` / `ParamTolerance`
+/// `RandomSearch`/`Ssga` so framework `CostTolerance`/`ParamTolerance`
 /// are honest under DE dynamics.
 #[test]
 fn elite_keeps_cost_monotone_across_iterations() {
@@ -111,7 +111,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
 }
 
 /// Population invariants: candidates and costs are length `pop_size`
-/// and sorted ascending so `param()` / `cost()` always surface the best.
+/// and sorted ascending so `param()`/`cost()` always surface the best.
 #[test]
 fn population_invariants_hold_after_iteration() {
     let pop_size = 12;
@@ -138,7 +138,7 @@ fn population_invariants_hold_after_iteration() {
 }
 
 /// Reinit-per-coord bound repair keeps every candidate inside the box
-/// across iterations — even when F = 1.5 pushes donor vectors well
+/// across iterations, even when F = 1.5 pushes donor vectors well
 /// outside [-5.12, 5.12].
 #[test]
 fn population_stays_feasible_even_with_aggressive_f() {

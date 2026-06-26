@@ -8,18 +8,18 @@ use crate::core::state::{CountsMirror, State};
 /// ([`GaussNewton`](crate::solver::GaussNewton),
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt),
 /// [`Trf`](crate::solver::Trf)): one `param`, an optional cached cost, and
-/// iteration / evaluation counters split into residual and Jacobian work.
+/// iteration/evaluation counters split into residual and Jacobian work.
 ///
 /// # Why not [`BasicState`](crate::core::state::BasicState)?
 ///
 /// `NllsState` deliberately does **not** impl
 /// [`GradientState`](crate::core::state::GradientState). The NLLS solvers
-/// have no L2 gradient to populate — their first-order optimality test is the
-/// ∞-norm of `Jᵀr`, exposed through each solver's own `with_tol_grad` /
+/// have no L2 gradient to populate: their first-order optimality test is the
+/// ∞-norm of `Jᵀr`, exposed through each solver's own `with_tol_grad`/
 /// `with_tol_grad_rel`, not the framework's
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance). Were
 /// these solvers to run on `BasicState` (which *is* a `GradientState`), a user
-/// could attach `GradientTolerance` and have it **silently never fire** —
+/// could attach `GradientTolerance` and have it **silently never fire**:
 /// `gradient()` stays `None`, so the criterion short-circuits and falls
 /// through to `MaxIter`. Binding NLLS to a state that is not a `GradientState`
 /// turns that misconfiguration into a compile error (tenet 3), the same guard
@@ -32,10 +32,10 @@ use crate::core::state::{CountsMirror, State};
 /// objective), so [`MaxCostEvals`](crate::core::termination::MaxCostEvals) and
 /// [`OptimizationResult::cost_evals`](crate::core::executor::OptimizationResult::cost_evals)
 /// behave exactly as they did on `BasicState`. The Jacobian work is surfaced
-/// separately through [`jacobian_evals`](Self::jacobian_evals) — the MINPACK
+/// separately through [`jacobian_evals`](Self::jacobian_evals): the MINPACK
 /// `njev` to `cost_evals`'s `nfev`. Hessian evaluations (unused by today's
 /// NLLS solvers) fold into the Jacobian counter, preserving the historical
-/// "Jacobian / Hessian → second-order work" convention.
+/// "Jacobian/Hessian → second-order work" convention.
 ///
 /// The scalar `F` defaults to `f64` so `NllsState<P>` call sites resolve
 /// unchanged.
@@ -70,17 +70,17 @@ impl<P, F: Scalar> NllsState<P, F> {
         }
     }
 
-    /// Cumulative residual evaluations across the run — the MINPACK `nfev`.
+    /// Cumulative residual evaluations across the run: the MINPACK `nfev`.
     ///
     /// Equal to [`cost_evals`](State::cost_evals) for a pure least-squares run
     /// (every cost is a residual evaluation); exposed under its own name so
-    /// consumers porting MINPACK / `levenberg-marquardt`-crate diagnostics can
+    /// consumers porting MINPACK/`levenberg-marquardt`-crate diagnostics can
     /// read the residual and Jacobian counts independently.
     pub fn residual_evals(&self) -> u64 {
         self.residual_evals
     }
 
-    /// Cumulative Jacobian evaluations across the run — the MINPACK `njev`.
+    /// Cumulative Jacobian evaluations across the run—the MINPACK `njev`.
     pub fn jacobian_evals(&self) -> u64 {
         self.jacobian_evals
     }

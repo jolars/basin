@@ -1,6 +1,6 @@
 #![cfg(feature = "ndarray")]
 
-//! Bfgs convergence over the ndarray backend (`Array1<f64>` / `Array2<f64>`).
+//! Bfgs convergence over the ndarray backend (`Array1<f64>` and `Array2<f64>`).
 //!
 //! Mirrors `tests/bfgs.rs` (nalgebra), `tests/bfgs_vec.rs` (`Vec<f64>`), and
 //! `tests/bfgs_faer.rs` (faer): the same generic `Solver` impl drives

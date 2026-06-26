@@ -2,7 +2,7 @@
 //! [`faer::sparse::SparseColMat<usize, f64>`] (CSC) over
 //! [`faer::Col<f64>`]. Lands in S2b alongside the dense faer backend.
 //!
-//! Faer's sparse stack covers all five `linalg` traits: SpMV / Aᵀ-SpMV
+//! Faer's sparse stack covers all five `linalg` traits: SpMV/Aᵀ-SpMV
 //! via [`sparse_dense_matmul`], Gram via
 //! [`sparse_sparse_matmul`], SPD solve via supernodal/simplicial
 //! Cholesky ([`SparseColMat::sp_cholesky`]), and least-squares solve
@@ -22,11 +22,11 @@ use super::linalg::{
     MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
 };
 
-// As with the dense faer backend, sparse matmul / Cholesky / QR all
+// As with the dense faer backend, sparse matmul/Cholesky/QR all
 // require `faer_traits::ComplexField`, while the diagonal-walk impls
 // stay on plain `Scalar`. f32 and f64 satisfy both halves; the sparse
-// SPD / lstsq factorizations additionally bound on `RealField`-like
-// behaviour through `ComplexField` (faer's hierarchy folds the real-
+// SPD/lstsq factorizations additionally bound on `RealField`-like
+// behavior through `ComplexField` (faer's hierarchy folds the real-
 // scalar case into ComplexField directly).
 
 impl<F> MatVec<Col<F>> for SparseColMat<usize, F>
@@ -218,7 +218,7 @@ where
         );
         // Symbolic + numeric Cholesky in one shot via the high-level
         // wrapper. LltError::Numeric is the rank-deficient/non-PSD
-        // case; LltError::Generic covers OOM / index overflow, which
+        // case; LltError::Generic covers OOM/index overflow, which
         // we surface as NotPositiveDefinite (the trait's only
         // backend-portable failure for this path).
         let llt = Self::sp_cholesky(self, Side::Lower).map_err(|e| match e {
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn solve_lstsq_square_matches_direct_solve() {
-        // Square non-singular system — least-squares solution
+        // Square non-singular system—least-squares solution
         // coincides with the exact solve.
         // A = [[1, 2], [3, 5]], b = [3, 8]. Exact x = [1, 1].
         let a = csc2([1.0, 2.0], [3.0, 5.0]);

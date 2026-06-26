@@ -10,15 +10,15 @@
 //!
 //! as a plain [`CostFunction`] + [`Gradient`]. Minimizing `φ_μ` for a
 //! decreasing sequence of `μ` traces the central path to the constrained
-//! optimum — the [`BarrierMethod`](crate::solver::BarrierMethod) automates
+//! optimum: the [`BarrierMethod`](crate::solver::BarrierMethod) automates
 //! that continuation, but `LogBarrier` is also usable on its own with any
-//! unconstrained solver / [`Executor`](crate::core::executor::Executor),
+//! unconstrained solver/[`Executor`](crate::core::executor::Executor),
 //! mirroring R's `constrOptim` layering a barrier on `optim`.
 //!
 //! # Adapter asymmetry (tenet 4, load-bearing)
 //!
 //! `LogBarrier` *consumes* [`LinearInequalityConstraints`] and exposes
-//! [`CostFunction`] + [`Gradient`] **only** — it deliberately does **not**
+//! [`CostFunction`] + [`Gradient`] **only**: it deliberately does **not**
 //! implement [`LinearInequalityConstraints`] itself. That asymmetry is what
 //! routes the wrapped problem to *unconstrained* solvers: if the barrier
 //! re-exposed the constraint trait it would route straight back into
@@ -40,7 +40,7 @@
 //!
 //! Requires the constraint matrix to implement
 //! [`MatVec`] (`A x`) and
-//! [`MatTransposeVec`] (`Aᵀ v`) — a
+//! [`MatTransposeVec`] (`Aᵀ v`)—a
 //! strict subset of the LA tier that never includes a linear solve. That
 //! covers nalgebra (`DMatrix`/`DVector`) and faer (`Mat`/`Col`); `Vec<f64>`
 //! and `ndarray` are a compile-time error until they grow the two matvec
@@ -56,11 +56,11 @@ use crate::core::problem::{CostFunction, Gradient};
 /// log-barrier objective `f(x) − μ · Σ log(bᵢ − aᵢᵀ x)` at a fixed `μ`.
 ///
 /// Borrows the underlying problem (`&'a P`) so the barrier parameter can be
-/// swapped cheaply between solves — the
+/// swapped cheaply between solves: the
 /// [`BarrierMethod`](crate::solver::BarrierMethod) builds a fresh
 /// `LogBarrier` per outer iteration as it shrinks `μ`. See the
 /// [module docs](self) for the formulation, the tenet-4 adapter asymmetry,
-/// and the feasibility / backend notes.
+/// and the feasibility/backend notes.
 pub struct LogBarrier<'a, P, F = f64> {
     problem: &'a P,
     mu: F,

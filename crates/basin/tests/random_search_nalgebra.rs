@@ -34,7 +34,7 @@ fn same_seed_yields_identical_trajectory() {
 }
 
 /// Convergence on `BoothBoxed` with the tight `[-1, 1]²` box: the
-/// constrained optimum sits at the corner `(1, 1)` — see the
+/// constrained optimum sits at the corner `(1, 1)`; see the
 /// equivalent Vec-backend test for the convergence-rate reasoning.
 #[test]
 fn converges_to_box_corner_on_tight_booth() {

@@ -1,4 +1,4 @@
-//! LINCOA driver loop (Powell 2015; PRIMA `lincob.f90`) — resumable working
+//! LINCOA driver loop (Powell 2015; PRIMA `lincob.f90`)—resumable working
 //! state.
 //!
 //! `LincoaWork` carries the shared [`QuadraticModel`], the folded constraint
@@ -8,7 +8,7 @@
 //! [`step`](LincoaWork::step) per `next_iter`; each step is one trust-region
 //! iteration that may also take a geometry step or reduce ρ.
 //!
-//! Reuses basin's shared model machinery (`prepare_update` / `update_params` /
+//! Reuses basin's shared model machinery (`prepare_update`/`update_params` /
 //! `commit_update`, `shift_origin`, and the `alt_model_change` /
 //! `adopt_alt_model` alternative-model pair for LINCOA's `tryqalt`) and the
 //! LINCOA-specific [`trstep`](super::trstep::trstep) (with its warm-started
@@ -30,12 +30,12 @@ pub(crate) enum Transition {
     Continue,
     /// ρ was reduced this step; keep iterating at the finer radius.
     RhoReduced,
-    /// ρ reached ρ_end — LINCOA's natural convergence.
+    /// ρ reached ρ_end—LINCOA's natural convergence.
     Converged,
 }
 
 /// The result of one [`step`](LincoaWork::step): the loop decision. Evaluated
-/// points are not returned — the public solver reports the model's best feasible
+/// points are not returned—the public solver reports the model's best feasible
 /// point ([`best`](LincoaWork::best)) and the `Problem` wrapper counts evals.
 pub(crate) struct StepOutcome {
     pub(crate) transition: Transition,
@@ -53,7 +53,7 @@ pub(crate) struct LincoaWork<F = f64> {
     rescon: Vec<F>,
     /// Warm-started active-set QR (PRIMA `iact`/`nact`/`qfac`/`rfac`).
     qr: ActiveSetQr<F>,
-    /// Final radius `ρ_end` — drives the schedule and the convergence stop.
+    /// Final radius `ρ_end`—drives the schedule and the convergence stop.
     rho_end: F,
     /// Current trust-region radius `ρ`.
     rho: F,
@@ -194,7 +194,7 @@ impl<F: Scalar> LincoaWork<F> {
     }
 
     /// Absolute point `x0 + disp` for an objective evaluation. LINCOA does not
-    /// clip — trust-region steps stay feasible and geometry steps may legitimately
+    /// clip—trust-region steps stay feasible and geometry steps may legitimately
     /// leave the feasible region.
     fn abs_point(&self, disp: &[F]) -> Vec<F> {
         let x0 = self.model.x0();

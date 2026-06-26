@@ -16,7 +16,7 @@
 //!
 //! LINCOA's reported iterate is the least-`F` feasible interpolation point
 //! (`x_opt`), maintained monotone by the driver, so
-//! [`best_param`](State::best_param) / [`best_cost`](State::best_cost) coincide
+//! [`best_param`](State::best_param)/[`best_cost`](State::best_cost) coincide
 //! with the current iterate at every check.
 
 use crate::core::math::Scalar;
@@ -26,17 +26,17 @@ use crate::core::state::{CountsMirror, RhoState, State};
 /// Solver state for [`Lincoa`](crate::solver::Lincoa).
 ///
 /// Construct with [`new`](Self::new) from the starting point; the solver
-/// evaluates the initial interpolation set and seeds the cost / trust-region
+/// evaluates the initial interpolation set and seeds the cost/trust-region
 /// radius in [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct LincoaState<V, F = f64> {
-    /// Current iterate — the best feasible point found so far. Initially the
+    /// Current iterate—the best feasible point found so far. Initially the
     /// user's starting point.
     pub(crate) param: V,
     /// `F(param)`. `None` before [`Solver::init`](crate::core::solver::Solver::init).
     pub(crate) cost: Option<F>,
-    /// Current trust-region radius `ρ` — `+∞` before
+    /// Current trust-region radius `ρ`—`+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from
     /// `ρ_beg`. [`RhoTolerance`](crate::core::termination::RhoTolerance) reads it.
     pub(crate) rho: F,
@@ -54,7 +54,7 @@ pub struct LincoaState<V, F = f64> {
 
 impl<V, F: Scalar> LincoaState<V, F> {
     /// Build an initial LINCOA state at the starting point `x0`. The solver
-    /// evaluates the initial interpolation set and fills the cost / `ρ` in
+    /// evaluates the initial interpolation set and fills the cost/`ρ` in
     /// [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(x0: V) -> Self {
         Self {

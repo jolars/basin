@@ -4,8 +4,8 @@
 //! Both frameworks solve the *same* problem (basin's raw Rosenbrock
 //! functions, wrapped for argmin via `ArgminProblem`) from the *same*
 //! start with *matched* configuration:
-//!   * GD     — steepest descent + More-Thuente line search.
-//!   * NM     — standard coefficients (α=1, exp=2, con=0.5, shrink=0.5)
+//!   * GD:      steepest descent + More-Thuente line search.
+//!   * NM:      standard coefficients (α=1, exp=2, con=0.5, shrink=0.5)
 //!     and a bit-identical initial simplex (basin's `IntoInitialSimplex`,
 //!     relative step 0.05).
 //!

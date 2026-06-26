@@ -1,11 +1,11 @@
-//! A small, self-contained tour of the linear-inequality / log-barrier API.
+//! A small, self-contained tour of the linear-inequality and log-barrier API.
 //!
 //! Run with: `cargo test --features nalgebra --test test -- --nocapture`
 //!
-//! It minimises `f(x) = ‖x − (2,2)‖²` subject to the linear inequality
+//! It minimizes `f(x) = ‖x − (2,2)‖²` subject to the linear inequality
 //! `x₀ + x₁ ≤ 2`. The unconstrained minimum `(2,2)` is infeasible, so the
 //! constrained optimum is the projection onto the line `x₀ + x₁ = 2` nearest
-//! `(2,2)` — namely `(1, 1)`.
+//! `(2,2)`, namely `(1, 1)`.
 #![cfg(feature = "nalgebra")]
 
 use basin::{
@@ -15,7 +15,7 @@ use basin::{
 use nalgebra::{DMatrix, DVector};
 
 // 1. Define the problem. The objective and its gradient are the usual
-//    `CostFunction` / `Gradient` traits; the constraints are the new
+//    `CostFunction`/`Gradient` traits; the constraints are the new
 //    `LinearInequalityConstraints` trait, which just hands the solver the
 //    matrix `A` and vector `b` of `A x ≤ b`.
 struct MyProblem {
@@ -66,7 +66,7 @@ fn barrier_method_tour() {
 
     // 2. Choose an inner unconstrained solver. The barrier objective is +∞
     //    outside the feasible set, so the inner line search must reject such
-    //    steps — Armijo backtracking does. (Strong-Wolfe searches or momentum
+    //    steps; Armijo backtracking does. (Strong-Wolfe searches or momentum
     //    can breach the barrier; see the `BarrierMethod` docs.)
     let inner = GradientDescent::with_line_search(Backtracking::new());
 
@@ -83,7 +83,7 @@ fn barrier_method_tour() {
     let x0 = BasicState::new(DVector::from_vec(vec![0.0, 0.0]));
 
     // 5. Drive it with the usual `Executor`. `max_iter` is only an outer
-    //    safety net — convergence comes from the gap test inside the solver.
+    //    safety net; convergence comes from the gap test inside the solver.
     let result = Executor::new(problem, solver, x0)
         .max_iter(50)
         .run()

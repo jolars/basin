@@ -9,7 +9,7 @@
 //! asserts a tiered parity.
 //!
 //! Because `minimize` is `pub(crate)` (NEWUOA has no public `Solver` surface
-//! yet — that is the next roadmap step), this lives in-crate rather than under
+//! yet—that is the next roadmap step), this lives in-crate rather than under
 //! `tests/`, and reads the fixtures via [`include_str!`] so it is independent of
 //! the test's working directory.
 //!
@@ -34,7 +34,7 @@
 //! 3. **Final output (loose).** basin must converge (ρ reached, not the eval
 //!    budget) to the same minimizer PRIMA found: `f` to `1e-6` relative, `x` to
 //!    `1e-4` in `‖·‖∞`, and the evaluation count `nf` within a margin (not
-//!    exact — a non-transcription port will not match `nf` to the unit).
+//!    exact—a non-transcription port will not match `nf` to the unit).
 
 use super::driver::{NewuoaConfig, NewuoaStop, minimize};
 
@@ -286,7 +286,7 @@ fn check_parity(text: &str) {
     // nf is the weakest signal: a paper-derived port takes a different (but
     // valid) trust-region trajectory, so the eval count differs by a chunk
     // (~15-20% observed) while still reaching the same minimizer. The margin is
-    // a same-ballpark sanity bound, not a parity claim — see the module docs.
+    // a same-ballpark sanity bound, not a parity claim—see the module docs.
     let nf_margin = (0.25 * fx.final_nf as f64).max(10.0);
     let nf_diff = (outcome.nf as f64 - fx.final_nf as f64).abs();
     assert!(

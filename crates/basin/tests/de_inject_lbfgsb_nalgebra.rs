@@ -1,7 +1,7 @@
 //! Integration test for [`DeInject`] with [`Lbfgsb`] inner on the
 //! nalgebra backend.
 //!
-//! Booth `[-5, 5]²` — global min at `(1, 3)` strictly interior — with
+//! Booth `[-5, 5]²` (global min at `(1, 3)` strictly interior) with
 //! a small DE population and L-Bfgs-B polishing. DE places candidates
 //! in the basin within a handful of generations; L-Bfgs-B drives them
 //! to gradient-descent precision. Assert `‖x* − (1, 3)‖_∞ ≤ 1e-6`.

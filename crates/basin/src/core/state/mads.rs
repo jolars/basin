@@ -8,7 +8,7 @@
 //!
 //! The mesh/poll bookkeeping (the integer mesh index `ℓ`, the Halton-index
 //! schedule, the incumbent in flat scratch) lives on the **solver** struct
-//! (`Mads`'s `MadsWork`), not here — the same split the Powell-family DFO solvers
+//! (`Mads`'s `MadsWork`), not here: the same split the Powell-family DFO solvers
 //! use. So [`MadsState`] is generic over the parameter vector `V` only: the
 //! direction algebra is internal `Vec<f64>`/`Vec<i64>` scratch and needs no
 //! `linalg`-tier ops from `V`.
@@ -16,9 +16,9 @@
 //! # Current vs best
 //!
 //! MADS's reported iterate is monotone non-increasing by construction (it accepts
-//! only improving mesh points), so [`best_param`](State::best_param) /
+//! only improving mesh points), so [`best_param`](State::best_param)/
 //! [`best_cost`](State::best_cost) coincide with the current iterate at every
-//! check, like the sorted-simplex / Powell-DFO shapes.
+//! check, like the sorted-simplex/Powell-DFO shapes.
 
 use crate::core::math::Scalar;
 use crate::core::problem::EvalCounts;
@@ -27,17 +27,17 @@ use crate::core::state::{CountsMirror, MeshState, State};
 /// Solver state for [`Mads`](crate::solver::Mads).
 ///
 /// Construct with [`new`](Self::new) from the starting point; the solver
-/// evaluates it and seeds the cost / poll size in
+/// evaluates it and seeds the cost/poll size in
 /// [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct MadsState<V, F = f64> {
-    /// Current incumbent — the best feasible point found so far. Initially the
+    /// Current incumbent—the best feasible point found so far. Initially the
     /// user's starting point.
     pub(crate) param: V,
     /// `f(param)`. `None` before [`Solver::init`](crate::core::solver::Solver::init).
     pub(crate) cost: Option<F>,
-    /// Current poll size `Δᵖ` — `+∞` before
+    /// Current poll size `Δᵖ`—`+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it. Shrinks
     /// (≈ halving on unsuccessful iterations) toward the configured floor.
     /// [`MeshTolerance`](crate::core::termination::MeshTolerance) reads it.
@@ -59,7 +59,7 @@ pub struct MadsState<V, F = f64> {
 
 impl<V, F: Scalar> MadsState<V, F> {
     /// Build an initial MADS state at the starting point `x0`. The solver
-    /// evaluates `x0` and fills the cost / poll size in
+    /// evaluates `x0` and fills the cost/poll size in
     /// [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(x0: V) -> Self {
         Self {
@@ -191,14 +191,14 @@ where
 /// It carries the same poll/mesh bookkeeping as [`MadsState`] plus the
 /// **aggregate constraint violation** `h(x) = Σⱼ max(cⱼ(x), 0)²` at the reported
 /// incumbent ([`constraint_violation`](Self::constraint_violation); `0` ⇔
-/// feasible). Construct it with [`new`](Self::new) from the starting point — an
+/// feasible). Construct it with [`new`](Self::new) from the starting point; an
 /// **infeasible start is allowed** (the progressive barrier relaxes its way to
 /// feasibility).
 ///
 /// # Current vs best
 ///
 /// Unlike the unconstrained [`MadsState`], the reported objective is **not**
-/// monotone — a newly found feasible point can have a higher `f` than a prior
+/// monotone: a newly found feasible point can have a higher `f` than a prior
 /// infeasible incumbent. The solver's progressive-barrier driver owns the
 /// incumbent selection, so [`update_best`](State::update_best) mirrors the
 /// current iterate unconditionally (the same rule
@@ -206,7 +206,7 @@ where
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct ConstrainedMadsState<V, F = f64> {
-    /// Current reported incumbent — the best feasible point if one has been
+    /// Current reported incumbent—the best feasible point if one has been
     /// found, else the best infeasible point within the barrier threshold.
     pub(crate) param: V,
     /// `f(param)`. `None` before [`Solver::init`](crate::core::solver::Solver::init).
@@ -214,7 +214,7 @@ pub struct ConstrainedMadsState<V, F = f64> {
     /// Aggregate constraint violation `h(param)` at the reported incumbent.
     /// `+∞` before init; `0` once the incumbent is feasible.
     pub(crate) constraint_violation: F,
-    /// Current poll size `Δᵖ` — `+∞` before init.
+    /// Current poll size `Δᵖ`—`+∞` before init.
     pub(crate) poll_size: F,
     /// Current mesh index `ℓ` (OrthoMADS eq. (1)). `0` before init.
     pub(crate) mesh_index: i32,
@@ -318,7 +318,7 @@ impl<V: Clone, F: Scalar> State for ConstrainedMadsState<V, F> {
         self.best_cost_evals
     }
 
-    /// Mirror the current incumbent unconditionally — the progressive-barrier
+    /// Mirror the current incumbent unconditionally—the progressive-barrier
     /// driver owns incumbent selection, and the reported `cost` is not monotone
     /// across the feasibility transition, so a `cost`-ranked best would be wrong.
     fn update_best(&mut self) {

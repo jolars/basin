@@ -1,5 +1,5 @@
-//! One-shot GD / Nelder-Mead comparison (not a benchmark): basin vs
-//! argmin on `Vec<f64>`, identical problem / start / configuration / a
+//! One-shot GD and Nelder-Mead comparison (not a benchmark): basin vs
+//! argmin on `Vec<f64>`, identical problem, start, configuration, and a
 //! fixed iteration budget (no early stop), so the only thing that can
 //! differ is the implementation. Prints iterations and the cost reached,
 //! confirming the two reach comparable quality before the timings in

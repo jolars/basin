@@ -14,7 +14,7 @@
 //!   properties, references) for use in catalog UIs and filtering. Iterate
 //!   [`ALL_SPECS`](crate::problems::ALL_SPECS) to enumerate the corpus.
 //!
-//! Most functions in this corpus are catalogued in Jamil & Yang (2013),
+//! Most functions in this corpus are cataloged in Jamil & Yang (2013),
 //! *A Literature Survey of Benchmark Functions For Global Optimisation
 //! Problems*, arXiv:1308.4008. Per-problem references on each
 //! [`ProblemSpec`](crate::problems::ProblemSpec) cite the original source where
@@ -107,7 +107,7 @@ pub use three_hump_camel::{
 };
 pub use zero::{ZERO_SPEC, Zero, zero, zero_gradient};
 
-/// All catalogued problem specs, for browsing and filtering. Append new
+/// All cataloged problem specs, for browsing and filtering. Append new
 /// problems here as they're added.
 pub static ALL_SPECS: &[&ProblemSpec] = &[
     &ROSENBROCK_SPEC,

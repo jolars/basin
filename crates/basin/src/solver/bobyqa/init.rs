@@ -10,7 +10,7 @@
 //! 2009, eq. 2.10 (the symmetric `α=Δ, β=−Δ` case recovers NEWUOA).
 //!
 //! Ported from PRIMA v0.7.2 (`fortran/bobyqa/initialize.f90`, subroutines
-//! `initxf` / `initq` / `inith`, plus `common/xinbd.f90`), translated into
+//! `initxf`/`initq`/`inith`, plus `common/xinbd.f90`), translated into
 //! basin's [`QuadraticModel`] layout: `xpt` is `m × n` (row per point), the
 //! gradient `gq` is stored at `x0` (not shifted to `x_opt`), the explicit
 //! Hessian part is `Γ` with implicit coefficients `γ ≡ 0`, and the `Ω` block of
@@ -40,7 +40,7 @@ pub(crate) struct BoundedInit<F = f64> {
 /// Adjust `x0` into the box leaving room for the coordinate steps (Powell 2009,
 /// the paragraph around eq. 2.1). Mirrors PRIMA's default (`honour_x0 = .false.`)
 /// revision in `preproc.f90`: clip to `[a, b]`, then apply the half-`ρ` split per
-/// coordinate — within `½ρ` of a bound snaps *onto* the bound (asymmetric cross),
+/// coordinate—within `½ρ` of a bound snaps *onto* the bound (asymmetric cross),
 /// but between `½ρ` and `ρ` of a bound is pushed `ρ` *into the interior* (so a
 /// near-bound start that has room keeps the symmetric cross). Requires
 /// `b_i ≥ a_i + 2ρ`, which makes the lower/upper cases mutually exclusive.
@@ -402,7 +402,7 @@ mod tests {
         assert_h_matches_inverse(&out.model, 1e-9);
     }
 
-    /// The §2 feasibility adjustment moves an out-of-box / too-close start.
+    /// The §2 feasibility adjustment moves an out-of-box/too-close start.
     #[test]
     fn x0_adjusted_into_box() {
         // x0_0 below lower bound; x0_1 within rho of the upper bound.

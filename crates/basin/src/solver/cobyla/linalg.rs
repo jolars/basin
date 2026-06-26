@@ -1,9 +1,9 @@
 //! Small dense column-major linear-algebra helpers for the COBYLA port.
 //!
-//! COBYLA's simplex bookkeeping works on tiny `n × n` / `n × (n+1)` matrices.
+//! COBYLA's simplex bookkeeping works on tiny `n × n`/`n × (n+1)` matrices.
 //! Rather than route these through the backend `linalg` tier (which targets
 //! large LA-heavy solvers), the port keeps its own pure-`Vec<F>` column-major
-//! scratch — exactly as the LINCOA active-set QR does — so it is backend-generic
+//! scratch (exactly as the LINCOA active-set QR does), so it is backend-generic
 //! and wasm-clean. Matrices are stored column-major: column `j` of an
 //! `r × c` matrix occupies `a[j*r .. (j+1)*r]`.
 //!

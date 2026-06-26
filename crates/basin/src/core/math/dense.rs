@@ -2,33 +2,33 @@
 //!
 //! basin's default param backend is `Vec<F>` (no external crate). The
 //! matrix-capable backends (nalgebra, faer) bring their own dense matrix
-//! types, but `Vec<F>` had none — so the linear-constraint solvers
+//! types, but `Vec<F>` had none, so the linear-constraint solvers
 //! ([`BarrierMethod`](crate::solver::BarrierMethod),
 //! [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)),
 //! which only need `A x` and `Aᵀ v`, were a compile-time error on the default
 //! backend (tenet 5).
 //!
 //! [`DenseMatrix`] closes that gap with the two matvec ops plus the handful of
-//! dense ops BFGS needs — [`MatrixIdentity`], [`ScaleInPlace`], and the
-//! rank-one Hessian update [`GeneralRankOneUpdate`] — so BFGS also runs on the
+//! dense ops BFGS needs ([`MatrixIdentity`], [`ScaleInPlace`], and the
+//! rank-one Hessian update [`GeneralRankOneUpdate`]), so BFGS also runs on the
 //! default backend. CMA-ES runs too: [`DenseMatrix`] additionally implements
 //! [`RankOneUpdate`](super::RankOneUpdate),
 //! [`MatrixFromDiagonal`](super::MatrixFromDiagonal),
-//! [`MatDiagonal`](super::MatDiagonal), and — the load-bearing op — a pure-Rust
+//! [`MatDiagonal`](super::MatDiagonal), and (the load-bearing op) a pure-Rust
 //! symmetric eigendecomposition [`SymmetricEigen`](super::SymmetricEigen) via a
 //! cyclic Jacobi solver (`dense_eig`). The SPD *solve* layer is also here:
 //! [`GramMatrix`](super::GramMatrix) (`JᵀJ`),
 //! [`AddDiagonalVectorInPlace`](super::AddDiagonalVectorInPlace) (Marquardt
 //! damping), and the load-bearing [`LinearSolveSpd`](super::LinearSolveSpd) via
 //! a pure-Rust Cholesky (`dense_chol`), so the normal-equations least-squares
-//! solvers all run on `Vec<f64>`: Gauss-Newton, Levenberg-Marquardt, and —
-//! with the diagonal-scaling op [`MaxDiagonal`](super::MaxDiagonal) — the
+//! solvers all run on `Vec<f64>`: Gauss-Newton, Levenberg-Marquardt, and
+//! (with the diagonal-scaling op [`MaxDiagonal`](super::MaxDiagonal)) the
 //! trust-region-reflective TRF. The whole family is normal-equations
 //! (`JᵀJ` + Cholesky), so none of them touch the QR least-squares solve
 //! [`LinearSolveLstsq`](super::LinearSolveLstsq); that op stays *not yet*
 //! implemented for `DenseMatrix`, but that is a separate, currently-unmotivated
 //! "not yet" (tenet 5), not what gated TRF. No solver has motivated a pure-Rust
-//! `DenseMatrix` QR yet, but — like the Cholesky and Jacobi solvers above —
+//! `DenseMatrix` QR yet, but (like the Cholesky and Jacobi solvers above)
 //! one would be welcome if it can be done honestly (pure-Rust, wasm-clean, no
 //! BLAS/LAPACK).
 //!
@@ -42,7 +42,7 @@ use super::{
     RankOneUpdate, ScaleInPlace, SymmetricEigen, SymmetricEigenError,
 };
 
-/// Row-major dense matrix — the matrix companion to `Vec<F>` as the param
+/// Row-major dense matrix, the matrix companion to `Vec<F>` as the param
 /// vector. `F` defaults to `f64` so the type name `DenseMatrix` keeps
 /// resolving to `DenseMatrix<f64>` unchanged.
 ///
@@ -305,7 +305,7 @@ impl<F: Scalar> SymmetricEigen<Vec<F>> for DenseMatrix<F> {
         let (eigenvalues, eigenvectors) =
             super::dense_eig::jacobi_eigen(&self.data, n).ok_or(SymmetricEigenError::Failed)?;
         // `jacobi_eigen` returns the eigenvectors row-major with column `k` the
-        // eigenvector for `eigenvalues[k]` — exactly `DenseMatrix`'s layout.
+        // eigenvector for `eigenvalues[k]`—exactly `DenseMatrix`'s layout.
         let b = Self {
             data: eigenvectors,
             rows: n,

@@ -12,7 +12,7 @@ vendored **PRIMA oracle** (see below).
 translation of Powell's derivative-free solvers (NEWUOA, BOBYQA, LINCOA, …),
 vendored as a git submodule pinned to **v0.7.2** for cross-validating basin's
 Powell-family implementations (`docs/newuoa-roadmap.md`). It is a maintainer
-oracle only — **not** a basin dependency (wasm/MSRV tenets forbid an FFI in the
+oracle only, **not** a basin dependency (wasm/MSRV tenets forbid an FFI in the
 crate), and the workspace never builds it (no `Cargo.toml`; members are
 explicit).
 
@@ -40,7 +40,7 @@ cd tools && uv sync
 We use two parsers with very different speed/quality trade-offs, run from
 recipes in the repo-root `Taskfile.yml`.
 
-### Stage 1 — fast pass with `pymupdf4llm`
+### Stage 1—fast pass with `pymupdf4llm`
 
 ```sh
 task ingest-paper PDF=~/Downloads/paper.pdf NAME=lbfgs
@@ -51,10 +51,10 @@ section structure, bibliography, and pseudocode. **Mangles equations**
 (sub/superscripts become bracket noise) and **drops figures** (replaces
 with placeholders).
 
-For most solver papers, this is enough — the algorithm pseudocode is what
+For most solver papers, this is enough; the algorithm pseudocode is what
 gets translated, and equations are usually rederived inline in code comments.
 
-### Stage 2 — selective marker pass
+### Stage 2—selective marker pass
 
 If specific pages have math or figures you actually need:
 
@@ -63,7 +63,7 @@ task ingest-paper-pages NAME=lbfgs PAGES="3-4,7"
 ```
 
 Outputs `references/lbfgs/source.marker.md`. Pages are 0-indexed (marker
-convention). Slow on CPU (~minutes per page) — first run also downloads
+convention). Slow on CPU (~minutes per page); first run also downloads
 ~2-3 GB of models into `~/.cache/`.
 
 The two outputs are kept side-by-side rather than spliced. When translating
@@ -72,10 +72,10 @@ from the paper, read `source.md` for structure and prose, switch to
 
 ## Why these tools
 
-- **`pymupdf4llm`** — pure-Python (via PyMuPDF C++ binding), no ML, fast.
+- **`pymupdf4llm`**: pure-Python (via PyMuPDF C++ binding), no ML, fast.
   Strictly better than `pypdf` (which gives raw text with no markdown
   structure and worse hyphen/ligature handling).
-- **`marker-pdf`** — ML pipeline, LaTeX equation rendering, figure handling.
+- **`marker-pdf`**: ML pipeline, LaTeX equation rendering, figure handling.
   AMD GPU acceleration is possible via PyTorch ROCm but not configured here
   (would force a heavy ROCm-built torch wheel on every contributor). Run on
   a separate ROCm-enabled env if you want GPU and drop the resulting
@@ -85,4 +85,4 @@ from the paper, read `source.md` for structure and prose, switch to
 
 Add to `pyproject.toml` under `[project.dependencies]`, run `uv lock` from
 this directory, and commit the updated `uv.lock`. The lockfile is the
-authoritative pin — version constraints in `pyproject.toml` stay loose.
+authoritative pin; version constraints in `pyproject.toml` stay loose.

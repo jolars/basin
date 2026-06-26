@@ -1,6 +1,6 @@
 /**
- * Tiny viridis-ish colormap. Hardcoded to avoid pulling in d3 / colormaps
- * — the bundle is small enough to care.
+ * Tiny viridis-ish colormap. Hardcoded to avoid pulling in d3 or colormaps;
+ * the bundle is small enough to care.
  *
  * Source values are 9 evenly-spaced viridis samples; we linearly interpolate
  * between them. Plenty good for a heatmap.

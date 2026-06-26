@@ -62,7 +62,7 @@ fn levenberg_marquardt_converges_on_sparse_linear_regression() {
 #[test]
 fn levenberg_marquardt_handles_sparse_diagonal_damping() {
     // Exercises the sparse Marquardt-damping path end-to-end via a
-    // tighter tol_grad — verifies the CSC diagonal extraction
+    // tighter tol_grad: verifies the CSC diagonal extraction
     // (`MatDiagonal`) and the `μ·D` `add_diagonal_vector_in_place`
     // pattern-hit assertion compose correctly with the Cholesky solve.
     let (problem, initial) = fixture();

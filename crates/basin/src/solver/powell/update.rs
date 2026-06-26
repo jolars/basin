@@ -5,12 +5,12 @@
 //! The update is split into three phases so the §7 MOVE/`t`-selection logic
 //! (later step) can choose `t` cheaply:
 //!
-//! 1. [`prepare_update`](QuadraticModel::prepare_update) — the `t`-independent
+//! 1. [`prepare_update`](QuadraticModel::prepare_update)—the `t`-independent
 //!    work: the vector `w` (eq. 4.10), `H w` (via eq. 4.25), and `β`
 //!    (eq. 4.12).
-//! 2. [`update_params`](QuadraticModel::update_params) — the per-`t` scalars
+//! 2. [`update_params`](QuadraticModel::update_params)—the per-`t` scalars
 //!    `α`, `τ`, `σ` (eq. 4.12). `σ` is the denominator MOVE keeps large.
-//! 3. [`commit_update`](QuadraticModel::commit_update) — apply the rank-2 `H`
+//! 3. [`commit_update`](QuadraticModel::commit_update)—apply the rank-2 `H`
 //!    update (eq. 4.11) to `Ξ`/`Υ` and the `Ω`-factorization (eqs. 4.18–4.20),
 //!    then the model update `Γ⁺`/`γ⁺`/`∇Q⁺` (eqs. 4.29–4.30).
 //!
@@ -59,7 +59,7 @@ pub(crate) struct UpdateScalars<F = f64> {
     pub(crate) beta: F,
     /// `τ = eₜᵀ H w`.
     pub(crate) tau: F,
-    /// `σ = αβ + τ²` — the update denominator.
+    /// `σ = αβ + τ²`—the update denominator.
     pub(crate) sigma: F,
 }
 
@@ -141,7 +141,7 @@ impl<F: Scalar> QuadraticModel<F> {
     /// `rᵢ = F(xᵢ) − F(x_opt)` (Powell 2006, §8, the modified RHS of system 3.10).
     ///
     /// Subtracting `F(x_opt)` rather than using the raw `F(xᵢ)` reduces rounding
-    /// damage and leaves `∇Q_int` / `∇²Q_int` unchanged, since the Lagrange
+    /// damage and leaves `∇Q_int`/`∇²Q_int` unchanged, since the Lagrange
     /// functions form a partition of unity (so a constant shift moves only the
     /// dropped constant term).
     fn alt_rhs(&self) -> Vec<F> {
@@ -318,7 +318,7 @@ impl<F: Scalar> QuadraticModel<F> {
     /// Panics if `σ = 0` (the update is undefined; the caller's MOVE logic must
     /// keep `|σ|` away from zero). The Ω-factorization's cancellation branch
     /// (eqs. 4.19–4.20) likewise assumes its denominator `ζ = τ² ± β·z²` stays
-    /// nonzero — the same MOVE-maintained precondition, not separately guarded.
+    /// nonzero—the same MOVE-maintained precondition, not separately guarded.
     ///
     /// [`prepare_update`]: QuadraticModel::prepare_update
     /// [`update_params`]: QuadraticModel::update_params
@@ -595,7 +595,7 @@ mod tests {
 
     /// Build the full `(m+n+1)` vector `w` (Powell 2006, eq. 4.10) for a new
     /// displacement `xnew`, in the *unsuppressed* index order
-    /// `[λ (m); c (1); g (n)]` — the order [`build_w_dense`] uses.
+    /// `[λ (m); c (1); g (n)]`—the order [`build_w_dense`] uses.
     fn full_w(model: &QuadraticModel<f64>, xnew: &[f64]) -> Vec<f64> {
         let n = model.n();
         let m = model.m();
@@ -785,7 +785,7 @@ mod tests {
     }
 
     /// Pick the non-`opt` interpolation index with the largest `|σ|` for the
-    /// proposed update — a stand-in for the §7 MOVE rule, keeping the test's
+    /// proposed update—a stand-in for the §7 MOVE rule, keeping the test's
     /// chosen `t` well away from a zero denominator.
     fn best_t(model: &QuadraticModel<f64>, ctx: &UpdateContext<f64>) -> usize {
         let mut best = None;
@@ -835,7 +835,7 @@ mod tests {
 
     /// T7: after one update with a generic displacement, the stored
     /// `Ω`/`Ξ`/`Υ` must still equal the blocks of `inv(W⁺)` built from the new
-    /// interpolation geometry — validating eq. 4.11 (Ξ/Υ) and eq. 4.18 (the
+    /// interpolation geometry—validating eq. 4.11 (Ξ/Υ) and eq. 4.18 (the
     /// Ω-factorization normal branch) together (n=2, m=5).
     #[test]
     fn update_preserves_kkt_identity() {
@@ -895,7 +895,7 @@ mod tests {
     }
 
     /// T9: the `Ω`-factorization cancellation branch (eqs. 4.19/4.20) is a
-    /// rounding-recovery path — in exact arithmetic `α, β ≥ 0 ⇒ σ ≥ 0`, so it is
+    /// rounding-recovery path—in exact arithmetic `α, β ≥ 0 ⇒ σ ≥ 0`, so it is
     /// only reached once rounding has driven a sign negative (Powell 2006, §4),
     /// which cannot be triggered deterministically by well-conditioned updates.
     /// Instead we validate the branch's *algebra* directly: it must realize the

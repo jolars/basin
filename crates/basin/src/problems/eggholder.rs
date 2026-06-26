@@ -7,7 +7,7 @@
 //! Highly multimodal "egg carton" surface with a vast number of local minima
 //! and a single deep global minimum at `(x, y) = (512, 404.2319)` with
 //! `f ≈ −959.6407` tucked into a corner of the domain. The nested `√|·|` terms
-//! make it non-differentiable, so it is cost-only — a hard target for global
+//! make it non-differentiable, so it is cost-only—a hard target for global
 //! solvers. Usual search domain is `x, y ∈ [-512, 512]`.
 
 use core::marker::PhantomData;
@@ -46,7 +46,7 @@ impl<P> Default for Eggholder<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static EGGHOLDER_SPEC: ProblemSpec = ProblemSpec {
     name: "Eggholder",
     dim: Dimensionality::Fixed(2),

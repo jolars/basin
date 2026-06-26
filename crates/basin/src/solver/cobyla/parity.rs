@@ -11,7 +11,7 @@
 //!
 //! The fixtures use only the nonlinear constraint block (`m_ineq = m_eq = 0`,
 //! `xl`/`xu = ±∞`), which is exactly the trait-only path basin's [`Cobyla`]
-//! drives (its `m_lcon = 0`) — so the two solvers see the same feasible region.
+//! drives (its `m_lcon = 0`)—so the two solvers see the same feasible region.
 //!
 //! # What is and isn't asserted
 //!
@@ -22,7 +22,7 @@
 //!
 //! 1. **Function equivalence (tight, `1e-12`).** The Rust objective *and*
 //!    constraint violation recomputed at every point PRIMA evaluated must match
-//!    the fixture values — guards both functions against C↔Rust drift.
+//!    the fixture values—guards both functions against C↔Rust drift.
 //! 2. **Initial design (tight, order-independent).** basin's first `n+1` samples
 //!    equal PRIMA's first `n+1` samples as a set (COBYLA's `n+1`-vertex simplex
 //!    is built cumulatively with pole swaps, so this compares against the

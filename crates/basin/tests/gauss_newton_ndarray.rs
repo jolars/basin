@@ -1,11 +1,11 @@
 #![cfg(feature = "ndarray")]
 
-//! Gauss-Newton over the `ndarray` backend (`Array1<f64>` / `Array2<f64>`).
+//! Gauss-Newton over the `ndarray` backend (`Array1<f64>`/`Array2<f64>`).
 //!
 //! Mirrors `tests/gauss_newton_nalgebra.rs`: `Array2`'s `GramMatrix` +
 //! `LinearSolveSpd` route through the same pure-Rust Cholesky (`dense_chol`)
 //! as the `DenseMatrix` backend, so the normal-equation step, eval counts,
-//! and the rank-deficient failure are backend-independent — the assertions
+//! and the rank-deficient failure are backend-independent; the assertions
 //! match the nalgebra mirror exactly.
 
 use basin::problems::{PowellSingular, RosenbrockResiduals};
@@ -43,7 +43,7 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
 fn gauss_newton_single_step_matches_normal_equation_solution() {
     // Smallest credible end-to-end test: one iteration must reproduce the
     // hand-computed normal-equation step. Guards the inner-step code
-    // against sign / transpose mistakes that the convergence test would
+    // against sign or transpose mistakes that the convergence test would
     // mask. δ from the S2a verification at (-1.2, 1.0) is
     // (J^T J)^{-1}·(J^T r) = [-2.2, 4.84]; the GN update is x ← x − δ,
     // so x_new = (-1.2 + 2.2, 1.0 − 4.84) = (1.0, −3.84).
@@ -91,7 +91,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
 fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
     // Load-bearing "why LM" test for S4. At x = (1, 2, 1, 1) two of
     // Powell's residuals (r₂, r₃) have vanishing Jacobian rows because
-    // both `x₁ − 2x₂` and `x₀ − x₃` are zero — so J has rank 2 < 4 and
+    // both `x₁ − 2x₂` and `x₀ − x₃` are zero, so J has rank 2 < 4 and
     // J^T J is exactly singular. Pure GN's Cholesky fails and the
     // solver returns SolverFailed. This is the case Levenberg-Marquardt's
     // damping is designed to recover.
@@ -120,7 +120,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
     //   - cost_evals = 1 + K
     //   - jacobian_evals = K
     // Disable the internal tol_grad check so termination is purely by
-    // MaxIter — keeps the assertion deterministic regardless of how
+    // MaxIter; keeps the assertion deterministic regardless of how
     // close Rosenbrock has driven `‖Jᵀr‖_∞` to zero.
     let problem = RosenbrockResiduals::<Array1<f64>>::new();
     let initial = Array1::from_vec(vec![-1.2, 1.0]);

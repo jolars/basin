@@ -8,7 +8,7 @@
 //! &CscMatrix` operator overload (composing transpose + spmm under
 //! the hood), and SPD solve via
 //! [`CscCholesky`](nalgebra_sparse::factorization::CscCholesky).
-//! The fifth — `LinearSolveLstsq` — is **deliberately not
+//! The fifth (`LinearSolveLstsq`) is **deliberately not
 //! implemented** here: nalgebra-sparse 0.10 doesn't ship a sparse QR.
 //! Reach for the faer-sparse backend if you need least-squares on
 //! sparse `J`.
@@ -25,7 +25,7 @@ use super::linalg::{
     MatTransposeVec, MatVec, MaxDiagonal,
 };
 
-// Bound stack mirrors the dense nalgebra backend: matvec / gram routes go
+// Bound stack mirrors the dense nalgebra backend: matvec/gram routes go
 // through nalgebra's `Closed*Assign + Zero + One` BLAS-2 tier, the
 // diagonal-walk impls stay on basic `Scalar`, and the Cholesky factor
 // step bounds on `RealField`. f32 and f64 satisfy every variant.
@@ -101,7 +101,7 @@ where
         // The `&CscMatrix * &CscMatrix` operator overload composes
         // pattern construction + spmm. Aᵀ A → CSC of shape
         // `(ncols, ncols)`; transpose() materializes Aᵀ as CSC. The
-        // overload's bound list is fatter than the MatVec / MatTranspose
+        // overload's bound list is fatter than the MatVec/MatTranspose
         // ones because nalgebra-sparse uses it for the general
         // (in)equality-checked matrix algebra surface, not just SPD ops.
         &self.transpose() * self
@@ -138,7 +138,7 @@ impl<F: Scalar> MatDiagonal<DVector<F>> for CscMatrix<F> {
             self.ncols()
         );
         // Diagonal entries missing from the CSC pattern are the implicit
-        // zero — same contract as `max_diagonal`.
+        // zero—same contract as `max_diagonal`.
         DVector::from_iterator(
             self.nrows(),
             (0..self.nrows()).map(|i| {

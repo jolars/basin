@@ -1,10 +1,10 @@
 //! Public-API integration tests for the MADS (OrthoMADS) solver.
 //!
-//! Exercises [`Mads`] through the framework — [`Executor`] over a [`MadsState`],
+//! Exercises [`Mads`] through the framework: [`Executor`] over a [`MadsState`],
 //! with framework termination ([`MaxCostEvals`], [`MeshTolerance`]). The
 //! direction machinery is validated against the OrthoMADS paper by the in-crate
 //! `solver::mads` golden tests; these confirm the public wiring (init/next_iter,
-//! the V↔Vec bridge, count mirroring, convergence / budget / early-stop paths)
+//! the V↔Vec bridge, count mirroring, convergence/budget/early-stop paths)
 //! and convergence on smooth problems across backends.
 
 use basin::{
@@ -70,7 +70,7 @@ fn converges_on_rosenbrock_2d() {
         MadsState::new(vec![-1.2, 1.0]),
     )
     // MADS is a poll-only direct search, so it needs many iterations on the
-    // Rosenbrock valley; let convergence / the eval budget govern, not max_iter.
+    // Rosenbrock valley; let convergence or the eval budget govern, not max_iter.
     .max_iter(100_000)
     .terminate_on(MaxCostEvals(20_000))
     .run()
@@ -136,7 +136,7 @@ fn respects_cost_eval_budget() {
 
 /// The motivating case: on a **discontinuous** objective, MADS converges where
 /// the Nelder-Mead simplex stalls. On the Step staircase, NM's initial simplex
-/// (5% offsets) lands entirely within one plateau — all vertices tie, so the
+/// (5% offsets) lands entirely within one plateau; all vertices tie, so the
 /// simplex degenerates and never escapes the start cell. MADS steps down the
 /// staircase on its mesh and reaches the minimum. Both run from the same start
 /// with the same budget.

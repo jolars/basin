@@ -2,7 +2,7 @@
 //! through the outer's mid-iter `Option<TerminationReason>` return
 //! (CONTRIBUTING.md "Solver composition" rule 3).
 //!
-//! Mirror of `cma_inject_solver_failed_bubbles.rs` — same
+//! Mirror of `cma_inject_solver_failed_bubbles.rs`: same
 //! `AlwaysFails` fixture wrapped in [`ClosureInner`] for the seeder.
 
 #![cfg(feature = "nalgebra")]

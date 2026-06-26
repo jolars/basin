@@ -1,9 +1,9 @@
 //! Worked example: `BoundedCmaInject` with Levenberg-Marquardt inner.
 //!
-//! Booth-as-residuals on a tight `[-1, 1]²` box — the unconstrained
+//! Booth-as-residuals on a tight `[-1, 1]²` box—the unconstrained
 //! minimum `(1, 3)` is outside the box, so the bound-active constrained
 //! optimum sits on the box corner `(1, 1)`. Bounded CMA-ES does global
-//! exploration under the adaptive BoundPenalty (Hansen / pycma); each
+//! exploration under the adaptive BoundPenalty (Hansen/pycma); each
 //! generation's best `k` candidates are polished by an unconstrained LM
 //! inner working off the same residual + Jacobian; the refined points
 //! are Mahalanobis-clipped (Hansen 2011 eq. 4) and injected back into
@@ -82,7 +82,7 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     let err = (p[0] - 1.0).abs().max((p[1] - 1.0).abs());
     assert!(
         err <= 5e-3,
-        "expected ≈ (1, 1) within 5e-3, got ({}, {}) — err = {}",
+        "expected ≈ (1, 1) within 5e-3, got ({}, {})—err = {}",
         p[0],
         p[1],
         err

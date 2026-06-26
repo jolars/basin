@@ -12,7 +12,7 @@ use basin::{
 };
 
 /// 2-D Rosenbrock: `f(x) = (1 − x₀)² + 100 (x₁ − x₀²)²`. Used by all
-/// three backend variants below — only the parameter type changes.
+/// three backend variants below; only the parameter type changes.
 mod rosenbrock {
     pub fn cost(x0: f64, x1: f64) -> f64 {
         (1.0 - x0).powi(2) + 100.0 * (x1 - x0 * x0).powi(2)

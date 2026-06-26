@@ -26,17 +26,17 @@
 //! [`mesh_and_poll_size`] from [`geometry`](super::geometry)), then classifies
 //! the iteration and updates the mesh index `ℓ` and `h_max` per Figure 10.6:
 //!
-//! - **Dominating** — a trial dominates `x_feas` (`≺f`) or `x_inf` (`≺h`):
+//! - **Dominating**: a trial dominates `x_feas` (`≺f`) or `x_inf` (`≺h`):
 //!   coarsen the mesh (`ℓ−1`), set `h_max ← h(x_inf)`. Opportunistic poll may
 //!   stop here.
-//! - **Improving** — non-dominating, but some visited infeasible point has
+//! - **Improving**: non-dominating, but some visited infeasible point has
 //!   `0 < h < h(x_inf)`: keep the mesh, set
 //!   `h_max ← max{h(v) : h(v) < h(x_inf)}` (abandon the current `x_inf`).
-//! - **Unsuccessful** — neither: refine the mesh (`ℓ+1`), set
+//! - **Unsuccessful**: neither: refine the mesh (`ℓ+1`), set
 //!   `h_max ← h(x_inf)`.
 //!
 //! The dominance / filter logic here is a fresh PB implementation, **not** a
-//! reuse of [`cobyla::filter`](crate::solver::cobyla) — COBYLA's
+//! reuse of [`cobyla::filter`](crate::solver::cobyla)—COBYLA's
 //! `selectx`/`savefilt` encode a merit-`φ` selection over `cstrv = [maxⱼ cⱼ]₊`,
 //! whereas PB selects two incumbents over the `(h, f)` Pareto front with the
 //! squared-sum `h`. They are cross-referenced but share no code.
@@ -55,7 +55,7 @@ use super::halton::halton_seed;
 type PbEval<'a, F, E> = dyn FnMut(&[F]) -> Result<(F, F), E> + 'a;
 
 /// The outcome of one [`PbWork::step`]: the transition plus the reported
-/// incumbent `(x*, f*, h*)` — `x_feas` if a feasible point has been found, else
+/// incumbent `(x*, f*, h*)`—`x_feas` if a feasible point has been found, else
 /// the current `x_inf`.
 pub(crate) struct PbOutcome<F> {
     pub(crate) transition: Transition,
@@ -70,7 +70,7 @@ pub(crate) struct PbWork<F> {
     ell: i32,
     /// Halton seed `t₀ = p_n`.
     t0: usize,
-    /// Largest `ℓ` reached so far — detects "poll size is the smallest so far".
+    /// Largest `ℓ` reached so far—detects "poll size is the smallest so far".
     ell_max: i32,
     /// Largest Halton index used so far.
     t_max: usize,
@@ -90,7 +90,7 @@ pub(crate) struct PbWork<F> {
 
 impl<F: Scalar> PbWork<F> {
     /// Evaluate the starting point and build the initial state. `eval` returns
-    /// `(f, h)` — the objective and the aggregate violation. Returns the work
+    /// `(f, h)`—the objective and the aggregate violation. Returns the work
     /// plus the seeded incumbent `(x*, f*, h*)`.
     pub(crate) fn try_init<E>(
         x0: Vec<F>,

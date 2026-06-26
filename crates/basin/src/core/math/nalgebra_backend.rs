@@ -21,7 +21,7 @@ use super::{
 
 // `F: Scalar` (basin's alias) bundles `Float + FromPrimitive + Sum + Debug +
 // Default + 'static`, which transitively satisfies `nalgebra::Scalar`
-// (`Clone + PartialEq + Debug + 'static`) via its blanket impl — no separate
+// (`Clone + PartialEq + Debug + 'static`) via its blanket impl; no separate
 // bound needed.
 
 impl<F, R, C, S> ScaledAdd<F> for Matrix<F, R, C, S>
@@ -221,7 +221,7 @@ where
             "clamp_in_place: upper shape mismatch"
         );
         // `iter_mut` and `iter` both traverse in column-major order, so
-        // zipping is consistent across self / lower / upper.
+        // zipping is consistent across self/lower/upper.
         for ((x, &lo), &hi) in self.iter_mut().zip(lower.iter()).zip(upper.iter()) {
             // `Float` has no `clamp`; `max(lo).min(hi)` matches the
             // `f64::clamp` result on finite, ordered bounds.
@@ -362,16 +362,16 @@ where
 }
 
 // ----------------------------------------------------------------------
-// linalg tier — dense ops on DMatrix<F> with V = DVector<F>.
+// linalg tier: dense ops on DMatrix<F> with V = DVector<F>.
 // Per tenet 5, this is dense-only; sparse comes in S2b.
 //
 // The bound `F: Scalar` (basin's alias) is paired here with nalgebra's
-// `Closed*Assign` traits — basin's `Float`-based `Scalar` doesn't subsume
-// the `+= / *=` requirements that nalgebra's BLAS-2 ops (`Mul`, `tr_mul`,
+// `Closed*Assign` traits; basin's `Float`-based `Scalar` doesn't subsume
+// the `+=`/`*=` requirements that nalgebra's BLAS-2 ops (`Mul`, `tr_mul`,
 // `ger`, …) accumulate into. `f64` and `f32` both satisfy both halves, so
 // the migration covers every scalar a real consumer will use today; the
 // heavyweight factorization impls (`LinearSolveSpd`, `SymmetricEigen`)
-// additionally need `nalgebra::ComplexField` / `RealField`.
+// additionally need `nalgebra::ComplexField`/`RealField`.
 // ----------------------------------------------------------------------
 
 impl<F> MatVec<DVector<F>> for DMatrix<F>
@@ -521,10 +521,10 @@ where
 // Behaviorally interchangeable with the pure-Rust impl above for the LAPACK
 // scalar set: same square assertion, same `Failed` mapping on non-convergence,
 // same `(eigenvectors, eigenvalues)` return shape (eigenvalues unsorted, as the
-// trait contract permits). Concrete per-scalar (f64 / f32) rather than generic
+// trait contract permits). Concrete per-scalar (f64/f32) rather than generic
 // because `nalgebra_lapack`'s scalar trait `SymmetricEigenScalar` is not
 // re-exported (only the `SymmetricEigen` struct is), so it cannot be named in a
-// bound — unlike `CholeskyScalar` above. f64 and f32 are the only scalars
+// bound, unlike `CholeskyScalar` above. f64 and f32 are the only scalars
 // LAPACK's `dsyev`/`ssyev` cover; see the `nalgebra-lapack` feature note in
 // `Cargo.toml`.
 #[cfg(feature = "nalgebra-lapack")]
@@ -637,7 +637,7 @@ where
             self.nrows(),
             b.len()
         );
-        // nalgebra's `cholesky` consumes the matrix — clone is unavoidable
+        // nalgebra's `cholesky` consumes the matrix—clone is unavoidable
         // without a separate factorize/solve split.
         self.clone()
             .cholesky()
@@ -650,7 +650,7 @@ where
 // interchangeable with the pure-Rust impl above for the LAPACK scalar set:
 // same assertions, same `NotPositiveDefinite` mapping when factorization fails.
 // The bound narrows from any `F: ComplexField` to `nalgebra_lapack`'s
-// `CholeskyScalar` (f32 / f64 and their complex counterparts) — see the
+// `CholeskyScalar` (f32/f64 and their complex counterparts)—see the
 // `nalgebra-lapack` feature note in `Cargo.toml`.
 #[cfg(feature = "nalgebra-lapack")]
 impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>

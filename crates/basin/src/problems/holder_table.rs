@@ -7,7 +7,7 @@
 //! Multimodal function with many local minima and four equal global minima at
 //! `(±8.05502, ±9.66459)` with `f ≈ −19.2085`, arranged at the corners of a
 //! flat "table". The nested `|·|` terms make it non-differentiable, so it is
-//! cost-only — a target for derivative-free and global solvers. Usual search
+//! cost-only—a target for derivative-free and global solvers. Usual search
 //! domain is `x, y ∈ [-10, 10]`.
 
 use core::marker::PhantomData;
@@ -47,7 +47,7 @@ impl<P> Default for HolderTable<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static HOLDER_TABLE_SPEC: ProblemSpec = ProblemSpec {
     name: "Holder table",
     dim: Dimensionality::Fixed(2),
@@ -70,7 +70,7 @@ pub static HOLDER_TABLE_SPEC: ProblemSpec = ProblemSpec {
                   (±8.05502, ±9.66459), value ≈ −19.2085, at the corners of a \
                   flat table. Non-differentiable (nested |·| terms); usual \
                   search domain is x, y ∈ [-10, 10]. Cost-only, for \
-                  derivative-free / global solvers.",
+                  derivative-free and global solvers.",
 };
 
 impl<P> HasSpec for HolderTable<P> {

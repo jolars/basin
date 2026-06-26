@@ -3,13 +3,13 @@
 //! Every solver in the family minimizes the shared [`QuadraticModel`] over a
 //! trust region `‖d‖ ≤ Δ`, but each intersects that ball with its own feasible
 //! region: nothing for NEWUOA, a box for BOBYQA, linear constraints for LINCOA.
-//! [`TrustRegionSubproblem`] captures exactly that one degree of freedom — the
+//! [`TrustRegionSubproblem`] captures exactly that one degree of freedom—the
 //! model core, the `H` update, and the driver loop are otherwise identical.
 //!
 //! The associated [`Region`](TrustRegionSubproblem::Region) type carries the
 //! per-solver feasibility data (`()`, a shifted box, …) rather than a shared
-//! constraint supertrait, keeping the box / linear / unconstrained cases
-//! distinct — consistent with basin's constraint design (`.claude/rules/`).
+//! constraint supertrait, keeping the box/linear/unconstrained cases
+//! distinct—consistent with basin's constraint design (`.claude/rules/`).
 
 use super::model::QuadraticModel;
 use crate::core::math::Scalar;
@@ -24,7 +24,7 @@ pub(crate) struct TrustRegionStep<F = f64> {
     /// maps it to absolute coordinates as `x_opt + d = x0 + (xⱼ − x0) + d` with
     /// `j = kopt`.
     pub(crate) d: Vec<F>,
-    /// CRVMIN — the least curvature `sᵢᵀ∇²Q sᵢ / ‖sᵢ‖²` seen on the *interior*
+    /// CRVMIN—the least curvature `sᵢᵀ∇²Q sᵢ / ‖sᵢ‖²` seen on the *interior*
     /// path, or `0` if the path ever reached the trust-region boundary. The
     /// driver's ρ-reduction test reads this.
     pub(crate) crvmin: F,

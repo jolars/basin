@@ -1,16 +1,16 @@
 //! Public-API integration tests for the COBYLA solver.
 //!
-//! Exercises [`Cobyla`] through the framework — [`Executor`] over a
+//! Exercises [`Cobyla`] through the framework: [`Executor`] over a
 //! [`CobylaState`], with framework termination ([`MaxCostEvals`],
 //! [`RhoTolerance`]) and a problem carrying nonlinear inequality constraints via
 //! [`NonlinearInequalityConstraints`]. These confirm the public wiring:
 //! init/next_iter, the constraint evaluation + folding into the merit, the V↔Vec
 //! bridge, count mirroring, feasibility of the returned point, and the
-//! convergence / budget / early-stop termination paths.
+//! convergence/budget/early-stop termination paths.
 //!
 //! The constraint trait is *function-valued* (no matrix carrier), so the
-//! backend-generic tests need only the parameter vector to be the backend type —
-//! they guard the support-matrix ✓ for nalgebra / ndarray / faer the same way
+//! backend-generic tests need only the parameter vector to be the backend type;
+//! they guard the support-matrix ✓ for nalgebra/ndarray/faer the same way
 //! `lincoa_public.rs` does for the linear-constrained family.
 
 use basin::{
@@ -103,7 +103,7 @@ fn rho_tolerance_stops_early() {
 }
 
 /// Backend-generic: drive COBYLA on nalgebra `DVector`. Guards the
-/// support-matrix ✓ for nalgebra — the param vector must satisfy
+/// support-matrix ✓ for nalgebra; the param vector must satisfy
 /// `VectorLen + Index + IndexMut`.
 #[cfg(feature = "nalgebra")]
 #[test]

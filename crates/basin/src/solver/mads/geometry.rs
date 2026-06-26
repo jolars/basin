@@ -3,7 +3,7 @@
 //! scaled-Householder integer basis `H`, the maximal positive basis
 //! `D_k = [H −H]`, and the ℓ↔(Δᵐ, Δᵖ) mesh/poll sizes.
 //!
-//! All arithmetic is flat `f64` / `i64` and depends only on `(t, ℓ, n)` — it is
+//! All arithmetic is flat `f64`/`i64` and depends only on `(t, ℓ, n)`—it is
 //! backend- and scalar-`F`-independent. The direction outputs are exact integer
 //! vectors, so poll points `x_k + Δᵐ·d` land exactly on the mesh. Verified
 //! against the paper's Table 1/2 and Figure 1 (see the golden tests below and
@@ -47,7 +47,7 @@ pub(crate) fn adjusted_halton_direction(t: usize, ell: i32, n: usize) -> Vec<i64
     let norm_sq = |q: &[i64]| -> i64 { q.iter().map(|qi| qi * qi).sum() };
 
     // Beyond α where the largest single component alone exceeds the target,
-    // ‖q‖ > target for certain — bound the breakpoint enumeration there.
+    // ‖q‖ > target for certain—bound the breakpoint enumeration there.
     let c_max = c.iter().fold(0.0_f64, |m, ci| m.max(ci.abs()));
     let alpha_ub = (target + 0.5) / c_max;
 

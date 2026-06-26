@@ -73,7 +73,7 @@ fn with_stds_ones_matches_default() {
 }
 
 /// Anisotropic stds on the bounded variant still recover the interior
-/// Booth minimum (1, 3) within budget — the per-coordinate scale flows
+/// Booth minimum (1, 3) within budget; the per-coordinate scale flows
 /// through the penalty's `σ² · diag(C)` without breaking convergence.
 #[test]
 fn with_stds_anisotropic_recovers_minimum() {
@@ -217,7 +217,7 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
 /// `PopulationState` invariants survive iteration on the bounded path:
 /// `candidates` and `costs` stay parallel, length-λ, and
 /// sorted-ascending. The bounded variant uses **penalized** costs in
-/// `state.costs` (so the sort is on the penalized values) — same
+/// `state.costs` (so the sort is on the penalized values): same
 /// invariant, different value semantics from the raw cost.
 #[test]
 fn population_invariants_hold_after_iteration() {

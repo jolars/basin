@@ -15,7 +15,7 @@ use crate::core::state::{CountsMirror, GradientState, State};
 /// shape, but it *does* impl [`GradientState`] (its gradient is the scalar
 /// `f'(x)`), so first-order termination criteria such as
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance) work on a
-/// 1D solver — the natural "stop when `|f'(x)| ≤ tol`" test. A scalar gradient
+/// 1D solver: the natural "stop when `|f'(x)| ≤ tol`" test. A scalar gradient
 /// satisfies the criteria's norm bounds directly (`f64::norm_squared()` is
 /// `f' · f'`).
 ///
@@ -152,9 +152,9 @@ where
     ScalarGradientState<F>: State,
 {
     fn mirror(&mut self, delta: &EvalCounts) {
-        // Same rule as `BasicState`: residual folds into cost, Jacobian /
+        // Same rule as `BasicState`: residual folds into cost, Jacobian/
         // Hessian into gradient. A 1D derivative solver only does cost +
-        // gradient work, so the residual / Jacobian / Hessian terms are 0 in
+        // gradient work, so the residual/Jacobian/Hessian terms are 0 in
         // practice.
         self.cost_evals = delta.cost_evals + delta.residual_evals;
         self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;

@@ -14,25 +14,25 @@
             title: "Backends",
             status: "Live",
             href: "/benchmarks/backends/",
-            body: "A curated set of solver + problem pairs across Vec, nalgebra, ndarray, and faer — isolating the cost of the linear-algebra layer, and showing where a backend can't run a solver at all.",
+            body: "A curated set of solver + problem pairs across Vec, nalgebra, ndarray, and faer—isolating the cost of the linear-algebra layer, and showing where a backend can't run a solver at all.",
         },
         {
             title: "Solvers",
             status: "Live",
             href: "/benchmarks/solvers/",
-            body: "Head-to-head runs of GD, Nelder–Mead, BFGS, L-BFGS, and CMA-ES on Rosenbrock from six starting points — suboptimality against wall-clock time under a fixed time budget per run.",
+            body: "Head-to-head runs of GD, Nelder–Mead, BFGS, L-BFGS, and CMA-ES on Rosenbrock from six starting points—suboptimality against wall-clock time under a fixed time budget per run.",
         },
         {
             title: "Competitors",
             status: "Live",
             href: "/benchmarks/competitors/",
-            body: "basin against established crates such as argmin on matched problems — suboptimality against wall-clock time, since the implementations differ.",
+            body: "basin against established crates such as argmin on matched problems—suboptimality against wall-clock time, since the implementations differ.",
         },
     ];
 </script>
 
 <Seo
-    title="Basin — benchmarks"
+    title="Basin—benchmarks"
     description="Benchmarks for the Basin optimization library, along three axes: linear-algebra backends, solver families, and competing crates such as argmin."
 />
 

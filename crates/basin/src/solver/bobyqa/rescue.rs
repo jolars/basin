@@ -5,7 +5,7 @@
 //! RESCUE replaces a few interpolation points by fresh ones to restore the
 //! conditioning of the interpolation system. It:
 //!
-//! 1. recentres the origin on `x_opt` ([`QuadraticModel::shift_origin`]);
+//! 1. recenters the origin on `x_opt` ([`QuadraticModel::shift_origin`]);
 //! 2. lays down a set of *provisional* interpolation points around `x_opt`
 //!    (coordinate steps of length `δ`, clipped to the bounds), represented
 //!    implicitly by `ptsid` + `ptsaux`, and rebuilds `H` (`Ξ`/`Υ`/`Ω`) for that
@@ -13,7 +13,7 @@
 //! 3. reinstates as many *original* points as can safely replace a provisional
 //!    point (the denominator test of eq. 5.7), updating `H` via [`updateh_rsc`];
 //! 4. evaluates `F` at the genuinely-new provisional points that remain and
-//!    rebuilds the quadratic model `∇Q` / `Γ` / `γ` by Lagrange corrections.
+//!    rebuilds the quadratic model `∇Q`/`Γ`/`γ` by Lagrange corrections.
 //!
 //! Ported from PRIMA v0.7.2 `fortran/bobyqa/rescue.f90` (the `rescue` and
 //! `updateh_rsc` subroutines), translated into basin's [`QuadraticModel`]
@@ -39,7 +39,7 @@ use super::init::{extra_pair, xinbd};
 /// `(ip, iq)`; `0` means "absent" (rescue.f90:358–359). With `ip = ⌊ptsid⌋` and
 /// `iq = ⌊(n+1)·ptsid − (n+1)·ip⌋`, the provisional step is
 /// `ptsaux(1,ip)·e_ip + ptsaux(1,iq)·e_iq` (both present), or a single
-/// `ptsaux(1,ip)·e_ip` / `ptsaux(2,iq)·e_iq` (only `ip` / only `iq`).
+/// `ptsaux(1,ip)·e_ip`/`ptsaux(2,iq)·e_iq` (only `ip` / only `iq`).
 fn decode_ptsid<F: Scalar>(p: F, n: usize) -> (usize, usize) {
     let np1 = F::from_usize(n + 1).expect("n+1 representable");
     let ip_f = p.floor();
@@ -91,7 +91,7 @@ pub(crate) fn rescue<F: Scalar, E>(
         sl[i] = (sl[i] - xopt[i]).min(zero);
         su[i] = (su[i] - xopt[i]).max(zero);
     }
-    // shift_origin recentres x0/xpt/gq/Γ (γ unchanged); its Ξ/Υ work is
+    // shift_origin recenters x0/xpt/gq/Γ (γ unchanged); its Ξ/Υ work is
     // overwritten below by the provisional H. Equivalent to PRIMA's HQ r2update
     // prologue, and additionally re-anchors gq to the new x0 (= x_opt).
     model.shift_origin();
@@ -498,7 +498,7 @@ pub(crate) fn rescue<F: Scalar, E>(
 /// (`zsign` untouched); `fval` and the model are not touched here. `vlag` is the
 /// (length `m+n`) `H·w` in `[λ; g]` layout; it is mutated locally. On
 /// `DAMAGING_ROUNDING` (non-finite `vlag`/`β` or `denom ≤ 0`) the update is
-/// silently skipped to protect `H` — matching PRIMA, which calls this without
+/// silently skipped to protect `H`—matching PRIMA, which calls this without
 /// capturing its optional `info` here (the entry gate at the call site already
 /// rejects bad denominators, so the skip is not expected to trigger).
 fn updateh_rsc<F: Scalar>(model: &mut QuadraticModel<F>, knew: usize, beta: F, vlag: &mut [F]) {

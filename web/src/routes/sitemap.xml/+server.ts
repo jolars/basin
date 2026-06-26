@@ -1,5 +1,5 @@
 // Canonical production origin. The deployed site lives at the apex custom
-// domain `https://basin.rs/`, served at root — so there is no base path to
+// domain `https://basin.rs/`, served at root—so there is no base path to
 // prefix here (a base-prefixed deploy would have a different origin too,
 // making these canonical URLs wrong regardless). Only the origin can't be
 // derived during prerender (which uses a placeholder host), hence the
@@ -19,7 +19,7 @@ function routePaths(): string[] {
                     .replace("/src/routes", "")
                     .replace(/\/\+page\.(svelte|svx|md)$/, ""),
             )
-            // Drop dynamic routes — they can't be enumerated without data.
+            // Drop dynamic routes—they can't be enumerated without data.
             .filter((path) => !path.includes("["))
             // The root `+page.svelte` maps to `''`; that's the landing page.
             .map((path) => (path === "" ? "/" : path))

@@ -11,21 +11,21 @@
 //!
 //! as a plain [`CostFunction`] + [`Gradient`]. Minimizing `L_ρ` for a
 //! sequence of multiplier updates `λ ← λ + ρ c(x)` (and, when feasibility
-//! stalls, an increasing `ρ`) drives the iterate to the constrained optimum
-//! — the [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)
+//! stalls, an increasing `ρ`) drives the iterate to the constrained
+//! optimum: the [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)
 //! automates that outer loop, but `AugmentedLagrangian` is also usable on its
-//! own with any unconstrained solver / [`Executor`](crate::core::executor::Executor)
+//! own with any unconstrained solver/[`Executor`](crate::core::executor::Executor)
 //! at a fixed `(λ, ρ)`.
 //!
 //! Unlike the [`LogBarrier`](crate::core::barrier::LogBarrier), `L_ρ` is
-//! finite and smooth *everywhere* — there is no feasibility wall — so the
+//! finite and smooth *everywhere* (there is no feasibility wall), so the
 //! inner solver may start from an **infeasible** point and use any line
 //! search (or none).
 //!
 //! # Adapter asymmetry (tenet 4, load-bearing)
 //!
 //! `AugmentedLagrangian` *consumes* [`LinearEqualityConstraints`] and exposes
-//! [`CostFunction`] + [`Gradient`] **only** — it deliberately does **not**
+//! [`CostFunction`] + [`Gradient`] **only**: it deliberately does **not**
 //! implement [`LinearEqualityConstraints`] itself. That asymmetry is what
 //! routes the wrapped problem to *unconstrained* solvers: if the adapter
 //! re-exposed the constraint trait it would route straight back into
@@ -37,7 +37,7 @@
 //!
 //! Requires the constraint matrix to implement
 //! [`MatVec`] (`A x`) and
-//! [`MatTransposeVec`] (`Aᵀ v`) — a
+//! [`MatTransposeVec`] (`Aᵀ v`)—a
 //! strict subset of the LA tier that never includes a linear solve. That
 //! covers nalgebra (`DMatrix`/`DVector`) and faer (`Mat`/`Col`); `Vec<f64>`
 //! and `ndarray` are a compile-time error until they grow the two matvec
@@ -52,7 +52,7 @@ use crate::core::problem::{CostFunction, Gradient};
 /// multiplier estimate `λ` and penalty `ρ`.
 ///
 /// Borrows the underlying problem (`&'a P`) and the multiplier vector
-/// (`&'a V`) so both can be swapped cheaply between solves — the
+/// (`&'a V`) so both can be swapped cheaply between solves: the
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)
 /// builds a fresh `AugmentedLagrangian` per outer iteration as it updates
 /// `λ` and `ρ`. (The extra `V` type parameter, relative to

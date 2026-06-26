@@ -16,7 +16,7 @@ use basin::{
 use nalgebra::{DMatrix, DVector};
 
 /// Sphere-style problem with a box for SSGA initial sampling. Plain
-/// f(x) = ||x||², not the convex regression target — we want the easy
+/// f(x) = ||x||², not the convex regression target; we want the easy
 /// canary that any working population solver should crush.
 struct BoxedSphere {
     lower: DVector<f64>,
@@ -51,8 +51,8 @@ impl basin::BoxConstraints for BoxedSphere {
 }
 
 /// Sphere(D=10) within a generous box. MaLsChCma with the default
-/// parameters should drive cost below 1e-6 well within 20k cost evals
-/// — CMA-ES alone solves this in a few hundred, so the chain machinery
+/// parameters should drive cost below 1e-6 well within 20k cost evals;
+/// CMA-ES alone solves this in a few hundred, so the chain machinery
 /// shouldn't regress it.
 #[test]
 fn converges_on_sphere_d10() {
@@ -143,7 +143,7 @@ fn different_seeds_yield_different_trajectories() {
 /// if its `(CmaEs, CmaEsState)` pair was correctly preserved
 /// and re-entered between outer iterations. Without `CmaEs::init`
 /// idempotency the second LS application would lose its evolution
-/// state — the test would still pass (count increments unconditionally)
+/// state; the test would still pass (count increments unconditionally)
 /// but the chain would be broken; see the cost-progression test below
 /// for the idempotency check.
 ///
@@ -153,7 +153,7 @@ fn different_seeds_yield_different_trajectories() {
 /// repeatedly on the best individual.
 #[test]
 fn chain_resumes_at_least_one_individual_twice() {
-    // Rastrigin is multimodal — random SSGA offspring almost never
+    // Rastrigin is multimodal; random SSGA offspring almost never
     // beat the worst, so the population stabilizes after a few iters
     // and the Molina §4.3 fallback (S_LS = ∅ → LS the best) fires
     // repeatedly on the same individual.
@@ -196,7 +196,7 @@ fn chain_resumes_at_least_one_individual_twice() {
 /// `result.cost_evals()` reflects outer SSGA evals + every inner CMA
 /// evaluation. With budget `B`, the final count overshoots `B` by at
 /// most one chain segment's evals plus the SSGA phase of the trailing
-/// iteration — bounded by `nfrec + ls_intensity + λ_inner`.
+/// iteration, bounded by `nfrec + ls_intensity + λ_inner`.
 #[test]
 fn cost_evals_overshoot_is_bounded() {
     let problem = BoxedSphere::new(5, 5.0);

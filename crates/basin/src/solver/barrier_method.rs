@@ -15,7 +15,7 @@ use crate::core::termination::{
     GradientTolerance, MaxIter, TerminationCriterion, TerminationReason,
 };
 
-/// Log-barrier method for `min f(x) s.t. A x ≤ b` — the constrained
+/// Log-barrier method for `min f(x) s.t. A x ≤ b`—the constrained
 /// analogue of R's `constrOptim`, layering a barrier on an unconstrained
 /// inner solver.
 ///
@@ -35,9 +35,9 @@ use crate::core::termination::{
 /// [`Lbfgs`](crate::solver::lbfgs::Lbfgs)
 /// ([`LbfgsState`](crate::core::state::LbfgsState)) is usable. Two inner kinds
 /// are deliberately excluded: a least-squares solver
-/// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)) — the barrier
+/// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt))—the barrier
 /// objective is not a sum of squares and the [`LogBarrier`] adapter exposes
-/// only `CostFunction + Gradient`, not `Residual + Jacobian` — and a
+/// only `CostFunction + Gradient`, not `Residual + Jacobian`—and a
 /// derivative-free solver (Nelder-Mead), ruled out by the [`GradientState`]
 /// bound.
 ///
@@ -79,7 +79,7 @@ use crate::core::termination::{
 /// infeasible `x₀` (some `aᵢᵀ x₀ ≥ bᵢ`) is detected at
 /// [`init`](Solver::init) and reported as
 /// [`SolverFailed`](TerminationReason::SolverFailed) on the first
-/// iteration — mirroring R's `constrOptim`, which errors on an infeasible
+/// iteration—mirroring R's `constrOptim`, which errors on an infeasible
 /// initial value. A phase-1 solve to *find* a feasible point is deferred.
 ///
 /// # Termination
@@ -87,14 +87,14 @@ use crate::core::termination::{
 /// The outer duality-gap test `m · μ ≤ tol` is solver-specific and lives on
 /// the solver (tenet 3): it fires via [`terminate`](Solver::terminate) as
 /// [`SolverConverged`](TerminationReason::SolverConverged). Pair with the
-/// executor's [`MaxIter`] as a safety net — with the defaults the gap
+/// executor's [`MaxIter`] as a safety net—with the defaults the gap
 /// closes in roughly `log(m · mu0 / tol) / log(reduction)` outer iterations
 /// (≈ 9 for the defaults), so an outer `max_iter` of 20–30 is ample.
 ///
 /// **Do not attach a gradient-norm criterion to the outer executor.** The
 /// gap test is the correct optimality measure here. At a constrained
-/// optimum the true objective gradient `∇f` does *not* vanish — it points
-/// into the active constraint face — so a framework
+/// optimum the true objective gradient `∇f` does *not* vanish—it points
+/// into the active constraint face—so a framework
 /// [`GradientTolerance`] /
 /// [`RelativeGradientTolerance`](crate::core::termination::RelativeGradientTolerance)
 /// on the outer loop would either never fire or fire on the wrong point.
@@ -104,7 +104,7 @@ use crate::core::termination::{
 /// # Backends
 ///
 /// Requires the constraint matrix to implement
-/// [`MatVec`] (`A x`) and [`MatTransposeVec`] (`Aᵀ v`) — never a linear
+/// [`MatVec`] (`A x`) and [`MatTransposeVec`] (`Aᵀ v`)—never a linear
 /// solve. All backends supply those two ops, so the method runs on every
 /// backend: `Vec<f64>` (via
 /// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
@@ -118,7 +118,7 @@ use crate::core::termination::{
 /// Internally drives the inner solver via
 /// [`run_loop`] with a **fresh** criteria
 /// vector each outer iteration (`MaxIter` + `GradientTolerance` on the
-/// barrier objective). The fresh vector is intrinsic here — each outer iter
+/// barrier objective). The fresh vector is intrinsic here—each outer iter
 /// minimizes a *different* surrogate (`Problem::new(LogBarrier)` with a
 /// shrinking μ), not a reuse-avoidance dodge: criteria
 /// [reset](crate::core::termination::TerminationCriterion::reset) per run, so
@@ -181,7 +181,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     ///
     /// # Panics
     ///
-    /// Panics unless `mu0 > 0` — a non-positive `μ` is not a barrier.
+    /// Panics unless `mu0 > 0`—a non-positive `μ` is not a barrier.
     pub fn mu0(mut self, mu0: F) -> Self {
         assert!(mu0 > F::zero(), "mu0 must be > 0");
         self.mu0 = mu0;
@@ -193,7 +193,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     ///
     /// # Panics
     ///
-    /// Panics unless `reduction > 1` — otherwise `μ` would not shrink and
+    /// Panics unless `reduction > 1`—otherwise `μ` would not shrink and
     /// the duality gap would never close.
     pub fn with_reduction(mut self, reduction: F) -> Self {
         assert!(reduction > F::one(), "reduction must be > 1");
@@ -221,9 +221,9 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// this budget rather than reaching [`with_inner_grad_tol`](Self::with_inner_grad_tol),
     /// so total work scales roughly linearly with it. Because the outer
     /// μ-continuation re-solves at each shrinking `μ`, a loosely-centered
-    /// (small-budget) subproblem usually still converges to the same point —
-    /// often an order of magnitude cheaper. Raise it for hard / higher-
-    /// dimensional problems; a Newton-class inner (future work) would centre
+    /// (small-budget) subproblem usually still converges to the same point—
+    /// often an order of magnitude cheaper. Raise it for hard/higher-
+    /// dimensional problems; a Newton-class inner (future work) would center
     /// in far fewer steps and reach `inner_grad_tol` instead.
     ///
     /// # Panics
@@ -239,7 +239,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// Gradient-norm tolerance for each inner barrier-subproblem solve
     /// (default `1e-8`). Inner solves stop at `‖∇φ_μ‖ ≤ inner_grad_tol`.
     ///
-    /// Note: with a first-order inner solver this rarely binds — the
+    /// Note: with a first-order inner solver this rarely binds—the
     /// ill-conditioned barrier means [`with_inner_max_iter`](Self::with_inner_max_iter)
     /// usually governs instead. It matters for a Newton-class inner.
     ///
@@ -312,7 +312,7 @@ where
 
         // Minimize the barrier objective at the current μ on a *separate*
         // inner state seeded (warm-started) at the current iterate. A fresh
-        // inner state — rather than threading the outer one — keeps the
+        // inner state (rather than threading the outer one) keeps the
         // inner solver's iteration counter from polluting the outer's.
         // Fresh criteria each call satisfies the statelessness contract.
         let mut barrier_wrapper = Problem::new(LogBarrier::new(problem.inner(), self.mu));
@@ -341,7 +341,7 @@ where
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
 
-        // Adopt the inner's iterate, then evaluate the *true* f / ∇f there
+        // Adopt the inner's iterate, then evaluate the *true* f/∇f there
         // (the inner left cost/gradient at the barrier objective).
         state.param = result.state.param().clone();
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
@@ -369,7 +369,7 @@ mod tests {
     use super::*;
 
     // The builder validation is backend-independent, so a unit inner stand-in
-    // (`()`) suffices — these never run the solver, only the builders.
+    // (`()`) suffices—these never run the solver, only the builders.
 
     #[test]
     #[should_panic(expected = "mu0 must be > 0")]

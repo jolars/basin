@@ -2,7 +2,7 @@
  * Per-problem metadata for the visualizer.
  *
  * Mirrors the corpus exposed by `basin::problems` (Sphere, Rosenbrock,
- * Beale, Booth) — but only the bits the UI needs: a viewing window
+ * Beale, Booth), but only the bits the UI needs: a viewing window
  * for the contour plot, a known minimum (location + optimal value f*,
  * the latter for the suboptimality chart), and how to compress the cost
  * dynamic range when colorizing.
@@ -121,7 +121,7 @@ export const PROBLEMS: ProblemMeta[] = [
         // Cosine ripple sits on top of a paraboloid; sqrt keeps the lattice
         // of local minima visible without flattening the basin floor.
         intensity: "sqrt",
-        // GD on Rastrigin is "wrong tool for the job" — it stalls in the
+        // GD on Rastrigin is "wrong tool for the job"—it stalls in the
         // nearest local well. Kept here so the slider has a sensible default
         // when users explore the (poor) local-search experience.
         gdAlphaDefault: 0.01,

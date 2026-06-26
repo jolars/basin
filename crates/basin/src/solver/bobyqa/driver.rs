@@ -1,4 +1,4 @@
-//! BOBYQA driver loop (Powell 2009, §6) — resumable working state.
+//! BOBYQA driver loop (Powell 2009, §6)—resumable working state.
 //!
 //! `BobyqaWork` carries the shared [`QuadraticModel`], the shifted bounds
 //! `sl`/`su`, and the ρ/Δ schedule across iterations. The public
@@ -7,9 +7,9 @@
 //! iteration that may also take a geometry step or reduce ρ.
 //!
 //! Ported from PRIMA v0.7.2 `fortran/bobyqa/bobyqb.f90`, reusing basin's shared
-//! model machinery (`prepare_update` / `update_params` / `commit_update`,
+//! model machinery (`prepare_update`/`update_params`/`commit_update`,
 //! `shift_origin`, the §8 `tryqalt` alternative model) and the BOBYQA-specific
-//! [`trsbox`](super::trsbox::trsbox) / [`geostep`](super::geometry::geostep) /
+//! [`trsbox`](super::trsbox::trsbox)/[`geostep`](super::geometry::geostep) /
 //! [`setdrop_tr`](super::geometry::setdrop_tr), and [`rescue`](super::rescue) for
 //! the §5 restoration procedure (invoked at the two denominator-failure sites,
 //! after a trust-region step and before a geometry step).
@@ -27,7 +27,7 @@ pub(crate) enum Transition {
     Continue,
     /// ρ was reduced this step; keep iterating at the finer radius.
     RhoReduced,
-    /// ρ reached ρ_end — BOBYQA's natural convergence.
+    /// ρ reached ρ_end—BOBYQA's natural convergence.
     Converged,
 }
 
@@ -46,12 +46,12 @@ pub(crate) struct BobyqaWork<F = f64> {
     /// Shifted upper bounds `su = b − x0` (`≥ 0`).
     pub(crate) su: Vec<F>,
     /// Absolute lower bounds `a` (PRIMA `xl`). Kept because the origin `x0`
-    /// drifts, so `sl`/`su` alone can no longer recover the box — RESCUE's
+    /// drifts, so `sl`/`su` alone can no longer recover the box—RESCUE's
     /// re-evaluation needs the absolute bounds for `xinbd`.
     pub(crate) lower: Vec<F>,
     /// Absolute upper bounds `b` (PRIMA `xu`).
     pub(crate) upper: Vec<F>,
-    /// Final radius `ρ_end` — drives the schedule and the convergence stop.
+    /// Final radius `ρ_end`—drives the schedule and the convergence stop.
     rho_end: F,
     /// Current trust-region radius `ρ`.
     rho: F,
@@ -459,7 +459,7 @@ impl<F: Scalar> BobyqaWork<F> {
                 self.maybe_shift_origin();
                 // Final short trust step (PRIMA bobyqb:576-584): when the
                 // converging iteration's trust step was short, evaluate F at
-                // x_opt + d before stopping — it is "often a good move in
+                // x_opt + d before stopping—it is "often a good move in
                 // variable space". Mirrors the NEWUOA sibling's Box-13 step. `d`
                 // is unchanged in the shortd branch, so it is the TRSBOX step;
                 // it is gated on `shortd` exactly as PRIMA gates on `.and. shortd`.

@@ -112,7 +112,7 @@ fn eval_counts_are_recorded() {
 }
 
 /// Two active constraints exercise the multi-row `Aᵀ·(μ/s)` sum in the
-/// barrier gradient — and the `DenseMatrix` transpose-matvec on a `2×2`. `min
+/// barrier gradient, and the `DenseMatrix` transpose-matvec on a `2×2`. `min
 /// ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2` and `x₀ ≤ 0.5` has both constraints active
 /// at the optimum `(0.5, 1.5)`.
 #[test]

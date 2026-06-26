@@ -15,7 +15,7 @@ use nalgebra::{DMatrix, DVector};
 /// CMA-ES + LM on 2-D Rosenbrock-as-residuals. CMA from a wide-σ start
 /// gets near `(1, 1)`; the inner LM (Nielsen damping, default tolerances)
 /// drives the iterate down to high precision via the basin's quadratic
-/// model. We assert `‖x* − (1, 1)‖_∞ ≤ 1e-6` — LM precision, not CMA
+/// model. We assert `‖x* − (1, 1)‖_∞ ≤ 1e-6`, LM precision, not CMA
 /// precision.
 #[test]
 fn converges_on_rosenbrock_residuals_2d() {
@@ -56,7 +56,7 @@ fn converges_on_rosenbrock_residuals_2d() {
 /// skips iter-0 injection) runs LM init (1 residual + 1 jacobian eval),
 /// at least one LM next_iter (1 residual + 1 jacobian), plus the
 /// outer's re-evaluation after clipping (1 cost). So `≥ outer_iters · k
-/// · (4 + 1)` extra work units over vanilla — using a slightly weaker
+/// · (4 + 1)` extra work units over vanilla, using a slightly weaker
 /// lower bound to absorb the iter-0 skip and any LM early-termination
 /// via the gradient-norm test.
 #[test]

@@ -1,16 +1,16 @@
 //! `Executor::from_start` equivalence tests.
 //!
 //! `Executor::from_start(problem, solver, x0)` must produce exactly the same
-//! run as `Executor::new(problem, solver, ExplicitState::new(x0))` — it is
+//! run as `Executor::new(problem, solver, ExplicitState::new(x0))`—it is
 //! sugar that calls the solver's
 //! [`InitialState::seed`](basin::InitialState::seed) instead of making the
 //! caller name the state type. Each test runs both forms with identical
 //! settings and asserts bit-identical final iterate and cost, covering one
 //! solver per state family.
 //!
-//! Solvers whose natural initialization needs more than a point — CMA-ES (σ),
-//! the population GA / DE / random search (they sample the box), and the
-//! bracketing scalar solvers (Brent, golden-section) — deliberately do **not**
+//! Solvers whose natural initialization needs more than a point, namely CMA-ES
+//! (σ), the population GA, DE, and random search (they sample the box), and the
+//! bracketing scalar solvers (Brent, golden-section), deliberately do **not**
 //! implement [`InitialState`](basin::InitialState), so `from_start` with one
 //! is a compile error. That exclusion is enforced by the type system; e.g.
 //! `Executor::from_start(problem, CmaEs::new(...), x0)` does not compile
@@ -240,7 +240,7 @@ fn mads_state() {
 /// BFGS now seeds uniformly across every backend it runs on. The `Vec<f64>`
 /// case is covered by [`bfgs_quasi_newton_state_vec_backend`]; these confirm
 /// the nalgebra and faer seed impls added alongside it (`WarmStart` was
-/// nalgebra-only before). `ndarray` is intentionally absent — BFGS does not
+/// nalgebra-only before). `ndarray` is intentionally absent—BFGS does not
 /// run on `Array2` (no `GeneralRankOneUpdate`).
 #[cfg(feature = "nalgebra")]
 #[test]

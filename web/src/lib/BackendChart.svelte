@@ -210,7 +210,7 @@
         class="fill-slate-500 dark:fill-slate-400"
         x={padL}
         y={padT - 5}
-        text-anchor="start">time / solve</text
+        text-anchor="start">time/solve</text
     >
     <text
         class="fill-slate-500 dark:fill-slate-400"

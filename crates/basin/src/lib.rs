@@ -1,4 +1,4 @@
-//! basin — a numerical optimization library.
+//! basin—a numerical optimization library.
 //!
 //! The framework lives in [`core`]: problem traits the user implements
 //! ([`CostFunction`], [`Gradient`], [`BoxConstraints`],
@@ -54,8 +54,8 @@
 //!
 //! [`Executor::new`] takes a fully-built [`State`] so you control the initial
 //! iterate (a custom simplex, a warm-started inverse Hessian, an anisotropic
-//! CMA-ES covariance). For the common case — start at a point, use the
-//! solver's natural defaults — [`Executor::from_start`] takes the bare
+//! CMA-ES covariance). For the common case (start at a point, use the
+//! solver's natural defaults) [`Executor::from_start`] takes the bare
 //! starting vector instead and builds the state for you via
 //! [`InitialState::seed`], so you never name the concrete state type:
 //!
@@ -90,33 +90,33 @@
 //! | `TrustRegion` | `BasicState` | ✓ |
 //! | `GaussNewton`, `LevenbergMarquardt`, `Trf` | `NllsState` | ✓ |
 //! | `NelderMead` | `BasicSimplexState` | ✓ |
-//! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState` / … | ✓ |
-//! | `Mads` | `MadsState` / `ConstrainedMadsState` | ✓ |
+//! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
+//! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
 //! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
-//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma` | `CmaEsState` | ✗ — needs a step-size σ |
-//! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ — sample the box, ignore a point |
-//! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ — bracket, not a point |
+//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma` | `CmaEsState` | ✗—needs a step-size σ |
+//! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗—sample the box, ignore a point |
+//! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗—bracket, not a point |
 //!
 //! # Error model
 //!
 //! basin distinguishes *three* outcomes a run can produce. The split is a
-//! stable part of the public contract — downstream code can rely on it:
+//! stable part of the public contract—downstream code can rely on it:
 //!
-//! - **Soft reject** — return `Ok(f64::INFINITY)` from [`CostFunction::cost`]
+//! - **Soft reject**: return `Ok(f64::INFINITY)` from [`CostFunction::cost`]
 //!   to reject a *single point* without stopping the solve. Line searches treat
 //!   `+∞` as worse and retreat; population solvers treat it as worst fitness.
 //!   This is the channel for "this `x` is outside my domain, but the solve
 //!   should continue."
-//! - **Clean stop** — the run ends *normally* with a
+//! - **Clean stop**: the run ends *normally* with a
 //!   [`TerminationReason`], either
 //!   because a [`TerminationCriterion`] fired or because the [`Solver`] reported
 //!   a mid-iteration stop. [`Executor::run`] returns
 //!   `Ok(`[`OptimizationResult`]`)` carrying that reason. This is **not** an
 //!   error.
-//! - **Hard abort** — return `Err(_)` from a problem-trait method to terminate
+//! - **Hard abort**: return `Err(_)` from a problem-trait method to terminate
 //!   the *entire* solve. The error is your own type and bubbles out of
 //!   [`Executor::run`] untouched, typed as `Result<_, P::Error>`. Use it when
-//!   the failure is not about a particular `x` — a downstream service vanished,
+//!   the failure is not about a particular `x`—a downstream service vanished,
 //!   the user pressed cancel, an early-stop condition in your own problem state
 //!   fired.
 //!
@@ -159,7 +159,7 @@
 //! | Feature           | Effect                                                                                        |
 //! | ----------------- | --------------------------------------------------------------------------------------------- |
 //! | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                |
-//! | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky / symmetric eigendecomposition for LAPACK-backed ones.   |
+//! | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky/symmetric eigendecomposition for LAPACK-backed ones.   |
 //!
 //! The default build is wasm-friendly: no BLAS/LAPACK and no threads.
 //! Parallelism is behind the opt-in `parallel` feature.
@@ -169,7 +169,7 @@
 
 pub mod core;
 pub mod line_search;
-/// Catalogue of test problems used by the example tests and benchmarks.
+/// Catalog of test problems used by the example tests and benchmarks.
 #[cfg(feature = "problems")]
 pub mod problems;
 /// Concrete solver implementations.

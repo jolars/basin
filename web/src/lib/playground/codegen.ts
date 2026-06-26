@@ -2,19 +2,19 @@
  * Reactive Rust code generation for the landing-page playground.
  *
  * This module is the single source of truth for the snippet the playground
- * shows. It is deliberately **pure** — no wasm, no DOM, no Svelte — so it
+ * shows. It is deliberately **pure** (no wasm, no DOM, no Svelte), so it
  * renders on the server (the landing page prerenders the default snippet)
  * and so the CI compile-check (`scripts/check-snippets.ts`) can import it
  * directly and verify that *every* snippet it can produce actually builds
- * against the real `basin` API. If the API drifts, the check fails — the
+ * against the real `basin` API. If the API drifts, the check fails—the
  * demo can't silently lie.
  *
  * Scope is intentionally tight: this is a showcase, not the `/visualizer`.
- * One solver — gradient descent with a constant step — on the Rosenbrock
+ * One solver (gradient descent with a constant step) on the Rosenbrock
  * valley. The knobs are sliders: step size α, heavy-ball **momentum** β
  * (β = 0 at the far left is plain steepest descent; turn it up and momentum
  * glides along the valley floor), and the iteration budget. The `Gradient`
- * impl is written inline rather than referencing `basin::problems::*` —
+ * impl is written inline rather than referencing `basin::problems::*`;
  * inline reads as more representative of real usage.
  *
  * Phase 1 is wasm-free. Phase 2 will wire a live contour beside the code.
@@ -27,7 +27,7 @@ export interface PlaygroundConfig {
     beta: number;
     /** `max_iter` budget. */
     maxIter: number;
-    /** Initial point `[x, y]` — set by clicking the live contour. */
+    /** Initial point `[x, y]`, set by clicking the live contour. */
     start: [number, number];
 }
 
@@ -44,8 +44,8 @@ export const ALPHA_STEPS: readonly number[] = [
 export const MAXITER_STEPS: readonly number[] = [100, 200, 300, 500];
 
 // Momentum β is a linear 0–1 knob, so it gets a plain fine-grained slider
-// (not the 1-2-5 index steps α / max_iter use for their multi-decade
-// ranges). β = 0 at the far left is "off" — plain steepest descent.
+// (not the 1-2-5 index steps α and max_iter use for their multi-decade
+// ranges). β = 0 at the far left is "off"—plain steepest descent.
 export const BETA_MIN = 0;
 export const BETA_MAX = 0.99;
 export const BETA_STEP = 0.01;
@@ -115,7 +115,7 @@ export function rustInt(n: number): string {
  * `println!` and the live "output" console so the two can never disagree.
  * The snippet fills the slots with Rust format specifiers (`{:?}`, `{}`);
  * the console fills them with the matching Rust-formatted values pulled
- * from the wasm run (`Run.paramDebug()` / `Run.costDisplay()`).
+ * from the wasm run (`Run.paramDebug()` and `Run.costDisplay()`).
  */
 export function buildOutputLine(param: string, cost: string): string {
     return `x = ${param} (f = ${cost})`;
@@ -123,7 +123,7 @@ export function buildOutputLine(param: string, cost: string): string {
 
 /** Live result reported by the contour, used to render the output console. */
 export type RunOutput = {
-    /** True once the run has finished (`.run()` returns / `println!` fires). */
+    /** True once the run has finished (`.run()` returns and `println!` fires). */
     done: boolean;
     /** `result.param()` Debug-formatted by Rust (e.g. `[0.99, 0.98]`). */
     paramDebug: string;

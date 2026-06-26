@@ -1,17 +1,17 @@
 //! Public-API integration tests for the nonlinearly-constrained MADS variant
 //! (`Mads<Constrained>`, the progressive barrier).
 //!
-//! Exercises [`Mads::constrained`] through the framework — [`Executor`] over a
+//! Exercises [`Mads::constrained`] through the framework: [`Executor`] over a
 //! [`ConstrainedMadsState`], with a problem carrying nonlinear inequality
 //! constraints via [`NonlinearInequalityConstraints`]. These confirm the public
 //! wiring: init/next_iter, the `c(x)` evaluation folded into the violation
 //! `h(x) = Σⱼ max(cⱼ, 0)²`, the V↔Vec bridge, count mirroring, feasibility of
-//! the returned point, and — the capability the extreme barrier lacks — that an
+//! the returned point, and (the capability the extreme barrier lacks) that an
 //! **infeasible start** relaxes its way to a feasible optimum.
 //!
 //! The constraint trait is *function-valued* (no matrix carrier), so the
 //! backend-generic tests need only the parameter vector to be the backend type,
-//! guarding the support-matrix ✓ for nalgebra / ndarray / faer (same shape as
+//! guarding the support-matrix ✓ for nalgebra/ndarray/faer (same shape as
 //! `cobyla_public.rs`). MADS's poll geometry is deterministic and
 //! backend-independent, so every backend traces the identical run.
 

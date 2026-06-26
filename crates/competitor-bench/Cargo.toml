@@ -2,9 +2,9 @@
 # optimization libraries (axis 3 of the bench plan): the
 # `levenberg-marquardt` crate for NLLS, `argmin` and `gomez` for the
 # gradient-based and derivative-free solvers, and `nlopt` (a C-linked
-# wrapper around NLopt 2.9.1) on the derivative-free / L-BFGS cases.
+# wrapper around NLopt 2.9.1) on the derivative-free/L-BFGS cases.
 # These external frameworks (and criterion) have no business in basin
-# proper — so per CONTRIBUTING.md ("a new member should pull in heavy
+# proper—so per CONTRIBUTING.md ("a new member should pull in heavy
 # deps that have no business in the core crate") they live here,
 # isolated from basin's own dependency graph, MSRV gate, and the wasm
 # build (CI scopes those to `-p basin`).
@@ -18,7 +18,7 @@
 # solver-loop overhead with zero linear-algebra-library confound. argmin
 # and gomez are compared on the `Vec<f64>` backend, which basin, argmin,
 # and gomez (via its bundled `gomez::nalgebra` re-export, 0.32) all
-# support natively, so NM / GD run on identical param types.
+# support natively, so NM/GD run on identical param types.
 [package]
 name = "competitor-bench"
 version = "1.3.0"
@@ -39,15 +39,15 @@ argmin = "0.11"
 argmin-math = { version = "0.5", features = ["vec"] }
 # gomez bundles its own nalgebra (0.32). That's a major mismatch with
 # the lm/basin nalgebra (0.34) elsewhere in this crate, but gomez is
-# used standalone — its `Function` trait takes a `gomez::nalgebra::DVector`,
-# never a basin/lm type — so the two nalgebra majors coexist in the
+# used standalone—its `Function` trait takes a `gomez::nalgebra::DVector`,
+# never a basin/lm type—so the two nalgebra majors coexist in the
 # lockfile without interacting.
 gomez = "0.5"
 # nlopt wraps the NLopt C library (statically linked, vendored via
-# nlopt-sys bundling NLopt 2.9.1) — needs `cmake` at build time (added
+# nlopt-sys bundling NLopt 2.9.1)—needs `cmake` at build time (added
 # to devenv.nix). NLopt has no per-iteration callback; the objective
 # closure is the only observation point, so the trace harness records a
-# best-so-far curve at function-eval granularity — vs the per-iteration
+# best-so-far curve at function-eval granularity—vs the per-iteration
 # curves the other libraries report (see trace.rs for the asymmetry
 # note). LGPL-2.1, but `publish = false` keeps it from ever propagating
 # to basin proper or the wasm build.
@@ -61,7 +61,7 @@ rayon = { version = "1", optional = true }
 
 [features]
 # Off by default so the axis-3 competitor benches (`compare`, `gd_nm`)
-# compile basin *without* rayon — a single-threaded basin vs a
+# compile basin *without* rayon—a single-threaded basin vs a
 # single-threaded argmin/lm/gomez/nlopt, with no parallelism confound.
 # Enabling it turns on basin's population-eval parallelism and unlocks the
 # `population_scaling` bench, which compares serial vs parallel *within one

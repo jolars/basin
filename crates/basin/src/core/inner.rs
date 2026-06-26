@@ -3,7 +3,7 @@
 //!
 //! [`InnerExecutor`] mirrors [`Executor`](crate::core::executor::Executor)'s
 //! builder ergonomics (`max_iter`, `terminate_on`) but does *not* own the
-//! problem — outer solvers store one as a field and call
+//! problem: outer solvers store one as a field and call
 //! [`InnerExecutor::run`] against the borrowed `&P` they receive in
 //! `next_iter`. Internally [`InnerExecutor::run`] is exactly
 //! [`run_loop`]; the wrapper just owns the
@@ -22,22 +22,22 @@ use crate::core::termination::TerminationCriterion;
 
 /// Marks a solver as eligible to be the *inner* of a composed solver.
 ///
-/// Composed solvers — [`BarrierMethod`](crate::solver::BarrierMethod) and
+/// Composed solvers ([`BarrierMethod`](crate::solver::BarrierMethod) and
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)
-/// re-solving their barrier / augmented-Lagrangian subproblem at each
+/// re-solving their barrier/augmented-Lagrangian subproblem at each
 /// continuation step, or the CMA-injection family via the
-/// [`MemeticInner`](crate::solver::MemeticInner) sub-trait — repeatedly seed
+/// [`MemeticInner`](crate::solver::MemeticInner) sub-trait) repeatedly seed
 /// a fresh inner state at the current outer iterate, drive the inner over it,
 /// then read the refined iterate back via [`State::param`].
 ///
 /// The seed/state machinery itself lives on the [`InitialState`] supertrait
 /// (which also powers the top-level
 /// [`Executor::from_start`](crate::core::executor::Executor::from_start)
-/// convenience constructor). `WarmStart` adds no items — it is a marker
+/// convenience constructor). `WarmStart` adds no items: it is a marker
 /// certifying that a solver's natural [`seed`](InitialState::seed) is
 /// *composition-safe*. A solver can build a default initial state
 /// ([`InitialState`]) without being a blessed inner: e.g. `TrustRegion` and
-/// the Powell / MADS families implement `InitialState` but not `WarmStart`.
+/// the Powell/MADS families implement `InitialState` but not `WarmStart`.
 pub trait WarmStart<V>: InitialState<V> {}
 
 /// Build a solver's natural initial [`State`] from a starting point.
@@ -49,7 +49,7 @@ pub trait WarmStart<V>: InitialState<V> {}
 /// radius, and so on.
 ///
 /// This is the capability behind
-/// [`Executor::from_start`](crate::core::executor::Executor::from_start) —
+/// [`Executor::from_start`](crate::core::executor::Executor::from_start):
 /// `Executor::from_start(problem, solver, x0)` calls
 /// [`seed`](Self::seed) so the caller never names the concrete state type.
 /// The composition layer reaches it through the [`WarmStart`] subtrait
@@ -81,7 +81,7 @@ pub trait InitialState<V> {
 /// Mirrors [`Executor`](crate::core::executor::Executor)'s builder API:
 /// [`max_iter`](Self::max_iter) and [`terminate_on`](Self::terminate_on)
 /// are chainable. The differences are (a) the problem isn't owned, and
-/// (b) [`run`](Self::run) is reusable — the same `InnerExecutor` is
+/// (b) [`run`](Self::run) is reusable: the same `InnerExecutor` is
 /// expected to be invoked many times across the outer's lifetime.
 ///
 /// [`run_loop`] stays as the lower-level
@@ -95,7 +95,7 @@ pub trait InitialState<V> {
 ///
 /// 1. **Eval aggregation.** The [`Problem`] wrapper bumps
 ///    [`EvalCounts`](crate::core::problem::EvalCounts) on every
-///    cost / gradient / residual / Jacobian / Hessian call, and the
+///    cost/gradient/residual/Jacobian/Hessian call, and the
 ///    executor mirrors the per-run delta onto the inner state via
 ///    [`CountsMirror`]. What the outer must do depends on which problem
 ///    the inner sees:
@@ -105,10 +105,10 @@ pub trait InitialState<V> {
 ///      the *same* wrapper as the outer's, so aggregation happens
 ///      transparently. No explicit roll-up; the outer state's
 ///      [`CountsMirror`] impl decides how the counts surface on its
-///      [`State::cost_evals`] /
+///      [`State::cost_evals`]/
 ///      [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals).
 ///    - **Adapter-problem inner** (the outer builds a fresh
-///      `Problem::new(adapter)` per outer iter — e.g. the barrier /
+///      `Problem::new(adapter)` per outer iter, e.g. the barrier/
 ///      augmented-Lagrangian methods): after [`run`](Self::run) returns,
 ///      fold the inner wrapper's counts back into the outer's wrapper via
 ///      [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
@@ -179,7 +179,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     }
 
     /// Read-only access to the inner solver. Lets composed outer
-    /// solvers dispatch on the inner before [`run`](Self::run) — e.g. to
+    /// solvers dispatch on the inner before [`run`](Self::run)—e.g. to
     /// build an inner state via [`InitialState::seed`] or
     /// `MemeticInner::seed_scaled`. Mutable access goes through
     /// [`run`](Self::run), which already takes `&mut self`.
@@ -194,7 +194,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// The inner state's [`State::cost_evals`] reflects only per-run
     /// work (snapshot-relative against the wrapper count at entry), not
     /// cumulative across calls. The wrapper itself accumulates
-    /// monotonically — for same-problem composition the outer reads
+    /// monotonically—for same-problem composition the outer reads
     /// its own [`Problem::counts`] after `run` to see total work; for
     /// adapter-problem composition the outer builds a fresh inner
     /// `Problem` and folds counts via
@@ -202,7 +202,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// [`Problem::counts_mut`] after `run` returns.
     ///
     /// Internally exactly
-    /// [`run_loop`] — `init` is called
+    /// [`run_loop`]—`init` is called
     /// on every invocation, so the inner solver sees a fresh setup pass
     /// each time (e.g. seeding cost/gradient at the new starting point).
     pub fn run<P>(

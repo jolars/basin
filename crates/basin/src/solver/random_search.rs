@@ -9,10 +9,10 @@ use crate::core::termination::TerminationReason;
 /// Elitist (1+λ) random search over a feasible box.
 ///
 /// The first stochastic solver in basin and the smallest vehicle for the
-/// new [`BasicPopulationState`] / [`PopulationState`](crate::PopulationState) story
-/// — a derivative-free, population-based method that exercises the
+/// new [`BasicPopulationState`]/[`PopulationState`](crate::PopulationState) story—
+/// a derivative-free, population-based method that exercises the
 /// reproducible RNG infrastructure (see [`crate::core::rng`]) without
-/// pulling in any covariance / distribution machinery (those land in
+/// pulling in any covariance/distribution machinery (those land in
 /// S8 alongside CMA-ES).
 ///
 /// # Algorithm
@@ -66,7 +66,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test — random search has no canonical
+/// No solver-internal optimality test—random search has no canonical
 /// fixed-point criterion. Use the framework's
 /// [`MaxIter`](crate::core::termination::MaxIter),
 /// [`MaxCostEvals`](crate::core::termination::MaxCostEvals),
@@ -78,7 +78,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Backends
 ///
-/// Backend-generic — works with any `V` implementing
+/// Backend-generic—works with any `V` implementing
 /// [`SampleUniformBox`] + `Clone`. That covers `Vec<f64>`,
 /// `nalgebra::DVector<f64>` (feature `nalgebra`),
 /// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
@@ -205,7 +205,7 @@ where
         // RNG-determined trajectory is reproducible regardless of which
         // constructor was used. Callers who genuinely want a custom
         // initial population should call `from_population` and skip
-        // `init` by stepping the solver themselves — `init` is the
+        // `init` by stepping the solver themselves—`init` is the
         // place where the solver's seeded RNG seeds the run.
         state.candidates.clear();
         state.costs.clear();
@@ -225,7 +225,7 @@ where
         problem: &mut Problem<P>,
         mut state: BasicPopulationState<V, F>,
     ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
-        // Snapshot the elite before resampling — this is what makes
+        // Snapshot the elite before resampling—this is what makes
         // state.cost() monotone.
         let elite_x = state.candidates[0].clone();
         let elite_c = state.costs[0];

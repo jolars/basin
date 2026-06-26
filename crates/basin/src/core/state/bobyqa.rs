@@ -9,14 +9,14 @@
 //!
 //! As with NEWUOA, the quadratic surrogate, the factored inverse-KKT matrix `H`,
 //! the shifted bounds `sl`/`su`, and the ρ/Δ schedule live on the **solver**
-//! struct, not here — so [`BobyqaState`] is generic over the parameter vector
+//! struct, not here, so [`BobyqaState`] is generic over the parameter vector
 //! `V` only. The box bounds themselves stay on the *problem* (tenet 4); the
 //! solver derives `sl`/`su` from them at init.
 //!
 //! # Current vs best
 //!
 //! BOBYQA reports the least-`F` feasible point, so
-//! [`best_param`](State::best_param) / [`best_cost`](State::best_cost) coincide
+//! [`best_param`](State::best_param)/[`best_cost`](State::best_cost) coincide
 //! with the current iterate at every check.
 
 use crate::core::math::Scalar;
@@ -26,17 +26,17 @@ use crate::core::state::{CountsMirror, RhoState, State};
 /// Solver state for [`Bobyqa`](crate::solver::Bobyqa).
 ///
 /// Construct with [`new`](Self::new) from the starting point; the solver clips
-/// it into the box, evaluates the initial interpolation set, and seeds the cost
-/// / trust-region radius in [`Solver::init`](crate::core::solver::Solver::init).
+/// it into the box, evaluates the initial interpolation set, and seeds the cost/trust-region
+/// radius in [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct BobyqaState<V, F = f64> {
-    /// Current iterate — the best feasible point found so far. Initially the
+    /// Current iterate—the best feasible point found so far. Initially the
     /// user's starting point (clipped into the box during `init`).
     pub(crate) param: V,
     /// `F(param)`. `None` before [`Solver::init`](crate::core::solver::Solver::init).
     pub(crate) cost: Option<F>,
-    /// Current trust-region radius `ρ` — `+∞` before
+    /// Current trust-region radius `ρ`—`+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from `ρ_beg`.
     pub(crate) rho: F,
 
@@ -54,7 +54,7 @@ pub struct BobyqaState<V, F = f64> {
 impl<V, F: Scalar> BobyqaState<V, F> {
     /// Build an initial BOBYQA state at the starting point `x0`. The solver
     /// adjusts `x0` into the box, evaluates the initial interpolation set, and
-    /// fills the cost / `ρ` in [`Solver::init`](crate::core::solver::Solver::init).
+    /// fills the cost/`ρ` in [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(x0: V) -> Self {
         Self {
             param: x0,

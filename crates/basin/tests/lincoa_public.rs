@@ -1,12 +1,12 @@
 //! Public-API integration tests for the LINCOA solver.
 //!
-//! Exercises [`Lincoa`] through the framework — [`Executor`] over a
+//! Exercises [`Lincoa`] through the framework: [`Executor`] over a
 //! [`LincoaState`], with framework termination ([`MaxCostEvals`],
 //! [`RhoTolerance`]) and a problem carrying linear constraints. These confirm
 //! the public wiring: init/next_iter, the constraint extraction + folding (all
 //! of inequalities, box bounds, and equalities through the general-form
 //! [`LinearConstraints`] trait), the V↔Vec bridge, count mirroring, feasibility
-//! of the returned point, and the convergence / budget / early-stop termination
+//! of the returned point, and the convergence/budget/early-stop termination
 //! paths.
 
 use basin::core::constraint::LinearConstraints;
@@ -301,7 +301,7 @@ fn backend_generic_nalgebra() {
 }
 
 /// Backend-generic: drive LINCOA on ndarray `Array2`/`Array1`. Guards the
-/// support-matrix ✓ for ndarray — the param vector must satisfy
+/// support-matrix ✓ for ndarray; the param vector must satisfy
 /// `VectorLen + IndexMut` and the constraint matrix `MatTransposeVec`.
 #[cfg(feature = "ndarray")]
 #[test]

@@ -38,7 +38,7 @@ use crate::solver::de::De;
 ///    population is sorted ascending after step 1):
 ///    - Seed the inner via
 ///      [`MemeticInner::seed_scaled`] at the candidate. DE has no σ
-///      analogue, so the seeder receives `F::one()` — only Nelder-Mead's
+///      analogue, so the seeder receives `F::one()`—only Nelder-Mead's
 ///      seeder consults `σ` (as the initial simplex edge); LM and
 ///      L-BFGS-B ignore it. See "Open questions" below.
 ///    - Drive the inner via [`InnerExecutor::run`] against the outer's
@@ -46,19 +46,19 @@ use crate::solver::de::De;
 ///      transparently (same-problem composition; see CONTRIBUTING.md
 ///      "Solver composition" rule 1).
 ///    - Saturating-clip the refined point to the box. *Not*
-///      reinit-per-coord — that's a diversity-preserving repair for
+///      reinit-per-coord—that's a diversity-preserving repair for
 ///      donor vectors; for a post-LS polish it would throw away the
 ///      inner's work.
 ///    - Re-evaluate the clipped point. **Conditional write-back**: only
 ///      adopt if `cost_refined < cost_origin` (strictly less). DE's main
 ///      selection rule uses `≤`; here we use `<` because the refined
-///      point is a polish, not a fresh trial — no-cost-change swaps
+///      point is a polish, not a fresh trial—no-cost-change swaps
 ///      would diversify without improving the elite.
 /// 3. **Re-sort.** Restore the ascending invariant on
 ///    [`PopulationState`](crate::core::state::PopulationState).
 ///
 /// One refinement schedule is supported via
-/// [`with_refine_every`](Self::with_refine_every) — refine on outer iters
+/// [`with_refine_every`](Self::with_refine_every)—refine on outer iters
 /// `0, n, 2n, …` for the configured `n`. Adaptive triggering (super-fit
 /// control, Caponio/Neri/Tirronen 2009) is intentionally deferred.
 ///
@@ -73,7 +73,7 @@ use crate::solver::de::De;
 ///
 /// Unlike CMA-ES, [`De`] is bounded by construction (requires
 /// [`BoxConstraints`]). One struct covers both unconstrained and bounded
-/// use — there is no `BoundedDeInject` because DE is always bounded.
+/// use—there is no `BoundedDeInject` because DE is always bounded.
 ///
 /// # Eval aggregation
 ///
@@ -89,7 +89,7 @@ use crate::solver::de::De;
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test — inherits [`De`]'s "pair with
+/// No solver-internal optimality test—inherits [`De`]'s "pair with
 /// framework criteria" model
 /// ([`MaxIter`](crate::core::termination::MaxIter),
 /// [`MaxCostEvals`],
@@ -102,12 +102,12 @@ use crate::solver::de::De;
 /// # Caveats
 ///
 /// Highly multimodal landscapes (Rastrigin, Schwefel) reward
-/// *exploration*, not the *exploitation* a local-search polish adds —
+/// *exploration*, not the *exploitation* a local-search polish adds—
 /// memetic DE measurably underperforms pure DE in this regime
 /// (Neri & Tirronen 2010 §4.2, where DEahcSPX ranks 4th-of-5 on
 /// Rastrigin at D=50). The survey's overall finding is that "limited
 /// employment of these alternative moves appears to be the best
-/// option" — refine *sparingly*, not every generation. Practical
+/// option"—refine *sparingly*, not every generation. Practical
 /// mitigations: sparser schedule
 /// ([`with_refine_every`](Self::with_refine_every) ≥ 5), smaller inner
 /// budget ([`with_inner_max_iter`](Self::with_inner_max_iter)), or a
@@ -121,32 +121,32 @@ use crate::solver::de::De;
 /// `nalgebra::DVector<f64>` (feature `nalgebra`),
 /// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
 /// (feature `faer`). No matrix operations required. The effective
-/// coverage is the intersection of [`De`]'s and the chosen inner's —
+/// coverage is the intersection of [`De`]'s and the chosen inner's—
 /// e.g. an [`Lbfgsb`](crate::Lbfgsb) inner narrows to nalgebra / faer.
 ///
 /// # References
 ///
 /// - Noman & Iba, *Accelerating Differential Evolution Using an
-///   Adaptive Local Search* (IEEE TEC, 2008) — establishes the design
+///   Adaptive Local Search* (IEEE TEC, 2008)—establishes the design
 ///   slot `DeInject` fills (DE outer + fittest-individual LS each
 ///   generation, Lamarckian write-back). The paper's specific LS is
 ///   simplex crossover with other population members as parents (SPX),
-///   not a black-box inner; `DeInject` generalises by accepting any
+///   not a black-box inner; `DeInject` generalizes by accepting any
 ///   [`MemeticInner`]. The paper's *adaptive LS length* (hill-climb
-///   until no improvement) is not built in here — to approximate it,
+///   until no improvement) is not built in here—to approximate it,
 ///   pair a large [`with_inner_max_iter`](Self::with_inner_max_iter)
 ///   with the inner's own convergence tolerance.
 /// - Neri & Tirronen, *Recent advances in differential evolution: a
 ///   survey and experimental analysis* (Artificial Intelligence Review,
-///   2010) — survey + 30D/50D benchmarks. §4.2 covers DEahcSPX; the
+///   2010)—survey + 30D/50D benchmarks. §4.2 covers DEahcSPX; the
 ///   overall message ("limited employment of these alternative moves
 ///   appears to be the best option") motivates the
 ///   [`with_refine_every`](Self::with_refine_every) knob.
 /// - Caponio, Neri & Tirronen, *Super-fit control adaptation in memetic
-///   differential evolution frameworks* (Soft Computing, 2009) — §2.4
+///   differential evolution frameworks* (Soft Computing, 2009)—§2.4
 ///   defines an adaptive trigger χ = (f_best − f_avg) /
 ///   max_k(f_best,k − f_avg,k), firing LS only when the best
-///   individual genuinely dominates the population. Not implemented —
+///   individual genuinely dominates the population. Not implemented—
 ///   would require tracking the historical max and a probabilistic
 ///   schedule; `with_refine_every` is the v1 stand-in.
 pub struct DeInject<I, V, F = f64>
@@ -226,8 +226,8 @@ where
 
     /// Register a termination criterion on the inner loop.
     /// Criteria are reused across every outer iteration's inner run, but
-    /// each is reset at the start of every run, so stateful criteria —
-    /// including [`MaxTime`](crate::core::termination::MaxTime) — are safe.
+    /// each is reset at the start of every run, so stateful criteria—
+    /// including [`MaxTime`](crate::core::termination::MaxTime)—are safe.
     /// See CONTRIBUTING.md "Solver composition" rule 2.
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where
@@ -258,12 +258,12 @@ where
     MaxCostEvals: TerminationCriterion<I::State> + 'static,
 {
     /// Cap the inner refinement at `evals` cost-evaluations via
-    /// [`MaxCostEvals`] — the local-search-intensity idiom
+    /// [`MaxCostEvals`]—the local-search-intensity idiom
     /// [`MaLsChCma`](crate::solver::MaLsChCma) uses. Composes with
     /// [`with_inner_max_iter`](Self::with_inner_max_iter): whichever
     /// budget fires first stops the inner.
     ///
-    /// Stateless across calls — safe to reuse for the lifetime of the
+    /// Stateless across calls—safe to reuse for the lifetime of the
     /// outer solver (composition contract 2).
     pub fn with_ls_intensity(self, evals: u64) -> Self {
         self.inner_terminate_on(MaxCostEvals(evals))
@@ -342,14 +342,14 @@ where
 
             // 5. Failure routing: bubble SolverFailed only (composition
             //    contract 3). MaxIter / tolerances / SolverConverged are
-            //    clean stops — consume the inner's final iterate.
+            //    clean stops—consume the inner's final iterate.
             if inner_result.reason.is_failure() {
                 return Ok((state, Some(inner_result.reason)));
             }
 
             // 6. Saturating clip to the box. The inner may have stepped
             //    outside `[lo, hi]` (NM, LM, and L-BFGS-B are
-            //    unconstrained on their seed — L-BFGS-B respects bounds
+            //    unconstrained on their seed—L-BFGS-B respects bounds
             //    only when paired with a `BoxConstraints` problem,
             //    which is this case, but we re-clip for safety).
             let mut x_refined = inner_result.state.param().clone();

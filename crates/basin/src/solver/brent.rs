@@ -18,8 +18,8 @@ use crate::core::termination::TerminationReason;
 ///
 /// Brent runs on [`ScalarState`], the
 /// cost-only single-iterate state. It does **not** impl
-/// [`GradientState`](crate::core::state::GradientState) — a 1-D minimizer has
-/// no gradient — so attaching a gradient criterion such as
+/// [`GradientState`](crate::core::state::GradientState)—a 1-D minimizer has
+/// no gradient—so attaching a gradient criterion such as
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance) is a
 /// **compile error** rather than one that silently never fires.
 ///
@@ -42,7 +42,7 @@ pub struct Brent<F = f64> {
     inner: Option<Inner<F>>,
 }
 
-/// `(3 − √5) / 2` — golden-section reduction factor used for the fallback
+/// `(3 − √5) / 2`—golden-section reduction factor used for the fallback
 /// step (split the larger sub-interval at its golden ratio).
 fn golden_c<F: Scalar>() -> F {
     F::from_f64(0.381_966_011_250_105_2).unwrap()
@@ -113,7 +113,7 @@ where
         // Clamp the user-supplied seed into the bracket. If it lands on a
         // bound, nudge to a golden-section interior point so the first
         // iteration has somewhere to step. `Float` has no `clamp`, so use
-        // `.max(a).min(b)` — same output as `f64::clamp` on a well-ordered
+        // `.max(a).min(b)`—same output as `f64::clamp` on a well-ordered
         // finite bracket (which the assert above guarantees).
         let mut x = state.param.max(a).min(b);
         if x == a || x == b {
@@ -227,7 +227,7 @@ where
         // tests like `CostTolerance` see real Δf signals instead of
         // firing on the unchanged s.fx after a non-improving probe
         // (issue #36). The executor's best-so-far tracking
-        // (`state.best_param` / `state.best_cost`) captures the
+        // (`state.best_param`/`state.best_cost`) captures the
         // true optimum independently of what's reported here, and
         // Brent's bracket-collapse `terminate` only fires once
         // `|u - x| < 2·tol`, so the two coincide at convergence.

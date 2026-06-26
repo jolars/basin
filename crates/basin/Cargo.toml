@@ -14,7 +14,7 @@ keywords = ["optimization", "math", "numerics", "solver", "nonlinear"]
 categories = ["mathematics", "science", "algorithms"]
 
 # Build docs.rs with every backend enabled so the feature-gated solver and
-# problem impls (nalgebra / ndarray / faer) render — not just the default
+# problem impls (nalgebra/ndarray/faer) render—not just the default
 # `Vec<f64>` surface. `--cfg docsrs` turns on the `doc(auto_cfg)` attribute
 # in `lib.rs` ("Available on crate feature `nalgebra` only").
 [package.metadata.docs.rs]
@@ -28,7 +28,7 @@ path = "src/lib.rs"
 [features]
 default = ["problems"]
 # Pin one version per backend (tenet 2 in CONTRIBUTING.md). A backend major bump
-# becomes a basin major bump — do not introduce per-version features.
+# becomes a basin major bump—do not introduce per-version features.
 # `nalgebra-sparse` rides along on the same feature: it's a separate crate,
 # but logically part of the nalgebra story (sparse Jacobians, sparse
 # Cholesky). Folding it in keeps the manifest to one nalgebra feature.
@@ -45,18 +45,18 @@ ndarray = ["dep:ndarray"]
 # (pure-Rust by design).
 ndarray-blas = ["ndarray", "ndarray/blas"]
 # Opt-in LAPACK-backed nalgebra. The nalgebra analogue of `ndarray-blas`:
-# swaps the nalgebra backend's pure-Rust Cholesky / symmetric eigendecomposition
+# swaps the nalgebra backend's pure-Rust Cholesky/symmetric eigendecomposition
 # (`LinearSolveSpd`, `SymmetricEigen`) for LAPACK-backed ones from the separate
 # `nalgebra-lapack` crate. Off by default and WASM-incompatible (LAPACK links a
 # Fortran/BLAS toolchain), same as `ndarray-blas`. We forward
 # `nalgebra-lapack/lapack-custom`: that crate has an `enforce_exactly_one_
 # feature_selected!` macro requiring exactly one `lapack-*` backend even to
 # compile, and `lapack-custom` is the only one that pulls NO provider crate
-# (its `extern crate lapack_src` is cfg'd off). So the rlib / `cargo doc` /
+# (its `extern crate lapack_src` is cfg'd off). So the rlib/`cargo doc` /
 # `cargo clippy` builds compile without linking or building OpenBLAS, keeping
 # `--all-features` green on docs.rs and CI. The flip side of `lapack-custom`:
 # the LAPACK symbols (`dpotrf_`, `dsyev_`, ...) must be supplied at *final link*
-# time by the consumer — add a `-src` crate (`openblas-src` / `netlib-src`,
+# time by the consumer—add a `-src` crate (`openblas-src`/`netlib-src`,
 # `extern crate`d in your binary) or link a system BLAS/LAPACK via link args,
 # exactly like `ndarray-blas`'s "bring your own BLAS source" story. With this
 # feature on, the two factorization ops narrow from any `F: ComplexField` /
@@ -66,15 +66,15 @@ ndarray-blas = ["ndarray", "ndarray/blas"]
 nalgebra-lapack = ["nalgebra", "dep:nalgebra-lapack", "nalgebra-lapack/lapack-custom"]
 # `generativity` and `faer-traits` are transitive deps of faer, surfaced
 # here so they only enter the graph when `faer` is enabled. `faer-traits`
-# is the home of `ComplexField` / `RealField` — bounds the faer-backend
+# is the home of `ComplexField`/`RealField`—bounds the faer-backend
 # linalg impls need to remain F-generic.
 faer = ["dep:faer", "dep:generativity", "dep:faer-traits"]
 # Opt-in parallel evaluation. Fans the independent probes of a
-# finite-difference gradient / Jacobian / Hessian across a `rayon` thread pool
+# finite-difference gradient/Jacobian/Hessian across a `rayon` thread pool
 # (`FiniteDiff`, via `core::parallel`), and turns on faer's rayon-backed
 # linalg. Off by default because basin is typically embedded inside a caller
 # that already manages parallelism (multi-start sweeps, R/Python schedulers,
-# outer rayon loops) — a default-on thread pool causes oversubscription and
+# outer rayon loops)—a default-on thread pool causes oversubscription and
 # fights the caller. WASM-incompatible: enabling this on wasm32-unknown-unknown
 # will fail to compile. Under this feature `FiniteDiff: Gradient/Jacobian/
 # Hessian` additionally requires the wrapped problem to be `Sync`.
@@ -87,8 +87,8 @@ problems = []
 
 [dependencies]
 # Scalar abstraction (`Float`, `FromPrimitive`) so solvers, states, and the
-# math layer can be generic over `f32` / `f64`. Pure-Rust, no_std-friendly,
-# tiny dep — wasm-clean.
+# math layer can be generic over `f32`/`f64`. Pure-Rust, no_std-friendly,
+# tiny dep—wasm-clean.
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
 nalgebra = { version = "0.34", optional = true }
 nalgebra-sparse = { version = "0.11", optional = true }
@@ -97,7 +97,7 @@ nalgebra-sparse = { version = "0.11", optional = true }
 # (0.28 moved to nalgebra 0.35); keeping them in lockstep preserves tenet 2's
 # single-version-per-backend story. `default-features = false` drops the
 # default `openblas` provider so the rlib builds without linking or building a
-# BLAS source — see the feature comment above. Non-default + WASM-incompatible.
+# BLAS source—see the feature comment above. Non-default + WASM-incompatible.
 nalgebra-lapack = { version = "0.27", optional = true, default-features = false }
 # Pure-Rust (no BLAS feature) so it stays wasm-compatible per the WASM hard
 # constraint in CONTRIBUTING.md.
@@ -114,7 +114,7 @@ faer = { version = "0.24", optional = true, default-features = false, features =
 # graph behind the `faer` feature. basin doesn't use this crate directly.
 generativity = { version = "1", optional = true }
 # Transitive dep of faer, surfaced as an optional dep so the F-generic faer
-# linalg impls can name `ComplexField` / `RealField` bounds. Major pinned to
+# linalg impls can name `ComplexField`/`RealField` bounds. Major pinned to
 # match faer 0.24 so the dep tree stays single-version.
 faer-traits = { version = "0.24", optional = true, default-features = false }
 # Re-exports `std::time::Instant` on native and a wasm-compatible shim on
@@ -122,7 +122,7 @@ faer-traits = { version = "0.24", optional = true, default-features = false }
 # Tiny crate, MSRV 1.60, no transitive deps on native.
 web-time = "1"
 # Seedable, wasm-safe RNG used by stochastic solvers (`RandomSearch`, CMA-ES,
-# ...). `default-features = false` drops `std_rng` / `thread_rng` and the
+# ...). `default-features = false` drops `std_rng`/`thread_rng` and the
 # implicit `getrandom` JS-feature pull-in, so a
 # `ChaCha8Rng::seed_from_u64(seed)` works on `wasm32-unknown-unknown` with
 # no JS shim.
@@ -131,13 +131,13 @@ rand_chacha = { version = "0.10", default-features = false }
 # Standard-normal sampling for CMA-ES. rand_distr 0.6 pairs with rand 0.10.
 # default-features off to stay consistent with the wasm-safe rand setup.
 rand_distr = { version = "0.6", default-features = false }
-# Opt-in CPU parallelism (the `parallel` feature only). Not wasm-compatible —
+# Opt-in CPU parallelism (the `parallel` feature only). Not wasm-compatible—
 # kept off by default per the WASM hard constraint. MSRV well under basin's
 # (rayon 1.x builds far below 1.87), so it doesn't constrain the CRAN pin.
 rayon = { version = "1", optional = true }
 
 [dev-dependencies]
-# Statistical bench harness. dev-dependency only — never enters the
+# Statistical bench harness. dev-dependency only—never enters the
 # published or WASM dependency graph. `default-features = false` drops
 # rayon (tenet: no parallelism by default) and plotters/html_reports
 # (heavy tree, no value for CLI microbenchmarks), keeping just the
@@ -158,8 +158,8 @@ name = "lm_backends"
 harness = false
 required-features = ["nalgebra", "faer", "problems"]
 
-# Backend axis (axis 1): GD / Nelder-Mead / unconstrained L-BFGS on
-# Rosenbrock across all four backends (Vec / nalgebra / ndarray / faer),
+# Backend axis (axis 1): GD/Nelder-Mead/unconstrained L-BFGS on
+# Rosenbrock across all four backends (Vec/nalgebra/ndarray/faer),
 # isolating the cost of the linear-algebra layer. Needs every backend plus
 # the test-problem corpus.
 [[bench]]
@@ -169,5 +169,5 @@ required-features = ["nalgebra", "ndarray", "faer", "problems"]
 
 # Per-backend integration tests (`tests/rosenbrock_<backend>.rs`) gate
 # themselves with `#![cfg(feature = "<backend>")]` rather than declaring
-# `required-features` here — keeps the manifest free of one stanza per
+# `required-features` here—keeps the manifest free of one stanza per
 # backend.

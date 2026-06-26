@@ -3,7 +3,7 @@
 //! Carries the λ sampled candidates (the [`PopulationState`] surface)
 //! **and** the search distribution that defines them: the mean `m`,
 //! step-size `σ`, covariance `C`, its eigenpair `B`/`D` (with `D⁻¹`),
-//! and the evolution paths `p_σ` / `p_c`. Every other basin solver
+//! and the evolution paths `p_σ`/`p_c`. Every other basin solver
 //! keeps its iterate in the state; CMA-ES used to park the distribution
 //! on the solver struct, which made its canonical TolX test a hardcoded
 //! `terminate` hook rather than a composable
@@ -14,12 +14,12 @@
 //! binds on a simplex, and lets both [`CmaEs`](crate::solver::CmaEs) and
 //! [`BoundedCmaEs`](crate::solver::BoundedCmaEs) be configuration-only.
 //!
-//! # Result semantics — `xfavorite` vs `xbest`
+//! # Result semantics: `xfavorite` vs `xbest`
 //!
 //! CMA-ES's recommended solution is the distribution mean (pycma's
-//! `xfavorite`), not the best evaluated sample. So [`State::param`] /
+//! `xfavorite`), not the best evaluated sample. So [`State::param`]/
 //! [`State::cost`] return `m` and `f(m)` (the solver evaluates `f(m)`
-//! once per generation), while [`State::best_param`] /
+//! once per generation), while [`State::best_param`]/
 //! [`State::best_cost`] track the best evaluated point ever seen
 //! (pycma's `xbest`). An
 //! [`OptimizationResult`](crate::core::executor::OptimizationResult)
@@ -28,7 +28,7 @@
 //!
 //! The single shared state is used by the bounded variant too: the
 //! adaptive boundary-penalty bookkeeping rides along as
-//! [`penalty`](CmaEsState) — an `Option<BoundPenalty>` that is `None`
+//! [`penalty`](CmaEsState): an `Option<BoundPenalty>` that is `None`
 //! for plain [`CmaEs`](crate::solver::CmaEs) and installed by
 //! [`BoundedCmaEs`](crate::solver::BoundedCmaEs)'s `init`. This mirrors
 //! [`LbfgsState`](crate::LbfgsState)'s `work: Option<LbfgsbWork>` field,
@@ -47,21 +47,21 @@ use crate::core::state::{CountsMirror, PopulationState, State};
 /// Construct with [`new`](Self::new) (isotropic `C = I`) or
 /// `CmaEsState::new(mean, sigma).with_stds(stds)` (anisotropic
 /// `C = diag(stds²)`). The solver fills the first generation's
-/// `candidates` / `costs` and the cost of the mean in
+/// `candidates`/`costs` and the cost of the mean in
 /// [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct CmaEsState<V, M, F = f64> {
     // --- population (PopulationState surface) ---
     /// λ sampled candidates, sorted by ascending cost after every
-    /// `init` / `next_iter`.
+    /// `init`/`next_iter`.
     pub(crate) candidates: Vec<V>,
     /// Costs in parallel with [`candidates`](Self::candidates) (the
     /// *penalized* cost for the bounded variant).
     pub(crate) costs: Vec<F>,
 
-    // --- mean as the iterate (param / cost) ---
-    /// Distribution mean `m` — the recommended solution (`xfavorite`).
+    // --- mean as the iterate (param/cost) ---
+    /// Distribution mean `m`, the recommended solution (`xfavorite`).
     pub(crate) m: V,
     /// `f(m)`, evaluated once per generation by the solver. `None`
     /// before [`Solver::init`](crate::core::solver::Solver::init).
@@ -81,7 +81,7 @@ pub struct CmaEsState<V, M, F = f64> {
     /// Generation counter for the `h_σ` formula.
     pub(crate) generation: u64,
 
-    // --- best evaluated point (xbest / fbest) ---
+    // --- best evaluated point (xbest/fbest) ---
     pub(crate) best_param: Option<V>,
     pub(crate) best_cost: F,
     pub(crate) best_iter: u64,
@@ -99,7 +99,7 @@ pub struct CmaEsState<V, M, F = f64> {
 /// [`BoundedCmaEs`](crate::solver::BoundedCmaEs). `None` on the
 /// unconstrained path; installed by `BoundedCmaEs::init`. The
 /// derived penalty *constants* (`damp`, `edist_threshold`,
-/// `hist_cap`) stay on the solver — only the per-iteration state lives
+/// `hist_cap`) stay on the solver; only the per-iteration state lives
 /// here.
 pub(crate) struct BoundPenalty<V, F = f64> {
     /// Per-coordinate quadratic-penalty weights `γ ∈ Rⁿ`.
@@ -109,7 +109,7 @@ pub(crate) struct BoundPenalty<V, F = f64> {
     /// Recent normalized fitness-IQR estimates (newest first).
     pub(crate) hist: VecDeque<F>,
     /// Raw (un-penalized) f-values of the most recent generation, in
-    /// sample order — read by the γ-update only as a flat bag for the
+    /// sample order—read by the γ-update only as a flat bag for the
     /// IQR.
     pub(crate) raw_costs: Vec<F>,
 }
@@ -179,7 +179,7 @@ where
 {
     /// Seed an anisotropic initial covariance `C = diag(stds²)` instead
     /// of the isotropic default. The first generation then samples
-    /// `m + σ · diag(stds) · N(0, I)` — i.e. optimizing in coordinates
+    /// `m + σ · diag(stds) · N(0, I)`—i.e. optimizing in coordinates
     /// rescaled by `1/stds`. `σ` remains the scalar overall step-size;
     /// `stds` only sets the *shape*. For a diagonal `C` the
     /// eigendecomposition is exactly `B = I`, `D = diag(stds)`, so
@@ -223,7 +223,7 @@ where
     V: VectorLen + std::ops::Index<usize, Output = F>,
     F: Scalar,
 {
-    /// The distribution mean `m` — CMA-ES's recommended solution
+    /// The distribution mean `m`—CMA-ES's recommended solution
     /// (`xfavorite`). Same value [`State::param`] returns.
     pub fn mean(&self) -> &V {
         &self.m
@@ -305,7 +305,7 @@ impl<V: Clone, M, F: Scalar> State for CmaEsState<V, M, F> {
     /// Refresh the best evaluated point from this generation. Considers
     /// both the best sample (`candidates[0]`, sorted ascending) and the
     /// mean (`m`, with cost `m_cost`), keeping whichever is lowest over
-    /// all history — so `best_param()` is the true `xbest` even when the
+    /// all history—so `best_param()` is the true `xbest` even when the
     /// mean is worse than a sample (or vice versa).
     fn update_best(&mut self) {
         if let Some(&best_sample_cost) = self.costs.first() {

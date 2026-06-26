@@ -19,7 +19,7 @@ pub(crate) enum Transition {
     /// Keep going (a successful or unsuccessful iteration that has not yet
     /// shrunk the poll size to the floor).
     Continue,
-    /// The poll size reached the configured floor — MADS's natural convergence.
+    /// The poll size reached the configured floor—MADS's natural convergence.
     Converged,
 }
 
@@ -44,9 +44,9 @@ pub(crate) struct MadsWork<F> {
     ell: i32,
     /// Halton seed `t₀ = p_n`.
     t0: usize,
-    /// Largest `ℓ` reached so far — detects "poll size is the smallest so far".
+    /// Largest `ℓ` reached so far—detects "poll size is the smallest so far".
     ell_max: i32,
-    /// Largest Halton index used so far — feeds the non-smallest-poll branch.
+    /// Largest Halton index used so far—feeds the non-smallest-poll branch.
     t_max: usize,
     /// Initial poll size `Δ₀` (uniform mesh scale); `Δᵖ = Δ₀·2^{-ℓ}`.
     scale: F,

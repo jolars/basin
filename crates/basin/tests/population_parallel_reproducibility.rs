@@ -11,10 +11,10 @@
 //!   This is the parallel analogue of numdiff's
 //!   `gradient_is_bitwise_reproducible_across_calls`: it catches any
 //!   nondeterminism a reordered parallel reduction could introduce.
-//! - **`cost_evals` matches a fixed per-solver formula.** DE / RandomSearch
+//! - **`cost_evals` matches a fixed per-solver formula.** DE and RandomSearch
 //!   hit `λ · (iters + 1)`; CMA-ES adds one `f(m)` mean evaluation per
 //!   generation, so it hits `(λ + 1) · (iters + 1)`. The constants below are
-//!   feature-independent — CI runs this file with `--features parallel` *and*
+//!   feature-independent: CI runs this file with `--features parallel` *and*
 //!   without, and both must hit the same numbers, proving the batched path
 //!   counts exactly as the old per-candidate loop did.
 //!
@@ -30,10 +30,10 @@ use std::fmt::Debug;
 
 /// Number of `next_iter` calls a `MaxIter(m)` run performs: termination is
 /// checked before each iteration (including iter 0), so the solver completes
-/// exactly `m` iterations on top of `init`. DE / RandomSearch evaluate `λ`
+/// exactly `m` iterations on top of `init`. DE and RandomSearch evaluate `λ`
 /// fresh candidates in `init` and `λ` again per iteration, so a run that is not
 /// cut short by a solver-internal stop performs `λ · (m + 1)` cost evaluations.
-/// (CMA-ES additionally evaluates the mean once per generation — see its test.)
+/// (CMA-ES additionally evaluates the mean once per generation; see its test.)
 fn expected_cost_evals(lambda: u64, max_iter: u64) -> u64 {
     lambda * (max_iter + 1)
 }

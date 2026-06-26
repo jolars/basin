@@ -1,6 +1,6 @@
 # Solvers
 
-Basin ships a growing catalogue of solvers, all driven by the same `Executor`
+Basin ships a growing catalog of solvers, all driven by the same `Executor`
 loop. Pick one based on what your problem provides (a gradient? only costs?
 residuals?) and whether it is constrained.
 
@@ -9,82 +9,82 @@ trailing note cites the paper it implements (or the source it ports).
 
 ## First-order
 
-- **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**
-  — steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
+- **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**:
+  steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
   `MoreThuente`, or `Wolfe` line searches) and optional heavy-ball momentum
   (Polyak, 1964).
-- **[`Sgd`](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)** —
+- **[`Sgd`](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)**:
   mini-batch stochastic gradient descent with a constant learning rate and
   optional Polyak (1964) heavy-ball momentum.
-- **[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/struct.ProjectedGradientDescent.html)**
-  — gradient descent for box-constrained problems, projecting each step back
+- **[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/struct.ProjectedGradientDescent.html)**:
+  gradient descent for box-constrained problems, projecting each step back
   onto the feasible box.
-- **[`BrentDerivative`](https://docs.rs/basin/latest/basin/solver/brent_derivative/struct.BrentDerivative.html)**
-  — Brent's method using first derivatives ("dbrent"): 1-D minimization on a
-  bracketed interval, the gradient-using sibling of `Brent` / `GoldenSection`
+- **[`BrentDerivative`](https://docs.rs/basin/latest/basin/solver/brent_derivative/struct.BrentDerivative.html)**:
+  Brent's method using first derivatives ("dbrent"): 1-D minimization on a
+  bracketed interval, the gradient-using sibling of `Brent`/`GoldenSection`
   (uses the sign of `f'` to bracket and secant extrapolation on `f'` to step;
   Brent, 1973, as transcribed in _Numerical Recipes_ §10.3).
 
 ## Derivative-free
 
-- **[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**
-  — the classic reflection / expansion / contraction simplex; needs only a
+- **[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**:
+  the classic reflection/expansion/contraction simplex; needs only a
   `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
   uses the dimension-aware coefficients of Gao & Han (2012), and the projected
   variant follows Luersen & Le Riche (2004).
-- **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**
-  — mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
+- **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
+  mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
   positive spanning set of `2n` directions on a shrinking mesh, generated from
   the Halton sequence and a scaled Householder reflection. Unlike Nelder-Mead it
-  has a convergence guarantee on nonsmooth / non-continuous objectives, a
+  has a convergence guarantee on nonsmooth or non-continuous objectives, a
   box-constrained variant (`Mads::bounded()`) via the extreme barrier, and a
   nonlinearly-constrained variant (`Mads::constrained()`) handling `c(x) ≤ 0`
   via the progressive barrier (which tolerates an infeasible start). Needs only
   a `CostFunction` (plus `NonlinearInequalityConstraints` for the constrained
   mode). Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
   Le Digabel 2009), and the progressive barrier (Audet & Dennis 2009).
-- **[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**
-  — Powell's model-based trust-region method: maintains a quadratic surrogate
+- **[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**:
+  Powell's model-based trust-region method: maintains a quadratic surrogate
   interpolating the objective on `2n+1` points and updates it by the
   least-Frobenius-norm rule, so each iteration needs only one new value. Needs
   only a `CostFunction`. Implements Powell (2006), cross-validated against
   PRIMA v0.7.2.
-- **[`Bobyqa`](https://docs.rs/basin/latest/basin/solver/bobyqa/struct.Bobyqa.html)**
-  — the bound-constrained sibling of `Newuoa`: the same least-Frobenius-norm
+- **[`Bobyqa`](https://docs.rs/basin/latest/basin/solver/bobyqa/struct.Bobyqa.html)**:
+  the bound-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a box-aware trust-region step (TRSBOX) and geometry
   step (ALTMOV), plus the RESCUE restoration procedure. Needs a `CostFunction`
   and `BoxConstraints`. Implements Powell (2009), cross-validated against
   PRIMA v0.7.2.
-- **[`Lincoa`](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)**
-  — the linearly-constrained sibling of `Newuoa`: the same least-Frobenius-norm
+- **[`Lincoa`](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)**:
+  the linearly-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a projected truncated-CG trust-region step (TRSTEP) and
   active-set QR (GETACT) that keep every iterate feasible under `A x ≤ b`. Needs
   a `CostFunction` and `LinearConstraints` (the general linear form: box bounds,
   equalities, and inequalities, all folded into `A x ≤ b`). Implements Powell
   (2015), ported from PRIMA v0.7.2.
-- **[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**
-  — the nonlinearly-constrained Powell solver, and the odd one out: instead of a
+- **[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**:
+  the nonlinearly-constrained Powell solver, and the odd one out: instead of a
   quadratic model it builds **linear** models by interpolation at the `n+1`
   vertices of a simplex and steers by an L-infinity exact-penalty merit function,
   so it is the only one handling general nonlinear inequality constraints
   `c(x) ≤ 0`. Needs a `CostFunction` and `NonlinearInequalityConstraints`.
   Implements Powell (1994), ported from PRIMA.
-- **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)** —
+- **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)**:
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in _Numerical Recipes_ §10.2); also used inside line searches.
-- **[`GoldenSection`](https://docs.rs/basin/latest/basin/solver/golden_section/struct.GoldenSection.html)**
-  — golden-section search: 1-D minimization on a bracketed interval, the robust
+- **[`GoldenSection`](https://docs.rs/basin/latest/basin/solver/golden_section/struct.GoldenSection.html)**:
+  golden-section search: 1-D minimization on a bracketed interval, the robust
   linearly-converging companion to `Brent` (Kiefer, 1953; _Numerical Recipes_
   §10.1).
 
 ## Quasi-Newton
 
-- **[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)** —
+- **[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)**:
   dense quasi-Newton with a full approximate Hessian (Nocedal & Wright, 2006).
-- **[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)** —
+- **[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
   limited-memory BFGS for larger problems (two-loop recursion, Nocedal &
   Wright Alg. 7.4).
-- **[`Lbfgsb`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)** —
+- **[`Lbfgsb`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
   L-BFGS with box bounds; a faithful port of the Nocedal–Zhu L-BFGS-B v3.0
   Fortran source (Byrd, Lu & Nocedal, 1995; Zhu, Byrd, Lu & Nocedal, 1997,
   ACM TOMS Alg. 778).
@@ -93,8 +93,8 @@ trailing note cites the paper it implements (or the source it ports).
 
 For problems exposing a `Hessian` (analytic, or synthesized by `FiniteDiff`):
 
-- **[`TrustRegion`](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)**
-  — second-order trust-region Newton minimizer (Nocedal & Wright, 2006,
+- **[`TrustRegion`](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)**:
+  second-order trust-region Newton minimizer (Nocedal & Wright, 2006,
   Alg. 4.1). The subproblem strategy is pluggable: `Steihaug` (truncated CG,
   the default), `Dogleg`, or `CauchyPoint`.
 
@@ -102,49 +102,47 @@ For problems exposing a `Hessian` (analytic, or synthesized by `FiniteDiff`):
 
 For problems expressed as residuals (`Residual` + `Jacobian`):
 
-- **[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)**
-  — undamped normal-equations solver (Madsen, Nielsen & Tingleff, 2004, §3.1).
-- **[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)**
-  — damped least squares; the workhorse for curve fitting. Marquardt (1963)
-  with Nielsen's (1999) smooth damping update and Moré (1978) / MINPACK column
+- **[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)**:
+  undamped normal-equations solver (Madsen, Nielsen & Tingleff, 2004, §3.1).
+- **[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)**:
+  damped least squares; the workhorse for curve fitting. Marquardt (1963)
+  with Nielsen's (1999) smooth damping update and Moré (1978)/MINPACK column
   scaling (Madsen, Nielsen & Tingleff, 2004, §3.2).
-- **[`Trf`](https://docs.rs/basin/latest/basin/solver/trf/struct.Trf.html)** —
+- **[`Trf`](https://docs.rs/basin/latest/basin/solver/trf/struct.Trf.html)**:
   trust-region reflective: Levenberg–Marquardt with box bounds (Branch,
   Coleman & Li, 1999, affine scaling).
 
 ## Global & stochastic
 
-- **[`CmaEs`](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)** /
-  **[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)**
-  — covariance-matrix adaptation evolution strategy (Hansen, 2016),
+- **[`CmaEs`](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)**/**[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)**:
+  covariance-matrix adaptation evolution strategy (Hansen, 2016),
   unconstrained and box-bounded; the bounded variant uses Hansen's adaptive
   `BoundPenalty` (the `pycma` default).
-- **[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)** —
+- **[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)**:
   differential evolution (DE/rand/1/bin) over a feasible box (Storn & Price,
   1997).
-- **[`RandomSearch`](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html)**
-  — elitist (1+λ) uniform sampling over a box.
-- **[`Ssga`](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html)** —
+- **[`RandomSearch`](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html)**:
+  elitist (1+λ) uniform sampling over a box.
+- **[`Ssga`](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html)**:
   steady-state real-coded genetic algorithm (replace-worst) with BLX-α
   crossover (Eshelman & Schaffer, 1993), negative assortative mating
-  (Fernandes & Rosa, 2001) and BGA mutation (Mühlenbein &
+  (Fernandes & Rosa, 2001), and BGA mutation (Mühlenbein &
   Schlierkamp-Voosen, 1993); the SSGA component of Molina et al. (2010), §4.4.
 
 ## Memetic (composed)
 
-These run a local solver inside a global one — an example of Basin's solver
+These run a local solver inside a global one, an example of Basin's solver
 composition primitives:
 
-- **[`CmaInject`](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)**
-  / **[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/bounded_cma_inject/struct.BoundedCmaInject.html)**
-  — CMA-ES with per-generation local polishing of the best individuals,
+- **[`CmaInject`](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)**/**[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/bounded_cma_inject/struct.BoundedCmaInject.html)**:
+  CMA-ES with per-generation local polishing of the best individuals,
   re-injected via Hansen's (2011) injection mechanism.
-- **[`DeInject`](https://docs.rs/basin/latest/basin/solver/de_inject/struct.DeInject.html)**
-  — the DE-flavored sibling of `CmaInject`: differential evolution (Storn &
+- **[`DeInject`](https://docs.rs/basin/latest/basin/solver/de_inject/struct.DeInject.html)**:
+  the DE-flavored sibling of `CmaInject`: differential evolution (Storn &
   Price, 1997) with per-generation top-_k_ local refinement and Hansen-style
   (2011) injection.
-- **[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch_cma/struct.MaLsChCma.html)**
-  — a memetic algorithm with persistent local-search chains and a CMA-ES inner
+- **[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch_cma/struct.MaLsChCma.html)**:
+  a memetic algorithm with persistent local-search chains and a CMA-ES inner
   (Molina et al., 2010).
 
 ## Constrained (composed)
@@ -152,12 +150,12 @@ composition primitives:
 These wrap any gradient inner solver in an outer loop that handles linear
 constraints:
 
-- **[`BarrierMethod`](https://docs.rs/basin/latest/basin/solver/barrier_method/struct.BarrierMethod.html)**
-  — log-barrier interior-point continuation for linear inequality constraints
+- **[`BarrierMethod`](https://docs.rs/basin/latest/basin/solver/barrier_method/struct.BarrierMethod.html)**:
+  log-barrier interior-point continuation for linear inequality constraints
   (`A x ≤ b`); needs a strictly feasible start (Boyd & Vandenberghe,
   _Convex Optimization_, §11.3, Alg. 11.1).
-- **[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**
-  — quadratic penalty plus multiplier updates for linear equality constraints
+- **[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**:
+  quadratic penalty plus multiplier updates for linear equality constraints
   (`A x = b`); tolerates an infeasible start (Nocedal & Wright, §17.3,
   Alg. 17.4, LANCELOT-style).
 
@@ -179,7 +177,7 @@ Two design rules shape which solver you can use where:
 - **Backends are tiered.** First-order and derivative-free solvers stay generic
   over the parameter type (`Vec<f64>`, nalgebra, ndarray, faer). Linear-algebra
   heavy solvers (the quasi-Newton and least-squares families) require a backend
-  that implements the richer math they need — so an unsupported parameter type
+  that implements the richer math they need, so an unsupported parameter type
   fails to compile rather than at runtime.
 
 The matrix below summarizes support: ✓ means it compiles and runs on that
@@ -223,13 +221,13 @@ interval (1-D), so the vector-backend choice does not apply.
 
 † `DeInject` is itself backend-generic, but its effective coverage is the
 intersection of `De` and the chosen inner solver: a `LevenbergMarquardt` or
-`Lbfgsb` inner narrows it to nalgebra / faer.
+`Lbfgsb` inner narrows it to nalgebra/faer.
 
 ‡ `TrustRegion`'s coverage depends on the subproblem strategy: `Steihaug`
 (the default) and `CauchyPoint` need only matrix-vector products, so they run
 on every backend; `Dogleg` additionally needs a Cholesky solve
 (`LinearSolveSpd`), now available on all four backends. On `ndarray` the Hessian
-must be supplied analytically as an `Array2<f64>` — `FiniteDiff` cannot
+must be supplied analytically as an `Array2<f64>`; `FiniteDiff` cannot
 synthesize one there (no dense-matrix constructor).
 
 Each solver's page on [docs.rs](https://docs.rs/basin) carries a **Backends**

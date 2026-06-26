@@ -2,7 +2,7 @@
 // dense index arithmetic of the H-factorization algebra; blanket-allowed here.
 #![allow(clippy::needless_range_loop)]
 
-//! BOBYQA (Powell 2009) — bound-constrained model-based derivative-free
+//! BOBYQA (Powell 2009)—bound-constrained model-based derivative-free
 //! optimization.
 //!
 //! BOBYQA reuses the shared Powell quadratic-model core (the crate-internal
@@ -35,7 +35,7 @@ use driver::{BobyqaWork, Transition};
 
 /// Type-state marker: box-constrained BOBYQA (the only mode). A marker keeps the
 /// door open for an unconstrained alias later without an API break, matching the
-/// `Lbfgs<Bounded>` / `NelderMead<Projected>` precedent.
+/// `Lbfgs<Bounded>`/`NelderMead<Projected>` precedent.
 pub struct Bounded;
 
 /// BOBYQA (Powell 2009): bound-constrained model-based derivative-free
@@ -77,14 +77,14 @@ pub struct Bounded;
 ///
 /// # Configuration
 ///
-/// - [`with_rho_beg`](Self::with_rho_beg) — initial trust-region radius `ρ_beg`
+/// - [`with_rho_beg`](Self::with_rho_beg): initial trust-region radius `ρ_beg`
 ///   (default `1.0`). Also the initial `Δ`. The initial sampling needs room
 ///   `b_i ≥ a_i + 2ρ_beg` (Powell 2009, eq. 2.1); if `ρ_beg` is too large for a
 ///   narrow box it is reduced to `min(b_i − a_i)/4` (with `ρ_end` pulled down to
 ///   match), mirroring PRIMA rather than rejecting the solve.
-/// - [`with_rho_end`](Self::with_rho_end) — final radius `ρ_end` (default
+/// - [`with_rho_end`](Self::with_rho_end): final radius `ρ_end` (default
 ///   `1e-6`); must satisfy `ρ_beg > ρ_end > 0`.
-/// - [`with_npt`](Self::with_npt) — interpolation-set size `npt`, in
+/// - [`with_npt`](Self::with_npt): interpolation-set size `npt`, in
 ///   `[2n+1, ½(n+1)(n+2)]` (default `2n+1`).
 ///
 /// # Panics
@@ -96,7 +96,7 @@ pub struct Bounded;
 ///
 /// # RESCUE
 ///
-/// The full method of RESCUE (Powell 2009, §5 — restoring the interpolation set
+/// The full method of RESCUE (Powell 2009, §5—restoring the interpolation set
 /// when rounding damages the update denominator) is implemented and wired, but
 /// it fires only on severely ill-conditioned geometry. As Powell and PRIMA both
 /// note, it is essentially never invoked on well-behaved problems without heavy
@@ -105,7 +105,7 @@ pub struct Bounded;
 /// # Backends
 ///
 /// Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-/// faer all work — the parameter type needs only [`Clone`], [`VectorLen`], and
+/// faer all work—the parameter type needs only [`Clone`], [`VectorLen`], and
 /// `Index`/`IndexMut` element access. The model algebra is internal pure-Rust
 /// `Vec<f64>` scratch, so no `linalg`-tier op is required. wasm-clean.
 ///

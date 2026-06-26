@@ -21,7 +21,7 @@
 </script>
 
 <Seo
-    title="Basin — solver benchmarks"
+    title="Basin—solver benchmarks"
     description="basin's general optimizers (GD, Nelder–Mead, BFGS, L-BFGS, CMA-ES) head-to-head on standard benchmark problems, as suboptimality-vs-time convergence traces under a fixed wall-clock budget."
 />
 
@@ -34,11 +34,11 @@
         <span class="text-slate-400 dark:text-slate-600">/</span> Solvers
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Solvers — head-to-head
+        Solvers—head-to-head
     </h1>
     <p class="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
-        basin's five general optimizers — gradient descent, Nelder–Mead, BFGS,
-        L-BFGS, and CMA-ES — from several seeded starting points sampled
+        basin's five general optimizers (gradient descent, Nelder–Mead, BFGS,
+        L-BFGS, and CMA-ES) from several seeded starting points sampled
         uniformly in each problem's domain. Each run is capped on a fixed
         <strong>{formatDuration(data.budgetNs)} wall-clock budget</strong>
         and stopped early on reaching suboptimality
@@ -127,7 +127,7 @@
         <code class="font-mono">Vec&lt;f64&gt;</code> backend, capped at
         {formatDuration(data.budgetNs)} per (solver, seed) run. Each per-iteration
         timestamp is the median over 11 repetitions of the same deterministic run;
-        absolute times are machine-specific — compare curves within a panel, not across
+        absolute times are machine-specific; compare curves within a panel, not across
         machines. Some seeds land in the basin of Rosenbrock's spurious local minimum
         near
         <code class="font-mono">(−1, 1, …, 1)</code> (which appears for

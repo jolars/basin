@@ -1,7 +1,7 @@
 //! Read-only side effects fired around the iteration loop.
 //!
-//! An [`Observe`] implementation watches the run as it happens — logging,
-//! progress reporting, recording a trajectory, streaming iterates to a UI —
+//! An [`Observe`] implementation watches the run as it happens (logging,
+//! progress reporting, recording a trajectory, streaming iterates to a UI)
 //! without influencing it. Observers do **not** decide whether to stop; that
 //! is the job of [`TerminationCriterion`](crate::core::termination::TerminationCriterion).
 //! The two extension points sit side-by-side on
@@ -11,13 +11,13 @@
 //!   returns `Option<TerminationReason>`; framework consumes the result and
 //!   stops the run if `Some`.
 //! - [`Observe`]: returns `()`; the executor ignores any side effects on the
-//!   optimization itself. Failures must be handled inside the observer —
+//!   optimization itself. Failures must be handled inside the observer—
 //!   the trait is infallible by design so a misbehaving logger can't kill
 //!   the run.
 //!
 //! Like termination criteria, observers bind on the minimum
 //! [`State`](crate::core::state::State) shape they need (tenet 3): a logger
-//! that just wants `iter` / `cost` impls `Observe<S: State>`; a gradient-norm
+//! that just wants `iter`/`cost` impls `Observe<S: State>`; a gradient-norm
 //! observer impls `Observe<S: GradientState>` and is rejected at compile time
 //! when attached to a derivative-free run.
 //!
@@ -71,7 +71,7 @@ pub trait Observe<S> {
     /// state's counter mirror has been refreshed. The state's iter counter
     /// is zero.
     ///
-    /// Always fires regardless of the observer's [`ObserverMode`] — modes
+    /// Always fires regardless of the observer's [`ObserverMode`]—modes
     /// gate iteration callbacks only.
     fn observe_init(&mut self, _state: &S) {}
 
@@ -90,7 +90,7 @@ pub trait Observe<S> {
     ///
     /// Does *not* fire when
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
-    /// returns `Err(_)` — in that case the state has been consumed and
+    /// returns `Err(_)`—in that case the state has been consumed and
     /// there is nothing to observe.
     ///
     /// Always fires regardless of the observer's [`ObserverMode`].
@@ -99,14 +99,14 @@ pub trait Observe<S> {
 
 /// Per-registration policy for [`observe_iter`](Observe::observe_iter).
 ///
-/// `Never` and `Every` gate the iteration callback only — `observe_init` and
+/// `Never` and `Every` gate the iteration callback only: `observe_init` and
 /// `observe_final` always fire. A user who wants to fully disable an observer
 /// should simply not register it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ObserverMode {
     /// Skip [`observe_iter`](Observe::observe_iter) entirely. The observer
-    /// still sees `observe_init` / `observe_final`.
+    /// still sees `observe_init`/`observe_final`.
     Never,
     /// Fire [`observe_iter`](Observe::observe_iter) on every iteration.
     Always,
@@ -116,7 +116,7 @@ pub enum ObserverMode {
     /// nonsensical and panics on construction via
     /// [`every`](Self::every), but raw construction is permitted and
     /// treated as `Never` (no iter is a multiple of zero under the
-    /// `iter % n == 0` rule because `n == 0` would divide-by-zero — the
+    /// `iter % n == 0` rule because `n == 0` would divide-by-zero—the
     /// executor checks for `n != 0` before the modulus).
     Every(u64),
 }

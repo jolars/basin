@@ -2,20 +2,20 @@
 //!
 //! Mirrors the Fortran subroutines in `references/lbfgsb-v3.0/lbfgsb.f`:
 //!
-//! - [`formt`] — build `T = θ SᵀS + L D⁻¹ Lᵀ` from the Gram blocks
+//! - [`formt`]: build `T = θ SᵀS + L D⁻¹ Lᵀ` from the Gram blocks
 //!   stored on [`LbfgsState`][s], then Cholesky-factorize it in place
 //!   so the upper triangle of `wt` holds `J` such that `T = Jᵀ J`
 //!   (Fortran `formt`, `lbfgsb.f:2173`).
-//! - [`bmv`] — apply the 2k × 2k middle-matrix inverse `M` to a vector,
+//! - [`bmv`]: apply the 2k × 2k middle-matrix inverse `M` to a vector,
 //!   via the two block-triangular solves (`lbfgsb.f:1106`).
 //! - [`cholesky_upper_in_place`], [`solve_upper_tri`],
-//!   [`solve_upper_tri_transposed`] — pure-Rust replacements for the
-//!   LINPACK `dpofa` / `dtrsl` calls. Row-major storage with stride
+//!   [`solve_upper_tri_transposed`]—pure-Rust replacements for the
+//!   LINPACK `dpofa`/`dtrsl` calls. Row-major storage with stride
 //!   `m_capacity` so the leading `col × col` block matches the
 //!   Fortran layout of `wt(m, m)` with only the leading `col × col`
 //!   live.
 //!
-//! All routines operate on `&[F]` / `&mut [F]` for `F: Scalar`; the
+//! All routines operate on `&[F]`/`&mut [F]` for `F: Scalar`; the
 //! surrounding solver is responsible for sourcing those slices from
 //! whichever backend [`LbfgsState`][s] is parameterized on.
 //!
@@ -29,7 +29,7 @@ use crate::core::math::Scalar;
 ///
 /// Storage is row-major with stride `m`; the leading `col × col` block
 /// is the live region. Lower-triangle entries of `wt` are left
-/// undefined (Fortran does the same — `dpofa` only touches the upper
+/// undefined (Fortran does the same—`dpofa` only touches the upper
 /// triangle).
 ///
 /// Returns `Ok(())` on success, or `Err(FormtError::NotPositiveDefinite)`
@@ -75,7 +75,7 @@ pub(crate) fn formt<F: Scalar>(
 /// `dpofa` returning a non-PD diagonal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FormtError {
-    /// The middle matrix `T = θ SᵀS + L D⁻¹ Lᵀ` failed Cholesky — a
+    /// The middle matrix `T = θ SᵀS + L D⁻¹ Lᵀ` failed Cholesky—a
     /// pivot was non-positive. Mirrors Fortran `info = -3`.
     NotPositiveDefinite,
 }
@@ -135,7 +135,7 @@ pub(crate) fn solve_upper_tri<F: Scalar>(j_upper: &[F], col: usize, m: usize, b:
 }
 
 /// Solve `Jᵀ x = b` in place on `b`. Mirrors LINPACK's `dtrsl(...,
-/// job=11, ...)` — `J` is upper triangular, the transposed solve runs
+/// job=11, ...)`—`J` is upper triangular, the transposed solve runs
 /// top-down.
 pub(crate) fn solve_upper_tri_transposed<F: Scalar>(
     j_upper: &[F],
@@ -182,7 +182,7 @@ pub(crate) fn bmv<F: Scalar>(
     }
     debug_assert!(v.len() >= 2 * col && p.len() >= 2 * col);
 
-    // Check J's diagonal upfront — the two triangular solves divide
+    // Check J's diagonal upfront—the two triangular solves divide
     // by `wt[i*m+i]`, so a zero/NaN/Inf pivot would silently produce
     // NaNs instead of surfacing the singularity. Mirrors Fortran's
     // `info ≠ 0` exit from `dtrsl`.
@@ -193,7 +193,7 @@ pub(crate) fn bmv<F: Scalar>(
         }
     }
 
-    // PART I — solve [  D^{1/2}      0  ] [ p1 ] = [ v1 ]
+    // PART I—solve [  D^{1/2}      0  ] [ p1 ] = [ v1 ]
     //                [ −L D^{−1/2}   J  ] [ p2 ]   [ v2 ].
     //
     // Stage 1a: build `rhs = v2 + L D⁻¹ v1` into `p[col..]` then
@@ -215,11 +215,11 @@ pub(crate) fn bmv<F: Scalar>(
         p[i] = v[i] / sy[i * m + i].sqrt();
     }
 
-    // PART II — solve [ −D^{1/2}   D^{−1/2} Lᵀ ] [ p1 ] = [ p1 ]
+    // PART II—solve [ −D^{1/2}   D^{−1/2} Lᵀ ] [ p1 ] = [ p1 ]
     //                 [    0          Jᵀ       ] [ p2 ]   [ p2 ].
     //
     // Stage 2a: solve `J p2 = p2`. Fortran uses
-    // `dtrsl(wt, ..., job=01)` — the non-transposed solve on an
+    // `dtrsl(wt, ..., job=01)`—the non-transposed solve on an
     // upper-tri factor.
     solve_upper_tri(wt, col, m, &mut p[col..col + col]);
 
@@ -242,7 +242,7 @@ pub(crate) fn bmv<F: Scalar>(
 /// `dtrsl` encounters a zero pivot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BmvError {
-    /// The Cholesky factor `J` of `T` has a zero pivot — the
+    /// The Cholesky factor `J` of `T` has a zero pivot—the
     /// triangular solve cannot proceed. Mirrors Fortran `info ≠ 0`
     /// from `dtrsl`.
     SingularJ,
@@ -250,7 +250,7 @@ pub(crate) enum BmvError {
 
 #[cfg(test)]
 // Explicit `i * m + j` indexing (including `0 * m + 0`) mirrors the
-// Fortran source's 2-D layout — load-bearing for readability when
+// Fortran source's 2-D layout—load-bearing for readability when
 // cross-checking against `lbfgsb.f`.
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {
@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn cholesky_rejects_non_pd() {
-        // T = [[1, 2], [2, 1]] has det −3 — indefinite.
+        // T = [[1, 2], [2, 1]] has det −3—indefinite.
         let m = 2;
         let mut t = vec![0.0_f64; m * m];
         t[0 * m + 0] = 1.0;

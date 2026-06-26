@@ -8,7 +8,7 @@
 //!
 //! Index convention for the order-`(m+n+1)` system: indices `0..m` are the
 //! interpolation/`A`-block components `λ`, index `m` is the suppressed constant
-//! term `c` (Powell 2006, §4 — its row/column is *not* stored by the model),
+//! term `c` (Powell 2006, §4—its row/column is *not* stored by the model),
 //! and indices `m+1..m+n+1` are the gradient components `g`.
 
 use crate::core::math::DenseMatrix;
@@ -222,7 +222,7 @@ mod tests {
             }
         }
 
-        // Columns of inv solve A x = eⱼ — cross-check against Cholesky solve.
+        // Columns of inv solve A x = eⱼ—cross-check against Cholesky solve.
         for j in 0..3 {
             let mut e = vec![0.0; 3];
             e[j] = 1.0;

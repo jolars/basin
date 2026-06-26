@@ -2,7 +2,7 @@
 // dense index arithmetic of the simplex / active-set algebra; blanket-allowed.
 #![allow(clippy::needless_range_loop)]
 
-//! COBYLA (Powell 1994) — Constrained Optimization BY Linear Approximations.
+//! COBYLA (Powell 1994)—Constrained Optimization BY Linear Approximations.
 //!
 //! Derivative-free solver for nonlinearly-constrained optimization. Unlike the
 //! quadratic-model Powell trio (NEWUOA/BOBYQA/LINCOA), COBYLA builds **linear**
@@ -44,7 +44,7 @@ use driver::{CobylaWork, Transition};
 ///
 /// COBYLA minimizes a smooth-or-not objective `F(x)` subject to `c(x) ≤ 0` for
 /// an arbitrary vector-valued constraint function `c`, using only objective and
-/// constraint *values* — no derivatives. Each iteration interpolates linear
+/// constraint *values*—no derivatives. Each iteration interpolates linear
 /// models of `F` and `c` at the vertices of a simplex, takes a trust-region step
 /// under those linear models, and ranks points by the L-infinity merit
 /// `Φ = F + μ·[maxᵢ cᵢ]₊`. The trust-region resolution `ρ` shrinks from `ρ_beg`
@@ -84,9 +84,9 @@ use driver::{CobylaWork, Transition};
 ///
 /// # Configuration
 ///
-/// - [`with_rho_beg`](Self::with_rho_beg) — initial trust-region radius `ρ_beg`
+/// - [`with_rho_beg`](Self::with_rho_beg): initial trust-region radius `ρ_beg`
 ///   (a reasonable coarse change to the variables; default `1.0`).
-/// - [`with_rho_end`](Self::with_rho_end) — final radius `ρ_end`, ~ the required
+/// - [`with_rho_end`](Self::with_rho_end): final radius `ρ_end`, ~ the required
 ///   accuracy (default `1e-6`); must satisfy `ρ_beg > ρ_end > 0`.
 ///
 /// # Constraints

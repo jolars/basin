@@ -30,14 +30,14 @@ use crate::line_search::{Constant, LineSearch};
 /// steepest descent; `β ∈ (0, 1)` carries momentum, which cancels the
 /// oscillating component of the gradient across a narrow valley while
 /// accumulating speed along the valley floor. With a [`Constant`] step
-/// this is the classical heavy-ball method — well-behaved on the curved,
+/// this is the classical heavy-ball method—well-behaved on the curved,
 /// ill-conditioned Rosenbrock valley where plain steepest descent
 /// zig-zags. A too-large effective step (roughly `α / (1 − β)` along
 /// consistent directions) diverges, so reduce `α` when adding momentum.
 ///
 /// # Backends
 ///
-/// Backend-generic — works with any `V` implementing
+/// Backend-generic—works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
 /// [`NegInPlace`] + [`ScaleInPlace<F>`] + `Clone`. With the default
 /// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
@@ -251,7 +251,7 @@ mod tests {
 
     /// Ill-conditioned quadratic `f(x) = x₀² + 100·x₁²` (condition number
     /// 100), gradient `[2x₀, 200x₁]`. A step small enough to be stable on
-    /// the stiff `x₁` axis crawls along the soft `x₀` axis — the regime
+    /// the stiff `x₁` axis crawls along the soft `x₀` axis—the regime
     /// where heavy-ball momentum demonstrably accelerates over plain
     /// steepest descent. This is the well-conditioned-vs-ill-conditioned
     /// distinction that matters: momentum is *not* faster on `Quadratic`.

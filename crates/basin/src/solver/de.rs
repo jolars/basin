@@ -13,12 +13,12 @@ use crate::solver::cma_es::sort_population_ascending;
 /// Simple and Efficient Heuristic for Global Optimization over
 /// Continuous Spaces*, J. Global Optim. 11:341–359).
 ///
-/// Stochastic, derivative-free, population-based — the canonical
+/// Stochastic, derivative-free, population-based—the canonical
 /// black-box optimizer for rugged continuous landscapes with few
 /// hyperparameters and no covariance model. Sits next to
 /// [`Ssga`](crate::solver::Ssga) (steady-state real-coded GA) and
 /// [`CmaEs`](crate::solver::CmaEs) (Gaussian model) in basin's
-/// global / stochastic family.
+/// global/stochastic family.
 ///
 /// # Algorithm
 ///
@@ -40,7 +40,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///    guarantee ensures `u ≠ x[i]` even when `CR = 0`.
 ///
 /// All `NP` trials are built from the *unmodified* current generation
-/// (synchronous DE — same as DEoptim and
+/// (synchronous DE—same as DEoptim and
 /// [`scipy.optimize.differential_evolution`]). After evaluation, each
 /// trial replaces its target if its cost is not worse
 /// (`c_trial ≤ c_x[i]`), then the population is re-sorted ascending so
@@ -60,7 +60,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// # Reproducibility
 ///
 /// Carries a [`ChaCha8Rng`] seeded from the `seed: u64` passed to
-/// [`new`](Self::new) — same seed → same iterate trajectory on every
+/// [`new`](Self::new)—same seed → same iterate trajectory on every
 /// platform basin builds for (including `wasm32-unknown-unknown`).
 ///
 /// # Contract
@@ -73,7 +73,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// - **Caller must:** supply **finite** bounds on every coordinate.
 ///   Uniform initialization (and bound repair) over an unbounded
 ///   interval is mathematically undefined, so a non-finite (`±∞`) bound
-///   is a contract violation — [`init`](Solver::init) panics naming the
+///   is a contract violation—[`init`](Solver::init) panics naming the
 ///   offending coordinate. Note `BoxConstraints` is shared with solvers
 ///   that *do* tolerate `±∞` entries (e.g. [`Trf`](crate::solver::Trf),
 ///   [`BoundedCmaEs`](crate::solver::BoundedCmaEs), which Gaussian-sample
@@ -85,7 +85,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///   `pop_size` (default
 ///   [`default_pop_size(D)`](Self::default_pop_size), override via
 ///   [`with_pop_size`](Self::with_pop_size)), so `λ` only needs to be
-///   non-zero — the solver clears the state's `candidates` / `costs`
+///   non-zero—the solver clears the state's `candidates`/`costs`
 ///   and refills them from a uniform sample of the box.
 /// - **Implementor (this solver) must:** maintain feasibility (every
 ///   candidate after `init` and every trial after crossover is repaired
@@ -95,7 +95,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test — classical DE has no canonical
+/// No solver-internal optimality test—classical DE has no canonical
 /// fixed-point criterion. Pair with framework criteria
 /// [`MaxIter`](crate::core::termination::MaxIter),
 /// [`MaxCostEvals`](crate::core::termination::MaxCostEvals),
@@ -103,11 +103,11 @@ use crate::solver::cma_es::sort_population_ascending;
 /// [`CostTolerance`](crate::core::termination::CostTolerance), or
 /// [`ParamTolerance`](crate::core::termination::ParamTolerance).
 /// Greedy selection ensures `state.cost()` is non-increasing, so the
-/// cost / param tolerances behave honestly under stochastic dynamics.
+/// cost/param tolerances behave honestly under stochastic dynamics.
 ///
 /// # Backends
 ///
-/// Backend-generic — works with any `V` implementing
+/// Backend-generic—works with any `V` implementing
 /// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<F>`] +
 /// [`ScaleInPlace<F>`] + `Index<usize, Output = F>` +
 /// `IndexMut<usize, Output = F>` + `Clone`. With the default
@@ -145,8 +145,8 @@ impl<F> De<F> {
     /// at least three peers to draw from (`pick_three_distinct` requires
     /// `NP ≥ 4`).
     ///
-    /// `F`-free, so the `: Scalar` bound is dropped from this impl block
-    /// — keeps `De::default_pop_size(D)` callable from the trait-impl
+    /// `F`-free, so the `: Scalar` bound is dropped from this impl block—
+    /// keeps `De::default_pop_size(D)` callable from the trait-impl
     /// `init` (`Self::default_pop_size`) and from F-agnostic test code
     /// (`De::default_pop_size(0)`, with `F` defaulting to `f64`).
     pub fn default_pop_size(n: usize) -> usize {
@@ -212,10 +212,10 @@ impl<F: Scalar> De<F> {
 
 /// Sample three pairwise-distinct indices from `0..n`, each also
 /// distinct from `exclude` (the target individual). Used by DE's
-/// mutation step; requires `n ≥ 4`. Rejection-sampled — `O(1)` expected
+/// mutation step; requires `n ≥ 4`. Rejection-sampled—`O(1)` expected
 /// for the population sizes DE is typically run at.
 ///
-/// `pub(crate)` so a future memetic / strategy-variant DE can reuse the
+/// `pub(crate)` so a future memetic/strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
 pub(crate) fn pick_three_distinct<R>(n: usize, exclude: usize, rng: &mut R) -> (usize, usize, usize)
 where
@@ -245,7 +245,7 @@ where
 
 /// DE/rand/1 mutation: `v = x_r1 + F · (x_r2 − x_r3)`.
 ///
-/// `pub(crate)` so a future memetic / strategy-variant DE can reuse the
+/// `pub(crate)` so a future memetic/strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
 pub(crate) fn de_rand_1_mutate<V, F>(x_r1: &V, x_r2: &V, x_r3: &V, f: F) -> V
 where
@@ -265,7 +265,7 @@ where
 /// diversity better than clamping, which biases the population toward
 /// the boundary.
 ///
-/// `pub(crate)` so a future memetic / strategy-variant DE can reuse the
+/// `pub(crate)` so a future memetic/strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
 pub(crate) fn repair_reinit_per_coord<V, F, R>(v: &mut V, lower: &V, upper: &V, rng: &mut R)
 where
@@ -285,7 +285,7 @@ where
 /// overwrite each coordinate `j` with the donor's value whenever
 /// `j == j_rand` (the guaranteed coordinate) or `rng.uniform() < cr`.
 ///
-/// `pub(crate)` so a future memetic / strategy-variant DE can reuse the
+/// `pub(crate)` so a future memetic/strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
 pub(crate) fn binomial_crossover<V, F, R>(target: &V, donor: &V, cr: f64, rng: &mut R) -> V
 where
@@ -338,11 +338,11 @@ where
             .unwrap_or_else(|| Self::default_pop_size(n));
         // Re-check the with_pop_size invariant here in case the user
         // didn't go through with_pop_size (default path needs the same
-        // guarantee — default_pop_size already enforces it, so this is
+        // guarantee—default_pop_size already enforces it, so this is
         // belt-and-braces but cheap).
         assert!(pop_size >= 4, "De requires pop_size >= 4 (got {pop_size})");
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
-        // Same reseed-from-scratch pattern as Ssga / RandomSearch — the
+        // Same reseed-from-scratch pattern as Ssga / RandomSearch—the
         // solver's trajectory is reproducible regardless of which
         // BasicPopulationState constructor the caller used.
         state.candidates.clear();
@@ -390,7 +390,7 @@ where
             trials.push(trial);
         }
         // All trials are built from the frozen current generation, so they
-        // are independent — evaluate them in one batch (parallel under the
+        // are independent—evaluate them in one batch (parallel under the
         // `parallel` feature).
         let trial_costs = problem.cost_batch(&trials)?;
 

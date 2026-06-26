@@ -78,7 +78,7 @@ impl<P> Default for SchafferN2<P> {
     }
 }
 
-/// Catalogue entry for Schaffer N.2.
+/// Catalog entry for Schaffer N.2.
 pub static SCHAFFER_N2_SPEC: ProblemSpec = ProblemSpec {
     name: "Schaffer N.2",
     dim: Dimensionality::Fixed(2),
@@ -157,7 +157,7 @@ impl<P> Default for SchafferN4<P> {
     }
 }
 
-/// Catalogue entry for Schaffer N.4.
+/// Catalog entry for Schaffer N.4.
 pub static SCHAFFER_N4_SPEC: ProblemSpec = ProblemSpec {
     name: "Schaffer N.4",
     dim: Dimensionality::Fixed(2),

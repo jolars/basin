@@ -7,7 +7,7 @@
 //! Multimodal function whose surface looks like a tray with a cross-shaped
 //! pattern of deep wells. It has four equal global minima at
 //! `(±1.34941, ±1.34941)` with `f ≈ −2.06261`. The nested `|·|` terms make it
-//! non-differentiable, so it is cost-only — a target for derivative-free and
+//! non-differentiable, so it is cost-only—a target for derivative-free and
 //! global solvers. Usual search domain is `x, y ∈ [-10, 10]`.
 
 use core::marker::PhantomData;
@@ -48,7 +48,7 @@ impl<P> Default for CrossInTray<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static CROSS_IN_TRAY_SPEC: ProblemSpec = ProblemSpec {
     name: "Cross-in-tray",
     dim: Dimensionality::Fixed(2),
@@ -70,7 +70,7 @@ pub static CROSS_IN_TRAY_SPEC: ProblemSpec = ProblemSpec {
     description: "Tray-shaped multimodal surface with four equal global minima \
                   at (±1.34941, ±1.34941), value ≈ −2.06261. Non-differentiable \
                   (nested |·| terms); usual search domain is x, y ∈ [-10, 10]. \
-                  Cost-only, for derivative-free / global solvers.",
+                  Cost-only, for derivative-free and global solvers.",
 };
 
 impl<P> HasSpec for CrossInTray<P> {

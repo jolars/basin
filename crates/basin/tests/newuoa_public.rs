@@ -1,11 +1,11 @@
 //! Public-API integration tests for the NEWUOA solver.
 //!
-//! Exercises [`Newuoa`] through the framework — [`Executor`] over a
+//! Exercises [`Newuoa`] through the framework: [`Executor`] over a
 //! [`NewuoaState`], with framework termination ([`MaxCostEvals`],
 //! [`RhoTolerance`]). The algorithm itself is validated bit-against-PRIMA by the
 //! in-crate `solver::newuoa::parity` tests; these confirm the public wiring:
-//! init/next_iter, the V↔Vec bridge, count mirroring, and the convergence /
-//! budget / early-stop termination paths.
+//! init/next_iter, the V↔Vec bridge, count mirroring, and the convergence/
+//! budget/early-stop termination paths.
 
 use basin::{
     CostFunction, Executor, MaxCostEvals, Newuoa, NewuoaState, RhoTolerance, TerminationReason,

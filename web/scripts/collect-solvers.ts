@@ -10,7 +10,7 @@
  * Run with: `npm run collect:solvers` (uses tsx). Produce the input first:
  *   cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json
  *
- * As with the backend / competitor collectors this is deliberately off CI —
+ * As with the backend/competitor collectors this is deliberately off CI—
  * timings are machine-specific. Refresh locally and commit the regenerated
  * JSON.
  */
@@ -61,7 +61,7 @@ const results = raw.filter((r) => SOLVER_ORDER.includes(r.solver));
 
 if (results.length === 0) {
     console.error(
-        "✗ trace file had no rows matching the curated solver set — is it stale?",
+        "✗ trace file had no rows matching the curated solver set—is it stale?",
     );
     process.exit(1);
 }

@@ -2,7 +2,7 @@
 // parity. Both lints are blanket-allowed for this module.
 #![allow(clippy::needless_range_loop, clippy::too_many_arguments)]
 
-//! Limited-memory BFGS — both modes.
+//! Limited-memory BFGS—both modes.
 //!
 //! [`Lbfgs`](crate::Lbfgs) is generic over a type-state
 //! [`Mode`](crate::solver::lbfgs::Bounded) marker:
@@ -16,20 +16,20 @@
 //! - [`Lbfgs<Unbounded>`](crate::Lbfgs) is unconstrained limited-memory BFGS via
 //!   Nocedal–Wright's two-loop recursion (Algorithm 7.4). Uses the
 //!   same [`LbfgsState`](crate::LbfgsState) history fields (`ws`, `wy`, `sy`, `theta`)
-//!   but skips the Cauchy / `freev` / `subsm` machinery — those are
+//!   but skips the Cauchy/`freev`/`subsm` machinery—those are
 //!   box-constraint-specific.
 //!
 //! Submodules backing the bounded path (all `pub(crate)`):
 //!
-//! - `cauchy` — generalized Cauchy point along the projected gradient
+//! - `cauchy`: generalized Cauchy point along the projected gradient
 //!   path. Port of `cauchy.f`.
-//! - `subsm` — subspace minimization with `iword == 1` bound-
+//! - `subsm`: subspace minimization with `iword == 1` bound-
 //!   backtracking (v3.0 deviation). Port of `subsm.f`.
-//! - `formk` — `L·E·Lᵀ` factorization of the indefinite middle
+//! - `formk`: `L·E·Lᵀ` factorization of the indefinite middle
 //!   matrix `K`. Port of `formk.f`.
-//! - `compact` — compact-form helpers (`formt`, `bmv`, pure-Rust
+//! - `compact`: compact-form helpers (`formt`, `bmv`, pure-Rust
 //!   Cholesky and triangular solves).
-//! - `backend` — the `AsFloatSliceMut` trait that lets
+//! - `backend`: the `AsFloatSliceMut` trait that lets
 //!   the slice-based numerics work generically over `Vec<f64>`,
 //!   `nalgebra::DVector<f64>`, `faer::Col<f64>`, and
 //!   `ndarray::Array1<f64>`.
@@ -59,7 +59,7 @@ use self::subsm::subsm;
 /// Limited-memory BFGS, parameterised over a type-state mode marker.
 ///
 /// `Lbfgs<Bounded>` (aliased as [`Lbfgsb`]) is a faithful port of
-/// Byrd–Lu–Nocedal 1995 / Zhu–Byrd–Lu–Nocedal 1997 (ACM TOMS Alg. 778),
+/// Byrd–Lu–Nocedal 1995/Zhu–Byrd–Lu–Nocedal 1997 (ACM TOMS Alg. 778),
 /// with the Nocedal–Morales 2011 v3.0 directional-derivative + bound-
 /// backtracking deviation in subspace minimization. Iteration-wise
 /// parity with the Fortran v3.0 reference (`references/lbfgsb-v3.0/`)
@@ -70,14 +70,14 @@ use self::subsm::subsm;
 /// `Lbfgs<Unbounded>` is unconstrained limited-memory BFGS via
 /// Nocedal–Wright's two-loop recursion (Algorithm 7.4). It reuses the
 /// same [`LbfgsState`] history machinery but skips the Cauchy /
-/// `freev` / `subsm` phases — those are box-constraint-specific.
+/// `freev`/`subsm` phases—those are box-constraint-specific.
 /// Construct with [`Lbfgs::<Unbounded>::new()`], or transition from
 /// the default [`Lbfgs::<Bounded>::new()`] via [`Lbfgs::unbounded`].
 ///
-/// # Bounded mode — per-iteration outline
+/// # Bounded mode—per-iteration outline
 ///
 /// 1. Walks the projected gradient ray, building a piecewise-quadratic
-///    model and identifying the **generalized Cauchy point** `xcp` —
+///    model and identifying the **generalized Cauchy point** `xcp`—
 ///    the minimizer along the path (see the `cauchy` submodule).
 /// 2. Restricts to the free variables at `xcp` and computes an
 ///    approximate **subspace minimizer** via a structured Newton step
@@ -93,12 +93,12 @@ use self::subsm::subsm;
 ///
 /// On a singular middle-matrix or non-positive-definite `T`, the
 /// solver clears the history and retries the iteration (Fortran's
-/// `goto 222` reset path). One retry is enough — after clearing,
+/// `goto 222` reset path). One retry is enough—after clearing,
 /// `col = 0` falls through to the line-search-only path, which
 /// either succeeds with the projected steepest-descent direction or
 /// fails the whole solve.
 ///
-/// # Unbounded mode — per-iteration outline
+/// # Unbounded mode—per-iteration outline
 ///
 /// 1. Two-loop recursion (Nocedal–Wright Alg. 7.4) over the
 ///    `(s_i, y_i)` history with initial Hessian `H₀ = (1/θ)·I`
@@ -115,7 +115,7 @@ use self::subsm::subsm;
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test on the unbounded path — pair with
+/// No solver-internal optimality test on the unbounded path—pair with
 /// the framework-level
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance).
 /// On the bounded path, a built-in projected-gradient check fires
@@ -152,10 +152,10 @@ pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     /// in both modes for the limited-memory update acceptance test.
     epsilon: F,
     /// Built-in projected-gradient convergence tolerance. Bounded mode
-    /// only — emits [`TerminationReason::SolverConverged`] at the top
+    /// only—emits [`TerminationReason::SolverConverged`] at the top
     /// of an iteration when `‖projgr(x, g, l, u)‖_∞ ≤ tol_pg`. Default
-    /// `1e-10`. Set to `0.0` to disable (matches Fortran `pgtol = 0`
-    /// — required for the iteration-wise parity test against the
+    /// `1e-10`. Set to `0.0` to disable (matches Fortran `pgtol = 0`)—
+    /// required for the iteration-wise parity test against the
     /// reference, which doesn't terminate on the projected gradient).
     /// Stored on the shared struct; the field is unused (and the
     /// builder unavailable) in [`Unbounded`] mode, where users wire
@@ -165,7 +165,7 @@ pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     tol_pg: F,
     /// Default limited-memory history capacity (Fortran `m`,
     /// `references/lbfgsb-v3.0/`). Default `10`. Only consulted when
-    /// the solver constructs the state itself — e.g. as a
+    /// the solver constructs the state itself—e.g. as a
     /// [`MemeticInner`](crate::solver::MemeticInner) seeding a fresh
     /// [`LbfgsState`] for a CMA-ES injection refinement. Standalone
     /// users supply `m_capacity` directly to `LbfgsState::new(x, m)`,
@@ -228,8 +228,8 @@ impl Lbfgs<Bounded, MoreThuente> {
 
 impl Lbfgs<Unbounded, MoreThuente> {
     /// Unconstrained L-BFGS with Moré–Thuente line search and the same
-    /// curvature-skip / history defaults as the bounded path. The
-    /// `tol_pg` field is unused in this mode — terminate via the
+    /// curvature-skip/history defaults as the bounded path. The
+    /// `tol_pg` field is unused in this mode—terminate via the
     /// framework-level
     /// [`GradientTolerance`](crate::core::termination::GradientTolerance).
     pub fn new() -> Self {
@@ -262,7 +262,7 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
     /// Override the built-in projected-gradient convergence tolerance.
     /// Default `1e-10`; pass `0.0` to disable (Fortran-`pgtol=0`
     /// semantics, used by the iteration-wise parity test). Bounded
-    /// mode only — the unbounded path doesn't compute a projected
+    /// mode only—the unbounded path doesn't compute a projected
     /// gradient.
     pub fn with_tol_pg(mut self, tol_pg: F) -> Self {
         assert!(tol_pg >= F::zero(), "tol_pg must be ≥ 0");
@@ -358,7 +358,7 @@ where
         let mut work = LbfgsbWork::<F>::new(n, m);
 
         // Project the initial iterate onto the feasible box and
-        // initialise `iwhere`, `cnstnd`, `boxed` (Fortran `active`,
+        // initialize `iwhere`, `cnstnd`, `boxed` (Fortran `active`,
         // `lbfgsb.f:1004`).
         active_init(
             state.param.as_float_slice_mut(),
@@ -394,7 +394,7 @@ where
         let n = state.param.as_float_slice().len();
         let m = state.m_capacity;
 
-        // Inner restart loop — Fortran's `goto 222` path. At most one
+        // Inner restart loop—Fortran's `goto 222` path. At most one
         // restart per iteration: after clearing history we either
         // succeed with the (col == 0) line-search-only path or bail.
         let mut restart_budget = 1u8;
@@ -403,7 +403,7 @@ where
             let work = state.work.as_mut().expect("work missing");
 
             // -------------------------------------------------------
-            // Phase A — projected gradient norm. Drives both the
+            // Phase A—projected gradient norm. Drives both the
             // built-in convergence check below and the cauchy
             // short-circuit further down. The framework-side
             // `ProjectedGradientTolerance` criterion does the same
@@ -422,7 +422,7 @@ where
             // Built-in convergence: emit `SolverConverged` when the
             // projected-gradient infinity-norm sits at the tolerance.
             // Restore the borrowed cost/gradient so callers reading
-            // `state.gradient()` / `state.cost()` on the final result
+            // `state.gradient()`/`state.cost()` on the final result
             // see the values at the converged iterate. Set
             // `tol_pg = 0.0` (Fortran `pgtol = 0`) to disable.
             if sbgnrm <= self.tol_pg {
@@ -438,7 +438,7 @@ where
             let updatd = work.updatd;
 
             // -------------------------------------------------------
-            // Phase B — generalized Cauchy point (or skip when no
+            // Phase B—generalized Cauchy point (or skip when no
             // bounds are active and we already have history).
             // -------------------------------------------------------
             let mut wrk = updatd;
@@ -480,7 +480,7 @@ where
             }
 
             // -------------------------------------------------------
-            // Phase C — free / active partition (Fortran `freev`).
+            // Phase C—free/active partition (Fortran `freev`).
             // -------------------------------------------------------
             let (nfree, nenter, ileave) = freev(
                 n,
@@ -496,7 +496,7 @@ where
             wrk = wrk_local;
 
             // -------------------------------------------------------
-            // Phase D — subspace minimization (when there are free
+            // Phase D—subspace minimization (when there are free
             // variables and history to use).
             // -------------------------------------------------------
             if nfree > 0 && col > 0 {
@@ -586,13 +586,13 @@ where
                         return Ok((state, Some(TerminationReason::SolverFailed)));
                     }
                 }
-                // We don't read `SubsmStatus` — the projected step
+                // We don't read `SubsmStatus`—the projected step
                 // is already applied to `work.z`, and the
                 // line-search step cap below re-enforces feasibility.
             }
 
             // -------------------------------------------------------
-            // Phase E — line search. Direction d = z − x.
+            // Phase E—line search. Direction d = z − x.
             // -------------------------------------------------------
             for i in 0..n {
                 work.d[i] = work.z[i] - state.param.as_float_slice()[i];
@@ -639,9 +639,9 @@ where
 
             // Drive the line search. Fortran `lnsrlb` sets the
             // initial trial step and the feasibility cap on
-            // `dcsrch`'s `stp` / `stpmax`; we don't have a generic
+            // `dcsrch`'s `stp`/`stpmax`; we don't have a generic
             // hook for that on [`LineSearch`], so for now we let the
-            // configured line search keep its own initial / max-step
+            // configured line search keep its own initial/max-step
             // settings. Parity holds on the Rosenbrock 5D fixture
             // because the natural Newton step stays interior, but
             // tight-bound problems may need a constraint-aware
@@ -653,7 +653,7 @@ where
 
             if !(stp.is_finite() && stp > F::zero()) {
                 // Line search bailed. If col == 0, abnormal
-                // termination — there's no compact-form state to
+                // termination—there's no compact-form state to
                 // reset. Otherwise restart with cleared history. The
                 // clone of `g_v` is fine: we're on the cold-path exit
                 // either way.
@@ -678,7 +678,7 @@ where
             let (f_new, g_new) = problem.cost_and_gradient(&state.param)?;
 
             // -------------------------------------------------------
-            // Phase F — limited-memory update. Curvature check
+            // Phase F—limited-memory update. Curvature check
             // matches Fortran's `dr ≤ epsmch · ddum`.
             // -------------------------------------------------------
             // s = stp · d  (in slice form, d holds the unscaled
@@ -731,7 +731,7 @@ where
                         work.reset_history();
                     }
                 } else {
-                    // append_pair refused (s·y ≤ 0 numerically) —
+                    // append_pair refused (s·y ≤ 0 numerically)—
                     // treat as a skipped update.
                     let work = state.work.as_mut().unwrap();
                     work.updatd = false;
@@ -764,7 +764,7 @@ where
         mut state: LbfgsState<V, F>,
     ) -> Result<LbfgsState<V, F>, Self::Error> {
         // Cache cost and gradient at the initial iterate. `state.work`
-        // stays `None` — the box-constrained scratch buffers are
+        // stays `None`—the box-constrained scratch buffers are
         // never touched on the unbounded path.
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
@@ -865,7 +865,7 @@ where
             .next(problem, &state.param, f_old, &g_v, &d_v)?;
 
         if !(stp.is_finite() && stp > F::zero()) {
-            // Line search bailed. Restore cached cost / gradient so
+            // Line search bailed. Restore cached cost/gradient so
             // the caller's final state is consistent with the last
             // accepted iterate, and bubble the failure.
             state.gradient = Some(g_v);
@@ -1012,7 +1012,7 @@ fn feasible_step_cap<F: Scalar>(x: &[F], l: &[F], u: &[F], d: &[F]) -> F {
     stpmx
 }
 
-/// Count entering / leaving variables and rebuild the free + active
+/// Count entering/leaving variables and rebuild the free + active
 /// partition in `index`. Port of Fortran `freev` (`lbfgsb.f:2241`).
 ///
 /// Returns `(nfree, nenter, ileave)` where `indx2[0..nenter]` holds
@@ -1126,7 +1126,7 @@ where
     V: Clone,
 {
     if *restart_budget == 0 {
-        // Restore the cached gradient / cost so the state stays
+        // Restore the cached gradient/cost so the state stays
         // consistent for the caller.
         state.gradient = Some(g_v.clone());
         state.cost = Some(f_old);
@@ -1150,7 +1150,7 @@ where
 }
 
 /// Same as `try_restart`, but used after the line search has already
-/// applied side effects we need to leave intact (state.gradient / cost
+/// applied side effects we need to leave intact (state.gradient/cost
 /// already restored by the caller).
 fn try_restart_after_lnsrch<V, F: Scalar>(
     state: &mut LbfgsState<V, F>,

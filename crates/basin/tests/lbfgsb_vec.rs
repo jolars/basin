@@ -3,15 +3,15 @@
 //! Layer A of S14.7 (per the L-Bfgs-B port plan). Each test exercises
 //! a different code path:
 //!
-//! - **`unbounded_rosenbrock_2d_converges`** — `cnstnd == false`,
+//! - **`unbounded_rosenbrock_2d_converges`**: `cnstnd == false`,
 //!   skips the GCP after the first iteration and runs L-Bfgs-style.
-//! - **`booth_at_corner_converges`** — every variable two-sided
+//! - **`booth_at_corner_converges`**: every variable two-sided
 //!   bounded; the optimum is at the upper-bound corner.
-//! - **`booth_slack_bounds_recover_unconstrained_minimum`** —
+//! - **`booth_slack_bounds_recover_unconstrained_minimum`**:
 //!   bounds present but inactive at the optimum (sanity check that
 //!   the GCP path returns the unconstrained Newton step when nothing
 //!   binds).
-//! - **`quadratic_5d_diagonal_converges_quickly`** — a strictly-
+//! - **`quadratic_5d_diagonal_converges_quickly`**: a strictly-
 //!   convex 5-D quadratic where the limited-memory approximation
 //!   captures the exact Hessian within `m` iterations.
 
@@ -85,7 +85,7 @@ fn unbounded_rosenbrock_2d_converges() {
 
 /// `BoothBoxed` with bounds `[-1, 1]²`. The unconstrained minimum
 /// `(1, 3)` is outside the box, so the constrained optimum is at
-/// the corner `(1, 1)` — both active simultaneously. Verifies that
+/// the corner `(1, 1)`—both active simultaneously. Verifies that
 /// GCP correctly identifies the active set and subsm respects
 /// dual feasibility.
 #[test]
@@ -108,7 +108,7 @@ fn booth_at_corner_converges() {
     // Booth: f(x, y) = (x + 2y − 7)² + (2x + y − 5)². At the upper
     // corner (1, 1): (1 + 2 − 7)² + (2 + 1 − 5)² = 16 + 4 = 20. Both
     // partial derivatives are negative there, so the upward push
-    // gets clipped by the upper bounds — KKT satisfied.
+    // gets clipped by the upper bounds; KKT satisfied.
     let expected_x = [1.0, 1.0];
     assert!(
         (result.param()[0] - expected_x[0]).abs() < 1e-5,
@@ -127,7 +127,7 @@ fn booth_at_corner_converges() {
     );
 }
 
-/// `BoothBoxed` with bounds `[-5, 5]²` — the unconstrained minimum
+/// `BoothBoxed` with bounds `[-5, 5]²`—the unconstrained minimum
 /// `(1, 3)` lies inside. The projected solver must recover the
 /// unconstrained answer, which is the L-Bfgs-style behavior on a
 /// well-conditioned 2-D quadratic.
@@ -159,7 +159,7 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
 
 /// Strictly convex 5-D quadratic `f(x) = ½ xᵀ A x − bᵀ x` with
 /// diagonal `A = diag(1, 2, …, 5)` and `b = (1, …, 1)`. Unconstrained
-/// minimum at `x*[i] = 1/diag[i]`. Bounds `[-2, 2]⁵` are slack — the
+/// minimum at `x*[i] = 1/diag[i]`. Bounds `[-2, 2]⁵` are slack; the
 /// optimum lies inside. With `m = 5` (matching the dimension), L-Bfgs
 /// has enough memory to capture the exact diagonal Hessian.
 #[test]

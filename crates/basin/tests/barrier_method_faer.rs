@@ -1,6 +1,6 @@
 #![cfg(feature = "faer")]
 //! Integration tests for the log-barrier [`BarrierMethod`] on linearly
-//! constrained quadratics (faer backend) — mirror of
+//! constrained quadratics (faer backend), mirror of
 //! `barrier_method_nalgebra.rs`.
 
 use basin::problems::ConstrainedQuadratic;
@@ -64,7 +64,7 @@ fn two_constraints_both_active() {
     // x₀ + x₁ ≤ 2 and x₀ ≤ 0.5; optimum (0.5, 1.5).
     let problem = ConstrainedQuadratic::new(
         Col::from_fn(2, |_| 2.0),
-        // A = [[1, 1], [1, 0]] — all ones except the (1, 1) entry.
+        // A = [[1, 1], [1, 0]], all ones except the (1, 1) entry.
         Mat::from_fn(2, 2, |i, j| if i == 1 && j == 1 { 0.0 } else { 1.0 }),
         Col::from_fn(2, |i| if i == 0 { 2.0 } else { 0.5 }),
     );

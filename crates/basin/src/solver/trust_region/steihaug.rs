@@ -14,8 +14,8 @@ use crate::core::math::{
 /// follows the current direction to the boundary and stops; otherwise it
 /// converges to the unconstrained model minimizer inside the region, with a
 /// residual tolerance `ε = min(½, √‖g‖) · ‖g‖` (the standard forcing
-/// sequence). Matrix-free — it touches the Hessian only through
-/// [`MatVec`] (Hessian-vector products) — so it runs on every backend and
+/// sequence). Matrix-free—it touches the Hessian only through
+/// [`MatVec`] (Hessian-vector products)—so it runs on every backend and
 /// scales to large, possibly indefinite problems.
 ///
 /// This is [`TrustRegion`](super::TrustRegion)'s default subproblem.

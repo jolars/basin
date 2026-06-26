@@ -9,7 +9,7 @@
 //! standard benchmark on the unit square `[0, 1]²` and tame Goldstein-Price's
 //! enormous dynamic range: the natural-log transform compresses the ~10⁶ spread
 //! into an `O(1)` surface with mean ≈ 0 and unit-ish variance, so it has the
-//! same landscape shape but very different conditioning — handy for probing
+//! same landscape shape but very different conditioning—handy for probing
 //! line-search and step-control behavior. The inputs are mapped back onto
 //! Goldstein-Price's `[-2, 2]²` domain by `x̄ = 4x − 2`. Global minimum at
 //! `x = (0.5, 0.25)` (the image of GP's minimizer `(0, −1)`), value
@@ -80,7 +80,7 @@ impl<P> Default for Picheny<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static PICHENY_SPEC: ProblemSpec = ProblemSpec {
     name: "Picheny",
     dim: Dimensionality::Fixed(2),

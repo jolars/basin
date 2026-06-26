@@ -6,7 +6,7 @@ use basin::{
 /// Same seed → same trajectory. Load-bearing reproducibility check
 /// for the stochastic-solver contract: a `RandomSearch::new(λ, seed)`
 /// driven over the same problem must produce bit-identical iterates
-/// across runs (and platforms — ChaCha8Rng is platform-independent).
+/// across runs (and platforms; ChaCha8Rng is platform-independent).
 #[test]
 fn same_seed_yields_identical_trajectory() {
     let lower = vec![-1.0, -1.0];
@@ -35,7 +35,7 @@ fn same_seed_yields_identical_trajectory() {
 }
 
 /// Different seeds → different trajectories. Sanity check that the
-/// RNG actually drives sampling — a constant-RNG bug would make this
+/// RNG actually drives sampling; a constant-RNG bug would make this
 /// test produce identical output.
 #[test]
 fn different_seeds_yield_different_trajectories() {
@@ -97,8 +97,8 @@ fn converges_to_box_corner_on_tight_booth() {
 
 /// Elitism contract: `state.cost()` is non-increasing across
 /// `next_iter` calls. This is what makes the framework's
-/// `CostTolerance` / `ParamTolerance` honest under stochastic
-/// dynamics — a non-elitist random search would silently break them.
+/// `CostTolerance`/`ParamTolerance` honest under stochastic
+/// dynamics; a non-elitist random search would silently break them.
 #[test]
 fn elite_keeps_cost_monotone_across_iterations() {
     let lower = vec![-3.0, -3.0];
@@ -126,7 +126,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
 }
 
 /// `BasicPopulationState` invariant: candidates and costs both have
-/// length `λ` and are sorted ascending so `param()` / `cost()` always
+/// length `λ` and are sorted ascending so `param()`/`cost()` always
 /// surface the best. Regression check on the sort/truncate logic in
 /// `next_iter`.
 #[test]

@@ -16,10 +16,10 @@ use nalgebra::{DMatrix, DVector};
 /// global min `(1, 3)` is strictly interior, so both the outer
 /// BoundPenalty (no active bounds at the optimum) and the inner
 /// L-Bfgs-B (interior iterates) drive convergence. Assert
-/// `‖x* − (1, 3)‖_∞ ≤ 1e-6` — L-Bfgs-B precision in the smooth
+/// `‖x* − (1, 3)‖_∞ ≤ 1e-6`—L-Bfgs-B precision in the smooth
 /// quadratic basin.
 ///
-/// The starting mean is `(0, 2)` — close enough that Hansen's
+/// The starting mean is `(0, 2)`, close enough that Hansen's
 /// Mahalanobis clip (Hansen 2011 eq. 4) doesn't heavily attenuate the
 /// inner's full-amplitude L-Bfgs-B refinements. With a distant start
 /// the test would still converge but require many more outer iters
@@ -64,11 +64,11 @@ fn converges_on_booth_boxed_slack() {
 ///
 /// Neither vanilla nor memetic registers the `CmaEsTolerance` (TolX)
 /// criterion, so each runs the full `outer_iters` without early
-/// termination — otherwise the memetic variant converges faster on TolX
+/// termination; otherwise the memetic variant converges faster on TolX
 /// and the eval-count comparison gets meaningless. The lower-bound check: per outer iter
 /// (after iter 0; CmaInject skips iter-0 injection), L-Bfgs-B init
 /// contributes 1 cost + 1 gradient eval (2 work units), and the
-/// outer's re-evaluation after clipping is 1 cost — so the floor is
+/// outer's re-evaluation after clipping is 1 cost, so the floor is
 /// `(outer_iters − 1) · k · 3`.
 #[test]
 fn aggregates_lbfgsb_work_into_outer() {

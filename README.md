@@ -125,7 +125,7 @@ expect you to bring your own BLAS/LAPACK source crate:
   | Feature           | Effect                                                                                                                                                         |
   | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                                                                                |
-  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky / symmetric eigendecomposition for LAPACK-backed ones (pins `nalgebra-lapack` 0.27, the release tracking nalgebra 0.34). |
+  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky/symmetric eigendecomposition for LAPACK-backed ones (pins `nalgebra-lapack` 0.27, the release tracking nalgebra 0.34). |
 
 The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
 is behind the opt-in `parallel` feature; BLAS/LAPACK acceleration is behind

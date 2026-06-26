@@ -7,8 +7,8 @@
 //!
 //! Smooth 2D polynomial test function with a single global minimum at
 //! `(x, y) = (0, −1)` with `f = 3`. Usual search domain is
-//! `x, y ∈ [-2, 2]`. The function has a very wide dynamic range — values
-//! reach ~10⁶ near the corners of the standard domain — which makes it a
+//! `x, y ∈ [-2, 2]`. The function has a very wide dynamic range—values
+//! reach ~10⁶ near the corners of the standard domain—which makes it a
 //! useful stress test for step-size control on first-order methods.
 //! Quartic polynomial overall (degree 8 once the two factors multiply
 //! out), with several saddle points and gentle plateaus around the
@@ -85,7 +85,7 @@ impl<P> Default for GoldsteinPrice<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static GOLDSTEIN_PRICE_SPEC: ProblemSpec = ProblemSpec {
     name: "Goldstein-Price",
     dim: Dimensionality::Fixed(2),
@@ -95,7 +95,7 @@ pub static GOLDSTEIN_PRICE_SPEC: ProblemSpec = ProblemSpec {
         convex: false,
         // Single strict local minimum on the usual domain x, y ∈ [-2, 2],
         // but the function has saddle points and the literature uses
-        // "unimodal" inconsistently — keep the conservative call.
+        // "unimodal" inconsistently—keep the conservative call.
         unimodal: false,
         separable: false,
         scalable: false,

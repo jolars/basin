@@ -66,7 +66,7 @@ impl<P> Default for StyblinskiTang<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static STYBLINSKI_TANG_SPEC: ProblemSpec = ProblemSpec {
     name: "Styblinski-Tang",
     dim: Dimensionality::NDimensional { min: 1 },
@@ -209,7 +209,7 @@ mod faer_impl {
 /// Styblinski-Tang function with explicit element-wise box bounds, suitable for
 /// box-constrained solvers (L-BFGS-B, projected gradient, CMA-ES variants).
 /// Implements both [`CostFunction`] and [`Gradient`] plus [`BoxConstraints`],
-/// routing through the same raw [`styblinski_tang`] / [`styblinski_tang_gradient`]
+/// routing through the same raw [`styblinski_tang`]/[`styblinski_tang_gradient`]
 /// free functions as the unconstrained [`StyblinskiTang`]. The standard search
 /// domain `[−5, 5]ⁿ` is the common case; build it with
 /// [`StyblinskiTangBoxed::with_standard_bounds`].

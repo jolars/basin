@@ -27,7 +27,7 @@ use crate::solver::powell::{QuadraticModel, TrustRegionStep, TrustRegionSubprobl
 pub(crate) struct Trsapp;
 
 impl<F: Scalar> TrustRegionSubproblem<F> for Trsapp {
-    /// TRSAPP is unconstrained — the trust ball is its only feasible region.
+    /// TRSAPP is unconstrained—the trust ball is its only feasible region.
     type Region = ();
 
     fn solve(&self, model: &QuadraticModel<F>, delta: F, _region: &()) -> TrustRegionStep<F> {

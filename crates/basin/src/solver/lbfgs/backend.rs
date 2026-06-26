@@ -1,7 +1,7 @@
 //! Backend-agnostic slice views over the parameter vector.
 //!
 //! L-BFGS-B's inner numerics (cauchy, subsm, formk, compact-form
-//! helpers) operate on `&[F]` / `&mut [F]` for the solver's scalar
+//! helpers) operate on `&[F]`/`&mut [F]` for the solver's scalar
 //! `F: Scalar`. To stay generic over the user-chosen parameter backend
 //! (`Vec<F>`, nalgebra `DVector<F>`, faer `Col<F>`, ndarray
 //! `Array1<F>`), the top-level solver views each vector as a

@@ -1,4 +1,4 @@
-//! Exponential data-fitting least-squares problem — the canonical
+//! Exponential data-fitting least-squares problem—the canonical
 //! poorly-scaled nonlinear least-squares benchmark.
 //!
 //! Fit the one-term exponential model `ŷ(t) = a · exp(b · t)` to data
@@ -8,12 +8,12 @@
 //! rᵢ(a, b) = a · exp(b · tᵢ) − yᵢ
 //! ```
 //!
-//! The Jacobian columns have very different magnitudes — `∂rᵢ/∂a =
+//! The Jacobian columns have very different magnitudes—`∂rᵢ/∂a =
 //! exp(b·tᵢ)` is `O(1)` while `∂rᵢ/∂b = a·tᵢ·exp(b·tᵢ)` scales with the
 //! amplitude `a` (often hundreds or thousands). That column-scale
 //! disparity is exactly what isotropic Levenberg-Marquardt damping
 //! (`μI`) handles badly and Marquardt diagonal damping (`μ·diag(JᵀJ)`)
-//! is invariant to — see
+//! is invariant to—see
 //! [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt). It is the
 //! exponential-fit family used as the running example in Madsen,
 //! Nielsen, Tingleff (2004).
@@ -30,14 +30,14 @@ use core::marker::PhantomData;
 
 use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
 
-/// Catalogue entry for the exponential-fit problem.
+/// Catalog entry for the exponential-fit problem.
 pub static EXPONENTIAL_FIT_SPEC: ProblemSpec = ProblemSpec {
     name: "Exponential fit",
     dim: Dimensionality::Fixed(2),
     properties: Properties {
         smooth: true,
         differentiable: true,
-        // Sum-of-squares of an exponential model — nonconvex in (a, b).
+        // Sum-of-squares of an exponential model—nonconvex in (a, b).
         convex: false,
         // The cost surface has flat valleys and a poorly-scaled
         // Jacobian; not reliably unimodal in practice.
@@ -265,7 +265,7 @@ mod ndarray_impl {
                 &self.t,
                 &mut buf,
             );
-            // Row-major buffer, m×2 layout — the default C-order
+            // Row-major buffer, m×2 layout—the default C-order
             // `from_shape_vec` matches the nalgebra `from_row_slice` mirror.
             Ok(Array2::from_shape_vec((m, 2), buf).expect("m*2 entries for an m×2"))
         }

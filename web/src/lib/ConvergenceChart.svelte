@@ -28,7 +28,7 @@
     // Static viewBox; the SVG scales to its container via `w-full h-auto`.
     const W = 380;
     const H = 264;
-    // Right and top need a bit of breathing room so the rightmost / topmost tick
+    // Right and top need a bit of breathing room so the rightmost or topmost tick
     // labels don't bump against the viewBox edge (the last x label, e.g. "20 ms",
     // also uses an `end` text-anchor below so it tucks inside the plot edge).
     // `directLabels` widens the right margin to hold the fanned-out labels.
@@ -68,8 +68,8 @@
         const yPx = (s: number) =>
             axisY - ((Math.log10(s) - yLo) / ySpan) * innerH;
 
-        // x ticks at each decade of time, labelled as a duration. First and last
-        // tick labels use start / end anchors so they tuck inside the plot
+        // x ticks at each decade of time, labeled as a duration. First and last
+        // tick labels use start and end anchors so they tuck inside the plot
         // edges instead of centering past them and getting clipped.
         const xTicks: {
             x: number;

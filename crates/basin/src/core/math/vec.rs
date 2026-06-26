@@ -287,7 +287,7 @@ mod tests {
     #[should_panic(expected = "sample_uniform_box requires finite bounds")]
     fn sample_uniform_box_rejects_non_finite_bounds() {
         // A `±∞` bound (e.g. a periodic coordinate left unbounded for
-        // `Trf` / `BoundedCmaEs` and then reused for `De`) must surface a
+        // `Trf`/`BoundedCmaEs` and then reused for `De`) must surface a
         // clear basin-level precondition panic naming the coordinate,
         // not `rand`'s opaque internal `NonFinite` unwrap. See issue #41.
         let lower = vec![0.0, f64::NEG_INFINITY, 0.0];
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn cl_scaling_infinite_bounds_yields_unit_d_and_zero_c() {
-        // Both bounds infinite: d_sq = 1, c = 0 (cases iii / iv).
+        // Both bounds infinite: d_sq = 1, c = 0 (cases iii/iv).
         // Effectively reduces to LM (D = I, C = 0).
         let x: Vec<f64> = vec![0.0, 0.0];
         let g: Vec<f64> = vec![-1.0, 1.0];

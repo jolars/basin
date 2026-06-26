@@ -39,7 +39,7 @@ impl<M, V> EqualityConstrainedQuadratic<M, V> {
     }
 }
 
-/// Catalogue entry for the linearly-equality-constrained quadratic fixture.
+/// Catalog entry for the linearly-equality-constrained quadratic fixture.
 pub static EQUALITY_CONSTRAINED_QUADRATIC_SPEC: ProblemSpec = ProblemSpec {
     name: "Equality-constrained quadratic",
     dim: Dimensionality::NDimensional { min: 1 },
@@ -60,7 +60,7 @@ pub static EQUALITY_CONSTRAINED_QUADRATIC_SPEC: ProblemSpec = ProblemSpec {
     }],
     description: "Isotropic quadratic Σ(xᵢ − cᵢ)² minimized subject to linear \
                   equalities A·x = b. The constrained optimum is the \
-                  projection of c onto the feasible affine subspace — the \
+                  projection of c onto the feasible affine subspace—the \
                   fixture for the augmented-Lagrangian method.",
 };
 

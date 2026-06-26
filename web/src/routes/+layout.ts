@@ -6,7 +6,7 @@ export const prerender = true;
 
 // Canonicalize every URL with a trailing slash. This makes relative
 // links inside docs Markdown (e.g. `../solvers/`) resolve consistently
-// in dev, `preview`, and under the `/basin` base path on GitHub Pages —
+// in dev, `preview`, and under the `/basin` base path on GitHub Pages—
 // without it, `trailingSlash: 'never'` resolves `../foo` against the
 // wrong directory.
 export const trailingSlash = "always";

@@ -2,7 +2,7 @@
 //! (`Mads::new().bounded()`), which enforces bounds by the extreme barrier
 //! (infeasible poll points get `f = +∞`).
 //!
-//! Mirrors `bounded_nelder_mead.rs`: slack-bounds / tight-bounds / infeasible-
+//! Mirrors `bounded_nelder_mead.rs`: slack-bounds/tight-bounds/infeasible-
 //! start coverage on `BoothBoxed`. Backend coverage piggybacks on the
 //! unbounded `mads_public.rs` tests (the bounded path differs only in the
 //! barrier eval closure, which is backend-agnostic).

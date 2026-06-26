@@ -17,10 +17,10 @@ use crate::core::termination::TerminationReason;
 /// same bracketing robustness, but a cheap first derivative lets it converge
 /// faster and enables a natural stopping test. It runs on
 /// [`ScalarGradientState`], which carries the scalar `f'(x)` and *does* impl
-/// [`GradientState`](crate::core::state::GradientState) — so
+/// [`GradientState`](crate::core::state::GradientState)—so
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance) ("stop
 /// when `|f'(x)| ≤ tol`") works here, unlike on the derivative-free
-/// [`Brent`](crate::solver::Brent) / [`GoldenSection`](crate::solver::GoldenSection).
+/// [`Brent`](crate::solver::Brent)/[`GoldenSection`](crate::solver::GoldenSection).
 ///
 /// Convergence test (in `Solver::terminate`):
 /// `|x − m| + 0.5·(b − a) ≤ 2·tol`, where `m = (a+b)/2`,
@@ -32,7 +32,7 @@ use crate::core::termination::TerminationReason;
 /// Scalar by construction: the parameter and gradient are each a single `F`
 /// (default `f64`), so `BrentDerivative` is backend-agnostic and needs no
 /// linear-algebra backend. The problem's `BoxConstraints` carry `F`-valued
-/// lower / upper bounds.
+/// lower/upper bounds.
 ///
 /// # Examples
 ///
@@ -69,7 +69,7 @@ struct Inner<F> {
     e: F,
 }
 
-/// `(3 − √5) / 2` — golden-section interior point used only to nudge a seed
+/// `(3 − √5) / 2`—golden-section interior point used only to nudge a seed
 /// off a bracket boundary so the first iteration has somewhere to step.
 fn golden_c<F: Scalar>() -> F {
     F::from_f64(0.381_966_011_250_105_2).unwrap()
@@ -435,7 +435,7 @@ mod tests {
     #[test]
     fn gradient_tolerance_stops() {
         // The payoff of the gradient-carrying state: a first-order termination
-        // criterion is usable on a 1D solver. Stop when |f'(x)| ≤ 1e-4 — looser
+        // criterion is usable on a 1D solver. Stop when |f'(x)| ≤ 1e-4—looser
         // than the solver's own bracket-collapse tolerance (≈√ε), so the
         // gradient criterion is what fires.
         let r = Executor::new(

@@ -9,7 +9,7 @@ use crate::core::solver::Solver;
 use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
 
-/// Levenberg-Marquardt with box bounds (TRF — trust-region-reflective)
+/// Levenberg-Marquardt with box bounds (TRF—trust-region-reflective)
 /// for nonlinear least-squares problems `min ½‖r(x)‖²` subject to
 /// `lower ≤ x ≤ upper`. The first n-D box-constrained NLLS solver in
 /// basin and the natural extension of [`LevenbergMarquardt`](super::LevenbergMarquardt)
@@ -18,9 +18,9 @@ use crate::core::termination::TerminationReason;
 /// # Algorithm
 ///
 /// At each iteration the solver computes the Coleman-Li affine scaling
-/// from Branch-Coleman-Li 1999 — a diagonal trust-region matrix
+/// from Branch-Coleman-Li 1999—a diagonal trust-region matrix
 /// `D = diag(|v|^{-1/2})` and a diagonal curvature correction
-/// `C = D · diag(g) · J^v · D` (also diagonal, non-negative) — and
+/// `C = D · diag(g) · J^v · D` (also diagonal, non-negative)—and
 /// solves the damped, scaled normal equations
 ///
 /// ```text
@@ -31,13 +31,13 @@ use crate::core::termination::TerminationReason;
 /// scaled back into the open feasible region by the largest
 /// `α ∈ (0, 1]` such that `x + α·h` stays inside `(lower, upper)`,
 /// multiplied by a strict-interior factor `θ ≈ 0.99995`. The damping
-/// `μ` adapts via the Nielsen smooth cubic gain-ratio update — same
-/// machinery as [`LevenbergMarquardt`](super::LevenbergMarquardt) — and
+/// `μ` adapts via the Nielsen smooth cubic gain-ratio update—same
+/// machinery as [`LevenbergMarquardt`](super::LevenbergMarquardt)—and
 /// initial `μ₀ = τ · max diag(JᵀJ + diag(c))`.
 ///
 /// The four-case dispatch defining `v(x)` and the elementwise diagonals
 /// `d²[i] = 1/|v_i|` and `c[i] = |g_i|/|v_i|` (or 0 for infinite bounds)
-/// follow Branch-Coleman-Li 1999 eqs (i)–(iv) — see
+/// follow Branch-Coleman-Li 1999 eqs (i)–(iv)—see
 /// `references/branch-coleman-li-1999/source.marker.md:43-72` and
 /// `references/branch-coleman-li-1999/NOTES.md`.
 ///
@@ -45,8 +45,8 @@ use crate::core::termination::TerminationReason;
 ///
 /// When `lower = -∞` and `upper = +∞` element-wise, the BCL scaling
 /// reduces to `D = I`, `C = 0`, the step-back is a no-op, and the
-/// algorithm becomes exactly Levenberg-Marquardt with Nielsen's μ-update
-/// — same iterates, same convergence. `Trf` strictly subsumes
+/// algorithm becomes exactly Levenberg-Marquardt with Nielsen's μ-update—
+/// same iterates, same convergence. `Trf` strictly subsumes
 /// [`LevenbergMarquardt`](super::LevenbergMarquardt) at the trait-bound
 /// level (the reverse is a compile error: LM bounds on
 /// `Residual + Jacobian` only, not [`BoxConstraints`]).
@@ -73,7 +73,7 @@ use crate::core::termination::TerminationReason;
 /// - **Reflection technique** (BCL §2 / FIG.2). The unconstrained step
 ///   is straight-line stepped back to the box boundary, never
 ///   reflected off it. Reflection saves ~2-3× iterations on problems
-///   where many components bind (BCL Table 1) — defer until a test
+///   where many components bind (BCL Table 1)—defer until a test
 ///   case demands it.
 /// - **Explicit trust-region radius `Δ`** with Moré-Sorensen-style
 ///   λ-adaptation (BCL FIG.6). The LM-style μ-update is simpler and
@@ -108,15 +108,15 @@ use crate::core::termination::TerminationReason;
 /// the solver emits [`TerminationReason::SolverConverged`] when
 /// `‖v ⊙ Jᵀr‖_∞ ≤ tol_grad` (equivalently `max_i |g_i| · |v_i|`,
 /// where `v_i` is BCL's signed distance-to-bound). The metric goes to
-/// zero at any KKT point — interior *or* face-active — so it works
-/// uniformly across the corner / edge / interior cases. Collapses to
+/// zero at any KKT point (interior *or* face-active), so it works
+/// uniformly across the corner/edge/interior cases. Collapses to
 /// LM's `‖Jᵀr‖_∞` when no constraint is active. Default
 /// `tol_grad = 1e-8`; set to `0.0` to disable the check.
 ///
 /// TRF runs on [`NllsState`], which does
 /// **not** impl [`GradientState`](crate::core::state::GradientState), so the
 /// framework gradient criteria are a **compile error** rather than a silent
-/// no-op — use [`with_tol_grad`](Self::with_tol_grad) above. This is the same
+/// no-op—use [`with_tol_grad`](Self::with_tol_grad) above. This is the same
 /// choice as [`LevenbergMarquardt`](super::LevenbergMarquardt): the L2-squared
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance) is the
 /// wrong metric for NLLS, and
@@ -128,10 +128,10 @@ use crate::core::termination::TerminationReason;
 ///
 /// LA-heavy: the default `Vec<f64>` backend (over the hand-rolled
 /// [`DenseMatrix<f64>`](crate::DenseMatrix), via a pure-Rust Cholesky),
-/// nalgebra (`DVector<f64>` / `DMatrix<f64>`), faer (`Col<f64>` /
-/// `Mat<f64>`), and ndarray (`Array1<f64>` / `Array2<f64>`, the latter over
+/// nalgebra (`DVector<f64>`/`DMatrix<f64>`), faer (`Col<f64>` /
+/// `Mat<f64>`), and ndarray (`Array1<f64>`/`Array2<f64>`, the latter over
 /// the same pure-Rust Cholesky) at the dense tier; nalgebra-sparse
-/// (`DVector<f64>` / `CscMatrix<f64>`) and faer-sparse (`Col<f64>` /
+/// (`DVector<f64>`/`CscMatrix<f64>`) and faer-sparse (`Col<f64>` /
 /// `SparseColMat<usize, f64>`) at the sparse tier.
 ///
 /// The sparse damping path requires the diagonal of `JᵀJ` to be in the
@@ -144,7 +144,7 @@ use crate::core::termination::TerminationReason;
 /// `state.cost` carries the LM convention `½‖r‖²`. The bound on `P`
 /// includes [`BoxConstraints`] (which inherits
 /// [`CostFunction`](crate::core::problem::CostFunction)) but the solver
-/// never calls `cost()` — it computes `½‖r‖²` from the residual it
+/// never calls `cost()`—it computes `½‖r‖²` from the residual it
 /// evaluates itself. Problems whose user-facing `cost()` uses an
 /// unscaled `Σ rᵢ²` form (e.g.
 /// [`BoothBoxedResiduals`](crate::problems::BoothBoxedResiduals)) will
@@ -169,7 +169,7 @@ pub struct Trf<V, M, F = f64> {
     mu: Option<F>,
     nu: F,
 
-    // Residual and Jacobian caches across iterations — same shape as
+    // Residual and Jacobian caches across iterations—same shape as
     // [`LevenbergMarquardt`](super::LevenbergMarquardt). On accept the
     // trial residual is at the new iterate (so it's stashed) but the
     // Jacobian there is unknown (so it's cleared); on reject both are
@@ -328,7 +328,7 @@ where
         problem: &mut Problem<P>,
         mut state: NllsState<V, F>,
     ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
-        // Use cached `r` / `J` when available (set by init or by the
+        // Use cached `r`/`J` when available (set by init or by the
         // previous accept/reject branch). Only count an eval when the
         // cache misses.
         let r = match self.r_cache.take() {
@@ -357,7 +357,7 @@ where
 
         // First-order optimality: ‖v ⊙ Jᵀr‖_∞ ≤ tol_grad, equal to
         // `max_i |g_i| / d_sq_i` in our representation (since
-        // `d_sq[i] = 1/|v_i|`). Goes to zero at any KKT point — interior
+        // `d_sq[i] = 1/|v_i|`). Goes to zero at any KKT point—interior
         // *or* face-active. Collapses to LM's `‖Jᵀr‖_∞` when bounds are
         // infinite (then `|v_i| = 1`, `d_sq = 1`, division is identity).
         if self.tol_grad > F::zero() && g.cl_kkt_inf_norm(&d_sq) <= self.tol_grad {

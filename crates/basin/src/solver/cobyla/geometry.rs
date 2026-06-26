@@ -3,7 +3,7 @@
 //!
 //! `assess_geo` tests the acceptability of the simplex (Powell 1994 eq. 14) via
 //! the per-vertex face distances `σ` (`vsig`) and edge lengths `η` (`veta`).
-//! `setdrop_tr` / `setdrop_geo` pick which vertex to replace after a
+//! `setdrop_tr`/`setdrop_geo` pick which vertex to replace after a
 //! trust-region or geometry step; `geostep` builds the geometry-improving step
 //! (eq. 15–17), choosing its sign by the linear merit model.
 

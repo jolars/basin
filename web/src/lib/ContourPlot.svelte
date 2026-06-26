@@ -16,14 +16,14 @@
         nx: number;
         ny: number;
         trajectory: Float64Array; // flat (x, y) pairs
-        /** Current generation's population as flat (x, y) pairs. Optional —
+        /** Current generation's population as flat (x, y) pairs. Optional,
          *  empty for non-population solvers (GD, NM, L-BFGS). When non-empty,
          *  drawn as faint dots underneath the trajectory polyline. */
         population?: Float64Array;
         startPoint: { x: number; y: number };
         theme: Theme;
         onPick: (p: { x: number; y: number }) => void;
-        /** Draw contour lines as a grey topographic ramp instead of the
+        /** Draw contour lines as a gray topographic ramp instead of the
          *  colored (viridis) palette. Trajectory/markers stay accented. */
         monochrome?: boolean;
     };
@@ -45,7 +45,7 @@
 
     // White contour edges in monochrome mode. Fainter on dark so the
     // (white) trajectory still reads over them; on light they sit over the
-    // grey heatmap fill. `t` is unused — depth comes from the per-level
+    // gray heatmap fill. `t` is unused—depth comes from the per-level
     // line width in `renderContours`.
     function whiteEdge(_t: number): string {
         return theme === "dark"
@@ -54,7 +54,7 @@
     }
     let contourStroke = $derived(monochrome ? whiteEdge : palette.contour);
 
-    // Light-grey (dark mode: dark-grey) heatmap fill from the cost grid,
+    // Light-gray (dark mode: dark-gray) heatmap fill from the cost grid,
     // normalized through the same intensity transform the levels use. Drawn
     // once per contour render (not per animation frame) onto the contour
     // canvas, beneath the white edges.
@@ -90,7 +90,7 @@
                       )
                     : 0;
                 // Darker deeper in the valley: t = 0 is the lowest cost
-                // (basin floor), so grey rises with t. Kept in a light band
+                // (basin floor), so gray rises with t. Kept in a light band
                 // overall, with the floor only moderately darker.
                 const grey = dark
                     ? Math.round(45 + 45 * t)
@@ -119,7 +119,7 @@
     const N_LEVELS = 12;
 
     // Re-extract iso-contours when the grid (i.e. the problem) changes.
-    // This is the expensive step — O(nx * ny * n_levels) — but it only
+    // This is the expensive step (O(nx * ny * n_levels)) but it only
     // runs on problem switches, not per animation frame.
     let isoLines = $derived.by(() => {
         const levels = chooseLevels(grid, problem.intensity, N_LEVELS);
@@ -242,7 +242,7 @@
 
         // Draw outermost-first so the brightest (innermost) strokes win
         // when contours crowd. `t = 0` is the outermost, `t = 1` the
-        // innermost — palette decides what those map to per theme.
+        // innermost—palette decides what those map to per theme.
         for (let li = lines.length - 1; li >= 0; li--) {
             const chains = lines[li].chains;
             if (chains.length === 0) continue;

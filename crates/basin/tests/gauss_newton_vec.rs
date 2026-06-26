@@ -42,7 +42,7 @@ fn gauss_newton_single_step_matches_normal_equation_solution() {
     // One iteration must reproduce the hand-computed normal-equation step.
     // δ = (JᵀJ)⁻¹·(Jᵀr) at (−1.2, 1.0) is [−2.2, 4.84]; the GN update is
     // x ← x − δ, so x_new = (1.0, −3.84). Guards the Cholesky solve path
-    // against sign / transpose mistakes the convergence test would mask.
+    // against sign or transpose mistakes the convergence test would mask.
     let problem = RosenbrockResiduals::<Vec<f64>>::new();
     let initial = vec![-1.2, 1.0];
 
@@ -71,7 +71,7 @@ fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
     // residuals (r₂, r₃) have vanishing Jacobian rows, so J has rank 2 < 4
     // and JᵀJ is exactly singular. The pure-Rust Cholesky hits a
     // non-positive pivot → `NotPositiveDefinite`, which GN surfaces as
-    // SolverFailed — the case Levenberg-Marquardt's damping is built to
+    // SolverFailed, the case Levenberg-Marquardt's damping is built to
     // recover (see `levenberg_marquardt_vec.rs`).
     let problem = PowellSingular::<Vec<f64>>::new();
     let initial = vec![1.0, 2.0, 1.0, 1.0];

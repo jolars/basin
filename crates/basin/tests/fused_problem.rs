@@ -9,7 +9,7 @@
 //!    gradient solver runs against them with zero opt-in.
 //! 2. A user who *overrides* `cost_and_gradient` is actually called by
 //!    the solver (proven via a shared counter).
-//! 3. `FiniteDiff` flows into the migrated solver bound — a values-only
+//! 3. `FiniteDiff` flows into the migrated solver bound; a values-only
 //!    problem still works through the fused method.
 
 use std::cell::Cell;
@@ -118,7 +118,7 @@ fn solver_calls_fused_override() {
 }
 
 // ---------------------------------------------------------------------
-// 3. CostAndGradientAndHessian — defaulted body equals separate calls.
+// 3. CostAndGradientAndHessian: defaulted body equals separate calls.
 // ---------------------------------------------------------------------
 
 #[cfg(feature = "nalgebra")]
@@ -211,7 +211,7 @@ mod hessian {
 }
 
 // ---------------------------------------------------------------------
-// 4. ResidualAndJacobian — LM actually calls the fused override.
+// 4. ResidualAndJacobian: LM actually calls the fused override.
 // ---------------------------------------------------------------------
 
 #[cfg(feature = "nalgebra")]

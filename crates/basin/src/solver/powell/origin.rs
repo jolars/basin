@@ -3,7 +3,7 @@
 //! As the iterates move away from the base point `x0`, the first `m` components
 //! of the update vector `w` (eq. 4.10) grow like `½‖x_opt−x0‖⁴`, so the `β`
 //! formula (7.8) suffers catastrophic cancellation: an error `ε` in `H₁₁` is
-//! amplified by `‖x_opt−x0‖⁶`. NEWUOA therefore re-centres `x0` on the current
+//! amplified by `‖x_opt−x0‖⁶`. NEWUOA therefore re-centers `x0` on the current
 //! best point `x_opt` whenever the step is small relative to that drift
 //! (eq. 7.10), re-expressing the model and the factored `H` in the new
 //! coordinates **without changing the quadratic `Q`**.
@@ -18,14 +18,14 @@
 //! - every displacement `x_j − x0` loses `s`, and `x0` gains `s`,
 //!
 //! where `s = x_opt − x0` and `x_av = ½(x0 + x_opt)`. The work is `O(m²n)`,
-//! dominated by the `Y Ω` / `Y Ω Yᵀ` products, so the driver only shifts on the
+//! dominated by the `Y Ω`/`Y Ω Yᵀ` products, so the driver only shifts on the
 //! small fraction of iterations that trip eq. 7.10.
 
 use crate::core::math::Scalar;
 use crate::solver::powell::model::QuadraticModel;
 
 impl<F: Scalar> QuadraticModel<F> {
-    /// Re-centre `x0` on the current best point `x_opt` (Powell 2006, §7). The
+    /// Re-center `x0` on the current best point `x_opt` (Powell 2006, §7). The
     /// quadratic `Q` and the interpolation values `F(x_j)` are unchanged; only
     /// the coordinate representation (`x0`, the displacements `x_j − x0`, the
     /// gradient `∇Q(x0)`, `Γ`, and the `Ξ`/`Υ` blocks of `H`) is revised.
@@ -166,7 +166,7 @@ mod tests {
     #[test]
     fn shift_preserves_kkt_identity() {
         let mut model = QuadraticModel::initialize(vec![0.0, 0.0], 0.5, 5, &offset_quadratic);
-        // The best initial sample is off-centre, so s = x_opt − x0 ≠ 0.
+        // The best initial sample is off-center, so s = x_opt − x0 ≠ 0.
         assert_ne!(model.kopt(), usize::MAX);
         assert!(model.xpt_row(model.kopt()).iter().any(|v| v.abs() > 0.0));
         model.shift_origin();

@@ -3,19 +3,19 @@
 //! reported ~10× slower per solve than the `levenberg-marquardt` crate
 //! (nalgebra 0.32). This isolates whether that's a *backend* cost by
 //! pitting basin's own faer path against its own nalgebra path on the
-//! identical work — same f64 arithmetic, same iteration counts, only the
+//! identical work: same f64 arithmetic, same iteration counts, only the
 //! linear-algebra library differs.
 //!
 //! Two layers:
 //!
-//! 1. **Primitive ops** — the three operations LM runs every iteration:
+//! 1. **Primitive ops**: the three operations LM runs every iteration:
 //!    `gram()` (forms `JᵀJ`), `mat_transpose_vec()` (`Jᵀr`), and
 //!    `solve_spd()` (Cholesky on the damped normal equations), at the
 //!    Jacobian shapes from eunoia's ellipse corpus (`m × n` with
 //!    `(m, n) ∈ {(4,10), (16,20), (64,30)}`; the solve is on the `n × n`
 //!    system). This is where the issue suspects faer's fixed per-call
-//!    overhead (alloc / dyn-stack / SIMD dispatch) dominates.
-//! 2. **End-to-end solve** — a full `LevenbergMarquardt::run()` to
+//!    overhead (alloc/dyn-stack/SIMD dispatch) dominates.
+//! 2. **End-to-end solve**: a full `LevenbergMarquardt::run()` to
 //!    convergence on the problems that exist for both backends
 //!    (`ExponentialFit`, `PowellSingular`). Iteration counts are
 //!    identical across backends, so the ratio is pure per-solve backend

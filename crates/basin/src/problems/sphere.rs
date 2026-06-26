@@ -3,7 +3,7 @@
 //! `f(x) = Σᵢ xᵢ²`
 //!
 //! Smooth, convex, separable, unimodal. Global minimum at `x = (0, …, 0)`
-//! with `f = 0`. The trivial canary problem — every solver should solve it
+//! with `f = 0`. The trivial canary problem—every solver should solve it
 //! cleanly; failure indicates the implementation is broken.
 
 use core::marker::PhantomData;
@@ -44,7 +44,7 @@ impl<P> Default for Sphere<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static SPHERE_SPEC: ProblemSpec = ProblemSpec {
     name: "Sphere",
     dim: Dimensionality::NDimensional { min: 1 },
@@ -65,7 +65,7 @@ pub static SPHERE_SPEC: ProblemSpec = ProblemSpec {
     }],
     description: "Sum of squares: f(x) = Σ xᵢ². Convex, separable, unimodal. \
                   Global minimum at x = (0, …, 0), value 0. The canonical \
-                  trivial canary — every solver should solve it cleanly.",
+                  trivial canary—every solver should solve it cleanly.",
 };
 
 impl<P> HasSpec for Sphere<P> {

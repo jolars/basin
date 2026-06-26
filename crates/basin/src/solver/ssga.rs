@@ -25,20 +25,20 @@ use crate::solver::cma_es::sort_population_ascending;
 /// Each [`next_iter`](Solver::next_iter) produces `offspring_per_step`
 /// children:
 ///
-/// 1. **NAM selection** — pick parent 1 uniformly at random; sample
+/// 1. **NAM selection**—pick parent 1 uniformly at random; sample
 ///    `nam_pool − 1` further candidates uniformly and pick the one with
 ///    the largest Euclidean distance from parent 1 (Fernandes & Rosa
 ///    2001; Molina 2010 §4.4.3 with `n_ass = nam_pool − 1`).
-/// 2. **BLX-α crossover** — per dimension `i`, draw `z_i` uniformly
+/// 2. **BLX-α crossover**—per dimension `i`, draw `z_i` uniformly
 ///    from `[min(p₁ᵢ, p₂ᵢ) − α·d, max(p₁ᵢ, p₂ᵢ) + α·d]` with
 ///    `d = |p₁ᵢ − p₂ᵢ|`, then clip to `[lowerᵢ, upperᵢ]` (Eshelman &
 ///    Schaffer 1993; Molina §4.4.2).
-/// 3. **BGA mutation** — per dimension with probability `mutation_prob`
+/// 3. **BGA mutation**—per dimension with probability `mutation_prob`
 ///    apply `cᵢ ← cᵢ ± rangᵢ · Σ_{k=0..15} αₖ 2⁻ᵏ`, with
 ///    `rangᵢ = bga_range_fraction · (upperᵢ − lowerᵢ)`, sign uniform,
 ///    and `αₖ ∈ {0, 1}` with `P(αₖ = 1) = 1/16`
 ///    (Mühlenbein & Schlierkamp-Voosen 1993; Molina §4.4.4).
-/// 4. **Replace-worst** — evaluate the offspring; if it beats the
+/// 4. **Replace-worst**—evaluate the offspring; if it beats the
 ///    current population's worst member, take its slot (Molina §4.4.5
 ///    "standard replacement strategy").
 ///
@@ -62,7 +62,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// # Reproducibility
 ///
 /// Carries a [`ChaCha8Rng`] seeded from the `seed: u64` passed to
-/// [`new`](Self::new) — same seed → same iterate trajectory on every
+/// [`new`](Self::new)—same seed → same iterate trajectory on every
 /// platform basin builds for (including `wasm32-unknown-unknown`).
 ///
 /// # Contract
@@ -81,7 +81,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test — SSGA has no canonical
+/// No solver-internal optimality test—SSGA has no canonical
 /// fixed-point criterion. Pair with framework criteria
 /// [`MaxIter`](crate::core::termination::MaxIter),
 /// [`MaxCostEvals`](crate::core::termination::MaxCostEvals),
@@ -93,7 +93,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// # Backends
 ///
-/// Backend-generic — works with any `V` implementing
+/// Backend-generic—works with any `V` implementing
 /// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<F>`] +
 /// [`NormSquared<F>`] + `Index<usize, Output = F>` +
 /// `IndexMut<usize, Output = F>` + `Clone`. With the default `F = f64`
@@ -139,7 +139,7 @@ impl<F: Scalar> Ssga<F> {
     ///
     /// # Panics
     ///
-    /// Panics if `pop_size < nam_pool` — replace-worst with NAM needs at
+    /// Panics if `pop_size < nam_pool`—replace-worst with NAM needs at
     /// least as many individuals as the NAM pool samples.
     pub fn with_pop_size(mut self, pop_size: usize) -> Self {
         assert!(
@@ -170,7 +170,7 @@ impl<F: Scalar> Ssga<F> {
         self
     }
 
-    /// Override the NAM pool size — total number of individuals sampled
+    /// Override the NAM pool size—total number of individuals sampled
     /// per mating event (parent 1 plus `n_ass = nam_pool − 1`
     /// candidates for parent 2). Default `4` (Molina 2010 §4.4.7 with
     /// `n_ass = 3`).
@@ -354,7 +354,7 @@ pub(crate) fn bga_mutate_in_place<V, F, R>(
 {
     let n = child.vec_len();
     // BGA's α_k sum `Σ_{k=0..15} α_k · 2^{−k}` and its 1/16 Bernoulli gate
-    // are F-independent — keep them as f64 and convert the final sum to F
+    // are F-independent—keep them as f64 and convert the final sum to F
     // once, rather than redo `from_f64` per loop body.
     for i in 0..n {
         if rng.random::<f64>() >= prob {

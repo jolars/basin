@@ -1,18 +1,18 @@
 /**
- * Direct-labelling support: spread a set of labels along one axis so they don't
+ * Direct-labeling support: spread a set of labels along one axis so they don't
  * overlap, moving each as little as possible from its ideal position.
  *
  * This is the `last.qp` positioning method from the R package `directlabels`
- * (https://github.com/tdhock/directlabels) — anchor each label at its line's
+ * (https://github.com/tdhock/directlabels): anchor each label at its line's
  * endpoint, then solve a small quadratic program to remove overlaps. Greedy
  * "bump the next one down" (their `last.bumpup`) is simpler but biases the whole
  * stack in one direction; the QP is symmetric and provably minimal-displacement.
  *
- * The QP is 1-D —
+ * The QP is 1-D:
  *
- *     minimise  Σ (yᵢ − tᵢ)²   subject to   yᵢ₊₁ ≥ yᵢ + gap,   lo ≤ yᵢ ≤ hi
+ *     minimize  Σ (yᵢ − tᵢ)²   subject to   yᵢ₊₁ ≥ yᵢ + gap,   lo ≤ yᵢ ≤ hi
  *
- * — so it has an exact O(n) solution and needs no solver. Substituting
+ * so it has an exact O(n) solution and needs no solver. Substituting
  * zᵢ = yᵢ − i·gap turns the separation constraints into a plain monotonicity
  * constraint (zᵢ₊₁ ≥ zᵢ), which is isotonic regression: solved by
  * pool-adjacent-violators.
@@ -48,8 +48,8 @@ function isotonic(values: number[]): number[] {
 
 /**
  * Place labels at `targets` (one ideal coordinate each, e.g. a line's endpoint
- * y) so neighbours are at least `gap` apart and all stay within `[lo, hi]`,
- * minimising total squared movement. Returns new coordinates aligned with the
+ * y) so neighbors are at least `gap` apart and all stay within `[lo, hi]`,
+ * minimizing total squared movement. Returns new coordinates aligned with the
  * input order (so `result[i]` is where `targets[i]` should go).
  *
  * If the labels physically can't fit (`(n − 1)·gap > hi − lo`) they're spread

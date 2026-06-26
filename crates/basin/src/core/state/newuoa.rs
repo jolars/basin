@@ -7,7 +7,7 @@
 //! [`RhoTolerance`](crate::core::termination::RhoTolerance) binds on.
 //!
 //! The quadratic surrogate, the factored inverse-KKT matrix `H`, and the ρ/Δ
-//! schedule live on the **solver** struct (`Newuoa`'s `NewuoaWork`), not here —
+//! schedule live on the **solver** struct (`Newuoa`'s `NewuoaWork`), not here:
 //! the same split Levenberg-Marquardt uses for its μ/ν/diag working state, and
 //! the reason [`NewuoaState`] is generic over the parameter vector `V` only, not
 //! the backend matrix. NEWUOA needs no `linalg`-tier ops from `V` (the model
@@ -16,10 +16,10 @@
 //! # Current vs best
 //!
 //! NEWUOA's reported iterate is monotone non-increasing by construction: the
-//! solver writes [`param`](State::param) / [`cost`](State::cost) as the
-//! least-`F` point seen so far. So [`best_param`](State::best_param) /
+//! solver writes [`param`](State::param)/[`cost`](State::cost) as the
+//! least-`F` point seen so far. So [`best_param`](State::best_param)/
 //! [`best_cost`](State::best_cost) coincide with the current iterate at every
-//! check, like the sorted-simplex / sorted-population shapes.
+//! check, like the sorted-simplex/sorted-population shapes.
 
 use crate::core::math::Scalar;
 use crate::core::problem::EvalCounts;
@@ -28,17 +28,17 @@ use crate::core::state::{CountsMirror, RhoState, State};
 /// Solver state for [`Newuoa`](crate::solver::Newuoa).
 ///
 /// Construct with [`new`](Self::new) from the starting point; the solver
-/// evaluates it and seeds the cost / trust-region radius in
+/// evaluates it and seeds the cost/trust-region radius in
 /// [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct NewuoaState<V, F = f64> {
-    /// Current iterate — the best point found so far (NEWUOA reports the
+    /// Current iterate—the best point found so far (NEWUOA reports the
     /// least-`F` point). Initially the user's starting point.
     pub(crate) param: V,
     /// `F(param)`. `None` before [`Solver::init`](crate::core::solver::Solver::init).
     pub(crate) cost: Option<F>,
-    /// Current trust-region radius `ρ` — `+∞` before
+    /// Current trust-region radius `ρ`—`+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from
     /// `ρ_beg`. [`RhoTolerance`](crate::core::termination::RhoTolerance) reads it.
     pub(crate) rho: F,
@@ -57,7 +57,7 @@ pub struct NewuoaState<V, F = f64> {
 impl<V, F: Scalar> NewuoaState<V, F> {
     /// Build an initial NEWUOA state at the starting point `x0`. The solver
     /// evaluates `x0` (and the rest of the initial interpolation set) and fills
-    /// the cost / `ρ` in [`Solver::init`](crate::core::solver::Solver::init).
+    /// the cost/`ρ` in [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(x0: V) -> Self {
         Self {
             param: x0,
@@ -165,7 +165,7 @@ where
     fn mirror(&mut self, delta: &EvalCounts) {
         // Derivative-free: NEWUOA only ever calls the cost function, so every
         // unit of work folds into the single `cost_evals` counter (the same rule
-        // as `BasicPopulationState` / `CmaEsState`).
+        // as `BasicPopulationState`/`CmaEsState`).
         self.cost_evals = delta.total_work();
     }
 }

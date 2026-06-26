@@ -2,7 +2,7 @@
 //! nalgebra backend.
 //!
 //! Two tests below: convergence on Rosenbrock 2-D (the canonical
-//! memetic-CMA-ES showcase — Hansen 2011 §4 reports `n×` speedup from
+//! memetic-CMA-ES showcase; Hansen 2011 §4 reports `n×` speedup from
 //! injection on this function), and cost-eval aggregation across the
 //! outer/inner composition boundary.
 //!
@@ -17,7 +17,7 @@ use basin::problems::{Rosenbrock, Sphere};
 use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
 use nalgebra::{DMatrix, DVector};
 
-/// Rosenbrock 2-D from `(-1, 1)` — the canonical non-convex banana
+/// Rosenbrock 2-D from `(-1, 1)`: the canonical non-convex banana
 /// valley CMA-ES is famously good at. The point of this test is to
 /// verify that injecting Nelder-Mead refinements doesn't *break* CMA's
 /// convergence (per Hansen 2011 §3: "All update equations starting
@@ -25,11 +25,11 @@ use nalgebra::{DMatrix, DVector};
 /// distribution. This means we are, in principle, free to change the
 /// distribution before each iteration step.").
 ///
-/// We do *not* assert speedup vs. vanilla CMA-ES — Hansen's reported
+/// We do *not* assert speedup vs. vanilla CMA-ES; Hansen's reported
 /// `n×` speedup was with gradient/Newton injection, not derivative-free
 /// NM polish, and empirically NM polish doesn't beat vanilla CMA-ES on
 /// Rosenbrock in eval-count terms. The memetic value is on
-/// multi-modal / ill-conditioned constrained problems
+/// multi-modal and ill-conditioned constrained problems
 /// (Melo & Iacca 2014); convergence on Rosenbrock is the canary, not
 /// the marketing.
 #[test]
@@ -65,7 +65,7 @@ fn converges_on_rosenbrock_2d() {
 /// the memetic variant invokes the inner `k` times per outer iter, so
 /// its public `cost_evals()` must come back strictly larger by at
 /// least the inner-init evaluations (`n + 1` NM vertices) plus the
-/// per-iter re-evaluation (`+1`). A loose lower bound suffices —
+/// per-iter re-evaluation (`+1`). A loose lower bound suffices;
 /// NelderMead may terminate early on some iters via `CostTolerance`
 /// internals, so we don't pin an exact count.
 #[test]

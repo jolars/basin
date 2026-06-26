@@ -24,7 +24,7 @@ use crate::core::termination::TerminationReason;
 ///   loop ordering.
 /// - **Implementor must:** populate every state field termination
 ///   criteria might read before returning from
-///   [`init`](Self::init) — at minimum [`State::cost`] for any state
+///   [`init`](Self::init): at minimum [`State::cost`] for any state
 ///   whose `cost()` panics on missing data, and
 ///   [`GradientState::gradient`](crate::core::state::GradientState::gradient)
 ///   for first-order solvers. After every successful
@@ -38,15 +38,15 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Eval counting
 ///
-/// Solvers do **not** maintain eval counters by hand. Every cost /
-/// gradient / residual / Jacobian / Hessian call goes through the
+/// Solvers do **not** maintain eval counters by hand. Every cost/
+/// gradient/residual/Jacobian/Hessian call goes through the
 /// [`Problem`] wrapper, which bumps
 /// [`EvalCounts`](crate::core::problem::EvalCounts) on the wrapper
 /// before delegating to the user's problem. The
 /// [`Executor`](crate::core::executor::Executor) mirrors those counts
-/// onto the state's [`State::cost_evals`] /
+/// onto the state's [`State::cost_evals`]/
 /// [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals)
-/// after every successful [`init`](Self::init) /
+/// after every successful [`init`](Self::init)/
 /// [`next_iter`](Self::next_iter); see
 /// [`CountsMirror`](crate::core::state::CountsMirror) for the per-state
 /// mapping.
@@ -59,10 +59,10 @@ use crate::core::termination::TerminationReason;
 /// `type Error = P::Error;` (or `<P as Residual>::Error` for NLLS
 /// solvers) so the user's typed problem error flows untouched out of
 /// [`Executor::run`](crate::core::executor::Executor::run). Soft per-point
-/// rejection still travels through `Ok(f64::INFINITY)` — see the
+/// rejection still travels through `Ok(f64::INFINITY)`; see the
 /// [`problem`](crate::core::problem) module docs.
 pub trait Solver<P, S: State> {
-    /// Hard-abort error type — mirrors the underlying problem's
+    /// Hard-abort error type, mirroring the underlying problem's
     /// `type Error`. See the [trait docs](Self#error-type).
     type Error;
 
@@ -72,7 +72,7 @@ pub trait Solver<P, S: State> {
     ///
     /// - **Implementor must:** seed every state field that termination
     ///   criteria or downstream
-    ///   [`next_iter`](Self::next_iter) calls will read at iter 0 — at
+    ///   [`next_iter`](Self::next_iter) calls will read at iter 0—at
     ///   minimum [`State::cost`], plus
     ///   [`GradientState::gradient`](crate::core::state::GradientState::gradient)
     ///   for first-order solvers and the parallel cost array for
@@ -114,8 +114,8 @@ pub trait Solver<P, S: State> {
     /// - **Implementor must (composition, adapter-problem inner only):**
     ///   when running an inner solver against an *adapter problem*
     ///   (e.g. [`LogBarrier`](crate::core::barrier::LogBarrier),
-    ///   [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian))
-    ///   — i.e. a freshly constructed inner [`Problem`] — fold the
+    ///   [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian)),
+    ///   i.e. a freshly constructed inner [`Problem`], fold the
     ///   inner wrapper's
     ///   [`EvalCounts`](crate::core::problem::EvalCounts) back into the
     ///   outer's via

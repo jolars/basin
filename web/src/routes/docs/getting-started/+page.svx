@@ -9,7 +9,7 @@ cargo add basin
 ```
 
 Basin works on plain `Vec<f64>` out of the box. Linear-algebra backends are
-opt-in, one feature each — for example, to use the [nalgebra](https://nalgebra.org)
+opt-in, one feature each—for example, to use the [nalgebra](https://nalgebra.org)
 backend (required by some solvers, see [Solvers](../solvers/)):
 
 ```sh
@@ -71,7 +71,7 @@ fn main() {
 ## Seeding from a point
 
 `Executor::new` takes a fully-built state, so you control the initial iterate.
-For the common case — start at a point with the solver's natural defaults —
+For the common case (start at a point with the solver's natural defaults),
 `Executor::from_start` takes the bare starting vector and builds the state for
 you, so you never name the concrete state type:
 
@@ -85,16 +85,16 @@ let result = Executor::from_start(Rosenbrock, GradientDescent::new(1e-3), vec![-
 ```
 
 Most solvers support `from_start`. The few whose natural initialization needs
-more than a point — CMA-ES (a step-size σ), the population GA / DE / random
+more than a point—CMA-ES (a step-size σ), the population GA, DE, or random
 search (they sample a box), and the bracketing scalar solvers (Brent,
-golden-section) — don't implement it, so calling `from_start` with one is a
+golden-section)—don't implement it, so calling `from_start` with one is a
 compile error; build the state explicitly and use `Executor::new` instead.
 
 ## Termination criteria
 
 `max_iter` is one stopping condition; the others are pluggable and composed via
 `terminate_on`. They are framework-level, so the same criteria work across
-solvers — and they are bound to the state a solver actually exposes (asking for
+solvers, and they are bound to the state a solver actually exposes (asking for
 a gradient tolerance on a derivative-free solver is a compile error):
 
 ```rust
@@ -112,5 +112,5 @@ reports which one.
 
 ## Next
 
-- [Solvers](../solvers/) — pick the right algorithm and backend.
+- [Solvers](../solvers/): pick the right algorithm and backend.
 - Browse the full API reference on [docs.rs](https://docs.rs/basin).

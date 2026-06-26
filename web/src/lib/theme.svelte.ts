@@ -1,8 +1,8 @@
 /**
  * Reactive theme store. Three preferences:
  *
- * - `auto` — follow the OS via `prefers-color-scheme`.
- * - `light` / `dark` — explicit override.
+ * - `auto`: follow the OS via `prefers-color-scheme`.
+ * - `light`/`dark`: explicit override.
  *
  * The store exposes both the user's *preference* (what the toggle
  * should show as selected) and the *effective* theme actually applied
@@ -74,7 +74,7 @@ class ThemeStore {
             try {
                 localStorage.setItem(STORAGE_KEY, pref);
             } catch {
-                // Private mode / quota — silent fallthrough.
+                // Private mode or quota: silent fallthrough.
             }
         }
     }

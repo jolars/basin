@@ -7,10 +7,10 @@
 //!   update denominator (PRIMA `setdrop_tr`).
 //! - [`geostep`] chooses a geometry-improving step for a chosen point by
 //!   approximately maximizing the modulus of the update denominator `σ`. It
-//!   tries three candidates — a line search through `x_opt` and another
+//!   tries three candidates—a line search through `x_opt` and another
 //!   interpolation point, a steepest-ascent step of the `knew`-th Lagrange
 //!   function, and (when constraints are active) a **projected** gradient step
-//!   onto the null space of the active normals — and selects by `|σ|` and
+//!   onto the null space of the active normals—and selects by `|σ|` and
 //!   feasibility. The projected step is what makes LINCOA effective on
 //!   constrained problems.
 //! - [`update_rescon`] maintains `rescon` after `x_opt` moves (PRIMA
@@ -23,7 +23,7 @@
 //! [`update_params`](QuadraticModel::update_params) `σ`; the `knew`-th Lagrange
 //! function's gradient/Hessian from
 //! [`lagrange_coeffs`](QuadraticModel::lagrange_coeffs) /
-//! [`lagrange_hessian_matvec`](QuadraticModel::lagrange_hessian_matvec) — exactly
+//! [`lagrange_hessian_matvec`](QuadraticModel::lagrange_hessian_matvec)—exactly
 //! as BOBYQA's geometry does.
 
 use crate::core::math::Scalar;

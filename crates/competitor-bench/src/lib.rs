@@ -1,6 +1,6 @@
 //! Benchmark-support library for basin's cross-framework comparisons
 //! (axis 3 of the bench plan): basin vs the `levenberg-marquardt` crate
-//! (NLLS) and vs `argmin` and `gomez` (gradient-based / derivative-free).
+//! (NLLS) and vs `argmin` and `gomez` (gradient-based and derivative-free).
 //!
 //! The pattern throughout is to reuse basin's corpus as the source of
 //! truth and build thin adapters for the competitors, so every framework
@@ -13,10 +13,10 @@
 //!   lockfile), so they operate on the very same `DVector`/`DMatrix`.
 //! - **argmin** ([`ArgminProblem`]): a single fn-pointer adapter that
 //!   wraps any of basin's `pub` raw cost/gradient functions
-//!   (`fn(&[f64]) -> f64` / `fn(&[f64], &mut [f64])`) into argmin's
+//!   (`fn(&[f64]) -> f64`/`fn(&[f64], &mut [f64])`) into argmin's
 //!   [`CostFunction`](argmin::core::CostFunction) +
-//!   [`Gradient`](argmin::core::Gradient) on the `Vec<f64>` backend —
-//!   the backend both basin and argmin support natively, so GD /
+//!   [`Gradient`](argmin::core::Gradient) on the `Vec<f64>` backend—
+//!   the backend both basin and argmin support natively, so GD and
 //!   Nelder-Mead run on identical param types.
 //! - **gomez** ([`GomezProblem`]): a single fn-pointer adapter that
 //!   wraps a basin raw cost function into gomez's
@@ -41,8 +41,8 @@ use levenberg_marquardt::LeastSquaresProblem;
 use nalgebra::storage::Owned;
 use nalgebra::{DMatrix, DVector, Dyn};
 
-/// argmin-side adapter wrapping a pair of basin raw functions — a cost
-/// `fn(&[f64]) -> f64` and a gradient `fn(&[f64], &mut [f64])` — into
+/// argmin-side adapter wrapping a pair of basin raw functions (a cost
+/// `fn(&[f64]) -> f64` and a gradient `fn(&[f64], &mut [f64])`) into
 /// argmin's [`CostFunction`] + [`Gradient`] on the `Vec<f64>` backend.
 /// One type covers every problem in basin's corpus, so the argmin side
 /// computes exactly the same math basin does.
@@ -77,13 +77,13 @@ impl Gradient for ArgminProblem {
 
 /// gomez-side adapter wrapping a basin raw cost `fn(&[f64]) -> f64` into
 /// gomez's [`Problem`] + [`Function`] over an unconstrained `n`-D domain.
-/// Cost-only — gomez has no gradient-using optimizer that lines up with
+/// Cost-only—gomez has no gradient-using optimizer that lines up with
 /// basin's first-order solvers, so the adapter exposes only the value;
 /// gomez approximates derivatives internally if a method ever needs them.
 ///
 /// Operates on `gomez::nalgebra::DVector<f64>` (gomez's bundled nalgebra
 /// 0.32), which is a separate version from the lm/basin nalgebra 0.34
-/// elsewhere in this crate — the two majors coexist in the lockfile and
+/// elsewhere in this crate—the two majors coexist in the lockfile and
 /// never meet, because gomez only ever sees its own type.
 pub struct GomezProblem {
     cost: fn(&[f64]) -> f64,
@@ -182,7 +182,7 @@ impl LeastSquaresProblem<f64, Dyn, Dyn> for LmExponentialFit {
 // n ∈ {10, 20, 30} regime. `n` params, `m = n + 2` residuals, unique
 // minimum f = 0 at x = (1, …, 1). Because it converges cleanly (unlike
 // the rank-deficient Powell), all three solvers reach the optimum in
-// comparable iteration counts — so the timing reflects per-iteration
+// comparable iteration counts—so the timing reflects per-iteration
 // cost, and any iteration-count difference is itself a clean signal.
 //
 //   rᵢ      = xᵢ − 1                  (i = 0 … n−1)
@@ -333,8 +333,8 @@ impl LeastSquaresProblem<f64, Dyn, Dyn> for LmVarDim {
 // ellipse fits live and where basin's LM showed a large per-iteration
 // cost gap vs the lm crate. The target `b` is deliberately outside the
 // range of `A·sin(x)` (whose entries are bounded by `Σⱼ|Aᵢⱼ|`), so the
-// problem is *infeasible* and the solver genuinely iterates — with
-// rejected steps that bump `μ` — instead of hitting a zero-residual fit
+// problem is *infeasible* and the solver genuinely iterates (with
+// rejected steps that bump `μ`) instead of hitting a zero-residual fit
 // in one step.
 //
 //   rᵢ(x)   = Σⱼ Aᵢⱼ·sin(xⱼ) − bᵢ            (i = 0 … m−1)
@@ -345,7 +345,7 @@ impl LeastSquaresProblem<f64, Dyn, Dyn> for LmVarDim {
 // ---------------------------------------------------------------------
 
 /// splitmix64-style deterministic pseudo-random in `[-0.5, 0.5)`. Shared
-/// by both sides so the generated `A` / `b` / `x₀` are bit-identical.
+/// by both sides so the generated `A`/`b`/`x₀` are bit-identical.
 fn splitmix(i: u64) -> f64 {
     let mut x = i.wrapping_add(0x9E37_79B9_7F4A_7C15);
     x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -376,7 +376,7 @@ impl UnderDetData {
         Self { m, n, a, b }
     }
 
-    /// Start point `x₀ⱼ = 0.1·splitmix(42+j)` — small, generic, away from
+    /// Start point `x₀ⱼ = 0.1·splitmix(42+j)`—small, generic, away from
     /// any stationary point.
     pub fn start(&self) -> Vec<f64> {
         (0..self.n).map(|j| 0.1 * splitmix(42 + j as u64)).collect()

@@ -1,4 +1,4 @@
-//! Limited-memory BFGS / L-BFGS-B state.
+//! Limited-memory BFGS/L-BFGS-B state.
 //!
 //! Carries the current iterate plus the limited-memory history
 //! `(s_k, y_k)` capped at `m_capacity` pairs, and the compact-form
@@ -6,7 +6,7 @@
 //! (`ws`, `wy`, `sy`, `ss`, `theta` in `references/lbfgsb-v3.0/`)
 //! but keeps the history chronologically (oldest at index 0) rather
 //! than in a ring buffer with a `head` pointer. The numerical result
-//! is identical because cauchy / subsm only require "column j of W
+//! is identical because cauchy/subsm only require "column j of W
 //! in oldest-to-newest order" and never depend on the ring-buffer
 //! index modulo `m_capacity`.
 
@@ -69,7 +69,7 @@ pub struct LbfgsState<V, F = f64> {
 /// Mirrors the layout Fortran `mainlb` carves out of the user-
 /// supplied scratch arrays (`ws`, `wy`, `sy`, `ss`, `wt`, `wn`, `snd`,
 /// `z`, `r`, `d`, `t`, `xp`, `wa`, `index`, `iwhere`, `indx2`) plus
-/// the iteration-persistent scalars that live in `isave` / `dsave`
+/// the iteration-persistent scalars that live in `isave`/`dsave`
 /// between coroutine returns.
 ///
 /// Stored on [`LbfgsState`] rather than the solver struct so that
@@ -89,19 +89,19 @@ pub(crate) struct LbfgsbWork<F = f64> {
     pub(crate) wt: Vec<F>,
 
     // ---- n-sized working vectors ----
-    /// Cauchy point / subspace Newton point (Fortran `z`).
+    /// Cauchy point/subspace Newton point (Fortran `z`).
     pub(crate) z: Vec<F>,
     /// Reduced gradient at the Cauchy point (Fortran `r`).
     pub(crate) r: Vec<F>,
     /// Search direction `d = z − x` (Fortran `d`).
     pub(crate) d: Vec<F>,
-    /// Cauchy breakpoint buffer / line-search previous iterate
+    /// Cauchy breakpoint buffer/line-search previous iterate
     /// (Fortran `t`).
     pub(crate) t_buf: Vec<F>,
     /// Subspace projected-Newton safeguard slot (Fortran `xp`).
     pub(crate) xp: Vec<F>,
 
-    // ---- 2m-sized cauchy / subsm scratch ----
+    // ---- 2m-sized cauchy/subsm scratch ----
     /// `Wᵀ d` accumulator inside `cauchy` (Fortran `wa(1..2m)`).
     pub(crate) wa_p: Vec<F>,
     /// `Wᵀ (xcp − x)` accumulator (Fortran `wa(2m+1..4m)`); fed to
@@ -122,7 +122,7 @@ pub(crate) struct LbfgsbWork<F = f64> {
     /// as `iorder` inside `cauchy` (the breakpoint heap).
     pub(crate) indx2: Vec<usize>,
 
-    // ---- Iteration-persistent scalars / flags ----
+    // ---- Iteration-persistent scalars/flags ----
     /// True iff at least one variable has a finite bound.
     pub(crate) cnstnd: bool,
     /// True iff every variable is two-sided (both bounds finite).
@@ -229,7 +229,7 @@ impl<V, F: Scalar> LbfgsState<V, F> {
     /// dropped (left shift on `ws`, `wy`, and the leading block of
     /// `sy`, `ss`).
     ///
-    /// Returns `false` if `s·y ≤ 0` or any product is non-finite —
+    /// Returns `false` if `s·y ≤ 0` or any product is non-finite—
     /// the curvature condition is the caller's responsibility, this
     /// is just a final safeguard. The state is left unchanged in
     /// that case.
@@ -250,7 +250,7 @@ impl<V, F: Scalar> LbfgsState<V, F> {
             self.ws.remove(0);
             self.wy.remove(0);
             // Shift the leading `(m-1) × (m-1)` block of sy and ss
-            // up-and-left by one row+column. Use a forward sweep —
+            // up-and-left by one row+column. Use a forward sweep—
             // each (i, j) only reads from (i+1, j+1) which we haven't
             // written yet.
             for i in 0..m - 1 {
@@ -315,7 +315,7 @@ impl<V: Clone, F: Scalar> State for LbfgsState<V, F> {
     /// # Panics
     ///
     /// Panics if read before [`Solver::init`](crate::core::solver::Solver::init)
-    /// has populated the cached cost — see [`BasicState::cost`] for
+    /// has populated the cached cost—see [`BasicState::cost`] for
     /// the full safety argument; same contract.
     ///
     /// [`BasicState::cost`]: crate::core::state::BasicState::cost
@@ -384,7 +384,7 @@ impl<V: Clone, F: Scalar> CountsMirror for LbfgsState<V, F> {
 
 #[cfg(test)]
 // Explicit `i * m + j` indexing (including `0 * m + 0`) mirrors the
-// Fortran source's 2-D layout for `sy` / `ss` — load-bearing for
+// Fortran source's 2-D layout for `sy`/`ss`: load-bearing for
 // readability when cross-checking against `lbfgsb.f`.
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {
@@ -461,7 +461,7 @@ mod tests {
         state.append_pair(s3.clone(), y3.clone());
 
         assert_eq!(state.col(), 2);
-        // After eviction, history is [s2, s3] / [y2, y3].
+        // After eviction, history is [s2, s3]/[y2, y3].
         assert_eq!(state.ws[0], s2);
         assert_eq!(state.ws[1], s3);
         assert_eq!(state.wy[0], y2);
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn curvature_failure_leaves_state_untouched() {
         let mut state = LbfgsState::<Vec<f64>>::new(vec![0.0, 0.0], 3);
-        // s · y = -1 (negative curvature) — must be rejected.
+        // s · y = -1 (negative curvature)—must be rejected.
         let s = vec![1.0, 0.0];
         let y = vec![-1.0, 0.0];
         let ok = state.append_pair(s, y);
@@ -492,7 +492,7 @@ mod tests {
     #[test]
     fn state_implements_state_and_gradient_state_traits() {
         // Sanity check that the trait impls are reachable through the
-        // generic State / GradientState bounds.
+        // generic State/GradientState bounds.
         let s: LbfgsState<Vec<f64>> = LbfgsState::new(vec![1.0, 2.0], 5);
         // Param round-trip via the State trait.
         let p: &Vec<f64> = State::param(&s);

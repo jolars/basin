@@ -18,8 +18,8 @@
 //! Booth (2D, convex quadratic, optimum `(1, 3)`) is the test problem.
 //! The outer state is a custom `MultiStartState` rather than
 //! `BasicSimplexState` because `BasicSimplexState`'s vertex/cost fields
-//! are `pub(crate)` — the integration test is outside the crate, so we
-//! show that composition works through the public `State` / `Solver` /
+//! are `pub(crate)`—the integration test is outside the crate, so we
+//! show that composition works through the public `State`, `Solver`, and
 //! `CountsMirror` traits alone.
 
 use basin::problems::Booth;
@@ -128,7 +128,7 @@ fn sort_by_cost(iterates: &mut [Vec<f64>], costs: &mut [f64]) {
 
 /// POC outer solver. Per outer iteration, runs the wrapped inner solver
 /// from each iterate and replaces the iterate with the inner's converged
-/// param. This is intentionally simple — it isn't real Nelder-Mead — but
+/// param. This is intentionally simple (it isn't real Nelder-Mead) but
 /// exercises the full composition contract.
 struct PerVertexRefine<G> {
     inner: InnerExecutor<BasicState<Vec<f64>>, G>,
@@ -283,7 +283,7 @@ fn inner_executor_aggregates_cost_evals_into_outer() {
 /// Stateful inner criterion that records how many times `reset` is
 /// invoked. Used to prove `run_loop` resets criteria once per inner run,
 /// so an `InnerExecutor`'s reused criteria vector sees fresh per-run state
-/// (contract 2). `check` never fires — termination is left to the real
+/// (contract 2). `check` never fires; termination is left to the real
 /// `GradientTolerance` alongside it.
 struct CountResets(Rc<RefCell<u32>>);
 
@@ -343,7 +343,7 @@ fn inner_executor_bubbles_inner_solver_failed_via_outer() {
         "outer should bubble SolverFailed from the inner; got {:?}",
         result.reason
     );
-    // Outer didn't complete a full iter — `iter()` reflects the last
+    // Outer didn't complete a full iter; `iter()` reflects the last
     // *fully completed* iteration per the executor contract.
     assert_eq!(result.iter(), 0);
 }

@@ -6,7 +6,7 @@
     // The visualizer is browser-only: it loads the wasm module and drives a
     // requestAnimationFrame loop, so it can't render on the server. The
     // heavy component lives in `$lib/Visualizer.svelte` and is pulled in via
-    // a dynamic import on mount — so this route stays SSR-safe and
+    // a dynamic import on mount, so this route stays SSR-safe and
     // prerenders a real <title>/og: head for crawlers (see `+page.ts`),
     // while the wasm module is never imported on the server.
     let Visualizer = $state<Component | null>(null);
@@ -17,7 +17,7 @@
 </script>
 
 <Seo
-    title="Basin — solver visualizer"
+    title="Basin—solver visualizer"
     description="Live wasm-driven 2D optimization trajectories from the Basin Rust library."
 />
 

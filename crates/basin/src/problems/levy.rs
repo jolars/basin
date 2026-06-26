@@ -103,7 +103,7 @@ impl<P> Default for Levy<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static LEVY_SPEC: ProblemSpec = ProblemSpec {
     name: "Levy",
     dim: Dimensionality::NDimensional { min: 1 },
@@ -240,7 +240,7 @@ mod faer_impl {
 /// Levy function with explicit element-wise box bounds, suitable for
 /// box-constrained solvers (L-BFGS-B, projected gradient, CMA-ES variants).
 /// Implements both [`CostFunction`] and [`Gradient`] plus [`BoxConstraints`],
-/// routing through the same raw [`levy`] / [`levy_gradient`] free functions as
+/// routing through the same raw [`levy`]/[`levy_gradient`] free functions as
 /// the unconstrained [`Levy`]. The standard search domain `[−10, 10]ⁿ` is the
 /// common case; build it with [`LevyBoxed::with_standard_bounds`].
 pub struct LevyBoxed<P> {

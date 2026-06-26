@@ -4,21 +4,21 @@
 //! Three element-wise operations the [`Trf`](crate::solver::Trf) solver
 //! needs that aren't generic enough to live in `math.rs`:
 //!
-//! - **Coleman-Li affine scaling** — `d²` and the `C` diagonal from
+//! - **Coleman-Li affine scaling**: `d²` and the `C` diagonal from
 //!   Branch-Coleman-Li 1999 eqs (i)–(iv) (`source.marker.md:54-59` in
 //!   `references/branch-coleman-li-1999/`). Defines the diagonal
 //!   trust-region scaling matrix `D = diag(|v|^{-1/2})` and the
 //!   curvature correction `C = D·diag(g)·J^v·D` that's also diagonal.
-//! - **Strict-interior step-back** — largest `τ` keeping `x + τ·s` in
+//! - **Strict-interior step-back**: largest `τ` keeping `x + τ·s` in
 //!   the box, used to cut the unconstrained Newton step back to the
 //!   feasible region. The TRF caller multiplies by `θ < 1` to keep
 //!   iterates in the *open* box (D is undefined where `v_i = 0`).
-//! - **Scaled gradient ∞-norm** — the `‖D·g‖_∞` first-order optimality
+//! - **Scaled gradient ∞-norm**: the `‖D·g‖_∞` first-order optimality
 //!   measure, computed from `g` and `d²` without materializing `D·g`.
 //!
 //! Per-backend implementations in `vec.rs`, `nalgebra_backend.rs`,
 //! `ndarray_backend.rs`, `faer_backend.rs`. All four backends are
-//! supported — the operations are pure element-wise, no LA dependency,
+//! supported: the operations are pure element-wise, no LA dependency,
 //! so the vector-tier coverage is honest across the corpus.
 //!
 //! The trait carries an `F = f64` scalar default so existing
@@ -33,7 +33,7 @@ use super::Scalar;
 ///
 /// Used exclusively by the [`Trf`](crate::solver::Trf) solver today.
 /// The trait groups three otherwise-unrelated element-wise operations
-/// because they share their caller and have no other users — splitting
+/// because they share their caller and have no other users; splitting
 /// would just inflate the solver's `where` clause.
 ///
 /// `F` defaults to `f64`, matching the legacy scalar pin; per-backend
@@ -94,12 +94,12 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     ///   `θ ∈ [θ_l, 1)` to keep iterates in the *open* box.
     fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> F;
 
-    /// `max_i |self[i]| / d_sq[i]` — the BCL first-order optimality
+    /// `max_i |self[i]| / d_sq[i]`, the BCL first-order optimality
     /// measure `‖v ⊙ g‖_∞` when `self = g` and `d_sq[i] = 1/|v_i|` is
     /// the [`compute_cl_scaling`](Self::compute_cl_scaling) output. Equals `max_i |g_i · v_i|`.
     ///
     /// This metric goes to zero at any KKT point of the box-constrained
-    /// problem — interior *or* face-active. The unscaled `‖g‖_∞`
+    /// problem: interior *or* face-active. The unscaled `‖g‖_∞`
     /// doesn't vanish on a finite face, and the scaled `‖D·g‖_∞ =
     /// max |g_i| / √|v_i|` actually *blows up* on a face (denominator
     /// → 0), so neither is a usable termination measure for TRF.
@@ -115,10 +115,10 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     ///   mismatch; entries of `0` produce `inf`, which propagates.
     fn cl_kkt_inf_norm(&self, d_sq: &Self) -> F;
 
-    /// `Σ self[i]² · weights[i]` — the squared D-norm `‖D · self‖²`
+    /// `Σ self[i]² · weights[i]`—the squared D-norm `‖D · self‖²`
     /// when `weights = d_sq` is the [`compute_cl_scaling`](Self::compute_cl_scaling) output.
     /// Used in the BCL scaled trust-region predicted-reduction
-    /// `½(μ · ‖D·h‖² − h^T g)` — the analogue of Nielsen's LM
+    /// `½(μ · ‖D·h‖² − h^T g)`—the analogue of Nielsen's LM
     /// `½(μ‖h‖² − h^T g)` with the affine-scaling D folded in.
     ///
     /// # Contract
@@ -135,7 +135,7 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     /// `rstep · max(1, |bound|)` from the relevant finite bound.
     ///
     /// Used at TRF `init` to bring an arbitrary starting point into
-    /// the open feasible region — the affine scaling matrix `D` is
+    /// the open feasible region—the affine scaling matrix `D` is
     /// undefined where `v_i = 0` (i.e. on a finite face).
     ///
     /// # Contract
@@ -155,7 +155,7 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F);
 }
 
-/// Helper for the case dispatch in `compute_cl_scaling` — writes
+/// Helper for the case dispatch in `compute_cl_scaling`: writes
 /// `(d_sq_i, c_diag_i)` for one component given the local `(x, g, l, u)`.
 /// Per-backend impls call this on each index to share the arithmetic;
 /// generic over `F: Scalar` so every backend can supply its own
@@ -183,7 +183,7 @@ pub(crate) fn cl_scaling_pair<F: Scalar>(x: F, g: F, l: F, u: F) -> (F, F) {
     }
 }
 
-/// Helper for `project_strictly_inside` — per-component clamp into the
+/// Helper for `project_strictly_inside`: per-component clamp into the
 /// *open* box. Returns the projected value.
 #[inline]
 pub(crate) fn project_strictly_inside_component<F: Scalar>(x: F, l: F, u: F, rstep: F) -> F {
@@ -208,7 +208,7 @@ pub(crate) fn project_strictly_inside_component<F: Scalar>(x: F, l: F, u: F, rst
     }
 }
 
-/// Helper for `max_feasible_step` — per-component limit, returning
+/// Helper for `max_feasible_step`: per-component limit, returning
 /// `F::infinity()` when `step_i = 0` or the relevant bound is infinite.
 #[inline]
 pub(crate) fn max_feasible_step_component<F: Scalar>(x: F, step: F, l: F, u: F) -> F {

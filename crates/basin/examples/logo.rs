@@ -1,21 +1,21 @@
 //! Generative logo for `basin`.
 //!
-//! Renders the package's namesake — a geographic *basin* — as a low-poly
+//! Renders the package's namesake (a geographic *basin*) as a low-poly
 //! isometric scene, and does it the way an optimization library should:
 //! the terrain is a quadratic basin (the canonical convex optimization
 //! landscape) carrying a damped sinusoidal ripple for organic ridges, and
 //! the rivulet winding down into the pool is an actual gradient-descent
 //! trajectory traced by basin's [`GradientDescent`] solver with heavy-ball
 //! momentum, run over that exact surface. The pool is the surface's
-//! minimum — exactly where the optimizer comes to rest. Momentum is what
+//! minimum, exactly where the optimizer comes to rest. Momentum is what
 //! makes the descent glide down the slope and settle in the basin floor
 //! rather than darting straight in, so the river is, literally,
 //! optimization output.
 //!
-//! There are two themes — a daytime scene (sun, butterfly) and a moonlit
+//! There are two themes: a daytime scene (sun, butterfly) and a moonlit
 //! night scene (full moon + stars, owl). The night palette is derived from
 //! the day one by a single Oklab "moonlight" transform (darken, desaturate,
-//! cool), so the two stay in sync when you re-roll the day colours.
+//! cool), so the two stay in sync when you re-roll the day colors.
 //!
 //! Run with:
 //!
@@ -48,13 +48,13 @@ const Y0: f64 = -4.2;
 const Y1: f64 = 4.2;
 
 /// Surface shape: a closed, *curved* (banana) valley. In coordinates
-/// `(u, v)` rotated by `BOWL_ROT` about the centre, the floor follows the
+/// `(u, v)` rotated by `BOWL_ROT` about the center, the floor follows the
 /// parabola `v = VALLEY_CURVE·u²`; the surface is soft along that floor
 /// (`VALLEY_FLOOR_K`) and stiff across it (`VALLEY_WALL_K`), and rises at
 /// both ends so the minimum is *enclosed* in the middle. Gradient descent
-/// drops to the floor and follows its bend into the pool — a curved river,
+/// drops to the floor and follows its bend into the pool, a curved river,
 /// not a straight radial line, and one that can't spill off an open valley
-/// mouth. Centred slightly off origin so the pool lands off-centre.
+/// mouth. Centered slightly off origin so the pool lands off-center.
 const BOWL_CX: f64 = 0.3;
 const BOWL_CY: f64 = -0.3;
 const VALLEY_FLOOR_K: f64 = 0.110; // along-valley softness (smaller = longer)
@@ -63,7 +63,7 @@ const VALLEY_CURVE: f64 = 0.200; // floor bend (parabola coefficient)
 const BOWL_ROT: f64 = 0.1; // valley orientation (radians)
 const RIM_K: f64 = 0.002;
 
-/// Water depth as a normalised height above the basin floor — a small,
+/// Water depth as a normalized height above the basin floor: a small,
 /// fixed pond rather than a percentile flood.
 const WATER_LEVEL: f64 = 0.004;
 
@@ -83,7 +83,7 @@ const RIVER_BETA: f64 = 0.35;
 const RIVER_ITERS: usize = 1100;
 const RIVER_POINTS: usize = 500; // trajectory vertices captured
 
-/// River carved into the terrain mesh along the descent trajectory — the same
+/// River carved into the terrain mesh along the descent trajectory, the same
 /// intersect-into-the-mesh treatment as the favicon. A ribbon tessellated to
 /// `RIVER_SEGS` segments (so its edge is smooth, independent of `GRID`) tapers
 /// from `RIVER_W_SRC` at the source to `RIVER_W_MOUTH` at the mouth (problem
@@ -97,15 +97,15 @@ const RIVER_SEGS: usize = 64;
 /// of, unioned into the ribbon and likewise carved into the mesh.
 const SPRING_R: f64 = 0.2;
 
-/// Trees: scattered at random over *plantable* ground — above the shoreline,
+/// Trees: scattered at random over *plantable* ground, above the shoreline,
 /// below the upper walls, and on gentle enough slopes to read as planted.
 /// Placement is fully determined by `TREE_SEED`, so bump it to resample a
 /// different arrangement (or raise `TREE_COUNT` for a denser stand).
 const TREE_SEED: u64 = 15;
 const TREE_COUNT: usize = 6;
 const TREE_MIN_DIST: f64 = 1.6; // min separation between trees (problem units)
-const TREE_MIN_LIFT: f64 = 0.05; // min normalised height above the water line
-const TREE_MAX_HN: f64 = 0.5; // max normalised height (keeps trees off the rim)
+const TREE_MIN_LIFT: f64 = 0.05; // min normalized height above the water line
+const TREE_MAX_HN: f64 = 0.5; // max normalized height (keeps trees off the rim)
 const TREE_MAX_SLOPE: f64 = 0.13; // reject ground steeper than this
 const TREE_MAX_ATTEMPTS: usize = 4000; // rejection-sampling budget per render
 
@@ -119,8 +119,8 @@ const ROCK_COUNT: usize = 5;
 const ROCK_SPRING_DX: f64 = -9.0; // spring rock: screen offset from the spring (px)
 const ROCK_SPRING_DY: f64 = -5.0; // (screen-space so it nestles beside the water)
 const ROCK_MIN_DIST: f64 = 1.4; // min separation between rocks (problem units)
-const ROCK_MIN_LIFT: f64 = 0.02; // min normalised height above the water line
-const ROCK_MAX_HN: f64 = 0.7; // max normalised height (rocks climb higher)
+const ROCK_MIN_LIFT: f64 = 0.02; // min normalized height above the water line
+const ROCK_MAX_HN: f64 = 0.7; // max normalized height (rocks climb higher)
 const ROCK_MAX_SLOPE: f64 = 0.22; // rocks sit on steeper ground than trees
 const ROCK_MAX_ATTEMPTS: usize = 4000; // rejection-sampling budget per render
 const ROCK_W: f64 = 14.0; // boulder half-width (px)
@@ -130,11 +130,11 @@ const ROCK_H: f64 = 16.0; // boulder height (px)
 const PAPER: Rgb = Rgb(244, 241, 222); // #f4f1de background
 // Terrain hypsometric ramps (low elevation → high), each sampled from the land
 // section of a named colormap. To test a palette, change the `TERRAIN_RAMP`
-// line at the bottom of this block to `&TURKU` / `&BILBAO` / `&BAMAKO` /
+// line at the bottom of this block to `&TURKU`, `&BILBAO`, `&BAMAKO`, or
 // `&SANDSTONE`, save, and look at `images/logo.svg` (run `task logo` and it
-// re-renders on every save). Add your own by pasting any colormap's stops —
+// re-renders on every save). Add your own by pasting any colormap's stops;
 // `ramp_sample` interpolates across however many you give it.
-#[allow(dead_code)] // Crameri `lajolla` — vivid red-rock / sunset
+#[allow(dead_code)] // Crameri `lajolla`: vivid red-rock or sunset
 const SANDSTONE: [Rgb; 6] = [
     hex("#ca514b"),
     hex("#df6e4f"),
@@ -143,7 +143,7 @@ const SANDSTONE: [Rgb; 6] = [
     hex("#f2c75c"),
     hex("#fbea93"),
 ];
-#[allow(dead_code)] // Crameri `turku` — muted olive/khaki → warm tan
+#[allow(dead_code)] // Crameri `turku`: muted olive/khaki → warm tan
 const TURKU: [Rgb; 6] = [
     hex("#565640"),
     hex("#6d6c4a"),
@@ -152,7 +152,7 @@ const TURKU: [Rgb; 6] = [
     hex("#c6a475"),
     hex("#dda888"),
 ];
-#[allow(dead_code)] // Crameri `bilbao` — clay-rose → pale grey-tan
+#[allow(dead_code)] // Crameri `bilbao`: clay-rose → pale gray-tan
 const BILBAO: [Rgb; 6] = [
     hex("#a36b59"),
     hex("#a87d5d"),
@@ -161,7 +161,7 @@ const BILBAO: [Rgb; 6] = [
     hex("#c1bb9e"),
     hex("#cccac3"),
 ];
-#[allow(dead_code)] // Crameri `bamako` — green lowlands → gold peaks
+#[allow(dead_code)] // Crameri `bamako`: green lowlands → gold peaks
 const BAMAKO: [Rgb; 6] = [
     hex("#335b28"),
     hex("#537014"),
@@ -170,7 +170,7 @@ const BAMAKO: [Rgb; 6] = [
     hex("#ceb546"),
     hex("#f3d993"),
 ];
-#[allow(dead_code)] // Crameri `bamako` — green lowlands → gold peaks
+#[allow(dead_code)] // Crameri `bamako`: green lowlands → gold peaks
 const CUSTOM: [Rgb; 5] = [
     hex("#5E7763"),
     hex("#7C7A62"),
@@ -197,11 +197,11 @@ const SUN_HALO: f64 = 1.45; // halo radius as a multiple of the core
 const LIGHT: [f64; 3] = [0.5, -0.35, 0.79];
 
 // ---------------------------------------------------------------------------
-// theme (day / night)
+// theme (day or night)
 // ---------------------------------------------------------------------------
 
 /// Which palette + props the scene renders with. `Day` is the original
-/// sunlit look; `Night` re-tints every colour through [`moonlight`] and
+/// sunlit look; `Night` re-tints every color through [`moonlight`] and
 /// swaps the props (sun → full moon + stars, butterfly → owl).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Theme {
@@ -216,8 +216,8 @@ const STAR: Rgb = hex("#e7ebf6"); // faint star points
 
 /// Owl (night creature): moonlit slate body so it stays legible on a dark
 /// background, with pale eyes and a warm beak.
-const OWL_DARK: Rgb = hex("#535d75"); // body / shadow side
-const OWL_LIT: Rgb = hex("#7e88a1"); // belly / lit side
+const OWL_DARK: Rgb = hex("#535d75"); // body or shadow side
+const OWL_LIT: Rgb = hex("#7e88a1"); // belly or lit side
 const OWL_EYE: Rgb = hex("#eaeef8"); // pale eye disk
 const OWL_PUPIL: Rgb = hex("#2b3142"); // dark pupil
 const OWL_BEAK: Rgb = hex("#cba36a"); // small warm beak
@@ -226,7 +226,7 @@ const OWL_BEAK: Rgb = hex("#cba36a"); // small warm beak
 const BFLY_WING: Rgb = hex("#e9c46a"); // upper wings (matches the sun accent)
 const BFLY_WING2: Rgb = hex("#e07a5f"); // lower wings (terracotta)
 const BFLY_BODY: Rgb = hex("#3d405b"); // dark body + antennae
-/// Whole-butterfly tilt in degrees, about its body centre (positive = clockwise
+/// Whole-butterfly tilt in degrees, about its body center (positive = clockwise
 /// in SVG's y-down frame, so the head leans right). Keeps it reading as drifting
 /// rather than pinned upright; flip the sign or scale to re-aim.
 const BFLY_TILT: f64 = -19.0;
@@ -235,24 +235,24 @@ const BFLY_TILT: f64 = -19.0;
 /// foreground meadow. The butterfly floats well above the surface
 /// (`CREATURE_HOVER`); the owl perches close to it (`CREATURE_PERCH`).
 const CREATURE_AT: [f64; 2] = [2.6, 1.7];
-const CREATURE_HOVER: f64 = 0.20; // butterfly lift (normalised height)
+const CREATURE_HOVER: f64 = 0.20; // butterfly lift (normalized height)
 const CREATURE_PERCH: f64 = 0.02; // owl lift (sits just above the ground)
 
-/// Re-tint a daytime colour for the night palette: darken, desaturate, and
-/// cool toward moonlit blue — all in Oklab so the shift stays perceptually
+/// Re-tint a daytime color for the night palette: darken, desaturate, and
+/// cool toward moonlit blue, all in Oklab so the shift stays perceptually
 /// even. A small lightness floor keeps nothing pure black. This single
 /// transform is what derives the entire night terrain/water/tree/rock ramp
-/// from the day palette, so re-rolling the day colours re-rolls night too.
+/// from the day palette, so re-rolling the day colors re-rolls night too.
 fn moonlight(c: Rgb) -> Rgb {
     let [l, a, b] = rgb_to_oklab(c);
     oklab_to_rgb([
-        l * 0.65 + 0.035, // darken to dusk (not black) — a lifted floor
+        l * 0.65 + 0.035, // darken to dusk (not black), a lifted floor
         a * 0.86,         // desaturate
         b * 0.56 - 0.018, // desaturate + push toward blue (−b is blue)
     ])
 }
 
-/// All theme-dependent colours, resolved once up front. Day uses the config
+/// All theme-dependent colors, resolved once up front. Day uses the config
 /// constants directly; Night maps each through [`moonlight`] and supplies
 /// its own moon/halo accents. Draw functions read from here rather than the
 /// raw constants so a single `Theme` value re-skins the whole scene.
@@ -265,8 +265,8 @@ struct Palette {
     trunk: Rgb,
     rock_lit: Rgb,
     rock_dark: Rgb,
-    orb: Rgb,      // sun (day) / moon (night) core
-    orb_halo: Rgb, // halo colour around the orb
+    orb: Rgb,      // sun (day) or moon (night) core
+    orb_halo: Rgb, // halo color around the orb
 }
 
 impl Palette {
@@ -287,7 +287,7 @@ impl Palette {
             Theme::Night => Self {
                 theme,
                 terrain: TERRAIN_RAMP.iter().map(|&c| moonlight(c)).collect(),
-                // Water is the hero (the river is optimiser output), so lift
+                // Water is the hero (the river is optimizer output), so lift
                 // it a touch toward the moon so it keeps a moonlit sheen
                 // rather than sinking into the dark terrain.
                 water: moonlight(WATER).lerp(MOON, 0.14),
@@ -307,9 +307,9 @@ impl Palette {
 // surface
 // ---------------------------------------------------------------------------
 
-/// Raw bowl height at problem point `(x, y)` — a quadratic basin with a
+/// Raw bowl height at problem point `(x, y)`: a quadratic basin with a
 /// damped sinusoidal ripple (organic ridges) and a gentle rising rim. The
-/// ripple fades to zero at the centre so the basin floor, and hence the
+/// ripple fades to zero at the center so the basin floor, and hence the
 /// pool, stays clean and the basin stays unimodal. This is the function
 /// basin's solver descends to trace the river.
 fn raw_height(x: f64, y: f64) -> f64 {
@@ -333,7 +333,7 @@ fn raw_height(x: f64, y: f64) -> f64 {
     bowl + w1 + w2 + w3 + rim
 }
 
-/// Normalisation + water level for the surface, sampled once.
+/// Normalization + water level for the surface, sampled once.
 struct Surface {
     hmin: f64,
     hmax: f64,
@@ -360,13 +360,13 @@ impl Surface {
         }
     }
 
-    /// Normalised height in `[0, 1]`.
+    /// Normalized height in `[0, 1]`.
     fn hn(&self, x: f64, y: f64) -> f64 {
         ((raw_height(x, y) - self.hmin) / (self.hmax - self.hmin)).clamp(0.0, 1.0)
     }
 
     /// On-surface screen position of a problem point, lifted by `lift`
-    /// (normalised units) so rivers/trees ride just above their facets.
+    /// (normalized units) so rivers/trees ride just above their facets.
     fn surface_point(&self, x: f64, y: f64, lift: f64) -> (f64, f64) {
         let gx = (x - X0) / (X1 - X0) * GRID as f64;
         let gy = (y - Y0) / (Y1 - Y0) * GRID as f64;
@@ -383,7 +383,7 @@ fn node_xy(i: usize, j: usize) -> (f64, f64) {
 }
 
 /// Isometric projection: grid coords `(gx, gy)` on the ground plane, plus
-/// normalised height `h`.
+/// normalized height `h`.
 fn project(gx: f64, gy: f64, h: f64) -> (f64, f64) {
     let sx = (gx - gy) * TILE_W;
     let sy = (gx + gy) * TILE_H - h * Z_SCREEN;
@@ -397,7 +397,7 @@ fn normalize3(v: [f64; 3]) -> [f64; 3] {
 
 /// The rendered surface, exposed as a `CostFunction` + `Gradient` so
 /// basin's [`GradientDescent`] can descend the exact terrain we draw. The
-/// gradient is a central difference of [`raw_height`] — no need to
+/// gradient is a central difference of [`raw_height`], no need to
 /// hand-differentiate the ripple, and it stays perfectly consistent with
 /// the surface.
 struct Bowl;
@@ -462,7 +462,7 @@ fn trace_river() -> Vec<[f64; 2]> {
 fn main() {
     let mut args = std::env::args().skip(1);
     let out_path = args.next().unwrap_or_else(|| "basin-logo.svg".into());
-    // Optional second arg selects the theme: `dark` / `night` → moonlit,
+    // Optional second arg selects the theme: `dark` or `night` → moonlit,
     // anything else (or absent) → the daytime scene.
     let theme = match args.next().as_deref() {
         Some("dark") | Some("night") => Theme::Night,
@@ -472,7 +472,7 @@ fn main() {
 
     let surf = Surface::new();
     let river = trace_river();
-    // The basin minimum *is* the pool centre — and where the river settles.
+    // The basin minimum *is* the pool center, and where the river settles.
     let pool_center = basin_min();
 
     let mut svg = Svg::new();
@@ -480,7 +480,7 @@ fn main() {
     draw_terrain(&mut svg, &surf, &pal, &river);
     let n_rocks = draw_rocks(&mut svg, &surf, &pal);
     let n_trees = draw_trees(&mut svg, &surf, &pal);
-    draw_creature(&mut svg, &surf, &pal); // butterfly (day) / owl (night), on top
+    draw_creature(&mut svg, &surf, &pal); // butterfly (day) or owl (night), on top
 
     let doc = svg.finish();
     std::fs::write(&out_path, &doc).expect("write SVG");
@@ -533,8 +533,8 @@ struct Facet {
 }
 
 /// Sample a continuous color ramp at `t ∈ [0, 1]` between equally-spaced anchor
-/// stops — a poor-man's colormap lookup. Drop in any number of stops (e.g. a
-/// hypsometric/topographic colormap) and this maps normalised elevation to
+/// stops, a poor-man's colormap lookup. Drop in any number of stops (e.g. a
+/// hypsometric/topographic colormap) and this maps normalized elevation to
 /// color. Blending goes through [`Rgb::lerp`], which interpolates in Oklab.
 fn ramp_sample(stops: &[Rgb], t: f64) -> Rgb {
     let t = t.clamp(0.0, 1.0);
@@ -591,11 +591,11 @@ fn oklab_to_rgb(lab: [f64; 3]) -> Rgb {
 
 fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]) {
     let wl = surf.water;
-    // True normalised height per node. The lake is carved into *this* mesh by
+    // True normalized height per node. The lake is carved into *this* mesh by
     // clipping every triangle against the water plane `z = wl`; the river is the
     // smooth ribbon along the descent trajectory ([`river_shapes`]) intersected
     // with each triangle, so both lake and river are real sub-faces of the
-    // surface — not shapes laid on top. The river follows the ground's curvature
+    // surface, not shapes laid on top. The river follows the ground's curvature
     // and is lit by the same slope normal; the lake is flat at the water line.
     let ht: Vec<Vec<f64>> = (0..=GRID)
         .map(|j| {
@@ -693,7 +693,7 @@ fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]
     }
 
     // Three back-to-front passes (terrain, river, lake). Each facet is stroked in
-    // its *own* fill colour so adjacent same-colour facets melt together (covering
+    // its *own* fill color so adjacent same-color facets melt together (covering
     // the anti-aliasing seam that would otherwise show the cream background as a
     // mesh of lines); drawing river then lake last keeps each water edge clean.
     terr.sort_by(|a, b| a.depth.partial_cmp(&b.depth).unwrap());
@@ -733,7 +733,7 @@ fn clip_to_water(verts: &[[f64; 3]; 3], wl: f64, keep_land: bool) -> Vec<[f64; 3
 /// The river footprint as a strip of convex polygons in **grid coordinates**,
 /// each paired with its bounding box `[minx, miny, maxx, maxy]` for cheap
 /// culling. The strip follows the descent trajectory (tessellated to `RIVER_SEGS`
-/// segments — smooth edge regardless of `GRID`), tapering from `RIVER_W_SRC` at
+/// segments, smooth edge regardless of `GRID`), tapering from `RIVER_W_SRC` at
 /// the source to `RIVER_W_MOUTH` toward the mouth (problem units). If
 /// `SPRING_R > 0`, a round source pool is appended. [`draw_terrain`] intersects
 /// each terrain triangle with these to carve the river into the mesh.
@@ -905,7 +905,7 @@ fn bary_height(p: [f64; 2], verts: &[[f64; 3]; 3]) -> f64 {
 /// Scatter trees at random over plantable ground, reproducibly from
 /// `TREE_SEED`. We rejection-sample problem-space points, keeping those that
 /// sit above the shoreline, below the upper walls, on gentle slopes, and far
-/// enough from already-placed trees. Returns how many were actually placed —
+/// enough from already-placed trees. Returns how many were actually placed;
 /// a tight `TREE_MIN_DIST` or a small eligible area can fall short of
 /// `TREE_COUNT` within the attempt budget.
 fn draw_trees(svg: &mut Svg, surf: &Surface, pal: &Palette) -> usize {
@@ -948,7 +948,7 @@ fn draw_trees(svg: &mut Svg, surf: &Surface, pal: &Palette) -> usize {
 }
 
 /// A small low-poly conifer: stacked triangle tiers over a short trunk,
-/// each tier split lit/shadow down the centre seam.
+/// each tier split lit/shadow down the center seam.
 fn draw_tree(svg: &mut Svg, pal: &Palette, base: (f64, f64)) {
     let (bx, by) = base;
     let w = 12.0;
@@ -1079,7 +1079,7 @@ fn draw_sky(svg: &mut Svg, pal: &Palette) {
 }
 
 /// Star field for the night sky: `(dx, dy, radius, opacity)` offsets from the
-/// moon centre, all up-and-left/right of it in open sky and inside the day
+/// moon center, all up-and-left/right of it in open sky and inside the day
 /// frame so the two themes stay the same size.
 const STARS: &[(f64, f64, f64, f64)] = &[
     (-150.0, -8.0, 1.9, 0.95),
@@ -1104,12 +1104,12 @@ fn draw_creature(svg: &mut Svg, surf: &Surface, pal: &Palette) {
     }
 }
 
-/// A small flat-shaded butterfly at `base` (its body centre): a dark body,
+/// A small flat-shaded butterfly at `base` (its body center): a dark body,
 /// two larger upper wings and two smaller lower wings (tilted ellipses), and
 /// two antennae. Sized to read at logo scale (~22 px wide).
 fn draw_butterfly(svg: &mut Svg, base: (f64, f64)) {
     let (bx, by) = base;
-    // The whole butterfly is tilted `BFLY_TILT` about its body centre. `rot`
+    // The whole butterfly is tilted `BFLY_TILT` about its body center. `rot`
     // spins a point about `(bx, by)`; the same angle is folded into each wing's
     // own rotation so the splay survives the tilt.
     let (s, c) = BFLY_TILT.to_radians().sin_cos();
@@ -1128,7 +1128,7 @@ fn draw_butterfly(svg: &mut Svg, base: (f64, f64)) {
     svg.ellipse(llx, lly, 5.2, 6.5, -16.0 + BFLY_TILT, BFLY_WING2); // lower left
     let (lrx, lry) = rot(bx + 6.0, by + 6.0);
     svg.ellipse(lrx, lry, 5.2, 6.5, 16.0 + BFLY_TILT, BFLY_WING2); // lower right
-    svg.ellipse(bx, by, 2.1, 9.0, BFLY_TILT, BFLY_BODY); // body (centre = pivot)
+    svg.ellipse(bx, by, 2.1, 9.0, BFLY_TILT, BFLY_BODY); // body (center = pivot)
     // Antennae.
     let (a0x, a0y) = rot(bx, by - 7.0);
     let (alx, aly) = rot(bx - 4.0, by - 13.0);
@@ -1198,12 +1198,12 @@ fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 }
 
 // ---------------------------------------------------------------------------
-// tiny deterministic PRNG (SplitMix64) — reproducible tree scatter, no deps
+// tiny deterministic PRNG (SplitMix64), reproducible tree scatter, no deps
 // ---------------------------------------------------------------------------
 
 /// Minimal seedable RNG so tree placement is fully determined by `TREE_SEED`
 /// and identical across platforms. SplitMix64: fast, well-scrambled, and
-/// stateless beyond a single `u64` — enough for sampling a handful of points.
+/// stateless beyond a single `u64`, enough for sampling a handful of points.
 struct Rng(u64);
 
 impl Rng {
@@ -1299,7 +1299,7 @@ impl Svg {
         self.body.push('\n');
     }
 
-    /// A circle with `fill-opacity` (for moon glow / stars).
+    /// A circle with `fill-opacity` (for moon glow or stars).
     fn circle_opacity(&mut self, cx: f64, cy: f64, r: f64, fill: Rgb, opacity: f64) {
         self.track(cx - r, cy - r);
         self.track(cx + r, cy + r);
@@ -1315,7 +1315,7 @@ impl Svg {
         self.body.push('\n');
     }
 
-    /// An axis-aligned ellipse, optionally rotated `rot_deg` about its centre
+    /// An axis-aligned ellipse, optionally rotated `rot_deg` about its center
     /// (butterfly wings, owl body). The bounding box is tracked loosely from
     /// the larger radius so rotation can't push it out of frame.
     fn ellipse(&mut self, cx: f64, cy: f64, rx: f64, ry: f64, rot_deg: f64, fill: Rgb) {
@@ -1402,8 +1402,8 @@ struct Rgb(u8, u8, u8);
 impl Rgb {
     /// Blend toward `other` by `t ∈ [0, 1]`, interpolating in **Oklab**
     /// (perceptual) rather than raw sRGB, so midpoints stay even instead of
-    /// going dark/muddy. Every color blend in the logo — terrain ramp, water
-    /// glint, sun halo — goes through here, like R's `colorRamp(space="Lab")`.
+    /// going dark/muddy. Every color blend in the logo (terrain ramp, water
+    /// glint, sun halo) goes through here, like R's `colorRamp(space="Lab")`.
     fn lerp(self, other: Rgb, t: f64) -> Rgb {
         let t = t.clamp(0.0, 1.0);
         let (p, q) = (rgb_to_oklab(self), rgb_to_oklab(other));
@@ -1422,7 +1422,7 @@ impl Rgb {
     }
 }
 
-/// Parse an HTML hex color — `"#52796f"` or `"52796f"` — into an [`Rgb`], so
+/// Parse an HTML hex color (`"#52796f"` or `"52796f"`) into an [`Rgb`], so
 /// palettes can be written with copy-pasted hex codes. A `const fn`, so it
 /// works inside the `const` palette tables. Expects exactly 6 hex digits
 /// (optionally `#`-prefixed); non-hex digits read as 0.

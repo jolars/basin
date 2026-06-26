@@ -1,8 +1,8 @@
 //! Integration tests for the projection-style box-constrained
 //! Nelder-Mead variant (`NelderMead::new().projected()` etc.).
 //!
-//! Mirrors the structure of `projected_gradient_descent_vec.rs` —
-//! slack-bounds / tight-bounds / infeasible-start coverage on
+//! Mirrors the structure of `projected_gradient_descent_vec.rs`:
+//! slack-bounds/tight-bounds/infeasible-start coverage on
 //! `BoothBoxed`, plus an adaptive-params smoke test on `RastriginBoxed`.
 //! Backend coverage piggybacks on the PGD tests (every shipped backend
 //! exercises the same `ClampInPlace` paths); revisit per-backend
@@ -45,8 +45,8 @@ fn slack_bounds_recover_unconstrained_minimum() {
 
 /// Tight bounds: the unconstrained minimum `(1, 3)` lies outside
 /// `[-1, 1]²`. The constrained optimum is the box corner `(1, 1)`. The
-/// projected NM should drive the simplex to the corner — the
-/// reflection / expansion / contraction trial points repeatedly clamp
+/// projected NM should drive the simplex to the corner; the
+/// reflection/expansion/contraction trial points repeatedly clamp
 /// back to the upper face. Load-bearing edge-active test (mirrors the
 /// PGD `tight_bounds_converge_to_box_corner` case).
 #[test]
@@ -127,8 +127,8 @@ fn infeasible_initial_simplex_is_projected_at_init() {
 /// is multimodal but its global minimum sits at the origin, well
 /// inside the standard `[-5.12, 5.12]ⁿ` box; from a near-origin start
 /// the local descent path should reach the global basin. Loose cost
-/// threshold — the test guards algorithm + bounds plumbing, not
-/// global-optimisation quality.
+/// threshold; the test guards algorithm + bounds plumbing, not
+/// global-optimization quality.
 #[test]
 fn adaptive_projected_on_rastrigin_3d() {
     let problem = RastriginBoxed::<Vec<f64>>::with_standard_bounds(3);

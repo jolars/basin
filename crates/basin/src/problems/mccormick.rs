@@ -61,7 +61,7 @@ impl<P> Default for McCormick<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static MCCORMICK_SPEC: ProblemSpec = ProblemSpec {
     name: "McCormick",
     dim: Dimensionality::Fixed(2),

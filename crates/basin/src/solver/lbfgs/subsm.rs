@@ -43,9 +43,9 @@ use crate::core::math::Scalar;
 /// Fortran `iword`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SubsmStatus {
-    /// `iword == 0` — the Newton step stayed inside the feasible box.
+    /// `iword == 0`—the Newton step stayed inside the feasible box.
     InteriorStep,
-    /// `iword == 1` — at least one bound was encountered (either by
+    /// `iword == 1`—at least one bound was encountered (either by
     /// projection or by the bound-backtracking fallback).
     BoundEncountered,
 }
@@ -62,32 +62,32 @@ pub(crate) enum SubsmError {
 ///
 /// # Parameters
 ///
-/// - `x` — length `n`. On entry: the Cauchy point `xcp` (output of
+/// - `x`: length `n`. On entry: the Cauchy point `xcp` (output of
 ///   [`super::cauchy::cauchy`]). On exit: the subspace minimizer.
-/// - `d` — length ≥ `nsub` (the algorithm uses `d[0..nsub]`). On
+/// - `d`: length ≥ `nsub` (the algorithm uses `d[0..nsub]`). On
 ///   entry: the reduced gradient `r` at `xcp` (produced by Fortran
 ///   `cmprlb`, indexed by subspace position). On exit: the Newton
 ///   direction in the same subspace ordering. `d[nsub..]` is left
 ///   untouched.
-/// - `xp` — length `n`. Scratch slot for the projected-Newton
+/// - `xp`: length `n`. Scratch slot for the projected-Newton
 ///   safeguard (holds `x` before projection so it can be restored if
 ///   the backtracking branch fires).
-/// - `xx` — length `n`. The current iterate (the outer-loop `x`,
+/// - `xx`: length `n`. The current iterate (the outer-loop `x`,
 ///   *not* `xcp`). Used by the directional-derivative check.
-/// - `gg` — length `n`. The gradient at `xx`.
-/// - `ind` — length `nsub`. Coordinate indices of free variables.
-/// - `l`, `u` — length `n`. Bounds with `±∞` for missing sides
+/// - `gg`: length `n`. The gradient at `xx`.
+/// - `ind`: length `nsub`. Coordinate indices of free variables.
+/// - `l`, `u`: length `n`. Bounds with `±∞` for missing sides
 ///   (basin's `BoxConstraints` convention). Fortran's `nbd(k)` code
 ///   is recovered per-component from `l[k].is_finite()` /
 ///   `u[k].is_finite()`.
-/// - `ws_cols`, `wy_cols` — `col` history columns, oldest first;
+/// - `ws_cols`, `wy_cols`: `col` history columns, oldest first;
 ///   each inner slice has length `n`.
-/// - `wn` — `2m × 2m` row-major, leading `2*col × 2*col` upper triangle
+/// - `wn`: `2m × 2m` row-major, leading `2*col × 2*col` upper triangle
 ///   stores the `L E Lᵀ` factor of `K` (built by `formk` in Stage 6;
 ///   tests may construct it directly for small fixtures).
-/// - `wv` — length ≥ `2*m` scratch for `WᵀZ d` and the middle-system
+/// - `wv`: length ≥ `2*m` scratch for `WᵀZ d` and the middle-system
 ///   solve.
-/// - `m`, `col`, `theta` — compact-form parameters matching the data
+/// - `m`, `col`, `theta`: compact-form parameters matching the data
 ///   stored in `wn`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn subsm<F: Scalar>(
@@ -230,7 +230,7 @@ pub(crate) fn subsm<F: Scalar>(
     // Step 6: restore x = xp and find the largest uniform α ∈ [0, 1]
     // keeping `xp + α d` feasible. Mirrors Fortran's loop 60 + branch
     // at 3319 (`lbfgsb.f:3290-3329`). Note: `temp1` is NOT reset per
-    // iteration — when a variable doesn't bind, temp1 retains its
+    // iteration—when a variable doesn't bind, temp1 retains its
     // previous value (which equals `alpha` after the prior `if` flush),
     // so the `temp1 < alpha` check correctly skips non-binders.
     x.copy_from_slice(xp);
@@ -290,7 +290,7 @@ pub(crate) fn subsm<F: Scalar>(
 
 #[cfg(test)]
 // Explicit `i * m2 + j` indexing (including `0 * m2 + 0`) mirrors the
-// Fortran source's 2-D layout — load-bearing for readability when
+// Fortran source's 2-D layout—load-bearing for readability when
 // cross-checking against `lbfgsb.f`.
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {

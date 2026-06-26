@@ -38,7 +38,7 @@ The committed `.tsv` is the artifact the test reads; you only need
 to follow the steps below if you've changed the fixture parameters
 (start point, bounds, `max_iter`, etc.) and need a fresh trajectory.
 
-The L-BFGS-B v3.0 source is **not vendored** in this repo —
+The L-BFGS-B v3.0 source is **not vendored** in this repo;
 `references/` is gitignored, by project convention (papers and
 reference implementations live there locally). Fetch the BSD-3
 v3.0 tarball from Nocedal's group:
@@ -74,21 +74,21 @@ basin's NEWUOA port (`docs/newuoa-roadmap.md`). The parity test is **in-crate**
 
 Committed fixtures (`problem`, `n`, start `x0`, `rho_beg`):
 
-- `newuoa_rosenbrock_2d.tsv` — Rosenbrock 2D (basin form), `x0=(-1.2, 1)`,
+- `newuoa_rosenbrock_2d.tsv`: Rosenbrock 2D (basin form), `x0=(-1.2, 1)`,
   `rho_beg=0.5`.
-- `newuoa_chrosen_5d.tsv` — chained Rosenbrock 5D, `x0=(-1,…)`, `rho_beg=0.5`.
-- `newuoa_arwhead_5d.tsv` — ARWHEAD 5D, `x0=(1,…)`, `rho_beg=1.0`.
-- `newuoa_vardim_5d.tsv` — VARDIM 5D (the §8 Qint motivator), `x0_i=1-i/n`,
+- `newuoa_chrosen_5d.tsv`: chained Rosenbrock 5D, `x0=(-1,…)`, `rho_beg=0.5`.
+- `newuoa_arwhead_5d.tsv`: ARWHEAD 5D, `x0=(1,…)`, `rho_beg=1.0`.
+- `newuoa_vardim_5d.tsv`: VARDIM 5D (the §8 Qint motivator), `x0_i=1-i/n`,
   `rho_beg=1/(2n)`.
 
 All use `rho_end=1e-6`, `npt=2n+1`, `maxfun=500n`. The locked inputs live in the
-fixture itself (the `# config` / `# x0` lines), so the test recomputes nothing.
+fixture itself (the `# config`/`# x0` lines), so the test recomputes nothing.
 
 There is intentionally **no `rosenbrock_5d`** fixture: 5D chained Rosenbrock is
 already `chrosen_5d` (the only difference is the summation term order, which the
 test's tier-1 objective check confirms is equivalent), and from the hard
 `(-1.2, 1, …)` start basin and PRIMA converge to *different* stationary points
-(basin to the global minimum `f≈1e-11`, PRIMA to a local one at `f≈3.93`) — a
+(basin to the global minimum `f≈1e-11`, PRIMA to a local one at `f≈3.93`), a
 property of ill-conditioned multi-basin problems, not a parity signal. The
 fixture set therefore uses problems where both solvers reach the same minimizer.
 
@@ -112,12 +112,12 @@ separated, `%.17e` for full f64 round-trip:
 Three tiers (basin is paper-derived, not an FP-identical transcription of
 PRIMA's Fortran, so per-eval trajectory parity is not expected past init):
 
-1. **Objective equivalence** — the Rust objective recomputed at every traced
+1. **Objective equivalence**: the Rust objective recomputed at every traced
    point matches the fixture `f` to `1e-12` relative (catches C↔Rust drift).
-2. **Initial design** — basin's first `npt` samples are the coordinate cross
+2. **Initial design**: basin's first `npt` samples are the coordinate cross
    `{x0, x0 ± ρ_beg eₖ}` (§3), compared as a set (PRIMA emits all `+` then all
    `−`; basin interleaves).
-3. **Final output** — basin converges (ρ reached) to the same minimizer: `f` to
+3. **Final output**: basin converges (ρ reached) to the same minimizer: `f` to
    `1e-6·(1 + |f*|)` (absolute `~1e-6` when the optimum is near zero, relative
    otherwise), `x` to `1e-4` in `‖·‖∞`, `nf` within a 25% same-ballpark margin
    (not exact).
@@ -169,24 +169,24 @@ to sit beside `newuoa/parity.rs` and read these files via `include_str!`.
 
 Committed fixtures (`problem`, `n`, box, start `x0`, `rho_beg`):
 
-- `bobyqa_rosenbrock_2d.tsv` — Rosenbrock 2D (basin form), box `[-5,5]²`,
+- `bobyqa_rosenbrock_2d.tsv`: Rosenbrock 2D (basin form), box `[-5,5]²`,
   `x0=(-1.2, 1)`, `rho_beg=0.5`. Interior minimizer `(1,1)` with ≥ `2·rho_beg`
   slack on every coordinate, so bounds never bind and the initial design is the
-  plain coordinate cross — confirms boxing doesn't perturb the unconstrained
+  plain coordinate cross, confirming boxing doesn't perturb the unconstrained
   trajectory.
-- `bobyqa_sphere_2d.tsv` — shifted sphere `Σ (xᵢ−3)²`, box `[-2,2]²`,
+- `bobyqa_sphere_2d.tsv`: shifted sphere `Σ (xᵢ−3)²`, box `[-2,2]²`,
   `x0=(0,0)`, `rho_beg=0.5`. The unconstrained minimizer `(3,3)` lies *outside*
-  the box, so the solution is the active corner `(2,2)` — exercises the TRSBOX
+  the box, so the solution is the active corner `(2,2)`, exercising the TRSBOX
   active-set path and bound-aware ALTMOV.
-- `bobyqa_chrosen_5d.tsv` — chained Rosenbrock 5D, wide box `[-10,10]⁵`,
+- `bobyqa_chrosen_5d.tsv`: chained Rosenbrock 5D, wide box `[-10,10]⁵`,
   `x0=(-1,…)`, `rho_beg=0.5`. Interior minimizer, bounds never bind; a
   dimensional-scaling check.
 
 All use `rho_end=1e-6`, `npt=2n+1`, `maxfun=500n`. Problems are chosen so PRIMA
 and basin reach the *same* minimizer (see the NEWUOA chrosen_5d note above for
-the multi-basin caveat that informs this choice). The locked inputs — now
-including the box — live in the fixture itself (`# config` / `# x0` / `# xl` /
-`# xu`), so the test recomputes nothing.
+the multi-basin caveat that informs this choice). The locked inputs (now
+including the box) live in the fixture itself (`# config`/`# x0`/`# xl`/`# xu`),
+so the test recomputes nothing.
 
 ## Format
 
@@ -207,21 +207,21 @@ bound-constrained):
 
 The same three tiers as NEWUOA, with one BOBYQA adaptation in tier 2:
 
-1. **Objective equivalence** — the Rust objective recomputed at every traced
+1. **Objective equivalence**: the Rust objective recomputed at every traced
    point matches the fixture `f` to `1e-12` relative.
-2. **Initial design** — basin's first `npt` samples equal PRIMA's first `npt`
+2. **Initial design**: basin's first `npt` samples equal PRIMA's first `npt`
    samples *as a set* (within `1e-12`). BOBYQA's initial design is bound-aware,
    so this compares against the fixture rather than reconstructing the
    coordinate cross analytically (PRIMA emits all `+` then all `−`; basin
    interleaves).
-3. **Final output** — basin converges (`SolverConverged`, ρ reached) to the
+3. **Final output**: basin converges (`SolverConverged`, ρ reached) to the
    same minimizer: `f` to `1e-6·(1 + |f*|)` (absolute `~1e-6` near a zero
    optimum, relative otherwise), `x` to `1e-4` in `‖·‖∞`, `nf` within a 25%
    same-ballpark margin.
 
 ## Regenerating
 
-Same recipe as NEWUOA — build `libprima` once (step 1 above), then compile,
+Same recipe as NEWUOA: build `libprima` once (step 1 above), then compile,
 link, and run `bobyqa_prima_driver.c`:
 
 ```bash
@@ -244,7 +244,7 @@ must stay textually mirrored (the tier-1 check enforces it).
 
 ## LINCOA fixtures
 
-Same recipe — build `libprima` once (step 1 above), then compile, link, and run
+Same recipe: build `libprima` once (step 1 above), then compile, link, and run
 `lincoa_prima_driver.c`. The problems are linear-inequality-constrained only
 (`xl`/`xu` passed as `±INFINITY`, no equalities), so PRIMA's folded constraint
 system equals the explicit `A x ≤ b` that basin's `Lincoa` folds.
@@ -263,7 +263,7 @@ gfortran -O2 -o /tmp/lincoa_gen /tmp/lincoa_gen.o \
 /tmp/lincoa_gen cquad3  > lincoa_cquad3_3d.tsv    # Σ(xᵢ-2)² s.t. x0+x1+x2≤3
 ```
 
-The fixture carries the `A x ≤ b` system (`# aineq` / `# bineq`) and the final
+The fixture carries the `A x ≤ b` system (`# aineq`/`# bineq`) and the final
 `cstrv`; `solver/lincoa/parity.rs` rebuilds the same problem, recomputes the
 objective at every traced point (tier 1), and asserts the converged `x`/`f`,
 feasibility, and `nf` against PRIMA. The objective + constraint definitions in
@@ -279,14 +279,14 @@ files via `include_str!`.
 
 Committed fixtures (`problem`, `n`, `m_nlcon`, start `x0`):
 
-- `cobyla_disk_2d.tsv` — Powell (B): `min x0·x1 s.t. x0²+x1²−1 ≤ 0`, `F*=−0.5`.
+- `cobyla_disk_2d.tsv`: Powell (B): `min x0·x1 s.t. x0²+x1²−1 ≤ 0`, `F*=−0.5`.
   Started at the *asymmetric* feasible point `(0.7, −0.3)`: this objective has
   two sign-symmetric minima `(+,−)` and `(−,+)`, so a start off the symmetry
   axis keeps PRIMA and basin in the same basin (both reach `(√½, −√½)`).
-- `cobyla_fletcher_2d.tsv` — Powell (F): `min −x0−x1 s.t. x0²−x1 ≤ 0,
+- `cobyla_fletcher_2d.tsv`: Powell (F): `min −x0−x1 s.t. x0²−x1 ≤ 0,
   x0²+x1²−1 ≤ 0`, `F*=−√2`, `x0=(0.5, 0.5)`. Two active nonlinear constraints
   at the solution.
-- `cobyla_ballsphere_3d.tsv` — convex sanity: `min Σ(xᵢ−2)² s.t. Σxᵢ²−1 ≤ 0`,
+- `cobyla_ballsphere_3d.tsv`: convex sanity: `min Σ(xᵢ−2)² s.t. Σxᵢ²−1 ≤ 0`,
   `x0=(0.5, 0.5, 0.5)`. Unique minimizer on the unit sphere at `(1/√3)·𝟙`.
 
 All use `rho_beg=0.5`, `rho_end=1e-6`, `maxfun=500n`, and a strictly feasible
@@ -316,20 +316,20 @@ too. Whitespace-separated, `%.17e`:
 The same three tiers as the siblings, with COBYLA's constraints folded into
 tier 1:
 
-1. **Function equivalence** — the Rust objective *and* the constraint violation
-   recomputed at every traced point match the fixture `f` / `cstrv` to `1e-12`
+1. **Function equivalence**: the Rust objective *and* the constraint violation
+   recomputed at every traced point match the fixture `f`/`cstrv` to `1e-12`
    (catches C↔Rust drift in either function).
-2. **Initial design** — basin's first `n+1` samples equal PRIMA's first `n+1`
+2. **Initial design**: basin's first `n+1` samples equal PRIMA's first `n+1`
    samples *as a set* (within `1e-12`). COBYLA's simplex is built cumulatively
    with pole swaps, so this compares against the fixture rather than
    reconstructing a coordinate cross.
-3. **Final output** — basin converges (ρ reached) to the same minimizer: `f` to
+3. **Final output**: basin converges (ρ reached) to the same minimizer: `f` to
    `1e-6·(1+|f*|)`, `x` to `1e-4` in `‖·‖∞`, the returned point feasible
    (`cstrv ≤ 1e-6`), `nf` within a same-ballpark margin.
 
 ### Regenerating
 
-Same recipe — build `libprima` once (step 1 above), then compile, link, and run
+Same recipe: build `libprima` once (step 1 above), then compile, link, and run
 `cobyla_prima_driver.c`. The problems use only the nonlinear block (`m_ineq =
 m_eq = 0`, `xl`/`xu = ±INFINITY`), matching basin's trait-only path.
 

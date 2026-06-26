@@ -6,7 +6,7 @@ use basin::{
 /// Convergence on Rastrigin(D=5) within the [-5.12, 5.12] standard box.
 /// SSGA is a global optimizer and Rastrigin is its canonical multimodal
 /// stress test; with pop=30 and 4000 cost evals the elite reliably
-/// drops below 5. (Tightness depends on seed luck — this loose bound is
+/// drops below 5. (Tightness depends on seed luck; this loose bound is
 /// the deterministic-CI threshold.)
 #[test]
 fn converges_on_low_dim_rastrigin() {
@@ -80,9 +80,9 @@ fn different_seeds_yield_different_trajectories() {
 }
 
 /// Replace-worst means `state.cost()` is non-increasing across
-/// generations — the elite at position 0 can only be replaced by a
+/// generations; the elite at position 0 can only be replaced by a
 /// strictly better individual. Same monotonicity contract as
-/// `RandomSearch` so framework `CostTolerance` / `ParamTolerance` are
+/// `RandomSearch` so framework `CostTolerance`/`ParamTolerance` are
 /// honest under SSGA dynamics.
 #[test]
 fn elite_keeps_cost_monotone_across_iterations() {
@@ -107,7 +107,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
 }
 
 /// Population invariants: candidates and costs are length pop_size and
-/// sorted ascending so `param()` / `cost()` always surface the best.
+/// sorted ascending so `param()`/`cost()` always surface the best.
 #[test]
 fn population_invariants_hold_after_iteration() {
     let pop_size = 12;

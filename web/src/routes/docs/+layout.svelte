@@ -15,28 +15,28 @@
     // <svelte:head> of their own, so this layout is the single title
     // source for the whole section (one tag per page, no duplicates).
     // Keyed by `page.route.id`, which is base-independent (`/docs/solvers`,
-    // never `/basin/...`) — unlike `resolve()` from `$app/paths`, which
+    // never `/basin/...`), unlike `resolve()` from `$app/paths`, which
     // returns a page-relative string (`../..`) under the default
     // `paths.relative`.
     const DOCS_META: Record<string, { title: string; description: string }> = {
         "/docs": {
-            title: "Documentation — Basin",
+            title: "Documentation—Basin",
             description:
                 "Overview of Basin: a generic executor loop drives a solver over a state, calling the problem traits you implement.",
         },
         "/docs/getting-started": {
-            title: "Getting started — Basin",
+            title: "Getting started—Basin",
             description:
                 "Install Basin and run your first solve: implement CostFunction, add a Gradient when needed, then drive a solver with the Executor.",
         },
         "/docs/solvers": {
-            title: "Solvers — Basin",
+            title: "Solvers—Basin",
             description:
-                "Basin's solver catalogue — first-order, derivative-free, nonlinear least-squares, and evolutionary methods — and the backend each supports.",
+                "Basin's solver catalog (first-order, derivative-free, nonlinear least-squares, and evolutionary methods) and the backend each supports.",
         },
     };
     const FALLBACK_META = {
-        title: "Documentation — Basin",
+        title: "Documentation—Basin",
         description:
             "Documentation for Basin, a numerical optimization library for Rust.",
     };

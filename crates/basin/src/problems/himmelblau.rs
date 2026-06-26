@@ -4,7 +4,7 @@
 //!
 //! Smooth quartic polynomial with four equal global minima (value 0), arranged
 //! symmetrically around a local maximum near the origin. The classic "which
-//! minimum does the solver find?" test — most interesting once a global solver
+//! minimum does the solver find?" test—most interesting once a global solver
 //! makes the choice between basins meaningful. Global minima:
 //! `(3, 2)`, `(−2.805118, 3.131312)`, `(−3.779310, −3.283186)`,
 //! `(3.584428, −1.848127)`. Usual search domain is `x, y ∈ [-5, 5]`.
@@ -63,7 +63,7 @@ impl<P> Default for Himmelblau<P> {
     }
 }
 
-/// Catalogue entry for this problem.
+/// Catalog entry for this problem.
 pub static HIMMELBLAU_SPEC: ProblemSpec = ProblemSpec {
     name: "Himmelblau",
     dim: Dimensionality::Fixed(2),

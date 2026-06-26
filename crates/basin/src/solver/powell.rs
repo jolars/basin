@@ -3,8 +3,8 @@
 // the H-algebra; the lint is blanket-allowed for this module.
 #![allow(clippy::needless_range_loop)]
 // The model-core read surface and several H-update entry points have only
-// `#[cfg(test)]` callers in the non-`bobyqa` build (the in-module tests, and —
-// for the §8 `Q_int` path — NEWUOA's driver alone); BOBYQA adds more callers.
+// `#[cfg(test)]` callers in the non-`bobyqa` build (the in-module tests, and—
+// for the §8 `Q_int` path—NEWUOA's driver alone); BOBYQA adds more callers.
 // Blanket-allow so test-only `pub(crate)` surface does not trip dead-code
 // analysis.
 #![allow(dead_code)]
@@ -16,13 +16,13 @@
 //! `Q` through the same factored inverse-KKT matrix `H = W⁻¹`. That spine lives
 //! here so each solver only supplies the pieces that genuinely differ:
 //!
-//! - [`model`] — [`QuadraticModel`]: storage and read surface (model evaluation,
+//! - [`model`]: [`QuadraticModel`]: storage and read surface (model evaluation,
 //!   the implicit-Hessian matvec, Lagrange-function coefficients).
-//! - [`update`] — the §4 closed-form least-Frobenius-norm rank-2 `H` update
-//!   (`prepare_update` / `update_params` / `commit_update`), plus the §8
+//! - [`update`]: the §4 closed-form least-Frobenius-norm rank-2 `H` update
+//!   (`prepare_update`/`update_params`/`commit_update`), plus the §8
 //!   alternative-model (`Q_int`) operations the *caller* may choose to adopt.
-//! - [`origin`] — the §7 origin shift that re-centres `x0` on `x_opt`.
-//! - [`subproblem`] — the [`TrustRegionSubproblem`] seam: NEWUOA supplies TRSAPP
+//! - [`origin`]: the §7 origin shift that re-centers `x0` on `x_opt`.
+//! - [`subproblem`]: the [`TrustRegionSubproblem`] seam: NEWUOA supplies TRSAPP
 //!   (unconstrained), BOBYQA supplies TRSBOX (box), LINCOA a projected solver.
 //!
 //! Initialization (the choice and placement of the interpolation set) is *not*

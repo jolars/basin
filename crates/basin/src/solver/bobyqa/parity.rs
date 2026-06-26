@@ -9,9 +9,9 @@
 //! full evaluation trace, and the final `x`/`f`/`nf`. This module replays the
 //! same bound-constrained problem through basin and asserts a tiered parity.
 //!
-//! Unlike NEWUOA's parity module — which drives a `pub(crate)` `minimize`
-//! because NEWUOA has no public solver — BOBYQA already exposes
-//! [`Bobyqa`](crate::solver::Bobyqa) / [`BobyqaState`](crate::BobyqaState), so
+//! Unlike NEWUOA's parity module—which drives a `pub(crate)` `minimize`
+//! because NEWUOA has no public solver—BOBYQA already exposes
+//! [`Bobyqa`](crate::solver::Bobyqa)/[`BobyqaState`](crate::BobyqaState), so
 //! this drives the *public* surface through an [`Executor`]. The eval trace is
 //! captured by a small [`Tracing`] problem wrapper that records every point its
 //! `cost` is called on. The module lives in-crate (rather than under `tests/`)
@@ -29,7 +29,7 @@
 //! 1. **Objective equivalence (tight).** The C objective in the harness and the
 //!    Rust objective here must be the same function; we recompute the Rust
 //!    objective at *every* point PRIMA evaluated and require agreement to
-//!    `1e-12` relative. This catches any coefficient / index / sign drift
+//!    `1e-12` relative. This catches any coefficient/index/sign drift
 //!    between the two definitions across the whole region PRIMA explored.
 //! 2. **Initial design (tight, order-independent).** basin's first `npt`
 //!    samples must equal PRIMA's first `npt` samples *as a set* (BOBYQA's
@@ -40,18 +40,18 @@
 //!    budget) to the same minimizer PRIMA found: `f` to `1e-6·(1 + |f*|)` (i.e.
 //!    relative when `|f*| ≫ 1`, but an absolute `~1e-6` floor when the optimum
 //!    is near zero, as it is for these problems), `x` to `1e-4` in `‖·‖∞`, and
-//!    the evaluation count `nf` within a margin (not exact — a non-transcription
+//!    the evaluation count `nf` within a margin (not exact—a non-transcription
 //!    port will not match `nf` to the unit).
 //!
 //! # Why no RESCUE-path fixture
 //!
 //! These fixtures exercise the model core, TRSBOX, ALTMOV, and the driver, but
-//! **not** RESCUE (§5): on clean problems RESCUE never fires. This is not a gap
-//! — PRIMA's own `rescue.f90` header records that RESCUE "is never invoked on
+//! **not** RESCUE (§5): on clean problems RESCUE never fires. This is not a gap—
+//! PRIMA's own `rescue.f90` header records that RESCUE "is never invoked on
 //! CUTEst ... problems with at most 50 variables unless heavy noise is imposed",
 //! and an attempt to provoke it here through the public driver (heavy
 //! high-frequency noise, coarse objective quantization, tight `ρ_end`, up to 10
-//! variables) never tripped the denominator-failure condition — it is a
+//! variables) never tripped the denominator-failure condition—it is a
 //! rounding-damage path unreachable with clean `f64` arithmetic on
 //! well-behaved problems. A bit-exact PRIMA *trajectory* parity on the RESCUE
 //! path is therefore unattainable (and would in any case diverge: basin's
@@ -354,7 +354,7 @@ fn check_parity(text: &str) {
     // nf is the weakest signal: a paper-derived port takes a different (but
     // valid) trajectory, so the eval count differs by a chunk while still
     // reaching the same minimizer. The margin is a same-ballpark sanity bound,
-    // not a parity claim — see the module docs.
+    // not a parity claim—see the module docs.
     let nf_margin = (0.25 * fx.final_nf as f64).max(10.0);
     let nf_diff = (result.cost_evals() as f64 - fx.final_nf as f64).abs();
     assert!(

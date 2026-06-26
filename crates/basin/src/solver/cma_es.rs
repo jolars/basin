@@ -14,7 +14,7 @@ use crate::core::termination::TerminationReason;
 /// `(µ/µ_W, λ)`-CMA Evolution Strategy with negative weights (aCMA-ES)
 /// from Hansen 2016 (*The CMA Evolution Strategy: A Tutorial*).
 ///
-/// Stochastic, derivative-free, population-based — the standard
+/// Stochastic, derivative-free, population-based—the standard
 /// black-box optimizer for ill-conditioned, non-separable, non-convex
 /// continuous problems. Uses a multivariate normal `N(m, σ²C)` to
 /// sample candidates, then adapts `m`, `σ`, and the covariance `C` from
@@ -64,16 +64,16 @@ use crate::core::termination::TerminationReason;
 ///
 /// The eigendecomposition is refreshed every iteration. Hansen's
 /// suggested optimization (eigendecompose every `max(1, ⌊1/(10n(c_1+c_µ))⌋)`
-/// generations, Appendix B.2) is deferred — at small to moderate `n`
+/// generations, Appendix B.2) is deferred—at small to moderate `n`
 /// the cost is dominated by `f` evaluations anyway, and the refresh
 /// frequency would change the per-iteration cost calculus.
 ///
-/// # Result — mean vs best sample
+/// # Result—mean vs best sample
 ///
 /// CMA-ES's recommended solution is the distribution mean (pycma's
 /// `xfavorite`), so [`State::param`](crate::State::param) /
 /// [`State::cost`](crate::State::cost) on [`CmaEsState`] return `m` and
-/// `f(m)` — the solver evaluates `f(m)` once per generation (so the
+/// `f(m)`—the solver evaluates `f(m)` once per generation (so the
 /// per-generation cost budget is `λ + 1`, not `λ`). The best evaluated
 /// point ever seen (`xbest`) is available via
 /// [`State::best_param`](crate::State::best_param) /
@@ -85,14 +85,14 @@ use crate::core::termination::TerminationReason;
 ///
 /// All defaults follow Hansen 2016 Table 1 (the 2016 negative-weights
 /// setting); see the per-field doc comments below for the exact
-/// formulas. The user supplies the initial mean / step-size (via
+/// formulas. The user supplies the initial mean/step-size (via
 /// [`CmaEsState`]) and the seed (via [`new`](Self::new)); `n` is the
 /// mean's length and λ defaults to `4 + ⌊3 ln n⌋`.
 ///
 /// # Reproducibility
 ///
 /// The solver carries a [`ChaCha8Rng`] seeded from the `seed: u64`
-/// passed to [`new`](Self::new) — same seed → same iterate trajectory
+/// passed to [`new`](Self::new)—same seed → same iterate trajectory
 /// on every platform basin builds for (including
 /// `wasm32-unknown-unknown`).
 ///
@@ -109,7 +109,7 @@ use crate::core::termination::TerminationReason;
 ///   generation in [`init`](Solver::init).
 /// - **Implementor (this solver) must:** maintain the
 ///   [`PopulationState`](crate::core::state::PopulationState)
-///   sorted-by-cost invariant on `state.candidates` / `state.costs`
+///   sorted-by-cost invariant on `state.candidates`/`state.costs`
 ///   at the start and end of every iteration.
 ///
 /// # Termination
@@ -119,7 +119,7 @@ use crate::core::termination::TerminationReason;
 /// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance), which
 /// binds on [`CmaEsState`] and fires
 /// [`TerminationReason::CmaEsTolerance`]. Register it on the
-/// [`Executor`](crate::core::executor::Executor) — Hansen's recommended
+/// [`Executor`](crate::core::executor::Executor)—Hansen's recommended
 /// value is `1e−12 · initial_sigma` (scale by `maxᵢ stdsᵢ` when an
 /// anisotropic initial covariance is used). Pair with the framework's
 /// [`MaxIter`](crate::core::termination::MaxIter) /
@@ -131,14 +131,14 @@ use crate::core::termination::TerminationReason;
 /// # Backends
 ///
 /// LA-heavy: requires symmetric eigendecomposition, scalar-and-rank-1
-/// matrix updates, and matrix-vector / transposed matrix-vector
+/// matrix updates, and matrix-vector/transposed matrix-vector
 /// products. Wired and tested for the default `Vec<f64>` /
 /// [`DenseMatrix`](crate::DenseMatrix) backend (pure-Rust cyclic Jacobi
-/// eigensolver — no feature flag, `wasm`-clean), `nalgebra::DVector<f64>`
+/// eigensolver—no feature flag, `wasm`-clean), `nalgebra::DVector<f64>`
 /// / `nalgebra::DMatrix<f64>` (feature `nalgebra`), `ndarray::Array1<f64>`
 /// / `ndarray::Array2<f64>` (feature `ndarray`, also wired to the cyclic
-/// Jacobi solver — `wasm`-clean), and `faer::Col<f64>` / `faer::Mat<f64>`
-/// (feature `faer`). Sparse covariance is not meaningful for CMA-ES — the
+/// Jacobi solver—`wasm`-clean), and `faer::Col<f64>`/`faer::Mat<f64>`
+/// (feature `faer`). Sparse covariance is not meaningful for CMA-ES—the
 /// rank-µ update densifies any starting pattern.
 ///
 /// # Examples
@@ -159,7 +159,7 @@ pub struct CmaEs<V, M, F = f64> {
 
 /// Derived CMA-ES constants (Hansen 2016 Table 1), computed once at
 /// [`Solver::init`] from `n` and `λ`. Pure functions of the
-/// hyperparameters — no mutable iterate (that lives in
+/// hyperparameters—no mutable iterate (that lives in
 /// [`CmaEsState`]).
 pub(crate) struct CmaConstants<F = f64> {
     pub(crate) n: usize,
@@ -183,7 +183,7 @@ pub(crate) struct CmaConstants<F = f64> {
     pub(crate) c_1: F,
     pub(crate) c_mu: F,
     pub(crate) expected_norm: F,
-    /// `(1.4 + 2/(n+1)) · E‖N(0,I)‖` — RHS of the h_σ test (eq. 47
+    /// `(1.4 + 2/(n+1)) · E‖N(0,I)‖`—RHS of the h_σ test (eq. 47
     /// callout footnote / Hansen 2016 p. 31).
     pub(crate) h_sigma_threshold: F,
 }
@@ -466,7 +466,7 @@ where
         problem: &mut Problem<P>,
         mut state: CmaEsState<V, M, F>,
     ) -> Result<CmaEsState<V, M, F>, Self::Error> {
-        // Compute-once constants guard (cached on the solver — config
+        // Compute-once constants guard (cached on the solver—config
         // only). A resumed solver re-entered via `run_loop` already has
         // them, so a chain-paused CmaEs is not rebuilt on every entry.
         if self.constants.is_none() {
@@ -483,12 +483,12 @@ where
         // is sampled now; a resumed / chain state arrives with a
         // populated, sorted population (and a valid `m_cost`) and is left
         // untouched. The distribution itself (`m`, `σ`, `C`, paths, `d`)
-        // was fully seeded by `CmaEsState::new` / `with_stds`.
+        // was fully seeded by `CmaEsState::new`/`with_stds`.
         if state.candidates.is_empty() {
             sample_generation(&mut state, lambda, &mut self.rng);
             state.costs = problem.cost_batch(&state.candidates)?;
             sort_population_ascending(&mut state.candidates, &mut state.costs);
-            // Evaluate the mean — param()/cost() report `m` (xfavorite).
+            // Evaluate the mean—param()/cost() report `m` (xfavorite).
             let m_cost = problem.cost(&state.m)?;
             state.m_cost = Some(m_cost);
         }

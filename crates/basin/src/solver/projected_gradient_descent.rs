@@ -12,7 +12,7 @@ use crate::line_search::{Constant, LineSearch};
 /// Steepest-descent step along `−∇f` followed by an element-wise
 /// projection back into `[lower, upper]`. The first n-D constrained
 /// solver in basin and the smallest vehicle for the
-/// [`BoxConstraints`] trait — handing this solver an unconstrained
+/// [`BoxConstraints`] trait—handing this solver an unconstrained
 /// problem is a compile error per tenet 4.
 ///
 /// # Algorithm
@@ -38,7 +38,7 @@ use crate::line_search::{Constant, LineSearch};
 /// - **Caller must:** pair with a feasible **or** infeasible initial
 ///   param; an infeasible start is projected at `init`.
 /// - **Implementor (this solver) must:** maintain feasibility across
-///   iterations — once the loop has run, every iterate the executor
+///   iterations—once the loop has run, every iterate the executor
 ///   sees is in the box.
 ///
 /// The line search runs against the *unconstrained* trial step
@@ -63,7 +63,7 @@ use crate::line_search::{Constant, LineSearch};
 ///
 /// # Backends
 ///
-/// Backend-generic — works with any `V` implementing
+/// Backend-generic—works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
 /// [`NegInPlace`] + [`ClampInPlace`] + `Clone`. With the default
 /// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
@@ -123,7 +123,7 @@ pub struct ProjectedGradientDescent<S> {
 impl<F: Scalar> ProjectedGradientDescent<Constant<F>> {
     /// Projected gradient descent with a fixed step size `alpha`.
     /// Equivalent to `with_line_search(Constant(alpha))`. Recommended
-    /// default — the line search variant has the caveat documented on
+    /// default—the line search variant has the caveat documented on
     /// the type.
     pub fn new(alpha: F) -> Self {
         Self {
@@ -147,7 +147,7 @@ impl<S> ProjectedGradientDescent<S> {
 // `ProjectedGradientDescent<S>` carries neither the param type `V` nor the
 // scalar `F` on the struct (unlike `GradientDescent<L, V, F>`), so a fully
 // scalar-generic `InitialState` impl would leave `F` unconstrained (E0207).
-// Pin the seed to the crate's `f64` default — the common case; `f32` users
+// Pin the seed to the crate's `f64` default—the common case; `f32` users
 // build the `BasicState` explicitly via `Executor::new`.
 impl<S, V> InitialState<V> for ProjectedGradientDescent<S>
 where

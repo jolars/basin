@@ -1,5 +1,5 @@
-//! Minimise the 2-D Rosenbrock function with Nelder-Mead, the canonical
-//! derivative-free testbed. No `Gradient` impl is needed — only `CostFunction`.
+//! Minimize the 2-D Rosenbrock function with Nelder-Mead, the canonical
+//! derivative-free testbed. No `Gradient` impl is needed, only `CostFunction`.
 //!
 //! Run with `cargo run --example nelder_mead`.
 

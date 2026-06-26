@@ -37,7 +37,7 @@ fn same_seed_yields_identical_trajectory() {
 }
 
 /// Different seeds → different trajectories. Regression-guards an
-/// always-zero / always-constant RNG bug.
+/// always-zero or always-constant RNG bug.
 #[test]
 fn different_seeds_yield_different_trajectories() {
     let m0 = DVector::from_vec(vec![0.5, 0.5, 0.5]);

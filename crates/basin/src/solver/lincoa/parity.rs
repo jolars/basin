@@ -11,7 +11,7 @@
 //!
 //! The fixtures are inequality-only (no box, no equalities), so PRIMA's folded
 //! constraint system equals the explicit `A x ≤ b`, which is exactly what basin's
-//! [`fold_constraints`] produces — the two solvers see the same feasible region.
+//! [`fold_constraints`] produces—the two solvers see the same feasible region.
 //!
 //! # What is and isn't asserted
 //!

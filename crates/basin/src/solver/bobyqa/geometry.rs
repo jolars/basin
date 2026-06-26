@@ -276,7 +276,7 @@ pub(crate) fn geostep<F: Scalar>(
         }
     }
 
-    // XLINE — the line step, snapped exactly to the bounds it reaches.
+    // XLINE—the line step, snapped exactly to the bounds it reaches.
     let stpsiz = stplen[best_ksq][best_isq];
     let ibd = isbd[best_ksq][best_isq];
     let row = model.xpt_row(best_ksq);
@@ -291,7 +291,7 @@ pub(crate) fn geostep<F: Scalar>(
     let d_line: Vec<F> = (0..n).map(|i| xline[i] - xopt[i]).collect();
 
     // For larger radii the line step alone is used (PRIMA: only try the Cauchy
-    // alternative when delbar is small — it helps bound-constrained runs).
+    // alternative when delbar is small—it helps bound-constrained runs).
     if delbar > F::from_f64(1e-2).unwrap() {
         return d_line;
     }
@@ -357,7 +357,7 @@ pub(crate) fn geostep<F: Scalar>(
                 }
             });
             // Loop continues only while a component was newly fixed (sfixsq grew)
-            // and free gradient mass remains — PRIMA geometry.f90 stop test.
+            // and free gradient mass remains—PRIMA geometry.f90 stop test.
             if !(sfixsq > ssqsav && ggfree > zero) {
                 break;
             }

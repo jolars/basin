@@ -7,11 +7,11 @@
     const features = [
         {
             title: "Pluggable solvers",
-            body: "Gradient descent, Nelder–Mead, L-BFGS / L-BFGS-B, Gauss–Newton, Levenberg–Marquardt, CMA-ES and more — driven by one shared executor loop.",
+            body: "Gradient descent, Nelder–Mead, L-BFGS/L-BFGS-B, Gauss–Newton, Levenberg–Marquardt, CMA-ES, and more, driven by one shared executor loop.",
         },
         {
             title: "Multiple backends",
-            body: "Run on plain Vec<f64>, nalgebra, ndarray, or faer. Each backend sits behind a single feature — no per-version feature explosion.",
+            body: "Run on plain Vec<f64>, nalgebra, ndarray, or faer. Each backend sits behind a single feature—no per-version feature explosion.",
         },
         {
             title: "First-class constraints",
@@ -19,7 +19,7 @@
         },
         {
             title: "Composable termination",
-            body: "Gradient, parameter, and cost tolerances, iteration and time budgets — configured uniformly across solvers, bound to the state each one exposes.",
+            body: "Gradient, parameter, and cost tolerances, iteration and time budgets—configured uniformly across solvers, bound to the state each one exposes.",
         },
         {
             title: "Runs in the browser",
@@ -33,7 +33,7 @@
 </script>
 
 <Seo
-    title="Basin — Numerical Optimization for Rust"
+    title="Basin—Numerical Optimization for Rust"
     description="Basin is a numerical optimization library for Rust: pluggable solvers, multiple linear-algebra backends, first-class constraints, and a wasm-first design."
 />
 

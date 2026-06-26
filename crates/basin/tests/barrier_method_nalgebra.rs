@@ -140,7 +140,7 @@ fn two_constraints_both_active() {
 }
 
 /// A `Bfgs` inner (state `QuasiNewtonState`, not `BasicState`) proves the
-/// barrier method is no longer locked to `BasicState<V>` / `GradientDescent`.
+/// barrier method is no longer locked to `BasicState<V>`/`GradientDescent`.
 /// `Bfgs` is paired with an Armijo `Backtracking` line search so it respects
 /// the barrier's `+∞` wall (a Wolfe/More-Thuente search could step into the
 /// infeasible region). It converges to the same projection (1,1) as the

@@ -23,7 +23,7 @@ use nalgebra::DVector;
 ///
 /// Ackley is chosen over the vanilla-DE convergence test's Rastrigin
 /// because highly multimodal landscapes reward exploration over the
-/// exploitation LS polish adds — DEahcSPX ranks 4th-of-5 on Rastrigin
+/// exploitation LS polish adds; DEahcSPX ranks 4th-of-5 on Rastrigin
 /// in Neri & Tirronen 2010 §4.2's benchmarks. Ackley exhibits the
 /// helpful side of the memetic combination instead (DESFLS-rivalling
 /// performance per the same tables).
@@ -59,7 +59,7 @@ fn converges_on_ackley_d3_with_nm_inner() {
 /// plus the post-clip re-evaluation (`+1`), so for `k = 1` over
 /// `outer_iters` generations the memetic variant's `cost_evals` must
 /// exceed vanilla's by ≥ `outer_iters · k · (n + 2)` (loose lower
-/// bound — NM may early-terminate on some iters).
+/// bound, NM may early-terminate on some iters).
 #[test]
 fn aggregates_inner_cost_evals_into_outer() {
     let n = 5usize;

@@ -1,4 +1,4 @@
-//! Integration tests for the [`Observe`] / [`ObserverMode`] wiring on
+//! Integration tests for the [`Observe`] and [`ObserverMode`] wiring on
 //! [`Executor`] and [`Stepper`].
 
 use std::cell::RefCell;
@@ -9,7 +9,7 @@ use basin::{
     State, StepOutcome, TerminationReason,
 };
 
-/// f(x) = ½ ‖x‖² — convex quadratic, gradient = x.
+/// f(x) = ½ ‖x‖²: convex quadratic, gradient = x.
 struct Quadratic;
 
 impl CostFunction for Quadratic {
@@ -60,7 +60,7 @@ impl<S: State> Observe<S> for Recorder {
     }
 }
 
-/// A tag-emitting observer for the ordering test — records *which*
+/// A tag-emitting observer for the ordering test; records *which*
 /// observer fired (not what hook).
 struct Tagger {
     tag: &'static str,
@@ -137,7 +137,7 @@ fn every_n_gates_iter_only() {
         .collect();
     // Iter counts that are multiples of 3 in 1..=10 are 3, 6, 9.
     assert_eq!(iter_hits, vec![3, 6, 9]);
-    // init / final still fire regardless of mode.
+    // init and final still fire regardless of mode.
     assert!(log.iter().any(|(k, _)| *k == "init"));
     assert!(log.iter().any(|(k, _)| *k == "final"));
 }

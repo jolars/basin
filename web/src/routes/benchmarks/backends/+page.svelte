@@ -43,7 +43,7 @@
 </script>
 
 <Seo
-    title="Basin — backend benchmarks"
+    title="Basin—backend benchmarks"
     description="Backend benchmarks for the Basin optimization library: a curated set of solver and problem pairs across the Vec, nalgebra, ndarray, and faer linear-algebra backends."
 />
 
@@ -56,14 +56,14 @@
         <span class="text-slate-400 dark:text-slate-600">/</span> Backends
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Backends — same solver, different linear algebra
+        Backends—same solver, different linear algebra
     </h1>
     <p class="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
         A curated set of (solver, problem) cases, each run to a fixed iteration
         budget varying only the linear-algebra backend. Scaling cases plot time
         against problem size <code class="font-mono">n</code> on log–log axes; fixed-size
         cases show one bar per backend. As a solver needs richer linear algebra, fewer
-        backends can run it — those gaps are intentional, and differ in cause. Times
+        backends can run it; those gaps are intentional, and differ in cause. Times
         are criterion's mean per full solve, so lower is better.
     </p>
 
@@ -94,9 +94,9 @@
     <p class="mt-8 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
         Measured {data.generatedAt} on {data.env.cpu}
         ({data.env.os}/{data.env.arch}), criterion mean per solve over a fixed
-        {data.iterations}-iteration budget (a cap — the least-squares and CMA-ES
+        {data.iterations}-iteration budget (a cap—the least-squares and CMA-ES
         cases converge sooner). Both axes are logarithmic. Absolute times are
-        machine-specific — compare the spread between backends within a chart,
+        machine-specific; compare the spread between backends within a chart,
         not across machines.
     </p>
 
