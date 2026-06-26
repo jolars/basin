@@ -11,7 +11,7 @@
 //!   returns `Option<TerminationReason>`; framework consumes the result and
 //!   stops the run if `Some`.
 //! - [`Observe`]: returns `()`; the executor ignores any side effects on the
-//!   optimization itself. Failures must be handled inside the observer—
+//!   optimization itself. Failures must be handled inside the observer:
 //!   the trait is infallible by design so a misbehaving logger can't kill
 //!   the run.
 //!
@@ -71,7 +71,7 @@ pub trait Observe<S> {
     /// state's counter mirror has been refreshed. The state's iter counter
     /// is zero.
     ///
-    /// Always fires regardless of the observer's [`ObserverMode`]—modes
+    /// Always fires regardless of the observer's [`ObserverMode`]; modes
     /// gate iteration callbacks only.
     fn observe_init(&mut self, _state: &S) {}
 
@@ -90,7 +90,7 @@ pub trait Observe<S> {
     ///
     /// Does *not* fire when
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
-    /// returns `Err(_)`—in that case the state has been consumed and
+    /// returns `Err(_)`: in that case the state has been consumed and
     /// there is nothing to observe.
     ///
     /// Always fires regardless of the observer's [`ObserverMode`].
@@ -116,7 +116,7 @@ pub enum ObserverMode {
     /// nonsensical and panics on construction via
     /// [`every`](Self::every), but raw construction is permitted and
     /// treated as `Never` (no iter is a multiple of zero under the
-    /// `iter % n == 0` rule because `n == 0` would divide-by-zero—the
+    /// `iter % n == 0` rule because `n == 0` would divide-by-zero; the
     /// executor checks for `n != 0` before the modulus).
     Every(u64),
 }

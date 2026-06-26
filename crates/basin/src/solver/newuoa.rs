@@ -9,13 +9,13 @@
 // surface does not trip dead-code analysis in the non-test build.
 #![allow(dead_code)]
 
-//! NEWUOA (Powell 2006)—model-based derivative-free optimization.
+//! NEWUOA (Powell 2006): model-based derivative-free optimization.
 //!
 //! [`Newuoa`] is Powell's NEWUOA: an unconstrained trust-region method for
 //! smooth objectives whose derivatives are unavailable. It maintains a quadratic
 //! surrogate `Q` interpolating the objective on a set of `npt` points and updates
 //! it by the least-Frobenius-norm rule, so each iteration needs only **one** new
-//! objective value. It binds [`CostFunction`] only—no gradient.
+//! objective value. It binds [`CostFunction`] only; no gradient.
 //!
 //! # Architecture
 //!
@@ -30,11 +30,11 @@
 //! crate-internal; only [`Newuoa`] and [`NewuoaState`](crate::NewuoaState) are
 //! public.
 //!
-//! # State / solver split
+//! # State and solver split
 //!
 //! The iterate and the trust-region radius `ρ` live on
 //! [`NewuoaState`](crate::NewuoaState); the quadratic model, the factored `H`,
-//! and the ρ/Δ schedule are solver-internal scratch the solver carries—the same
+//! and the ρ/Δ schedule are solver-internal scratch the solver carries: the same
 //! split Levenberg-Marquardt uses for its μ/ν/diag working state. This is why
 //! [`NewuoaState`](crate::NewuoaState) is generic over the parameter vector `V`
 //! only, not the backend matrix `M`: NEWUOA's model algebra is internal `Vec<F>`
@@ -51,7 +51,7 @@
 //! # Backends
 //!
 //! Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-//! faer all work (the parameter type needs only element access and length—
+//! faer all work (the parameter type needs only element access and length:
 //! [`Clone`], [`VectorLen`](crate::core::math::VectorLen), and indexing). wasm-
 //! clean: the model algebra is pure-Rust `Vec<F>` with no BLAS/LAPACK.
 //!
@@ -120,7 +120,7 @@ use driver::{NewuoaWork, Transition};
 /// Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
 /// faer all work. The model algebra is internal pure-Rust `Vec<f64>` scratch, so
 /// the parameter type needs only [`Clone`], [`VectorLen`], and `Index`/`IndexMut`
-/// element access—never any `linalg`-tier matrix op. wasm-clean (no
+/// element access, never any `linalg`-tier matrix op. wasm-clean (no
 /// BLAS/LAPACK).
 ///
 /// # References
@@ -150,14 +150,14 @@ impl<F: Scalar> Newuoa<F> {
         }
     }
 
-    /// Set the initial trust-region radius `ρ_beg` (also the initial `Δ`)—a
+    /// Set the initial trust-region radius `ρ_beg` (also the initial `Δ`): a
     /// reasonable initial change to the variables.
     pub fn with_rho_beg(mut self, rho_beg: F) -> Self {
         self.rho_beg = rho_beg;
         self
     }
 
-    /// Set the final trust-region radius `ρ_end`—the required accuracy in the
+    /// Set the final trust-region radius `ρ_end`: the required accuracy in the
     /// variables. Must satisfy `ρ_beg > ρ_end > 0`.
     pub fn with_rho_end(mut self, rho_end: F) -> Self {
         self.rho_end = rho_end;

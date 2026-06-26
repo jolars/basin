@@ -23,7 +23,7 @@
 //!   third: [`DenseMatrix`] implements them via a pure-Rust Cholesky
 //!   (`dense_chol`), so Gauss-Newton and Levenberg-Marquardt run on the
 //!   default backend. The QR least-squares solve [`LinearSolveLstsq`] (and the
-//!   trust-region-reflective `MaxDiagonal`) stay nalgebra/faer-only.
+//!   trust-region-reflective `MaxDiagonal`) stay nalgebra- and faer-only.
 
 /// Scalar element type for vectors and matrices in the math layer.
 ///
@@ -193,7 +193,7 @@ pub(crate) trait FloorZerosInPlace<F = f64> {
     fn floor_zeros_in_place(&mut self, value: F);
 }
 
-/// Per-component scalar read/write on a 1-D vector backend. The minimal
+/// Per-component scalar read and write on a 1-D vector backend. The minimal
 /// access finite-difference differentiation needs: perturb one coordinate
 /// of a parameter vector and read derivative values back out
 /// ([`crate::core::numdiff`]).

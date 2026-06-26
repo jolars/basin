@@ -27,7 +27,7 @@ pub struct Wolfe<F = f64> {
     pub alpha_init: F,
     /// Upper bound on the bracketing trial step. Default `10.0`.
     pub alpha_max: F,
-    /// Maximum bracketing/zoom iterations before bailing. Default `25`.
+    /// Maximum bracketing or zoom iterations before bailing. Default `25`.
     pub max_iter: u32,
 }
 
@@ -79,7 +79,7 @@ impl<F: Scalar> Wolfe<F> {
         self
     }
 
-    /// Override the bracketing/zoom iteration cap.
+    /// Override the bracketing or zoom iteration cap.
     pub fn max_iter(mut self, max_iter: u32) -> Self {
         self.max_iter = max_iter;
         self
@@ -107,7 +107,7 @@ where
 
         // If `direction` is not a descent direction (or `phi0_prime` is
         // NaN), bail with α = 0 rather than looping forever. Written
-        // positively so NaN routes here too—`NaN < 0.0` is false.
+        // positively so NaN routes here too: `NaN < 0.0` is false.
         if phi0_prime >= F::zero() || phi0_prime.is_nan() {
             return Ok(F::zero());
         }
@@ -153,8 +153,8 @@ where
             // cap, the next iteration's φ check will end up in zoom anyway.
             let next_alpha = (alpha * two).min(self.alpha_max);
             if next_alpha == alpha {
-                // Cannot expand further. Best we can do is return current
-                // α—Armijo is satisfied here even if curvature isn't.
+                // Cannot expand further. Best we can do is return the current
+                // α: Armijo is satisfied here even if curvature isn't.
                 return Ok(alpha);
             }
             alpha = next_alpha;
@@ -162,7 +162,7 @@ where
 
         // Bracketing exhausted without locating a Wolfe step; return the
         // last α (Armijo held there). Caller (BFGS) treats this like any
-        // other α—the curvature condition guard will detect the failure
+        // other α: the curvature condition guard will detect the failure
         // and skip the H update if needed.
         Ok(alpha)
     }
@@ -215,7 +215,7 @@ impl<F: Scalar> Wolfe<F> {
                 phi_lo = phi_j;
             }
 
-            // Bracket collapsed—return the best α we have.
+            // Bracket collapsed: return the best α we have.
             if (alpha_hi - alpha_lo).abs() <= F::epsilon() * alpha_hi.abs().max(F::one()) {
                 break;
             }

@@ -2,7 +2,7 @@
 //!
 //! `f(x, y) = 2x² − 1.05x⁴ + x⁶/6 + xy + y²`
 //!
-//! Smooth polynomial with three local minima—the central global minimum at
+//! Smooth polynomial with three local minima: the central global minimum at
 //! `(x, y) = (0, 0)` with `f = 0`, flanked by two symmetric "humps". Useful as
 //! a small, smooth basin-of-attraction test for local solvers: depending on the
 //! start, a descent method settles into the central bowl or stalls near a hump.

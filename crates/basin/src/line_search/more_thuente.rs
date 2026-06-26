@@ -2,7 +2,7 @@ use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::line_search::LineSearch;
 
-/// Moré–Thuente line search—port of MINPACK-2's `dcsrch` + `dcstep`.
+/// Moré–Thuente line search: port of MINPACK-2's `dcsrch` + `dcstep`.
 ///
 /// Finds an `α > 0` along the caller-supplied descent direction `d`
 /// satisfying both the strong-Wolfe conditions:
@@ -12,7 +12,7 @@ use crate::line_search::LineSearch;
 ///
 /// Same exit criteria as the strong-Wolfe `Wolfe` line search, but the
 /// stepping strategy is different: rather than bisection, this uses
-/// the safeguarded cubic/quadratic interpolation of Moré & Thuente
+/// the safeguarded cubic and quadratic interpolation of Moré & Thuente
 /// 1994 (ACM TOMS 20(3)). The algorithm maintains a bracketing
 /// interval `[stx, sty]` containing a Wolfe-satisfying step, computes
 /// a cubic-interpolation trial step from the function and derivative
@@ -46,7 +46,7 @@ pub struct MoreThuente<F = f64> {
     /// Curvature coefficient. Default `0.9` (Fortran `lnsrlb`
     /// constant). Strong-Wolfe `c2` analog.
     pub gtol: F,
-    /// Relative tolerance on the bracket width—exits with
+    /// Relative tolerance on the bracket width: exits with
     /// `xtol`-warning if the bracket has collapsed to relative size
     /// `≤ xtol`. Default `0.1` (Fortran `lnsrlb` constant).
     pub xtol: F,
@@ -193,7 +193,7 @@ where
         let mut stp = self.alpha_init;
 
         for _ in 0..self.maxfev {
-            // Evaluate f(stp), g(stp)—Fortran `task = 'FG'` callback.
+            // Evaluate f(stp), g(stp): Fortran `task = 'FG'` callback.
             let mut trial = param.clone();
             trial.scaled_add(stp, direction);
             let (f, g_full) = problem.cost_and_gradient(&trial)?;
@@ -205,7 +205,7 @@ where
                 stage = 2;
             }
 
-            // Warning/convergence tests (Fortran lines 3578–3594).
+            // Warning and convergence tests (Fortran lines 3578–3594).
             //
             // All four warning conditions and the convergence
             // condition terminate the search. Treated identically
@@ -305,11 +305,11 @@ where
     }
 }
 
-/// Safeguarded cubic/quadratic step interpolation.
+/// Safeguarded cubic and quadratic step interpolation.
 ///
 /// Direct port of `dcstep.f` (Fortran lines 3694–3948). Updates
-/// `(stx, fx, dx)` and `(sty, fy, dy)`—the bracketing interval
-/// endpoints—and computes the next trial step `stp`. The
+/// `(stx, fx, dx)` and `(sty, fy, dy)`, the bracketing interval
+/// endpoints, and computes the next trial step `stp`. The
 /// four-case structure of Moré & Thuente §3:
 ///
 /// 1. `fp > fx`: minimum bracketed. Take cubic step or average of

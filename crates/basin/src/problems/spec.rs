@@ -16,7 +16,7 @@ pub struct Reference {
     pub citation: &'static str,
     /// Full title of the work.
     pub title: &'static str,
-    /// Venue/journal/book + pages, e.g. `"The Computer Journal, 3(3), 175–184"`.
+    /// Venue, journal, or book, plus pages, e.g. `"The Computer Journal, 3(3), 175–184"`.
     pub source: &'static str,
     /// DOI without scheme, e.g. `"10.1093/comjnl/3.3.175"`.
     pub doi: Option<&'static str>,
@@ -52,7 +52,7 @@ pub struct Properties {
     /// for N-D problems where unimodality depends on `n`, prefer `false` and
     /// note the caveat in [`ProblemSpec::description`].
     pub unimodal: bool,
-    /// `f(x) = Σ_i g_i(x_i)`—decomposes into per-coordinate functions.
+    /// `f(x) = Σ_i g_i(x_i)`: decomposes into per-coordinate functions.
     pub separable: bool,
     /// Defined for any `n >= some min` (matches `Dimensionality::NDimensional`).
     pub scalable: bool,

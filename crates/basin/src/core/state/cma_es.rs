@@ -109,7 +109,7 @@ pub(crate) struct BoundPenalty<V, F = f64> {
     /// Recent normalized fitness-IQR estimates (newest first).
     pub(crate) hist: VecDeque<F>,
     /// Raw (un-penalized) f-values of the most recent generation, in
-    /// sample order—read by the γ-update only as a flat bag for the
+    /// sample order, read by the γ-update only as a flat bag for the
     /// IQR.
     pub(crate) raw_costs: Vec<F>,
 }
@@ -179,7 +179,7 @@ where
 {
     /// Seed an anisotropic initial covariance `C = diag(stds²)` instead
     /// of the isotropic default. The first generation then samples
-    /// `m + σ · diag(stds) · N(0, I)`—i.e. optimizing in coordinates
+    /// `m + σ · diag(stds) · N(0, I)`, i.e. optimizing in coordinates
     /// rescaled by `1/stds`. `σ` remains the scalar overall step-size;
     /// `stds` only sets the *shape*. For a diagonal `C` the
     /// eigendecomposition is exactly `B = I`, `D = diag(stds)`, so
@@ -223,7 +223,7 @@ where
     V: VectorLen + std::ops::Index<usize, Output = F>,
     F: Scalar,
 {
-    /// The distribution mean `m`—CMA-ES's recommended solution
+    /// The distribution mean `m`, CMA-ES's recommended solution
     /// (`xfavorite`). Same value [`State::param`] returns.
     pub fn mean(&self) -> &V {
         &self.m
@@ -305,7 +305,7 @@ impl<V: Clone, M, F: Scalar> State for CmaEsState<V, M, F> {
     /// Refresh the best evaluated point from this generation. Considers
     /// both the best sample (`candidates[0]`, sorted ascending) and the
     /// mean (`m`, with cost `m_cost`), keeping whichever is lowest over
-    /// all history—so `best_param()` is the true `xbest` even when the
+    /// all history, so `best_param()` is the true `xbest` even when the
     /// mean is worse than a sample (or vice versa).
     fn update_best(&mut self) {
         if let Some(&best_sample_cost) = self.costs.first() {

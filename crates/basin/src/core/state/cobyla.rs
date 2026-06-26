@@ -32,17 +32,17 @@ use crate::core::state::{CountsMirror, RhoState, State};
 /// Solver state for [`Cobyla`](crate::solver::Cobyla).
 ///
 /// Construct with [`new`](Self::new) from the starting point; the solver
-/// evaluates the initial simplex and seeds the cost/trust-region radius in
+/// evaluates the initial simplex and seeds the cost and trust-region radius in
 /// [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct CobylaState<V, F = f64> {
-    /// Current iterate—the incumbent COBYLA would return (filter-selected by
+    /// Current iterate: the incumbent COBYLA would return (filter-selected by
     /// the work). Initially the user's starting point.
     pub(crate) param: V,
     /// `F(param)`. `None` before [`Solver::init`](crate::core::solver::Solver::init).
     pub(crate) cost: Option<F>,
-    /// Current trust-region radius `ρ`—`+∞` before
+    /// Current trust-region radius `ρ`; `+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from
     /// `ρ_beg`. [`RhoTolerance`](crate::core::termination::RhoTolerance) reads it.
     pub(crate) rho: F,
@@ -60,7 +60,7 @@ pub struct CobylaState<V, F = f64> {
 
 impl<V, F: Scalar> CobylaState<V, F> {
     /// Build an initial COBYLA state at the starting point `x0`. The solver
-    /// evaluates the initial simplex and fills the cost/`ρ` in
+    /// evaluates the initial simplex and fills the cost and `ρ` in
     /// [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(x0: V) -> Self {
         Self {
@@ -168,7 +168,7 @@ where
     CobylaState<V, F>: State,
 {
     fn mirror(&mut self, delta: &EvalCounts) {
-        // Derivative-free: COBYLA only ever calls the cost/constraint
+        // Derivative-free: COBYLA only ever calls the cost and constraint
         // function (one combined evaluation), so every unit of work folds into
         // the single `cost_evals` counter.
         self.cost_evals = delta.total_work();

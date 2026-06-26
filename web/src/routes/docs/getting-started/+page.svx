@@ -9,7 +9,7 @@ cargo add basin
 ```
 
 Basin works on plain `Vec<f64>` out of the box. Linear-algebra backends are
-opt-in, one feature each—for example, to use the [nalgebra](https://nalgebra.org)
+opt-in, one feature each. For example, to use the [nalgebra](https://nalgebra.org)
 backend (required by some solvers, see [Solvers](../solvers/)):
 
 ```sh
@@ -85,10 +85,10 @@ let result = Executor::from_start(Rosenbrock, GradientDescent::new(1e-3), vec![-
 ```
 
 Most solvers support `from_start`. The few whose natural initialization needs
-more than a point—CMA-ES (a step-size σ), the population GA, DE, or random
-search (they sample a box), and the bracketing scalar solvers (Brent,
-golden-section)—don't implement it, so calling `from_start` with one is a
-compile error; build the state explicitly and use `Executor::new` instead.
+more than a point do not implement it: CMA-ES (a step-size σ), the population
+GA, DE, and random search (they sample a box), and the bracketing scalar
+solvers (Brent, golden-section). For those, calling `from_start` is a compile
+error; build the state explicitly and use `Executor::new` instead.
 
 ## Termination criteria
 

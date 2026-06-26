@@ -1,6 +1,6 @@
 //! Generalized Cauchy point for L-BFGS-B.
 //!
-//! Port of `cauchy` (`references/lbfgsb-v3.0/lbfgsb.f:1222`)—given
+//! Port of `cauchy` (`references/lbfgsb-v3.0/lbfgsb.f:1222`): given
 //! the current iterate `x`, gradient `g`, bounds `(l, u)`, and the
 //! compact-form L-BFGS data `(ws, wy, sy, wt, theta)`, compute the
 //! first local minimizer of
@@ -42,7 +42,7 @@ pub(crate) mod iwhere {
 /// Diagnostic / return values from [`cauchy`]. Mirrors what Fortran
 /// `cauchy` leaves in its working arrays on exit (the `nseg` counter
 /// and a flag indicating the entire ray was bounded). The solver
-/// doesn't read these fields—they exist for unit-test
+/// doesn't read these fields: they exist for unit-test
 /// introspection and to keep the function signature self-
 /// documenting.
 #[allow(dead_code)]
@@ -51,7 +51,7 @@ pub(crate) struct CauchyResult {
     /// Number of quadratic segments explored (Fortran `nseg`).
     pub(crate) nseg: usize,
     /// True iff every nonzero component of the search direction `d`
-    /// is bounded—Fortran's `bnded` flag, which gates the
+    /// is bounded: Fortran's `bnded` flag, which gates the
     /// `f1 = f2 = dtm = 0` post-loop branch.
     pub(crate) bounded: bool,
 }
@@ -192,7 +192,7 @@ pub(crate) fn cauchy<F: Scalar>(
                 }
                 nbreak += 1;
             } else {
-                // No bound in the search direction—park index at
+                // No bound in the search direction: park index at
                 // the tail of iorder (Fortran's `nfree` walks down).
                 nfree -= 1;
                 iorder[nfree] = i;
@@ -214,7 +214,7 @@ pub(crate) fn cauchy<F: Scalar>(
     xcp.copy_from_slice(x);
 
     if nbreak == 0 && nfree == n {
-        // d = 0—already feasible-stationary.
+        // d = 0: already feasible-stationary.
         return Ok(CauchyResult {
             nseg: 0,
             bounded: true,
@@ -345,7 +345,7 @@ pub(crate) fn cauchy<F: Scalar>(
         if nleft > 0 {
             dtm = -f1 / f2;
         } else if bnded {
-            // Entire ray was bounded—pin to current xcp.
+            // Entire ray was bounded: pin to current xcp.
             f1 = zero;
             let _ = f1; // explicit zero matches Fortran but unused below
             dtm = zero;
@@ -600,7 +600,7 @@ mod tests {
         .unwrap();
         assert!((b.xcp[0] - 2.0).abs() < 1e-12);
         assert!((b.xcp[1] - 2.0).abs() < 1e-12);
-        // No segments crossed—single piece, no breakpoints.
+        // No segments crossed: single piece, no breakpoints.
         assert_eq!(res.nseg, 1);
     }
 
@@ -701,7 +701,7 @@ mod tests {
         // M = [−d; θ ss]⁻¹ (col = 1 simplifies fully).
         //
         // For 1-D with one history pair, B reduces to a scalar `b`.
-        // Cauchy then takes α = ‖g‖² / (θ ‖g‖² + ...)—and since the
+        // Cauchy then takes α = ‖g‖² / (θ ‖g‖² + ...), and since the
         // problem is unbounded, the GCP is simply x − α g for that α.
         //
         // Rather than work out the closed-form `b`, we check that:

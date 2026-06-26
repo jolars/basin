@@ -23,28 +23,28 @@ pub enum TerminationReason {
     MaxGradientEvals,
     /// `‖∇f(x)‖ ≤ tol`.
     GradientTolerance,
-    /// `‖∇f(x_k)‖ ≤ tol · ‖∇f(x_0)‖`—gradient norm relative to the
+    /// `‖∇f(x_k)‖ ≤ tol · ‖∇f(x_0)‖`: gradient norm relative to the
     /// initial gradient (scale-invariant first-order stationarity).
     RelativeGradientTolerance,
-    /// `‖x − π_C(x − ∇f(x))‖_∞ ≤ tol`—projected-gradient stationarity
+    /// `‖x − π_C(x − ∇f(x))‖_∞ ≤ tol`: projected-gradient stationarity
     /// for box-constrained problems. Collapses to the unconstrained
     /// gradient norm when no constraint is active.
     ProjectedGradientTolerance,
     /// `‖x_k − x_{k−1}‖ ≤ tol`.
     ParamTolerance,
-    /// `‖x_k − x_{k−1}‖ ≤ tol · ‖x_k‖`—scale-invariant step test
+    /// `‖x_k − x_{k−1}‖ ≤ tol · ‖x_k‖`: scale-invariant step test
     /// (MINPACK `xtol`).
     RelativeParamTolerance,
     /// `|f_k − f_{k−1}| ≤ tol`.
     CostTolerance,
-    /// `|f_k − f_{k−1}| ≤ tol · |f_{k−1}|`—scale-invariant cost
+    /// `|f_k − f_{k−1}| ≤ tol · |f_{k−1}|`: scale-invariant cost
     /// reduction test (MINPACK `ftol`).
     RelativeCostTolerance,
-    /// `f(x_k) ≤ target`—user-supplied target cost reached
+    /// `f(x_k) ≤ target`: user-supplied target cost reached
     /// (NLopt's `stopval`/SciPy's `f_min`).
     TargetCost,
     /// Best-so-far cost has not improved by more than `tol` in
-    /// `patience` consecutive iterations—the early-stopping pattern.
+    /// `patience` consecutive iterations: the early-stopping pattern.
     NoImprovement,
     /// Simplex collapsed below the configured tolerance.
     SimplexTolerance,
@@ -67,7 +67,7 @@ impl TerminationReason {
     /// Whether this reason represents an unrecoverable failure that an
     /// outer solver should bubble (rather than consume and continue).
     ///
-    /// Currently only [`SolverFailed`](Self::SolverFailed) qualifies—
+    /// Currently only [`SolverFailed`](Self::SolverFailed) qualifies:
     /// [`MaxIter`](Self::MaxIter), the `*Tolerance` reasons, and
     /// [`SolverConverged`](Self::SolverConverged) are all "clean stops"
     /// that an outer solver running an inner per outer iter should treat
@@ -113,8 +113,8 @@ pub trait TerminationCriterion<S> {
     ///
     /// The driver calls this once at the start of every run (see
     /// [`run_loop`](crate::core::executor::run_loop)), so a single criterion
-    /// instance reused across composed inner runs—as an
-    /// [`InnerExecutor`](crate::core::inner::InnerExecutor) does—sees fresh
+    /// instance reused across composed inner runs (as an
+    /// [`InnerExecutor`](crate::core::inner::InnerExecutor) does) sees fresh
     /// state each call. Stateless criteria need no override; any criterion
     /// holding cross-call state (a start instant, an anchored initial value, a
     /// stall counter) MUST override this to clear it, or it will misbehave when
@@ -136,7 +136,7 @@ impl<S: State> TerminationCriterion<S> for MaxIter {
 }
 
 /// Stop after `state.cost_evals() >= n` cost-function evaluations.
-/// Lagarias et al. (1998) (T3)—the budget users actually care about
+/// Lagarias et al. (1998) (T3): the budget users actually care about
 /// when one iteration can spend many evals (line search, Nelder-Mead
 /// shrink).
 pub struct MaxCostEvals(pub u64);
@@ -153,7 +153,7 @@ impl<S: State> TerminationCriterion<S> for MaxCostEvals {
 
 /// Stop after `state.gradient_evals() >= n` gradient evaluations. Bound
 /// on `S: GradientState` so it can't be paired with derivative-free
-/// solvers—a compile error rather than a silently no-op criterion.
+/// solvers: a compile error rather than a silently no-op criterion.
 pub struct MaxGradientEvals(pub u64);
 
 impl<S: GradientState> TerminationCriterion<S> for MaxGradientEvals {
@@ -169,7 +169,7 @@ impl<S: GradientState> TerminationCriterion<S> for MaxGradientEvals {
 /// Stop when `‖∇f(x)‖ ≤ tol`. Skipped silently when the state has no
 /// gradient populated yet (e.g. iter 0 before `init` has run).
 ///
-/// Requires `S: GradientState`—pairing with a derivative-free solver
+/// Requires `S: GradientState`; pairing with a derivative-free solver
 /// is a compile error.
 pub struct GradientTolerance<F = f64>(pub F);
 
@@ -189,11 +189,11 @@ where
     }
 }
 
-/// Stop when `‖∇f(x_k)‖ ≤ tol · ‖∇f(x_0)‖`—the gradient norm relative
+/// Stop when `‖∇f(x_k)‖ ≤ tol · ‖∇f(x_0)‖`: the gradient norm relative
 /// to the gradient at the starting point. The scale-invariant analogue
 /// of [`GradientTolerance`]: scaling the objective by a constant scales
-/// every gradient by the same constant, so the ratio—and hence the
-/// stopping point—is unchanged, letting one `tol` port across
+/// every gradient by the same constant, so the ratio (and hence the
+/// stopping point) is unchanged, letting one `tol` port across
 /// objectives of different magnitude.
 ///
 /// Unlike [`RelativeCostTolerance`]/[`RelativeParamTolerance`] (which
@@ -205,7 +205,7 @@ where
 /// starting gradient may itself be tiny.
 ///
 /// Captures `‖∇f(x_0)‖` on the first check at which a gradient is
-/// populated. Requires `S: GradientState`—pairing with a
+/// populated. Requires `S: GradientState`; pairing with a
 /// derivative-free solver is a compile error. Skipped silently while
 /// the state has no gradient populated yet.
 pub struct RelativeGradientTolerance<F = f64> {
@@ -255,7 +255,7 @@ where
 /// problem: when no constraint is active it collapses to `‖∇f‖_∞`;
 /// when a face is active it collapses to the ∞-norm of the gradient
 /// components corresponding to *inactive* coordinates. This is why
-/// [`GradientTolerance`] is the wrong metric for constrained problems—
+/// [`GradientTolerance`] is the wrong metric for constrained problems:
 /// `‖∇f‖` need not vanish at a constrained optimum (the gradient
 /// points into an active face), but the projected-gradient measure
 /// always does.
@@ -357,7 +357,7 @@ where
     }
 }
 
-/// Stop when `‖x_k − x_{k−1}‖ ≤ tol · ‖x_k‖`—the scale-invariant
+/// Stop when `‖x_k − x_{k−1}‖ ≤ tol · ‖x_k‖`: the scale-invariant
 /// analogue of [`ParamTolerance`], matching MINPACK's `xtol`. Holds its
 /// own copy of the previous iterate.
 ///
@@ -437,7 +437,7 @@ where
     }
 }
 
-/// Stop when `|f_k − f_{k−1}| ≤ tol · |f_{k−1}|`—the scale-invariant
+/// Stop when `|f_k − f_{k−1}| ≤ tol · |f_{k−1}|`: the scale-invariant
 /// analogue of [`CostTolerance`], matching MINPACK's `ftol` (whose
 /// `actred = 1 − (‖r_k‖/‖r_{k−1}‖)²` reduces to this relative-cost test
 /// for `f = ½‖r‖²`). Holds its own copy of the previous cost.
@@ -478,17 +478,17 @@ where
     }
 }
 
-/// Stop when `best_cost ≤ target`—a user-supplied target cost level.
+/// Stop when `best_cost ≤ target`: a user-supplied target cost level.
 /// This is NLopt's `stopval` and SciPy's `f_min`: an absolute *level*
 /// stop, not a change-in-cost stop like [`CostTolerance`].
 ///
-/// Most useful for global/stochastic solvers (random search, CMA-ES,
+/// Most useful for global and stochastic solvers (random search, CMA-ES,
 /// the steady-state GA) where "good enough" is a more natural stopping
 /// rule than asymptotic convergence, and for benchmarking
 /// ("how long until the solver hits cost ≤ ε?").
 ///
-/// Binds on [`State::best_cost`]—the lowest cost the executor has
-/// ever observed on this state—so on non-monotone solvers (Brent's
+/// Binds on [`State::best_cost`] (the lowest cost the executor has
+/// ever observed on this state), so on non-monotone solvers (Brent's
 /// rejected probes, a line search that allows transient increases,
 /// CMA-ES sampling) this fires once any iterate dropped to the
 /// target, never on a transient uphill step away from a previously
@@ -506,7 +506,7 @@ where
 }
 
 /// Stop when the executor-maintained best cost has not improved by
-/// more than `tol` in `patience` consecutive checks—the early-
+/// more than `tol` in `patience` consecutive checks: the early-
 /// stopping pattern from ML, minus the validation set.
 ///
 /// Improvement is counted strictly against a running anchor: an
@@ -525,7 +525,7 @@ where
 pub struct NoImprovement<F = f64> {
     patience: u64,
     tol: F,
-    /// Last `best_cost()` value that counted as improvement—
+    /// Last `best_cost()` value that counted as improvement;
     /// resets the patience counter on the next strict drop below
     /// `anchor − tol`.
     anchor: Option<F>,
@@ -579,7 +579,7 @@ where
 /// `max_i |f_i − f_1| ≤ tol_f`, where `x_1`/`f_1` are the best vertex
 /// and its cost.
 ///
-/// Requires `S: SimplexState`—single-iterate solvers (gradient
+/// Requires `S: SimplexState`; single-iterate solvers (gradient
 /// descent, BFGS) cannot be paired with it (compile error).
 pub struct SimplexTolerance<F = f64> {
     tol_x: F,
@@ -626,7 +626,7 @@ where
 /// distribution drops below `tol_x`, i.e. `σ · maxᵢ dᵢ < tol_x` (where
 /// `dᵢ` are the square roots of `C`'s eigenvalues).
 ///
-/// Binds on the concrete [`CmaEsState`]—the canonical convergence
+/// Binds on the concrete [`CmaEsState`]: the canonical convergence
 /// criterion for both [`CmaEs`](crate::solver::CmaEs) and
 /// [`BoundedCmaEs`](crate::solver::BoundedCmaEs), which share that
 /// state. The Hansen-recommended default is `1e−12 · initial_sigma`
@@ -663,8 +663,8 @@ where
 /// [`Newuoa`](crate::solver::Newuoa) and [`Bobyqa`](crate::solver::Bobyqa)
 /// already self-terminate when `ρ` reaches the `ρ_end` they were configured with
 /// (which drives Powell's schedule), so this criterion is mainly useful to stop
-/// **early** at a coarser `ρ` than the configured floor—e.g. a quick
-/// low-accuracy solve. The threshold should satisfy `rho_end ≥` the solver's
+/// **early** at a coarser `ρ` than the configured floor (e.g. a quick
+/// low-accuracy solve). The threshold should satisfy `rho_end ≥` the solver's
 /// configured `ρ_end` to fire first.
 pub struct RhoTolerance<F = f64> {
     rho_end: F,
@@ -693,7 +693,7 @@ where
 /// This is the natural convergence test of MADS: [`Mads`](crate::solver::Mads)
 /// already self-terminates when `Δᵖ` reaches the floor it was configured with,
 /// so this criterion is mainly useful to stop **early** at a coarser poll size
-/// than the configured floor—e.g. a quick low-accuracy solve. The threshold
+/// than the configured floor (e.g. a quick low-accuracy solve). The threshold
 /// should satisfy `poll_size_min ≥` the solver's configured floor to fire first.
 pub struct MeshTolerance<F = f64> {
     poll_size_min: F,
@@ -753,7 +753,7 @@ mod reset_tests {
     //! freshly-constructed behavior, so a criterion reused across
     //! composed inner runs (where `run_loop` calls `reset` at the start of
     //! every run) does not carry state across calls. The assertions are
-    //! chosen so that the *unreset* behavior would differ—i.e. each test
+    //! chosen so that the *unreset* behavior would differ, i.e. each test
     //! fails if the `reset` override is removed.
     use super::*;
     use crate::core::state::BasicState;

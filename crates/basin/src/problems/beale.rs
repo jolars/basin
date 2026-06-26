@@ -5,7 +5,7 @@
 //! Smooth multimodal 2D test function with a long, near-flat valley. Global
 //! minimum at `(x, y) = (3, 0.5)` with `f = 0`. Usual search domain is
 //! `x, y ∈ [-4.5, 4.5]`. Useful as a smooth, non-quadratic, fixed-2D
-//! complement to Rosenbrock—first-order methods slow noticeably in the
+//! complement to Rosenbrock: first-order methods slow noticeably in the
 //! flat region near the optimum.
 
 use core::marker::PhantomData;
@@ -68,7 +68,7 @@ pub static BEALE_SPEC: ProblemSpec = ProblemSpec {
         differentiable: true,
         convex: false,
         // Three saddle points exist in addition to the global minimum, but no
-        // other strict local minima—keeping `unimodal: false` is the
+        // other strict local minima, keeping `unimodal: false` is the
         // conservative call given the literature's mixed usage of the term.
         unimodal: false,
         separable: false,

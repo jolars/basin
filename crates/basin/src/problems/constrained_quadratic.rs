@@ -56,7 +56,7 @@ pub static CONSTRAINED_QUADRATIC_SPEC: ProblemSpec = ProblemSpec {
     }],
     description: "Isotropic quadratic Σ(xᵢ − cᵢ)² minimized subject to linear \
                   inequalities A·x ≤ b. The constrained optimum is the \
-                  projection of c onto the feasible polytope—the fixture \
+                  projection of c onto the feasible polytope: the fixture \
                   for the log-barrier BarrierMethod.",
 };
 

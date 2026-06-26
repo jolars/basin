@@ -72,7 +72,7 @@ pub trait Solver<P, S: State> {
     ///
     /// - **Implementor must:** seed every state field that termination
     ///   criteria or downstream
-    ///   [`next_iter`](Self::next_iter) calls will read at iter 0—at
+    ///   [`next_iter`](Self::next_iter) calls will read at iter 0: at
     ///   minimum [`State::cost`], plus
     ///   [`GradientState::gradient`](crate::core::state::GradientState::gradient)
     ///   for first-order solvers and the parallel cost array for

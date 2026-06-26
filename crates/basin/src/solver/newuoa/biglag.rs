@@ -26,7 +26,7 @@
 //! [`bigden`](QuadraticModel::bigden), which maximizes the denominator `|σ|`
 //! directly. The driver ([`super::driver`]) applies this test on the
 //! recomputed update scalars after each BIGLAG step and substitutes BIGDEN's `d`
-//! when it fires—a rare event in practice (Powell 2006, §6).
+//! when it fires: a rare event in practice (Powell 2006, §6).
 
 use crate::core::math::Scalar;
 use crate::solver::powell::QuadraticModel;
@@ -37,7 +37,7 @@ pub(crate) struct BiglagResult<F = f64> {
     /// new interpolation point is `x_opt + d`). Same convention as
     /// [`super::trsapp::TrsappResult::d`].
     pub(crate) d: Vec<F>,
-    /// `τ = ℓ_t(x_opt + d)`—the Lagrange-function value at the new point. The
+    /// `τ = ℓ_t(x_opt + d)`: the Lagrange-function value at the new point. The
     /// driver does not screen it directly: it recomputes `τ`/`σ` from the §4
     /// update (`prepare_update`/`update_params`) and applies the eq. 6.17
     /// BIGDEN test there. This field is informational.
@@ -170,7 +170,7 @@ impl<F: Scalar> QuadraticModel<F> {
 
             // Maximize |ℓ_t(x_opt + d(θ))| over θ ∈ [0, 2π): the θ = 0 incumbent
             // plus NTHETA = 49 interior nodes on a 2π/(NTHETA+1) grid (50 distinct
-            // angles, none at 2π ≡ 0—matching PRIMA's biglag.f `TWOPI/(IU+1)`),
+            // angles, none at 2π ≡ 0, matching PRIMA's biglag.f `TWOPI/(IU+1)`),
             // then a 3-point parabolic refinement, mirroring TRSAPP's boundary
             // sweep (trsapp.rs) but on the modulus rather than the model value.
             const NTHETA: usize = 49;
@@ -199,7 +199,7 @@ impl<F: Scalar> QuadraticModel<F> {
 
             // Commit d_j = cosθ* d + sinθ* s and its Lagrange value. The refined
             // angle is committed unconditionally (no `max(best_abs)` guard, unlike
-            // TRSAPP's defensive sweep)—faithful to PRIMA's biglag.f, where the
+            // TRSAPP's defensive sweep), faithful to PRIMA's biglag.f, where the
             // |ℓ| no-decrease guarantee rests on the θ = 0 seed being reachable and
             // the parabola being seeded at the grid maximum.
             let c = theta_star.cos();

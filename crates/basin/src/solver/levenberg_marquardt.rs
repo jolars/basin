@@ -18,16 +18,16 @@ use crate::core::termination::TerminationReason;
 /// `ρ = (F(x) − F(x+h)) / (L(0) − L(h))` (Nielsen eq. 2.2). On a
 /// successful step (ρ > 0) μ is reduced via the smooth cubic
 /// `μ ← μ · max(1/3, 1 − (2ρ−1)³)`; on a failed step (ρ ≤ 0) μ grows
-/// geometrically `μ ← μ·ν, ν ← 2ν` with ν initialized to 2—Nielsen
+/// geometrically `μ ← μ·ν, ν ← 2ν` with ν initialized to 2; Nielsen
 /// shows this avoids the discontinuities of the classical
-/// multiply/divide threshold rule and lands roughly 25 % fewer
+/// multiply-or-divide threshold rule and lands roughly 25 % fewer
 /// iterations on average. See Nielsen, *Damping Parameter in
 /// Marquardt's Method* (IMM-REP-1999-05) for the derivation and
 /// Madsen, Nielsen, Tingleff (2004), *Methods for Non-Linear Least
 /// Squares Problems*, §3.2.
 ///
 /// **Marquardt scaling (`μ·D`, not `μI`).** The damping matrix is the
-/// diagonal of the Gram, `D = diag(JᵀJ)`—the per-parameter curvature—
+/// diagonal of the Gram, `D = diag(JᵀJ)` (the per-parameter curvature),
 /// rather than the identity. This makes the trust region ellipsoidal
 /// in the metric of the columns of `J`, so the algorithm is invariant
 /// to diagonal rescaling of the parameters (Marquardt 1963; Moré 1978,
@@ -46,7 +46,7 @@ use crate::core::termination::TerminationReason;
 /// scale is floored to `1` at `init` (see `FloorZerosInPlace`), so a
 /// fully-insensitive parameter stays put rather than failing Cholesky.
 ///
-/// Initial damping is `μ₀ = τ`—dimensionless, because the
+/// Initial damping is `μ₀ = τ`, dimensionless, because the
 /// per-parameter magnitude now lives in `D` (the initial per-column
 /// damping is `τ·diag(J(x₀)ᵀJ(x₀))`). τ is the *relative* trust
 /// parameter; use a smaller value (e.g. `1e-6`) when `x₀` is believed
@@ -55,7 +55,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// **Cholesky-on-(JᵀJ + μ·D) vs QR-on-stacked-system.** The damping
 /// makes the SPD path strictly better-conditioned than pure
-/// Gauss-Newton's `JᵀJ`—`μ·D` regularizes the rank deficiency that
+/// Gauss-Newton's `JᵀJ`: `μ·D` regularizes the rank deficiency that
 /// makes GN fail. We stay on the SPD path because that's the only one
 /// the [`linalg`](crate::core::math) tier exposes today, and the
 /// regularization is sufficient for unconstrained LM.
@@ -70,13 +70,13 @@ use crate::core::termination::TerminationReason;
 ///   too small to make `JᵀJ + μ·D` SPD (effectively never, for any
 ///   sensible `JᵀJ` and finite μ), the inner damping loop bumps μ via
 ///   `μ := μ·ν, ν := 2ν` and retries. Default
-///   [`with_max_inner_attempts`](Self::with_max_inner_attempts) is 50—far more
+///   [`with_max_inner_attempts`](Self::with_max_inner_attempts) is 50, far more
 ///   than enough; in practice the first attempt succeeds. If the cap
 ///   is exhausted (μ overflowing to `inf`), the solver returns
 ///   [`TerminationReason::SolverFailed`]. Note that bumping μ cannot
 ///   rescue a coordinate whose `D` entry is zero (`μ·0 = 0`); the
 ///   `init` zero-column floor exists precisely to keep `D > 0`.
-/// - **Divergence on highly nonlinear/poorly initialized problems.**
+/// - **Divergence on highly nonlinear or poorly initialized problems.**
 ///   The damping itself prevents divergent steps (failed steps are
 ///   rejected via the gain-ratio test), so divergence manifests as
 ///   μ growing without bound. Catch this with
@@ -89,7 +89,7 @@ use crate::core::termination::TerminationReason;
 /// [`CostTolerance`](crate::core::termination::CostTolerance),
 /// [`ParamTolerance`](crate::core::termination::ParamTolerance), …),
 /// the solver emits [`TerminationReason::SolverConverged`] when any of
-/// four MINPACK-style tests is satisfied—the same independent
+/// four MINPACK-style tests is satisfied: the same independent
 /// `info`-code structure MINPACK uses, so converging on whichever fires
 /// first:
 ///
@@ -111,7 +111,7 @@ use crate::core::termination::TerminationReason;
 ///   and *predicted* per-iteration reductions in `F = ½‖r‖²`. The
 ///   `prered` clause is what the framework's
 ///   [`RelativeCostTolerance`](crate::core::termination::RelativeCostTolerance)
-///   cannot express—it gates on the LM model, so the solver iterates
+///   cannot express: it gates on the LM model, so the solver iterates
 ///   through temporary settling points (small actual gain, large
 ///   predicted gain) instead of stopping short. Default `0.0`
 ///   (disabled). See [`with_tol_cost_rel`](Self::with_tol_cost_rel).
@@ -121,7 +121,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// The two gradient tests run before the step is computed (a step at a
 /// stationary point is wasted); `tol_cost_rel`/`tol_step_rel` run after, since they need
-/// the attempted step and its predicted/actual reduction.
+/// the attempted step and its predicted and actual reduction.
 ///
 /// LM runs on [`NllsState`], which does
 /// **not** impl [`GradientState`](crate::core::state::GradientState): the
@@ -212,7 +212,7 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     mu: Option<F>,
     nu: F,
 
-    // Marquardt scaling diagonal `D`—the monotone running max of
+    // Marquardt scaling diagonal `D`: the monotone running max of
     // `diag(JᵀJ)` (Moré 1978). Seeded at `init` from `diag(J(x₀)ᵀJ(x₀))`
     // with zero columns floored to 1, then maxed against each
     // iteration's Gram diagonal. The damped system is `(JᵀJ + μ·D) h =
@@ -220,9 +220,9 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     diag: Option<V>,
 
     // Cross-iteration caches keyed on "did the iterate move?". A
-    // rejected step leaves `x` unchanged, so everything derived from it—
+    // rejected step leaves `x` unchanged, so everything derived from it,
     // the residual `r`, the Gram `A = JᵀJ`, and the gradient
-    // `g = Jᵀr`—is still valid on the next outer iteration and is
+    // `g = Jᵀr`, is still valid on the next outer iteration and is
     // reused. Madsen-Nielsen Algorithm 3.16 recomputes `A` and `g` only
     // *after* an accepted step (line 13), never on a reject; caching
     // them here makes basin's executor-driven loop (one `next_iter` per
@@ -234,8 +234,8 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     //   `r` on reject; the trial residual is computed in the gain-ratio
     //   test, so accepting never re-evaluates it.
     // - `gram_cache`/`jtr_cache`: set together on reject (the iterate
-    //   held still), cleared together on accept (the new `J`—and so
-    //   `A`, `g`—must be recomputed at the moved iterate). When both
+    //   held still), cleared together on accept (the new `J`, and so
+    //   `A`, `g`, must be recomputed at the moved iterate). When both
     //   are absent the step re-evaluates `J` once and rebuilds them.
     r_cache: Option<V>,
     gram_cache: Option<M>,
@@ -282,14 +282,14 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         self
     }
 
-    /// Relative (scale-invariant) first-order optimality tolerance—
+    /// Relative (scale-invariant) first-order optimality tolerance,
     /// the MINPACK `gtol` test (Moré 1978): emit
     /// [`TerminationReason::SolverConverged`] when the cosine of the
     /// angle between the residual `r` and every Jacobian column is at
     /// most `tol`, i.e. `max_j |gⱼ| / (‖J·,ⱼ‖ · ‖r‖) ≤ tol` with
     /// `g = Jᵀr`. Being a dimensionless cosine, it is invariant to
     /// scaling of the residuals, so one tolerance ports across problems
-    /// with different residual normalizations—unlike the absolute
+    /// with different residual normalizations, unlike the absolute
     /// [`with_tol_grad`](Self::with_tol_grad). Set to `0.0` to disable. Default
     /// `0.0` (disabled); use e.g. `1e-8` for MINPACK `gtol` parity.
     ///
@@ -302,7 +302,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         self
     }
 
-    /// Relative cost-reduction tolerance—the MINPACK `ftol` test
+    /// Relative cost-reduction tolerance, the MINPACK `ftol` test
     /// (Moré 1978): emit [`TerminationReason::SolverConverged`] when both
     /// the *actual* and the *predicted* reduction in `½‖r‖²` over an
     /// iteration are at most `tol` relative to the current cost, and the
@@ -316,7 +316,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// predicted reduction, `F = ½‖r‖²`, and `ρ = actred/prered`.
     ///
     /// The `prered` clause is the load-bearing difference from the
-    /// framework's [`RelativeCostTolerance`]—which sees only the
+    /// framework's [`RelativeCostTolerance`], which sees only the
     /// achieved reduction between consecutive costs and has no access to
     /// the LM model. At a *temporary settling point* a single step's
     /// actual gain can be small while the model still predicts substantial
@@ -336,7 +336,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         self
     }
 
-    /// Relative step tolerance—the MINPACK `xtol` test (Moré 1978):
+    /// Relative step tolerance, the MINPACK `xtol` test (Moré 1978):
     /// emit [`TerminationReason::SolverConverged`] when the accepted (or
     /// attempted) step is negligible relative to the iterate,
     /// `‖h‖ ≤ tol·‖x‖`. Nielsen's smooth μ-update carries no explicit
@@ -365,7 +365,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Maximum number of damping bumps inside a single outer iteration
     /// before giving up with [`TerminationReason::SolverFailed`]. Each
     /// bump multiplies μ by ν (initially 2) and doubles ν. With the
-    /// default 50, μ grows by a factor of `2^50 ≈ 10¹⁵` before bailing—
+    /// default 50, μ grows by a factor of `2^50 ≈ 10¹⁵` before bailing,
     /// effectively unreachable in practice. Default `50`.
     pub fn with_max_inner_attempts(mut self, n: u32) -> Self {
         assert!(n > 0, "max_inner_attempts must be > 0");
@@ -407,7 +407,7 @@ where
         // state. Also evaluate J(x₀) once to seed the Marquardt scaling
         // diagonal `D`. The Gram `A₀`, gradient `g₀`, and residual `r`
         // are stashed into the caches so the first `next_iter` reuses
-        // them—no redundant evaluation (or re-formed Gram) at the
+        // them, with no redundant evaluation (or re-formed Gram) at the
         // init/iter-0 boundary.
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
         state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
@@ -466,7 +466,7 @@ where
         // both the damping and the relative gradient test.
         let diag_cur = a.diagonal();
 
-        // First-order optimality—converge on *either* test, matching
+        // First-order optimality: converge on *either* test, matching
         // MINPACK's independent checks:
         //   * absolute   ‖Jᵀr‖_∞ ≤ tol_grad           (Madsen et al. 3.3a)
         //   * relative   max_j |gⱼ|/(‖J·,ⱼ‖·‖r‖) ≤ tol_grad_rel  (MINPACK gtol)
@@ -487,7 +487,7 @@ where
         };
         if abs_converged || rel_converged {
             // Restore the caches so a subsequent `run()` (e.g. via
-            // `InnerExecutor`) doesn't see corrupted state—though
+            // `InnerExecutor`) doesn't see corrupted state, though
             // in practice `init` resets them on each reuse. The iterate
             // didn't move, so A and g are still valid.
             self.r_cache = Some(r);
@@ -502,7 +502,7 @@ where
         // Marquardt scaling: maintain `D` as the monotone running max of
         // `diag(JᵀJ)` (Moré 1978). `D` was floored away from zero at
         // `init`, and the max only grows entries, so it stays strictly
-        // positive—the damped Gram below is SPD by construction.
+        // positive; the damped Gram below is SPD by construction.
         let mut d = self
             .diag
             .take()
@@ -515,7 +515,7 @@ where
         let mut nu = self.nu;
 
         // Inner damping loop: bump μ on Cholesky failure. In practice
-        // the first attempt succeeds—a properly damped (JᵀJ + μ·D) is
+        // the first attempt succeeds: a properly damped (JᵀJ + μ·D) is
         // SPD by construction. The retry path matters only for
         // pathological cases where the initial μ is too small to
         // overcome arithmetic roundoff.
@@ -556,7 +556,7 @@ where
 
         // L(0) − L(h) = ½ hᵀ(μ·D·h − g) = ½(μ·hᵀD h − hᵀg) (Nielsen eq.
         // 2.3, with the scaling diagonal D folded into the quadratic
-        // term—`μI` is the D = I special case). Both terms make the
+        // term; `μI` is the D = I special case). Both terms make the
         // predicted reduction positive: μ·hᵀD h > 0 since D > 0, and
         // −hᵀg > 0 since h is a descent direction. Form hᵀD h as
         // h·(D ⊙ h) to avoid materializing μ·D·h − g.
@@ -584,8 +584,8 @@ where
         if rho > F::zero() {
             // Accept. Update x and cost; adapt μ via Nielsen eq. 2.5
             // with β=2, γ=3, p=3. The trial residual is at the new
-            // iterate—stash it; the iterate moved, so the Gram and
-            // gradient are stale—clear them so the next iteration
+            // iterate, so stash it; the iterate moved, so the Gram and
+            // gradient are stale, so clear them so the next iteration
             // re-evaluates J(x_trial) and rebuilds A and g.
             state.param = x_trial;
             state.cost = Some(f_trial);
@@ -598,7 +598,7 @@ where
         } else {
             // Reject. Keep state; bump μ geometrically and double ν so
             // consecutive failures escalate damping faster. The iterate
-            // held still, so r, A and g all remain valid—cache A and g
+            // held still, so r, A and g all remain valid; cache A and g
             // so the next attempt re-solves with a new μ instead of
             // reforming the Gram (Madsen-Nielsen Alg. 3.16; issue #10).
             mu = mu * nu;
@@ -610,8 +610,8 @@ where
 
         self.mu = Some(mu);
         self.nu = nu;
-        // `d` is unchanged by accept/reject (the running max happens
-        // once, above)—persist it for the next iteration.
+        // `d` is unchanged by accept or reject (the running max happens
+        // once, above), so persist it for the next iteration.
         self.diag = Some(d);
 
         // MINPACK ftol / xtol convergence (Moré 1978), checked after the
@@ -625,12 +625,12 @@ where
         //     meaningful. The `prered ≤ tol·F` clause is load-bearing: it
         //     separates a true plateau from a temporary settling point
         //     where one step's actual gain is small but the model still
-        //     predicts progress—there `prered` is large, so we keep
+        //     predicts progress: there `prered` is large, so we keep
         //     iterating. `|actred|` (not `actred`) mirrors MINPACK's
         //     `dabs(actred)`: a step that *raised* the cost only counts as
         //     converged if the increase is itself below tolerance, so a
         //     large-jump rejected step keeps the solver going.
-        //   * tol_step_rel  ‖h‖ ≤ tol_step_rel·‖x‖—the step is negligible
+        //   * tol_step_rel  ‖h‖ ≤ tol_step_rel·‖x‖, the step is negligible
         //     relative to the iterate. Squared on both sides to avoid a sqrt.
         let cost_rel_converged = self.tol_cost_rel > F::zero()
             && actual_diff.abs() <= self.tol_cost_rel * prev_cost

@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn solve_lstsq_square_matches_direct_solve() {
-        // Square non-singular system—least-squares solution
+        // Square non-singular system: the least-squares solution
         // coincides with the exact solve.
         // A = [[1, 2], [3, 5]], b = [3, 8]. Exact x = [1, 1].
         let a = csc2([1.0, 2.0], [3.0, 5.0]);

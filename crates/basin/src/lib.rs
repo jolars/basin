@@ -1,4 +1,4 @@
-//! basin—a numerical optimization library.
+//! basin: a numerical optimization library.
 //!
 //! The framework lives in [`core`]: problem traits the user implements
 //! ([`CostFunction`], [`Gradient`], [`BoxConstraints`],
@@ -93,14 +93,14 @@
 //! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
 //! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
 //! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
-//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma` | `CmaEsState` | ✗—needs a step-size σ |
-//! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗—sample the box, ignore a point |
-//! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗—bracket, not a point |
+//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma` | `CmaEsState` | ✗ (needs a step-size σ) |
+//! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
+//! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ (bracket, not a point) |
 //!
 //! # Error model
 //!
 //! basin distinguishes *three* outcomes a run can produce. The split is a
-//! stable part of the public contract—downstream code can rely on it:
+//! stable part of the public contract; downstream code can rely on it:
 //!
 //! - **Soft reject**: return `Ok(f64::INFINITY)` from [`CostFunction::cost`]
 //!   to reject a *single point* without stopping the solve. Line searches treat
@@ -116,7 +116,7 @@
 //! - **Hard abort**: return `Err(_)` from a problem-trait method to terminate
 //!   the *entire* solve. The error is your own type and bubbles out of
 //!   [`Executor::run`] untouched, typed as `Result<_, P::Error>`. Use it when
-//!   the failure is not about a particular `x`—a downstream service vanished,
+//!   the failure is not about a particular `x`: a downstream service vanished,
 //!   the user pressed cancel, an early-stop condition in your own problem state
 //!   fired.
 //!

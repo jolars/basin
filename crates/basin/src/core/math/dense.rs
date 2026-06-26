@@ -305,7 +305,7 @@ impl<F: Scalar> SymmetricEigen<Vec<F>> for DenseMatrix<F> {
         let (eigenvalues, eigenvectors) =
             super::dense_eig::jacobi_eigen(&self.data, n).ok_or(SymmetricEigenError::Failed)?;
         // `jacobi_eigen` returns the eigenvectors row-major with column `k` the
-        // eigenvector for `eigenvalues[k]`—exactly `DenseMatrix`'s layout.
+        // eigenvector for `eigenvalues[k]`, exactly `DenseMatrix`'s layout.
         let b = Self {
             data: eigenvectors,
             rows: n,

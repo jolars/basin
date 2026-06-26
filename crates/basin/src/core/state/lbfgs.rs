@@ -229,7 +229,7 @@ impl<V, F: Scalar> LbfgsState<V, F> {
     /// dropped (left shift on `ws`, `wy`, and the leading block of
     /// `sy`, `ss`).
     ///
-    /// Returns `false` if `s·y ≤ 0` or any product is non-finite—
+    /// Returns `false` if `s·y ≤ 0` or any product is non-finite:
     /// the curvature condition is the caller's responsibility, this
     /// is just a final safeguard. The state is left unchanged in
     /// that case.
@@ -250,7 +250,7 @@ impl<V, F: Scalar> LbfgsState<V, F> {
             self.ws.remove(0);
             self.wy.remove(0);
             // Shift the leading `(m-1) × (m-1)` block of sy and ss
-            // up-and-left by one row+column. Use a forward sweep—
+            // up-and-left by one row+column. Use a forward sweep:
             // each (i, j) only reads from (i+1, j+1) which we haven't
             // written yet.
             for i in 0..m - 1 {
@@ -315,7 +315,7 @@ impl<V: Clone, F: Scalar> State for LbfgsState<V, F> {
     /// # Panics
     ///
     /// Panics if read before [`Solver::init`](crate::core::solver::Solver::init)
-    /// has populated the cached cost—see [`BasicState::cost`] for
+    /// has populated the cached cost; see [`BasicState::cost`] for
     /// the full safety argument; same contract.
     ///
     /// [`BasicState::cost`]: crate::core::state::BasicState::cost
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn curvature_failure_leaves_state_untouched() {
         let mut state = LbfgsState::<Vec<f64>>::new(vec![0.0, 0.0], 3);
-        // s · y = -1 (negative curvature)—must be rejected.
+        // s · y = -1 (negative curvature): must be rejected.
         let s = vec![1.0, 0.0];
         let y = vec![-1.0, 0.0];
         let ok = state.append_pair(s, y);

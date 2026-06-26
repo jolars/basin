@@ -13,17 +13,17 @@
 //! (1983) active-set method and maintains a QR factorization of the active
 //! constraint normals.
 //!
-//! The active set and its `Q R` factorization are **warm-started**—GETACT
-//! reuses them within a TRSTEP solve and across driver iterations—so they live
+//! The active set and its `Q R` factorization are **warm-started** (GETACT
+//! reuses them within a TRSTEP solve and across driver iterations), so they live
 //! in [`ActiveSetQr`], owned by the driver ([`LincoaWork`](super::driver)) and
 //! threaded by `&mut` into the free `trstep`/`getact` functions rather than
 //! hidden behind the immutable [`TrustRegionSubproblem`](crate::solver::powell::TrustRegionSubproblem)
-//! seam (which stays unchanged for NEWUOA/BOBYQA). This mirrors PRIMA, where
+//! seam (which stays unchanged for NEWUOA and BOBYQA). This mirrors PRIMA, where
 //! `iact`/`nact`/`qfac`/`rfac` are `lincob` locals threaded as inout.
 //!
 //! The QR is held as bespoke `Vec<F>` scratch (column-major `n × n` `Q` and
-//! `R`), maintained by Givens rotations on add/drop of an active normal
-//! (`qradd_Rfull`/`qrexc_Rfull` in PRIMA `powalg.f90`)—there is no QR in
+//! `R`), maintained by Givens rotations on add or drop of an active normal
+//! (`qradd_Rfull`/`qrexc_Rfull` in PRIMA `powalg.f90`): there is no QR in
 //! basin's `linalg` tier and this active-set factorization is solver-internal,
 //! exactly the precedent set by the model's `H`-algebra.
 
@@ -283,7 +283,7 @@ fn delact<F: Scalar>(
     warm.nact = nact - 1;
 }
 
-/// `psd ← −Q[:, nact..n] (Q[:, nact..n]ᵀ g)`—minus the projection of `g` onto
+/// `psd ← −Q[:, nact..n] (Q[:, nact..n]ᵀ g)`: minus the projection of `g` onto
 /// the range of the inactive `Q` columns (PRIMA's projection of `-G`).
 fn project_neg_g<F: Scalar>(g: &[F], qfac: &[F], n: usize, nact: usize, psd: &mut [F]) {
     let zero = F::zero();
@@ -309,7 +309,7 @@ fn project_neg_g<F: Scalar>(g: &[F], qfac: &[F], n: usize, nact: usize, psd: &mu
 /// - `g`: `∇Q` at the current CG iterate (length `n`).
 /// - `delta`: trust-region radius (defines the nearly-active band `0.2·Δ`).
 /// - `resact`/`resnew`: TRSTEP-level residual scratch (length `m`); kept up to
-///   date here (only permuted, values preserved across add/drop).
+///   date here (only permuted, values preserved across add or drop).
 /// - `psd`: output direction (length `n`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn getact<F: Scalar>(

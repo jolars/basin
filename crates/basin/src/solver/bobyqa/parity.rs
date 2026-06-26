@@ -1,7 +1,7 @@
 //! Cross-validation of the public [`Bobyqa`](crate::solver::Bobyqa) solver
 //! against PRIMA v0.7.2.
 //!
-//! PRIMA is the BSD-3 C/Fortran reference translation of Powell's solvers
+//! PRIMA is the BSD-3 C and Fortran reference translation of Powell's solvers
 //! (vendored at `tools/prima`). For each test problem we generate a fixture
 //! with PRIMA's BOBYQA (`tests/fixtures/bobyqa_prima_driver.c` →
 //! `tests/fixtures/bobyqa_<problem>_<n>d.tsv`; see that file and the fixtures
@@ -9,8 +9,8 @@
 //! full evaluation trace, and the final `x`/`f`/`nf`. This module replays the
 //! same bound-constrained problem through basin and asserts a tiered parity.
 //!
-//! Unlike NEWUOA's parity module—which drives a `pub(crate)` `minimize`
-//! because NEWUOA has no public solver—BOBYQA already exposes
+//! Unlike NEWUOA's parity module (which drives a `pub(crate)` `minimize`
+//! because NEWUOA has no public solver), BOBYQA already exposes
 //! [`Bobyqa`](crate::solver::Bobyqa)/[`BobyqaState`](crate::BobyqaState), so
 //! this drives the *public* surface through an [`Executor`]. The eval trace is
 //! captured by a small [`Tracing`] problem wrapper that records every point its
@@ -40,18 +40,18 @@
 //!    budget) to the same minimizer PRIMA found: `f` to `1e-6·(1 + |f*|)` (i.e.
 //!    relative when `|f*| ≫ 1`, but an absolute `~1e-6` floor when the optimum
 //!    is near zero, as it is for these problems), `x` to `1e-4` in `‖·‖∞`, and
-//!    the evaluation count `nf` within a margin (not exact—a non-transcription
+//!    the evaluation count `nf` within a margin (not exact: a non-transcription
 //!    port will not match `nf` to the unit).
 //!
 //! # Why no RESCUE-path fixture
 //!
 //! These fixtures exercise the model core, TRSBOX, ALTMOV, and the driver, but
-//! **not** RESCUE (§5): on clean problems RESCUE never fires. This is not a gap—
+//! **not** RESCUE (§5): on clean problems RESCUE never fires. This is not a gap:
 //! PRIMA's own `rescue.f90` header records that RESCUE "is never invoked on
 //! CUTEst ... problems with at most 50 variables unless heavy noise is imposed",
 //! and an attempt to provoke it here through the public driver (heavy
 //! high-frequency noise, coarse objective quantization, tight `ρ_end`, up to 10
-//! variables) never tripped the denominator-failure condition—it is a
+//! variables) never tripped the denominator-failure condition: it is a
 //! rounding-damage path unreachable with clean `f64` arithmetic on
 //! well-behaved problems. A bit-exact PRIMA *trajectory* parity on the RESCUE
 //! path is therefore unattainable (and would in any case diverge: basin's
@@ -323,7 +323,7 @@ fn check_parity(text: &str) {
         fx.problem,
     );
 
-    // Mixed absolute/relative: ~1e-6 absolute when the optimum is near zero
+    // Mixed absolute and relative: ~1e-6 absolute when the optimum is near zero
     // (these problems), relative to |f*| when it is large.
     let f_tol = 1e-6 * (1.0 + fx.final_f.abs());
     assert!(
@@ -354,7 +354,7 @@ fn check_parity(text: &str) {
     // nf is the weakest signal: a paper-derived port takes a different (but
     // valid) trajectory, so the eval count differs by a chunk while still
     // reaching the same minimizer. The margin is a same-ballpark sanity bound,
-    // not a parity claim—see the module docs.
+    // not a parity claim; see the module docs.
     let nf_margin = (0.25 * fx.final_nf as f64).max(10.0);
     let nf_diff = (result.cost_evals() as f64 - fx.final_nf as f64).abs();
     assert!(

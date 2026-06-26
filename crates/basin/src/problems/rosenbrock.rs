@@ -204,7 +204,7 @@ mod faer_impl {
 //   r₁ = 1 − x₀
 // with `Σ rᵢ² = rosenbrock(x)` exactly (note: unscaled sum, matching the
 // published Rosenbrock cost rather than the LM ½‖r‖² convention; see
-// the `Residual` trait contract). Used as a fixture for the LM track—
+// the `Residual` trait contract). Used as a fixture for the LM track:
 // same minimum (1, 1), same shape, but exposed in the form Gauss-Newton
 // and Levenberg-Marquardt expect. n > 2 is not supported here; the
 // existing `Rosenbrock` wrapper covers the cost form for general n.
@@ -240,7 +240,7 @@ pub fn rosenbrock_residuals_jacobian(x: &[f64], out: &mut [f64]) {
 
 /// 2D Rosenbrock exposed as a least-squares problem (2 residuals, 2
 /// parameters). Shares [`ROSENBROCK_SPEC`] with the cost-form
-/// [`Rosenbrock`] wrapper—this is just a different *interface* over
+/// [`Rosenbrock`] wrapper: this is just a different *interface* over
 /// the same function. Restricted to `param.len() == 2`; passing any
 /// other length will trip a debug assertion in the raw functions.
 ///
@@ -528,7 +528,7 @@ mod tests {
     #[test]
     fn residual_wrapper_reuses_rosenbrock_spec() {
         let spec = <RosenbrockResiduals<Vec<f64>> as HasSpec>::SPEC;
-        // Same static—both wrappers point at the one Rosenbrock entry.
+        // Same static: both wrappers point at the one Rosenbrock entry.
         assert!(core::ptr::eq(spec, &ROSENBROCK_SPEC));
     }
 

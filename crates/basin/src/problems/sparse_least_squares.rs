@@ -3,7 +3,7 @@
 //! `r(x) = A · x − b` with a sparse design matrix `A`. The Jacobian
 //! `J(x) = A` is constant in `x`; the residual is exactly linear, so
 //! Gauss-Newton converges in a single iteration. This is the load-
-//! bearing sparse fixture for S2b—the simplest possible problem
+//! bearing sparse fixture for S2b: the simplest possible problem
 //! that exercises sparse `MatVec`, sparse `Jacobian::Output`, and
 //! sparse `LinearSolveSpd`/`LinearSolveLstsq` end-to-end.
 //!
@@ -128,7 +128,7 @@ mod nalgebra_impl {
     impl Jacobian for SparseLeastSquares<CscMatrix<f64>, DVector<f64>> {
         type Jacobian = CscMatrix<f64>;
         fn jacobian(&self, _x: &DVector<f64>) -> Result<CscMatrix<f64>, std::convert::Infallible> {
-            // J(x) = A—constant in x for linear residuals.
+            // J(x) = A, constant in x for linear residuals.
             Ok(self.a.clone())
         }
     }
@@ -213,7 +213,7 @@ mod faer_impl {
             &self,
             _x: &Col<f64>,
         ) -> Result<SparseColMat<usize, f64>, std::convert::Infallible> {
-            // J(x) = A—constant in x for linear residuals.
+            // J(x) = A, constant in x for linear residuals.
             Ok(self.a.clone())
         }
     }
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn spec_is_wired_up_via_has_spec_trait() {
-        // Only need a type—concrete generics don't matter for the SPEC constant.
+        // Only need a type: concrete generics don't matter for the SPEC constant.
         type Probe = SparseLeastSquares<(), ()>;
         let spec = <Probe as HasSpec>::SPEC;
         assert_eq!(spec.name, "Sparse least squares");

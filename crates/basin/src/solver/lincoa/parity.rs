@@ -1,6 +1,6 @@
 //! Cross-validation of the LINCOA driver against PRIMA v0.7.2.
 //!
-//! PRIMA is the BSD-3 C/Fortran reference translation of Powell's solvers
+//! PRIMA is the BSD-3 C and Fortran reference translation of Powell's solvers
 //! (vendored at `tools/prima`). For each linearly-constrained test problem we
 //! generate a fixture with PRIMA's LINCOA (`tests/fixtures/lincoa_prima_driver.c`
 //! → `tests/fixtures/lincoa_<problem>_<n>d.tsv`; see that file and the fixtures
@@ -11,7 +11,7 @@
 //!
 //! The fixtures are inequality-only (no box, no equalities), so PRIMA's folded
 //! constraint system equals the explicit `A x ≤ b`, which is exactly what basin's
-//! [`fold_constraints`] produces—the two solvers see the same feasible region.
+//! [`fold_constraints`] produces: the two solvers see the same feasible region.
 //!
 //! # What is and isn't asserted
 //!

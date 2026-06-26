@@ -25,7 +25,7 @@ pub fn booth(x: &[f64]) -> f64 {
 
 /// Writes the Booth residuals at `x` into `out`. Both slices must have
 /// length 2. `r(x, y) = [x + 2y − 7, 2x + y − 5]` so
-/// `Σ rᵢ² = booth(x, y)` exactly—the unscaled-sum convention shared
+/// `Σ rᵢ² = booth(x, y)` exactly: the unscaled-sum convention shared
 /// with `RosenbrockResiduals`. Zero at `(1, 3)`.
 pub fn booth_residuals(x: &[f64], out: &mut [f64]) {
     debug_assert_eq!(x.len(), 2);
@@ -137,7 +137,7 @@ impl Gradient for Booth<Vec<f64>> {
 /// global minimum `(1, 3)` of unconstrained Booth is on the interior
 /// of `[-10, 10]²` but lies *outside* tighter boxes such as
 /// `[-1, 1]²`, where the constrained optimum is the box corner
-/// `(1, 1)`—see the integration tests for projection-active
+/// `(1, 1)`: see the integration tests for projection-active
 /// behavior.
 pub struct BoothBoxed<P> {
     lower: P,
@@ -190,7 +190,7 @@ impl BoxConstraints for BoothBoxed<Vec<f64>> {
 // Booth factors as a 2-residual least-squares problem
 // `r = [x+2y−7, 2x+y−5]` with constant Jacobian `[[1,2],[2,1]]` and
 // `Σ rᵢ² == booth(x, y)` exactly (unscaled-sum convention shared with
-// `RosenbrockResiduals`). Used as a fixture for `Trf` (S6)—the
+// `RosenbrockResiduals`). Used as a fixture for `Trf` (S6): the
 // constrained optimum on `[-1, 1]²` is the corner (1, 1), giving a
 // load-bearing edge-active test case.
 
@@ -219,7 +219,7 @@ impl<P> HasSpec for BoothResiduals<P> {
 /// Booth-as-residuals with explicit element-wise box bounds, suitable
 /// for [`Trf`](crate::solver::Trf). The unconstrained min `(1, 3)`
 /// lies outside tighter boxes (e.g. `[-1, 1]²`), where the constrained
-/// optimum sits at the box corner `(1, 1)`—a load-bearing edge-active
+/// optimum sits at the box corner `(1, 1)`: a load-bearing edge-active
 /// test case where the unprojected `‖∇f‖_∞` is large but the BCL
 /// scaled-gradient measure `‖D · Jᵀr‖_∞` vanishes.
 pub struct BoothBoxedResiduals<P> {
@@ -262,7 +262,7 @@ impl Residual for BoothResiduals<Vec<f64>> {
 impl Jacobian for BoothResiduals<Vec<f64>> {
     type Jacobian = DenseMatrix<f64>;
     fn jacobian(&self, _x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
-        // Constant 2×2 Jacobian—independent of x. `buf` is row-major,
+        // Constant 2×2 Jacobian, independent of x. `buf` is row-major,
         // which is `DenseMatrix`'s native layout.
         let mut buf = [0.0_f64; 4];
         booth_residuals_jacobian(&mut buf);
@@ -385,7 +385,7 @@ mod nalgebra_impl {
     impl Jacobian for BoothResiduals<DVector<f64>> {
         type Jacobian = DMatrix<f64>;
         fn jacobian(&self, _x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
-            // Constant 2×2 Jacobian—independent of x.
+            // Constant 2×2 Jacobian, independent of x.
             let mut buf = [0.0_f64; 4];
             booth_residuals_jacobian(&mut buf);
             Ok(DMatrix::from_row_slice(2, 2, &buf))
@@ -517,7 +517,7 @@ mod ndarray_impl {
     impl Jacobian for BoothResiduals<Array1<f64>> {
         type Jacobian = Array2<f64>;
         fn jacobian(&self, _x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
-            // Constant 2×2 Jacobian—independent of x. `buf` is row-major,
+            // Constant 2×2 Jacobian, independent of x. `buf` is row-major,
             // so the default C-order `from_shape_vec` matches the nalgebra
             // `from_row_slice` mirror.
             let mut buf = [0.0_f64; 4];

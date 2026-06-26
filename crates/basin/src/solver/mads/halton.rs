@@ -4,7 +4,7 @@
 //! random direction matrix with a deterministic construction seeded by the Halton
 //! sequence. This module provides the radical-inverse generator and the
 //! per-iteration Halton direction `u_t ∈ [0,1]^n`, plus the prime helper for the
-//! Halton seed `t₀ = p_n`. Every value is a pure function of `(t, n)`—no RNG,
+//! Halton seed `t₀ = p_n`. Every value is a pure function of `(t, n)`: no RNG,
 //! fully reproducible (see `references/orthomads-2009/NOTES.md`).
 
 /// The radical-inverse function `u_{t,p} = Σ_r a_{t,r,p} · p^{-(1+r)}`, where the

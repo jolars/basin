@@ -1,7 +1,7 @@
 use super::{Dot, NegInPlace, NormInfinity, NormSquared, ScaledAdd};
 
-// These scalar-element impls treat `f64` itself as the parameter/vector
-// type—used by 1-D solvers that work directly on a scalar `x: f64`.
+// These scalar-element impls treat `f64` itself as the parameter or vector
+// type, used by 1-D solvers that work directly on a scalar `x: f64`.
 // They are not blanketed over `F: Scalar` because that would conflict
 // with the container impls (`Vec<F>`, `DVector<F>`, `Col<F>`, …): Rust
 // can't rule out a future upstream `impl Scalar for Vec<...>` etc., so

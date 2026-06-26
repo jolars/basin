@@ -1,4 +1,4 @@
-//! Powell's singular function—a 4-variable, 4-residual least-squares
+//! Powell's singular function: a 4-variable, 4-residual least-squares
 //! problem from Powell (1962). Classic Levenberg–Marquardt benchmark
 //! because the Jacobian is rank-deficient at the optimum (hence
 //! "singular"), so naive Gauss–Newton stalls and the damping in LM
@@ -17,7 +17,7 @@
 //!
 //! S2a wires `Jacobian` impls for the LA-heavy backends (nalgebra and
 //! faer dense). `Vec<f64>` and `ndarray` deliberately don't implement
-//! `Jacobian`—see the trait's `# Backends` note. The raw
+//! `Jacobian`: see the trait's `# Backends` note. The raw
 //! `powell_singular_jacobian` function below stays backend-agnostic and
 //! is the single source of truth that the per-backend impls reshape
 //! into their matrix types.
@@ -52,7 +52,7 @@ pub static POWELL_SINGULAR_SPEC: ProblemSpec = ProblemSpec {
     }],
     description: "4-variable, 4-residual least-squares problem with a \
                   rank-deficient Jacobian at the optimum x = (0, 0, 0, 0). \
-                  Standard LM benchmark—naive Gauss–Newton stalls; LM \
+                  Standard LM benchmark: naive Gauss–Newton stalls; LM \
                   damping recovers convergence.",
 };
 
@@ -462,7 +462,7 @@ mod tests {
         fn gram_at_origin_is_singular() {
             // Powell's "singular": Jᵀ J at the optimum drops rank, so
             // Cholesky must fail. This is what makes plain Gauss-Newton
-            // stall here—the LM track will use the same property to
+            // stall here: the LM track will use the same property to
             // exercise the damping.
             let p: PowellSingular<DVector<f64>> = PowellSingular::new();
             let x = DVector::zeros(4);

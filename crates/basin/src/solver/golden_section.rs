@@ -31,8 +31,8 @@ use crate::core::termination::TerminationReason;
 ///
 /// `GoldenSection` runs on [`ScalarState`], the cost-only single-iterate
 /// state. It does **not** impl
-/// [`GradientState`](crate::core::state::GradientState)—a 1-D minimizer has
-/// no gradient—so attaching a gradient criterion such as
+/// [`GradientState`](crate::core::state::GradientState) (a 1-D minimizer has
+/// no gradient), so attaching a gradient criterion such as
 /// [`GradientTolerance`](crate::core::termination::GradientTolerance) is a
 /// **compile error** rather than one that silently never fires.
 ///
@@ -41,7 +41,7 @@ use crate::core::termination::TerminationReason;
 /// Scalar by construction: the parameter is a single `F` (default
 /// `f64`), so `GoldenSection` is backend-agnostic and needs no
 /// linear-algebra backend. The problem's `BoxConstraints` carry
-/// `F`-valued lower/upper bounds.
+/// `F`-valued lower and upper bounds.
 ///
 /// # Examples
 ///
@@ -63,7 +63,7 @@ pub struct GoldenSection<F = f64> {
     inner: Option<Inner<F>>,
 }
 
-/// `(√5 − 1) / 2`—the golden-ratio bracket-reduction factor. The new
+/// `(√5 − 1) / 2`, the golden-ratio bracket-reduction factor. The new
 /// bracket keeps this fraction of the previous width each step.
 fn golden_r<F: Scalar>() -> F {
     F::from_f64(0.618_033_988_749_894_9).unwrap()
@@ -129,7 +129,7 @@ where
         );
         // Place the two interior points at the golden ratio: with
         // `r = (√5−1)/2`, `c1 = a + (1−r)(b−a)` and `c2 = a + r(b−a)`, so
-        // `a < c1 < c2 < b`. The starting point in `state` is ignored—the
+        // `a < c1 < c2 < b`. The starting point in `state` is ignored; the
         // bracket alone determines the search.
         let r = golden_r::<F>();
         let span = b - a;
@@ -317,7 +317,7 @@ mod tests {
         );
         assert!((r.best_cost() + 2.0).abs() < 1e-10, "f = {}", r.best_cost());
         // Golden section converges linearly (bracket shrinks by ≈0.618 per
-        // step), so it needs ~40 evals to reach √ε on [0, 2]—looser than
+        // step), so it needs ~40 evals to reach √ε on [0, 2], looser than
         // Brent's parabolic budget. A generous ceiling guards against a real
         // regression without pinning the exact count.
         assert!(
@@ -368,7 +368,7 @@ mod tests {
         .unwrap();
         // Looser than the Brent analog: golden section converges linearly, so
         // CostTolerance(1e-12) stops it while x is still ~1e-4 from the
-        // optimum. These bounds still rule out the issue-#36 bug—a spurious
+        // optimum. These bounds still rule out the issue-#36 bug: a spurious
         // fire on the first probe would leave best_x near the ≈0.76 init point.
         assert!(
             (r.best_param() - 1.0).abs() < 1e-3,

@@ -637,7 +637,7 @@ where
             self.nrows(),
             b.len()
         );
-        // nalgebra's `cholesky` consumes the matrix—clone is unavoidable
+        // nalgebra's `cholesky` consumes the matrix, so a clone is unavoidable
         // without a separate factorize/solve split.
         self.clone()
             .cholesky()
@@ -650,7 +650,7 @@ where
 // interchangeable with the pure-Rust impl above for the LAPACK scalar set:
 // same assertions, same `NotPositiveDefinite` mapping when factorization fails.
 // The bound narrows from any `F: ComplexField` to `nalgebra_lapack`'s
-// `CholeskyScalar` (f32/f64 and their complex counterparts)—see the
+// `CholeskyScalar` (f32/f64 and their complex counterparts); see the
 // `nalgebra-lapack` feature note in `Cargo.toml`.
 #[cfg(feature = "nalgebra-lapack")]
 impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>

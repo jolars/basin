@@ -24,13 +24,13 @@ use crate::core::termination::TerminationCriterion;
 ///
 /// Composed solvers ([`BarrierMethod`](crate::solver::BarrierMethod) and
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)
-/// re-solving their barrier/augmented-Lagrangian subproblem at each
+/// re-solving their barrier or augmented-Lagrangian subproblem at each
 /// continuation step, or the CMA-injection family via the
 /// [`MemeticInner`](crate::solver::MemeticInner) sub-trait) repeatedly seed
 /// a fresh inner state at the current outer iterate, drive the inner over it,
 /// then read the refined iterate back via [`State::param`].
 ///
-/// The seed/state machinery itself lives on the [`InitialState`] supertrait
+/// The seed and state machinery itself lives on the [`InitialState`] supertrait
 /// (which also powers the top-level
 /// [`Executor::from_start`](crate::core::executor::Executor::from_start)
 /// convenience constructor). `WarmStart` adds no items: it is a marker
@@ -108,7 +108,7 @@ pub trait InitialState<V> {
 ///      [`State::cost_evals`]/
 ///      [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals).
 ///    - **Adapter-problem inner** (the outer builds a fresh
-///      `Problem::new(adapter)` per outer iter, e.g. the barrier/
+///      `Problem::new(adapter)` per outer iter, e.g. the barrier and
 ///      augmented-Lagrangian methods): after [`run`](Self::run) returns,
 ///      fold the inner wrapper's counts back into the outer's wrapper via
 ///      [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
@@ -179,7 +179,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     }
 
     /// Read-only access to the inner solver. Lets composed outer
-    /// solvers dispatch on the inner before [`run`](Self::run)—e.g. to
+    /// solvers dispatch on the inner before [`run`](Self::run), e.g. to
     /// build an inner state via [`InitialState::seed`] or
     /// `MemeticInner::seed_scaled`. Mutable access goes through
     /// [`run`](Self::run), which already takes `&mut self`.
@@ -194,7 +194,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// The inner state's [`State::cost_evals`] reflects only per-run
     /// work (snapshot-relative against the wrapper count at entry), not
     /// cumulative across calls. The wrapper itself accumulates
-    /// monotonically—for same-problem composition the outer reads
+    /// monotonically: for same-problem composition the outer reads
     /// its own [`Problem::counts`] after `run` to see total work; for
     /// adapter-problem composition the outer builds a fresh inner
     /// `Problem` and folds counts via
@@ -202,7 +202,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// [`Problem::counts_mut`] after `run` returns.
     ///
     /// Internally exactly
-    /// [`run_loop`]—`init` is called
+    /// [`run_loop`]: `init` is called
     /// on every invocation, so the inner solver sees a fresh setup pass
     /// each time (e.g. seeding cost/gradient at the new starting point).
     pub fn run<P>(

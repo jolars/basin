@@ -20,15 +20,15 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 /// [`Lbfgsb`](crate::Lbfgsb)) see the same bounds the outer
 /// enforces via BoundPenalty.
 ///
-/// The injection mechanism (Hansen 2011 eq. 4—Mahalanobis clip,
+/// The injection mechanism (Hansen 2011 eq. 4: Mahalanobis clip,
 /// plug back into the standard CMA update) is unchanged from
 /// `CmaInject`; only the outer solver is replaced. Adaptive
 /// boundary-penalty bookkeeping inside `BoundedCmaEs` is orthogonal
-/// to injection—`BoundedCmaInject` reads the same post-update
+/// to injection; `BoundedCmaInject` reads the same post-update
 /// `m, σ, B, D^{-1}` for clipping, and re-evaluates injected
 /// candidates with the same γ-weighted penalty regular samples
-/// receive (otherwise an out-of-box LM/L-BFGS-B refinement would
-/// dominate the population at a spuriously low raw cost—bug
+/// receive (otherwise an out-of-box LM or L-BFGS-B refinement would
+/// dominate the population at a spuriously low raw cost, a bug
 /// noticed when writing the LM example).
 ///
 /// # Inner solver
@@ -38,7 +38,7 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 /// [`NelderMead`](crate::solver::NelderMead),
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt), and
 /// [`Lbfgsb`](crate::Lbfgsb). L-BFGS-B is the natural inner
-/// here—its `P: BoxConstraints` bound matches the outer's, and the
+/// here: its `P: BoxConstraints` bound matches the outer's, and the
 /// same box flows through both ends of the composition.
 ///
 /// Note an asymmetry: NM and LM are unconstrained solvers, so even
@@ -233,7 +233,7 @@ where
             y.scaled_add(-F::one(), &m);
             y.scale_in_place(F::one() / sigma);
 
-            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖—B, D⁻¹ from the state.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖, with B, D⁻¹ from the state.
             let inv_sqrt_norm = {
                 let mut bt_y = state.b.mat_transpose_vec(&y);
                 bt_y.component_mul_assign(&state.d_inv);
@@ -254,7 +254,7 @@ where
 
             // 10. Re-evaluate using the BoundPenalty so the injected
             //     candidate ranks consistently with regular samples in
-            //     `state.costs`. Raw cost would let an LM/L-BFGS-B
+            //     `state.costs`. Raw cost would let an LM or L-BFGS-B
             //     refinement that landed outside the box skip the
             //     penalty and dominate the population (bug surfaces
             //     dramatically on bound-active problems). Mirrors

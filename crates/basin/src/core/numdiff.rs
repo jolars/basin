@@ -9,7 +9,7 @@
 //! solvers via basin's type-system dispatch.
 //!
 //! The wrapper *forwards* [`BoxConstraints`] when the inner problem carries
-//! box bounds—adding derivatives must not silently un-constrain a problem
+//! box bounds: adding derivatives must not silently un-constrain a problem
 //! (tenet 4 in `CONTRIBUTING.md`: an adapter that *adds* a capability preserves
 //! the rest).
 //!
@@ -24,23 +24,23 @@
 //! - **Forward Jacobian** reproduces MINPACK `fdjac2` exactly:
 //!   `eps = sqrt(eps_f)`, `hⱼ = eps · |xⱼ|`, and `hⱼ = eps` when `xⱼ = 0`.
 //!   This is the function-values-only counterpart of MINPACK `lmder`, i.e.
-//!   the `lmdif` Jacobian—chosen as the default so least-squares fits via
+//!   the `lmdif` Jacobian, chosen as the default so least-squares fits via
 //!   `FiniteDiff` match `lmdif`'s convergence lineage.
 //!
 //! # Caveats
 //!
 //! - **Evaluation counting.** One counted [`Gradient::gradient`],
 //!   [`Jacobian::jacobian`], or [`Hessian::hessian`] call performs *many*
-//!   internal cost/residual evaluations (`2n` central/`n+1` forward
+//!   internal cost or residual evaluations (`2n` central/`n+1` forward
 //!   gradient, `n+1`/`2n` Jacobian columns, `~2n²` Hessian). Eval counting
 //!   lives on the solver `State` and is incremented by the solver per
 //!   *derivative* call, so a problem wrapper has no way to record the inner
-//!   calls—`result.cost_evals()` will **not** reflect them. Users who need
+//!   calls, so `result.cost_evals()` will **not** reflect them. Users who need
 //!   true cost-evaluation budgets should account for the `O(n)`/`O(n²)`
 //!   multiplier themselves.
 //! - **Domain & hard-abort.** Each probe `?`-propagates the inner
 //!   function's [`Error`](CostFunction::Error). If the inner `cost` /
-//!   `residual` returns `Err`, the derivative call returns the same `Err`—
+//!   `residual` returns `Err`, the derivative call returns the same `Err`:
 //!   no swallowing, no partial result. A point where the inner function
 //!   *soft-rejects* (`Ok(f64::INFINITY)`) poisons the derivative with `±∞`
 //!   rather than aborting; keeping probes inside the strict domain
@@ -53,9 +53,9 @@
 //! feature they fan across a `rayon` thread pool: the `n` gradient/Jacobian
 //! columns, and the `n(n+1)/2` upper-triangular Hessian entries, are evaluated
 //! concurrently (the shared `f(x)`/`r(x)` base evaluation runs once up
-//! front). The result is **bit-identical** to the sequential path—each
+//! front). The result is **bit-identical** to the sequential path (each
 //! output slot is written independently and collected in order, with no
-//! floating-point reduction—so enabling the feature never changes the
+//! floating-point reduction), so enabling the feature never changes the
 //! numbers, only the wall-clock.
 //!
 //! This is a win when the wrapped `cost`/`residual` is expensive; for a
@@ -84,8 +84,8 @@ pub enum Method {
 
 /// Wraps a problem to synthesize its derivatives by finite differences.
 ///
-/// Construct with [`FiniteDiff::new`] (central gradient/Hessian, forward
-/// Jacobian—see the [module docs](self)) and adjust with the builder
+/// Construct with [`FiniteDiff::new`] (central gradient and Hessian, forward
+/// Jacobian; see the [module docs](self)) and adjust with the builder
 /// methods. The wrapper delegates [`CostFunction`]/[`Residual`] /
 /// [`BoxConstraints`] to the inner problem and implements [`Gradient`] /
 /// [`Jacobian`]/[`Hessian`] via finite differences.
@@ -95,7 +95,7 @@ pub enum Method {
 /// [`Gradient`] is backend-generic (any `V: Clone + VectorLen +
 /// VectorIndex`). [`Jacobian`] and [`Hessian`] additionally require
 /// `V: DenseMatrixFromFn`, so they are available only for the matrix
-/// backends (nalgebra `DVector → DMatrix`, faer `Col → Mat`)—`Vec<f64>`
+/// backends (nalgebra `DVector → DMatrix`, faer `Col → Mat`); `Vec<f64>`
 /// and `ndarray` produce a compile-time error, mirroring the analytic
 /// [`Jacobian`]/[`Hessian`] coverage (tenet 5).
 ///
@@ -182,7 +182,7 @@ impl<P> FiniteDiff<P> {
     }
 
     /// Override the adaptive step rule with a fixed absolute step `h` used
-    /// for *every* coordinate. Escape hatch—most callers should leave the
+    /// for *every* coordinate. Escape hatch; most callers should leave the
     /// adaptive `|xⱼ|`-scaled rule in place.
     pub fn with_step(mut self, h: f64) -> Self {
         self.fixed_step = Some(h);
@@ -225,7 +225,7 @@ impl<P: Residual> Residual for FiniteDiff<P> {
 // Forward box bounds so a `CostFunction + BoxConstraints` problem wrapped
 // in `FiniteDiff` still routes to the constrained solvers (ProjectedGD,
 // TRF). Per tenet 4 this is correct precisely because `FiniteDiff` *adds* a
-// capability and preserves the constraint—it does not consume it.
+// capability and preserves the constraint: it does not consume it.
 impl<P: BoxConstraints> BoxConstraints for FiniteDiff<P> {
     fn lower(&self) -> &Self::Param {
         self.problem.lower()
@@ -331,7 +331,7 @@ fn nr_step(xj: f64, scale: f64, fixed_step: Option<f64>) -> f64 {
 }
 
 // ----------------------------------------------------------------------
-// Free functions—the tested numerics core, reused by the wrapper.
+// Free functions: the tested numerics core, reused by the wrapper.
 // ----------------------------------------------------------------------
 
 /// Central-difference gradient `∇f(x)ⱼ ≈ (f(x+hⱼeⱼ) − f(x−hⱼeⱼ)) / 2hⱼ`.
@@ -353,7 +353,7 @@ where
     let n = x.vec_len();
     let scale = function_precision.max(f64::EPSILON).cbrt();
     // Each task perturbs coordinate `j` of its own probe buffer, evaluates,
-    // and resets it—so the buffer stays equal to `x` between indices.
+    // and resets it, so the buffer stays equal to `x` between indices.
     let cols = try_map_range_with(
         n,
         || x.clone(),
@@ -582,7 +582,7 @@ where
     let h: Vec<f64> = (0..n)
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
-    // f(x + hₖeₖ) for each k—independent across k.
+    // f(x + hₖeₖ) for each k, independent across k.
     let fi = try_map_range_with(
         n,
         || x.clone(),
@@ -630,7 +630,7 @@ where
 mod tests {
     use super::*;
 
-    /// `f(x) = Σ aᵢ xᵢ²`—gradient `2aᵢxᵢ`, diagonal Hessian `2aᵢ`. Used
+    /// `f(x) = Σ aᵢ xᵢ²`: gradient `2aᵢxᵢ`, diagonal Hessian `2aᵢ`. Used
     /// for backend-agnostic checks that don't need the `problems` feature.
     struct DiagQuadratic {
         a: Vec<f64>,
@@ -688,7 +688,7 @@ mod tests {
 
     // The probe fan-out (under `parallel`) writes each output slot
     // independently and collects in order, so the result must be identical
-    // across repeated calls—no reduction-order nondeterminism. `n = 16` is
+    // across repeated calls, with no reduction-order nondeterminism. `n = 16` is
     // large enough that the rayon path spreads across worker threads.
     #[test]
     fn gradient_is_bitwise_reproducible_across_calls() {

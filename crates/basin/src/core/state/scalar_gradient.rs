@@ -7,7 +7,7 @@ use crate::core::state::{CountsMirror, GradientState, State};
 /// State for one-dimensional solvers that carry a first derivative
 /// ([`BrentDerivative`](crate::solver::BrentDerivative)): a scalar `param`, an
 /// optional cached cost, an optional cached gradient `f'(x)`, and
-/// cost/gradient evaluation counters. `Param` and `Float` are the same scalar
+/// cost and gradient evaluation counters. `Param` and `Float` are the same scalar
 /// `F`.
 ///
 /// It is the gradient-carrying sibling of

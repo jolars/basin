@@ -7,7 +7,7 @@
 //! Multimodal function whose surface looks like a tray with a cross-shaped
 //! pattern of deep wells. It has four equal global minima at
 //! `(±1.34941, ±1.34941)` with `f ≈ −2.06261`. The nested `|·|` terms make it
-//! non-differentiable, so it is cost-only—a target for derivative-free and
+//! non-differentiable, so it is cost-only: a target for derivative-free and
 //! global solvers. Usual search domain is `x, y ∈ [-10, 10]`.
 
 use core::marker::PhantomData;

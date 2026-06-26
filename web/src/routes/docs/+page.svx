@@ -19,7 +19,7 @@ shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
   a simplex (`BasicSimplexState`), a population, and so on.
 - **Executor**: the driver that runs a solver to termination and hands back an
   `OptimizationResult`.
-- **Termination**: pluggable stopping criteria (gradient/parameter/cost
+- **Termination**: pluggable stopping criteria (gradient, parameter, and cost
   tolerances, iteration and time budgets) configured uniformly across solvers.
 - **Observers**: read-only hooks fired around the loop (`observe_init`/`observe_iter`/`observe_final`)
   for logging, progress reporting, or

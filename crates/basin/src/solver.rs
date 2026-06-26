@@ -9,7 +9,7 @@ pub mod barrier_method;
 /// (Hansen `BoundPenalty`, the default in pycma).
 pub mod bounded_cma_es;
 /// Memetic [`BoundedCmaEs`] with
-/// Hansen-2011 injection—sibling of [`cma_inject`] over the bounded
+/// Hansen-2011 injection: sibling of [`cma_inject`] over the bounded
 /// outer. Inners: Nelder-Mead, Levenberg-Marquardt, L-BFGS-B.
 pub mod bounded_cma_inject;
 /// Brent's method (1D root or minimum bracketing).
@@ -22,10 +22,10 @@ pub mod cma_es;
 /// Levenberg-Marquardt. For L-BFGS-B inner with consistent bound
 /// handling, see [`bounded_cma_inject`].
 pub mod cma_inject;
-/// Differential Evolution (DE/rand/1/bin)—Storn-Price 1997 global
+/// Differential Evolution (DE/rand/1/bin): Storn-Price 1997 global
 /// optimizer on a feasible box, fully backend-generic.
 pub mod de;
-/// Memetic [`De`] with per-generation top-k local refinement—
+/// Memetic [`De`] with per-generation top-k local refinement: the
 /// DE-flavored sibling of [`cma_inject`]. Inners: Nelder-Mead,
 /// Levenberg-Marquardt, L-BFGS-B.
 pub mod de_inject;
@@ -36,7 +36,7 @@ pub mod golden_section;
 /// Steepest-descent solver with a pluggable line search and optional
 /// heavy-ball momentum.
 pub mod gradient_descent;
-/// L-BFGS family—unconstrained `Lbfgs<Unbounded>` (two-loop
+/// L-BFGS family: unconstrained `Lbfgs<Unbounded>` (two-loop
 /// recursion) and box-constrained `Lbfgs<Bounded>` (faithful port of
 /// Nocedal's L-BFGS-B v3.0). `Lbfgsb` is a type alias for
 /// `Lbfgs<Bounded>`.
@@ -44,14 +44,14 @@ pub mod lbfgs;
 /// Levenberg-Marquardt solver for nonlinear least squares with
 /// Nielsen 1999 damping update.
 pub mod levenberg_marquardt;
-/// MA-LSCh-CMA—memetic algorithm with LS chains (inner: CMA-ES).
+/// MA-LSCh-CMA: memetic algorithm with LS chains (inner: CMA-ES).
 pub mod ma_ls_ch_cma;
-/// MADS (Audet & Dennis 2006)—mesh adaptive direct search (deterministic
+/// MADS (Audet & Dennis 2006): mesh adaptive direct search (deterministic
 /// OrthoMADS instance) for nonsmooth or non-continuous objectives.
 pub mod mads;
 /// Nelder-Mead derivative-free simplex solver.
 pub mod nelder_mead;
-/// NEWUOA (Powell 2006)—model-based derivative-free trust-region solver
+/// NEWUOA (Powell 2006): model-based derivative-free trust-region solver
 /// (quadratic surrogate + least-Frobenius-norm update).
 pub mod newuoa;
 /// Shared core of the Powell-family DFO solvers (NEWUOA, BOBYQA, …): the
@@ -68,22 +68,22 @@ pub mod random_search;
 pub mod sgd;
 /// Steady-state real-coded GA with BLX-α + NAM + BGA + replace-worst.
 pub mod ssga;
-/// Levenberg-Marquardt with box bounds (TRF—trust-region-reflective).
+/// Levenberg-Marquardt with box bounds (TRF, trust-region-reflective).
 pub mod trf;
 
 /// BFGS quasi-Newton solver (dense inverse-Hessian; `Vec<f64>`, nalgebra,
 /// faer).
 pub mod bfgs;
 
-/// BOBYQA (Powell 2009)—bound-constrained model-based derivative-free
+/// BOBYQA (Powell 2009): bound-constrained model-based derivative-free
 /// trust-region solver (shared Powell core + TRSBOX + ALTMOV + RESCUE).
 pub mod bobyqa;
 
-/// LINCOA (Powell 2015)—linearly-constrained model-based derivative-free
+/// LINCOA (Powell 2015): linearly-constrained model-based derivative-free
 /// trust-region solver (shared Powell core + TRSTEP projected-CG + GETACT).
 pub mod lincoa;
 
-/// COBYLA (Powell 1994)—nonlinearly-constrained derivative-free solver
+/// COBYLA (Powell 1994): nonlinearly-constrained derivative-free solver
 /// (simplex linear models + L-infinity merit + `trstlp`).
 pub mod cobyla;
 

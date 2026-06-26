@@ -79,7 +79,7 @@ surprise.
 
 ## Solvers
 
-- **First-order/quasi-Newton/Newton:** gradient descent (with momentum and
+- **First-order, quasi-Newton, and Newton:** gradient descent (with momentum and
   pluggable line searches), SGD, BFGS, L-BFGS, L-BFGS-B, and a Newton
   trust-region method.
 - **Derivative-free:** Nelder-Mead; Brent, Brent-with-derivatives, and
@@ -87,9 +87,9 @@ surprise.
   LINCOA, COBYLA); and MADS (OrthoMADS).
 - **Nonlinear least squares:** Gauss-Newton, Levenberg-Marquardt, trust-region
   reflective.
-- **Global/stochastic:** random search, CMA-ES, differential evolution, a
+- **Global and stochastic:** random search, CMA-ES, differential evolution, a
   steady-state genetic algorithm, and memetic combinations (MA-LS-Chain, plus
-  CMA-ES/DE injection wrappers).
+  CMA-ES and DE injection wrappers).
 - **Constrained:** box bounds via projected gradient descent, bounded
   Nelder-Mead, L-BFGS-B, and bounded CMA-ES; LINCOA for linear constraints and
   COBYLA for nonlinear inequalities; log-barrier and augmented Lagrangian
@@ -125,7 +125,7 @@ expect you to bring your own BLAS/LAPACK source crate:
   | Feature           | Effect                                                                                                                                                         |
   | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                                                                                |
-  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky/symmetric eigendecomposition for LAPACK-backed ones (pins `nalgebra-lapack` 0.27, the release tracking nalgebra 0.34). |
+  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky and symmetric eigendecomposition for LAPACK-backed ones (pins `nalgebra-lapack` 0.27, the release tracking nalgebra 0.34). |
 
 The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
 is behind the opt-in `parallel` feature; BLAS/LAPACK acceleration is behind

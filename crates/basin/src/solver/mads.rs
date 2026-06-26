@@ -2,16 +2,16 @@
 // the flat poll/direction arithmetic; the lint is blanket-allowed here.
 #![allow(clippy::needless_range_loop)]
 
-//! MADS (Audet & Dennis 2006)—mesh adaptive direct search, the deterministic
+//! MADS (Audet & Dennis 2006): mesh adaptive direct search, the deterministic
 //! OrthoMADS instance (Abramson, Audet, Dennis & Le Digabel 2009).
 //!
-//! [`Mads`] is a directional direct-search method for **nonsmooth /
+//! [`Mads`] is a directional direct-search method for **nonsmooth or
 //! non-continuous** objectives, where Nelder-Mead has no convergence theory and
 //! is known to stagnate. Each iteration polls a positive spanning set of `2n`
 //! directions on a shrinking mesh around the incumbent; an improving mesh point
 //! coarsens the mesh, a failed poll refines it. The set of poll directions
 //! becomes asymptotically dense, which gives MADS its Clarke-stationarity
-//! convergence guarantee on nonsmooth functions. It binds [`CostFunction`] only—
+//! convergence guarantee on nonsmooth functions. It binds [`CostFunction`] only;
 //! no derivatives.
 //!
 //! # Architecture
@@ -28,11 +28,11 @@
 //! poll point lies exactly on the mesh. The poll loop and bookkeeping live in
 //! the `driver` submodule.
 //!
-//! # State / solver split
+//! # State and solver split
 //!
 //! The incumbent and the poll size `Δᵖ` live on [`MadsState`](crate::MadsState);
 //! the mesh index, Halton-index schedule, and flat-scratch incumbent live on the
-//! solver (`Mads`'s `MadsWork`)—the same split the Powell-family DFO solvers
+//! solver (`Mads`'s `MadsWork`): the same split the Powell-family DFO solvers
 //! use. So [`MadsState`](crate::MadsState) is generic over the parameter vector
 //! `V` only; the direction algebra is internal `Vec<f64>`/`Vec<i64>` scratch.
 //!
@@ -49,7 +49,7 @@
 //! Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
 //! faer all work (the parameter type needs only [`Clone`], [`VectorLen`], and
 //! `Index`/`IndexMut`). The poll geometry is pure-Rust integer/`f64` scratch with
-//! no RNG, no `linalg`-tier ops, and no time—fully deterministic and wasm-clean.
+//! no RNG, no `linalg`-tier ops, and no time: fully deterministic and wasm-clean.
 //!
 //! [`CostFunction`]: crate::core::problem::CostFunction
 //! [`VectorLen`]: crate::core::math::VectorLen
@@ -75,7 +75,7 @@ use driver::{MadsWork, Transition};
 use progressive_barrier::PbWork;
 
 /// Type-state marker: box-bound-constrained MADS (`Mads<Bounded>`), reached via
-/// [`Mads::bounded`]. Bounds are enforced by the **extreme barrier**—infeasible
+/// [`Mads::bounded`]. Bounds are enforced by the **extreme barrier**: infeasible
 /// poll points are assigned `f = +∞` and rejected without evaluating the
 /// objective (Audet & Dennis 2006, §2). Pair with a problem implementing
 /// [`BoxConstraints`].
@@ -90,7 +90,7 @@ pub struct Bounded;
 pub struct Constrained;
 
 /// MADS (Audet & Dennis 2006): mesh adaptive direct search, deterministic
-/// OrthoMADS instance—derivative-free local optimization for nonsmooth or
+/// OrthoMADS instance: derivative-free local optimization for nonsmooth or
 /// non-continuous objectives.
 ///
 /// Configure the poll-size schedule, then drive it with an
@@ -147,7 +147,7 @@ pub struct Constrained;
 ///
 /// Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
 /// faer all work. The poll geometry is internal pure-Rust integer/`f64` scratch,
-/// so the parameter type needs only [`Clone`], [`VectorLen`], and `Index`/`IndexMut`—
+/// so the parameter type needs only [`Clone`], [`VectorLen`], and `Index`/`IndexMut`,
 /// never any `linalg`-tier op. Deterministic (no RNG) and wasm-clean.
 ///
 /// # References
@@ -163,7 +163,7 @@ pub struct Mads<Mode = Unbounded, F = f64> {
     poll_size_init: F,
     poll_size_min: F,
     /// Built in [`Solver::init`]; the resumable poll loop + mesh schedule
-    /// (unconstrained/box-bounded modes).
+    /// (unconstrained or box-bounded modes).
     work: Option<MadsWork<F>>,
     /// Built in [`Solver::init`] for the constrained mode; the resumable
     /// progressive-barrier poll loop. `None` in the other modes.
@@ -186,7 +186,7 @@ impl<F: Scalar> Mads<Unbounded, F> {
 }
 
 impl<Mode, F: Scalar> Mads<Mode, F> {
-    /// Set the initial poll size `Δ₀`—a reasonable initial change to the
+    /// Set the initial poll size `Δ₀`, a reasonable initial change to the
     /// variables. Uniformly scales the mesh.
     pub fn with_initial_poll_size(mut self, poll_size_init: F) -> Self {
         self.poll_size_init = poll_size_init;

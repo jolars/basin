@@ -23,7 +23,7 @@ use crate::core::math::{DenseMatrix, Scalar};
 ///
 /// i.e. an explicit symmetric part `Γ` plus a sum of rank-one terms keyed to
 /// the interpolation points. The constant term `Q(x0)` is **deliberately not
-/// stored** (Powell 2006, eq. 4.23—the model works in *changes* to `F` and
+/// stored** (Powell 2006, eq. 4.23: the model works in *changes* to `F` and
 /// `x`), so [`eval_change`](Self::eval_change) returns `Q(x0 + d) − Q(x0)`.
 ///
 /// `H` has block form `[[Ω, Ξᵀ], [Ξ, Υ]]` of order `m + n + 1`. Its `(m+1)`-th
@@ -151,7 +151,7 @@ impl<F: Scalar> QuadraticModel<F> {
     /// Apply the implicit Hessian of a *Lagrange function* `ℓ_t`:
     /// `∇²ℓ_t · u = Σ_k λ_k (x_k − x0)((x_k − x0)·u)` (Powell 2006, eq. 6.15).
     ///
-    /// Unlike `Q`, a Lagrange function has **no explicit `Γ` part**—its Hessian
+    /// Unlike `Q`, a Lagrange function has **no explicit `Γ` part**: its Hessian
     /// is purely the rank-one sum keyed by its implicit coefficients `λ`, which
     /// are the `Ω`-column of `H` returned by
     /// [`lagrange_coeffs`](Self::lagrange_coeffs). BIGLAG (Powell 2006, §6) uses
@@ -255,7 +255,7 @@ mod tests {
 
     /// Build a model on `n` variables, `m` interpolation points, with the given
     /// `Γ`, `γ`, `∇Q` and interpolation displacements. The `H`-factorization
-    /// blocks are filled with zeros—irrelevant to the read surface, which
+    /// blocks are filled with zeros, irrelevant to the read surface, which
     /// only touches `gq`, `gamma_explicit`, `gamma`, and `xpt`.
     fn model_with(
         n: usize,

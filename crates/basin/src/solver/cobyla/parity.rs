@@ -1,6 +1,6 @@
 //! Cross-validation of the COBYLA driver against PRIMA v0.7.2.
 //!
-//! PRIMA is the BSD-3 C/Fortran reference translation of Powell's solvers
+//! PRIMA is the BSD-3 C and Fortran reference translation of Powell's solvers
 //! (vendored at `tools/prima`). For each nonlinearly-constrained test problem we
 //! generate a fixture with PRIMA's COBYLA (`tests/fixtures/cobyla_prima_driver.c`
 //! → `tests/fixtures/cobyla_<problem>_<n>d.tsv`; see that file and the fixtures
@@ -11,18 +11,18 @@
 //!
 //! The fixtures use only the nonlinear constraint block (`m_ineq = m_eq = 0`,
 //! `xl`/`xu = ±∞`), which is exactly the trait-only path basin's [`Cobyla`]
-//! drives (its `m_lcon = 0`)—so the two solvers see the same feasible region.
+//! drives (its `m_lcon = 0`), so the two solvers see the same feasible region.
 //!
 //! # What is and isn't asserted
 //!
-//! basin's COBYLA is ported from Powell 1994 / PRIMA but is not an FP-identical
+//! basin's COBYLA is ported from Powell 1994 and PRIMA but is not an FP-identical
 //! transcription, so the per-evaluation trajectory diverges once trust-region
-//! iterations begin. The assertions mirror the NEWUOA/LINCOA parity harnesses,
+//! iterations begin. The assertions mirror the NEWUOA and LINCOA parity harnesses,
 //! with COBYLA's nonlinear constraints added to tier 1:
 //!
 //! 1. **Function equivalence (tight, `1e-12`).** The Rust objective *and*
 //!    constraint violation recomputed at every point PRIMA evaluated must match
-//!    the fixture values—guards both functions against C↔Rust drift.
+//!    the fixture values: guards both functions against C↔Rust drift.
 //! 2. **Initial design (tight, order-independent).** basin's first `n+1` samples
 //!    equal PRIMA's first `n+1` samples as a set (COBYLA's `n+1`-vertex simplex
 //!    is built cumulatively with pole swaps, so this compares against the
@@ -42,7 +42,7 @@ struct Fixture {
     rho_end: f64,
     max_fun: usize,
     x0: Vec<f64>,
-    /// Every objective/constraint evaluation PRIMA made, in order: `(f, cstrv, x)`.
+    /// Every objective and constraint evaluation PRIMA made, in order: `(f, cstrv, x)`.
     evals: Vec<(f64, f64, Vec<f64>)>,
     final_f: f64,
     final_cstrv: f64,

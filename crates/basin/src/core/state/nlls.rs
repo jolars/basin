@@ -80,7 +80,7 @@ impl<P, F: Scalar> NllsState<P, F> {
         self.residual_evals
     }
 
-    /// Cumulative Jacobian evaluations across the run—the MINPACK `njev`.
+    /// Cumulative Jacobian evaluations across the run: the MINPACK `njev`.
     pub fn jacobian_evals(&self) -> u64 {
         self.jacobian_evals
     }

@@ -17,7 +17,7 @@
 //!   solve. The error bubbles all the way out of
 //!   [`Executor::run`](crate::Executor::run) typed as
 //!   `Result<_, P::Error>`. Use this when the failure is *not* about a
-//!   particular `x`—a downstream service vanished, the user pressed
+//!   particular `x`: a downstream service vanished, the user pressed
 //!   cancel, an early-stopping criterion in the problem's own state fired.
 //!
 //! Problems that never fail in this way pick
@@ -27,11 +27,11 @@
 //! so the happy path stays zero-cost.
 
 /// Scalar-valued objective `f(x): Param → Output`. The smallest
-/// problem trait—every solver binds at least on this.
+/// problem trait: every solver binds at least on this.
 ///
 /// # Contract
 ///
-/// - **Implementor must:** be a *pure* function of `param`—
+/// - **Implementor must:** be a *pure* function of `param`:
 ///   evaluating at the same `param` twice must return the same
 ///   `Output` (or the same `Err`). Solvers cache costs across iterations,
 ///   line searches reuse evaluations, and termination criteria assume the
@@ -75,7 +75,7 @@ pub trait CostFunction {
     /// provisional choices).
     type Output;
     /// User-chosen hard-abort error. Pick
-    /// [`std::convert::Infallible`] when the cost cannot fail—its
+    /// [`std::convert::Infallible`] when the cost cannot fail: its
     /// niche optimization keeps `Result<f64, Infallible>` the same
     /// layout as bare `f64` on the happy path.
     type Error;
@@ -107,22 +107,22 @@ pub trait CostFunction {
 ///
 /// # Fused evaluation
 ///
-/// When a solver needs *both* `f(x)` and `∇f(x)` at the same point—
-/// which it almost always does at the start of every iteration—
+/// When a solver needs *both* `f(x)` and `∇f(x)` at the same point
+/// (which it almost always does at the start of every iteration),
 /// it calls [`cost_and_gradient`](Self::cost_and_gradient). The default
 /// body simply calls [`CostFunction::cost`] and [`Gradient::gradient`]
 /// in turn, which is the right answer for most problems and what
 /// users get for free.
 ///
 /// **Override `cost_and_gradient` when the two share substantial
-/// intermediate work**—autodiff tapes, forward-mode adjoints,
+/// intermediate work**: autodiff tapes, forward-mode adjoints,
 /// neural-net activations, expensive simulation state. The default
 /// then becomes a no-op and the solver picks up the fusion savings
 /// without any further change.
 ///
 /// Cost-only callers (line searches probing trial steps, cost-only
 /// termination criteria, derivative-free solvers) keep calling
-/// [`CostFunction::cost`] directly—no waste from the fused method.
+/// [`CostFunction::cost`] directly, with no waste from the fused method.
 ///
 /// # Examples
 ///
@@ -227,7 +227,7 @@ pub trait Gradient: CostFunction {
 ///
 /// # Contract
 ///
-/// - **Implementor must:** be a *pure* function of `param` and `batch`—
+/// - **Implementor must:** be a *pure* function of `param` and `batch`:
 ///   evaluating at the same `(param, batch)` twice must return the same
 ///   `Gradient` (or the same `Err`). Same call-order independence as
 ///   [`CostFunction::cost`].
@@ -235,7 +235,7 @@ pub trait Gradient: CostFunction {
 ///   `(1/|batch|) · Σ_{i ∈ batch} ∇fᵢ(param)`, not the unscaled sum.
 ///   This convention matches PyTorch/JAX/ensmallen and keeps the
 ///   solver's learning-rate `α` interpretation independent of batch
-///   size—switching `batch_size` does not require rescaling `α`.
+///   size: switching `batch_size` does not require rescaling `α`.
 /// - **Implementor must:** return a `Gradient` whose shape matches
 ///   `param`, same as [`Gradient::gradient`].
 /// - **Caller (solver) must:** pass a non-empty `batch` whose indices
@@ -310,7 +310,7 @@ pub trait MiniBatchGradient: CostFunction {
     type Gradient;
 
     /// Number of component samples `n` in the finite-sum objective
-    /// `f(x) = (1/n) Σᵢ fᵢ(x)`. Fixed for a given problem instance—
+    /// `f(x) = (1/n) Σᵢ fᵢ(x)`. Fixed for a given problem instance, so
     /// solvers may cache it once at [`Solver::init`](crate::core::solver::Solver::init).
     fn n_samples(&self) -> usize;
 
@@ -335,7 +335,7 @@ pub trait MiniBatchGradient: CostFunction {
 /// - **Implementor must:** be a *pure* function of `param`, with the
 ///   same call-order independence as [`CostFunction::cost`].
 /// - **Implementor must:** return an `Output` whose length `m` is fixed
-///   for a given problem—`m` does not depend on the iterate. Solvers
+///   for a given problem; `m` does not depend on the iterate. Solvers
 ///   may allocate workspace once based on the first call. `m` is
 ///   independent of `param.len() = n`.
 /// - When [`CostFunction`] is also implemented, the cost must agree
@@ -381,7 +381,7 @@ pub trait Residual {
     /// independent of `param.len() = n`.
     type Output;
     /// User-chosen hard-abort error. Independent of
-    /// [`CostFunction::Error`]—the trait families are orthogonal
+    /// [`CostFunction::Error`]: the trait families are orthogonal
     /// (NLLS solvers bind on `Residual` + [`Jacobian`]; first-order
     /// solvers bind on `CostFunction` + [`Gradient`]).
     type Error;
@@ -415,7 +415,7 @@ pub trait Residual {
 /// # Fused evaluation
 ///
 /// NLLS solvers (Gauss-Newton, LM, TRF) evaluate `r(x)` and `J(x)`
-/// together at every accepted iterate—and `r(x)` is usually the
+/// together at every accepted iterate, and `r(x)` is usually the
 /// dominant cost, with `J(x)` reusing intermediate state (forward-mode
 /// AD on the residual graph, FE assembly, simulation adjoints).
 /// [`residual_and_jacobian`](Self::residual_and_jacobian) provides the
@@ -487,7 +487,7 @@ pub trait Jacobian: Residual {
     /// Evaluate residual *and* Jacobian at `param` in one call. The
     /// default body delegates to [`Residual::residual`] and
     /// [`Jacobian::jacobian`]; override when shared intermediate work
-    /// can be amortized across the two—common in NLLS where `r(x)`
+    /// can be amortized across the two, common in NLLS where `r(x)`
     /// reuses forward-mode AD state that `J(x)` continues from.
     ///
     /// **Contract.** The returned `(residual, jacobian)` pair must
@@ -495,7 +495,7 @@ pub trait Jacobian: Residual {
     /// would return separately at the same `param`.
     ///
     /// **Eval counting.** NLLS solvers count one fused call as one
-    /// `cost_evals` *and* one `gradient_evals` increment—the same
+    /// `cost_evals` *and* one `gradient_evals` increment: the same
     /// convention solvers use for separate calls, because `½‖r‖²`
     /// plays the role of cost and `Jᵀr` the role of gradient.
     fn residual_and_jacobian(
@@ -548,7 +548,7 @@ pub trait Jacobian: Residual {
 ///   the `faer` feature).
 ///
 /// `Vec<f64>` and `ndarray::Array1<f64>` deliberately have no `Hessian`
-/// impl—there's no honest dense matrix type to pair with them. Per
+/// impl: there's no honest dense matrix type to pair with them. Per
 /// tenet 5 in `CONTRIBUTING.md`, missing backend coverage is a compile-time
 /// error rather than a runtime surprise.
 ///
@@ -681,7 +681,7 @@ impl EvalCounts {
     /// Componentwise `self + other`. Used by composed solvers that drive an
     /// inner against a *different* problem type (an adapter like
     /// [`LogBarrier`](crate::core::barrier::LogBarrier) or
-    /// [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian))—
+    /// [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian)):
     /// they construct a fresh inner [`Problem`] and merge its counts back
     /// into the outer's wrapper after [`run_loop`](crate::core::executor::run_loop).
     pub fn add(&mut self, other: &EvalCounts) {
@@ -730,7 +730,7 @@ impl EvalCounts {
 /// # Error path
 ///
 /// Counters bump **before** the delegated inner call. A mid-call `Err`
-/// therefore still leaves the wrapper count incremented—the wrapper is
+/// therefore still leaves the wrapper count incremented: the wrapper is
 /// authoritative even on the hard-abort path, where the state mirror may
 /// be stale. Observers can read the true count via
 /// [`counts`](Self::counts) regardless.
@@ -801,7 +801,7 @@ impl<P: CostFunction> Problem<P> {
     /// so the returned costs are bit-identical to a serial loop whether or not
     /// `parallel` is enabled.
     ///
-    /// Population solvers use this for per-generation fitness evaluation—
+    /// Population solvers use this for per-generation fitness evaluation:
     /// the λ candidates of one generation are independent, so they evaluate
     /// concurrently. Short-circuits on the first `Err` (hard abort).
     pub fn cost_batch(&mut self, params: &[P::Param]) -> Result<Vec<P::Output>, P::Error>
@@ -842,7 +842,7 @@ impl<P: Gradient> Problem<P> {
 impl<P: MiniBatchGradient> Problem<P> {
     /// Counted [`MiniBatchGradient::batch_gradient`]: one call bumps
     /// [`EvalCounts::gradient_evals`] by one, regardless of batch
-    /// size—same convention as [`Gradient::gradient`] (one *call* is
+    /// size, the same convention as [`Gradient::gradient`] (one *call* is
     /// one gradient evaluation; the per-sample work is implementation
     /// detail).
     pub fn batch_gradient(

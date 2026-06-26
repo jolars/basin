@@ -1,5 +1,5 @@
 //! End-to-end COBYLA convergence tests on Powell's 1994 problems (Tables 1–2).
-//! These assert convergence to the *published* optima—an oracle independent of
+//! These assert convergence to the *published* optima: an oracle independent of
 //! PRIMA. The PRIMA bit-parity cross-validation lives in [`super::parity`].
 
 use crate::NonlinearInequalityConstraints;

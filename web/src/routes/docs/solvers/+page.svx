@@ -28,7 +28,7 @@ trailing note cites the paper it implements (or the source it ports).
 ## Derivative-free
 
 - **[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**:
-  the classic reflection/expansion/contraction simplex; needs only a
+  the classic reflection, expansion, and contraction simplex; needs only a
   `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
   uses the dimension-aware coefficients of Gao & Han (2012), and the projected
   variant follows Luersen & Le Riche (2004).

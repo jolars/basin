@@ -14,7 +14,7 @@
 //! stalls, an increasing `ρ`) drives the iterate to the constrained
 //! optimum: the [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)
 //! automates that outer loop, but `AugmentedLagrangian` is also usable on its
-//! own with any unconstrained solver/[`Executor`](crate::core::executor::Executor)
+//! own with any unconstrained solver or [`Executor`](crate::core::executor::Executor)
 //! at a fixed `(λ, ρ)`.
 //!
 //! Unlike the [`LogBarrier`](crate::core::barrier::LogBarrier), `L_ρ` is
@@ -37,7 +37,7 @@
 //!
 //! Requires the constraint matrix to implement
 //! [`MatVec`] (`A x`) and
-//! [`MatTransposeVec`] (`Aᵀ v`)—a
+//! [`MatTransposeVec`] (`Aᵀ v`): a
 //! strict subset of the LA tier that never includes a linear solve. That
 //! covers nalgebra (`DMatrix`/`DVector`) and faer (`Mat`/`Col`); `Vec<f64>`
 //! and `ndarray` are a compile-time error until they grow the two matvec

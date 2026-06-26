@@ -115,10 +115,10 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     ///   mismatch; entries of `0` produce `inf`, which propagates.
     fn cl_kkt_inf_norm(&self, d_sq: &Self) -> F;
 
-    /// `Σ self[i]² · weights[i]`—the squared D-norm `‖D · self‖²`
+    /// `Σ self[i]² · weights[i]`, the squared D-norm `‖D · self‖²`
     /// when `weights = d_sq` is the [`compute_cl_scaling`](Self::compute_cl_scaling) output.
     /// Used in the BCL scaled trust-region predicted-reduction
-    /// `½(μ · ‖D·h‖² − h^T g)`—the analogue of Nielsen's LM
+    /// `½(μ · ‖D·h‖² − h^T g)`, the analogue of Nielsen's LM
     /// `½(μ‖h‖² − h^T g)` with the affine-scaling D folded in.
     ///
     /// # Contract
@@ -135,7 +135,7 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     /// `rstep · max(1, |bound|)` from the relevant finite bound.
     ///
     /// Used at TRF `init` to bring an arbitrary starting point into
-    /// the open feasible region—the affine scaling matrix `D` is
+    /// the open feasible region: the affine scaling matrix `D` is
     /// undefined where `v_i = 0` (i.e. on a finite face).
     ///
     /// # Contract

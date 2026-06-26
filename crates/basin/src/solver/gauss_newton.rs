@@ -13,14 +13,14 @@ use crate::core::termination::TerminationReason;
 ///
 /// Each iteration solves the normal equations `(JᵀJ) δ = −Jᵀr` via
 /// Cholesky on the Gram matrix `JᵀJ` and takes the full step
-/// `x ← x + δ`. No damping, no line search—that's what
+/// `x ← x + δ`. No damping, no line search; that's what
 /// Levenberg-Marquardt is for. See Madsen, Nielsen, Tingleff (2004),
 /// *Methods for Non-Linear Least Squares Problems*, §3.1.
 ///
 /// **Cholesky-on-`JᵀJ` vs QR-on-`J`.** Cholesky on the Gram is the
 /// simple path and the only one the
 /// [`linalg`](crate::core::math) tier exposes today. It squares the
-/// condition number of `J` and fails noisily on rank-deficient `J`—
+/// condition number of `J` and fails noisily on rank-deficient `J`;
 /// see the [`solve_spd` failure path](#failure-modes) below. QR-on-`J`
 /// is more numerically robust but adds a second factorization to the
 /// linalg surface; deferred until a solver actually needs it. Pure GN
@@ -33,10 +33,10 @@ use crate::core::termination::TerminationReason;
 ///   Cholesky inside [`LinearSolveSpd`] returns
 ///   [`NotPositiveDefinite`](crate::core::math::LinearSolveError::NotPositiveDefinite),
 ///   and the solver returns [`TerminationReason::SolverFailed`]. This
-///   is the *correct* behavior for pure GN—Powell's singular
+///   is the *correct* behavior for pure GN; Powell's singular
 ///   function is the canonical example. Reach for Levenberg-Marquardt
 ///   when this fires.
-/// - **Divergence on highly nonlinear/poorly initialized problems.**
+/// - **Divergence on highly nonlinear or poorly initialized problems.**
 ///   No safeguard here either; pure GN trusts the linear model. Catch
 ///   this with a finite [`MaxIter`](crate::core::termination::MaxIter)
 ///   or [`CostTolerance`](crate::core::termination::CostTolerance) on
@@ -188,7 +188,7 @@ where
         }
 
         // Solve (JᵀJ) δ = −Jᵀr. Cholesky failure means JᵀJ is not
-        // positive definite (rank-deficient J)—pure GN can't recover,
+        // positive definite (rank-deficient J); pure GN can't recover,
         // LM in S4 will.
         let gram = j.gram();
         let mut neg_g = g;

@@ -18,7 +18,7 @@ impl<F: Scalar> QuadraticModel<F> {
     /// 3.13–3.20 for the closed-form `Ξ`/`Υ`/`Ω`-factorization).
     ///
     /// `eval` evaluates the objective at an absolute point; it is called exactly
-    /// once per interpolation point (`m` evaluations total) and may fail—the
+    /// once per interpolation point (`m` evaluations total) and may fail: the
     /// first `Err` aborts initialization and bubbles to the caller (the public
     /// [`Newuoa`](crate::solver::Newuoa) solver forwards the problem's typed
     /// cost error). Keeping it a closure lets initialization be unit-tested
@@ -82,7 +82,7 @@ impl<F: Scalar> QuadraticModel<F> {
         // --- 2. Paired points for the off-diagonal Hessian (eq 3.3), m>2n+1. ---
         // For each extra point store (ip, p, q, p̂, q̂) (all 0-based), where p,q
         // are coordinates and p̂,q̂ the point indices of x0+σ_p ρ e_p and
-        // x0+σ_q ρ e_q (eq 3.19)—reused by both the Γ off-diagonal and the
+        // x0+σ_q ρ e_q (eq 3.19): reused by both the Γ off-diagonal and the
         // Ω-factorization column (eq 3.20).
         let mut extras: Vec<(usize, usize, usize, usize, usize)> = Vec::new();
         for ip in (2 * n + 1)..m {
@@ -131,7 +131,7 @@ impl<F: Scalar> QuadraticModel<F> {
         }
         let gamma = vec![F::zero(); m];
 
-        // --- 4. Factored inverse-KKT H (suppressed (m+1)-th row/col). ---
+        // --- 4. Factored inverse-KKT H (suppressed (m+1)-th row and column). ---
         let npt_minus = m - n - 1;
         let mut bmat_xi = DenseMatrix::from_fn(n, m, |_, _| F::zero());
         // Υ is identically zero for m ≥ 2n+1 (eq 3.16).
@@ -273,7 +273,7 @@ mod tests {
         assert!((model.gamma_explicit.get(1, 1) - g[1][1]).abs() < 1e-12);
     }
 
-    /// T4: the master KKT identity—the stored `Ω`/`Ξ`/`Υ` blocks must equal
+    /// T4: the master KKT identity: the stored `Ω`/`Ξ`/`Υ` blocks must equal
     /// the corresponding blocks of `inv(W)` after INIT, validating eqs 3.13–3.20
     /// across `m = 2n+1` (n=1, n=2) and `m > 2n+1` (n=2).
     #[test]

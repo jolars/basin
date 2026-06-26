@@ -28,17 +28,17 @@ use crate::core::state::{CountsMirror, RhoState, State};
 /// Solver state for [`Newuoa`](crate::solver::Newuoa).
 ///
 /// Construct with [`new`](Self::new) from the starting point; the solver
-/// evaluates it and seeds the cost/trust-region radius in
+/// evaluates it and seeds the cost and trust-region radius in
 /// [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct NewuoaState<V, F = f64> {
-    /// Current iterate—the best point found so far (NEWUOA reports the
+    /// Current iterate: the best point found so far (NEWUOA reports the
     /// least-`F` point). Initially the user's starting point.
     pub(crate) param: V,
     /// `F(param)`. `None` before [`Solver::init`](crate::core::solver::Solver::init).
     pub(crate) cost: Option<F>,
-    /// Current trust-region radius `ρ`—`+∞` before
+    /// Current trust-region radius `ρ`; `+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from
     /// `ρ_beg`. [`RhoTolerance`](crate::core::termination::RhoTolerance) reads it.
     pub(crate) rho: F,
@@ -57,7 +57,7 @@ pub struct NewuoaState<V, F = f64> {
 impl<V, F: Scalar> NewuoaState<V, F> {
     /// Build an initial NEWUOA state at the starting point `x0`. The solver
     /// evaluates `x0` (and the rest of the initial interpolation set) and fills
-    /// the cost/`ρ` in [`Solver::init`](crate::core::solver::Solver::init).
+    /// the cost and `ρ` in [`Solver::init`](crate::core::solver::Solver::init).
     pub fn new(x0: V) -> Self {
         Self {
             param: x0,

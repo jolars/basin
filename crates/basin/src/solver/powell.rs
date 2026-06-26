@@ -3,8 +3,8 @@
 // the H-algebra; the lint is blanket-allowed for this module.
 #![allow(clippy::needless_range_loop)]
 // The model-core read surface and several H-update entry points have only
-// `#[cfg(test)]` callers in the non-`bobyqa` build (the in-module tests, and—
-// for the §8 `Q_int` path—NEWUOA's driver alone); BOBYQA adds more callers.
+// `#[cfg(test)]` callers in the non-`bobyqa` build (the in-module tests, and,
+// for the §8 `Q_int` path, NEWUOA's driver alone); BOBYQA adds more callers.
 // Blanket-allow so test-only `pub(crate)` surface does not trip dead-code
 // analysis.
 #![allow(dead_code)]

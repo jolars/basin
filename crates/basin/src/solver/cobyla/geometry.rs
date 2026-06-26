@@ -69,7 +69,7 @@ pub(crate) fn setdrop_geo<F: Scalar>(
 }
 
 /// Pick the vertex to replace with the trust-region trial point (eq. 19–22),
-/// using the combined distance/poisedness score. Returns a 0-based index in
+/// using the combined distance and poisedness score. Returns a 0-based index in
 /// `0..=n` (`n` = the pole) or [`NO_DROP`]. PRIMA `setdrop_tr`.
 pub(crate) fn setdrop_tr<F: Scalar>(
     ximproved: bool,

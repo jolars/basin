@@ -8,7 +8,7 @@
 //!
 //! (`sl = a − x0`, `su = b − x0` are the shifted bounds, `x_opt` the best
 //! interpolation point relative to `x0`). It is the box-aware member of the
-//! shared [`TrustRegionSubproblem`] family—the unconstrained TRSAPP (NEWUOA)
+//! shared [`TrustRegionSubproblem`] family: the unconstrained TRSAPP (NEWUOA)
 //! is the special case with no active bounds.
 //!
 //! The method (Powell 2009, §3) is an **active-set truncated conjugate
@@ -51,7 +51,7 @@ impl<F: Scalar> TrustRegionSubproblem<F> for Trsbox {
     }
 }
 
-/// `Σ_{i: xbdi[i]==0} a[i]·b[i]`—inner product over the *free* variables.
+/// `Σ_{i: xbdi[i]==0} a[i]·b[i]`: inner product over the *free* variables.
 fn dot_free<F: Scalar>(a: &[F], b: &[F], xbdi: &[i8]) -> F {
     let mut s = F::zero();
     for i in 0..a.len() {
@@ -439,7 +439,7 @@ pub(crate) fn trsbox<F: Scalar>(
         let grid_size = 2 * (gs_f.to_f64().unwrap().round() as usize).max(2);
         let hangt = interval_max(zero, hangt_bd, &args, grid_size);
         let sdec = interval_fun(hangt, &args);
-        // `.not. sdec > 0` in PRIMA—also exits on NaN.
+        // `.not. sdec > 0` in PRIMA: also exits on NaN.
         if sdec <= zero || sdec.is_nan() {
             break;
         }
@@ -548,7 +548,7 @@ mod tests {
         );
     }
 
-    /// Slack bounds, large Δ: TRSBOX behaves like the unconstrained solve—it
+    /// Slack bounds, large Δ: TRSBOX behaves like the unconstrained solve, it
     /// reaches the interior minimizer (gradient ≈ 0 at x_opt + d) with a
     /// positive predicted reduction that matches the model, and no bound active.
     #[test]

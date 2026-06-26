@@ -498,7 +498,7 @@ pub(crate) fn rescue<F: Scalar, E>(
 /// (`zsign` untouched); `fval` and the model are not touched here. `vlag` is the
 /// (length `m+n`) `H·w` in `[λ; g]` layout; it is mutated locally. On
 /// `DAMAGING_ROUNDING` (non-finite `vlag`/`β` or `denom ≤ 0`) the update is
-/// silently skipped to protect `H`—matching PRIMA, which calls this without
+/// silently skipped to protect `H`, matching PRIMA, which calls this without
 /// capturing its optional `info` here (the entry gate at the call site already
 /// rejects bad denominators, so the skip is not expected to trigger).
 fn updateh_rsc<F: Scalar>(model: &mut QuadraticModel<F>, knew: usize, beta: F, vlag: &mut [F]) {

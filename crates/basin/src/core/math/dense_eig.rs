@@ -12,7 +12,7 @@
 //! simplest correct symmetric eigensolver: a sequence of plane rotations that
 //! drive the off-diagonal mass to zero, accumulating the eigenvectors in an
 //! orthogonal matrix. It is slower than the tridiagonal-QR method the
-//! nalgebra/faer backends use, but `Vec<F>` is the convenience backend;
+//! nalgebra and faer backends use, but `Vec<F>` is the convenience backend;
 //! callers wanting speed at large `n` reach for faer.
 
 use super::Scalar;
@@ -123,7 +123,7 @@ pub(super) fn jacobi_eigen<F: Scalar>(a: &[F], n: usize) -> Option<(Vec<F>, Vec<
                 m[p * n + q] = zero;
                 m[q * n + p] = zero;
 
-                // Rotate the remaining entries of rows/cols p and q, keeping
+                // Rotate the remaining entries of rows and cols p and q, keeping
                 // the matrix symmetric.
                 for i in 0..n {
                     if i != p && i != q {

@@ -38,11 +38,11 @@ use crate::solver::nelder_mead::NelderMead;
 /// # Why an associated state type
 ///
 /// Each inner has a natural state shape: NM wants a simplex (`n + 1`
-/// vertices), LM wants a single iterate with cached residual/Jacobian,
+/// vertices), LM wants a single iterate with cached residual and Jacobian,
 /// L-BFGS-B wants the limited-memory history. Tying
 /// [`State`](InitialState::State) to [`InitialState`] lets the memetic factory
 /// write `BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())`
-/// without the caller having to spell out `LbfgsState<V>` in turbofish—
+/// without the caller having to spell out `LbfgsState<V>` in turbofish;
 /// `I` determines it.
 ///
 /// # Eval aggregation
@@ -80,7 +80,7 @@ type ClosureSeedFn<V, S, F> = Box<dyn Fn(&V, F) -> S>;
 /// Intended use is one-off experiments and contract tests (e.g. the
 /// `AlwaysFails` harness verifying `SolverFailed` bubbling). For
 /// shipping configurations, prefer impl-ing `MemeticInner` on your
-/// solver type—it's a three-line trait.
+/// solver type; it's a three-line trait.
 pub struct ClosureInner<I, S, V, F = f64> {
     inner: I,
     seed_fn: ClosureSeedFn<V, S, F>,
@@ -126,7 +126,7 @@ where
     type State = S;
     fn seed(&self, x: &V) -> S {
         // σ-free seed: the closure receives σ = 0. `ClosureInner` is an
-        // experiment/contract-test escape hatch, so a documented dummy
+        // experiment and contract-test escape hatch, so a documented dummy
         // is acceptable here where it is not in the native impls.
         (self.seed_fn)(x, F::zero())
     }
@@ -161,8 +161,8 @@ where
     type State = BasicSimplexState<V, F>;
     fn seed(&self, x: &V) -> BasicSimplexState<V, F> {
         // σ-free seed: Nelder-Mead's own default relative-step simplex
-        // (FMINSEARCH/SciPy 5%), used when there is no outer step-size to
-        // track (e.g. a barrier/AL inner).
+        // (FMINSEARCH and SciPy 5%), used when there is no outer step-size to
+        // track (e.g. a barrier or AL inner).
         BasicSimplexState::new(x.clone())
     }
 }
@@ -220,13 +220,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    // `seed_scaled` defaults to `seed`—LM ignores σ.
+    // `seed_scaled` defaults to `seed`; LM ignores σ.
 }
 
 // `WarmStart` is generic over the mode marker so both `Lbfgsb` (bounded,
-// used as a CMA inner) and `Lbfgs<Unbounded>` (used as a barrier/AL
+// used as a CMA inner) and `Lbfgs<Unbounded>` (used as a barrier or AL
 // inner) seed the same `LbfgsState`. `MemeticInner` stays on the bounded
-// alias only—CMA injection pairs with the bounded variant.
+// alias only; CMA injection pairs with the bounded variant.
 impl<Mode, S, V, F> InitialState<V> for Lbfgs<Mode, S, F>
 where
     F: Scalar,
@@ -250,11 +250,11 @@ where
     F: Scalar,
     V: Clone,
 {
-    // `seed_scaled` defaults to `seed`—L-BFGS-B ignores σ.
+    // `seed_scaled` defaults to `seed`; L-BFGS-B ignores σ.
 }
 
 // -----------------------------------------------------------------------
-// CmaInject—memetic CMA-ES with Hansen-2011 injection.
+// CmaInject: memetic CMA-ES with Hansen-2011 injection.
 // -----------------------------------------------------------------------
 
 /// Memetic CMA-ES with Hansen (2011) injection: outer CMA-ES proposes
@@ -275,7 +275,7 @@ where
 /// with `y_i = (x_i − m)/σ` and `C^{-1/2} = B D^{-1} Bᵀ` from the
 /// post-update eigendecomposition CMA-ES already maintains. After
 /// clipping, replaced candidates re-enter the population on equal
-/// footing with regular samples—all subsequent CMA updates
+/// footing with regular samples; all subsequent CMA updates
 /// (m, p_σ, p_c, C, σ) run the standard equations unchanged. Lamarckian
 /// by construction; no Baldwinian mode in the paper.
 ///
@@ -296,7 +296,7 @@ where
 /// [`EvalCounts`](crate::core::problem::EvalCounts) as the outer's own
 /// evaluations. [`CmaEsState`]'s [`CountsMirror`] folds every
 /// kind of work into the outer's single `cost_evals` via
-/// `delta.total_work()`—CMA-ES outer state has no `gradient_evals`
+/// `delta.total_work()`; CMA-ES outer state has no `gradient_evals`
 /// field, so a derivative-based inner (LM, L-BFGS-B) has its gradient
 /// work honestly collapse into `cost_evals` with no per-trait cross-type
 /// fold. See CONTRIBUTING.md "Solver composition" rule 1.
@@ -384,8 +384,8 @@ where
 
     /// Register a termination criterion on the inner loop.
     /// Criteria are reused across every outer iteration's inner run, but
-    /// each is reset at the start of every run, so stateful criteria—
-    /// including [`MaxTime`](crate::core::termination::MaxTime)—are safe.
+    /// each is reset at the start of every run, so stateful criteria,
+    /// including [`MaxTime`](crate::core::termination::MaxTime), are safe.
     /// See CONTRIBUTING.md "Solver composition" rule 2.
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where
@@ -503,7 +503,7 @@ where
             y.scaled_add(-F::one(), &m);
             y.scale_in_place(F::one() / sigma);
 
-            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖—B, D⁻¹ from the state.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖, with B, D⁻¹ from the state.
             let inv_sqrt_norm = {
                 let mut bt_y = state.b.mat_transpose_vec(&y);
                 bt_y.component_mul_assign(&state.d_inv);

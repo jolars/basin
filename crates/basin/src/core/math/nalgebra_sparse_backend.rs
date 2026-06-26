@@ -138,7 +138,7 @@ impl<F: Scalar> MatDiagonal<DVector<F>> for CscMatrix<F> {
             self.ncols()
         );
         // Diagonal entries missing from the CSC pattern are the implicit
-        // zero—same contract as `max_diagonal`.
+        // zero, the same contract as `max_diagonal`.
         DVector::from_iterator(
             self.nrows(),
             (0..self.nrows()).map(|i| {

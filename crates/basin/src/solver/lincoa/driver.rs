@@ -1,4 +1,4 @@
-//! LINCOA driver loop (Powell 2015; PRIMA `lincob.f90`)—resumable working
+//! LINCOA driver loop (Powell 2015; PRIMA `lincob.f90`): resumable working
 //! state.
 //!
 //! `LincoaWork` carries the shared [`QuadraticModel`], the folded constraint
@@ -30,12 +30,12 @@ pub(crate) enum Transition {
     Continue,
     /// ρ was reduced this step; keep iterating at the finer radius.
     RhoReduced,
-    /// ρ reached ρ_end—LINCOA's natural convergence.
+    /// ρ reached ρ_end: LINCOA's natural convergence.
     Converged,
 }
 
 /// The result of one [`step`](LincoaWork::step): the loop decision. Evaluated
-/// points are not returned—the public solver reports the model's best feasible
+/// points are not returned: the public solver reports the model's best feasible
 /// point ([`best`](LincoaWork::best)) and the `Problem` wrapper counts evals.
 pub(crate) struct StepOutcome {
     pub(crate) transition: Transition,
@@ -53,7 +53,7 @@ pub(crate) struct LincoaWork<F = f64> {
     rescon: Vec<F>,
     /// Warm-started active-set QR (PRIMA `iact`/`nact`/`qfac`/`rfac`).
     qr: ActiveSetQr<F>,
-    /// Final radius `ρ_end`—drives the schedule and the convergence stop.
+    /// Final radius `ρ_end`: drives the schedule and the convergence stop.
     rho_end: F,
     /// Current trust-region radius `ρ`.
     rho: F,
@@ -128,7 +128,7 @@ impl<F: Scalar> LincoaWork<F> {
     /// Build the initial model under the folded linear-constraint system (Powell
     /// 2015) and seed the ρ/Δ schedule. `amat`/`bvec_abs` are the unit-normalized
     /// system from [`fold_constraints`](super::init::fold_constraints) in absolute
-    /// coordinates. Returns the work plus the initial best feasible point/value.
+    /// coordinates. Returns the work plus the initial best feasible point and value.
     ///
     /// # Panics
     ///
@@ -194,7 +194,7 @@ impl<F: Scalar> LincoaWork<F> {
     }
 
     /// Absolute point `x0 + disp` for an objective evaluation. LINCOA does not
-    /// clip—trust-region steps stay feasible and geometry steps may legitimately
+    /// clip: trust-region steps stay feasible and geometry steps may legitimately
     /// leave the feasible region.
     fn abs_point(&self, disp: &[F]) -> Vec<F> {
         let x0 = self.model.x0();
@@ -298,7 +298,7 @@ impl<F: Scalar> LincoaWork<F> {
         }
 
         let qred_thr = F::from_f64(1e-5).expect("1e-5 representable") * self.rho * self.rho;
-        let trfail = qred <= qred_thr || qred.is_nan(); // tiny/negative qred, or NaN
+        let trfail = qred <= qred_thr || qred.is_nan(); // tiny or negative qred, or NaN
 
         let mut ratio = -F::one();
         let mut knew_tr: Option<usize> = None;

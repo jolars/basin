@@ -6,7 +6,7 @@
 //! ripple of amplitude `A` creates a dense lattice of local minima on
 //! integer offsets. The global minimum sits at `x = (0, …, 0)` with
 //! `f = 0`. Separable (the sum decomposes per coordinate), which is a
-//! useful diagnostic—solvers that exploit separability handle it far
+//! useful diagnostic: solvers that exploit separability handle it far
 //! better than non-separable multimodal functions like Schwefel or
 //! Ackley.
 //!
@@ -81,7 +81,7 @@ pub static RASTRIGIN_SPEC: ProblemSpec = ProblemSpec {
         differentiable: true,
         // Non-convex: the cosine term creates many bumps.
         convex: false,
-        // Highly multimodal—many local minima on an integer lattice.
+        // Highly multimodal: many local minima on an integer lattice.
         unimodal: false,
         // f(x) = Σᵢ gᵢ(xᵢ) with gᵢ(t) = A + t² − A·cos(2π·t); the
         // additive constant A·n is shared across coordinates but the
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn boxed_form_reuses_rastrigin_spec() {
         let spec = <RastriginBoxed<Vec<f64>> as HasSpec>::SPEC;
-        // Same static—both wrappers point at the one Rastrigin entry.
+        // Same static: both wrappers point at the one Rastrigin entry.
         assert!(core::ptr::eq(spec, &RASTRIGIN_SPEC));
     }
 }

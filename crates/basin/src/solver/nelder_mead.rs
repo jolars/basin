@@ -28,7 +28,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Backends
 ///
-/// Backend-generic—works with any `V` implementing
+/// Backend-generic; works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) + `Clone`, paired
 /// with a [`BasicSimplexState<V, F>`]. With the default `F = f64` that
 /// covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
@@ -38,7 +38,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Examples
 ///
-/// Derivative-free minimization of Rosenbrock—Nelder–Mead needs only
+/// Derivative-free minimization of Rosenbrock: Nelder–Mead needs only
 /// [`CostFunction`] and iterates a [`BasicSimplexState`] seeded from a
 /// single point (the initial simplex is built automatically):
 ///
@@ -101,7 +101,7 @@ pub struct Unbounded;
 /// # Known limitation
 ///
 /// The simple projection approach can stall when many vertices collapse
-/// onto the same boundary face—the simplex becomes degenerate and the
+/// onto the same boundary face: the simplex becomes degenerate and the
 /// reflection step loses descent direction. This is a known weakness of
 /// the projection variant; scipy ships it anyway because it works well
 /// enough in practice. For tighter behavior near active bounds consider
@@ -134,7 +134,7 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
     /// Nelder-Mead with the standard parameters (Nelder & Mead 1965):
     /// α=1, β=2, γ=0.5, δ=0.5. These coefficients *are* the default, so
     /// this is the canonical entry point; [`adaptive`](Self::adaptive)
-    /// and [`with_params`](Self::with_params) are presets/overrides.
+    /// and [`with_params`](Self::with_params) are presets and overrides.
     pub fn new() -> Self {
         Self {
             config: ParamConfig::Standard,
@@ -219,7 +219,7 @@ impl<Mode, F: Scalar> NelderMead<Mode, F> {
 }
 
 /// Write `(1 − t)·a + t·b` into `out`, in place. Works for any
-/// `t ∈ ℝ`—values outside `[0, 1]` extrapolate, which is what
+/// `t ∈ ℝ`; values outside `[0, 1]` extrapolate, which is what
 /// reflection needs. `out`'s previous contents are overwritten; the
 /// caller must guarantee it has the same shape as `a`/`b` (the
 /// solver enforces this by pre-allocating scratch in `init`).
@@ -254,7 +254,7 @@ where
 /// Called from `next_iter` where the simplex is already sorted except
 /// for the one slot Nelder-Mead just rewrote (or the four slots after a
 /// shrink), so each call does only a handful of swaps in the steady
-/// state—and crucially, allocates nothing.
+/// state, and crucially, allocates nothing.
 fn insertion_sort_simplex<V, F: PartialOrd>(vertices: &mut [V], costs: &mut [F]) {
     for i in 1..vertices.len() {
         let mut j = i;
@@ -290,7 +290,7 @@ where
 }
 
 /// Pre-allocate Nelder-Mead's three scratch slots (centroid + two trial
-/// vertices) on `state.scratch` if it isn't sized yet. Idempotent—a
+/// vertices) on `state.scratch` if it isn't sized yet. Idempotent: a
 /// re-`init` reuses the existing storage.
 fn ensure_scratch<V, F>(state: &mut BasicSimplexState<V, F>)
 where
@@ -410,7 +410,7 @@ where
     // Best vertex is fixed at index 0; shrink every other vertex toward
     // it in place: v ← best + δ·(v − best) = (1 − δ)·best + δ·v.
     // Split-borrow lets us read x[0] while mutating x[i], and the
-    // affine write goes directly into the vertex slot—no scratch
+    // affine write goes directly into the vertex slot, with no scratch
     // alloc per shrunk vertex.
     let one = F::one();
     let (best_slice, rest) = state.vertices.split_at_mut(1);

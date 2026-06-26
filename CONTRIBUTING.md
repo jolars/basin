@@ -13,12 +13,12 @@ opt-in features arrive in minor releases.
 Basin is a Rust library crate for numerical optimization, inspired by `argmin`.
 It pairs a small generic core (problem traits you implement, a pluggable
 termination layer, and an `Executor` driver loop) with a growing set of solvers
-spanning first-order/quasi-Newton (gradient descent, BFGS, L-BFGS/L-BFGS-B),
+spanning first-order and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B),
 derivative-free (Nelder-Mead, Brent, and Powell's model-based family
 NEWUOA/BOBYQA/LINCOA/COBYLA), nonlinear least squares (Gauss-Newton,
-Levenberg-Marquardt, trust-region-reflective), global/stochastic (random search,
+Levenberg-Marquardt, trust-region-reflective), global and stochastic (random search,
 CMA-ES, a steady-state GA, memetic combinations), and constrained methods
-(projected gradient, bounded Nelder-Mead/L-BFGS-B/ CMA-ES, log-barrier,
+(projected gradient, bounded Nelder-Mead, L-BFGS-B, and CMA-ES, log-barrier,
 augmented Lagrangian, and COBYLA for nonlinear inequality constraints). Solvers
 are generic over the linear-algebra backend (`Vec<f64>`, nalgebra, ndarray,
 faer).
@@ -103,8 +103,8 @@ These shape API decisions and are non-obvious from the code alone.
    knobs stay on the solver. Each criterion binds on the *minimum state shape*
    it needs (e.g. `GradientTolerance` requires `S: GradientState`), so a
    derivative-free solver can't be paired with a gradient criterion by mistake.
-   Because derivative-free solvers have no gradient, termination is pluggable /
-   opt-in based on what the state and problem expose.
+   Because derivative-free solvers have no gradient, termination is pluggable
+   and opt-in based on what the state and problem expose.
 4. **First-class constraints.** Constraints describe the *problem*, so they live
    problem-side, not as executor config, never on state. Solvers declare support
    via traits; a constrained problem handed to an unconstrained solver is a
@@ -121,25 +121,25 @@ These shape API decisions and are non-obvious from the code alone.
 
 ## WASM as a hard constraint
 
-Basin must build for `wasm32-unknown-unknown` out of the box—a constraint on
+Basin must build for `wasm32-unknown-unknown` out of the box: a constraint on
 dependencies, not a feature. CI enforces it
 (`cargo build --target wasm32-unknown-unknown`).
 
 - Every default dep must be wasm-compatible. Anything that isn't (file I/O,
   threads, BLAS/LAPACK-linked math) sits behind a non-default feature.
-- No `std::time::Instant` in default paths—use `web-time` or feature-gate the
-  time-based criterion. No rayon/parallelism in default features (gate behind
+- No `std::time::Instant` in default paths; use `web-time` or feature-gate the
+  time-based criterion. No rayon or parallelism in default features (gate behind
   `parallel`).
 - nalgebra and ndarray are wasm-fine in pure-Rust configs; pick those when both
   exist. LAPACK/BLAS acceleration of either is opt-in and off by default:
   `ndarray-blas` (forwards `ndarray/blas`) and `nalgebra-lapack` (swaps the
-  nalgebra backend's Cholesky/symmetric eigendecomposition for LAPACK-backed
+  nalgebra backend's Cholesky and symmetric eigendecomposition for LAPACK-backed
   ones). Both link a Fortran/BLAS toolchain, so neither builds for wasm and
   neither is in the wasm CI matrix.
 - If a solver can't realistically run on wasm, document that in a per-solver
   compat note rather than weakening the guarantee.
 
-## MSRV is externally constrained—do not bump casually
+## MSRV is externally constrained: do not bump casually
 
 Basin's MSRV (pinned in `rust-toolchain.toml`) is set by downstream consumers,
 not basin's own preferences:
@@ -148,7 +148,7 @@ not basin's own preferences:
   toolchain, which lags stable significantly. Bumping above CRAN's pin makes the
   R bindings unshippable. Don't bump `rust-version`/the `devenv.nix` pin without
   checking the current CRAN toolchain first.
-- **Secondary (non-binding): Python bindings**: PyO3/maturin track recent
+- **Secondary (non-binding): Python bindings**: PyO3 and maturin track recent
   stable, so unlikely to bind tighter than CRAN.
 - Every new dep (and dev-dep, which is exercised by `cargo publish --dry-run`
   and CI) must compile under the MSRV. Prefer small, stable transitive trees
@@ -162,7 +162,7 @@ The workspace manifest is at the repo root (shared lockfile) with three members:
 
 - `crates/basin`: the library.
 - `crates/basin-wasm`: `wasm-bindgen` JS bindings consumed by the
-  Svelte/Tailwind visualizer in `web/` (deployed to GitHub Pages). `web/` is its
+  Svelte and Tailwind visualizer in `web/` (deployed to GitHub Pages). `web/` is its
   own node project, **not** a Cargo workspace member.
 - `crates/competitor-bench`: benchmarks against competing libraries.
 

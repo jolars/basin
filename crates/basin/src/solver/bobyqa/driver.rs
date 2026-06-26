@@ -1,4 +1,4 @@
-//! BOBYQA driver loop (Powell 2009, §6)—resumable working state.
+//! BOBYQA driver loop (Powell 2009, §6): resumable working state.
 //!
 //! `BobyqaWork` carries the shared [`QuadraticModel`], the shifted bounds
 //! `sl`/`su`, and the ρ/Δ schedule across iterations. The public
@@ -27,7 +27,7 @@ pub(crate) enum Transition {
     Continue,
     /// ρ was reduced this step; keep iterating at the finer radius.
     RhoReduced,
-    /// ρ reached ρ_end—BOBYQA's natural convergence.
+    /// ρ reached ρ_end: BOBYQA's natural convergence.
     Converged,
 }
 
@@ -46,12 +46,12 @@ pub(crate) struct BobyqaWork<F = f64> {
     /// Shifted upper bounds `su = b − x0` (`≥ 0`).
     pub(crate) su: Vec<F>,
     /// Absolute lower bounds `a` (PRIMA `xl`). Kept because the origin `x0`
-    /// drifts, so `sl`/`su` alone can no longer recover the box—RESCUE's
+    /// drifts, so `sl`/`su` alone can no longer recover the box: RESCUE's
     /// re-evaluation needs the absolute bounds for `xinbd`.
     pub(crate) lower: Vec<F>,
     /// Absolute upper bounds `b` (PRIMA `xu`).
     pub(crate) upper: Vec<F>,
-    /// Final radius `ρ_end`—drives the schedule and the convergence stop.
+    /// Final radius `ρ_end`: drives the schedule and the convergence stop.
     rho_end: F,
     /// Current trust-region radius `ρ`.
     rho: F,
@@ -114,7 +114,7 @@ fn redrat<F: Scalar>(ared: F, pred: F) -> F {
 impl<F: Scalar> BobyqaWork<F> {
     /// Build the initial model under box bounds (Powell 2009, §2) and seed the
     /// ρ/Δ schedule. Returns the work plus the initial best feasible
-    /// point/value. `eval` may fail; the first `Err` aborts and bubbles.
+    /// point and value. `eval` may fail; the first `Err` aborts and bubbles.
     ///
     /// `ρ_beg` is reduced for a narrow box (see below), so the effective
     /// `ρ_beg`/`ρ_end` may differ from the requested ones.
@@ -314,7 +314,7 @@ impl<F: Scalar> BobyqaWork<F> {
         let qred = trs.predicted_reduction;
         let dnorm = self.delta.min(norm(&d));
         let shortd = dnorm < half * self.rho;
-        // PRIMA `.not. (qred > 1e-5·ρ²)`: tiny/negative qred, or NaN.
+        // PRIMA `.not. (qred > 1e-5·ρ²)`: tiny or negative qred, or NaN.
         let qred_thr = F::from_f64(1e-5).expect("1e-5 representable") * self.rho * self.rho;
         let trfail = qred <= qred_thr || qred.is_nan();
 
@@ -459,7 +459,7 @@ impl<F: Scalar> BobyqaWork<F> {
                 self.maybe_shift_origin();
                 // Final short trust step (PRIMA bobyqb:576-584): when the
                 // converging iteration's trust step was short, evaluate F at
-                // x_opt + d before stopping—it is "often a good move in
+                // x_opt + d before stopping: it is "often a good move in
                 // variable space". Mirrors the NEWUOA sibling's Box-13 step. `d`
                 // is unchanged in the shortd branch, so it is the TRSBOX step;
                 // it is gated on `shortd` exactly as PRIMA gates on `.and. shortd`.

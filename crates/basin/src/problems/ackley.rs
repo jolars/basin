@@ -9,7 +9,7 @@
 //! funnel toward the global minimum at `x = (0, …, 0)` with `f = 0`, while the
 //! cosine term studs the whole surface with a regular lattice of shallow local
 //! minima. The `√(Σ xᵢ²)` term has a cusp at the origin, so the function is
-//! **not differentiable at its own minimum**—basin treats it as cost-only,
+//! **not differentiable at its own minimum**: basin treats it as cost-only,
 //! for global and derivative-free solvers (cf. [`Rastrigin`](super::Rastrigin)).
 //! Standard search domain is `[−32.768, 32.768]^n` (Bäck 1996).
 
@@ -76,7 +76,7 @@ pub static ACKLEY_SPEC: ProblemSpec = ProblemSpec {
         differentiable: false,
         convex: false,
         unimodal: false,
-        // The exp of a mean couples all coordinates—not separable.
+        // The exp of a mean couples all coordinates, not separable.
         separable: false,
         scalable: true,
     },

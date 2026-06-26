@@ -18,7 +18,7 @@
 //!
 //! seeded with BIGLAG's step (`|σ|` is expected large where `|τ|` is large; eq.
 //! 6.21). Because `σ(x)` is a *quartic* polynomial, this is much more laborious
-//! than BIGLAG—but, as Powell notes, the situation (6.17) "is very rare in
+//! than BIGLAG, but, as Powell notes, the situation (6.17) "is very rare in
 //! practice", so the cost is incurred almost never.
 //!
 //! # Method (eqs. 6.22–6.34)

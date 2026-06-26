@@ -31,7 +31,7 @@ type ChainSlot<V, M> = (CmaEs<V, M>, CmaEsState<V, M>);
 /// per-individual local-search chain data.
 ///
 /// Solver-private (declared `pub` so the impl can construct it but kept
-/// out of `core::state` per CONTRIBUTING.md tenet 4—one consumer, no
+/// out of `core::state` per CONTRIBUTING.md tenet 4: one consumer, no
 /// shared abstraction to design yet). Each chain entry is the saved
 /// `(CmaEs, CmaEsState)` pair the inner needs for a resumed run: the
 /// [`CmaEs`] carries the derived constants + RNG; the [`CmaEsState`]
@@ -118,7 +118,7 @@ impl<V, M> CountsMirror for MaLsChState<V, M> {
     fn mirror(&mut self, delta: &EvalCounts) {
         // Same derivative-free convention as `BasicPopulationState`:
         // total work folds into `cost_evals` so a gradient-based inner
-        // (a future LM/L-BFGS chain operator) bumps the same counter
+        // (a future LM or L-BFGS chain operator) bumps the same counter
         // as the SSGA phase's `cost` calls.
         self.cost_evals = delta.total_work();
     }
@@ -159,7 +159,7 @@ impl<V, M> Default for MaLsChState<V, M> {
     }
 }
 
-/// `MA-LSCh-CMA`—memetic algorithm with local-search chains using
+/// `MA-LSCh-CMA`: memetic algorithm with local-search chains using
 /// CMA-ES as the inner LS operator, per Molina et al. 2010 §4.4.
 ///
 /// A steady-state real-coded GA (SSGA: BLX-α + NAM + BGA + replace-
@@ -180,7 +180,7 @@ impl<V, M> Default for MaLsChState<V, M> {
 ///    (NAM → BLX-α → BGA → replace-worst) until `nfrec` cost
 ///    evaluations have been spent (Molina 2010 §4.3 step 2). When
 ///    replace-worst displaces an individual, its chain (if any) is
-///    discarded—the new genome is treated as never-LS'd.
+///    discarded; the new genome is treated as never-LS'd.
 /// 2. **Build `S_LS`** = `{ i : never LS'd OR
 ///    last_ls_cost[i] − costs[i] ≥ δ_LS_min }` (§4.3 step 3).
 /// 3. **Pick `c_LS`.** If `S_LS` non-empty, take the best individual
@@ -246,7 +246,7 @@ impl<V, M> Default for MaLsChState<V, M> {
 ///   *and* [`BoxConstraints<Param = V>`] on the problem. The SSGA needs
 ///   the box for initial sampling, BLX clipping, and BGA range; the
 ///   per-individual CMA-ES inner does not see the box (so the inner
-///   CMA-ES is *unbounded*—chain individuals can drift outside the
+///   CMA-ES is *unbounded*: chain individuals can drift outside the
 ///   box and be discarded only via the SSGA replace-worst feedback
 ///   loop). This matches Molina 2010 §4.4.6.
 /// - **Caller must:** hand in a [`MaLsChState::new()`].
@@ -256,7 +256,7 @@ impl<V, M> Default for MaLsChState<V, M> {
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test. Pair with framework criteria—
+/// No solver-internal optimality test. Pair with framework criteria,
 /// typically
 /// [`MaxCostEvals`] for budget
 /// control. Chain segments overshoot `I_str` by up to `λ_inner − 1`
@@ -605,7 +605,7 @@ where
                 let mut s = inner_state;
                 // Local budget reset. `run_loop` already snapshots the
                 // wrapper at entry so the inner state's `cost_evals`
-                // measures per-segment work—but the iteration counter
+                // measures per-segment work, but the iteration counter
                 // is the inner's responsibility and the `MaxCostEvals`
                 // criterion in Phase 4 reads `state.cost_evals()`,
                 // which is the wrapper-mirrored per-run value. Reset
@@ -623,7 +623,7 @@ where
                 if let Some(lam) = self.inner_lambda {
                     cma = cma.with_lambda(lam);
                 }
-                // Empty inner population—CmaEs::init samples the first
+                // Empty inner population; CmaEs::init samples the first
                 // generation. The mean / σ live on the state now.
                 let inner_state =
                     CmaEsState::<V, M>::new(state.candidates[c_ls].clone(), sigma_init);
@@ -636,7 +636,7 @@ where
         // between chain segments (it's stateless, but the
         // `InnerExecutor` reuse pattern doesn't fit here since we hold
         // a different `cma` per individual). Allocation cost is one
-        // box per chain segment—negligible against I_str evals.
+        // box per chain segment, negligible against I_str evals.
         // `CmaEsTolerance` replaces the internal TolX hook the old
         // `CmaEs::terminate` provided; tol_x is `1e−12 ·` the segment's
         // starting σ (Hansen's default, made per-segment-relative so it
@@ -661,7 +661,7 @@ where
         }
 
         // Adopt the chain's best *evaluated* point (xbest), not the
-        // distribution mean that `param()`/`cost()` now report—the
+        // distribution mean that `param()`/`cost()` now report; the
         // memetic algorithm wants the best feasible refinement found.
         let new_cost = inner_result.best_cost();
         let new_param = inner_result.best_param().clone();
@@ -687,7 +687,7 @@ where
 
 /// Joint ascending-by-cost sort over the five parallel arrays in
 /// [`MaLsChState`]. The chain pointer travels with its individual
-/// through the permutation—that's why the chain belongs in the
+/// through the permutation; that's why the chain belongs in the
 /// state, not in a side index.
 fn sort_parallel_arrays<V, M>(state: &mut MaLsChState<V, M>) {
     let n = state.candidates.len();

@@ -2,7 +2,7 @@
 // dense index arithmetic of the H-factorization algebra; blanket-allowed here.
 #![allow(clippy::needless_range_loop)]
 
-//! BOBYQA (Powell 2009)—bound-constrained model-based derivative-free
+//! BOBYQA (Powell 2009): bound-constrained model-based derivative-free
 //! optimization.
 //!
 //! BOBYQA reuses the shared Powell quadratic-model core (the crate-internal
@@ -96,7 +96,7 @@ pub struct Bounded;
 ///
 /// # RESCUE
 ///
-/// The full method of RESCUE (Powell 2009, §5—restoring the interpolation set
+/// The full method of RESCUE (Powell 2009, §5: restoring the interpolation set
 /// when rounding damages the update denominator) is implemented and wired, but
 /// it fires only on severely ill-conditioned geometry. As Powell and PRIMA both
 /// note, it is essentially never invoked on well-behaved problems without heavy
@@ -105,7 +105,7 @@ pub struct Bounded;
 /// # Backends
 ///
 /// Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-/// faer all work—the parameter type needs only [`Clone`], [`VectorLen`], and
+/// faer all work; the parameter type needs only [`Clone`], [`VectorLen`], and
 /// `Index`/`IndexMut` element access. The model algebra is internal pure-Rust
 /// `Vec<f64>` scratch, so no `linalg`-tier op is required. wasm-clean.
 ///

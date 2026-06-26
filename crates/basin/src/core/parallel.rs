@@ -12,7 +12,7 @@
 //! it off they are blanket-implemented for every type, so a bound like
 //! `P: MaybeSync` imposes nothing. This lets one set of function signatures
 //! carry the thread-safety bounds the `rayon` path needs without forcing them
-//! (and breaking the wasm/no-threads build) on the sequential path.
+//! (and breaking the wasm and no-threads build) on the sequential path.
 //!
 //! # `try_map_range_with`/`try_map_slice_with`
 //!

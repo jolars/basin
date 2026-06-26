@@ -12,7 +12,7 @@
 //! decreasing sequence of `μ` traces the central path to the constrained
 //! optimum: the [`BarrierMethod`](crate::solver::BarrierMethod) automates
 //! that continuation, but `LogBarrier` is also usable on its own with any
-//! unconstrained solver/[`Executor`](crate::core::executor::Executor),
+//! unconstrained solver or [`Executor`](crate::core::executor::Executor),
 //! mirroring R's `constrOptim` layering a barrier on `optim`.
 //!
 //! # Adapter asymmetry (tenet 4, load-bearing)
@@ -40,7 +40,7 @@
 //!
 //! Requires the constraint matrix to implement
 //! [`MatVec`] (`A x`) and
-//! [`MatTransposeVec`] (`Aᵀ v`)—a
+//! [`MatTransposeVec`] (`Aᵀ v`): a
 //! strict subset of the LA tier that never includes a linear solve. That
 //! covers nalgebra (`DMatrix`/`DVector`) and faer (`Mat`/`Col`); `Vec<f64>`
 //! and `ndarray` are a compile-time error until they grow the two matvec

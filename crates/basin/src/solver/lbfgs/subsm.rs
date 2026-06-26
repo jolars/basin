@@ -43,9 +43,9 @@ use crate::core::math::Scalar;
 /// Fortran `iword`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SubsmStatus {
-    /// `iword == 0`—the Newton step stayed inside the feasible box.
+    /// `iword == 0`: the Newton step stayed inside the feasible box.
     InteriorStep,
-    /// `iword == 1`—at least one bound was encountered (either by
+    /// `iword == 1`: at least one bound was encountered (either by
     /// projection or by the bound-backtracking fallback).
     BoundEncountered,
 }
@@ -230,7 +230,7 @@ pub(crate) fn subsm<F: Scalar>(
     // Step 6: restore x = xp and find the largest uniform α ∈ [0, 1]
     // keeping `xp + α d` feasible. Mirrors Fortran's loop 60 + branch
     // at 3319 (`lbfgsb.f:3290-3329`). Note: `temp1` is NOT reset per
-    // iteration—when a variable doesn't bind, temp1 retains its
+    // iteration: when a variable doesn't bind, temp1 retains its
     // previous value (which equals `alpha` after the prior `if` flush),
     // so the `temp1 < alpha` check correctly skips non-binders.
     x.copy_from_slice(xp);
@@ -290,7 +290,7 @@ pub(crate) fn subsm<F: Scalar>(
 
 #[cfg(test)]
 // Explicit `i * m2 + j` indexing (including `0 * m2 + 0`) mirrors the
-// Fortran source's 2-D layout—load-bearing for readability when
+// Fortran source's 2-D layout: load-bearing for readability when
 // cross-checking against `lbfgsb.f`.
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {

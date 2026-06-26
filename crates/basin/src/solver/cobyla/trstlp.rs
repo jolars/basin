@@ -210,7 +210,7 @@ fn trstlp_sub<F: Scalar>(
     let one = F::one();
     let eps = F::epsilon();
     let realmax = F::max_value();
-    // `m` (1-based in PRIMA): number of "real" constraints—all of them in
+    // `m` (1-based in PRIMA): number of "real" constraints, all of them in
     // stage 1, all-but-the-objective in stage 2.
     let m_real = if stage == 1 { mcon } else { mcon - 1 };
 
@@ -530,7 +530,7 @@ fn trstlp_sub<F: Scalar>(
 }
 
 /// Trust-region radius update (PRIMA `trrad`, COBYLA path). `ratio` is the
-/// actual/predicted merit reduction; `dnorm` the step length.
+/// actual-to-predicted merit reduction; `dnorm` the step length.
 pub(crate) fn trrad<F: Scalar>(
     delta_in: F,
     dnorm: F,

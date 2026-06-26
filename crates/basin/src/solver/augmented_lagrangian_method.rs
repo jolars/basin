@@ -14,7 +14,7 @@ use crate::core::termination::{
     GradientTolerance, MaxIter, TerminationCriterion, TerminationReason,
 };
 
-/// Augmented-Lagrangian method for `min f(x) s.t. A x = b`—the
+/// Augmented-Lagrangian method for `min f(x) s.t. A x = b`, the
 /// equality-constrained analogue of the log-barrier
 /// [`BarrierMethod`](crate::solver::BarrierMethod), layering a quadratic
 /// penalty plus multiplier estimates on an unconstrained inner solver.
@@ -37,16 +37,16 @@ use crate::core::termination::{
 /// ([`QuasiNewtonState`](crate::core::state::QuasiNewtonState)), and unbounded
 /// [`Lbfgs`](crate::solver::lbfgs::Lbfgs)
 /// ([`LbfgsState`](crate::core::state::LbfgsState)). A least-squares inner
-/// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)) does not fit—
+/// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)) does not fit:
 /// `L_ρ` is not a sum of squares and the [`AugmentedLagrangian`] adapter
-/// exposes only `CostFunction + Gradient`—and a derivative-free inner
+/// exposes only `CostFunction + Gradient`, and a derivative-free inner
 /// (Nelder-Mead) is excluded by the [`GradientState`] bound.
 ///
 /// # Infeasible starts are fine
 ///
 /// Unlike the [`BarrierMethod`](crate::solver::BarrierMethod), the augmented
-/// Lagrangian is finite and smooth *everywhere*—there is no `+∞`
-/// feasibility wall—so the starting point need **not** satisfy `A x₀ = b`,
+/// Lagrangian is finite and smooth *everywhere* (there is no `+∞`
+/// feasibility wall), so the starting point need **not** satisfy `A x₀ = b`,
 /// and the inner solver may use any line search (Armijo backtracking, Wolfe,
 /// Moré–Thuente) or momentum. No phase-1 feasibility solve is required.
 ///
@@ -87,7 +87,7 @@ use crate::core::termination::{
 /// # Backends
 ///
 /// Requires the constraint matrix to implement [`MatVec`] (`A x`) and
-/// [`MatTransposeVec`] (`Aᵀ v`)—never a linear solve. All backends supply
+/// [`MatTransposeVec`] (`Aᵀ v`), never a linear solve. All backends supply
 /// those two ops, so the method runs on every backend: `Vec<f64>` (via
 /// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
 /// (`DMatrix`/`DVector`), faer (`Mat`/`Col`), and `ndarray`
@@ -98,10 +98,10 @@ use crate::core::termination::{
 /// Internally drives the inner solver via
 /// [`run_loop`] against a **fresh** inner
 /// `Problem` wrapper each outer iteration
-/// (the inner is an *adapter-problem* composition—the augmented Lagrangian
+/// (the inner is an *adapter-problem* composition: the augmented Lagrangian
 /// is a distinct type from the outer problem) with a fresh criteria vector
 /// (`MaxIter` + `GradientTolerance` on the augmented Lagrangian). The fresh
-/// wrapper is intrinsic here—each outer iter minimizes a *different*
+/// wrapper is intrinsic here, since each outer iter minimizes a *different*
 /// surrogate (updated λ, ρ), not a reuse-avoidance dodge: criteria
 /// [reset](crate::core::termination::TerminationCriterion::reset) per run, so
 /// even a stored [`InnerExecutor`](crate::core::inner::InnerExecutor) would
@@ -165,7 +165,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     ///
     /// # Panics
     ///
-    /// Panics unless `rho0 > 0`—a non-positive penalty is not a penalty.
+    /// Panics unless `rho0 > 0`; a non-positive penalty is not a penalty.
     pub fn rho0(mut self, rho0: F) -> Self {
         assert!(rho0 > F::zero(), "rho0 must be > 0");
         self.rho0 = rho0;
@@ -177,7 +177,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     ///
     /// # Panics
     ///
-    /// Panics unless `rho_increase > 1`—otherwise the penalty would not
+    /// Panics unless `rho_increase > 1`; otherwise the penalty would not
     /// grow and a stalled iterate could never be pushed onto the feasible
     /// set.
     pub fn with_rho_increase(mut self, rho_increase: F) -> Self {
@@ -220,7 +220,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// ill-conditioned) penalized objective typically exhausts this budget
     /// rather than reaching [`with_inner_grad_tol`](Self::with_inner_grad_tol); the
     /// outer multiplier updates still converge from loosely-minimized
-    /// subproblems. Raise it for hard/higher-dimensional problems.
+    /// subproblems. Raise it for hard or higher-dimensional problems.
     ///
     /// # Panics
     ///
@@ -283,7 +283,7 @@ where
         self.c_norm = F::infinity();
         self.c_norm_prev = F::infinity();
 
-        // λ ← 0 ∈ ℝᵐ. Clone `b` for the right shape (m entries), then zero it—
+        // λ ← 0 ∈ ℝᵐ. Clone `b` for the right shape (m entries), then zero it:
         // backend-generic with no "zeros_like" in the math layer. No
         // feasibility precondition: the augmented Lagrangian tolerates an
         // infeasible x₀.
@@ -337,7 +337,7 @@ where
         }
 
         // Adopt the inner's iterate, then evaluate the *true* f / ∇f there
-        // (the inner left cost/gradient at the augmented-Lagrangian value).
+        // (the inner left cost and gradient at the augmented-Lagrangian value).
         state.param = result.state.param().clone();
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);

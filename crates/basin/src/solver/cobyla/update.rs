@@ -6,7 +6,7 @@
 //! `updatexfc`.
 //!
 //! The simplex is stored as `sim` (n × (n+1) column-major: columns `0..n` are
-//! displacements from the pole, column `n` is the pole—the current best vertex
+//! displacements from the pole, column `n` is the pole: the current best vertex
 //! in absolute coordinates) and its companion `simi = inv(sim[:, 0..n])`. `fval`,
 //! `conmat` (m × (n+1)), and `cval` hold the objective, constraints, and
 //! constraint violations at the vertices. Vertex replacement updates `simi` by a

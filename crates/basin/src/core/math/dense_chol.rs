@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn rejects_positive_semidefinite_singular() {
-        // Rank-1 PSD (not PD): [[1, 1], [1, 1]]—the second pivot is exactly 0.
+        // Rank-1 PSD (not PD): [[1, 1], [1, 1]], the second pivot is exactly 0.
         let a = vec![1.0, 1.0, 1.0, 1.0];
         let b = vec![1.0, 1.0];
         assert!(cholesky_solve_spd::<f64>(&a, 2, &b).is_none());

@@ -18,14 +18,14 @@ use crate::line_search::{LineSearch, Wolfe};
 /// definiteness).
 ///
 /// On the first accepted step we rescale `H ← (sᵀy / yᵀy)·I` (Nocedal &
-/// Wright (6.20))—cheap, large convergence improvement on poorly scaled
+/// Wright (6.20)), cheap, with a large convergence improvement on poorly scaled
 /// problems.
 ///
 /// **Curvature failure (`yᵀs ≤ ε · |y| · |s|`):** the H update is skipped
 /// for that iteration. Strong Wolfe with `c2 < 1` guarantees `yᵀs > 0` in
 /// exact arithmetic, so this branch is a numerical safeguard, not the
-/// primary path. (Damped BFGS/Powell's modification is overkill when
-/// strong Wolfe is in place—see plan.)
+/// primary path. (Damped BFGS and Powell's modification are overkill when
+/// strong Wolfe is in place; see plan.)
 ///
 /// # Backends
 ///
@@ -42,7 +42,7 @@ use crate::line_search::{LineSearch, Wolfe};
 /// BFGS on the 2-D Rosenbrock function over the dependency-free
 /// `Vec<f64>` backend. Quasi-Newton solvers iterate a
 /// [`QuasiNewtonState`], parameterised by the
-/// param vector and the dense matrix type—here `Vec<f64>` and
+/// param vector and the dense matrix type, here `Vec<f64>` and
 /// [`DenseMatrix`](crate::DenseMatrix), bundled by the
 /// [`DenseQuasiNewtonState`](crate::DenseQuasiNewtonState) alias so the
 /// matrix type needn't be spelled:
@@ -164,7 +164,7 @@ where
             .next(problem, &state.param, cost_old, &g, &direction)?;
 
         // Line search bailed (α = 0): direction wasn't descent, or we're
-        // at numerical convergence. Restore gradient/cost so the state
+        // at numerical convergence. Restore gradient and cost so the state
         // stays consistent and report it as a mid-iter termination so the
         // executor halts immediately. NaN routes here too
         // (`NaN > 0.0` is false).
@@ -179,7 +179,7 @@ where
         s.scale_in_place(alpha);
         state.param.scaled_add(F::one(), &s);
 
-        // Fused cost+grad at the new iterate—one fused call gives both
+        // Fused cost+grad at the new iterate: one fused call gives both
         // values consumed below (BFGS update reads g_new; state caches
         // cost_new at the bottom of the iter).
         let (cost_new, g_new) = problem.cost_and_gradient(&state.param)?;
@@ -221,7 +221,7 @@ where
         }
         // else: curvature failure (very rare with strong Wolfe). Skip the
         // H update; the line search still produced a descent step, so we
-        // continue. If this persists, max_iter/GradientTolerance halt.
+        // continue. If this persists, max_iter or GradientTolerance halt.
 
         state.cost = Some(cost_new);
         state.gradient = Some(g_new);
@@ -235,11 +235,11 @@ where
 /// seeding a fresh [`QuasiNewtonState`] (identity inverse-Hessian) at the
 /// warm-start point.
 ///
-/// Implemented for every backend BFGS itself runs on—`Vec<f64>` (via the
+/// Implemented for every backend BFGS itself runs on: `Vec<f64>` (via the
 /// hand-rolled [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra,
-/// ndarray, and faer—so
+/// ndarray, and faer, so
 /// [`Executor::from_start`](crate::Executor::from_start) and the composed
-/// (barrier/AL) inners seed uniformly regardless of backend.
+/// (barrier and AL) inners seed uniformly regardless of backend.
 impl<S, F> InitialState<Vec<F>> for Bfgs<S, F>
 where
     F: Scalar,

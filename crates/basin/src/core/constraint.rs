@@ -6,7 +6,7 @@
 //! (`c(x) ≤ 0` for an arbitrary vector-valued `c`, consumed by COBYLA).
 //!
 //! These four are deliberately *sibling* traits, not members of a
-//! `Constraint` supertrait/hierarchy. Per tenet 4, a shared *parent*
+//! `Constraint` supertrait or hierarchy. Per tenet 4, a shared *parent*
 //! abstraction waits until ≥2 constrained solvers share more than data
 //! accessors, and they don't: the box family keeps feasibility by
 //! *projection*, the linear-inequality family by a *barrier*, the
@@ -107,7 +107,7 @@ pub trait BoxConstraints: CostFunction {
 /// [`ClampInPlace`](crate::core::math::ClampInPlace). Consumers add the
 /// operations they actually need: the barrier requires
 /// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and
-/// `Aᵀ v`)—a strict subset of the LA tier that never includes a linear
+/// `Aᵀ v`), a strict subset of the LA tier that never includes a linear
 /// solve. With those bounds the barrier is available on the matrix-capable
 /// backends (nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`); `Vec<f64>`
 /// and `ndarray` produce a compile-time error until they grow the two
@@ -153,7 +153,7 @@ pub trait LinearInequalityConstraints: CostFunction {
 /// The trait stays free of math bounds on [`Matrix`](Self::Matrix), the
 /// same way the sibling traits leave their carriers unbounded. Consumers add
 /// the operations they actually need: the augmented Lagrangian requires
-/// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and `Aᵀ v`)—
+/// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and `Aᵀ v`):
 /// a strict subset of the LA tier that never includes a linear solve. With
 /// those bounds the method is available on the matrix-capable backends
 /// (nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`); `Vec<f64>` and
@@ -208,12 +208,12 @@ pub trait LinearEqualityConstraints: CostFunction {
 /// linear inequalities, linear equalities, and box bounds into the same
 /// `constr(x) ≤ 0` vector. A planned `NonlinearConstraints` *aggregator*
 /// (analogous to [`LinearConstraints`], which does this for the linear kinds)
-/// will expose the nonlinear block plus optional linear/box blocks and fold
+/// will expose the nonlinear block plus optional linear and box blocks and fold
 /// them together, letting a problem hand COBYLA all four constraint kinds at
 /// once. That is **deliberately deferred**, not foreclosed: like
 /// [`LinearConstraints`] it will be *standalone* (not a parent of this trait,
 /// no blanket bridge: a blanket impl could only forward the nonlinear block
-/// and would silently drop the linear/box data), so adding it later is purely
+/// and would silently drop the linear and box data), so adding it later is purely
 /// additive and breaks nothing here. This single-kind trait remains the right
 /// surface for the inequality-only consumer.
 ///
@@ -286,7 +286,7 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 /// blanket impls bridging from them. A problem that wants LINCOA implements
 /// `LinearConstraints` directly. This is deliberate: a blanket
 /// `impl<P: LinearInequalityConstraints> LinearConstraints for P` could only
-/// forward the inequality block, silently dropping any box/equality data the
+/// forward the inequality block, silently dropping any box and equality data the
 /// problem also carries, and would block a manual impl by coherence. Keeping
 /// it standalone makes the full general form expressible. The sibling traits
 /// remain the right surface for their single-kind consumers (the log-barrier

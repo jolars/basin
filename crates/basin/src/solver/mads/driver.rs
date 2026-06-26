@@ -1,4 +1,4 @@
-//! OrthoMADS driver: the resumable poll loop and mesh/Halton bookkeeping.
+//! OrthoMADS driver: the resumable poll loop and mesh and Halton bookkeeping.
 //!
 //! [`MadsWork`] holds the incumbent and the integer mesh index `ℓ`, and runs one
 //! OrthoMADS iteration per [`step`](MadsWork::step): generate the poll set
@@ -19,7 +19,7 @@ pub(crate) enum Transition {
     /// Keep going (a successful or unsuccessful iteration that has not yet
     /// shrunk the poll size to the floor).
     Continue,
-    /// The poll size reached the configured floor—MADS's natural convergence.
+    /// The poll size reached the configured floor: MADS's natural convergence.
     Converged,
 }
 
@@ -44,9 +44,9 @@ pub(crate) struct MadsWork<F> {
     ell: i32,
     /// Halton seed `t₀ = p_n`.
     t0: usize,
-    /// Largest `ℓ` reached so far—detects "poll size is the smallest so far".
+    /// Largest `ℓ` reached so far: detects "poll size is the smallest so far".
     ell_max: i32,
-    /// Largest Halton index used so far—feeds the non-smallest-poll branch.
+    /// Largest Halton index used so far: feeds the non-smallest-poll branch.
     t_max: usize,
     /// Initial poll size `Δ₀` (uniform mesh scale); `Δᵖ = Δ₀·2^{-ℓ}`.
     scale: F,
@@ -98,7 +98,7 @@ impl<F: Scalar> MadsWork<F> {
         eval: &mut dyn FnMut(&[F]) -> Result<F, E>,
     ) -> Result<StepOutcome<F>, E> {
         // Halton index for this iteration (OrthoMADS Fig. 2): if the poll size is
-        // the smallest seen so far (ℓ at a new/tied max), tie it to ℓ; else take
+        // the smallest seen so far (ℓ at a new or tied max), tie it to ℓ; else take
         // a fresh index past every one used before.
         let t = if self.ell >= self.ell_max {
             self.ell_max = self.ell;

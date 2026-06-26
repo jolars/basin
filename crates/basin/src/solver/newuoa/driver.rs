@@ -15,9 +15,9 @@
 //! geometry-improving step. This version implements that branch (Boxes 7–9):
 //! Box 7/8 picks the furthest point `x_t` and tests `DIST = ‖x_t − x_opt‖ ≥ 2Δ`;
 //! Box 9 calls [BIGLAG](super::biglag) to maximize `|ℓ_t(x_opt + d)|` over
-//! `‖d‖ ≤ Δ̄` (eq. 6.16)—falling back to [BIGDEN](QuadraticModel::bigden) when
+//! `‖d‖ ≤ Δ̄` (eq. 6.16), falling back to [BIGDEN](QuadraticModel::bigden) when
 //! the BIGLAG step would leave the update denominator ill-conditioned
-//! (`|σ| < 0.8 τ²`, eq. 6.17)—and folds the new point in with `MOVE = t`
+//! (`|σ| < 0.8 τ²`, eq. 6.17), and folds the new point in with `MOVE = t`
 //! fixed. The short-step Box-14 test (eq. 7.7) gates whether the work at the
 //! current `ρ` is complete, using `CRVMIN` and the model errors `|F − Q|` of the
 //! 3 most recent updates.
@@ -34,7 +34,7 @@
 //! wholesale with the alternative interpolant `Q_int` (the quadratic minimizing
 //! `‖∇²Q‖_F` subject to the current conditions; eq. 8.3) once it is persistently
 //! the better model. Each Box-5 trust-region update that drops a point sets a
-//! flag—here in PRIMA v0.7.2's tuned form of eq. 8.4 (`tryqalt`): `RATIO ≤ 0.1`
+//! flag: here in PRIMA v0.7.2's tuned form of eq. 8.4 (`tryqalt`): `RATIO ≤ 0.1`
 //! **and** `‖∇Q_int(x_opt)‖² ≤ 0.1·‖∇Q(x_opt)‖²` (gradients at `x_opt`; Powell's
 //! paper states `0.01`/`100×` at `x0`, which PRIMA re-tuned). After three
 //! consecutive YES flags `Q` is adopted from `Q_int` (see [`adopt_alt_model`]).
@@ -59,7 +59,7 @@ use crate::solver::powell::{QuadraticModel, TrustRegionSubproblem};
 
 /// Configuration for a standalone NEWUOA run via [`minimize`].
 ///
-/// The public [`Newuoa`](crate::solver::Newuoa) solver does not use this—it
+/// The public [`Newuoa`](crate::solver::Newuoa) solver does not use this: it
 /// configures `ρ_beg`/`ρ_end`/`npt` on the solver and delegates the budget
 /// to framework termination ([`MaxCostEvals`](crate::MaxCostEvals)).
 pub(crate) struct NewuoaConfig<F = f64> {
@@ -107,14 +107,14 @@ pub(crate) enum Transition {
     Continue,
     /// The work at this `ρ` finished and `ρ` was reduced (eq. 7.6).
     RhoReduced,
-    /// `ρ` reached `ρ_end` and the work there is complete—converged.
+    /// `ρ` reached `ρ_end` and the work there is complete: converged.
     Converged,
 }
 
 /// The result of one [`NewuoaWork::step`]: the schedule transition and the
 /// objective values sampled during the step.
 ///
-/// `evaluated` holds 0, 1, or 2 `(x_absolute, F(x))` pairs in evaluation order—
+/// `evaluated` holds 0, 1, or 2 `(x_absolute, F(x))` pairs in evaluation order:
 /// a trust-region step (Box 4) can be followed by a geometry step (Box 9) in
 /// the same iteration, so a step can sample `F` twice. The caller folds these
 /// into its best-so-far tracking; in the framework path the [`Problem`] wrapper
@@ -130,10 +130,10 @@ pub(crate) struct StepOutcome<F = f64> {
 /// ρ/Δ schedule, the Box-14 model-error history, and the §8 Qint counter.
 ///
 /// Shared by the standalone [`minimize`] driver and the public
-/// [`Newuoa`](crate::solver::Newuoa) solver—see the module docs.
+/// [`Newuoa`](crate::solver::Newuoa) solver; see the module docs.
 pub(crate) struct NewuoaWork<F = f64> {
     model: QuadraticModel<F>,
-    /// Final radius `ρ_end`—drives the eq-7.6 schedule and the convergence
+    /// Final radius `ρ_end`: drives the eq-7.6 schedule and the convergence
     /// stop. The model itself stays solver-side (not on the state).
     rho_end: F,
     /// Current trust-region radius `ρ`.
@@ -152,7 +152,7 @@ pub(crate) struct NewuoaWork<F = f64> {
 
 impl<F: Scalar> NewuoaWork<F> {
     /// Box 1: build the initial model (its `npt` evaluations of `F`) and seed
-    /// the ρ/Δ schedule. Returns the work plus the initial best point/value
+    /// the ρ/Δ schedule. Returns the work plus the initial best point and value
     /// (tracked independently of the model's `kopt`). `eval` may fail; the first
     /// `Err` aborts and bubbles to the caller.
     ///
@@ -228,7 +228,7 @@ impl<F: Scalar> NewuoaWork<F> {
             // happened here and the 3 most recent each had ‖d‖ ≤ ρ and a model
             // error ≤ ⅛ρ²·CRVMIN. This is PRIMA v0.7.2's `accurate_mod`
             // (newuob.f90); Powell's paper eq. 7.7 additionally gates on the
-            // predicted reduction, a term PRIMA drops—we track PRIMA here.
+            // predicted reduction, a term PRIMA drops; we track PRIMA here.
             let thr = eighth * self.rho * self.rho * crvmin;
             let box14_y = self.history.len() >= 3
                 && self
@@ -499,8 +499,8 @@ fn far_point<F: Scalar>(model: &QuadraticModel<F>) -> (usize, F) {
 /// Box 7). Returns the evaluated absolute point and its value (the caller folds
 /// it into best-so-far tracking) and pushes the Box-14 history entry.
 ///
-/// If the BIGLAG step would leave the update denominator ill-conditioned—
-/// `|σ| < 0.8 τ²` (eq. 6.17)—the step is replaced by [`bigden`], which
+/// If the BIGLAG step would leave the update denominator ill-conditioned,
+/// `|σ| < 0.8 τ²` (eq. 6.17), the step is replaced by [`bigden`], which
 /// maximizes `|σ|` directly (eq. 6.18). This is rare in practice (Powell 2006,
 /// §6), so the quartic BIGDEN search runs almost never.
 ///

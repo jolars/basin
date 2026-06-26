@@ -13,7 +13,7 @@
 //!   arrays out with [`Run::trajectory_xy`] and [`Run::costs`].
 //!
 //! The visualizer monomorphizes its concerns (2D problems, `Vec<f64>`
-//! params, no nalgebra/ndarray/faer) so the inner stepper is a single
+//! params, no nalgebra, ndarray, or faer) so the inner stepper is a single
 //! concrete type per solver. That keeps the wasm bundle small and avoids
 //! `dyn`-incompatible plumbing on the `Solver` trait.
 
@@ -112,7 +112,7 @@ struct RunOptions {
     /// SSGA population size. `0` → use the solver's own default.
     ssga_pop_size: usize,
     /// Box-bounds for stochastic solvers (DE, SSGA, Random Search). Sourced
-    /// from the visualizer viewport—"visible" doubles as "feasible" here.
+    /// from the visualizer viewport: "visible" doubles as "feasible" here.
     xmin: f64,
     xmax: f64,
     ymin: f64,
@@ -191,7 +191,7 @@ impl CostFunction for Problem2DCost {
 /// 2D problem dispatcher with box bounds attached. DE, SSGA, and
 /// Random Search bound their `Solver<P, ...>` impl on `P:
 /// BoxConstraints<Param = V>`, so they can't reuse the bare [`Problem2D`].
-/// Bounds are sourced from the visualizer viewport—"visible" doubles as
+/// Bounds are sourced from the visualizer viewport: "visible" doubles as
 /// "feasible" here, which is the right semantics for a 2D demo.
 #[derive(Clone)]
 struct Problem2DBounded {
@@ -253,7 +253,7 @@ impl Gradient for Problem2D {
 /// `row j` (y-coordinate index) has the `nx` x-samples laid out in
 /// increasing x order. `j = 0` is `ymin`, `j = ny - 1` is `ymax`.
 ///
-/// Cheap by design—JS calls this once per problem (or on resize) and
+/// Cheap by design: JS calls this once per problem (or on resize) and
 /// renders into a canvas. Intentionally returns a flat array, not a
 /// `Vec<Vec<f64>>`, to avoid per-row JS object overhead.
 #[wasm_bindgen(js_name = evalGrid)]
@@ -315,7 +315,7 @@ enum Inner {
     NelderMead(Stepper<Problem2D, BasicSimplexState<Vec<f64>>, NelderMead>),
     Mads(Stepper<Problem2D, MadsState<Vec<f64>>, Mads>),
     // Boxed: `LbfgsState` carries the limited-memory history buffers, so
-    // this variant is several times larger than the others—boxing keeps
+    // this variant is several times larger than the others, so boxing keeps
     // `Inner` small (clippy::large_enum_variant). Auto-deref means the
     // `step`/`xy`/`cost` match arms need no `*` and read like the rest.
     Lbfgs(Box<LbfgsStepper>),
@@ -405,9 +405,9 @@ pub struct Run {
     costs: Vec<f64>,
     /// Absolute cost at which to stop early: `f* + target_suboptimality`.
     /// `None` disables the suboptimality stop (run to `max_iter`). This is
-    /// a visualizer-level convergence test—it knows each problem's `f*`,
+    /// a visualizer-level convergence test: it knows each problem's `f*`,
     /// so "stop when essentially at the optimum" replaces a per-solver
-    /// gradient/simplex tolerance and matches the suboptimality the cost
+    /// gradient or simplex tolerance and matches the suboptimality the cost
     /// chart plots.
     target_cost: Option<f64>,
     /// Stable termination-reason string, or `None` while still running.
@@ -442,7 +442,7 @@ impl Run {
     /// (see [`RunOptions`]). `max_iter` caps the total number of
     /// iterations; subsequent `step_many` calls cumulatively count against
     /// this cap. `stop_at_cost` is the absolute cost at which to stop
-    /// early—typically `f* + target_suboptimality`, since the visualizer knows
+    /// early, typically `f* + target_suboptimality`, since the visualizer knows
     /// each problem's `f*`. Pass a non-finite value (e.g. `NaN`) to disable
     /// the early stop (run to `max_iter`).
     #[wasm_bindgen(constructor)]
@@ -608,7 +608,7 @@ impl Run {
             SolverKind::CmaEs => {
                 // σ default: a quarter of the average viewport span. Gives
                 // σ ≈ 1.5 on Sphere [-3,3]², σ ≈ 1 on Goldstein-Price [-2,2]²,
-                // σ ≈ 5 on Booth [-10,10]²—fine starting points; the slider
+                // σ ≈ 5 on Booth [-10,10]², all fine starting points; the slider
                 // overrides this whenever the user touches it.
                 let sigma = if opts.cma_sigma.is_finite() && opts.cma_sigma > 0.0 {
                     opts.cma_sigma
@@ -839,7 +839,7 @@ mod tests {
                 ..RunOptions::default()
             },
             5,
-            f64::NAN, // early stop disabled—exercise the max_iter path purely
+            f64::NAN, // early stop disabled; exercise the max_iter path purely
         );
         let r = run.step_many_inner(100);
         assert!(r.done);
@@ -935,7 +935,7 @@ mod tests {
         );
         let initial = run.costs()[0];
         run.step_many_inner(200);
-        // Modest target—DE on 2D Sphere is easy but the test just needs
+        // Modest target: DE on 2D Sphere is easy but the test just needs
         // to confirm the box-constraints plumbing works end to end.
         let last = run.costs().last().copied().unwrap();
         assert!(last < 0.1 * initial, "{last} not < 0.1 × {initial}");

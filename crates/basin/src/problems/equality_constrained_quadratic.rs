@@ -60,7 +60,7 @@ pub static EQUALITY_CONSTRAINED_QUADRATIC_SPEC: ProblemSpec = ProblemSpec {
     }],
     description: "Isotropic quadratic Σ(xᵢ − cᵢ)² minimized subject to linear \
                   equalities A·x = b. The constrained optimum is the \
-                  projection of c onto the feasible affine subspace—the \
+                  projection of c onto the feasible affine subspace: the \
                   fixture for the augmented-Lagrangian method.",
 };
 

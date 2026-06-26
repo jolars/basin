@@ -40,10 +40,10 @@ pub(crate) struct BoundedInit<F = f64> {
 /// Adjust `x0` into the box leaving room for the coordinate steps (Powell 2009,
 /// the paragraph around eq. 2.1). Mirrors PRIMA's default (`honour_x0 = .false.`)
 /// revision in `preproc.f90`: clip to `[a, b]`, then apply the half-`ρ` split per
-/// coordinate—within `½ρ` of a bound snaps *onto* the bound (asymmetric cross),
+/// coordinate: within `½ρ` of a bound snaps *onto* the bound (asymmetric cross),
 /// but between `½ρ` and `ρ` of a bound is pushed `ρ` *into the interior* (so a
 /// near-bound start that has room keeps the symmetric cross). Requires
-/// `b_i ≥ a_i + 2ρ`, which makes the lower/upper cases mutually exclusive.
+/// `b_i ≥ a_i + 2ρ`, which makes the lower and upper cases mutually exclusive.
 fn adjust_x0<F: Scalar>(x0: &mut [F], lower: &[F], upper: &[F], rho: F) {
     let half = F::from_f64(0.5).expect("0.5 representable");
     for i in 0..x0.len() {
@@ -402,7 +402,7 @@ mod tests {
         assert_h_matches_inverse(&out.model, 1e-9);
     }
 
-    /// The §2 feasibility adjustment moves an out-of-box/too-close start.
+    /// The §2 feasibility adjustment moves an out-of-box or too-close start.
     #[test]
     fn x0_adjusted_into_box() {
         // x0_0 below lower bound; x0_1 within rho of the upper bound.

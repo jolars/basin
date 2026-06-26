@@ -7,8 +7,8 @@
 //! stored `Ω`/`Ξ`/`Υ` blocks equal the corresponding blocks of `inv(W)`.
 //!
 //! Index convention for the order-`(m+n+1)` system: indices `0..m` are the
-//! interpolation/`A`-block components `λ`, index `m` is the suppressed constant
-//! term `c` (Powell 2006, §4—its row/column is *not* stored by the model),
+//! interpolation and `A`-block components `λ`, index `m` is the suppressed constant
+//! term `c` (Powell 2006, §4, its row and column are *not* stored by the model),
 //! and indices `m+1..m+n+1` are the gradient components `g`.
 
 use crate::core::math::DenseMatrix;
@@ -40,7 +40,7 @@ pub(crate) fn build_w_dense(model: &QuadraticModel<f64>) -> DenseMatrix<f64> {
         }
     }
 
-    // P / Pᵀ blocks. Column/row `m` is the constant term `c`; columns/rows
+    // P / Pᵀ blocks. Column and row `m` is the constant term `c`; columns and rows
     // `m+1..m+n+1` are the gradient components.
     for i in 0..m {
         let xi = model.xpt_row(i);
@@ -146,8 +146,8 @@ pub(crate) fn omega_from_factorization(model: &QuadraticModel<f64>) -> DenseMatr
 ///
 /// `Ξ` (`bmat_xi`, `n × m`) maps to the gradient-rows × `λ`-cols block of
 /// `inv(W)` (rows `m+1..`, cols `0..m`); `Υ` (`bmat_ups`, `n × n`) to the
-/// gradient × gradient block (rows/cols `m+1..`); `Ω` to the leading `m × m`
-/// block. The suppressed `c` row/column (index `m`) is never compared.
+/// gradient × gradient block (rows and cols `m+1..`); `Ω` to the leading `m × m`
+/// block. The suppressed `c` row and column (index `m`) is never compared.
 ///
 /// `tol` is a *mixed* tolerance: the threshold for each entry is
 /// `tol·(1 + |want|)`. A purely absolute tolerance is unfair when ill-conditioned
@@ -222,7 +222,7 @@ mod tests {
             }
         }
 
-        // Columns of inv solve A x = eⱼ—cross-check against Cholesky solve.
+        // Columns of inv solve A x = eⱼ: cross-check against Cholesky solve.
         for j in 0..3 {
             let mut e = vec![0.0; 3];
             e[j] = 1.0;

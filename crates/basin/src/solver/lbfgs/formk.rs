@@ -54,7 +54,7 @@ use crate::core::math::Scalar;
 /// Reasons [`formk`] can fail. Matches Fortran's `info ≠ 0` exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FormkError {
-    /// The first Cholesky factorization (of the (1,1) block) failed—
+    /// The first Cholesky factorization (of the (1,1) block) failed:
     /// the limited-memory matrix has degenerated. Mirrors Fortran
     /// `info = −1` from `formk`.
     NotPositiveDefiniteFirst,
@@ -119,7 +119,7 @@ pub(crate) fn formk<F: Scalar>(
     debug_assert_eq!(wy_cols.len(), col);
 
     // -----------------------------------------------------------------
-    // Phase 1—update `wn1` for the new pair (when `updatd`).
+    // Phase 1: update `wn1` for the new pair (when `updatd`).
     // -----------------------------------------------------------------
     let upcl = if updatd {
         if iupdat as usize > m {
@@ -152,7 +152,7 @@ pub(crate) fn formk<F: Scalar>(
             }
         }
 
-        // Put new rows in (1,1), (2,1), (2,2)—the *last* history
+        // Put new rows in (1,1), (2,1), (2,2): the *last* history
         // column contributes its row of `Y'ZZ'Y`, `S'AA'Y`, `S'AA'S`.
         // `last = col − 1` is the 0-indexed slot of the newest pair.
         let last = col - 1;
@@ -190,7 +190,7 @@ pub(crate) fn formk<F: Scalar>(
     };
 
     // -----------------------------------------------------------------
-    // Phase 2—modify old parts of `wn1` for entering / leaving vars.
+    // Phase 2: modify old parts of `wn1` for entering and leaving vars.
     // (1,1) and (2,2) symmetric / lower-tri updates.
     // -----------------------------------------------------------------
     for iy in 0..upcl {
@@ -214,7 +214,7 @@ pub(crate) fn formk<F: Scalar>(
         }
     }
 
-    // (2,1) block update—full rectangle, with sign flip across the
+    // (2,1) block update: full rectangle, with sign flip across the
     // (block) diagonal (`is ≤ jy + m` in Fortran ⇔ `iy ≤ jy` here).
     for iy in 0..upcl {
         for jy in 0..upcl {
@@ -238,7 +238,7 @@ pub(crate) fn formk<F: Scalar>(
     }
 
     // -----------------------------------------------------------------
-    // Phase 3—form the upper triangle of `wn` from `wn1`.
+    // Phase 3: form the upper triangle of `wn` from `wn1`.
     //   (1,1) ← (Y'ZZ'Y)/θ + D
     //   (1,2) ← −L_a' + R_z'   (from wn1's (2,1) block, with sign
     //                          flipped on the strict lower part)
@@ -267,7 +267,7 @@ pub(crate) fn formk<F: Scalar>(
     }
 
     // -----------------------------------------------------------------
-    // Phase 4—Cholesky of (1,1) in place. Upper triangle gets `L^T`.
+    // Phase 4: Cholesky of (1,1) in place. Upper triangle gets `L^T`.
     // -----------------------------------------------------------------
     for j in 0..col {
         let mut s = wn[j * two_m + j];
@@ -290,7 +290,7 @@ pub(crate) fn formk<F: Scalar>(
     }
 
     // -----------------------------------------------------------------
-    // Phase 5—solve `L^T · X = wn(0..col, col..2col)` in place. One
+    // Phase 5: solve `L^T · X = wn(0..col, col..2col)` in place. One
     // forward solve per column of the (1,2) block.
     // -----------------------------------------------------------------
     for js in col..col2 {
@@ -304,7 +304,7 @@ pub(crate) fn formk<F: Scalar>(
     }
 
     // -----------------------------------------------------------------
-    // Phase 6—Schur-update (2,2): wn(2,2) += X^T X (upper triangle).
+    // Phase 6: Schur-update (2,2): wn(2,2) += X^T X (upper triangle).
     // -----------------------------------------------------------------
     for is in col..col2 {
         for js in is..col2 {
@@ -317,7 +317,7 @@ pub(crate) fn formk<F: Scalar>(
     }
 
     // -----------------------------------------------------------------
-    // Phase 7—Cholesky of (2,2) in place. Same algorithm as Phase 4,
+    // Phase 7: Cholesky of (2,2) in place. Same algorithm as Phase 4,
     // offset by `col`.
     // -----------------------------------------------------------------
     for j in 0..col {
@@ -345,7 +345,7 @@ pub(crate) fn formk<F: Scalar>(
 
 #[cfg(test)]
 // Explicit `i * two_m + j` indexing (including `0 * two_m + 0`)
-// mirrors the Fortran source's 2-D layout—load-bearing for
+// mirrors the Fortran source's 2-D layout: load-bearing for
 // readability when cross-checking against `lbfgsb.f`.
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {
