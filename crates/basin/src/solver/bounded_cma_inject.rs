@@ -49,9 +49,11 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 ///
 /// # Backends
 ///
-/// Same coverage as [`BoundedCmaEs`]: nalgebra (`DVector`/`DMatrix`)
-/// and faer (`Col`/`Mat`). `Vec<f64>` and `ndarray` produce a
-/// compile-time error per tenet 5.
+/// Same coverage as [`BoundedCmaEs`]: the default `Vec<f64>` (via
+/// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The
+/// matrix bound is [`SymmetricEigen`], which every backend satisfies, and the
+/// shipped [`MemeticInner`] inners are
+/// backend-generic.
 ///
 /// # Examples
 ///

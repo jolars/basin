@@ -83,8 +83,8 @@ use crate::line_search::{Constant, LineSearch};
 /// ```
 pub struct GradientDescent<L, V, F = f64> {
     line_search: L,
-    /// Momentum coefficient `β`; `0.0` disables momentum (plain steepest
-    /// descent, taking the original allocation-free code path).
+    /// Momentum coefficient `β`; `0.0` disables momentum and runs the plain
+    /// steepest-descent step, which keeps no persistent velocity buffer.
     beta: F,
     /// Heavy-ball velocity `vₖ`. `None` until the first momentum step
     /// (treated as the zero vector) and reset by [`init`](Solver::init) so
@@ -171,8 +171,8 @@ where
             .next(problem, &state.param, prev_cost, &grad, &direction)?;
 
         if self.beta == F::zero() {
-            // No momentum: the original allocation-free steepest-descent
-            // step, bit-identical to the pre-momentum implementation.
+            // No momentum: the plain steepest-descent step, bit-identical to
+            // the pre-momentum implementation (no persistent velocity buffer).
             state.param.scaled_add(alpha, &direction);
         } else {
             // Heavy ball: v ← β·v + αₖ·direction (direction = −∇f), then

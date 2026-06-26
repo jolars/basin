@@ -59,14 +59,10 @@ the previous lands.
   `as_standard_layout()`, with `AddDiagonalVectorInPlace`/`MaxDiagonal`
   for the LM/Trf damping), *not* QR, so no `LinearSolveLstsq` was needed.
   Remaining honest (pure-Rust, no BLAS) gaps: the memetic family
-  (`CmaInject`/`BoundedCmaInject`/`MaLsChCma`) on `Vec<f64>` + ndarray—now
-  that the CMA family covers both backends, the matrix bounds resolve on
-  `Array2<f64>`; ndarray coverage just needs wiring tests + a
-  `MemeticInner<Array1<f64>>` inner choice. While there, fix the stale
-  "Backends" notes in `cma_inject.rs` (\~L286) and `bounded_cma_inject.rs`
-  (\~L52): both claim "`Vec<f64>` and `ndarray` produce a compile-time
-  error" while also saying "Same coverage as `CmaEs`"—the Vec<f64> half
-  was already wrong, and ndarray now resolves too. No permanent (BLAS-only)
+  (`CmaInject`, `BoundedCmaInject`, `MaLsChCma`) compiles and runs on all four
+  backends already (the `SymmetricEigen` matrix bound resolves everywhere and
+  the shipped `MemeticInner` inners are backend-generic); only the `Vec<f64>`
+  and ndarray integration tests are still missing. No permanent (BLAS-only)
   gaps recorded yet.
 
 - [x] **Made `BarrierMethod`/`AugmentedLagrangianMethod`

@@ -266,12 +266,10 @@ impl<V, M> Default for MaLsChState<V, M> {
 ///
 /// # Backends
 ///
-/// Same coverage as [`CmaEs`]: `nalgebra` (`DVector`/`DMatrix`),
-/// `faer` (`Col`/`Mat`), and `ndarray::Array1<f64>` with
-/// `ndarray-linalg` not required (`SymmetricEigen` for `Array1` is
-/// gated by the matrix backend that *isn't* available for ndarray, so
-/// in practice nalgebra and faer). `Vec<f64>` produces a compile-time
-/// error per tenet 5 (no honest matrix type).
+/// Same coverage as [`CmaEs`]: the default `Vec<f64>` (via
+/// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The only
+/// linear-algebra requirement is the matrix bound [`SymmetricEigen`], which
+/// every backend satisfies.
 ///
 /// # Examples
 ///

@@ -303,9 +303,11 @@ where
 ///
 /// # Backends
 ///
-/// Same coverage as [`CmaEs`]: nalgebra (`DVector`/`DMatrix`) and
-/// faer (`Col`/`Mat`). `Vec<f64>` and `ndarray` produce a
-/// compile-time error per tenet 5.
+/// Same coverage as [`CmaEs`]: the default `Vec<f64>` (via
+/// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The
+/// matrix bound is [`SymmetricEigen`], which every backend satisfies, and the
+/// shipped [`MemeticInner`] inners are
+/// backend-generic.
 ///
 /// # Examples
 ///
