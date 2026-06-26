@@ -342,7 +342,7 @@ where
         // belt-and-braces but cheap).
         assert!(pop_size >= 4, "De requires pop_size >= 4 (got {pop_size})");
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
-        // Same reseed-from-scratch pattern as Ssga / RandomSearch; the
+        // Same reseed-from-scratch pattern as Ssga and RandomSearch; the
         // solver's trajectory is reproducible regardless of which
         // BasicPopulationState constructor the caller used.
         state.candidates.clear();

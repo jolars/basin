@@ -11,7 +11,7 @@ Conventions for the optimization test-problem corpus
 tenets.
 
 For the *workflow* of adding a brand-new problem from scratch, prefer the
-`add-test-problem` project subagent (`.claude/agents/add-test-problem.md`) —
+`add-test-problem` project subagent (`.claude/agents/add-test-problem.md`):
 it scaffolds the file, updates `ALL_SPECS`, and runs the verification
 gauntlet in its own context. This file documents the *conventions* that
 subagent (and any in-place edit) must follow.
@@ -22,7 +22,7 @@ Each problem gets one file: `src/problems/<name>.rs`. No subdirectories.
 
 The file is structured top-to-bottom as:
 
-1. Module-level rustdoc — formula, character, global minimum, cite the
+1. Module-level rustdoc: formula, character, global minimum, cite the
    primary reference.
 2. `use` statements (imports from `super::spec` and `crate::{CostFunction,
    Gradient}`).
@@ -32,11 +32,11 @@ The file is structured top-to-bottom as:
 4. The wrapper struct: `pub struct <Name><P = Vec<f64>>(PhantomData<fn() ->
    P>)` with `new()`, `Default`.
 5. `pub static <NAME>_SPEC: ProblemSpec` (see below).
-6. `impl<P> HasSpec for <Name><P>` — blanket; pulls metadata from `<NAME>_SPEC`.
+6. `impl<P> HasSpec for <Name><P>`: blanket; pulls metadata from `<NAME>_SPEC`.
 7. `CostFunction` + `Gradient` impls for `<Name><Vec<f64>>` (always-on),
    then per-backend impls each in their own `#[cfg(feature = "...")] mod
    <backend>_impl { ... }` block. Order: nalgebra → ndarray → faer.
-8. `#[cfg(test)] mod tests { ... }` — see Tests below.
+8. `#[cfg(test)] mod tests { ... }`: see Tests below.
 
 ## The wrapper struct
 
@@ -51,14 +51,14 @@ covariant and doesn't require `P: Send + Sync` for auto-traits.
 
 The `P = Vec<f64>` default is for downstream-with-no-backend ergonomics.
 **It will not help inference inside this crate's tests** when multiple
-backend features are enabled — explicit turbofish (`Foo::<Vec<f64>>::default()`)
+backend features are enabled: explicit turbofish (`Foo::<Vec<f64>>::default()`)
 is required there. Don't try to "fix" this with type aliases.
 
 ## Per-backend impls
 
 - `Vec<f64>`: always present, routes through the slice-based primitives.
 - `nalgebra::DVector<f64>`: gated on `feature = "nalgebra"`. Use
-  `x.as_slice()` / `out.as_mut_slice()` to route through the primitives.
+  `x.as_slice()`/`out.as_mut_slice()` to route through the primitives.
 - `ndarray::Array1<f64>`: gated on `feature = "ndarray"`. Use
   `x.as_slice().expect("Array1 is contiguous")` and the `_mut` variant.
 - `faer::Col<f64>`: gated on `feature = "faer"`. Faer's `Col` doesn't expose
@@ -78,12 +78,12 @@ fields:
 - `dim`: `Dimensionality::Fixed(n)` for 2D-only problems (Beale etc.) or
   `NDimensional { min: n }` for scalable ones.
 - `properties`: `Properties { ... }` literal. **Be conservative with
-  `unimodal`** — for N-D problems where unimodality depends on `n` (e.g.
+  `unimodal`**: for N-D problems where unimodality depends on `n` (e.g.
   Rosenbrock's spurious local min for n ≥ 4), set `false` and explain in
   the description. Same conservative rule applies to `convex` if the search
   domain isn't the whole of `R^n`.
 - `references`: `&[Reference { ... }]`, **at least one entry, all real**.
-  Not just URLs — citation, title, source/venue, and DOI when available.
+  Not just URLs: citation, title, source or venue, and DOI when available.
   The first entry is the primary citation. URLs (S&B, arXiv) go in
   `Reference::url` as the publicly-accessible link, not in lieu of the
   citation. If no single original paper exists (e.g. Sphere, where De Jong
@@ -92,7 +92,7 @@ fields:
   minimum location and value.
 
 Then `impl<P> HasSpec for Foo<P> { const SPEC: &'static ProblemSpec =
-&FOO_SPEC; }` — always blanket over `P`, since the spec is a property of
+&FOO_SPEC; }`: always blanket over `P`, since the spec is a property of
 the math, not the backend.
 
 ## Tests
@@ -140,7 +140,7 @@ it in:
 
 - Add a variant to `ProblemKind` in `crates/basin-wasm/src/lib.rs` and
   extend `Problem2D`'s `CostFunction` + `Gradient` match arms to call
-  the raw `<name>` / `<name>_gradient` functions.
+  the raw `<name>`/`<name>_gradient` functions.
 - Add a `ProblemMeta` entry to the `PROBLEMS` array in
   `web/src/lib/problems.ts` with `kind`, `label`, the documented
   search `domain`, `minimum`, an `intensity` choice (`'sqrt'` for mild

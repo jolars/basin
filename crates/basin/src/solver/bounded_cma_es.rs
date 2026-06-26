@@ -55,7 +55,7 @@ use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
 /// - **Reflection and clipping**. Cheap, unprincipled. Clipping puts a
 ///   delta on the distribution that fights covariance adaptation;
 ///   reflection aliases multimodally near corners.
-/// - **Adaptive quadratic penalty** (this solver, Hansen / pycma).
+/// - **Adaptive quadratic penalty** (this solver, Hansen and pycma).
 ///   Self-tuning, no extra knobs leaked to the user, battle-tested
 ///   across the BBOB benchmark suite.
 /// - **Smooth-boundary transformation** (pycma's `BoundTransform`).
