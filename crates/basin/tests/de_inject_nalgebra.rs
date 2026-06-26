@@ -3,7 +3,7 @@
 //!
 //! Three tests: convergence on Rastrigin D=5 (the canonical multimodal
 //! stress test [`De`] is benchmarked against), cost-eval aggregation
-//! across the outer/inner composition boundary
+//! across the outer and inner composition boundary
 //! (CONTRIBUTING.md "Solver composition" rule 1), and reproducibility
 //! under a fixed seed. For the L-Bfgs-B inner variant see
 //! `de_inject_lbfgsb_nalgebra.rs`; for the failure-bubbling contract

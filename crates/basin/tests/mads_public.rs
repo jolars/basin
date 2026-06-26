@@ -188,7 +188,7 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
 }
 
 /// Backend-generic over the parameter vector: drive MADS on `nalgebra`'s
-/// `DVector` to prove the `V`-generic solver/state work outside `Vec<f64>`.
+/// `DVector` to prove the `V`-generic solver and state work outside `Vec<f64>`.
 #[cfg(feature = "nalgebra")]
 #[test]
 fn backend_generic_nalgebra() {

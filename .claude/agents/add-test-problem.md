@@ -7,7 +7,7 @@ model: inherit
 
 You add one optimization test problem at a time to basin's `src/problems/`
 corpus, following an established template. The conventions are documented
-in `.claude/rules/problems.md` — **read that file first**, then read
+in `.claude/rules/problems.md` (**read that file first**), then read
 `src/problems/sphere.rs` as a reference implementation. Sphere is the
 cleanest template (smaller than Rosenbrock, more representative than
 zero-cost specials).
@@ -18,7 +18,7 @@ zero-cost specials).
    that's enough; don't ask for clarification. Find the canonical
    reference (original paper, year, venue, DOI). Surjanovic & Bingham's
    library (`https://www.sfu.ca/~ssurjano/`) is a good fallback for the
-   formula and minima but **never the citation** — track down the actual
+   formula and minima but **never the citation**; track down the actual
    first publication. If you genuinely cannot find an original paper,
    cite a well-known popularizing source (e.g. Jamil & Yang 2013 for
    benchmark surveys, De Jong's thesis for early GA test functions).
@@ -57,7 +57,7 @@ zero-cost specials).
    - `dim` is `Fixed(2)`, or `NDimensional { min }` with `min <= 2`
      (i.e. the problem is meaningful in 2D);
    - `Vec<f64>` `CostFunction` (and, for gradient solvers, `Gradient`)
-     impls already exist — they always do, per the corpus convention.
+     impls already exist (they always do, per the corpus convention).
 
    Skip the web wiring (and note the skip in your final report) only if
    the problem is intrinsically high-dimensional (e.g. a function whose
@@ -71,11 +71,11 @@ zero-cost specials).
      `web/src/lib/problems.ts` with: `kind`, `label`, a sensible
      `domain` (use the documented standard search domain), `minimum`,
      `intensity` (`'sqrt'` for mild quadratics, `'log1p'` for
-     high-dynamic-range surfaces like Rosenbrock/Beale), and a
+     high-dynamic-range surfaces like Rosenbrock and Beale), and a
      `gdAlphaDefault` step size that converges from a typical start
      within a few hundred iterations.
    - Smoke-test by running `cd web && npm run build` (it rebuilds the
-     wasm too) — must finish without errors.
+     wasm too): must finish without errors.
 
 9. **Run the verification gauntlet** (all four must pass):
 

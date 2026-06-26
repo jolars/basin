@@ -8,7 +8,7 @@
  *
  * The implementation is the standard 16-case marching-squares table
  * with linear interpolation along edges. Saddle ambiguity (cases 5 and
- * 10) is resolved by comparing the cell's average value to `level`—the
+ * 10) is resolved by comparing the cell's average value to `level`: the
  * simplest disambiguation that doesn't introduce visible artifacts
  * for smooth functions.
  *
@@ -255,7 +255,7 @@ export function chainSegments(
 /**
  * Chaikin corner-cutting: replace each pair of adjacent vertices with
  * two new vertices at 1/4 and 3/4 along the edge. Two iterations is
- * the sweet spot for iso-contours—enough to kill the stair-step from
+ * the sweet spot for iso-contours: enough to kill the stair-step from
  * marching-squares without flattening real curvature.
  *
  * Closed chains (first point repeated as last) are handled by treating

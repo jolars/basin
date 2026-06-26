@@ -60,7 +60,7 @@
     $effect(() => {
         const cur = lines; // track: re-run whenever the generated code changes
         if (prevLines === null) {
-            prevLines = cur; // first render—nothing to flash yet
+            prevLines = cur; // first render: nothing to flash yet
             return;
         }
         const changed = new Set<number>();
@@ -90,15 +90,15 @@
             copied = true;
             setTimeout(() => (copied = false), 1500);
         } catch {
-            // Clipboard unavailable (e.g. insecure context)—no-op.
+            // Clipboard unavailable (e.g. insecure context): no-op.
         }
     }
 
     // --- Live contour (Phase 2) ------------------------------------------
     // The contour component pulls in wasm + ContourPlot, so it is loaded
-    // lazily and client-only—never imported on the server or in the hero
+    // lazily and client-only: never imported on the server or in the hero
     // bundle. An IntersectionObserver boots it the first time the plot
-    // scrolls into view, protecting the landing page's load/LCP.
+    // scrolls into view, protecting the landing page's load and LCP.
     type ContourProps = {
         alpha: number;
         beta: number;
@@ -154,7 +154,7 @@
             <code class="font-mono text-sm">Gradient</code>, then hand your
             problem, a solver, and a starting point to the
             <code class="font-mono text-sm">Executor</code>. Here it's gradient
-            descent on the Rosenbrock valley—drag the sliders, or click the
+            descent on the Rosenbrock valley: drag the sliders, or click the
             plot to move the start, and watch the run and the code update
             together.
         </p>
@@ -178,7 +178,7 @@
                 <div
                     class="absolute inset-0 grid place-items-center px-6 text-center text-xs text-slate-500 dark:text-slate-400"
                 >
-                    Live solver—animates as it scrolls into view.
+                    Live solver: animates as it scrolls into view.
                 </div>
             {/if}
         </div>
@@ -330,7 +330,7 @@
    neutrals. Tokens are injected via {@html}, so they need `:global`;
    colors come from CSS variables on `.rust-hl` (a real template element,
    so it carries the scope hash and the variables inherit into the
-   injected token spans). One rule set serves both themes—the variables
+   injected token spans). One rule set serves both themes: the variables
    flip under the site's class-based `.dark`. */
     .rust-hl {
         --tok-comment: #928374; /* stone-gray */

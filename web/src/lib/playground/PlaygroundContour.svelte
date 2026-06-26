@@ -13,7 +13,7 @@
 
     // Mirrors the playground config that drives the generated snippet, so the
     // animation and the code always show the same run. Fixed to gradient
-    // descent (constant step) on Rosenbrock—the playground's one solver.
+    // descent (constant step) on Rosenbrock: the playground's one solver.
     type Props = {
         alpha: number;
         beta: number;
@@ -87,7 +87,7 @@
             sx,
             sy,
             // Constant-step gradient descent with momentum β; no early-stop
-            // (NaN cost target disables it—run the full max_iter).
+            // (NaN cost target disables it: run the full max_iter).
             { gdLineSearch: "constant", gdAlpha: a, gdBeta: b },
             mi,
             Number.NaN,

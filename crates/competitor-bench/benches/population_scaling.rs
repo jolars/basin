@@ -5,7 +5,7 @@
 //! # Why this exists
 //!
 //! basin's `parallel` feature is a *compile-time* switch with no runtime
-//! threads knob—thread count follows rayon's global pool
+//! threads knob: thread count follows rayon's global pool
 //! (`RAYON_NUM_THREADS`, default = all cores). So you cannot put a "serial"
 //! and a "parallel" contestant side by side in one criterion run. Instead the
 //! comparison is **two runs of this single `parallel`-built binary**, differing
@@ -30,7 +30,7 @@
 //! # The objective
 //!
 //! A sphere wrapped in a fixed busy-compute loop ([`ExpensiveSphere`]) so one
-//! evaluation costs ~microseconds—the regime where fanning a generation
+//! evaluation costs ~microseconds, the regime where fanning a generation
 //! across cores pays for the rayon overhead. For near-free objectives the
 //! batch overhead dominates and parallelism is a net loss; that crossover is
 //! the whole reason the feature is opt-in, so it is worth eyeballing by

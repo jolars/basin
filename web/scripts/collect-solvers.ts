@@ -10,8 +10,8 @@
  * Run with: `npm run collect:solvers` (uses tsx). Produce the input first:
  *   cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json
  *
- * As with the backend/competitor collectors this is deliberately off CI—
- * timings are machine-specific. Refresh locally and commit the regenerated
+ * As with the backend and competitor collectors this is deliberately off
+ * CI: timings are machine-specific. Refresh locally and commit the regenerated
  * JSON.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

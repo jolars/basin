@@ -6,7 +6,7 @@
  * renders on the server (the landing page prerenders the default snippet)
  * and so the CI compile-check (`scripts/check-snippets.ts`) can import it
  * directly and verify that *every* snippet it can produce actually builds
- * against the real `basin` API. If the API drifts, the check fails—the
+ * against the real `basin` API. If the API drifts, the check fails: the
  * demo can't silently lie.
  *
  * Scope is intentionally tight: this is a showcase, not the `/visualizer`.
@@ -45,7 +45,7 @@ export const MAXITER_STEPS: readonly number[] = [100, 200, 300, 500];
 
 // Momentum β is a linear 0–1 knob, so it gets a plain fine-grained slider
 // (not the 1-2-5 index steps α and max_iter use for their multi-decade
-// ranges). β = 0 at the far left is "off"—plain steepest descent.
+// ranges). β = 0 at the far left is "off": plain steepest descent.
 export const BETA_MIN = 0;
 export const BETA_MAX = 0.99;
 export const BETA_STEP = 0.01;
@@ -97,7 +97,7 @@ export function nearestIndex(steps: readonly number[], value: number): number {
 export function rustFloat(n: number): string {
     if (!Number.isFinite(n)) throw new Error(`non-finite float: ${n}`);
     let s = String(n);
-    // `String(1)` → "1"; Rust wants "1.0". Scientific/decimal forms already
+    // `String(1)` → "1"; Rust wants "1.0". Scientific and decimal forms already
     // read as floats. (Our slider values never reach JS exponential range.)
     if (!/[.eE]/.test(s)) s += ".0";
     return s;
@@ -169,7 +169,7 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
 }
 
 export interface NamedConfig {
-    /** Valid Rust bin/file stem identifying this snippet. */
+    /** Valid Rust binary or file stem identifying this snippet. */
     name: string;
     config: PlaygroundConfig;
 }

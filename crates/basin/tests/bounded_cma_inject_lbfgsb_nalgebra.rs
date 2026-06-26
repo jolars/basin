@@ -16,7 +16,7 @@ use nalgebra::{DMatrix, DVector};
 /// global min `(1, 3)` is strictly interior, so both the outer
 /// BoundPenalty (no active bounds at the optimum) and the inner
 /// L-Bfgs-B (interior iterates) drive convergence. Assert
-/// `‖x* − (1, 3)‖_∞ ≤ 1e-6`—L-Bfgs-B precision in the smooth
+/// `‖x* − (1, 3)‖_∞ ≤ 1e-6`: L-Bfgs-B precision in the smooth
 /// quadratic basin.
 ///
 /// The starting mean is `(0, 2)`, close enough that Hansen's

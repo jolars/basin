@@ -85,7 +85,7 @@ fn unbounded_rosenbrock_2d_converges() {
 
 /// `BoothBoxed` with bounds `[-1, 1]²`. The unconstrained minimum
 /// `(1, 3)` is outside the box, so the constrained optimum is at
-/// the corner `(1, 1)`—both active simultaneously. Verifies that
+/// the corner `(1, 1)`: both active simultaneously. Verifies that
 /// GCP correctly identifies the active set and subsm respects
 /// dual feasibility.
 #[test]
@@ -127,7 +127,7 @@ fn booth_at_corner_converges() {
     );
 }
 
-/// `BoothBoxed` with bounds `[-5, 5]²`—the unconstrained minimum
+/// `BoothBoxed` with bounds `[-5, 5]²`: the unconstrained minimum
 /// `(1, 3)` lies inside. The projected solver must recover the
 /// unconstrained answer, which is the L-Bfgs-style behavior on a
 /// well-conditioned 2-D quadratic.

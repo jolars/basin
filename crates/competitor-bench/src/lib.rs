@@ -12,10 +12,10 @@
 //!   from basin's corpus. Both crates use nalgebra ^0.34 (shared
 //!   lockfile), so they operate on the very same `DVector`/`DMatrix`.
 //! - **argmin** ([`ArgminProblem`]): a single fn-pointer adapter that
-//!   wraps any of basin's `pub` raw cost/gradient functions
+//!   wraps any of basin's `pub` raw cost and gradient functions
 //!   (`fn(&[f64]) -> f64`/`fn(&[f64], &mut [f64])`) into argmin's
 //!   [`CostFunction`](argmin::core::CostFunction) +
-//!   [`Gradient`](argmin::core::Gradient) on the `Vec<f64>` backend—
+//!   [`Gradient`](argmin::core::Gradient) on the `Vec<f64>` backend:
 //!   the backend both basin and argmin support natively, so GD and
 //!   Nelder-Mead run on identical param types.
 //! - **gomez** ([`GomezProblem`]): a single fn-pointer adapter that
@@ -77,13 +77,13 @@ impl Gradient for ArgminProblem {
 
 /// gomez-side adapter wrapping a basin raw cost `fn(&[f64]) -> f64` into
 /// gomez's [`Problem`] + [`Function`] over an unconstrained `n`-D domain.
-/// Cost-only—gomez has no gradient-using optimizer that lines up with
+/// Cost-only: gomez has no gradient-using optimizer that lines up with
 /// basin's first-order solvers, so the adapter exposes only the value;
 /// gomez approximates derivatives internally if a method ever needs them.
 ///
 /// Operates on `gomez::nalgebra::DVector<f64>` (gomez's bundled nalgebra
-/// 0.32), which is a separate version from the lm/basin nalgebra 0.34
-/// elsewhere in this crate—the two majors coexist in the lockfile and
+/// 0.32), which is a separate version from the lm and basin nalgebra 0.34
+/// elsewhere in this crate: the two majors coexist in the lockfile and
 /// never meet, because gomez only ever sees its own type.
 pub struct GomezProblem {
     cost: fn(&[f64]) -> f64,
@@ -182,7 +182,7 @@ impl LeastSquaresProblem<f64, Dyn, Dyn> for LmExponentialFit {
 // n ∈ {10, 20, 30} regime. `n` params, `m = n + 2` residuals, unique
 // minimum f = 0 at x = (1, …, 1). Because it converges cleanly (unlike
 // the rank-deficient Powell), all three solvers reach the optimum in
-// comparable iteration counts—so the timing reflects per-iteration
+// comparable iteration counts, so the timing reflects per-iteration
 // cost, and any iteration-count difference is itself a clean signal.
 //
 //   rᵢ      = xᵢ − 1                  (i = 0 … n−1)
@@ -376,7 +376,7 @@ impl UnderDetData {
         Self { m, n, a, b }
     }
 
-    /// Start point `x₀ⱼ = 0.1·splitmix(42+j)`—small, generic, away from
+    /// Start point `x₀ⱼ = 0.1·splitmix(42+j)`, small, generic, away from
     /// any stationary point.
     pub fn start(&self) -> Vec<f64> {
         (0..self.n).map(|j| 0.1 * splitmix(42 + j as u64)).collect()

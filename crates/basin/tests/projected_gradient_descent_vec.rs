@@ -35,7 +35,7 @@ fn slack_bounds_recover_unconstrained_minimum() {
 }
 
 /// Tight bounds: the unconstrained minimum (1, 3) lies *outside*
-/// [-1, 1]². The constrained optimum is the box corner (1, 1)—both
+/// [-1, 1]². The constrained optimum is the box corner (1, 1): both
 /// gradient components are negative there, pulling the iterate against
 /// the upper face. The unprojected ‖∇f‖_∞ ≈ 20 at (1, 1), so
 /// `GradientTolerance` would *not* trigger; the projected metric
@@ -91,7 +91,7 @@ fn infeasible_initial_param_is_projected_at_init() {
 /// `ProjectedGradientTolerance` triggers on the tight-bounds setup
 /// because the projected-gradient ∞-norm vanishes at (1, 1). A
 /// regular `GradientTolerance` would *not* fire here (∇f is non-zero
-/// at the constrained optimum)—that's the whole reason this
+/// at the constrained optimum). That's the whole reason this
 /// criterion exists.
 #[test]
 fn projected_gradient_tolerance_triggers_at_corner_minimum() {

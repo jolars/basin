@@ -10,7 +10,7 @@ use std::mem::size_of;
 
 use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent, MaxIter};
 
-/// `Result<f64, Infallible>` must be the same size as `f64`—the entire
+/// `Result<f64, Infallible>` must be the same size as `f64`: the entire
 /// rationale for choosing `Infallible` as the default error in the
 /// migration is that the happy path stays zero-cost.
 #[test]
@@ -104,9 +104,9 @@ fn cost_err_at_init_bubbles_out_of_executor_run() {
     }
 }
 
-/// Soft reject (`Ok(f64::INFINITY)`) must NOT abort the run—line search
+/// Soft reject (`Ok(f64::INFINITY)`) must NOT abort the run: line search
 /// retreats off the infeasible region just like before the typed-error
-/// migration. This pins the soft/hard split.
+/// migration. This pins the soft and hard split.
 #[test]
 fn soft_reject_via_infinity_does_not_abort() {
     struct InfiniteBeyondUnit;

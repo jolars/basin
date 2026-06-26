@@ -25,7 +25,7 @@
         menuOpen = false;
     });
 
-    // Reflect the resolved (light/dark) theme onto `<html>` so Tailwind
+    // Reflect the resolved (light or dark) theme onto `<html>` so Tailwind
     // dark: variants apply everywhere. Lives in the root layout so it
     // runs on every page (the inline script in app.html handles the
     // pre-hydration paint; this keeps the class in sync afterwards).

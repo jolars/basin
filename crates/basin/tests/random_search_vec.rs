@@ -127,7 +127,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
 
 /// `BasicPopulationState` invariant: candidates and costs both have
 /// length `λ` and are sorted ascending so `param()`/`cost()` always
-/// surface the best. Regression check on the sort/truncate logic in
+/// surface the best. Regression check on the sort and truncate logic in
 /// `next_iter`.
 #[test]
 fn population_invariants_hold_after_iteration() {

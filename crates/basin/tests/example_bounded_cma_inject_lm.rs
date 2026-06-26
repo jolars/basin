@@ -1,6 +1,6 @@
 //! Worked example: `BoundedCmaInject` with Levenberg-Marquardt inner.
 //!
-//! Booth-as-residuals on a tight `[-1, 1]²` box—the unconstrained
+//! Booth-as-residuals on a tight `[-1, 1]²` box: the unconstrained
 //! minimum `(1, 3)` is outside the box, so the bound-active constrained
 //! optimum sits on the box corner `(1, 1)`. Bounded CMA-ES does global
 //! exploration under the adaptive BoundPenalty (Hansen/pycma); each

@@ -34,7 +34,7 @@
     // `directLabels` widens the right margin to hold the fanned-out labels.
     const padR = $derived(directLabels ? 80 : 20);
     const padT = 16;
-    // Left/bottom padding depend on `compact` so they react if the prop flips.
+    // Left and bottom padding depend on `compact` so they react if the prop flips.
     // Bumped slightly to give the widest y label ("1e-10") clearance on the left.
     const padL = $derived(compact ? 42 : 60);
     const padB = $derived(compact ? 24 : 38);

@@ -5,7 +5,7 @@ import { SolverKind } from "./basin-wasm/basin_wasm";
  *
  * The `id` is the key the value is stored under (in the visualizer's
  * `optionValues` record) and the field name passed across the wasm
- * boundary inside the `Run` options object—keep these in sync with
+ * boundary inside the `Run` options object: keep these in sync with
  * `RunOptions` in `crates/basin-wasm/src/lib.rs` (camelCase).
  */
 export type SolverOption =
@@ -69,7 +69,7 @@ export type SolverMeta = {
     options: SolverOption[];
     /**
      * Iterations advanced per animation frame. Fractional values are
-     * supported: `0.25` means "one iter every 4 frames"—useful for
+     * supported: `0.25` means "one iter every 4 frames", useful for
      * population solvers where each generation is a big visible jump and
      * you want time to read the cloud between updates. Defaults to 8,
      * fine for single-iterate solvers (GD, NM, L-BFGS) and SSGA (whose

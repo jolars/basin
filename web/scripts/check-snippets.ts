@@ -5,7 +5,7 @@
  * snippet it can produce, drops each into a throwaway Cargo package as a
  * standalone `src/bin/<name>.rs`, and runs `cargo build` against the
  * local `basin` crate. If any generated program fails to compile, this
- * exits non-zero—so the playground can never drift from the real API.
+ * exits non-zero, so the playground can never drift from the real API.
  *
  * Run with: `npm run check:snippets` (uses tsx).
  *

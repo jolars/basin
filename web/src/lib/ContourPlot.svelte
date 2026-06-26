@@ -24,7 +24,7 @@
         theme: Theme;
         onPick: (p: { x: number; y: number }) => void;
         /** Draw contour lines as a gray topographic ramp instead of the
-         *  colored (viridis) palette. Trajectory/markers stay accented. */
+         *  colored (viridis) palette. Trajectory and markers stay accented. */
         monochrome?: boolean;
     };
 
@@ -45,7 +45,7 @@
 
     // White contour edges in monochrome mode. Fainter on dark so the
     // (white) trajectory still reads over them; on light they sit over the
-    // gray heatmap fill. `t` is unused—depth comes from the per-level
+    // gray heatmap fill. `t` is unused: depth comes from the per-level
     // line width in `renderContours`.
     function whiteEdge(_t: number): string {
         return theme === "dark"
@@ -242,7 +242,7 @@
 
         // Draw outermost-first so the brightest (innermost) strokes win
         // when contours crowd. `t = 0` is the outermost, `t = 1` the
-        // innermost—palette decides what those map to per theme.
+        // innermost: palette decides what those map to per theme.
         for (let li = lines.length - 1; li >= 0; li--) {
             const chains = lines[li].chains;
             if (chains.length === 0) continue;
@@ -293,7 +293,7 @@
 
         // Current-generation population cloud (CMA-ES, DE, RS, SSGA). Drawn
         // first so the best-so-far trail visually wins. Faint sky-blue dots
-        // read as "the swarm" vs the white/accent trajectory line.
+        // read as "the swarm" vs the white or accent trajectory line.
         if (pop.length >= 2) {
             ctx.fillStyle =
                 theme === "dark"

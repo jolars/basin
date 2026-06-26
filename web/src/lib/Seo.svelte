@@ -4,7 +4,7 @@
     // Per-page <title>, description, canonical URL, and the dynamic Open
     // Graph and Twitter tags. The page-INVARIANT social tags (og:image,
     // og:type, og:site_name, twitter:card, twitter:image) live in
-    // `app.html` once. Title/description are kept here (and ONLY here)
+    // `app.html` once. Title and description are kept here (and ONLY here)
     // per page: `app.html` deliberately omits them, because a static tag
     // in the template plus a per-page one in `<svelte:head>` would emit
     // two <title>/<meta name="description"> tags (SvelteKit does not

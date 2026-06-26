@@ -17,8 +17,8 @@
 //!
 //! Booth (2D, convex quadratic, optimum `(1, 3)`) is the test problem.
 //! The outer state is a custom `MultiStartState` rather than
-//! `BasicSimplexState` because `BasicSimplexState`'s vertex/cost fields
-//! are `pub(crate)`—the integration test is outside the crate, so we
+//! `BasicSimplexState` because `BasicSimplexState`'s vertex and cost fields
+//! are `pub(crate)`: the integration test is outside the crate, so we
 //! show that composition works through the public `State`, `Solver`, and
 //! `CountsMirror` traits alone.
 

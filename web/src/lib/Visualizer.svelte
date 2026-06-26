@@ -50,7 +50,7 @@
     let trajectory: Float64Array<ArrayBufferLike> = $state(new Float64Array(0));
     let costs: Float64Array<ArrayBufferLike> = $state(new Float64Array(0));
     // Current-generation population for stochastic solvers (CMA-ES, DE, RS,
-    // SSGA). Empty Float64Array for the local solvers—the contour plot
+    // SSGA). Empty Float64Array for the local solvers: the contour plot
     // skips rendering when length is zero.
     let population: Float64Array<ArrayBufferLike> = $state(new Float64Array(0));
     let reason = $state("");
@@ -61,7 +61,7 @@
     // Plain (non-reactive) handles for the in-flight run + animation
     // frame. We deliberately keep these out of `$state` because the run
     // effect both reads (cleanup) and writes (assignment) them, and a
-    // reactive write would re-trigger the effect—Svelte detects that
+    // reactive write would re-trigger the effect: Svelte detects that
     // as `effect_update_depth_exceeded` and aborts.
     let activeRun: Run | null = null;
     let frameId: number | null = null;
@@ -112,7 +112,7 @@
             deCr: optionValues.deCr ?? 0.9,
             rsLambda: optionValues.rsLambda ?? 16,
             ssgaPopSize: optionValues.ssgaPopSize ?? 0,
-            // Box bounds for DE, SSGA, or RandomSearch—they use the visible
+            // Box bounds for DE, SSGA, or RandomSearch: they use the visible
             // viewport as the feasible region (the right semantics for a 2D
             // demo). Reading the fields here ties the effect to domain
             // changes when the user switches problems.
@@ -122,7 +122,7 @@
             ymax: d.ymax,
         };
         // Stop early once the cost is within SUBOPT_TARGET of the known
-        // optimum—the same value the cost chart uses as its log floor.
+        // optimum: the same value the cost chart uses as its log floor.
         const stopAtCost = problemMeta.fStar + SUBOPT_TARGET;
 
         if (frameId !== null) {
@@ -144,7 +144,7 @@
         // Generation-based solvers (CMA-ES, DE, or RS) advance one full
         // generation per `next_iter`, so 8/frame races through the run in
         // a flash. The solver's meta gates this. Fractional rates (< 1) mean
-        // "step every Nth frame"—for population-based solvers where each
+        // "step every Nth frame": for population-based solvers where each
         // generation is a big visible jump, this gives the eye time to read
         // the cloud between updates. SSGA's "iter" is a single offspring
         // evaluation, so it keeps the default chunk of 8.

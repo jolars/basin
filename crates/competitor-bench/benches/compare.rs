@@ -9,7 +9,7 @@
 //!
 //! All three use MINPACK gtol/ftol/xtol at `30·ε` (the lm crate's
 //! default; basin configured to match) so they stop at comparable
-//! points—confirmed by `src/bin/verify.rs`.
+//! points, confirmed by `src/bin/verify.rs`.
 //!
 //! Run: `cargo bench -p lm-bench`.
 
@@ -193,7 +193,7 @@ fn bench_vardim(c: &mut Criterion) {
 }
 
 /// Underdetermined trigonometric (`m < n`, rank-deficient `JᵀJ`) at
-/// eunoia's regime—issue #10. Both solvers reach the same cost (see
+/// eunoia's regime (issue #10). Both solvers reach the same cost (see
 /// `verify`), so on the sizes where iteration counts also match
 /// (`(15,7)`, `(25,12)`) the timing ratio is per-iteration cost. This is
 /// the regime where basin reformed `JᵀJ` on every rejected step, which

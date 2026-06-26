@@ -1,7 +1,7 @@
 //! `Executor::from_start` equivalence tests.
 //!
 //! `Executor::from_start(problem, solver, x0)` must produce exactly the same
-//! run as `Executor::new(problem, solver, ExplicitState::new(x0))`—it is
+//! run as `Executor::new(problem, solver, ExplicitState::new(x0))`. It is
 //! sugar that calls the solver's
 //! [`InitialState::seed`](basin::InitialState::seed) instead of making the
 //! caller name the state type. Each test runs both forms with identical
@@ -240,7 +240,7 @@ fn mads_state() {
 /// BFGS now seeds uniformly across every backend it runs on. The `Vec<f64>`
 /// case is covered by [`bfgs_quasi_newton_state_vec_backend`]; these confirm
 /// the nalgebra and faer seed impls added alongside it (`WarmStart` was
-/// nalgebra-only before). `ndarray` is intentionally absent—BFGS does not
+/// nalgebra-only before). `ndarray` is intentionally absent: BFGS does not
 /// run on `Array2` (no `GeneralRankOneUpdate`).
 #[cfg(feature = "nalgebra")]
 #[test]

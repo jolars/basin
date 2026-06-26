@@ -1,6 +1,6 @@
 // Shared navigation model. `href` is a base-independent app pathname
 // (it starts with `/` and is passed through `resolve()` at the call
-// site, which prefixes the base)—never hardcode `/basin`. `section`
+// site, which prefixes the base); never hardcode `/basin`. `section`
 // is the first path segment, used for active-state matching across a
 // whole section (e.g. any `/docs/*` page lights up the "Docs" link).
 

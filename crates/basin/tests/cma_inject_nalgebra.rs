@@ -4,7 +4,7 @@
 //! Two tests below: convergence on Rosenbrock 2-D (the canonical
 //! memetic-CMA-ES showcase; Hansen 2011 §4 reports `n×` speedup from
 //! injection on this function), and cost-eval aggregation across the
-//! outer/inner composition boundary.
+//! outer and inner composition boundary.
 //!
 //! For the LM-inner variant see `cma_inject_lm_nalgebra.rs`; for
 //! L-BFGS-B inner see `bounded_cma_inject_lbfgsb_nalgebra.rs`; for the
@@ -26,7 +26,7 @@ use nalgebra::{DMatrix, DVector};
 /// distribution before each iteration step.").
 ///
 /// We do *not* assert speedup vs. vanilla CMA-ES; Hansen's reported
-/// `n×` speedup was with gradient/Newton injection, not derivative-free
+/// `n×` speedup was with gradient or Newton injection, not derivative-free
 /// NM polish, and empirically NM polish doesn't beat vanilla CMA-ES on
 /// Rosenbrock in eval-count terms. The memetic value is on
 /// multi-modal and ill-conditioned constrained problems

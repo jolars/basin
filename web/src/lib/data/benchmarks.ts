@@ -98,17 +98,17 @@ export const CASES: Case[] = [
     {
         solver: "gd",
         problem: "rosenbrock",
-        blurb: "First-order, vector tier only—runs on all four backends.",
+        blurb: "First-order, vector tier only: runs on all four backends.",
     },
     {
         solver: "nm",
         problem: "ackley",
-        blurb: "Derivative-free simplex, vector tier only—all four backends on a multimodal landscape.",
+        blurb: "Derivative-free simplex, vector tier only: all four backends on a multimodal landscape.",
     },
     {
         solver: "lbfgs",
         problem: "styblinski",
-        blurb: "Quasi-Newton in compact form (no dense matrix)—all four backends.",
+        blurb: "Quasi-Newton in compact form (no dense matrix): all four backends.",
     },
     {
         solver: "bfgs",
@@ -151,7 +151,7 @@ export const BACKEND_LABELS: Record<Backend, string> = {
     faer: "faer",
 };
 
-/** Line/legend colors per backend: mid-tone hues legible on both light and
+/** Line and legend colors per backend: mid-tone hues legible on both light and
  * dark backgrounds (indigo, sky, amber, and rose). Shared by the chart lines
  * and the legend so they never drift. */
 export const BACKEND_COLORS: Record<Backend, string> = {

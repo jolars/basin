@@ -29,7 +29,7 @@ export interface SolverResult {
     solver: Solver;
     problem: string;
     n: number;
-    /** Seed used to draw the starting point—uniquely identifies a panel
+    /** Seed used to draw the starting point: uniquely identifies a panel
      * within a problem. */
     seed: number;
     /** Starting parameter (length `n`). Sampled uniformly from the
@@ -59,7 +59,7 @@ export const SOLVER_LABELS: Record<Solver, string> = {
     cmaes: "CMA-ES",
 };
 
-/** Line/legend colors per solver: mid-tone hues legible on both light and
+/** Line and legend colors per solver: mid-tone hues legible on both light and
  * dark backgrounds. Distinct from the backend palette (Vec is indigo there)
  * to avoid cross-page color confusion. */
 export const SOLVER_COLORS: Record<Solver, string> = {

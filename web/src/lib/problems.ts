@@ -121,7 +121,7 @@ export const PROBLEMS: ProblemMeta[] = [
         // Cosine ripple sits on top of a paraboloid; sqrt keeps the lattice
         // of local minima visible without flattening the basin floor.
         intensity: "sqrt",
-        // GD on Rastrigin is "wrong tool for the job"—it stalls in the
+        // GD on Rastrigin is "wrong tool for the job": it stalls in the
         // nearest local well. Kept here so the slider has a sensible default
         // when users explore the (poor) local-search experience.
         gdAlphaDefault: 0.01,

@@ -90,7 +90,7 @@ export function paletteFor(theme: Theme): Palette {
         reason: "rgba(202, 138, 4, 0.95)",
         // On light: invert the viridis ramp so the inner (low-cost)
         // contour is the *darkest* purple-blue and the outer is a
-        // muted teal/yellow. Both ends still have ample contrast on a
+        // muted teal or yellow. Both ends still have ample contrast on a
         // near-white background.
         contour: (t) => {
             const [r, g, b] = viridisAt(1 - t);

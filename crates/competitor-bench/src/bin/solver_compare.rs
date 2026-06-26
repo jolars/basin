@@ -19,7 +19,7 @@
 //! Timing: solvers are deterministic on the cost sequence (CMA-ES too, since
 //! its RNG is seeded per `(solver, start)`), so only timing jitters across
 //! reps. `REPS` reps per (solver, start), median-elapsed-ns per iter index
-//! paired with the rep-invariant cost—same as the competitor harness.
+//! paired with the rep-invariant cost, same as the competitor harness.
 //!
 //! Run: `cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json`.
 
@@ -33,7 +33,7 @@ use basin::{
 };
 
 /// Wall-clock budget per (solver, start, rep). 20 ms gives GD room to either
-/// converge or visibly stall on hard starts; Bfgs/L-Bfgs converge in a few
+/// converge or visibly stall on hard starts; Bfgs and L-Bfgs converge in a few
 /// hundred µs from easy starts and the line just ends there.
 const BUDGET: Duration = Duration::from_millis(20);
 /// Repetitions per (solver, start) for the per-iteration time median.
@@ -46,7 +46,7 @@ const F_OPT: f64 = 0.0;
 /// solver that hits it, which lines the y-scales up across panels.
 const TARGET: f64 = 1e-10;
 /// Suboptimality floor so the log-scale y-axis stays well-defined. Equal
-/// to `TARGET`—solvers can't drive subopt below the level they stop at.
+/// to `TARGET`: solvers can't drive subopt below the level they stop at.
 const FLOOR: f64 = TARGET;
 /// Base seed for CMA-ES, mixed with the start index so different starts
 /// draw different populations while each `(solver, start)` is reproducible.
@@ -54,7 +54,7 @@ const CMAES_BASE_SEED: u64 = 42;
 /// Starting-point seeds. Each seed produces one start sampled uniformly
 /// from the problem's domain box (see [`sample_start`]). 1-indexed so the
 /// `Seed N` titles on the web page match the actual seed used in the
-/// RNG—no off-by-one between what's shown and what's reproducible. Six gives
+/// RNG: no off-by-one between what's shown and what's reproducible. Six gives
 /// the existing 3×2 panel layout; trim or extend without other changes.
 const START_SEEDS: [u64; 6] = [1, 2, 3, 4, 5, 6];
 
@@ -65,7 +65,7 @@ const START_SEEDS: [u64; 6] = [1, 2, 3, 4, 5, 6];
 // One entry per problem the harness benchmarks. Each carries the
 // human-readable name (matched on the web side), the dimensionality, and
 // the per-dim domain box used to sample seeded starts. Today there's just
-// Rosenbrock at n=10—adding (say) Ackley is a one-line append plus a
+// Rosenbrock at n=10. Adding (say) Ackley is a one-line append plus a
 // matching `run_<solver>` arm in `main`.
 
 struct ProblemConfig {
@@ -88,7 +88,7 @@ const PROBLEMS: &[ProblemConfig] = &[ProblemConfig {
     domain_hi: 2.0,
 }];
 
-/// SplitMix64—small, deterministic, no external rand dep. Seeded per
+/// SplitMix64: small, deterministic, no external rand dep. Seeded per
 /// (problem, start_seed); the sampled start is the next `n` outputs treated
 /// as uniform `f64` in the per-dim domain.
 struct SplitMix64(u64);
@@ -109,7 +109,7 @@ impl SplitMix64 {
 /// Hash the (problem name, seed) pair into a SplitMix64 stream so different
 /// problems draw different starts from the same seed list.
 fn sample_start(p: &ProblemConfig, seed: u64) -> Vec<f64> {
-    // Mix the problem name into the RNG seed via a FNV-like fold—keeps
+    // Mix the problem name into the RNG seed via a FNV-like fold: keeps
     // problem-seed pairs uncorrelated without pulling in a hash dep.
     let mut h: u64 = 0xcbf29ce484222325;
     for b in p.name.as_bytes() {
@@ -149,7 +149,7 @@ where
         pts.push((t0.elapsed().as_nanos(), cost));
         // Hand-rolled target-cost stop. basin's `CostTolerance` checks the
         // *change* `|f_k − f_{k-1}|`, not the absolute level, so it can't
-        // serve here—and the framework has no `TargetCost` criterion yet.
+        // serve here, and the framework has no `TargetCost` criterion yet.
         // Driving from the `Stepper` lets us cut as soon as `f − f*` ≤ TARGET.
         if cost - F_OPT <= TARGET {
             break;
@@ -159,7 +159,7 @@ where
 }
 
 /// Median elapsed-ns per iteration index across `REPS` reps. Trims to the
-/// shortest rep—under a wall-clock budget the per-rep iteration count
+/// shortest rep: under a wall-clock budget the per-rep iteration count
 /// can vary by one or two.
 fn median_reps(mut run: impl FnMut() -> Vec<(u128, f64)>) -> Vec<(u128, f64)> {
     let runs: Vec<Vec<(u128, f64)>> = (0..REPS).map(|_| run()).collect();
@@ -175,7 +175,7 @@ fn median_reps(mut run: impl FnMut() -> Vec<(u128, f64)>) -> Vec<(u128, f64)> {
 
 /// Number of log-spaced grid points between `T_MIN_NS` and the budget. ~150
 /// gives smooth log-log curves at the 380-pixel chart width without bloating
-/// the committed JSON (NM does >150k iters in 20 ms—emitting them all
+/// the committed JSON (NM does >150k iters in 20 ms: emitting them all
 /// would produce a 50 MB file).
 const GRID_POINTS: usize = 150;
 /// Lower grid bound (1 µs). Anything finer than this isn't resolvable on the
@@ -184,8 +184,8 @@ const T_MIN_NS: f64 = 1_000.0;
 
 /// Downsample a dense trace onto a log-spaced time grid with best-so-far
 /// suboptimality. Keeps the iter-0 anchor at `t = 0`, then emits one sample
-/// per grid point carrying the minimum cost seen up to that time—*up to
-/// the actual stop time of the trace*. The line ends where the solver
+/// per grid point carrying the minimum cost seen up to that time, but only
+/// *up to the actual stop time of the trace*. The line ends where the solver
 /// actually stopped (early-stop on hitting `TARGET`, or budget on running
 /// out of time); no fake flat-line extension to the budget edge.
 fn downsample(pts: &[(u128, f64)], budget_ns: u128) -> Vec<(u128, f64)> {

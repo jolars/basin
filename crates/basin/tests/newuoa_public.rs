@@ -96,7 +96,7 @@ fn rho_tolerance_stops_early() {
 }
 
 /// Backend-generic over the parameter vector: drive NEWUOA on `nalgebra`'s
-/// `DVector` to prove the `V`-generic solver/state work outside `Vec<f64>`.
+/// `DVector` to prove the `V`-generic solver and state work outside `Vec<f64>`.
 #[cfg(feature = "nalgebra")]
 #[test]
 fn backend_generic_nalgebra() {

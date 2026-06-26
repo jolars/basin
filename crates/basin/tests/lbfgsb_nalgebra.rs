@@ -169,7 +169,7 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
     // L-Bfgs-B's per-iteration extra cost+grad eval (the
     // re-evaluation at the accepted step, see `next_iter`) inflates
     // its `cost_evals` slightly above Bfgs's. The iteration count
-    // should be comparable, though—a constant-factor slowdown
+    // should be comparable, though. A constant-factor slowdown
     // would indicate a wiring bug rather than the m → ∞ limit.
     assert!(
         lbfgsb_result.iter() < bfgs_result.iter() + 30,

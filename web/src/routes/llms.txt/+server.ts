@@ -4,7 +4,7 @@
 // fetched on its own.
 const SITE_ORIGIN = "https://basin.rs";
 
-// llms.txt format: https://llmstxt.org—an H1 name, a blockquote summary,
+// llms.txt format: https://llmstxt.org, an H1 name, a blockquote summary,
 // then sections of `- [title](url): note` links. This is a *signpost*,
 // not a copy of the docs: the web pages are a thin overview and the
 // authoritative API reference lives on docs.rs, so we link out to it

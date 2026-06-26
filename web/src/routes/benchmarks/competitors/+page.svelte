@@ -44,7 +44,7 @@
         <span class="text-slate-400 dark:text-slate-600">/</span> Competitors
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Competitors—basin vs argmin, gomez, and nlopt, convergence over time
+        Competitors: basin vs argmin, gomez, and nlopt, convergence over time
     </h1>
     <p class="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
         basin against <a
@@ -111,7 +111,7 @@
         own bundled
         <code class="font-mono">nalgebra::DVector&lt;f64&gt;</code>). The GD,
         NM, and L-BFGS cases run from the classic Rosenbrock start to a
-        {data.iterations}-iteration cap (a cap—the quasi-Newton case converges
+        {data.iterations}-iteration cap (a cap: the quasi-Newton case converges
         first, and gomez's NM hits its internal no-progress stop before the
         budget); the NEWUOA case instead runs on Styblinski–Tang (n = 5) from
         the origin to natural ρ-convergence. Each point is the median wall-clock

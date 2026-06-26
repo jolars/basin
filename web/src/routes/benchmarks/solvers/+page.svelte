@@ -34,7 +34,7 @@
         <span class="text-slate-400 dark:text-slate-600">/</span> Solvers
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Solvers—head-to-head
+        Solvers: head-to-head
     </h1>
     <p class="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
         basin's five general optimizers (gradient descent, Nelder–Mead, BFGS,

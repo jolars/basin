@@ -78,7 +78,7 @@
         const yHi = Math.max(Math.ceil(Math.log10(s0)), yLo + 1);
         const ySpan = yHi - yLo;
         // Clamp into [yLo, yHi]: descent stays below the top, and a value
-        // at/under the optimum lands on the bottom axis.
+        // at or under the optimum lands on the bottom axis.
         const yOf = (v: number) =>
             Math.min(Math.log10(Math.max(v - fstar, SUBOPT_TARGET)), yHi);
 

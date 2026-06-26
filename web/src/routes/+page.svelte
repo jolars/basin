@@ -11,7 +11,7 @@
         },
         {
             title: "Multiple backends",
-            body: "Run on plain Vec<f64>, nalgebra, ndarray, or faer. Each backend sits behind a single feature—no per-version feature explosion.",
+            body: "Run on plain Vec<f64>, nalgebra, ndarray, or faer. Each backend sits behind a single feature: no per-version feature explosion.",
         },
         {
             title: "First-class constraints",
@@ -19,7 +19,7 @@
         },
         {
             title: "Composable termination",
-            body: "Gradient, parameter, and cost tolerances, iteration and time budgets—configured uniformly across solvers, bound to the state each one exposes.",
+            body: "Gradient, parameter, and cost tolerances, iteration and time budgets: configured uniformly across solvers, bound to the state each one exposes.",
         },
         {
             title: "Runs in the browser",
@@ -39,7 +39,7 @@
 
 <!-- Hero. `flow-root` contains the floated logo so it can't bleed into the
      next section. Below `md` the logo stacks on top (centered); at `md`+ it
-     floats right and the heading/paragraph/buttons wrap around it.
+     floats right and the heading, paragraph, and buttons wrap around it.
 
      Two logo variants swap on the `.dark` class (the same class the
      Light/Auto/Dark toggle drives, set pre-hydration in app.html so there is
