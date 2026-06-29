@@ -36,6 +36,33 @@ faer).
   Run this before committing any rustdoc changes.
 - `cargo fmt`: format (also enforced by pre-commit).
 
+### `cargo test --all-features` needs a BLAS/LAPACK provider
+
+`cargo clippy --all-features` and `cargo doc --all-features` work out of the box
+because they only *check* and never *link*. `cargo test --all-features` is
+different: it links executables, and the `nalgebra-lapack`/`ndarray-blas`
+features deliberately pull in **no** BLAS/LAPACK provider crate (see the
+`Cargo.toml` comments: `nalgebra-lapack` forwards `lapack-custom` precisely so
+the rlib/docs build without a Fortran toolchain). So a bare
+`cargo test --all-features` fails at link time with `undefined reference to
+dsyev_`/`dpotrf_`—this is by design, not a missing system library. Installing
+`liblapack`/`libblas` is not enough on its own; nothing tells the linker to use
+them.
+
+To actually run the LAPACK-backed tests, supply a provider at link time. With
+any OpenBLAS in scope (it provides both BLAS and LAPACK symbols):
+
+```fish
+# NixOS example: point at an OpenBLAS in the store
+set OB (ls -d /nix/store/*openblas-*/lib | head -1)
+RUSTFLAGS="-L $OB -l openblas" cargo test -p basin --all-features
+```
+
+Outside Nix, an `-L <dir> -l openblas` (or `-l lapack -l blas` for reference
+netlib) pointing at your system libraries does the same. CI does **not** run
+`--all-features` *tests*; the routine local test command is the pure-Rust
+feature set: `cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
+
 The dev environment is provided by `devenv.nix` (loaded automatically via
 `direnv` from `.envrc`). It pins Rust 1.87.0 (matches `rust-version` in
 `Cargo.toml`) and adds the `wasm32-unknown-unknown` target plus tooling:
