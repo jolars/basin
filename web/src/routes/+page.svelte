@@ -33,7 +33,7 @@
 </script>
 
 <Seo
-    title="Basin—Numerical Optimization for Rust"
+    title="Basin — Numerical Optimization for Rust"
     description="Basin is a numerical optimization library for Rust: pluggable solvers, multiple linear-algebra backends, first-class constraints, and a wasm-first design."
 />
 
@@ -62,7 +62,7 @@
     <span
         class="inline-block text-xs font-mono uppercase tracking-widest text-stone-500 dark:text-stone-400"
     >
-        Alpha · Rust
+        Rust
     </span>
     <h1
         class="mt-3 text-4xl md:text-6xl font-semibold tracking-tight text-balance"
