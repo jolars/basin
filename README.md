@@ -122,9 +122,9 @@ Two backends have opt-in, BLAS/LAPACK-backed acceleration. Both are off by
 default and not wasm-compatible (each links a Fortran/BLAS toolchain), and both
 expect you to bring your own BLAS/LAPACK source crate:
 
-  | Feature           | Effect                                                                                                                                                         |
-  | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                                                                                |
+  | Feature           | Effect                                                                                                                                                           |
+  | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                                                                                  |
   | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky and symmetric eigendecomposition for LAPACK-backed ones (pins `nalgebra-lapack` 0.27, the release tracking nalgebra 0.34). |
 
 The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
@@ -140,10 +140,10 @@ test-problem conventions were modeled on argmin's. Thanks to the argmin authors
 and contributors for a library that is a pleasure to learn from.
 
 The Powell-family derivative-free solvers (COBYLA, NEWUOA, BOBYQA, LINCOA) are
-derived from [PRIMA], Zaikun Zhang's modern-Fortran reference implementation of
-M. J. D. Powell's methods, used as the authoritative source for the exact
-formulas and as the cross-validation oracle. PRIMA is distributed under the BSD
-3-Clause License; its notice is retained in
+derived from [PRIMA], Zaikun Zhang's modern-Fortran reference implementation of M. J. D.
+Powell's methods, used as the authoritative source for the exact formulas and as
+the cross-validation oracle. PRIMA is distributed under the BSD 3-Clause
+License; its notice is retained in
 [COPYRIGHT](https://github.com/jolars/basin/blob/main/crates/basin/COPYRIGHT).
 
 The bound-constrained L-BFGS-B solver is a port of the [L-BFGS-B] version 3.0
