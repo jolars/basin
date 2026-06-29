@@ -56,7 +56,7 @@
         <span class="text-stone-400 dark:text-stone-600">/</span> Backends
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Backends: same solver, different linear algebra
+        Backends: Same Solver, Different Linear Algebra
     </h1>
     <p class="mt-3 max-w-3xl text-stone-600 dark:text-stone-300">
         A curated set of (solver, problem) cases, each run to a fixed iteration

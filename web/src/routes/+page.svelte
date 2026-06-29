@@ -23,7 +23,7 @@
         },
         {
             title: "Runs in the browser",
-            body: "wasm-first by design: the default build pulls in no BLAS/LAPACK or threads, so basin compiles to wasm32 out of the box.",
+            body: "WASM-first by design: the default build pulls in no BLAS/LAPACK or threads, so basin compiles to wasm32 out of the box.",
         },
         {
             title: "Paper-anchored",
@@ -104,12 +104,12 @@
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 pb-16">
     <Playground />
     <p class="mt-6 text-sm text-stone-600 dark:text-stone-300">
-        Want to see it move? The
+        If you want to play around with a larger set of problems and solvers,
+        please see the
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href={resolve("/visualizer/")}>visualizer</a
-        >
-        animates these trajectories live, compiled to wasm.
+        >.
     </p>
 </section>
 
@@ -118,7 +118,7 @@
     class="border-t border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40"
 >
     <div class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
-        <h2 class="text-2xl font-semibold tracking-tight">What's in the box</h2>
+        <h2 class="text-2xl font-semibold tracking-tight">Features</h2>
         <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {#each features as f}
                 <div
@@ -130,38 +130,6 @@
                     </p>
                 </div>
             {/each}
-        </div>
-    </div>
-</section>
-
-<!-- Closing CTA -->
-<section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
-    <div
-        class="rounded-2xl border border-stone-200 dark:border-stone-800 p-8 md:p-12 flex flex-wrap items-center justify-between gap-6"
-    >
-        <div>
-            <h2 class="text-2xl font-semibold tracking-tight">
-                Compare solvers on classical problems
-            </h2>
-            <p class="mt-2 text-stone-600 dark:text-stone-300 max-w-xl">
-                Head-to-head solver comparisons across linear-algebra backends,
-                solver families, and competing crates. Explore the docs, or
-                watch solvers converge in the visualizer.
-            </p>
-        </div>
-        <div class="flex flex-wrap gap-3">
-            <a
-                href={resolve("/docs/getting-started/")}
-                class="px-5 py-2.5 rounded-lg bg-stone-900 text-white font-medium hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white transition-colors"
-            >
-                Read the docs
-            </a>
-            <a
-                href={resolve("/benchmarks/")}
-                class="px-5 py-2.5 rounded-lg border border-stone-300 dark:border-stone-700 font-medium hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-            >
-                Benchmarks
-            </a>
         </div>
     </div>
 </section>
