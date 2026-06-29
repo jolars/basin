@@ -15,6 +15,40 @@
     content: '';
 }
 
+/* Shiki (build-time fence highlighting in svelte.config.js) emits dual-theme
+ * CSS variables with `defaultColor: false`: `--shiki-light`/`--shiki-dark` per
+ * token. Map them to the active theme here; the `.dark span` rule needs `span`
+ * specificity to beat the light-mode `.shiki span` rule, so both sides target
+ * spans. The frame (background, border) is a fixed inset that matches the
+ * landing page's code panels (slate-50/200 light, slate-900/800 dark) rather
+ * than shiki's own `--shiki-*-bg` — which is white in light mode and so leaves
+ * no visible frame. All rules are unlayered, so they beat the prose plugin's
+ * layered `pre`/`code` styling. */
+.shiki {
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0; /* slate-200 */
+    background-color: #f8fafc; /* slate-50 */
+}
+.shiki span {
+    color: var(--shiki-light);
+}
+.dark .shiki {
+    border-color: #1e293b; /* slate-800 */
+    background-color: #0f172a; /* slate-900 */
+}
+.dark .shiki span {
+    color: var(--shiki-dark);
+}
+
+/* Neutralize the inline-code chrome (backticks, weight) that the prose code
+ * rules would otherwise apply to the <code> wrapping a highlighted block. */
+.prose .shiki code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-weight: inherit;
+}
+
 html,
 body {
     height: 100%;
