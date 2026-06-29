@@ -5,9 +5,6 @@ shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
 *solver* over a *state*, calling into the *problem* traits you implement
 (`CostFunction`, `Gradient`, and friends).
 
-> **Alpha.** The public API is still iterating and breaking changes are
-> expected. Pin a version and read the changelog before upgrading.
-
 ## How the pieces fit
 
 - **Problem**: what you implement. A `CostFunction` (and a `Gradient`, if your
