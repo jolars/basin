@@ -17,7 +17,7 @@
 </script>
 
 <Seo
-    title="Basin—solver visualizer"
+    title="Solver Visualizer – Basin"
     description="Live wasm-driven 2D optimization trajectories from the Basin Rust library."
 />
 

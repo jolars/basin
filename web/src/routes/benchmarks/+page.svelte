@@ -32,7 +32,7 @@
 </script>
 
 <Seo
-    title="Basin—benchmarks"
+    title="Benchmarks – Basin"
     description="Benchmarks for the Basin optimization library, along three axes: linear-algebra backends, solver families, and competing crates such as argmin."
 />
 

@@ -43,7 +43,7 @@
 </script>
 
 <Seo
-    title="Basin—backend benchmarks"
+    title="Backend Benchmarks – Basin"
     description="Backend benchmarks for the Basin optimization library: a curated set of solver and problem pairs across the Vec, nalgebra, ndarray, and faer linear-algebra backends."
 />
 

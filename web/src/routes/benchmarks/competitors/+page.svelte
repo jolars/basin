@@ -31,7 +31,7 @@
 </script>
 
 <Seo
-    title="Basin—competitor benchmarks"
+    title="Competitor Benchmarks – Basin"
     description="basin versus established Rust optimization crates such as argmin and gomez on matched problems, as suboptimality-vs-time convergence traces."
 />
 
