@@ -60,7 +60,7 @@
         class="hidden dark:block mx-auto mb-8 w-3/4 max-w-sm h-auto md:float-right md:mx-0 md:mb-4 md:ml-10 md:w-2/5 md:max-w-sm"
     />
     <span
-        class="inline-block text-xs font-mono uppercase tracking-widest text-slate-500 dark:text-slate-400"
+        class="inline-block text-xs font-mono uppercase tracking-widest text-stone-500 dark:text-stone-400"
     >
         Alpha · Rust
     </span>
@@ -70,7 +70,7 @@
         Numerical Optimization in Rust
     </h1>
     <p
-        class="mt-5 max-w-2xl text-lg md:text-xl text-slate-600 dark:text-slate-300 text-pretty"
+        class="mt-5 max-w-2xl text-lg md:text-xl text-stone-600 dark:text-stone-300 text-pretty"
     >
         <span class="font-semibold">Basin</span> is a solver framework with a generic
         executor loop over pluggable solvers, multiple linear-algebra backends, first-class
@@ -79,13 +79,13 @@
     <div class="mt-8 flex flex-wrap gap-3">
         <a
             href={resolve("/docs/getting-started/")}
-            class="px-5 py-2.5 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white transition-colors"
+            class="px-5 py-2.5 rounded-lg bg-stone-900 text-white font-medium hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white transition-colors"
         >
             Get started
         </a>
         <a
             href={resolve("/visualizer/")}
-            class="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            class="px-5 py-2.5 rounded-lg border border-stone-300 dark:border-stone-700 font-medium hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
         >
             Open the visualizer
         </a>
@@ -93,7 +93,7 @@
             href="https://github.com/jolars/basin"
             target="_blank"
             rel="noreferrer"
-            class="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-2"
+            class="px-5 py-2.5 rounded-lg border border-stone-300 dark:border-stone-700 font-medium hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors inline-flex items-center gap-2"
         >
             <IconGithub class="w-4 h-4" aria-hidden="true" /> Source Code
         </a>
@@ -103,10 +103,10 @@
 <!-- Quick taste: interactive code-gen playground -->
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 pb-16">
     <Playground />
-    <p class="mt-6 text-sm text-slate-600 dark:text-slate-300">
+    <p class="mt-6 text-sm text-stone-600 dark:text-stone-300">
         Want to see it move? The
         <a
-            class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
+            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href={resolve("/visualizer/")}>visualizer</a
         >
         animates these trajectories live, compiled to wasm.
@@ -115,17 +115,17 @@
 
 <!-- Features -->
 <section
-    class="border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40"
+    class="border-t border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40"
 >
     <div class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
         <h2 class="text-2xl font-semibold tracking-tight">What's in the box</h2>
         <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {#each features as f}
                 <div
-                    class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5"
+                    class="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-5"
                 >
                     <h3 class="font-semibold">{f.title}</h3>
-                    <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                    <p class="mt-2 text-sm text-stone-600 dark:text-stone-300">
                         {f.body}
                     </p>
                 </div>
@@ -137,13 +137,13 @@
 <!-- Closing CTA -->
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
     <div
-        class="rounded-2xl border border-slate-200 dark:border-slate-800 p-8 md:p-12 flex flex-wrap items-center justify-between gap-6"
+        class="rounded-2xl border border-stone-200 dark:border-stone-800 p-8 md:p-12 flex flex-wrap items-center justify-between gap-6"
     >
         <div>
             <h2 class="text-2xl font-semibold tracking-tight">
                 Compare solvers on classical problems
             </h2>
-            <p class="mt-2 text-slate-600 dark:text-slate-300 max-w-xl">
+            <p class="mt-2 text-stone-600 dark:text-stone-300 max-w-xl">
                 Benchmarks and head-to-head solver comparisons are on the way.
                 In the meantime, explore the docs or watch solvers converge in
                 the visualizer.
@@ -152,13 +152,13 @@
         <div class="flex flex-wrap gap-3">
             <a
                 href={resolve("/docs/getting-started/")}
-                class="px-5 py-2.5 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white transition-colors"
+                class="px-5 py-2.5 rounded-lg bg-stone-900 text-white font-medium hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white transition-colors"
             >
                 Read the docs
             </a>
             <a
                 href={resolve("/benchmarks/")}
-                class="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                class="px-5 py-2.5 rounded-lg border border-stone-300 dark:border-stone-700 font-medium hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
             >
                 Benchmarks
             </a>

@@ -51,7 +51,7 @@
 >
     <aside class="lg:sticky lg:top-20 lg:self-start">
         <p
-            class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3"
+            class="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-3"
         >
             Documentation
         </p>
@@ -64,8 +64,8 @@
                         : undefined}
                     class="px-3 py-1.5 rounded-md transition-colors {path ===
                     strip(resolve(link.href))
-                        ? 'bg-slate-100 text-slate-900 font-medium dark:bg-slate-800 dark:text-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800'}"
+                        ? 'bg-stone-100 text-stone-900 font-medium dark:bg-stone-800 dark:text-stone-100'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-400 dark:hover:text-stone-100 dark:hover:bg-stone-800'}"
                 >
                     {link.label}
                 </a>

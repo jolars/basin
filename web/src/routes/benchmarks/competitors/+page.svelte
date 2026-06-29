@@ -36,31 +36,31 @@
 />
 
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
-    <p class="text-sm text-slate-500 dark:text-slate-400">
+    <p class="text-sm text-stone-500 dark:text-stone-400">
         <a
-            class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
+            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href={resolve("/benchmarks/")}>Benchmarks</a
         >
-        <span class="text-slate-400 dark:text-slate-600">/</span> Competitors
+        <span class="text-stone-400 dark:text-stone-600">/</span> Competitors
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
         Competitors: basin vs argmin, gomez, and nlopt, convergence over time
     </h1>
-    <p class="mt-3 max-w-3xl text-slate-600 dark:text-slate-300">
+    <p class="mt-3 max-w-3xl text-stone-600 dark:text-stone-300">
         basin against <a
-            class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
+            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href="https://argmin-rs.org/"
             target="_blank"
             rel="noreferrer">argmin</a
         >,
         <a
-            class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
+            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href="https://docs.rs/gomez/"
             target="_blank"
             rel="noreferrer">gomez</a
         >, and
         <a
-            class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
+            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href="https://nlopt.readthedocs.io/"
             target="_blank"
             rel="noreferrer">nlopt</a
@@ -83,14 +83,14 @@
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
         {#each COMPETITOR_CASES as c}
             <div
-                class="rounded-xl border border-slate-200 dark:border-slate-800 p-5"
+                class="rounded-xl border border-stone-200 dark:border-stone-800 p-5"
             >
                 <h3 class="text-sm font-semibold">
                     {SOLVER_LABELS[c.solver]}
-                    <span class="text-slate-400 dark:text-slate-500">·</span>
+                    <span class="text-stone-400 dark:text-stone-500">·</span>
                     {PROBLEM_LABELS[c.problem]}
                 </h3>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                <p class="mt-1 text-xs text-stone-500 dark:text-stone-400">
                     {c.blurb}
                 </p>
                 <div class="mt-3">
@@ -104,7 +104,7 @@
         {/each}
     </div>
 
-    <p class="mt-8 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-8 max-w-3xl text-sm text-stone-500 dark:text-stone-400">
         Measured {data.generatedAt} on {data.env.cpu}
         ({data.env.os}/{data.env.arch}). All libraries run on the
         <code class="font-mono">Vec&lt;f64&gt;</code> backend (gomez through its
@@ -122,9 +122,9 @@
         not across machines.
     </p>
 
-    <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">
         To watch basin's solvers converge interactively, try the <a
-            class="underline decoration-dotted hover:text-slate-900 dark:hover:text-slate-100"
+            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href={resolve("/visualizer/")}>visualizer</a
         >.
     </p>

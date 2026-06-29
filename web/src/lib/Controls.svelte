@@ -34,10 +34,10 @@
     }: Props = $props();
 
     const labelCls =
-        "text-slate-700 dark:text-slate-300 uppercase text-xs tracking-wide";
+        "text-stone-700 dark:text-stone-300 uppercase text-xs tracking-wide";
     const selectCls =
-        "bg-white text-slate-900 border border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 rounded px-2 py-1";
-    const valueCls = "font-mono text-slate-900 dark:text-slate-100";
+        "bg-white text-stone-900 border border-stone-300 dark:bg-stone-800 dark:text-stone-100 dark:border-stone-700 rounded px-2 py-1";
+    const valueCls = "font-mono text-stone-900 dark:text-stone-100";
 
     // A `logSlider` is hidden unless its `showIf` option currently matches.
     function visible(opt: SolverOption): boolean {
@@ -206,7 +206,7 @@
                     />
                     <button
                         type="button"
-                        class="px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700"
+                        class="px-2 py-1 rounded border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 hover:bg-stone-50 dark:hover:bg-stone-700"
                         title="Reroll seed"
                         onclick={() =>
                             onOptionChange(
@@ -238,10 +238,10 @@
         />
     </label>
 
-    <p class="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
+    <p class="text-stone-600 dark:text-stone-400 text-xs leading-relaxed">
         Click anywhere on the contour plot to reset the starting point. The
         solver re-runs immediately. Current start: <span
-            class="font-mono text-slate-800 dark:text-slate-200"
+            class="font-mono text-stone-800 dark:text-stone-200"
             >({startPoint.x.toFixed(2)}, {startPoint.y.toFixed(2)})</span
         >
     </p>

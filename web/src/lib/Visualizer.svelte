@@ -249,26 +249,26 @@
             <h1 class="text-2xl md:text-3xl font-semibold tracking-tight">
                 Solver visualizer
             </h1>
-            <p class="text-slate-600 dark:text-slate-400 text-sm mt-1">
+            <p class="text-stone-600 dark:text-stone-400 text-sm mt-1">
                 Live wasm-driven 2D trajectories. Click on the contour to reset
                 the start point.
             </p>
         </div>
         <p
-            class="text-xs text-slate-500 dark:text-slate-500 font-mono hidden md:block self-center"
+            class="text-xs text-stone-500 dark:text-stone-500 font-mono hidden md:block self-center"
         >
             {solverMeta.blurb}
         </p>
     </header>
 
     {#if !wasmReady}
-        <p class="text-slate-500 dark:text-slate-400">Loading wasm…</p>
+        <p class="text-stone-500 dark:text-stone-400">Loading wasm…</p>
     {:else}
         <div
             class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 flex-1 min-h-0"
         >
             <div
-                class="relative bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden aspect-square lg:aspect-auto lg:min-h-[360px]"
+                class="relative bg-stone-100 dark:bg-stone-900 rounded-lg overflow-hidden aspect-square lg:aspect-auto lg:min-h-[360px]"
             >
                 <ContourPlot
                     problem={problemMeta}
@@ -283,7 +283,7 @@
                 />
             </div>
             <aside class="flex flex-col gap-6 min-w-0">
-                <div class="bg-slate-100 dark:bg-slate-900 rounded-lg p-4">
+                <div class="bg-stone-100 dark:bg-stone-900 rounded-lg p-4">
                     <Controls
                         {problemKind}
                         {solverKind}
@@ -296,7 +296,7 @@
                     />
                 </div>
                 <div
-                    class="bg-slate-100 dark:bg-slate-900 rounded-lg p-3 h-56 lg:flex-1"
+                    class="bg-stone-100 dark:bg-stone-900 rounded-lg p-3 h-56 lg:flex-1"
                 >
                     <CostChart
                         {costs}

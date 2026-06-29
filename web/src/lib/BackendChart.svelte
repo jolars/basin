@@ -152,7 +152,7 @@
     <!-- y decade gridlines + labels -->
     {#each g.yTicks as t}
         <line
-            class="stroke-slate-200 dark:stroke-slate-700"
+            class="stroke-stone-200 dark:stroke-stone-700"
             stroke-width="1"
             x1={padL}
             x2={padL + innerW}
@@ -160,7 +160,7 @@
             y2={t.y}
         />
         <text
-            class="fill-slate-400 dark:fill-slate-500"
+            class="fill-stone-400 dark:fill-stone-500"
             x={padL - 6}
             y={t.y}
             text-anchor="end"
@@ -171,7 +171,7 @@
     <!-- x gridlines + labels (one per problem size) -->
     {#each g.xTicks as t}
         <line
-            class="stroke-slate-100 dark:stroke-slate-800"
+            class="stroke-stone-100 dark:stroke-stone-800"
             stroke-width="1"
             x1={t.x}
             x2={t.x}
@@ -179,7 +179,7 @@
             y2={axisY}
         />
         <text
-            class="fill-slate-400 dark:fill-slate-500"
+            class="fill-stone-400 dark:fill-stone-500"
             x={t.x}
             y={axisY + 8}
             text-anchor="middle"
@@ -189,7 +189,7 @@
 
     <!-- axes -->
     <line
-        class="stroke-slate-300 dark:stroke-slate-600"
+        class="stroke-stone-300 dark:stroke-stone-600"
         stroke-width="1"
         x1={padL}
         x2={padL}
@@ -197,7 +197,7 @@
         y2={axisY}
     />
     <line
-        class="stroke-slate-300 dark:stroke-slate-600"
+        class="stroke-stone-300 dark:stroke-stone-600"
         stroke-width="1"
         x1={padL}
         x2={padL + innerW}
@@ -207,13 +207,13 @@
 
     <!-- captions -->
     <text
-        class="fill-slate-500 dark:fill-slate-400"
+        class="fill-stone-500 dark:fill-stone-400"
         x={padL}
         y={padT - 5}
         text-anchor="start">time/solve</text
     >
     <text
-        class="fill-slate-500 dark:fill-slate-400"
+        class="fill-stone-500 dark:fill-stone-400"
         x={padL + innerW / 2}
         y={H - 4}
         text-anchor="middle">n (parameters)</text
@@ -246,7 +246,7 @@
         {/if}
         <g transform={label.transform}>
             <rect
-                class="fill-white dark:fill-slate-950"
+                class="fill-white dark:fill-stone-950"
                 x={label.x - 3}
                 y={label.y - 8}
                 width={label.w}

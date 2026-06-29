@@ -149,7 +149,7 @@
 <div class="grid xl:grid-cols-2 gap-8 items-start">
     <div class="min-w-0">
         <h2 class="text-2xl font-semibold tracking-tight">A Small Example</h2>
-        <p class="mt-3 text-slate-600 dark:text-slate-300">
+        <p class="mt-3 text-stone-600 dark:text-stone-300">
             Implement <code class="font-mono text-sm">CostFunction</code> and
             <code class="font-mono text-sm">Gradient</code>, then hand your
             problem, a solver, and a starting point to the
@@ -163,7 +163,7 @@
              above) so the wasm never weighs on the hero's initial load. -->
         <div
             bind:this={contourEl}
-            class="relative mt-6 w-full max-w-2xl aspect-[3/2] mx-auto xl:max-w-none xl:mx-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 overflow-hidden"
+            class="relative mt-6 w-full max-w-2xl aspect-[3/2] mx-auto xl:max-w-none xl:mx-0 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 overflow-hidden"
         >
             {#if ContourComp}
                 <ContourComp
@@ -176,7 +176,7 @@
                 />
             {:else}
                 <div
-                    class="absolute inset-0 grid place-items-center px-6 text-center text-xs text-slate-500 dark:text-slate-400"
+                    class="absolute inset-0 grid place-items-center px-6 text-center text-xs text-stone-500 dark:text-stone-400"
                 >
                     Live solver: animates as it scrolls into view.
                 </div>
@@ -186,9 +186,9 @@
         <div class="mt-6 flex flex-col gap-4 text-sm">
             <label class="flex flex-col gap-1">
                 <span
-                    class="text-slate-700 dark:text-slate-300 uppercase text-xs tracking-wide"
+                    class="text-stone-700 dark:text-stone-300 uppercase text-xs tracking-wide"
                     >Step size α:
-                    <span class="font-mono text-slate-900 dark:text-slate-100"
+                    <span class="font-mono text-stone-900 dark:text-stone-100"
                         >{rustFloat(cfg.alpha)}</span
                     ></span
                 >
@@ -210,9 +210,9 @@
 
             <label class="flex flex-col gap-1">
                 <span
-                    class="text-slate-700 dark:text-slate-300 uppercase text-xs tracking-wide"
+                    class="text-stone-700 dark:text-stone-300 uppercase text-xs tracking-wide"
                     >Momentum β:
-                    <span class="font-mono text-slate-900 dark:text-slate-100"
+                    <span class="font-mono text-stone-900 dark:text-stone-100"
                         >{cfg.beta > 0 ? rustFloat(cfg.beta) : "off"}</span
                     ></span
                 >
@@ -234,9 +234,9 @@
 
             <label class="flex flex-col gap-1">
                 <span
-                    class="text-slate-700 dark:text-slate-300 uppercase text-xs tracking-wide"
+                    class="text-stone-700 dark:text-stone-300 uppercase text-xs tracking-wide"
                     >Max iterations:
-                    <span class="font-mono text-slate-900 dark:text-slate-100"
+                    <span class="font-mono text-stone-900 dark:text-stone-100"
                         >{rustInt(cfg.maxIter)}</span
                     ></span
                 >
@@ -260,19 +260,19 @@
 
     <div class="flex flex-col gap-4 min-w-0">
         <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 overflow-hidden"
+            class="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 overflow-hidden"
         >
             <div
-                class="px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                class="px-4 py-2 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3"
             >
                 <span
-                    class="text-xs font-mono text-slate-500 dark:text-slate-400"
+                    class="text-xs font-mono text-stone-500 dark:text-stone-400"
                     >rosenbrock.rs</span
                 >
                 <button
                     type="button"
                     onclick={copyCode}
-                    class="text-xs font-mono px-2 py-1 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    class="text-xs font-mono px-2 py-1 rounded border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
                 >
                     {copied ? "Copied!" : "Copy"}
                 </button>
@@ -285,26 +285,26 @@
          (Run.paramDebug and costDisplay), so this is the snippet's real
          stdout, not a JS approximation. -->
         <div
-            class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 overflow-hidden"
+            class="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 overflow-hidden"
         >
             <div
-                class="px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                class="px-4 py-2 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3"
             >
                 <span
-                    class="text-xs font-mono text-slate-500 dark:text-slate-400"
+                    class="text-xs font-mono text-stone-500 dark:text-stone-400"
                     >Output</span
                 >
                 {#if output}
                     <span
-                        class="text-[10px] font-mono uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                        class="text-[10px] font-mono uppercase tracking-wide text-stone-400 dark:text-stone-500"
                         >{output.done ? "done" : "running…"}</span
                     >
                 {/if}
             </div>
             <pre class="px-4 py-3 overflow-x-auto text-sm leading-relaxed"><code
                     class="font-mono {output
-                        ? 'text-slate-700 dark:text-slate-300'
-                        : 'text-slate-400 dark:text-slate-500'}"
+                        ? 'text-stone-700 dark:text-stone-300'
+                        : 'text-stone-400 dark:text-stone-500'}"
                     >{outputText}</code
                 ></pre>
         </div>
@@ -324,33 +324,34 @@
         transition: none;
     }
 
-    /* Prism token theme: earthy, topographic palette (Gruvbox-derived) to
-   match basin's geographical theme: sienna-red keywords, gold types,
-   olive functions, rust numbers, teal "water" strings, warm stone
-   neutrals. Tokens are injected via {@html}, so they need `:global`;
-   colors come from CSS variables on `.rust-hl` (a real template element,
-   so it carries the scope hash and the variables inherit into the
-   injected token spans). One rule set serves both themes: the variables
-   flip under the site's class-based `.dark`. */
+    /* Prism token theme: the Everforest material palette, matching the
+   build-time Shiki fences (everforest-light/dark) so the in-page playground
+   and the doc code blocks read as one. Forest greens, soft contrast: green
+   functions, yellow types, aqua "water" strings, sage neutrals. Tokens are
+   injected via {@html}, so they need `:global`; colors come from CSS
+   variables on `.rust-hl` (a real template element, so it carries the scope
+   hash and the variables inherit into the injected token spans). One rule
+   set serves both themes: the variables flip under the site's class-based
+   `.dark`. */
     .rust-hl {
-        --tok-comment: #928374; /* stone-gray */
-        --tok-keyword: #9d0006; /* sienna red */
-        --tok-fn: #79740e; /* olive green */
-        --tok-macro: #8f3f71; /* muted plum */
-        --tok-string: #427b58; /* basin teal */
-        --tok-number: #af3a03; /* rust orange */
-        --tok-type: #b57614; /* ochre gold */
-        --tok-punct: #7c6f64; /* warm stone */
+        --tok-comment: #939f91; /* everforest-light gray */
+        --tok-keyword: #f85552; /* red */
+        --tok-fn: #8da101; /* green */
+        --tok-macro: #df69ba; /* purple */
+        --tok-string: #35a77c; /* aqua */
+        --tok-number: #f57d26; /* orange */
+        --tok-type: #dfa000; /* yellow */
+        --tok-punct: #5c6a72; /* fg/gray */
     }
     :global(.dark) .rust-hl {
-        --tok-comment: #928374;
-        --tok-keyword: #fb4934;
-        --tok-fn: #b8bb26;
-        --tok-macro: #d3869b;
-        --tok-string: #8ec07c;
-        --tok-number: #fe8019;
-        --tok-type: #fabd2f;
-        --tok-punct: #a89984;
+        --tok-comment: #859289; /* everforest-dark gray */
+        --tok-keyword: #e67e80; /* red */
+        --tok-fn: #a7c080; /* green */
+        --tok-macro: #d699b6; /* purple */
+        --tok-string: #83c092; /* aqua */
+        --tok-number: #e69875; /* orange */
+        --tok-type: #dbbc7f; /* yellow */
+        --tok-punct: #9da9a0; /* gray2 */
     }
     .rust-hl :global(.token.comment) {
         color: var(--tok-comment);

@@ -146,7 +146,7 @@
     />
 {:else}
     <div
-        class="absolute inset-0 grid place-items-center text-xs text-slate-500 dark:text-slate-400"
+        class="absolute inset-0 grid place-items-center text-xs text-stone-500 dark:text-stone-400"
     >
         Booting wasm…
     </div>

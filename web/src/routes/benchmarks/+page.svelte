@@ -40,7 +40,7 @@
     <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">
         Benchmarks
     </h1>
-    <p class="mt-4 max-w-2xl text-slate-600 dark:text-slate-300">
+    <p class="mt-4 max-w-2xl text-stone-600 dark:text-stone-300">
         Basin's benchmark suite is built along three axes: <strong
             >backends</strong
         >,
@@ -54,8 +54,8 @@
             <svelte:element
                 this={Tag}
                 href={axis.href ? resolve(axis.href) : undefined}
-                class="block rounded-xl border border-slate-200 dark:border-slate-800 p-5 {axis.href
-                    ? 'transition-colors hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                class="block rounded-xl border border-stone-200 dark:border-stone-800 p-5 {axis.href
+                    ? 'transition-colors hover:border-stone-300 dark:hover:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-800/40'
                     : ''}"
             >
                 <div class="flex items-center justify-between gap-2">
@@ -64,12 +64,12 @@
                         class="text-xs font-mono uppercase tracking-widest {axis.status ===
                         'Live'
                             ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-slate-400 dark:text-slate-500'}"
+                            : 'text-stone-400 dark:text-stone-500'}"
                     >
                         {axis.status}
                     </span>
                 </div>
-                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                <p class="mt-2 text-sm text-stone-600 dark:text-stone-300">
                     {axis.body}
                 </p>
                 {#if axis.href}

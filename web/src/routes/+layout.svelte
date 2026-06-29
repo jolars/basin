@@ -62,7 +62,7 @@
                     href={link.href}
                     target="_blank"
                     rel="noreferrer"
-                    class="{extra} px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    class="{extra} px-3 py-1.5 rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-400 dark:hover:text-stone-100 dark:hover:bg-stone-800 transition-colors"
                 >
                     {link.label}
                 </a>
@@ -72,8 +72,8 @@
                     aria-current={current === link.section ? "page" : undefined}
                     class="{extra} px-3 py-1.5 rounded-md transition-colors {current ===
                     link.section
-                        ? 'text-slate-900 bg-slate-100 dark:text-slate-100 dark:bg-slate-800'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800'}"
+                        ? 'text-stone-900 bg-stone-100 dark:text-stone-100 dark:bg-stone-800'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-400 dark:hover:text-stone-100 dark:hover:bg-stone-800'}"
                 >
                     {link.label}
                 </a>
@@ -84,7 +84,7 @@
 
 <div class="min-h-screen flex flex-col">
     <header
-        class="border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20 bg-white/80 dark:bg-slate-950/80 backdrop-blur"
+        class="border-b border-stone-200 dark:border-stone-800 sticky top-0 z-20 bg-white/80 dark:bg-stone-950/80 backdrop-blur"
     >
         <nav
             class="max-w-screen-2xl mx-auto px-4 md:px-8 h-14 flex items-center gap-3 sm:gap-6"
@@ -94,7 +94,7 @@
                  `<img src={asset("/logo.svg")} alt="basin" class="h-6" />`). -->
             <a
                 href={resolve("/")}
-                class="font-semibold tracking-tight text-lg hover:text-slate-600 dark:hover:text-slate-300"
+                class="font-semibold tracking-tight text-lg hover:text-stone-600 dark:hover:text-stone-300"
             >
                 Basin
             </a>
@@ -112,7 +112,7 @@
                 rel="noreferrer"
                 aria-label="basin on GitHub"
                 title="basin on GitHub"
-                class="inline-flex items-center justify-center rounded-md p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 transition-colors"
+                class="inline-flex items-center justify-center rounded-md p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-400 dark:hover:text-stone-100 dark:hover:bg-stone-800 transition-colors"
             >
                 <IconGithub width="18" height="18" aria-hidden="true" />
             </a>
@@ -121,7 +121,7 @@
 
             <button
                 type="button"
-                class="sm:hidden inline-flex items-center justify-center rounded-md p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 transition-colors"
+                class="sm:hidden inline-flex items-center justify-center rounded-md p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 dark:text-stone-400 dark:hover:text-stone-100 dark:hover:bg-stone-800 transition-colors"
                 aria-label="Toggle navigation menu"
                 aria-expanded={menuOpen}
                 aria-controls="mobile-nav"
@@ -138,7 +138,7 @@
         {#if menuOpen}
             <ul
                 id="mobile-nav"
-                class="sm:hidden border-t border-slate-200 dark:border-slate-800 px-4 py-2 flex flex-col gap-1 text-sm"
+                class="sm:hidden border-t border-stone-200 dark:border-stone-800 px-4 py-2 flex flex-col gap-1 text-sm"
             >
                 {@render navItems("block")}
             </ul>
@@ -149,12 +149,12 @@
         {@render children()}
     </main>
 
-    <footer class="border-t border-slate-200 dark:border-slate-800 mt-auto">
+    <footer class="border-t border-stone-200 dark:border-stone-800 mt-auto">
         <div
-            class="max-w-screen-2xl mx-auto px-4 md:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-500"
+            class="max-w-screen-2xl mx-auto px-4 md:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-sm text-stone-500 dark:text-stone-500"
         >
             <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span class="font-semibold text-slate-700 dark:text-slate-300"
+                <span class="font-semibold text-stone-700 dark:text-stone-300"
                     >Basin</span
                 >
                 <a
@@ -162,7 +162,7 @@
                     target="_blank"
                     rel="noreferrer"
                     title="View changelog"
-                    class="font-mono text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                    class="font-mono text-xs px-1.5 py-0.5 rounded border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:border-stone-300 dark:hover:border-stone-700 transition-colors"
                 >
                     v{__BASIN_VERSION__}
                 </a>
@@ -173,7 +173,7 @@
                     href="https://github.com/jolars/basin"
                     target="_blank"
                     rel="noreferrer"
-                    class="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-200"
+                    class="inline-flex items-center gap-1.5 hover:text-stone-900 dark:hover:text-stone-200"
                     ><IconGithub
                         class="w-3.5 h-3.5"
                         aria-hidden="true"
@@ -183,7 +183,7 @@
                     href="https://docs.rs/basin"
                     target="_blank"
                     rel="noreferrer"
-                    class="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-200"
+                    class="inline-flex items-center gap-1.5 hover:text-stone-900 dark:hover:text-stone-200"
                     ><IconBook
                         class="w-3.5 h-3.5"
                         aria-hidden="true"
@@ -193,7 +193,7 @@
                     href="https://crates.io/crates/basin"
                     target="_blank"
                     rel="noreferrer"
-                    class="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-200"
+                    class="inline-flex items-center gap-1.5 hover:text-stone-900 dark:hover:text-stone-200"
                     ><IconRust
                         class="w-3.5 h-3.5"
                         aria-hidden="true"

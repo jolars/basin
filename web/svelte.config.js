@@ -11,12 +11,13 @@ const base = process.env.BASIN_BASE_PATH ?? "";
 // Build-time syntax highlighter. Shiki runs only during preprocess/prerender
 // (Node), so none of it ships to the client. Dual-theme output emits
 // `--shiki-light`/`--shiki-dark` CSS variables (defaultColor: false); app.css
-// maps them to the active theme via the `.dark` class toggle. The Gruvbox
-// themes match the landing page's Playground, which colors Rust with the
-// canonical Gruvbox material palette.
+// maps them to the active theme via the `.dark` class toggle. The Everforest
+// themes are the green-forward, soft-contrast "natural" palette that matches
+// the logo's mossy basin floor; the landing page's Playground hand-colors Rust
+// with the same Everforest material palette.
 const LANGS = ["rust", "bash", "sh", "toml", "json", "js", "ts"];
 const highlighter = await createHighlighter({
-    themes: ["gruvbox-light-medium", "gruvbox-dark-medium"],
+    themes: ["everforest-light", "everforest-dark"],
     langs: LANGS,
 });
 
@@ -37,8 +38,8 @@ const mdsvexConfig = {
             const html = highlighter.codeToHtml(code, {
                 lang: language,
                 themes: {
-                    light: "gruvbox-light-medium",
-                    dark: "gruvbox-dark-medium",
+                    light: "everforest-light",
+                    dark: "everforest-dark",
                 },
                 defaultColor: false,
             });
