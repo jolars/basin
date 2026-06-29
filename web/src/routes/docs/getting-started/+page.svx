@@ -1,4 +1,4 @@
-# Getting started
+# Getting Started
 
 ## Install
 
@@ -21,7 +21,7 @@ Available backend features: `nalgebra`, `ndarray`, `faer`. The `problems`
 feature (a corpus of standard test functions) is on by default; disable it with
 `default-features = false` to shrink a wasm build.
 
-## Your first solve
+## A Simple Example
 
 Implement `CostFunction` for your objective. Add a `Gradient` impl when the
 solver needs derivatives (gradient descent does; Nelder–Mead does not). Then
@@ -69,7 +69,7 @@ fn main() {
 }
 ```
 
-## Seeding from a point
+## Seeding from a Point
 
 `Executor::new` takes a fully-built state, so you control the initial iterate.
 For the common case (start at a point with the solver's natural defaults),
@@ -91,7 +91,7 @@ GA, DE, and random search (they sample a box), and the bracketing scalar solvers
 (Brent, golden-section). For those, calling `from_start` is a compile error;
 build the state explicitly and use `Executor::new` instead.
 
-## Termination criteria
+## Termination Criteria
 
 `max_iter` is one stopping condition; the others are pluggable and composed via
 `terminate_on`. They are framework-level, so the same criteria work across

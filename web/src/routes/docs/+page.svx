@@ -5,7 +5,7 @@ shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
 *solver* over a *state*, calling into the *problem* traits you implement
 (`CostFunction`, `Gradient`, and friends).
 
-## How the pieces fit
+## How the Pieces Fit
 
 - **Problem**: what you implement. A `CostFunction` (and a `Gradient`, if your
   solver needs one) describing the objective. Constraints such as box bounds
@@ -23,9 +23,9 @@ shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
   reporting, or recording a trajectory. Sibling to termination: observers watch,
   criteria decide.
 
-## Where to go next
+## Where to Go Next
 
-- [Getting started](getting-started/): install Basin and run your first solve.
+- [Getting Started](getting-started/): install Basin and run your first solve.
 - [Solvers](solvers/): the catalog of solvers and which backends they need.
 
 You can also watch solvers converge interactively in the

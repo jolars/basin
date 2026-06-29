@@ -7,7 +7,7 @@ residuals?) and whether it is constrained.
 Each solver name links to its API page on [docs.rs](https://docs.rs/basin); the
 trailing note cites the paper it implements (or the source it ports).
 
-## First-order
+## First-Order
 
 - **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**:
   steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
@@ -25,7 +25,7 @@ trailing note cites the paper it implements (or the source it ports).
   (uses the sign of `f'` to bracket and secant extrapolation on `f'` to step;
   Brent, 1973, as transcribed in *Numerical Recipes* §10.3).
 
-## Derivative-free
+## Derivative-Free
 
 - **[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**:
   the classic reflection, expansion, and contraction simplex; needs only a
@@ -89,7 +89,7 @@ trailing note cites the paper it implements (or the source it ports).
   Fortran source (Byrd, Lu & Nocedal, 1995; Zhu, Byrd, Lu & Nocedal, 1997, ACM
   TOMS Alg. 778).
 
-## Trust region
+## Trust Region
 
 For problems exposing a `Hessian` (analytic, or synthesized by `FiniteDiff`):
 
@@ -98,7 +98,7 @@ For problems exposing a `Hessian` (analytic, or synthesized by `FiniteDiff`):
   The subproblem strategy is pluggable: `Steihaug` (truncated CG, the default),
   `Dogleg`, or `CauchyPoint`.
 
-## Nonlinear least squares
+## Nonlinear Least Squares
 
 For problems expressed as residuals (`Residual` + `Jacobian`):
 
@@ -112,7 +112,7 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
   trust-region reflective: Levenberg–Marquardt with box bounds (Branch, Coleman
   & Li, 1999, affine scaling).
 
-## Global & stochastic
+## Global & Stochastic
 
 - **[`CmaEs`](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)**/**[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)**:
   covariance-matrix adaptation evolution strategy (Hansen, 2016), unconstrained
@@ -133,7 +133,7 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
   `Ẽ(x) = min{f(x)}` transform, wrapping any local solver with a pluggable step
   taker and acceptance test; adaptive step size on by default.
 
-## Memetic (composed)
+## Memetic (Composed)
 
 These run a local solver inside a global one, an example of Basin's solver
 composition primitives:
@@ -149,7 +149,7 @@ composition primitives:
   a memetic algorithm with persistent local-search chains and a CMA-ES inner
   (Molina et al., 2010).
 
-## Constrained (composed)
+## Constrained (Composed)
 
 These wrap any gradient inner solver in an outer loop that handles linear
 constraints:
@@ -171,7 +171,7 @@ The pluggable line searches are documented alongside the first-order solvers:
 [`MoreThuente`](https://docs.rs/basin/latest/basin/line_search/more_thuente/struct.MoreThuente.html)
 (Moré & Thuente, 1994; a port of MINPACK-2's `dcsrch`).
 
-## Backends and constraints
+## Backends and Constraints
 
 Two design rules shape which solver you can use where:
 
@@ -240,5 +240,5 @@ dense-matrix constructor).
 Each solver's page on [docs.rs](https://docs.rs/basin) carries a **Backends**
 note listing exactly which parameter types it supports.
 
-See [getting started](../getting-started/) for a worked example, or open the
-[visualizer](../../visualizer/) to watch several of these solvers converge.
+See [Getting Started](../getting-started/) for a worked example, or open the
+[Visualizer](../../visualizer/) to watch several of these solvers converge.
