@@ -34,9 +34,9 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "approx"
@@ -96,7 +96,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "basin"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "criterion",
  "faer",
@@ -116,7 +116,7 @@ dependencies = [
 
 [[package]]
 name = "basin-wasm"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "basin",
  "console_error_panic_hook",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "competitor-bench"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "argmin",
  "argmin-math",
@@ -493,9 +493,9 @@ checksum = "2b14b339eb76d07f052cdbad76ca7c1310e56173a138095d3bf42a23c06ef5d8"
 
 [[package]]
 name = "faer"
-version = "0.24.1"
+version = "0.24.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6eda5a09c282d3b6f73881446d031a77e36fbf1e3d67bdc5085149b7e6b3f631"
+checksum = "5ab6df3dd147fe8d702a288b95bcd8fcc499ab572fc80da6828f60cd4d524d67"
 dependencies = [
  "bytemuck",
  "dyn-stack",
