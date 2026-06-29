@@ -224,8 +224,9 @@ pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::trust_region::{CauchyPoint, Dogleg, Steihaug, TrustRegion};
 pub use crate::solver::{
-    AugmentedLagrangianMethod, BarrierMethod, Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent,
-    BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton,
-    GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsChCma, MaLsChState, Mads,
-    MemeticInner, NelderMead, Newuoa, ProjectedGradientDescent, RandomSearch, Sgd, Ssga, Trf,
+    AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping, Bobyqa, BoundedCmaEs,
+    BoundedCmaInject, Brent, BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject,
+    GaussNewton, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsChCma,
+    MaLsChState, Mads, MemeticInner, Metropolis, NelderMead, Newuoa, ProjectedGradientDescent,
+    RandomDisplacement, RandomSearch, Sgd, Ssga, StepTaker, Trf,
 };
