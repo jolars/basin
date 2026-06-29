@@ -32,6 +32,11 @@ export function GET() {
 - [API documentation (docs.rs)](https://docs.rs/basin): full, authoritative API reference
 - [crates.io](https://crates.io/crates/basin): published releases
 - [Source (GitHub)](https://github.com/jolars/basin): repository, issues, and changelog
+
+## Optional
+
+- [Benchmarks](${SITE_ORIGIN}/benchmarks/): performance against competing libraries, across backends and solvers
+- [Visualizer](${SITE_ORIGIN}/visualizer/): interactive in-browser solver visualization (WASM)
 `;
 
     return new Response(body, {

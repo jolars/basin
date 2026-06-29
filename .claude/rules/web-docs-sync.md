@@ -67,4 +67,4 @@ release. Don't block the docs update on it; note it in the commit or PR.
 ## Verifying
 
 Run the web build to catch malformed markdown or links:
-`cd web && npm run build` (optionally `npm run dev` and eyeball the page).
+`cd web && pnpm build` (optionally `pnpm dev` and eyeball the page).
