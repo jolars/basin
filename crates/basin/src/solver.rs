@@ -5,6 +5,10 @@ pub mod augmented_lagrangian_method;
 /// Log-barrier method for linear inequality constraints `A x ≤ b`
 /// (`constrOptim`-style layer over any unconstrained inner solver).
 pub mod barrier_method;
+/// Basin-hopping (Wales & Doye 1997): Metropolis Monte-Carlo walk over the
+/// `Ẽ(x) = min{f(x)}` transform, wrapping any [`WarmStart`](crate::core::inner::WarmStart)
+/// local solver with a pluggable step taker and acceptance test.
+pub mod basin_hopping;
 /// Box-constrained CMA-ES with adaptive quadratic boundary penalty
 /// (Hansen `BoundPenalty`, the default in pycma).
 pub mod bounded_cma_es;
@@ -93,6 +97,7 @@ pub mod trust_region;
 
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
+pub use basin_hopping::{AcceptanceTest, BasinHopping, Metropolis, RandomDisplacement, StepTaker};
 pub use bfgs::Bfgs;
 pub use bobyqa::Bobyqa;
 pub use bounded_cma_es::BoundedCmaEs;

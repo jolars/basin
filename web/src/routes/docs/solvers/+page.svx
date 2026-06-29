@@ -128,6 +128,10 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
   (Eshelman & Schaffer, 1993), negative assortative mating (Fernandes & Rosa,
   2001), and BGA mutation (Mühlenbein & Schlierkamp-Voosen, 1993); the SSGA
   component of Molina et al. (2010), §4.4.
+- **[`BasinHopping`](https://docs.rs/basin/latest/basin/solver/basin_hopping/struct.BasinHopping.html)**:
+  basin-hopping (Wales & Doye, 1997): a Metropolis Monte-Carlo walk over the
+  `Ẽ(x) = min{f(x)}` transform, wrapping any local solver with a pluggable step
+  taker and acceptance test; adaptive step size on by default.
 
 ## Memetic (composed)
 
@@ -209,6 +213,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `De`                        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `RandomSearch`              | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Ssga`                      | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `BasinHopping`              | Global          |     ✓†     |    ✓     |   ✓†    |  ✓   |
   | `CmaInject`                 | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
   | `BoundedCmaInject`          | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
   | `DeInject`                  | Memetic         |     ✓†     |    ✓     |   ✓†    |  ✓   |
@@ -219,10 +224,11 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
 `Brent`, `GoldenSection`, and `BrentDerivative` minimize over a scalar `f64`
 interval (1-D), so the vector-backend choice does not apply.
 
-† `DeInject` is itself backend-generic, but its effective coverage is the
-intersection of `De` and the chosen inner solver. The shipped inners
-(`NelderMead`, `LevenbergMarquardt`, `Lbfgsb`) are all backend-generic, so a
-backend-specific inner of your own is the only thing that would narrow it.
+† `DeInject` and `BasinHopping` are themselves backend-generic, but their
+effective coverage is the intersection of the outer driver and the chosen inner
+solver. The shipped inners (`NelderMead`, `LevenbergMarquardt`, `Lbfgsb`) are all
+backend-generic, so a backend-specific inner of your own is the only thing that
+would narrow it.
 
 ‡ `TrustRegion`'s coverage depends on the subproblem strategy: `Steihaug` (the
 default) and `CauchyPoint` need only matrix-vector products, so they run on
