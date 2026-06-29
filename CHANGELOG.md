@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.0](https://github.com/jolars/basin/compare/v1.3.0...v1.4.0) (2026-06-29)
+
+### Features
+- **solvers:** add basin-hopping global solver ([`cbc62e2`](https://github.com/jolars/basin/commit/cbc62e29f78d1414116649ca0633a92b27279478))
+
 ## [1.3.0](https://github.com/jolars/basin/compare/v1.2.0...v1.3.0) (2026-06-24)
 
 ### Features
