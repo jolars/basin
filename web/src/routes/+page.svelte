@@ -95,7 +95,7 @@
             rel="noreferrer"
             class="px-5 py-2.5 rounded-lg border border-stone-300 dark:border-stone-700 font-medium hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors inline-flex items-center gap-2"
         >
-            <IconGithub class="w-4 h-4" aria-hidden="true" /> Source Code
+            <IconGithub class="w-4 h-4" aria-hidden="true" /> Source code
         </a>
     </div>
 </section>
