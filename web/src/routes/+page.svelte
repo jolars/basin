@@ -144,9 +144,9 @@
                 Compare solvers on classical problems
             </h2>
             <p class="mt-2 text-stone-600 dark:text-stone-300 max-w-xl">
-                Benchmarks and head-to-head solver comparisons are on the way.
-                In the meantime, explore the docs or watch solvers converge in
-                the visualizer.
+                Head-to-head solver comparisons across linear-algebra backends,
+                solver families, and competing crates. Explore the docs, or
+                watch solvers converge in the visualizer.
             </p>
         </div>
         <div class="flex flex-wrap gap-3">

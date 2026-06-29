@@ -12,16 +12,16 @@ shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
   live here too, not on the solver.
 - **Solver**: the algorithm. Gradient descent, Nelder–Mead, L-BFGS,
   Levenberg–Marquardt, CMA-ES, and more.
-- **State**: the iterate(s) a solver carries: a single point (`BasicState`),
-  a simplex (`BasicSimplexState`), a population, and so on.
+- **State**: the iterate(s) a solver carries: a single point (`BasicState`), a
+  simplex (`BasicSimplexState`), a population, and so on.
 - **Executor**: the driver that runs a solver to termination and hands back an
   `OptimizationResult`.
 - **Termination**: pluggable stopping criteria (gradient, parameter, and cost
   tolerances, iteration and time budgets) configured uniformly across solvers.
-- **Observers**: read-only hooks fired around the loop (`observe_init`/`observe_iter`/`observe_final`)
-  for logging, progress reporting, or
-  recording a trajectory. Sibling to termination: observers watch, criteria
-  decide.
+- **Observers**: read-only hooks fired around the loop
+  (`observe_init`/`observe_iter`/`observe_final`) for logging, progress
+  reporting, or recording a trajectory. Sibling to termination: observers watch,
+  criteria decide.
 
 ## Where to go next
 

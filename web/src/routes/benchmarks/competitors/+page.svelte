@@ -68,8 +68,8 @@
         argmin lines up on GD, NM, and L-BFGS, gomez on derivative-free NM only,
         and nlopt on NM, L-BFGS, and NEWUOA. Most cases pit different
         implementations of the same family against each other; the NEWUOA case
-        is the exception: basin and nlopt run the <em>same</em> Powell
-        algorithm (matched ρ_beg/ρ_end), and it's the only case off Rosenbrock
+        is the exception: basin and nlopt run the <em>same</em> Powell algorithm
+        (matched ρ_beg/ρ_end), and it's the only case off Rosenbrock
         (Styblinski–Tang at n = 5). Because no two implementations share a code
         path, a single mean solve time would hide the differences in path and
         per-iteration cost. Instead each chart plots
