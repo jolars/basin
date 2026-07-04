@@ -5,6 +5,54 @@ shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
 *solver* over a *state*, calling into the *problem* traits you implement
 (`CostFunction`, `Gradient`, and friends).
 
+You minimize a function by implementing one trait for your objective, picking a
+solver, and handing both to the `Executor`. Basin covers first-order and
+quasi-Newton methods (gradient descent, BFGS, L-BFGS, L-BFGS-B), derivative-free
+search (Nelder–Mead, Powell's NEWUOA/BOBYQA family, MADS), nonlinear least
+squares (Gauss–Newton, Levenberg–Marquardt, trust-region-reflective), and
+global or stochastic optimizers (CMA-ES, a steady-state GA, memetic hybrids),
+with box, linear, and nonlinear constraints handled problem-side. Every solver
+is generic over the linear-algebra backend, from plain `Vec<f64>` to nalgebra,
+ndarray, or faer.
+
+## A Solver Run at a Glance
+
+The smallest complete program: minimize the sphere function with the
+derivative-free Nelder–Mead simplex. Implement `CostFunction`, then let
+`Executor::from_start` build the state from your starting point.
+
+```rust
+use basin::{CostFunction, Executor, MaxIter, NelderMead};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|xi| xi * xi).sum())
+    }
+}
+
+fn main() {
+    let result = Executor::from_start(Sphere, NelderMead::new(), vec![1.0, 1.0])
+        .terminate_on(MaxIter(500))
+        .run()
+        .unwrap();
+
+    println!("x = {:?}", result.param()); // ~[0.0, 0.0]
+    println!("f = {}", result.cost()); // ~0.0
+}
+```
+
+Nelder–Mead needs no derivatives, so `CostFunction` is the only trait to
+implement. If you want to reach for a gradient-based solver and you add a
+`Gradient` impl; the [Getting Started](getting-started/) guide walks through
+that full path on the Rosenbrock function.
+
 ## How the Pieces Fit
 
 - **Problem**: what you implement. A `CostFunction` (and a `Gradient`, if your
@@ -22,6 +70,26 @@ shape of [argmin](https://argmin-rs.org): a generic *executor* loop drives a
   (`observe_init`/`observe_iter`/`observe_final`) for logging, progress
   reporting, or recording a trajectory. Sibling to termination: observers watch,
   criteria decide.
+
+## Choosing a Solver
+
+A rough map from the shape of your problem to where to start. The
+[Solvers](solvers/) catalog has the full list and the backend each one needs.
+
+- **Smooth objective, gradient available**: `GradientDescent` to start, then
+  `Bfgs` or `Lbfgs` for faster convergence (`Lbfgs` when the dimension is large).
+- **No derivatives, low dimension**: `NelderMead`, or Powell's model-based
+  `Newuoa`/`Bobyqa` for smoother functions.
+- **Sum-of-squares residuals**: the nonlinear-least-squares family,
+  `GaussNewton`, `LevenbergMarquardt`, or `Trf` (trust-region-reflective, for
+  bound constraints).
+- **Rugged or multimodal landscape**: the global and stochastic optimizers,
+  `CmaEs`, the steady-state GA, or a memetic hybrid.
+- **Constraints**: box bounds, linear (in)equalities, and nonlinear constraints
+  describe the *problem*, so they live problem-side. Bounded solvers
+  (`Lbfgsb`, bounded `NelderMead`, `Trf`) consume them directly; adapters
+  (projection, log-barrier, augmented Lagrangian, or `Cobyla`) wrap
+  unconstrained solvers.
 
 ## Where to Go Next
 
