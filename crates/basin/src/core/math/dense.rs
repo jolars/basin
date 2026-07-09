@@ -61,6 +61,7 @@ use super::{
 /// (Gauss-Newton, Levenberg-Marquardt, TRF); see the module docs for why the
 /// QR least-squares ops are deliberately absent.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DenseMatrix<F = f64> {
     /// Row-major entries: `data[i * cols + j] = A[i, j]`.
     data: Vec<F>,

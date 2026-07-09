@@ -79,6 +79,21 @@ faer = ["dep:faer", "dep:generativity", "dep:faer-traits"]
 # will fail to compile. Under this feature `FiniteDiff: Gradient/Jacobian/
 # Hessian` additionally requires the wrapped problem to be `Sync`.
 parallel = ["dep:rayon", "faer?/rayon"]
+# Opt-in state (de)serialization for the `CheckpointWriter` observer: derive
+# `Serialize`/`Deserialize` on the checkpointable states and pull in `bincode`
+# as the on-disk format. Off by default (most runs don't checkpoint) and it
+# forwards each enabled backend's own serde feature so the backend vector/matrix
+# types are serializable: `nalgebra/serde-serialize`, `ndarray/serde`. faer 0.24
+# ships no serde feature, so faer-backed states are not checkpointable (an honest
+# compile error if you try). Pure-Rust and wasm-clean, but the `CheckpointWriter`
+# observer itself is additionally `not(target_arch = "wasm32")` because it does
+# file I/O.
+serde = [
+  "dep:serde",
+  "dep:bincode",
+  "nalgebra?/serde-serialize",
+  "ndarray?/serde",
+]
 # Standard test-problem corpus (Rosenbrock, ...). Pure-Rust, no extra deps;
 # default-on so plain `cargo test` keeps working without `--features problems`
 # (integration tests can't see `cfg(test)` lib gating). Downstream can drop
@@ -135,6 +150,16 @@ rand_distr = { version = "0.6", default-features = false }
 # kept off by default per the WASM hard constraint. MSRV well under basin's
 # (rayon 1.x builds far below 1.87), so it doesn't constrain the CRAN pin.
 rayon = { version = "1", optional = true }
+# State (de)serialization behind the opt-in `serde` feature, for the
+# `CheckpointWriter` observer. Both are pure-Rust and wasm-clean; the observer
+# that uses them is gated `not(wasm32)` for file I/O. `serde` derive only.
+# `bincode` 2 is the compact binary on-disk format; MSRV 1.85 is under basin's
+# 1.87 pin, so it doesn't tighten the CRAN-driven MSRV. Non-default, so neither
+# enters the default or WASM dependency graph.
+serde = { version = "1", optional = true, default-features = false, features = [
+  "derive",
+] }
+bincode = { version = "2", optional = true, features = ["serde"] }
 
 [dev-dependencies]
 # Statistical bench harness. dev-dependency only—never enters the

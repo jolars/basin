@@ -380,6 +380,12 @@ pub trait MeshState: State {
 ///
 /// The scalar `F` defaults to `f64` so existing `BasicState<P>` call
 /// sites resolve unchanged.
+///
+/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
+/// `P` and `F` are), so it can be checkpointed and reloaded to warm-start a
+/// later run; see
+/// [`CheckpointWriter`](crate::core::observer::CheckpointWriter).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasicState<P, F = f64> {
     pub(crate) param: P,
     pub(crate) cost: Option<F>,
@@ -768,6 +774,11 @@ impl<V, F: Scalar> SimplexState for BasicSimplexState<V, F> {
 ///
 /// The scalar `F` defaults to `f64` so existing `QuasiNewtonState<V, M>`
 /// call sites resolve unchanged.
+///
+/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
+/// `V`, `M`, and `F` are) for checkpointing; see
+/// [`CheckpointWriter`](crate::core::observer::CheckpointWriter).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuasiNewtonState<V, M, F = f64> {
     pub(crate) param: V,
     pub(crate) cost: Option<F>,

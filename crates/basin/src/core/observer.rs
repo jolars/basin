@@ -78,6 +78,11 @@ mod report;
 pub use history::History;
 pub use report::Report;
 
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+mod checkpoint;
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+pub use checkpoint::{CheckpointWriter, read_checkpoint};
+
 /// Hooks fired around the iteration loop. See the
 /// [module docs](self) for lifecycle and edge cases.
 ///
