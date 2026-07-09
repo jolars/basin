@@ -93,34 +93,6 @@ the previous lands.
   inners) prove a non-`BasicState` inner converges to the same optimum as
   the `GradientDescent` inner.
 
-- [ ] **Observer layer.** Shipped: `Observe<S>` trait (three defaulted
-  infallible methods, generic over the minimum state shape per tenet 3),
-  `ObserverMode::{Never, Always, Every(n), NewBest}`, `Executor::observe_with`
-  builder, wired into `Stepper` so `observe_init` fires after `Solver::init`,
-  `observe_iter` after each successful step (mode-gated), and `observe_final` on
-  clean stop. `NewBest` fires `observe_iter` only on a strict best-cost
-  improvement (`best_iter() == iter()`); it binds on plain `State` because
-  best-so-far tracking is now a required part of the base `State` trait
-  (executor-maintained, like `iter()`/`cost_evals()`), so the once-planned
-  `BestCostState` extension trait is redundant and dropped. Zero-dep starter
-  observers ship in core: `Report` (one-line stderr progress) and `History`
-  (records the `(iter, cost, best_cost)` trajectory). A `serde`-gated,
-  `not(target_arch = "wasm32")` `CheckpointWriter` observer serializes `state`
-  to disk with `bincode`; resume just `read_checkpoint`s into the initial state
-  and hands it to `Executor::new`, no framework support needed (argmin makes
-  checkpointing a first-class executor concern; for basin "save the iterate
-  periodically so a new run can warm-start" is exactly an observer's job).
-  Remaining: extend checkpoint coverage beyond the single-iterate
-  `BasicState`/`QuasiNewtonState` (`LbfgsState` needs its lazily-rebuilt
-  `LbfgsbWork` scratch skipped; stochastic/population states need RNG state
-  serialized); satellite crates for heavier integrations
-  (`basin-observer-tracing`, `basin-observer-slog`, eventually a TUI or
-  spectator-style crate) per the repo-structure rule (features on `basin` for
-  light deps, separate crate only when heavy or platform-specific). Keep
-  observers strictly read-only: problem transformers (gradient clipping etc.)
-  stay as problem-adapter wrappers, not observer hooks, mirroring how
-  constraints attach problem-side.
-
 - [x] **General trust-region Newton solver (the `Hessian`-trait consumer).**
   BUILT (branch `trust-region`): public `TrustRegion<Sub, F>` over
   `BasicState`, consuming the `Hessian` trait: the second-order solver
@@ -157,14 +129,6 @@ the previous lands.
 
 Surfaced while implementing the termination layer. Not blocking, but each gets
 harder to fix as more code piles on.
-
-- [x] **Rustdoc the load-bearing invariants on public traits.** Done in S0.
-  `# Contract` heading + `**Caller must:**`/`**Implementor must:**`
-  bullets are the established convention; `#![warn(missing_docs)]` and
-  `#![warn(rustdoc::broken_intra_doc_links)]` are on at the crate root.
-  Filling in docs on items that hold no contract (struct fields, trivial
-  constructors) is the open follow-up: those are the \~100 `missing_docs`
-  warnings still surfaced by the lint.
 
 - [ ] **Unified `Composed<Outer, Inner>` abstraction (or honest "no").** Two
   concrete memetic shapes exist: `CmaInject` and `BoundedCmaInject`
