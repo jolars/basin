@@ -99,7 +99,7 @@ pub trait Observe<S> {
 
 /// Per-registration policy for [`observe_iter`](Observe::observe_iter).
 ///
-/// `Never` and `Every` gate the iteration callback only: `observe_init` and
+/// Every variant gates the iteration callback only: `observe_init` and
 /// `observe_final` always fire. A user who wants to fully disable an observer
 /// should simply not register it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -119,6 +119,16 @@ pub enum ObserverMode {
     /// `iter % n == 0` rule because `n == 0` would divide-by-zero; the
     /// executor checks for `n != 0` before the modulus).
     Every(u64),
+    /// Fire [`observe_iter`](Observe::observe_iter) only on iterations that
+    /// strictly improved the best cost so far, i.e. where
+    /// [`State::best_iter`](crate::core::state::State::best_iter) equals
+    /// [`State::iter`](crate::core::state::State::iter). Ties (a new iterate
+    /// merely equal to the incumbent) do *not* fire, matching the strict
+    /// `<` test in [`State::update_best`](crate::core::state::State::update_best).
+    ///
+    /// Pairs naturally with observers that only care about progress, such as
+    /// logging or checkpointing the incumbent whenever it moves.
+    NewBest,
 }
 
 impl ObserverMode {
@@ -132,11 +142,14 @@ impl ObserverMode {
 
     /// Whether this mode wants [`observe_iter`](Observe::observe_iter) to
     /// fire for an iteration whose (post-increment) counter is `iter`.
-    pub(crate) fn fires_on(&self, iter: u64) -> bool {
+    /// `is_new_best` reports whether that iteration strictly improved the
+    /// best cost (only [`NewBest`](Self::NewBest) consults it).
+    pub(crate) fn fires_on(&self, iter: u64, is_new_best: bool) -> bool {
         match *self {
             ObserverMode::Never => false,
             ObserverMode::Always => true,
             ObserverMode::Every(n) => n != 0 && iter % n == 0,
+            ObserverMode::NewBest => is_new_best,
         }
     }
 }

@@ -234,8 +234,12 @@ where
                     .as_ref()
                     .expect("state slot is Some after Continue");
                 let iter = state.iter();
+                // `update_best` set `best_iter == iter` iff this iteration
+                // strictly improved the incumbent; that is exactly the
+                // `NewBest` firing condition.
+                let is_new_best = state.best_iter() == iter;
                 for (observer, mode) in self.observers.iter_mut() {
-                    if mode.fires_on(iter) {
+                    if mode.fires_on(iter, is_new_best) {
                         observer.observe_iter(state);
                     }
                 }

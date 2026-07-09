@@ -166,6 +166,57 @@ fn never_skips_iter_but_init_final_fire() {
 }
 
 #[test]
+fn new_best_fires_on_every_strict_improvement() {
+    // GD with a sane step on a strictly convex quadratic decreases the cost
+    // every iteration, so `best_iter == iter` at every step and `NewBest`
+    // fires exactly like `Always`.
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let recorder = Recorder::with_log(Rc::clone(&log));
+
+    let _ = Executor::new(
+        Quadratic,
+        GradientDescent::new(0.1),
+        BasicState::new(vec![1.0, -2.0, 3.0]),
+    )
+    .max_iter(5)
+    .observe_with(recorder, ObserverMode::NewBest)
+    .run()
+    .unwrap();
+
+    let log = log.borrow();
+    let iter_hits: Vec<u64> = log
+        .iter()
+        .filter_map(|(k, i)| (*k == "iter").then_some(*i))
+        .collect();
+    assert_eq!(iter_hits, vec![1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn new_best_skips_non_improving_iters() {
+    // A zero step size never moves the iterate, so the cost is flat and the
+    // incumbent (seeded at init, iter 0) never strictly improves. `NewBest`
+    // must skip every iteration while `init`/`final` still fire.
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let recorder = Recorder::with_log(Rc::clone(&log));
+
+    let _ = Executor::new(
+        Quadratic,
+        GradientDescent::new(0.0),
+        BasicState::new(vec![1.0, 1.0]),
+    )
+    .max_iter(4)
+    .observe_with(recorder, ObserverMode::NewBest)
+    .run()
+    .unwrap();
+
+    let log = log.borrow();
+    let kinds: Vec<&'static str> = log.iter().map(|(k, _)| *k).collect();
+    assert!(kinds.iter().all(|k| *k != "iter"), "no NewBest iter fires");
+    assert_eq!(kinds.iter().filter(|k| ***k == *"init").count(), 1);
+    assert_eq!(kinds.iter().filter(|k| ***k == *"final").count(), 1);
+}
+
+#[test]
 fn multiple_observers_fire_in_registration_order() {
     let log = Rc::new(RefCell::new(Vec::new()));
     let a = Tagger {
