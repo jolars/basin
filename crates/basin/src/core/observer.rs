@@ -55,8 +55,28 @@
 //! - **Reading the reason from inside observers.** The argument to
 //!   [`observe_final`](Observe::observe_final) is the
 //!   [`TerminationReason`]; state types do not carry it.
+//!
+//! # Starter observers
+//!
+//! Two zero-dependency observers ship in core, both binding on the minimum
+//! [`State`](crate::core::state::State) shape:
+//!
+//! - [`Report`]: prints a one-line progress report (iter / cost / best) to
+//!   stderr on each fire.
+//! - [`History`]: records the `(iter, cost, best_cost)` trajectory for later
+//!   plotting or analysis.
+//!
+//! Heavier integrations (tracing, slog, a TUI) live in satellite crates; a
+//! `serde`-gated `CheckpointWriter` (non-wasm) snapshots the state to disk for
+//! warm-starting a later run.
 
 use crate::core::termination::TerminationReason;
+
+mod history;
+mod report;
+
+pub use history::History;
+pub use report::Report;
 
 /// Hooks fired around the iteration loop. See the
 /// [module docs](self) for lifecycle and edge cases.

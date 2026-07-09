@@ -195,7 +195,7 @@ pub use crate::core::numdiff::{
     central_difference_jacobian, forward_difference_gradient, forward_difference_hessian,
     forward_difference_jacobian,
 };
-pub use crate::core::observer::{Observe, ObserverMode};
+pub use crate::core::observer::{History, Observe, ObserverMode, Report};
 pub use crate::core::problem::{
     CostFunction, EvalCounts, Gradient, Hessian, Jacobian, MiniBatchGradient, Problem, Residual,
 };
