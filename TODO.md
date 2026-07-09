@@ -65,34 +65,6 @@ the previous lands.
   and ndarray integration tests are still missing. No permanent (BLAS-only)
   gaps recorded yet.
 
-- [x] **Made `BarrierMethod`/`AugmentedLagrangianMethod`
-  inner-solver-agnostic.** Both now bound
-  `So: WarmStart<V> + for<'a> Solver<Adapter<'a, P>, So::State>` with
-  `So::State: GradientState<Param=V>` (was hard-wired to `BasicState<V>` ⇒
-  `GradientDescent` only). The state-seeding primitive is the new
-  `WarmStart<V>` trait (`src/core/inner.rs`):
-  `type State: State<Param=V>; fn seed(&self, x: &V) -> State`. The σ-free
-  `seed` resolved the "open design wrinkle": option (b):
-  `MemeticInner<V>: WarmStart<V>` now extends it, adding the
-  CMA-flavored `seed_scaled(x, σ)` (defaults to `seed`; only Nelder-Mead
-  overrides) + `work_units`; `CmaInject`/`BoundedCmaInject` call sites
-  switched `seed(x, σ)` → `seed_scaled(x, σ)`. The barrier and AL methods read
-  `cost_evals`/`gradient_evals` off `So::State: GradientState` directly, so
-  they need neither `seed_scaled` nor `work_units`. Shipped `WarmStart`
-  impls: `GradientDescent`, `BFGS`, mode-generic `LBFGS` (covers `LBFGSB` +
-  unbounded), plus the split-out `NelderMead`/`LevenbergMarquardt` impls.
-  The two non-fixes held: **least-squares inners** (LM/Gauss-Newton/`Trf`)
-  are excluded automatically: the adapters expose
-  `CostFunction + Gradient`, not `Residual + Jacobian` (a barrier or Lagrangian
-  is not a sum of squares); **derivative-free inners** (Nelder-Mead) are
-  excluded by the `GradientState` bound, which is also exactly why the
-  σ-free `seed` is the right thing (the only σ-sensitive inner can't reach
-  the barrier and AL). Tests: `tests/barrier_method_nalgebra.rs` (`BFGS` +
-  `Backtracking` inner, Armijo respects the `+∞` wall) and
-  `tests/augmented_lagrangian_nalgebra.rs` (`BFGS` and unbounded `LBFGS`
-  inners) prove a non-`BasicState` inner converges to the same optimum as
-  the `GradientDescent` inner.
-
 - [x] **General trust-region Newton solver (the `Hessian`-trait consumer).**
   BUILT (branch `trust-region`): public `TrustRegion<Sub, F>` over
   `BasicState`, consuming the `Hessian` trait: the second-order solver
@@ -143,46 +115,6 @@ harder to fix as more code piles on.
   `Composed` marker coarser than `WarmStart`, or do these shapes share nothing
   beyond the three composition contracts? Resolve by writing the trait or
   writing the "no" comment in `core/inner.rs`.
-
-- [x] **Workspace wasm build broken by `competitor-bench` transitive dep.**
-  Resolved (2026-06-10) by setting
-  `default-members = ["crates/basin", "crates/basin-wasm"]` in the
-  workspace manifest, so the bare `cargo build`/`cargo build --target wasm32-unknown-unknown`
-  builds only the two
-  shippable, wasm-clean crates. `competitor-bench` (which links
-  `levenberg-marquardt` → `getrandom 0.3`, with no wasm backend unless its
-  `wasm_js` feature is enabled) stays a `members` entry, so `--workspace`
-  clippy and tests still cover it; it's just out of the *default* build set. A
-  `getrandom_backend` cfg in `.cargo/config.toml` was ruled out: the cfg
-  alone doesn't satisfy getrandom 0.3 (the `wasm_js` backend also needs its
-  feature, which a bench crate has no business pulling). CI gained a
-  regression guard running the bare workspace wasm build (ci.yml `wasm` job,
-  `default` matrix entry), which now also exercises `basin-wasm` on wasm.
-
-- [x] **State construction surface: hide the state zoo behind the solver (or
-  honest "no").** Resolved: added `Executor::from_start(problem, solver, x0)`
-  (`core/executor.rs`), which seeds the solver's natural state from a bare
-  starting vector via the new public `InitialState<V>` trait (`core/inner.rs`).
-  `WarmStart<V>: InitialState<V>` is now an empty marker for composition-safe
-  inners, so non-inner solvers (TrustRegion, the Powell and MADS families,
-  barrier and AL) are seedable without being treated as inners. The three-arg
-  `Executor::new` stays as the explicit custom-seed form. CMA-ES (needs σ), the
-  population GA, DE, and random search (sample the box), and the bracketing
-  scalar solvers (Brent, golden-section) deliberately don't implement
-  `InitialState`, so calling `from_start` on them is a compile error that
-  directs callers to `new`. Also closed the BFGS `Vec` and faer seed gap
-  (`WarmStart` was nalgebra-only), added the solver-to-state-to-`from_start`
-  table to the crate-root rustdoc and a getting-started section in the web docs,
-  and added round-trip, per-backend BFGS, and f32 tests in
-  `tests/from_start_round_trip.rs`. The richer state taxonomy is kept on
-  purpose: the capability traits (`GradientState`, `SimplexState`,
-  `PopulationState`) are what termination criteria bind on (tenet 3), and the
-  concrete state types carry real working memory (L-BFGS history, CMA
-  covariance, NLLS counters, simplex vertices), so they are not collapsed into a
-  single `IterState`. A further two-arg `Executor::new(problem, solver)` seeding
-  from the problem's own `x0` was considered and not added: explicit
-  construction is where `x0` lives and makes the solver-state pairing visible,
-  so the explicit form stays the one the docs teach.
 
 See `CONTRIBUTING.md` for the design tenets and constraints that shape these
 decisions.
