@@ -290,3 +290,32 @@ tasks:
     cmds:
       - cargo run -p competitor-bench --release --bin solver_compare > target/solver-traces.json
       - cd web && pnpm collect:solvers
+
+  paper:build:
+    desc: "Build the JOSS paper (paper/paper.pdf) with the Open Journals inara image."
+    summary: |
+      Runs the openjournals/inara Docker image over paper/ with JOURNAL=joss,
+      producing paper/paper.pdf from paper/paper.md and paper/paper.bib. Needs
+      Docker and network access (to pull the image on first run).
+    cmds:
+      - >
+        docker run --rm
+        --volume $PWD/paper:/data
+        --user $(id -u):$(id -g)
+        --env JOURNAL=joss
+        openjournals/inara
+
+  paper:preview:
+    desc: "Rebuild the paper on save and (re)open it in zathura."
+    watch: true
+    sources:
+      - paper/paper.md
+      - paper/paper.bib
+    cmds:
+      - task: paper:build
+      - pgrep -f "zathura.*paper/paper.pdf" || (zathura paper/paper.pdf &)
+
+  paper:wordcount:
+    desc: "Count words in the paper body (pandoc plain-text render)."
+    cmds:
+      - pandoc paper/paper.md -t plain | wc -w
