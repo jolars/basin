@@ -192,14 +192,15 @@ pub use crate::core::math::{
 };
 pub use crate::core::numdiff::{
     FiniteDiff, Method, central_difference_gradient, central_difference_hessian,
-    central_difference_jacobian, forward_difference_gradient, forward_difference_hessian,
-    forward_difference_jacobian,
+    central_difference_hessian_product, central_difference_jacobian, forward_difference_gradient,
+    forward_difference_hessian, forward_difference_hessian_product, forward_difference_jacobian,
 };
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
 pub use crate::core::observer::{History, Observe, ObserverMode, Report};
 pub use crate::core::problem::{
-    CostFunction, EvalCounts, Gradient, Hessian, Jacobian, MiniBatchGradient, Problem, Residual,
+    CostFunction, EvalCounts, Gradient, Hessian, HessianProduct, Jacobian, MiniBatchGradient,
+    Problem, Residual,
 };
 pub use crate::core::solver::Solver;
 #[cfg(feature = "faer")]
@@ -224,7 +225,9 @@ pub use crate::core::termination::{
 pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
-pub use crate::solver::trust_region::{CauchyPoint, Dogleg, Steihaug, TrustRegion};
+pub use crate::solver::trust_region::{
+    CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion,
+};
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping, Bobyqa, BoundedCmaEs,
     BoundedCmaInject, Brent, BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject,

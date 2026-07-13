@@ -1,6 +1,6 @@
 //! Steihaug truncated conjugate-gradient trust-region subproblem.
 
-use super::{Step, Subproblem, model_decrease, tau_to_boundary};
+use super::{Step, Subproblem, SubproblemHvp, model_decrease_from_bd, tau_to_boundary};
 use crate::core::math::{
     Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
 };
@@ -15,8 +15,15 @@ use crate::core::math::{
 /// converges to the unconstrained model minimizer inside the region, with a
 /// residual tolerance `ε = min(½, √‖g‖) · ‖g‖` (the standard forcing
 /// sequence). Matrix-free, it touches the Hessian only through
-/// [`MatVec`] (Hessian-vector products), so it runs on every backend and
+/// Hessian-vector products — [`MatVec`] in
+/// [`TrustRegion`](super::TrustRegion)'s exact mode, the problem's
+/// [`HessianProduct`](crate::core::problem::HessianProduct) in
+/// [`MatrixFree`](super::MatrixFree) mode — so it runs on every backend and
 /// scales to large, possibly indefinite problems.
+///
+/// Each returned step costs one extra product for the predicted model
+/// reduction (identically in both modes); recovering the model value from
+/// the CG recurrence instead is a possible future micro-optimization.
 ///
 /// This is [`TrustRegion`](super::TrustRegion)'s default subproblem.
 #[derive(Debug, Clone, Copy)]
@@ -41,21 +48,27 @@ impl Steihaug {
         self.max_iter = Some(n);
         self
     }
-}
 
-impl Default for Steihaug {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<V, M, F> Subproblem<V, M, F> for Steihaug
-where
-    F: Scalar,
-    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace + VectorLen,
-    M: MatVec<V>,
-{
-    fn solve(&self, g: &V, b: &M, radius: F) -> Step<V, F> {
+    /// The CG core, driven by a fallible Hessian-vector product `bv: v ↦ B·v`.
+    /// Both subproblem impls delegate here: the exact path wraps
+    /// [`MatVec`] in an infallible closure, the matrix-free path wraps the
+    /// counted [`HessianProduct`](crate::core::problem::HessianProduct) call.
+    pub(crate) fn solve_with<V, F, E>(
+        &self,
+        g: &V,
+        radius: F,
+        mut bv: impl FnMut(&V) -> Result<V, E>,
+    ) -> Result<Step<V, F>, E>
+    where
+        F: Scalar,
+        V: Clone
+            + Dot<F>
+            + NormSquared<F>
+            + ScaledAdd<F>
+            + ScaleInPlace<F>
+            + NegInPlace
+            + VectorLen,
+    {
         let n = g.vec_len();
         let max_iter = self.max_iter.unwrap_or(n.max(1));
 
@@ -72,21 +85,21 @@ where
         let tol = (if s < half { s } else { half }) * g_norm;
 
         // Only triggers for g ≈ 0 (ε ≥ ‖g‖ is impossible otherwise): the
-        // zero step, which the driver reads as convergence.
+        // zero step, which the driver reads as convergence. The model
+        // decrease at z = 0 is exactly zero, so no product is spent on it.
         if g_norm <= tol {
-            let predicted_reduction = model_decrease(g, b, &z);
-            return Step {
+            return Ok(Step {
                 d: z,
-                predicted_reduction,
+                predicted_reduction: F::zero(),
                 hit_boundary: false,
-            };
+            });
         }
 
         let mut d = r.clone();
         d.neg_in_place();
 
         for _ in 0..max_iter {
-            let bd = b.matvec(&d);
+            let bd = bv(&d)?;
             let dbd = d.dot(&bd);
 
             // Non-positive curvature: the model is unbounded along ±d, so
@@ -94,12 +107,13 @@ where
             if dbd <= F::zero() {
                 let tau = tau_to_boundary(&z, &d, radius);
                 z.scaled_add(tau, &d);
-                let predicted_reduction = model_decrease(g, b, &z);
-                return Step {
+                let bz = bv(&z)?;
+                let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+                return Ok(Step {
                     d: z,
                     predicted_reduction,
                     hit_boundary: true,
-                };
+                });
             }
 
             let alpha = r_dot / dbd;
@@ -111,12 +125,13 @@ where
             if z_next.norm_squared().sqrt() >= radius {
                 let tau = tau_to_boundary(&z, &d, radius);
                 z.scaled_add(tau, &d);
-                let predicted_reduction = model_decrease(g, b, &z);
-                return Step {
+                let bz = bv(&z)?;
+                let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+                return Ok(Step {
                     d: z,
                     predicted_reduction,
                     hit_boundary: true,
-                };
+                });
             }
             z = z_next;
 
@@ -124,12 +139,13 @@ where
             r.scaled_add(alpha, &bd);
             let r_dot_next = r.dot(&r);
             if r_dot_next.sqrt() < tol {
-                let predicted_reduction = model_decrease(g, b, &z);
-                return Step {
+                let bz = bv(&z)?;
+                let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+                return Ok(Step {
                     d: z,
                     predicted_reduction,
                     hit_boundary: false,
-                };
+                });
             }
 
             // d ← −r + β d.
@@ -142,11 +158,49 @@ where
         }
 
         // Iteration cap reached: return the best interior iterate so far.
-        let predicted_reduction = model_decrease(g, b, &z);
-        Step {
+        let bz = bv(&z)?;
+        let predicted_reduction = model_decrease_from_bd(g, &z, &bz);
+        Ok(Step {
             d: z,
             predicted_reduction,
             hit_boundary: false,
+        })
+    }
+}
+
+impl Default for Steihaug {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V, M, F> Subproblem<V, M, F> for Steihaug
+where
+    F: Scalar,
+    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace + VectorLen,
+    M: MatVec<V>,
+{
+    fn solve(&self, g: &V, b: &M, radius: F) -> Step<V, F> {
+        match self.solve_with(g, radius, |v| {
+            Ok::<_, std::convert::Infallible>(b.matvec(v))
+        }) {
+            Ok(step) => step,
+            Err(never) => match never {},
         }
+    }
+}
+
+impl<V, F> SubproblemHvp<V, F> for Steihaug
+where
+    F: Scalar,
+    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace + VectorLen,
+{
+    fn solve_hvp<E>(
+        &self,
+        g: &V,
+        radius: F,
+        bv: impl FnMut(&V) -> Result<V, E>,
+    ) -> Result<Step<V, F>, E> {
+        self.solve_with(g, radius, bv)
     }
 }

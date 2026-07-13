@@ -166,9 +166,11 @@ where
     fn mirror(&mut self, delta: &EvalCounts) {
         // Residual calls are the cost work for a least-squares objective, so
         // they fold into `cost_evals`; the Jacobian (and, for any future
-        // second-order NLLS solver, the Hessian) is tracked separately.
+        // second-order NLLS solver, the Hessian or Hessian-product work) is
+        // tracked separately.
         self.cost_evals = delta.cost_evals + delta.residual_evals;
         self.residual_evals = delta.residual_evals;
-        self.jacobian_evals = delta.jacobian_evals + delta.hessian_evals;
+        self.jacobian_evals =
+            delta.jacobian_evals + delta.hessian_evals + delta.hessian_product_evals;
     }
 }

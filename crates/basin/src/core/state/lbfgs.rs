@@ -378,7 +378,10 @@ impl<V: Clone, F: Scalar> GradientState for LbfgsState<V, F> {
 impl<V: Clone, F: Scalar> CountsMirror for LbfgsState<V, F> {
     fn mirror(&mut self, delta: &EvalCounts) {
         self.cost_evals = delta.cost_evals + delta.residual_evals;
-        self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
+        self.gradient_evals = delta.gradient_evals
+            + delta.jacobian_evals
+            + delta.hessian_evals
+            + delta.hessian_product_evals;
     }
 }
 

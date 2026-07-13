@@ -123,4 +123,4 @@ pub use random_search::RandomSearch;
 pub use sgd::Sgd;
 pub use ssga::Ssga;
 pub use trf::Trf;
-pub use trust_region::{CauchyPoint, Dogleg, Steihaug, TrustRegion};
+pub use trust_region::{CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion};

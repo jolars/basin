@@ -5,14 +5,14 @@
 
 use basin::core::executor::Executor;
 use basin::core::math::DenseMatrix;
-use basin::core::problem::{CostFunction, Gradient, Hessian};
+use basin::core::problem::{CostFunction, Gradient, Hessian, HessianProduct};
 use basin::core::state::{BasicState, LbfgsState, State};
 use basin::core::termination::{
     CostTolerance, GradientTolerance, MaxIter, RelativeCostTolerance, TargetCost,
 };
 use basin::line_search::{Backtracking, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
-use basin::{GradientDescent, Steihaug, TrustRegion};
+use basin::{GradientDescent, MatrixFree, Steihaug, TrustRegion};
 
 /// `f(x) = ‖x − c‖²` with `c = (1, 2, 3)`. Minimum at `c`, cost 0.
 struct ShiftedQuadF32 {
@@ -90,6 +90,37 @@ impl Hessian for ShiftedQuadF32 {
             |i, j| if i == j { 2.0 } else { 0.0 },
         ))
     }
+}
+
+impl HessianProduct for ShiftedQuadF32 {
+    fn hessian_product(&self, _x: &Vec<f32>, v: &Vec<f32>) -> Result<Vec<f32>, Self::Error> {
+        // ∇²f = 2 I, so ∇²f·v = 2 v.
+        Ok(v.iter().map(|vi| 2.0 * vi).collect())
+    }
+}
+
+#[test]
+fn matrix_free_trust_region_f32_round_trips_state_solver_termination() {
+    // The matrix-free second-order pipeline (HessianProduct trait, Steihaug
+    // CG via products) runs end-to-end at F = f32 over Vec<f32>, with no
+    // matrix type anywhere.
+    let problem = ShiftedQuadF32 {
+        c: vec![1.0_f32, 2.0, 3.0],
+    };
+    let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let solver: TrustRegion<Steihaug, f32, MatrixFree> =
+        TrustRegion::matrix_free_with(Steihaug::new());
+
+    let result = Executor::new(problem, solver, state)
+        .terminate_on(MaxIter(100))
+        .terminate_on(GradientTolerance::<f32>(1e-4))
+        .run()
+        .unwrap();
+
+    let final_x = result.state.param();
+    assert!((final_x[0] - 1.0).abs() < 1e-3);
+    assert!((final_x[1] - 2.0).abs() < 1e-3);
+    assert!((final_x[2] - 3.0).abs() < 1e-3);
 }
 
 #[test]

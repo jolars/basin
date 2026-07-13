@@ -264,11 +264,13 @@ pub trait GradientState: State {
 /// - **[`BasicState`]/[`QuasiNewtonState`]/[`LbfgsState`]** (carry
 ///   both cost and gradient counters):
 ///   `cost_evals = cost + residual`,
-///   `gradient_evals = gradient + jacobian + hessian`.
-///   The residual/Jacobian/Hessian counters fold into the
-///   cost/gradient slots, preserving today's NLLS convention where
+///   `gradient_evals = gradient + jacobian + hessian + hessian_product`.
+///   The residual/Jacobian/Hessian/Hessian-product counters fold into
+///   the cost/gradient slots, preserving today's NLLS convention where
 ///   residual calls counted against `cost_evals` and Jacobian calls
-///   against `gradient_evals` on `BasicState`.
+///   against `gradient_evals` on `BasicState`. One Hessian-vector
+///   product costs roughly one gradient, so the fold keeps
+///   `MaxGradientEvals` an honest cap on matrix-free work.
 /// - **[`BasicSimplexState`]/[`BasicPopulationState`]/`MaLsChState`**
 ///   (derivative-free outer, no `gradient_evals` field):
 ///   `cost_evals = total_work` (every kind folded in). Lets a CMA-ES
@@ -517,11 +519,14 @@ where
 {
     fn mirror(&mut self, delta: &EvalCounts) {
         // NLLS convention preserved: residual calls fold into the cost
-        // counter, Jacobian/Hessian into gradient. (Today's
+        // counter, Jacobian/Hessian/Hessian-product into gradient. (Today's
         // Gauss-Newton/LM/TRF impls manually bumped cost_evals on
         // residual() and gradient_evals on jacobian().)
         self.cost_evals = delta.cost_evals + delta.residual_evals;
-        self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
+        self.gradient_evals = delta.gradient_evals
+            + delta.jacobian_evals
+            + delta.hessian_evals
+            + delta.hessian_product_evals;
     }
 }
 
@@ -960,7 +965,10 @@ impl<V: Clone, M, F: Scalar> GradientState for QuasiNewtonState<V, M, F> {
 impl<V: Clone, M, F: Scalar> CountsMirror for QuasiNewtonState<V, M, F> {
     fn mirror(&mut self, delta: &EvalCounts) {
         self.cost_evals = delta.cost_evals + delta.residual_evals;
-        self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
+        self.gradient_evals = delta.gradient_evals
+            + delta.jacobian_evals
+            + delta.hessian_evals
+            + delta.hessian_product_evals;
     }
 }
 

@@ -153,10 +153,13 @@ where
 {
     fn mirror(&mut self, delta: &EvalCounts) {
         // Same rule as `BasicState`: residual folds into cost, Jacobian/
-        // Hessian into gradient. A 1D derivative solver only does cost +
-        // gradient work, so the residual/Jacobian/Hessian terms are 0 in
+        // Hessian/Hessian-product into gradient. A 1D derivative solver
+        // only does cost + gradient work, so the remaining terms are 0 in
         // practice.
         self.cost_evals = delta.cost_evals + delta.residual_evals;
-        self.gradient_evals = delta.gradient_evals + delta.jacobian_evals + delta.hessian_evals;
+        self.gradient_evals = delta.gradient_evals
+            + delta.jacobian_evals
+            + delta.hessian_evals
+            + delta.hessian_product_evals;
     }
 }

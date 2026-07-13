@@ -85,8 +85,11 @@ the previous lands.
   (Cholesky Newton step via `LinearSolveSpd` + Cauchy fallback on indefinite
   B, all backends but ndarray), `CauchyPoint` (closed-form baseline,
   universal). v1 forms full B once per accepted iterate (Dogleg needs it
-  anyway); a matrix-free `HessianProduct` trait so Steihaug needn't form B
-  is a future additive extension. Tests: Cauchy/Steihaug/Dogleg on quadratic +
+  anyway); DONE post-v1: the matrix-free `HessianProduct` problem trait +
+  `TrustRegion` `MatrixFree` mode (`TrustRegion::matrix_free()`, mode marker
+  type param, `SubproblemHvp` seam for Steihaug/CauchyPoint, counted
+  `hessian_product_evals`, `FiniteDiff` synthesis per N&W eq. 8.20), so
+  Steihaug needn't form B. Tests: Cauchy/Steihaug/Dogleg on quadratic +
   Rosenbrock (analytic `DenseMatrix` Hessian), f32 round-trip, `FiniteDiff`
   central-difference Hessian on nalgebra Rosenbrock. Web catalog +
   Backends notes updated.

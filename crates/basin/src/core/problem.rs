@@ -623,6 +623,84 @@ pub trait Hessian: Gradient {
     }
 }
 
+/// Matrix-free Hessian-vector products: `v ↦ ∇²f(param) · v`.
+///
+/// Implement this when the Hessian is too large to form (or a product is
+/// simply cheaper), so matrix-free solvers like
+/// [`TrustRegion`](crate::solver::TrustRegion) in
+/// [`MatrixFree`](crate::solver::trust_region::MatrixFree) mode can drive
+/// second-order optimization without a matrix type anywhere. Deliberately
+/// *not* a subtrait of [`Hessian`]: the point is problems that cannot (or
+/// should not) materialize `∇²f`.
+///
+/// # Contract
+///
+/// - The product must equal `∇²f(param) · v` for the *same* `f` whose
+///   derivative the [`Gradient`] impl returns.
+/// - It must be a pure function of `(param, v)` and linear in `v`.
+///
+/// Standard sources of an implementation are analytic derivation,
+/// reverse-over-forward automatic differentiation, and the
+/// gradient-difference approximation `(∇f(x + h v) − ∇f(x)) / h`
+/// (Nocedal & Wright, 2nd ed., eq. 8.20); the latter ships as
+/// [`forward_difference_hessian_product`](crate::core::numdiff::forward_difference_hessian_product)
+/// and its central-difference sibling.
+///
+/// # Backends
+///
+/// No matrix type is involved, so there is nothing to wire per backend:
+/// any `Param` works, including `Vec<f64>` and `ndarray::Array1<f64>`,
+/// which have no [`Hessian`] impl at all.
+///
+/// A problem that also implements [`Hessian`] with a
+/// [`MatVec`](crate::core::math::MatVec)-capable matrix can forward:
+/// `fn hessian_product(&self, x, v) { Ok(self.hessian(x)?.matvec(v)) }`.
+/// There is deliberately no blanket impl doing this, so such problems can
+/// still provide a cheaper hand-written product.
+///
+/// # Examples
+///
+/// ```
+/// use basin::{CostFunction, Gradient, HessianProduct};
+///
+/// // f(x) = x₀² + x₁² has constant Hessian 2·I, so ∇²f(x)·v = 2·v.
+/// struct Sphere;
+/// impl CostFunction for Sphere {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = std::convert::Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+///         Ok(x.iter().map(|xi| xi * xi).sum())
+///     }
+/// }
+/// impl Gradient for Sphere {
+///     type Gradient = Vec<f64>;
+///     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+///         Ok(x.iter().map(|xi| 2.0 * xi).collect())
+///     }
+/// }
+/// impl HessianProduct for Sphere {
+///     fn hessian_product(
+///         &self,
+///         _x: &Vec<f64>,
+///         v: &Vec<f64>,
+///     ) -> Result<Vec<f64>, std::convert::Infallible> {
+///         Ok(v.iter().map(|vi| 2.0 * vi).collect())
+///     }
+/// }
+///
+/// let hv = Sphere.hessian_product(&vec![3.0, 4.0], &vec![1.0, 0.0]).unwrap();
+/// assert_eq!(hv, vec![2.0, 0.0]);
+/// ```
+pub trait HessianProduct: Gradient {
+    /// Evaluate the Hessian-vector product `∇²f(param) · v`.
+    fn hessian_product(
+        &self,
+        param: &Self::Param,
+        v: &Self::Param,
+    ) -> Result<<Self as Gradient>::Gradient, <Self as CostFunction>::Error>;
+}
+
 /// Per-kind evaluation counters carried by [`Problem`].
 ///
 /// One field per problem-trait method family. The
@@ -651,6 +729,11 @@ pub struct EvalCounts {
     /// [`Hessian::hessian`] calls (including the Hessian side of fused
     /// calls).
     pub hessian_evals: u64,
+    /// [`HessianProduct::hessian_product`] calls. One call is one
+    /// Hessian-vector product — `O(n)` work, roughly one gradient — as
+    /// opposed to [`hessian_evals`](Self::hessian_evals), where one call
+    /// forms the full `O(n²)` matrix.
+    pub hessian_product_evals: u64,
 }
 
 impl EvalCounts {
@@ -663,6 +746,7 @@ impl EvalCounts {
             + self.residual_evals
             + self.jacobian_evals
             + self.hessian_evals
+            + self.hessian_product_evals
     }
 
     /// Componentwise `self − base`. Used by
@@ -675,6 +759,7 @@ impl EvalCounts {
             residual_evals: self.residual_evals - base.residual_evals,
             jacobian_evals: self.jacobian_evals - base.jacobian_evals,
             hessian_evals: self.hessian_evals - base.hessian_evals,
+            hessian_product_evals: self.hessian_product_evals - base.hessian_product_evals,
         }
     }
 
@@ -690,6 +775,7 @@ impl EvalCounts {
         self.residual_evals += other.residual_evals;
         self.jacobian_evals += other.jacobian_evals;
         self.hessian_evals += other.hessian_evals;
+        self.hessian_product_evals += other.hessian_product_evals;
     }
 }
 
@@ -916,6 +1002,18 @@ impl<P: Hessian> Problem<P> {
     }
 }
 
+impl<P: HessianProduct> Problem<P> {
+    /// Counted [`HessianProduct::hessian_product`].
+    pub fn hessian_product(
+        &mut self,
+        param: &P::Param,
+        v: &P::Param,
+    ) -> Result<<P as Gradient>::Gradient, <P as CostFunction>::Error> {
+        self.counts.hessian_product_evals += 1;
+        self.inner.hessian_product(param, v)
+    }
+}
+
 #[cfg(test)]
 mod problem_wrapper_tests {
     use super::*;
@@ -997,5 +1095,27 @@ mod problem_wrapper_tests {
         assert_eq!(a.cost_evals, 5);
         assert_eq!(a.gradient_evals, 1);
         assert_eq!(a.jacobian_evals, 5);
+    }
+
+    impl HessianProduct for Sphere {
+        fn hessian_product(
+            &self,
+            _x: &Vec<f64>,
+            v: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
+            Ok(v.iter().map(|vi| 2.0 * vi).collect())
+        }
+    }
+
+    #[test]
+    fn counts_hessian_product_calls() {
+        let mut p = Problem::new(Sphere);
+        let hv = p.hessian_product(&vec![1.0, 2.0], &vec![1.0, 0.0]).unwrap();
+        assert_eq!(hv, vec![2.0, 0.0]);
+        assert_eq!(p.counts().hessian_product_evals, 1);
+        assert_eq!(p.counts().cost_evals, 0);
+        assert_eq!(p.counts().gradient_evals, 0);
+        assert_eq!(p.counts().hessian_evals, 0);
+        assert_eq!(p.counts().total_work(), 1);
     }
 }

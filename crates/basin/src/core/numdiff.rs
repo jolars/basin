@@ -3,10 +3,17 @@
 //! [`FiniteDiff`] wraps a problem that only exposes function values
 //! ([`CostFunction`] and/or [`Residual`]) and *adds* the derivative traits
 //! the solvers want: [`Gradient`] (for first-order solvers), [`Jacobian`]
-//! (for least-squares solvers), and [`Hessian`] (for second-order solvers).
+//! (for least-squares solvers), [`Hessian`] (for second-order solvers), and
+//! [`HessianProduct`] (for matrix-free second-order solvers).
 //! Each derivative is approximated by finite differences of the wrapped
 //! problem, so a values-only problem flows straight into the existing
 //! solvers via basin's type-system dispatch.
+//!
+//! Separately from the wrapper, the [`forward_difference_hessian_product`] /
+//! [`central_difference_hessian_product`] free functions are bounded on
+//! `P: Gradient`, so a problem with an *analytic* gradient can implement
+//! [`HessianProduct`] as a one-liner (2 gradient evaluations per product)
+//! without stacking finite differences.
 //!
 //! The wrapper *forwards* [`BoxConstraints`] when the inner problem carries
 //! box bounds: adding derivatives must not silently un-constrain a problem
@@ -68,7 +75,7 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{DenseMatrixFromFn, VectorIndex, VectorLen};
 use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with, try_map_slice_with};
-use crate::core::problem::{CostFunction, Gradient, Hessian, Jacobian, Residual};
+use crate::core::problem::{CostFunction, Gradient, Hessian, HessianProduct, Jacobian, Residual};
 
 /// Which finite-difference stencil to use for a given derivative.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,12 +99,13 @@ pub enum Method {
 ///
 /// # Backends
 ///
-/// [`Gradient`] is backend-generic (any `V: Clone + VectorLen +
-/// VectorIndex`). [`Jacobian`] and [`Hessian`] additionally require
-/// `V: DenseMatrixFromFn`, so they are available only for the matrix
-/// backends (nalgebra `DVector → DMatrix`, faer `Col → Mat`); `Vec<f64>`
-/// and `ndarray` produce a compile-time error, mirroring the analytic
-/// [`Jacobian`]/[`Hessian`] coverage (tenet 5).
+/// [`Gradient`] and [`HessianProduct`] are backend-generic (any `V: Clone +
+/// VectorLen + VectorIndex`; no matrix type is involved). [`Jacobian`] and
+/// [`Hessian`] additionally require `V: DenseMatrixFromFn`, so they are
+/// available only for the matrix backends (nalgebra `DVector → DMatrix`,
+/// faer `Col → Mat`); `Vec<f64>` and `ndarray` produce a compile-time
+/// error, mirroring the analytic [`Jacobian`]/[`Hessian`] coverage
+/// (tenet 5).
 ///
 /// # Examples
 ///
@@ -307,6 +315,41 @@ where
             Method::Central => central_difference_hessian(
                 &self.problem,
                 param,
+                self.function_precision,
+                self.fixed_step,
+            ),
+        }
+    }
+}
+
+impl<P, V> HessianProduct for FiniteDiff<P>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    V: Clone + VectorLen + VectorIndex + MaybeSync,
+    <P as CostFunction>::Error: MaybeSend,
+{
+    /// Hessian-vector product by differencing this wrapper's own
+    /// finite-difference gradients along `v` (stencil set by
+    /// [`hessian_method`](FiniteDiff::hessian_method)). Note this stacks two
+    /// truncation errors (FD of FD): it is the no-analytic-anything
+    /// fallback. With an analytic [`Gradient`], skip the wrapper and call
+    /// [`forward_difference_hessian_product`] /
+    /// [`central_difference_hessian_product`] directly (2 gradient
+    /// evaluations per product). Cost here is 2 synthesized gradients:
+    /// `~4n` cost evaluations with the central/central default.
+    fn hessian_product(&self, param: &V, v: &V) -> Result<V, P::Error> {
+        match self.hessian_method {
+            Method::Forward => forward_difference_hessian_product(
+                self,
+                param,
+                v,
+                self.function_precision,
+                self.fixed_step,
+            ),
+            Method::Central => central_difference_hessian_product(
+                self,
+                param,
+                v,
                 self.function_precision,
                 self.fixed_step,
             ),
@@ -626,6 +669,122 @@ where
     Ok(V::dense_from_fn(n, n, |i, j| hess[i * n + j]))
 }
 
+/// Euclidean norm via the scalar accessors; shared by the
+/// Hessian-vector-product step rules.
+fn vec_norm<V: VectorLen + VectorIndex>(x: &V) -> f64 {
+    (0..x.vec_len())
+        .map(|j| {
+            let xj = x.get_scalar(j);
+            xj * xj
+        })
+        .sum::<f64>()
+        .sqrt()
+}
+
+/// `x + h·v`, built through the scalar accessors.
+fn probe_along<V: Clone + VectorLen + VectorIndex>(x: &V, v: &V, h: f64) -> V {
+    let mut probe = x.clone();
+    for j in 0..x.vec_len() {
+        probe.set_scalar(j, x.get_scalar(j) + h * v.get_scalar(j));
+    }
+    probe
+}
+
+/// Forward-difference Hessian-vector product
+/// `∇²f(x)·v ≈ (∇f(x + h v) − ∇f(x)) / h` (Nocedal & Wright, *Numerical
+/// Optimization*, 2e, eq. 8.20).
+///
+/// This is the standard route to a matrix-free
+/// [`HessianProduct`] when only a
+/// (possibly analytic) [`Gradient`] is available: 2 gradient evaluations
+/// per product, no matrix type anywhere. A problem with an analytic
+/// gradient implements the trait as a one-liner calling this.
+///
+/// The step is `h = √eps_f · max(‖x‖, 1) / ‖v‖` with
+/// `eps_f = function_precision.max(f64::EPSILON)`, so the *perturbation*
+/// `h·v` has magnitude `√eps_f · max(‖x‖, 1)` regardless of the scale of
+/// `v`. `fixed_step`, when `Some`, overrides `h` with the raw step along
+/// `v`. `‖v‖ = 0` short-circuits to the zero vector (exact by linearity).
+/// Returns `Err` if either gradient evaluation does.
+pub fn forward_difference_hessian_product<P, V>(
+    problem: &P,
+    x: &V,
+    v: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+) -> Result<V, <P as CostFunction>::Error>
+where
+    P: Gradient<Param = V, Gradient = V, Output = f64>,
+    V: Clone + VectorLen + VectorIndex,
+{
+    let v_norm = vec_norm(v);
+    if v_norm == 0.0 {
+        let mut hv = v.clone();
+        for j in 0..hv.vec_len() {
+            hv.set_scalar(j, 0.0);
+        }
+        return Ok(hv);
+    }
+    let h = match fixed_step {
+        Some(h) => h,
+        None => {
+            let eps = function_precision.max(f64::EPSILON);
+            eps.sqrt() * vec_norm(x).max(1.0) / v_norm
+        }
+    };
+    let g0 = problem.gradient(x)?;
+    let gp = problem.gradient(&probe_along(x, v, h))?;
+    let mut hv = v.clone();
+    for j in 0..hv.vec_len() {
+        hv.set_scalar(j, (gp.get_scalar(j) - g0.get_scalar(j)) / h);
+    }
+    Ok(hv)
+}
+
+/// Central-difference Hessian-vector product
+/// `∇²f(x)·v ≈ (∇f(x + h v) − ∇f(x − h v)) / 2h`: the two-sided variant of
+/// [`forward_difference_hessian_product`] (Nocedal & Wright, 2e, eq. 8.20),
+/// `O(h²)` truncation error at the same 2-gradient cost (the base gradient
+/// is not needed).
+///
+/// The step is `h = ∛eps_f · max(‖x‖, 1) / ‖v‖`; `fixed_step` and `‖v‖ = 0`
+/// behave as in the forward variant. Returns `Err` if either gradient
+/// evaluation does.
+pub fn central_difference_hessian_product<P, V>(
+    problem: &P,
+    x: &V,
+    v: &V,
+    function_precision: f64,
+    fixed_step: Option<f64>,
+) -> Result<V, <P as CostFunction>::Error>
+where
+    P: Gradient<Param = V, Gradient = V, Output = f64>,
+    V: Clone + VectorLen + VectorIndex,
+{
+    let v_norm = vec_norm(v);
+    if v_norm == 0.0 {
+        let mut hv = v.clone();
+        for j in 0..hv.vec_len() {
+            hv.set_scalar(j, 0.0);
+        }
+        return Ok(hv);
+    }
+    let h = match fixed_step {
+        Some(h) => h,
+        None => {
+            let eps = function_precision.max(f64::EPSILON);
+            eps.cbrt() * vec_norm(x).max(1.0) / v_norm
+        }
+    };
+    let gp = problem.gradient(&probe_along(x, v, h))?;
+    let gm = problem.gradient(&probe_along(x, v, -h))?;
+    let mut hv = v.clone();
+    for j in 0..hv.vec_len() {
+        hv.set_scalar(j, (gp.get_scalar(j) - gm.get_scalar(j)) / (2.0 * h));
+    }
+    Ok(hv)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -719,6 +878,113 @@ mod tests {
         assert_eq!(fd.gradient_method, Method::Central);
         assert_eq!(fd.jacobian_method, Method::Forward);
         assert_eq!(fd.hessian_method, Method::Central);
+    }
+
+    /// `DiagQuadratic` with its analytic gradient, for the `P: Gradient`
+    /// Hessian-product free functions.
+    struct DiagQuadraticGrad {
+        a: Vec<f64>,
+    }
+
+    impl CostFunction for DiagQuadraticGrad {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = std::convert::Infallible;
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+            Ok(x.iter().zip(&self.a).map(|(xi, ai)| ai * xi * xi).sum())
+        }
+    }
+    impl Gradient for DiagQuadraticGrad {
+        type Gradient = Vec<f64>;
+        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+            Ok(x.iter()
+                .zip(&self.a)
+                .map(|(xi, ai)| 2.0 * ai * xi)
+                .collect())
+        }
+    }
+
+    #[test]
+    fn hessian_product_free_fns_match_analytic_quadratic() {
+        // ∇²f = diag(2a), so ∇²f·v = 2a∘v exactly (the quadratic makes the
+        // forward difference exact up to rounding).
+        let a = vec![1.0, 2.0, 0.5];
+        let p = DiagQuadraticGrad { a: a.clone() };
+        let x = vec![-1.2, 0.7, 3.0];
+        let v = vec![1.0, -2.0, 0.25];
+        let fwd = forward_difference_hessian_product(&p, &x, &v, f64::EPSILON, None).unwrap();
+        let cen = central_difference_hessian_product(&p, &x, &v, f64::EPSILON, None).unwrap();
+        for i in 0..3 {
+            let want = 2.0 * a[i] * v[i];
+            assert!(approx(fwd[i], want, 1e-5), "fwd i={i} {} vs {want}", fwd[i]);
+            assert!(approx(cen[i], want, 1e-7), "cen i={i} {} vs {want}", cen[i]);
+        }
+    }
+
+    #[test]
+    fn hessian_product_of_zero_direction_is_zero() {
+        let p = DiagQuadraticGrad { a: vec![1.0, 2.0] };
+        let x = vec![-1.2, 0.7];
+        let v = vec![0.0, 0.0];
+        let hv = central_difference_hessian_product(&p, &x, &v, f64::EPSILON, None).unwrap();
+        assert_eq!(hv, vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn finite_diff_hessian_product_matches_rosenbrock_analytic() {
+        // FD-of-FD (the wrapper differences its own synthesized gradients),
+        // so the tolerance is looser than for the analytic-gradient path.
+        // Analytic 2D Rosenbrock Hessian at a generic point:
+        //   H₀₀ = 2 − 400(x₁ − 3x₀²), H₀₁ = H₁₀ = −400x₀, H₁₁ = 200.
+        struct Rosenbrock2;
+        impl CostFunction for Rosenbrock2 {
+            type Param = Vec<f64>;
+            type Output = f64;
+            type Error = std::convert::Infallible;
+            fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+                Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+            }
+        }
+        let (x0, x1) = (-1.2, 1.0);
+        let x = vec![x0, x1];
+        let v = vec![0.3, -0.7];
+        let h = [
+            [2.0 - 400.0 * (x1 - 3.0 * x0 * x0), -400.0 * x0],
+            [-400.0 * x0, 200.0],
+        ];
+        let want = [
+            h[0][0] * v[0] + h[0][1] * v[1],
+            h[1][0] * v[0] + h[1][1] * v[1],
+        ];
+        let hv = FiniteDiff::new(Rosenbrock2)
+            .hessian_product(&x, &v)
+            .unwrap();
+        for i in 0..2 {
+            let rel = (hv[i] - want[i]).abs() / want[i].abs().max(1.0);
+            assert!(rel < 1e-3, "i={i} {} vs {}", hv[i], want[i]);
+        }
+    }
+
+    #[test]
+    fn finite_diff_trust_region_matrix_free_converges() {
+        // End-to-end: a values-only problem through FiniteDiff's synthesized
+        // HessianProduct into the matrix-free trust region, on the
+        // dependency-free Vec<f64> backend (which has no Hessian impl at all).
+        use crate::solver::TrustRegion;
+        use crate::{BasicState, Executor, GradientTolerance};
+
+        let result = Executor::new(
+            FiniteDiff::new(DiagQuadratic {
+                a: vec![1.0, 50.0, 2.5],
+            }),
+            TrustRegion::matrix_free(),
+            BasicState::new(vec![5.0, 1.0, -3.0]),
+        )
+        .max_iter(100)
+        .terminate_on(GradientTolerance(1e-6))
+        .run()
+        .unwrap();
+        assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     }
 
     #[cfg(feature = "problems")]
