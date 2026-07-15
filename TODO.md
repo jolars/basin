@@ -57,13 +57,12 @@ the previous lands.
   normal-equations path (`JᵀJ` via `GramMatrix` + a pure-Rust Cholesky
   `LinearSolveSpd`, the same `dense_chol` reused on `Array2` through
   `as_standard_layout()`, with `AddDiagonalVectorInPlace`/`MaxDiagonal`
-  for the LM/Trf damping), *not* QR, so no `LinearSolveLstsq` was needed.
-  Remaining honest (pure-Rust, no BLAS) gaps: the memetic family
-  (`CmaInject`, `BoundedCmaInject`, `MaLsChCma`) compiles and runs on all four
-  backends already (the `SymmetricEigen` matrix bound resolves everywhere and
-  the shipped `MemeticInner` inners are backend-generic); only the `Vec<f64>`
-  and ndarray integration tests are still missing. No permanent (BLAS-only)
-  gaps recorded yet.
+  for the LM/Trf damping), *not* QR, so no `LinearSolveLstsq` was needed;
+  the memetic family (`CmaInject`, `BoundedCmaInject`, `MaLsChCma`) now has
+  per-backend smoke tests on all four backends (the missing `Vec<f64>`,
+  ndarray, and faer integration tests landed; the trait wiring already
+  resolved everywhere). Remaining honest (pure-Rust, no BLAS) gaps: none
+  recorded. No permanent (BLAS-only) gaps recorded yet.
 
 - [x] **General trust-region Newton solver (the `Hessian`-trait consumer).**
   BUILT (branch `trust-region`): public `TrustRegion<Sub, F>` over
