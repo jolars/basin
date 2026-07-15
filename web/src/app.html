@@ -43,11 +43,15 @@
         <!-- No-FOUC: resolve the saved theme and set the class on <html>
              before first paint, so prerendered content doesn't flash the
              wrong colors. Mirrors `src/lib/theme.svelte.ts` (key
-             `basin.theme`, default `auto`). -->
+             `basin.theme` in sessionStorage, default `auto`): the toggle
+             is per-session only; new sessions follow the OS. -->
         <script>
             (function () {
                 try {
-                    var pref = localStorage.getItem('basin.theme');
+                    // Drop the pre-session-storage persistent key so old
+                    // visitors return to following the OS.
+                    localStorage.removeItem('basin.theme');
+                    var pref = sessionStorage.getItem('basin.theme');
                     if (pref !== 'light' && pref !== 'dark' && pref !== 'auto')
                         pref = 'auto';
                     var dark =

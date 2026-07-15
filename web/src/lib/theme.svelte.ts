@@ -10,10 +10,12 @@
  * query, so flipping the OS theme while in `auto` mode updates it
  * immediately.
  *
- * Persisted in `localStorage` under `basin.theme`. Defaults to `auto`
+ * Persisted in `sessionStorage` under `basin.theme`, so an explicit
+ * toggle survives reloads and navigation within the tab but a fresh
+ * session starts back at `auto` (following the OS). Defaults to `auto`
  * for first-time visitors.
  *
- * The module guards `window`/`localStorage` access for safety: the root
+ * The module guards `window`/`sessionStorage` access for safety: the root
  * layout is server-rendered (prerendered), so this store is imported in
  * an SSR context where those globals are absent. The pre-hydration paint
  * is handled by an inline script in `app.html`; this store keeps the
@@ -26,8 +28,8 @@ export type EffectiveTheme = "light" | "dark";
 const STORAGE_KEY = "basin.theme";
 
 function readPreference(): ThemePreference {
-    if (typeof localStorage === "undefined") return "auto";
-    const v = localStorage.getItem(STORAGE_KEY);
+    if (typeof sessionStorage === "undefined") return "auto";
+    const v = sessionStorage.getItem(STORAGE_KEY);
     return v === "light" || v === "dark" || v === "auto" ? v : "auto";
 }
 
@@ -70,9 +72,9 @@ class ThemeStore {
 
     set(pref: ThemePreference) {
         this.preference = pref;
-        if (typeof localStorage !== "undefined") {
+        if (typeof sessionStorage !== "undefined") {
             try {
-                localStorage.setItem(STORAGE_KEY, pref);
+                sessionStorage.setItem(STORAGE_KEY, pref);
             } catch {
                 // Private mode or quota: silent fallthrough.
             }
