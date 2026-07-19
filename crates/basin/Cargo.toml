@@ -13,10 +13,6 @@ readme.workspace = true
 keywords = ["optimization", "math", "numerics", "solver", "nonlinear"]
 categories = ["mathematics", "science", "algorithms"]
 
-# Build docs.rs with every backend enabled so the feature-gated solver and
-# problem impls (nalgebra/ndarray/faer) render—not just the default
-# `Vec<f64>` surface. `--cfg docsrs` turns on the `doc(auto_cfg)` attribute
-# in `lib.rs` ("Available on crate feature `nalgebra` only").
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -27,146 +23,47 @@ path = "src/lib.rs"
 
 [features]
 default = ["problems"]
-# Pin one version per backend (tenet 2 in CONTRIBUTING.md). A backend major bump
-# becomes a basin major bump—do not introduce per-version features.
-# `nalgebra-sparse` rides along on the same feature: it's a separate crate,
-# but logically part of the nalgebra story (sparse Jacobians, sparse
-# Cholesky). Folding it in keeps the manifest to one nalgebra feature.
 nalgebra = ["dep:nalgebra", "dep:nalgebra-sparse"]
 ndarray = ["dep:ndarray"]
-# Opt-in BLAS-backed ndarray. Off by default per the WASM hard constraint
-# (cblas-sys is not wasm-compatible) and because BLAS wiring is a heavy
-# toolchain story most basin users don't need. This feature only flips
-# ndarray's `blas` switch; the consumer is still responsible for picking
-# a BLAS source crate (`openblas-src`, `netlib-src`, `intel-mkl-src`,
-# `accelerate-src`, ...) and adding it as a direct dependency. The nalgebra
-# analogue is `nalgebra-lapack` below (nalgebra 0.34 has no `blas` feature; its
-# LAPACK path lives in the separate `nalgebra-lapack` crate); faer has none
-# (pure-Rust by design).
 ndarray-blas = ["ndarray", "ndarray/blas"]
-# Opt-in LAPACK-backed nalgebra. The nalgebra analogue of `ndarray-blas`:
-# swaps the nalgebra backend's pure-Rust Cholesky/symmetric eigendecomposition
-# (`LinearSolveSpd`, `SymmetricEigen`) for LAPACK-backed ones from the separate
-# `nalgebra-lapack` crate. Off by default and WASM-incompatible (LAPACK links a
-# Fortran/BLAS toolchain), same as `ndarray-blas`. We forward
-# `nalgebra-lapack/lapack-custom`: that crate has an `enforce_exactly_one_
-# feature_selected!` macro requiring exactly one `lapack-*` backend even to
-# compile, and `lapack-custom` is the only one that pulls NO provider crate
-# (its `extern crate lapack_src` is cfg'd off). So the rlib/`cargo doc` /
-# `cargo clippy` builds compile without linking or building OpenBLAS, keeping
-# `--all-features` green on docs.rs and CI. The flip side of `lapack-custom`:
-# the LAPACK symbols (`dpotrf_`, `dsyev_`, ...) must be supplied at *final link*
-# time by the consumer—add a `-src` crate (`openblas-src`/`netlib-src`,
-# `extern crate`d in your binary) or link a system BLAS/LAPACK via link args,
-# exactly like `ndarray-blas`'s "bring your own BLAS source" story. With this
-# feature on, the two factorization ops narrow from any `F: ComplexField` /
-# `RealField` to the LAPACK scalar set (f32/f64). Acceleration only pays off for
-# large dense systems (e.g. large-n CMA-ES); for small/medium problems
-# nalgebra's pure-Rust factorizations are competitive.
-nalgebra-lapack = ["nalgebra", "dep:nalgebra-lapack", "nalgebra-lapack/lapack-custom"]
-# `generativity` and `faer-traits` are transitive deps of faer, surfaced
-# here so they only enter the graph when `faer` is enabled. `faer-traits`
-# is the home of `ComplexField`/`RealField`—bounds the faer-backend
-# linalg impls need to remain F-generic.
+nalgebra-lapack = [
+  "nalgebra",
+  "dep:nalgebra-lapack",
+  "nalgebra-lapack/lapack-custom",
+]
 faer = ["dep:faer", "dep:generativity", "dep:faer-traits"]
-# Opt-in parallel evaluation. Fans the independent probes of a
-# finite-difference gradient/Jacobian/Hessian across a `rayon` thread pool
-# (`FiniteDiff`, via `core::parallel`), and turns on faer's rayon-backed
-# linalg. Off by default because basin is typically embedded inside a caller
-# that already manages parallelism (multi-start sweeps, R/Python schedulers,
-# outer rayon loops)—a default-on thread pool causes oversubscription and
-# fights the caller. WASM-incompatible: enabling this on wasm32-unknown-unknown
-# will fail to compile. Under this feature `FiniteDiff: Gradient/Jacobian/
-# Hessian` additionally requires the wrapped problem to be `Sync`.
 parallel = ["dep:rayon", "faer?/rayon"]
-# Opt-in state (de)serialization for the `CheckpointWriter` observer: derive
-# `Serialize`/`Deserialize` on the checkpointable states and pull in `bincode`
-# as the on-disk format. Off by default (most runs don't checkpoint) and it
-# forwards each enabled backend's own serde feature so the backend vector/matrix
-# types are serializable: `nalgebra/serde-serialize`, `ndarray/serde`. faer 0.24
-# ships no serde feature, so faer-backed states are not checkpointable (an honest
-# compile error if you try). Pure-Rust and wasm-clean, but the `CheckpointWriter`
-# observer itself is additionally `not(target_arch = "wasm32")` because it does
-# file I/O.
 serde = [
   "dep:serde",
   "dep:bincode",
   "nalgebra?/serde-serialize",
   "ndarray?/serde",
 ]
-# Standard test-problem corpus (Rosenbrock, ...). Pure-Rust, no extra deps;
-# default-on so plain `cargo test` keeps working without `--features problems`
-# (integration tests can't see `cfg(test)` lib gating). Downstream can drop
-# it via `default-features = false` to shrink the WASM bundle.
 problems = []
 
 [dependencies]
-# Scalar abstraction (`Float`, `FromPrimitive`) so solvers, states, and the
-# math layer can be generic over `f32`/`f64`. Pure-Rust, no_std-friendly,
-# tiny dep—wasm-clean.
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
 nalgebra = { version = "0.34", optional = true }
 nalgebra-sparse = { version = "0.11", optional = true }
-# LAPACK-backed nalgebra decompositions, behind the opt-in `nalgebra-lapack`
-# feature. Pinned to 0.27 because that is the release tracking nalgebra 0.34
-# (0.28 moved to nalgebra 0.35); keeping them in lockstep preserves tenet 2's
-# single-version-per-backend story. `default-features = false` drops the
-# default `openblas` provider so the rlib builds without linking or building a
-# BLAS source—see the feature comment above. Non-default + WASM-incompatible.
 nalgebra-lapack = { version = "0.27", optional = true, default-features = false }
-# Pure-Rust (no BLAS feature) so it stays wasm-compatible per the WASM hard
-# constraint in CONTRIBUTING.md.
 ndarray = { version = "0.17", optional = true, default-features = false }
-# default-features off because faer's defaults pull in rayon (breaks wasm,
-# tenet: no parallelism in default features) and npy (file I/O). We enable
-# only `std` + `linalg` so the core dense types work on native and wasm.
-# Rayon is reachable via the opt-in `parallel` feature above.
 faer = { version = "0.24", optional = true, default-features = false, features = [
   "std",
   "linalg",
 ] }
-# Transitive dep of faer, surfaced as an optional dep so it only enters the
-# graph behind the `faer` feature. basin doesn't use this crate directly.
 generativity = { version = "1", optional = true }
-# Transitive dep of faer, surfaced as an optional dep so the F-generic faer
-# linalg impls can name `ComplexField`/`RealField` bounds. Major pinned to
-# match faer 0.24 so the dep tree stays single-version.
 faer-traits = { version = "0.24", optional = true, default-features = false }
-# Re-exports `std::time::Instant` on native and a wasm-compatible shim on
-# `wasm32-unknown-unknown`, so `MaxTime` works on both without feature gating.
-# Tiny crate, MSRV 1.60, no transitive deps on native.
 web-time = "1"
-# Seedable, wasm-safe RNG used by stochastic solvers (`RandomSearch`, CMA-ES,
-# ...). `default-features = false` drops `std_rng`/`thread_rng` and the
-# implicit `getrandom` JS-feature pull-in, so a
-# `ChaCha8Rng::seed_from_u64(seed)` works on `wasm32-unknown-unknown` with
-# no JS shim.
 rand = { version = "0.10", default-features = false }
 rand_chacha = { version = "0.10", default-features = false }
-# Standard-normal sampling for CMA-ES. rand_distr 0.6 pairs with rand 0.10.
-# default-features off to stay consistent with the wasm-safe rand setup.
 rand_distr = { version = "0.6", default-features = false }
-# Opt-in CPU parallelism (the `parallel` feature only). Not wasm-compatible—
-# kept off by default per the WASM hard constraint. MSRV well under basin's
-# (rayon 1.x builds far below 1.87), so it doesn't constrain the CRAN pin.
 rayon = { version = "1", optional = true }
-# State (de)serialization behind the opt-in `serde` feature, for the
-# `CheckpointWriter` observer. Both are pure-Rust and wasm-clean; the observer
-# that uses them is gated `not(wasm32)` for file I/O. `serde` derive only.
-# `bincode` 2 is the compact binary on-disk format; MSRV 1.85 is under basin's
-# 1.87 pin, so it doesn't tighten the CRAN-driven MSRV. Non-default, so neither
-# enters the default or WASM dependency graph.
 serde = { version = "1", optional = true, default-features = false, features = [
   "derive",
 ] }
 bincode = { version = "2", optional = true, features = ["serde"] }
 
 [dev-dependencies]
-# Statistical bench harness. dev-dependency only—never enters the
-# published or WASM dependency graph. `default-features = false` drops
-# rayon (tenet: no parallelism by default) and plotters/html_reports
-# (heavy tree, no value for CLI microbenchmarks), keeping just the
-# `cargo bench` integration shim.
 criterion = { version = "0.8", default-features = false, features = [
   "cargo_bench_support",
 ] }
@@ -175,24 +72,12 @@ criterion = { version = "0.8", default-features = false, features = [
 name = "rosenbrock"
 harness = false
 
-# Backend-vs-backend microbenchmark for the LM hot path (issue #9):
-# nalgebra vs faer on the small dense ops LM runs each iteration. Needs
-# both backends plus the test-problem corpus.
 [[bench]]
 name = "lm_backends"
 harness = false
 required-features = ["nalgebra", "faer", "problems"]
 
-# Backend axis (axis 1): GD/Nelder-Mead/unconstrained L-BFGS on
-# Rosenbrock across all four backends (Vec/nalgebra/ndarray/faer),
-# isolating the cost of the linear-algebra layer. Needs every backend plus
-# the test-problem corpus.
 [[bench]]
 name = "solver_backends"
 harness = false
 required-features = ["nalgebra", "ndarray", "faer", "problems"]
-
-# Per-backend integration tests (`tests/rosenbrock_<backend>.rs`) gate
-# themselves with `#![cfg(feature = "<backend>")]` rather than declaring
-# `required-features` here—keeps the manifest free of one stanza per
-# backend.
