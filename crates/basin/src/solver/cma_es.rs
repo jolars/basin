@@ -415,7 +415,7 @@ pub(crate) fn sort_population_ascending<V, F: PartialOrd>(candidates: &mut [V], 
     apply_permutation(costs, &idx);
 }
 
-fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
+pub(crate) fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
     let mut visited = vec![false; slice.len()];
     for start in 0..slice.len() {
         if visited[start] || idx[start] == start {

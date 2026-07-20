@@ -5,6 +5,8 @@ use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::BasicPopulationState;
 use crate::core::termination::TerminationReason;
+// Joint ascending-by-cost sort shared with the population solvers.
+use crate::solver::cma_es::sort_population_ascending;
 
 /// Elitist (1+λ) random search over a feasible box.
 ///
@@ -141,42 +143,6 @@ impl RandomSearch {
         Self {
             lambda,
             rng: ChaCha8Rng::seed_from_u64(seed),
-        }
-    }
-}
-
-/// Sort `candidates` and `costs` jointly by ascending cost. NaN costs
-/// sort last so a single bad evaluation can't drag itself to the
-/// front. Mirrors `nelder_mead::sort_simplex`.
-fn sort_population_ascending<V, F: PartialOrd>(candidates: &mut [V], costs: &mut [F]) {
-    let n = candidates.len();
-    debug_assert_eq!(n, costs.len());
-    let mut idx: Vec<usize> = (0..n).collect();
-    idx.sort_by(|&i, &j| {
-        costs[i]
-            .partial_cmp(&costs[j])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    apply_permutation(candidates, &idx);
-    apply_permutation(costs, &idx);
-}
-
-fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
-    let mut visited = vec![false; slice.len()];
-    for start in 0..slice.len() {
-        if visited[start] || idx[start] == start {
-            visited[start] = true;
-            continue;
-        }
-        let mut current = start;
-        loop {
-            let next = idx[current];
-            visited[current] = true;
-            if next == start {
-                break;
-            }
-            slice.swap(current, next);
-            current = next;
         }
     }
 }

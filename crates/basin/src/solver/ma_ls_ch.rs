@@ -22,6 +22,9 @@ use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PopulationState, State};
 use crate::core::termination::{MaxCostEvals, TerminationCriterion, TerminationReason};
+// Cycle-following in-place permutation: after the call,
+// `slice[i] = original[idx[i]]`.
+use crate::solver::cma_es::apply_permutation;
 use crate::solver::ssga::{
     bga_mutate_in_place, blx_alpha_crossover, nam_select, replace_worst_if_better,
 };
@@ -737,28 +740,4 @@ fn sort_parallel_arrays<V, C>(state: &mut MaLsChGenericState<V, C>) {
     apply_permutation::<Option<C>>(&mut state.chains, &idx);
     apply_permutation::<f64>(&mut state.last_ls_cost, &idx);
     apply_permutation::<u32>(&mut state.ls_application_count, &idx);
-}
-
-/// Cycle-following in-place permutation: after the call,
-/// `slice[i] = original[idx[i]]`. Mirrors the helper used by
-/// `cma_es::sort_population_ascending`; inlined here because that
-/// helper is module-private.
-fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {
-    let mut visited = vec![false; slice.len()];
-    for start in 0..slice.len() {
-        if visited[start] || idx[start] == start {
-            visited[start] = true;
-            continue;
-        }
-        let mut current = start;
-        loop {
-            let next = idx[current];
-            visited[current] = true;
-            if next == start {
-                break;
-            }
-            slice.swap(current, next);
-            current = next;
-        }
-    }
 }
