@@ -44,10 +44,11 @@ pub struct MaLsChGenericState<V, C> {
     pub(crate) candidates: Vec<V>,
     pub(crate) costs: Vec<f64>,
     pub(crate) chains: Vec<Option<C>>,
-    /// Cost of `candidates[i]` at the end of its last LS application,
-    /// or `+∞` if never LS'd. Used to evaluate the S_LS eligibility
-    /// rule (Molina 2010 §4.3 step 1: `last_ls_cost − current_cost ≥
-    /// δ_LS_min`).
+    /// Cost of `candidates[i]` when its last LS segment *started*, or
+    /// `+∞` if never LS'd. `last_ls_cost − current_cost` is thus the
+    /// improvement the last LS application obtained, which the S_LS
+    /// eligibility rule compares against `δ_LS_min` (Molina 2010 §4.3
+    /// step 1).
     pub(crate) last_ls_cost: Vec<f64>,
     pub(crate) ls_application_count: Vec<u32>,
     iter: u64,
@@ -193,7 +194,8 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///    replace-worst displaces an individual, its chain (if any) is
 ///    discarded; the new genome is treated as never-LS'd.
 /// 2. **Build `S_LS`** = `{ i : never LS'd OR
-///    last_ls_cost[i] − costs[i] ≥ δ_LS_min }` (§4.3 step 3).
+///    last_ls_cost[i] − costs[i] ≥ δ_LS_min }` (§4.3 step 3), where the
+///    difference is the improvement the last LS segment obtained.
 /// 3. **Pick `c_LS`.** If `S_LS` non-empty, take the best individual
 ///    in it; otherwise take the best individual in the whole population
 ///    (Molina §4.3 final rule, line 371 of `references/molina-2010`).
@@ -220,7 +222,10 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///    - If `inner_result.best_cost() < costs[c_LS]`, write the improved
 ///      best evaluated param/cost back. Always update
 ///      `last_ls_cost[c_LS]` and `ls_application_count[c_LS]`. Store
-///      the advanced `(solver, state)` pair back in the slot.
+///      the advanced `(solver, state)` pair back in the slot only when
+///      the segment improved by at least `δ_LS_min`; otherwise drop the
+///      chain (the reference removes exhausted chains from memory), so
+///      a future pick reseeds fresh.
 /// 7. **Resort** the population (and parallel arrays) ascending.
 ///
 /// # Default parameters
@@ -417,9 +422,9 @@ impl<V, LS> MaLsCh<V, LS> {
         self
     }
 
-    /// Override `δ_LS_min`, the cost-improvement threshold an
-    /// already-LS'd individual must clear to be re-eligible for LS
-    /// (default `1e-8`, Molina 2010 §4.4.7).
+    /// Override `δ_LS_min`, the cost improvement an LS segment must
+    /// obtain for the individual to stay LS-eligible and for its chain
+    /// to be kept for resumption (default `1e-8`, Molina 2010 §4.4.7).
     ///
     /// # Panics
     ///
@@ -595,10 +600,18 @@ where
         sort_parallel_arrays(&mut state);
 
         // -- Phase 2: pick the LS target c_LS. --
+        // S_LS membership (Molina §4.3 step 1): never LS'd, or the last
+        // LS segment cleared δ_LS_min. `last_ls_cost` holds the cost the
+        // last segment *started* from, so the difference is that
+        // segment's improvement; it can only grow stale through
+        // replace-worst, which resets the slot. Ineligibility is sticky
+        // (the reference's `non_improved` marker): a failed segment also
+        // drops the chain, so `chains[i].is_none()` can't stand in for
+        // "never LS'd" here.
         let mut c_ls: Option<usize> = None;
         let mut best_cost_in_s_ls = f64::INFINITY;
         for i in 0..state.candidates.len() {
-            let eligible = state.chains[i].is_none()
+            let eligible = state.ls_application_count[i] == 0
                 || (state.last_ls_cost[i] - state.costs[i] >= self.ls_improvement_threshold);
             if eligible && state.costs[i] < best_cost_in_s_ls {
                 best_cost_in_s_ls = state.costs[i];
@@ -675,13 +688,24 @@ where
         // unconditional, but a conditional update is safer (CMA-ES is
         // genuinely non-monotone over a chain segment) and matches the
         // Rmalschains R package's behavior.
+        let pre_segment_cost = state.costs[c_ls];
         if new_cost < state.costs[c_ls] {
             state.candidates[c_ls] = new_param;
             state.costs[c_ls] = new_cost;
         }
-        state.last_ls_cost[c_ls] = state.costs[c_ls];
+        // Record the cost this segment started from: eligibility (Phase
+        // 2) reads `last_ls_cost - costs`, the improvement obtained by
+        // the previous LS application (Molina §4.3 step 1b).
+        state.last_ls_cost[c_ls] = pre_segment_cost;
         state.ls_application_count[c_ls] = state.ls_application_count[c_ls].saturating_add(1);
-        state.chains[c_ls] = Some((ls, inner_result.state));
+        // Keep the chain only when the segment cleared δ_LS_min.
+        // Rmalschains removes exhausted chains (`m_memory->remove`), so
+        // a future pick reseeds at a fresh scale instead of resuming a
+        // converged operator that would burn the whole segment budget
+        // making no progress.
+        if pre_segment_cost - state.costs[c_ls] >= self.ls_improvement_threshold {
+            state.chains[c_ls] = Some((ls, inner_result.state));
+        }
 
         // -- Phase 6: resort all parallel arrays jointly. --
         sort_parallel_arrays(&mut state);
