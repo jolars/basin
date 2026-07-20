@@ -124,6 +124,31 @@ fn matrix_free_trust_region_f32_round_trips_state_solver_termination() {
 }
 
 #[test]
+fn solis_wets_f32_round_trips_state_solver_termination() {
+    // The derivative-free adaptive-random-search pipeline (SolisWets,
+    // SolisWetsState, RhoTolerance via RhoState) runs end-to-end at
+    // F = f32 over Vec<f32>.
+    use basin::SolisWets;
+    use basin::core::termination::RhoTolerance;
+
+    let problem = ShiftedQuadF32 {
+        c: vec![1.0_f32, 2.0, 3.0],
+    };
+    let solver = SolisWets::<f32>::new(42);
+
+    let result = Executor::from_start(problem, solver, vec![0.0_f32; 3])
+        .terminate_on(MaxIter(20_000))
+        .terminate_on(RhoTolerance::<f32>::new(1e-5))
+        .run()
+        .unwrap();
+
+    let final_x = result.state.best_param();
+    assert!((final_x[0] - 1.0).abs() < 1e-1);
+    assert!((final_x[1] - 2.0).abs() < 1e-1);
+    assert!((final_x[2] - 3.0).abs() < 1e-1);
+}
+
+#[test]
 fn trust_region_f32_round_trips_state_solver_termination() {
     // The whole second-order pipeline (Hessian trait, DenseMatrix<f32>
     // matvec, Steihaug CG) runs end-to-end at F = f32 over Vec<f32>.
