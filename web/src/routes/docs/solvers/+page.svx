@@ -69,6 +69,13 @@ trailing note cites the paper it implements (or the source it ports).
   function, so it is the only one handling general nonlinear inequality
   constraints `c(x) ≤ 0`. Needs a `CostFunction` and
   `NonlinearInequalityConstraints`. Implements Powell (1994), ported from PRIMA.
+- **[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
+  adaptive random local search: a randomized hill-climber testing `x + b + d`
+  and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a
+  step size `ρ` that expands after 5 successive successes and contracts after
+  3 failures. The cheapest local search in the library (O(n) memory and time,
+  cost evaluations only) and the classic memetic LS operator. Needs only a
+  `CostFunction`. Implements Solis & Wets (1981).
 - **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)**:
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in *Numerical Recipes* §10.2); also used inside line searches.
@@ -149,9 +156,17 @@ composition primitives:
   the DE-flavored sibling of `CmaInject`: differential evolution (Storn & Price, 1997)
   with per-generation top-*k* local refinement and Hansen-style (2011)
   injection.
-- **[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch_cma/struct.MaLsChCma.html)**:
+- **[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   a memetic algorithm with persistent local-search chains and a CMA-ES inner
   (Molina et al., 2010).
+- **[`MaLsChSw`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
+  the high-dimensional sibling of `MaLsChCma`: the same local-search-chain
+  framework with a Solis-Wets inner, whose O(n) chain snapshots keep
+  chain-memetic search viable when the dimension grows (MA-SW-Chains: Molina,
+  Lozano & Herrera, 2010, winner of the CEC'2010 large-scale competition).
+  Both are type aliases of the generic `MaLsCh<V, LS>`, which accepts any
+  local-search operator implementing the `ResumableInner` (seed + snapshot +
+  resume) trait.
 
 ## Constrained (Composed)
 
@@ -202,6 +217,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `Bobyqa`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Lincoa`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Cobyla`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `SolisWets`                 | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Brent`                     | Derivative-free |     —      |    —     |    —    |  —   |
   | `GoldenSection`             | Derivative-free |     —      |    —     |    —    |  —   |
   | `BrentDerivative`           | First-order     |     —      |    —     |    —    |  —   |
@@ -222,6 +238,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `BoundedCmaInject`          | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
   | `DeInject`                  | Memetic         |     ✓†     |    ✓     |   ✓†    |  ✓   |
   | `MaLsChCma`                 | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `MaLsChSw`                  | Memetic         |     ✓§     |    ✓§    |   ✓§    |  ✓§  |
   | `BarrierMethod`             | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
   | `AugmentedLagrangianMethod` | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
 
@@ -233,6 +250,10 @@ effective coverage is the intersection of the outer driver and the chosen inner
 solver. The shipped inners (`NelderMead`, `LevenbergMarquardt`, `Lbfgsb`) are all
 backend-generic, so a backend-specific inner of your own is the only thing that
 would narrow it.
+
+§ `MaLsChSw` bounds only on the vector tier — no matrix type is involved at
+all, unlike `MaLsChCma`, whose inner CMA-ES needs each backend's symmetric
+eigendecomposition.
 
 ‡ `TrustRegion`'s coverage depends on the subproblem strategy: `Steihaug` (the
 default) and `CauchyPoint` need only matrix-vector products, so they run on

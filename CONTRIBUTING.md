@@ -14,10 +14,11 @@ Basin is a Rust library crate for numerical optimization, inspired by `argmin`.
 It pairs a small generic core (problem traits you implement, a pluggable
 termination layer, and an `Executor` driver loop) with a growing set of solvers
 spanning first-order and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B),
-derivative-free (Nelder-Mead, Brent, and Powell's model-based family
+derivative-free (Nelder-Mead, Brent, Solis-Wets, and Powell's model-based family
 NEWUOA/BOBYQA/LINCOA/COBYLA), nonlinear least squares (Gauss-Newton,
 Levenberg-Marquardt, trust-region-reflective), global and stochastic (random search,
-CMA-ES, a steady-state GA, memetic combinations), and constrained methods
+CMA-ES, a steady-state GA, memetic combinations incl. the MA-LSCh chain family),
+and constrained methods
 (projected gradient, bounded Nelder-Mead, L-BFGS-B, and CMA-ES, log-barrier,
 augmented Lagrangian, and COBYLA for nonlinear inequality constraints). Solvers
 are generic over the linear-algebra backend (`Vec<f64>`, nalgebra, ndarray,
@@ -98,7 +99,9 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
     family, `SimplexTolerance`, `MaxTime`).
   - `constraint.rs`, `barrier.rs`, `augmented_lagrangian.rs`: constraint markers
     and the unconstrained-problem adapters (tenet 4).
-  - `inner.rs`: `InnerExecutor`/`WarmStart` for solver composition.
+  - `inner.rs`: `InnerExecutor`/`WarmStart`/`ResumableInner` for solver
+    composition (fresh-seed tiers plus the seed + snapshot + resume tier the
+    MA-LSCh chain family drives).
   - `math.rs` + `math/`: the backend math layer: a shared vector tier plus the
     `linalg` tier, with per-backend impls for `Vec<f64>` (incl. `dense.rs` /
     `dense_eig.rs`), nalgebra (+sparse), faer (+sparse), and ndarray (tenet 5).

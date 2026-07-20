@@ -28,8 +28,9 @@ the relevant files. Don't duplicate it here:
 
 - **Scalar type defaults to `f64`, but the whole pipeline is `F: Scalar`.**
   Every state (`BasicState`, `BasicSimplexState`, `BasicPopulationState`,
-  `QuasiNewtonState`, `LbfgsState`), every solver (gradient descent, BFGS, both
-  L-BFGS modes, NLLS family, CMA-ES, barrier and AL, line searches), and every
+  `QuasiNewtonState`, `LbfgsState`, `SolisWetsState`), every solver (gradient
+  descent, BFGS, both L-BFGS modes, NLLS family, CMA-ES, Solis-Wets, barrier
+  and AL, line searches), and every
   shipped termination criterion carries an `F = f64` default, so existing call
   sites resolve unchanged while `f32` works end-to-end (see
   `tests/f32_round_trip.rs`). The `F = f64` default is the ergonomic choice for
