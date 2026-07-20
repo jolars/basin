@@ -15,6 +15,7 @@
 //! routing) every outer solver must follow.
 
 use crate::core::executor::{OptimizationResult, run_loop};
+use crate::core::math::Scalar;
 use crate::core::problem::Problem;
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
@@ -67,6 +68,86 @@ pub trait InitialState<V> {
     /// Build a fresh state seeded at `x` using the solver's natural
     /// default scale.
     fn seed(&self, x: &V) -> Self::State;
+}
+
+/// A local-search operator whose full evolution state can be seeded at a
+/// point, snapshotted, and resumed: the contract behind MA-LSCh chain
+/// persistence (Molina et al. 2010), where an outer solver stores a
+/// `(solver, state)` pair per individual and later continues that exact
+/// local-search run.
+///
+/// This is the fourth composition tier, next to the fresh-seed ladder
+/// [`InitialState`] → [`WarmStart`] →
+/// [`MemeticInner`](crate::solver::MemeticInner) — but deliberately
+/// **not** a subtrait of [`InitialState`]: [`seed_chain`](Self::seed_chain)
+/// takes an explicit scale hint precisely because a resumable operator
+/// ([`CmaEs`](crate::solver::CmaEs)) may have no natural σ-free default
+/// seed (that's why
+/// [`Executor::from_start`](crate::core::executor::Executor::from_start)
+/// is a compile error for CMA-ES). A solver may implement both tiers
+/// ([`SolisWets`](crate::solver::SolisWets) does).
+///
+/// # Contract
+///
+/// - **Implementor must:** make
+///   [`Solver::init`](crate::core::solver::Solver::init)
+///   *resume-idempotent*: calling `init` on an already-advanced
+///   [`State`](Self::State) must not reset evolution state
+///   (CMA-ES's constants cache + non-empty-population skip and
+///   Solis-Wets's `cost: Option<_>` sentinel are the reference
+///   behaviors).
+/// - **Implementor must:** make [`seed_chain`](Self::seed_chain) a pure
+///   function of `(self-as-config, x, fx, scale, seed)`. The
+///   prototype's own RNG must not be consumed: chains derive their
+///   streams solely from `seed`, so outer trajectories stay
+///   reproducible.
+/// - **Implementor must:** return a state whose
+///   [`State::param`] equals `x`.
+/// - **Caller (the outer solver) must:** bound the operator's
+///   `Solver` impl at its own impl site
+///   (`LS: Solver<P, LS::State, Error = P::Error>`), never via a
+///   supertrait here; and follow the three composition contracts on
+///   [`InnerExecutor`] (eval aggregation, criteria reset, failure
+///   routing) when driving the chain segment.
+pub trait ResumableInner<V, F = f64>: Sized
+where
+    F: Scalar,
+{
+    /// Evolution-state snapshot stored per chain slot.
+    type State: State<Param = V, Float = F> + CountsMirror;
+
+    /// Build a fresh per-chain `(solver, state)` pair anchored at `x`.
+    ///
+    /// `self` acts as a configuration prototype: hyperparameters are
+    /// copied into the returned per-chain solver instance, while the
+    /// prototype's own RNG is ignored. `fx` is the caller's known cost
+    /// at `x` (implementations may prime their state with it to avoid a
+    /// redundant evaluation, or ignore it). `scale` is the caller's
+    /// scale hint (MA-LSCh passes half the nearest-neighbor distance;
+    /// it becomes CMA-ES's σ or Solis-Wets's ρ). `seed` seeds the
+    /// chain's private RNG stream.
+    fn seed_chain(&self, x: &V, fx: F, scale: F, seed: u64) -> (Self, Self::State);
+
+    /// Prepare a stored snapshot for its next run segment: reset the
+    /// local iteration counter and any per-segment bookkeeping. Must
+    /// **not** touch evolution state (distribution, bias, step size,
+    /// streak counters, …) — persisting those across segments is the
+    /// point of the chain.
+    fn prepare_resume(&self, state: &mut Self::State);
+
+    /// Operator-specific per-segment convergence criteria, built from
+    /// the segment's *starting* state (CMA-ES: TolX at `1e-12 ·` the
+    /// segment's starting σ). Budget criteria
+    /// ([`MaxCostEvals`](crate::core::termination::MaxCostEvals)) are
+    /// the outer's responsibility and are checked before these.
+    /// Default: none (Solis-Wets, which the reference implementation
+    /// runs purely budget-driven).
+    fn segment_criteria(
+        &self,
+        _state: &Self::State,
+    ) -> Vec<Box<dyn TerminationCriterion<Self::State>>> {
+        Vec::new()
+    }
 }
 
 /// Pre-configured inner solver an outer solver drives once per outer

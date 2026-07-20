@@ -183,7 +183,7 @@ pub use crate::core::constraint::{
     NonlinearInequalityConstraints,
 };
 pub use crate::core::executor::{Executor, OptimizationResult, StepOutcome, Stepper, run_loop};
-pub use crate::core::inner::{InitialState, InnerExecutor, WarmStart};
+pub use crate::core::inner::{InitialState, InnerExecutor, ResumableInner, WarmStart};
 pub use crate::core::math::{
     ClampInPlace, ComponentMulAssign, DenseMatrix, DenseMatrixFromFn, Dot, GramMatrix,
     LinearSolveError, LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
@@ -232,7 +232,8 @@ pub use crate::solver::trust_region::{
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping, Bobyqa, BoundedCmaEs,
     BoundedCmaInject, Brent, BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject,
-    GaussNewton, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsChCma,
-    MaLsChState, Mads, MemeticInner, Metropolis, NelderMead, Newuoa, ProjectedGradientDescent,
-    RandomDisplacement, RandomSearch, Sgd, SolisWets, Ssga, StepTaker, Trf,
+    GaussNewton, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsCh, MaLsChCma,
+    MaLsChGenericState, MaLsChState, Mads, MemeticInner, Metropolis, NelderMead, Newuoa,
+    ProjectedGradientDescent, RandomDisplacement, RandomSearch, Sgd, SolisWets, Ssga, StepTaker,
+    Trf,
 };
