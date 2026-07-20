@@ -177,10 +177,18 @@ impl<F: Scalar> Ssga<F> {
     ///
     /// # Panics
     ///
-    /// Panics if `pool < 2`. A pool of 2 degenerates to plain uniform
-    /// selection (no negative assortative bias).
+    /// Panics if `pool < 2` or `pool > pop_size`; the invariant is
+    /// checked in both builders so it holds regardless of call order.
+    /// A pool of 2 degenerates to plain uniform selection (no negative
+    /// assortative bias).
     pub fn with_nam_pool(mut self, pool: usize) -> Self {
         assert!(pool >= 2, "Ssga requires nam_pool >= 2, got {}", pool);
+        assert!(
+            pool <= self.pop_size,
+            "Ssga requires nam_pool <= pop_size (got nam_pool={}, pop_size={})",
+            pool,
+            self.pop_size
+        );
         self.nam_pool = pool;
         self
     }
@@ -302,6 +310,12 @@ where
 {
     debug_assert!(pop.len() >= 2, "nam_select needs at least 2 individuals");
     debug_assert!(pool >= 2, "nam_select needs nam_pool >= 2");
+    debug_assert!(
+        pool <= pop.len(),
+        "nam_select needs nam_pool <= population size (got pool={}, pop={})",
+        pool,
+        pop.len()
+    );
     let n = pop.len();
     let p1 = rng.random_range(0..n);
     // Seed `best` with the first sampled candidate so we always return

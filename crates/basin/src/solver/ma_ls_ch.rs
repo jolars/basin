@@ -377,9 +377,16 @@ impl<V, LS> MaLsCh<V, LS> {
     ///
     /// # Panics
     ///
-    /// Panics if `pool < 2`.
+    /// Panics if `pool < 2` or `pool > pop_size`; the invariant is
+    /// checked in both builders so it holds regardless of call order.
     pub fn with_nam_pool(mut self, pool: usize) -> Self {
         assert!(pool >= 2, "nam_pool must be >= 2, got {}", pool);
+        assert!(
+            pool <= self.pop_size,
+            "MaLsCh requires nam_pool <= pop_size (got nam_pool={}, pop_size={})",
+            pool,
+            self.pop_size
+        );
         self.nam_pool = pool;
         self
     }
