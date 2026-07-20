@@ -96,7 +96,7 @@ pub use sparse_least_squares::{
     SPARSE_LEAST_SQUARES_SPEC, SparseLeastSquares, SparseLeastSquaresBoxed,
 };
 pub use spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
-pub use sphere::{SPHERE_SPEC, Sphere, sphere, sphere_gradient};
+pub use sphere::{SPHERE_SPEC, Sphere, SphereBoxed, sphere, sphere_gradient};
 pub use step::{STEP_SPEC, Step, step};
 pub use styblinski_tang::{
     STYBLINSKI_TANG_SPEC, StyblinskiTang, StyblinskiTangBoxed, styblinski_tang,
