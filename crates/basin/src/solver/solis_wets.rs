@@ -138,6 +138,7 @@ use crate::solver::cma_inject::MemeticInner;
 ///     .unwrap();
 /// assert!(result.cost() < 1e-6);
 /// ```
+#[derive(Clone)]
 pub struct SolisWets<F = f64> {
     /// `ρ` used by [`InitialState::seed`] for fresh, unscaled starts.
     rho_init: F,
@@ -456,16 +457,11 @@ where
     /// `(#s, #f, bias, ρ)` (MA-SW-Chains §II.C), so a fresh chain spends
     /// zero budget re-scoring the point the outer already evaluated.
     fn seed_chain(&self, x: &V, fx: F, scale: F, seed: u64) -> (Self, Self::State) {
+        // Struct-update over a clone so a future hyperparameter can't
+        // be forgotten here; only the RNG stream is replaced.
         let sw = Self {
-            rho_init: self.rho_init,
-            bias_gain: self.bias_gain,
-            bias_memory: self.bias_memory,
-            bias_decay: self.bias_decay,
-            expand_threshold: self.expand_threshold,
-            contract_threshold: self.contract_threshold,
-            expand_factor: self.expand_factor,
-            contract_factor: self.contract_factor,
             rng: ChaCha8Rng::seed_from_u64(seed),
+            ..self.clone()
         };
         let mut state = SolisWetsState::new(x.clone(), scale);
         state.cost = Some(fx);
