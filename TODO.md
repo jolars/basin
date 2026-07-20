@@ -99,25 +99,5 @@ the previous lands.
     fourth subproblem strategy once a consumer wants the extra robustness; until
     then v1's three iterative or closed-form strategies cover the common cases.
 
-## Cleanup and design debt (review notes)
-
-Surfaced while implementing the termination layer. Not blocking, but each gets
-harder to fix as more code piles on.
-
-- [ ] **`ResumableInner`, when a second chain operator arrives.** A unified
-  `Composed<Outer, Inner>` abstraction was considered and rejected: the
-  fresh-seed tiers (`InitialState` → `WarmStart` → `MemeticInner`,
-  `core/inner.rs`) already serve every composing outer except `MaLsChCma`
-  (barrier, AL, basin hopping, CMA and DE injection), MA-LSCh shares nothing
-  with them beyond the three prose composition contracts, and no generic code
-  would consume a `Composed` marker. The abstraction actually missing is a
-  *resumable* inner: `MaLsChCma` hard-codes CMA-ES because chain persistence
-  stores the concrete `(CmaEs, CmaEsState)` pair per individual
-  (`MaLsChState::cma_chains`), which the seed-fresh tiers cannot express. A
-  seed + snapshot + resume trait would let `MaLsChCma` go generic over its LS
-  operator. Extract it bottom-up when a second persistent-chain inner is
-  wanted (e.g. the L-BFGS or LM chain operator hinted at in `MaLsChState`'s
-  `CountsMirror` docs), not before.
-
 See `CONTRIBUTING.md` for the design tenets and constraints that shape these
 decisions.
