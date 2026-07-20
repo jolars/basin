@@ -38,6 +38,8 @@ pub mod nlls;
 pub mod scalar;
 /// One-dimensional gradient-carrying solver state (`ScalarGradientState`).
 pub mod scalar_gradient;
+/// Solis-Wets adaptive random-walk state (`SolisWetsState`).
+pub mod solis_wets;
 
 pub use bobyqa::BobyqaState;
 pub use cma_es::CmaEsState;
@@ -49,6 +51,7 @@ pub use newuoa::NewuoaState;
 pub use nlls::NllsState;
 pub use scalar::ScalarState;
 pub use scalar_gradient::ScalarGradientState;
+pub use solis_wets::SolisWetsState;
 
 use crate::core::math::{MatrixIdentity, Scalar, VectorLen};
 use crate::core::problem::EvalCounts;
@@ -351,14 +354,17 @@ pub trait PopulationState: State {
     fn costs(&self) -> &[Self::Float];
 }
 
-/// State that carries a trust-region radius `ρ`, the minimum shape the
+/// State that carries a trust-region radius or step size `ρ`, the minimum
+/// shape the
 /// [`RhoTolerance`](crate::core::termination::RhoTolerance) criterion binds on
 /// (tenet 3). Implemented by the Powell-family DFO states
-/// ([`NewuoaState`], [`BobyqaState`], [`LincoaState`], [`CobylaState`]); their `ρ` shrinks from `ρ_beg` toward
-/// `ρ_end` on Powell's schedule, and the criterion fires once it reaches the
-/// configured floor.
+/// ([`NewuoaState`], [`BobyqaState`], [`LincoaState`], [`CobylaState`]), whose
+/// trust-region `ρ` shrinks from `ρ_beg` toward `ρ_end` on Powell's schedule,
+/// and by [`SolisWetsState`], whose `ρ` is the adaptive mutation standard
+/// deviation. Either way the criterion fires once `ρ` reaches the configured
+/// floor.
 pub trait RhoState: State {
-    /// The current trust-region radius `ρ`.
+    /// The current trust-region radius or step size `ρ`.
     fn rho(&self) -> Self::Float;
 }
 

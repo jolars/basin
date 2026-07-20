@@ -70,6 +70,9 @@ pub mod random_search;
 /// Mini-batch stochastic gradient descent with constant learning rate
 /// and optional Polyak heavy-ball momentum.
 pub mod sgd;
+/// Solis-Wets (1981) adaptive random local search: biased normal
+/// mutations with success/failure step-size control.
+pub mod solis_wets;
 /// Steady-state real-coded GA with BLX-α + NAM + BGA + replace-worst.
 pub mod ssga;
 /// Levenberg-Marquardt with box bounds (TRF, trust-region-reflective).
@@ -121,6 +124,7 @@ pub use newuoa::Newuoa;
 pub use projected_gradient_descent::ProjectedGradientDescent;
 pub use random_search::RandomSearch;
 pub use sgd::Sgd;
+pub use solis_wets::SolisWets;
 pub use ssga::Ssga;
 pub use trf::Trf;
 pub use trust_region::{CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion};
