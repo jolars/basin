@@ -163,7 +163,7 @@ composition primitives:
   the high-dimensional sibling of `MaLsChCma`: the same local-search-chain
   framework with a Solis-Wets inner, whose O(n) chain snapshots keep
   chain-memetic search viable when the dimension grows (MA-SW-Chains: Molina,
-  Lozano & Herrera, 2010, winner of the CEC'2010 large-scale competition).
+  Lozano, and Herrera, 2010, winner of the CEC'2010 large-scale competition).
   Both are type aliases of the generic `MaLsCh<V, LS>`, which accepts any
   local-search operator implementing the `ResumableInner` (seed + snapshot +
   resume) trait.
@@ -251,7 +251,7 @@ solver. The shipped inners (`NelderMead`, `LevenbergMarquardt`, `Lbfgsb`) are al
 backend-generic, so a backend-specific inner of your own is the only thing that
 would narrow it.
 
-§ `MaLsChSw` bounds only on the vector tier — no matrix type is involved at
+§ `MaLsChSw` bounds only on the vector tier—no matrix type is involved at
 all, unlike `MaLsChCma`, whose inner CMA-ES needs each backend's symmetric
 eigendecomposition.
 

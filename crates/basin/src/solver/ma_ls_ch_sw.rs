@@ -5,10 +5,10 @@
 //! (the SSGA framework and chain bookkeeping) and in [`SolisWets`]'s
 //! [`ResumableInner`](crate::core::inner::ResumableInner) impl (fresh
 //! chains at `ρ = ½ ·` nearest-neighbor distance with the cost slot
-//! primed, resume via a local iter reset, no per-segment tolerance —
-//! segments are purely budget-driven). This module is the concrete
-//! public face: the [`MaLsChSw`]/[`MaLsChSwState`] aliases plus the
-//! constructor.
+//! primed, resume via a local iter reset, no per-segment
+//! tolerance—segments are purely budget-driven). This module is the
+//! concrete public face: the [`MaLsChSw`]/[`MaLsChSwState`] aliases
+//! plus the constructor.
 
 use crate::core::state::SolisWetsState;
 use crate::solver::ma_ls_ch::{MaLsCh, MaLsChGenericState};
