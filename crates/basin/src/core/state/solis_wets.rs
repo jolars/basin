@@ -11,7 +11,7 @@
 //!
 //! [`SolisWets::init`](crate::solver::SolisWets) is resume-idempotent:
 //! the fresh-state sentinel is `cost = None` (set once by `new`), so a
-//! resumed state — whose cost is already populated — passes through
+//! resumed state—whose cost is already populated—passes through
 //! `init` untouched, mirroring
 //! [`CmaEsState`](crate::core::state::CmaEsState)'s empty-population
 //! guard.

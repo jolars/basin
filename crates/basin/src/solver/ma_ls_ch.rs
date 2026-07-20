@@ -32,8 +32,8 @@ use crate::solver::ssga::{
 /// State carried by [`MaLsCh`]: a steady-state population plus
 /// per-individual local-search chain data.
 ///
-/// `C` is the chain-slot payload — `(LS, LS::State)` for a concrete
-/// chain operator `LS:` [`ResumableInner`] — kept as a bare type
+/// `C` is the chain-slot payload—`(LS, LS::State)` for a concrete
+/// chain operator `LS:` [`ResumableInner`]—kept as a bare type
 /// parameter so the struct definition carries no trait bounds (bounds
 /// live on the [`Solver`] impl). Each occupied slot is the saved
 /// `(solver, state)` pair the operator needs for a resumed run: the
