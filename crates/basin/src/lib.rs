@@ -94,7 +94,7 @@
 //! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
 //! | `SolisWets` | `SolisWetsState` | ✓ |
 //! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
-//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma`, `MaLsChSw` | `CmaEsState`/`MaLsChState`/… | ✗ (needs a step-size σ / samples the box) |
+//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma`, `MaLsChSw` | `CmaEsState`/`MaLsChState`/… | ✗ (needs a step-size σ or samples the box) |
 //! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
 //! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ (bracket, not a point) |
 //!
