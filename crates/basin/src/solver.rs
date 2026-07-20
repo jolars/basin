@@ -48,6 +48,9 @@ pub mod lbfgs;
 /// Levenberg-Marquardt solver for nonlinear least squares with
 /// Nielsen 1999 damping update.
 pub mod levenberg_marquardt;
+/// Generic MA-LSCh memetic framework: SSGA + local-search chains,
+/// generic over the resumable LS operator.
+pub mod ma_ls_ch;
 /// MA-LSCh-CMA: memetic algorithm with LS chains (inner: CMA-ES).
 pub mod ma_ls_ch_cma;
 /// MADS (Audet & Dennis 2006): mesh adaptive direct search (deterministic
@@ -117,6 +120,7 @@ pub use golden_section::GoldenSection;
 pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;
 pub use lincoa::Lincoa;
+pub use ma_ls_ch::{MaLsCh, MaLsChGenericState};
 pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
 pub use mads::{Bounded, Constrained, Mads};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
