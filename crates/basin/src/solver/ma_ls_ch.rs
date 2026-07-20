@@ -245,7 +245,7 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 /// | `ls_intensity` (`I_str`) | `300` | Bergmeir 2016 example |
 /// | `ls_improvement_threshold` (`δ_LS_min`) | `1e-8` | §4.4.7 |
 /// | `nfrec` | `= ls_intensity` | Derived from `r_L/G = 0.5` (§4.3) |
-/// | `initial_scale_fallback` | `1.0` | when min-neighbor distance is 0 |
+/// | `initial_scale_fallback` | `1.0` | when min-neighbor distance is 0 or non-finite |
 ///
 /// # Reproducibility
 ///
@@ -641,8 +641,11 @@ where
                 (ls, s)
             }
             None => {
+                // Non-finite scales happen when every pairwise distance
+                // overflows (astronomically wide boxes); fall back the
+                // same way as for a duplicated point.
                 let scale = sigma_init_for(&state.candidates, c_ls)
-                    .filter(|s| *s > 0.0)
+                    .filter(|s| s.is_finite() && *s > 0.0)
                     .unwrap_or(self.initial_scale_fallback);
                 let derived_seed = rng.random::<u64>();
                 self.ls.seed_chain(
