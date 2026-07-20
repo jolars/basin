@@ -242,7 +242,7 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 /// | `ls_intensity` (`I_str`) | `300` | Bergmeir 2016 example |
 /// | `ls_improvement_threshold` (`δ_LS_min`) | `1e-8` | §4.4.7 |
 /// | `nfrec` | `= ls_intensity` | Derived from `r_L/G = 0.5` (§4.3) |
-/// | `initial_sigma_fallback` | `1.0` | when min-neighbor distance is 0 |
+/// | `initial_scale_fallback` | `1.0` | when min-neighbor distance is 0 |
 ///
 /// # Reproducibility
 ///
@@ -303,7 +303,7 @@ pub struct MaLsCh<V, LS> {
     ls_intensity: u64,
     ls_improvement_threshold: f64,
     nfrec: Option<u64>,
-    initial_sigma_fallback: f64,
+    initial_scale_fallback: f64,
     seed: u64,
     rng: Option<ChaCha8Rng>,
     /// LS-operator configuration prototype: hyperparameters are copied
@@ -334,7 +334,7 @@ impl<V, LS> MaLsCh<V, LS> {
             ls_intensity: 300,
             ls_improvement_threshold: 1e-8,
             nfrec: None,
-            initial_sigma_fallback: 1.0,
+            initial_scale_fallback: 1.0,
             seed,
             rng: None,
             ls,
@@ -351,7 +351,7 @@ impl<V, LS> MaLsCh<V, LS> {
     pub fn with_pop_size(mut self, pop_size: usize) -> Self {
         assert!(
             pop_size >= self.nam_pool,
-            "MaLsChCma requires pop_size >= nam_pool (got pop_size={}, nam_pool={})",
+            "MaLsCh requires pop_size >= nam_pool (got pop_size={}, nam_pool={})",
             pop_size,
             self.nam_pool
         );
@@ -461,14 +461,14 @@ impl<V, LS> MaLsCh<V, LS> {
     ///
     /// # Panics
     ///
-    /// Panics if `sigma <= 0`.
-    pub fn with_initial_sigma_fallback(mut self, sigma: f64) -> Self {
+    /// Panics if `scale <= 0`.
+    pub fn with_initial_scale_fallback(mut self, scale: f64) -> Self {
         assert!(
-            sigma > 0.0,
-            "initial_sigma_fallback must be > 0, got {}",
-            sigma
+            scale > 0.0,
+            "initial_scale_fallback must be > 0, got {}",
+            scale
         );
-        self.initial_sigma_fallback = sigma;
+        self.initial_scale_fallback = scale;
         self
     }
 }
@@ -640,7 +640,7 @@ where
             None => {
                 let scale = sigma_init_for(&state.candidates, c_ls)
                     .filter(|s| *s > 0.0)
-                    .unwrap_or(self.initial_sigma_fallback);
+                    .unwrap_or(self.initial_scale_fallback);
                 let derived_seed = rng.random::<u64>();
                 self.ls.seed_chain(
                     &state.candidates[c_ls],
