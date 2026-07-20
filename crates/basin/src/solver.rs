@@ -53,6 +53,8 @@ pub mod levenberg_marquardt;
 pub mod ma_ls_ch;
 /// MA-LSCh-CMA: memetic algorithm with LS chains (inner: CMA-ES).
 pub mod ma_ls_ch_cma;
+/// MA-SW-Chains: memetic algorithm with LS chains (inner: Solis-Wets).
+pub mod ma_ls_ch_sw;
 /// MADS (Audet & Dennis 2006): mesh adaptive direct search (deterministic
 /// OrthoMADS instance) for nonsmooth or non-continuous objectives.
 pub mod mads;
@@ -122,6 +124,7 @@ pub use levenberg_marquardt::LevenbergMarquardt;
 pub use lincoa::Lincoa;
 pub use ma_ls_ch::{MaLsCh, MaLsChGenericState};
 pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
+pub use ma_ls_ch_sw::{MaLsChSw, MaLsChSwState};
 pub use mads::{Bounded, Constrained, Mads};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
 pub use newuoa::Newuoa;
