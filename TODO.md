@@ -104,19 +104,20 @@ the previous lands.
 Surfaced while implementing the termination layer. Not blocking, but each gets
 harder to fix as more code piles on.
 
-- [ ] **Unified `Composed<Outer, Inner>` abstraction (or honest "no").** Two
-  concrete memetic shapes exist: `CmaInject` and `BoundedCmaInject`
-  (per-generation top-k polish via `MemeticInner`, S11 + S13) and `MaLsChCma`
-  (per-individual persistent LS chains, S12). `MemeticInner` covers
-  CMA-injection composition but not MA-LSCh's persistent-state shape. The
-  state-seeding slice is already extracted as `WarmStart<V>` (`core/inner.rs`),
-  shared by the barrier and AL family and (via `MemeticInner: WarmStart`)
-  CMA-injection. It is not a `Composed` abstraction: it says nothing about the
-  outer loop, eval routing, or failure bubbling (see the `WarmStart` note in
-  `CONTRIBUTING.md` "Solver composition"). Open question: is there a shared
-  `Composed` marker coarser than `WarmStart`, or do these shapes share nothing
-  beyond the three composition contracts? Resolve by writing the trait or
-  writing the "no" comment in `core/inner.rs`.
+- [ ] **`ResumableInner`, when a second chain operator arrives.** A unified
+  `Composed<Outer, Inner>` abstraction was considered and rejected: the
+  fresh-seed tiers (`InitialState` → `WarmStart` → `MemeticInner`,
+  `core/inner.rs`) already serve every composing outer except `MaLsChCma`
+  (barrier, AL, basin hopping, CMA and DE injection), MA-LSCh shares nothing
+  with them beyond the three prose composition contracts, and no generic code
+  would consume a `Composed` marker. The abstraction actually missing is a
+  *resumable* inner: `MaLsChCma` hard-codes CMA-ES because chain persistence
+  stores the concrete `(CmaEs, CmaEsState)` pair per individual
+  (`MaLsChState::cma_chains`), which the seed-fresh tiers cannot express. A
+  seed + snapshot + resume trait would let `MaLsChCma` go generic over its LS
+  operator. Extract it bottom-up when a second persistent-chain inner is
+  wanted (e.g. the L-BFGS or LM chain operator hinted at in `MaLsChState`'s
+  `CountsMirror` docs), not before.
 
 See `CONTRIBUTING.md` for the design tenets and constraints that shape these
 decisions.
