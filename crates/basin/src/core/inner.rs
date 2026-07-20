@@ -78,7 +78,7 @@ pub trait InitialState<V> {
 ///
 /// This is the fourth composition tier, next to the fresh-seed ladder
 /// [`InitialState`] → [`WarmStart`] →
-/// [`MemeticInner`](crate::solver::MemeticInner) — but deliberately
+/// [`MemeticInner`](crate::solver::MemeticInner)—but deliberately
 /// **not** a subtrait of [`InitialState`]: [`seed_chain`](Self::seed_chain)
 /// takes an explicit scale hint precisely because a resumable operator
 /// ([`CmaEs`](crate::solver::CmaEs)) may have no natural σ-free default
@@ -89,8 +89,7 @@ pub trait InitialState<V> {
 ///
 /// # Contract
 ///
-/// - **Implementor must:** make
-///   [`Solver::init`](crate::core::solver::Solver::init)
+/// - **Implementor must:** make [`Solver::init`]
 ///   *resume-idempotent*: calling `init` on an already-advanced
 ///   [`State`](Self::State) must not reset evolution state
 ///   (CMA-ES's constants cache + non-empty-population skip and
@@ -131,7 +130,7 @@ where
     /// Prepare a stored snapshot for its next run segment: reset the
     /// local iteration counter and any per-segment bookkeeping. Must
     /// **not** touch evolution state (distribution, bias, step size,
-    /// streak counters, …) — persisting those across segments is the
+    /// streak counters, …)—persisting those across segments is the
     /// point of the chain.
     fn prepare_resume(&self, state: &mut Self::State);
 

@@ -15,14 +15,14 @@ use crate::solver::ma_ls_ch::{MaLsCh, MaLsChGenericState};
 use crate::solver::solis_wets::SolisWets;
 
 /// `MA-SW-Chains`: [`MaLsCh`] with Solis-Wets as the chain operator,
-/// per Molina, Lozano & Herrera (CEC 2010) — the winner of the CEC'2010
+/// per Molina, Lozano, and Herrera (CEC 2010)—the winner of the CEC'2010
 /// large-scale global optimization competition.
 ///
 /// The high-dimensional counterpart of
 /// [`MaLsChCma`](crate::solver::MaLsChCma): where a CMA-ES chain stores
 /// an O(n²) covariance per individual, a Solis-Wets chain snapshot is
-/// just `(#s, #f, bias, ρ)` — O(n) per individual and O(n) per
-/// evaluation — so the chain-memetic approach stays viable when the
+/// just `(#s, #f, bias, ρ)`—O(n) per individual and O(n) per
+/// evaluation—so the chain-memetic approach stays viable when the
 /// dimension grows. The trade-off is isotropic (plus bias) mutations:
 /// on strongly ill-conditioned basins at moderate dimension the CMA
 /// variant typically refines deeper.
@@ -36,9 +36,9 @@ use crate::solver::solis_wets::SolisWets;
 /// # Backends
 ///
 /// The outer SSGA and the Solis-Wets inner need only the vector tier,
-/// so all four backends work — `Vec<f64>`, `nalgebra::DVector<f64>`
+/// so all four backends work—`Vec<f64>`, `nalgebra::DVector<f64>`
 /// (feature `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`),
-/// and `faer::Col<f64>` (feature `faer`) — with **no matrix type and no
+/// and `faer::Col<f64>` (feature `faer`)—with **no matrix type and no
 /// `linalg` tier involved**, unlike the CMA variant.
 ///
 /// # References
@@ -88,7 +88,7 @@ use crate::solver::solis_wets::SolisWets;
 pub type MaLsChSw<V> = MaLsCh<V, SolisWets>;
 
 /// State carried by [`MaLsChSw`]: the [`MaLsChGenericState`] whose
-/// chain slots hold saved `(SolisWets, SolisWetsState)` pairs — the
+/// chain slots hold saved `(SolisWets, SolisWetsState)` pairs—the
 /// [`SolisWets`] carries the hyperparameters + RNG stream; the
 /// [`SolisWetsState`] carries the iterate, bias, `ρ`, and streak
 /// counters (the MA-SW-Chains §II.C snapshot).

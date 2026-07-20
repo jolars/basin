@@ -56,7 +56,7 @@ use crate::solver::cma_inject::MemeticInner;
 /// iteration regardless of which branch is taken, and is seeded once at
 /// construction (never re-seeded in [`init`](Solver::init)), so a
 /// paused `(SolisWets, SolisWetsState)` pair resumes its stream
-/// mid-sequence — the property LS-chain persistence relies on.
+/// mid-sequence—the property LS-chain persistence relies on.
 ///
 /// # Contract
 ///
@@ -72,10 +72,14 @@ use crate::solver::cma_inject::MemeticInner;
 ///   [`Executor::from_start`](crate::core::executor::Executor::from_start))
 ///   on the scale of the distance to the sought minimum; `ρ` adapts
 ///   quickly in either direction.
-/// - A pathological always-improving cost expands `ρ` without bound
-///   until it overflows to `+∞`; the resulting non-finite candidates
-///   then register as failures and contract it back. No guard is
-///   needed, but budgets (`MaxCostEvals`) remain the caller's job.
+/// - Any real cost stops improving once `ρ` grows past its basin, and
+///   contraction then pulls `ρ` back, so no expansion guard is shipped.
+///   The truly pathological case (a cost that keeps returning improving
+///   values even for non-finite candidates, i.e. one that ignores `x`)
+///   can expand `ρ` all the way to `+∞`, and from there contraction
+///   cannot recover it (`0.5 · ∞ = ∞`): the run makes no further
+///   progress and `RhoTolerance` never fires, so budgets (`MaxIter`,
+///   `MaxCostEvals`) remain the caller's job.
 ///
 /// # Termination
 ///
@@ -436,8 +440,11 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if `sigma ≤ 0` (via [`SolisWetsState::new`]); both shipped
-    /// callers pass a CMA step-size, which is positive by construction.
+    /// Panics if `sigma ≤ 0` (via [`SolisWetsState::new`]). All shipped
+    /// callers pass a positive scale: `CmaInject`/`BoundedCmaInject`
+    /// forward the outer CMA step-size (positive by construction: its
+    /// multiplicative update never underflows to zero), and `DeInject`
+    /// passes the constant `1`.
     fn seed_scaled(&self, x: &V, sigma: F) -> SolisWetsState<V, F> {
         SolisWetsState::new(x.clone(), sigma)
     }
@@ -453,7 +460,7 @@ where
     /// Fresh chain: a copy of the prototype's hyperparameters with a
     /// private RNG stream seeded from `seed` (the prototype's own RNG is
     /// never drawn), plus a state at `(x, ρ = scale)` with the cost slot
-    /// primed to `fx` — the chain snapshot for Solis-Wets is exactly
+    /// primed to `fx`—the chain snapshot for Solis-Wets is exactly
     /// `(#s, #f, bias, ρ)` (MA-SW-Chains §II.C), so a fresh chain spends
     /// zero budget re-scoring the point the outer already evaluated.
     fn seed_chain(&self, x: &V, fx: F, scale: F, seed: u64) -> (Self, Self::State) {
@@ -469,7 +476,7 @@ where
     }
 
     /// Reset the local iteration counter so the resumed segment starts
-    /// at iter 0; bias, `ρ`, and the streak counters persist — that's
+    /// at iter 0; bias, `ρ`, and the streak counters persist—that's
     /// the chain.
     fn prepare_resume(&self, state: &mut Self::State) {
         state.iter = 0;

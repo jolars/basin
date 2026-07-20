@@ -40,7 +40,7 @@ use crate::solver::ma_ls_ch::{MaLsCh, MaLsChGenericState};
 pub type MaLsChCma<V, M> = MaLsCh<V, CmaEs<V, M>>;
 
 /// State carried by [`MaLsChCma`]: the [`MaLsChGenericState`] whose
-/// chain slots hold saved `(CmaEs, CmaEsState)` pairs — the [`CmaEs`]
+/// chain slots hold saved `(CmaEs, CmaEsState)` pairs—the [`CmaEs`]
 /// carries the derived constants + RNG; the [`CmaEsState`] carries the
 /// evolution state (mean, sigma, covariance, paths) and the previous
 /// generation's λ candidates the next CMA `next_iter` needs as the
