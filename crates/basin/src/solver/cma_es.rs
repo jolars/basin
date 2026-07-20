@@ -400,19 +400,32 @@ pub(crate) fn sample_generation<V, M, F>(
 }
 
 /// Sort `candidates` and `costs` jointly by ascending cost. NaN costs
-/// sort last (mirrors `nelder_mead::sort_simplex` /
-/// `random_search::sort_population_ascending`).
+/// sort last, so index 0 holds the best finite candidate whenever one
+/// exists.
 pub(crate) fn sort_population_ascending<V, F: PartialOrd>(candidates: &mut [V], costs: &mut [F]) {
     let n = candidates.len();
     debug_assert_eq!(n, costs.len());
     let mut idx: Vec<usize> = (0..n).collect();
-    idx.sort_by(|&i, &j| {
-        costs[i]
-            .partial_cmp(&costs[j])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    idx.sort_by(|&i, &j| nan_last_cmp(&costs[i], &costs[j]));
     apply_permutation(candidates, &idx);
     apply_permutation(costs, &idx);
+}
+
+/// Ascending `PartialOrd` comparison that orders NaN after every
+/// non-NaN value (incomparable-with-itself is the generic NaN test),
+/// so population sorts keep the "index 0 is the incumbent best"
+/// invariant even when the cost function returns NaN on part of the
+/// domain.
+pub(crate) fn nan_last_cmp<F: PartialOrd>(a: &F, b: &F) -> std::cmp::Ordering {
+    a.partial_cmp(b).unwrap_or_else(|| {
+        let a_nan = a.partial_cmp(a).is_none();
+        let b_nan = b.partial_cmp(b).is_none();
+        match (a_nan, b_nan) {
+            (true, false) => std::cmp::Ordering::Greater,
+            (false, true) => std::cmp::Ordering::Less,
+            _ => std::cmp::Ordering::Equal,
+        }
+    })
 }
 
 pub(crate) fn apply_permutation<T>(slice: &mut [T], idx: &[usize]) {

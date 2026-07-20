@@ -24,7 +24,7 @@ use crate::core::state::{CountsMirror, PopulationState, State};
 use crate::core::termination::{MaxCostEvals, TerminationCriterion, TerminationReason};
 // Cycle-following in-place permutation: after the call,
 // `slice[i] = original[idx[i]]`.
-use crate::solver::cma_es::apply_permutation;
+use crate::solver::cma_es::{apply_permutation, nan_last_cmp};
 use crate::solver::ssga::{
     bga_mutate_in_place, blx_alpha_crossover, nam_select, replace_worst_if_better,
 };
@@ -729,11 +729,7 @@ fn sort_parallel_arrays<V, C>(state: &mut MaLsChGenericState<V, C>) {
     debug_assert_eq!(n, state.ls_application_count.len());
 
     let mut idx: Vec<usize> = (0..n).collect();
-    idx.sort_by(|&i, &j| {
-        state.costs[i]
-            .partial_cmp(&state.costs[j])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    idx.sort_by(|&i, &j| nan_last_cmp(&state.costs[i], &state.costs[j]));
 
     apply_permutation::<V>(&mut state.candidates, &idx);
     apply_permutation::<f64>(&mut state.costs, &idx);
