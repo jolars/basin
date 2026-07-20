@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.5.0](https://github.com/jolars/basin/compare/v1.4.0...v1.5.0) (2026-07-20)
+
+### Features
+- add SphereBoxed to the problems corpus ([`2b966a5`](https://github.com/jolars/basin/commit/2b966a58c0db01b7ee25061c87328a20989fc405))
+- add MA-SW-Chains via SolisWets chain operator ([`41c59e7`](https://github.com/jolars/basin/commit/41c59e741aae463d3e83f55024c3bd6d9cbc1c3c))
+- add Solis-Wets adaptive random search ([`28c02c7`](https://github.com/jolars/basin/commit/28c02c7f5b0d5c58b5bfc88d26fd5c7cbef3529d))
+- **solver:** add matrix-free `HessianProduct` mode for `TrustRegion` ([`a02048e`](https://github.com/jolars/basin/commit/a02048efb6f9279716e6e7334b6e1c6678488005))
+- **observer:** add serde-gated CheckpointWriter observer ([`ba2d212`](https://github.com/jolars/basin/commit/ba2d212d3f449c19e13addbfbf006e19445c541f))
+- **observer:** add Report and History starter observers ([`aba5ae5`](https://github.com/jolars/basin/commit/aba5ae5c7f075299b3e527d0c3884670e71e4ade))
+- **observer:** add ObserverMode::NewBest ([`6cc840d`](https://github.com/jolars/basin/commit/6cc840d79857e81c736fe7199a27b5e22316ef99))
+
+### Bug Fixes
+- enforce nam_pool <= pop_size in both builders ([`69afad8`](https://github.com/jolars/basin/commit/69afad83f81d20b69a7c085826e2cc6361615bcf))
+- reject non-finite fresh-chain scales ([`984a572`](https://github.com/jolars/basin/commit/984a572ea8df898a859d0ba0dc1e18cc7ab5bafd))
+- sort NaN costs last in population sorts ([`a9f7f66`](https://github.com/jolars/basin/commit/a9f7f6624f415e8661a8eecd157b5c068974dc0c))
+- repair LS chain eligibility and retention ([`4852675`](https://github.com/jolars/basin/commit/4852675e27a63d22f4c85741f82064881f81f686))
+
 ## [1.4.0](https://github.com/jolars/basin/compare/v1.3.0...v1.4.0) (2026-06-29)
 
 ### Features
