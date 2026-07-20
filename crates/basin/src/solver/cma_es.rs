@@ -658,21 +658,28 @@ where
 
     /// Fresh chain: a new `CmaEs` seeded from `seed` (the prototype's
     /// own RNG is never drawn), carrying over the prototype's
-    /// `with_lambda` override, plus an isotropic `CmaEsState` at
+    /// hyperparameters, plus an isotropic `CmaEsState` at
     /// `(x, σ = scale)`. `fx` is ignored: `CmaEsState` has no slot for
     /// a pre-evaluated mean cost (`Solver::init` evaluates `f(m)`
     /// itself), so priming would change the eval trajectory.
     fn seed_chain(&self, x: &V, _fx: F, scale: F, seed: u64) -> (Self, Self::State) {
-        let mut cma = CmaEs::new(seed);
-        if let Some(lambda) = self.lambda_override {
-            cma = cma.with_lambda(lambda);
-        }
+        // Exhaustive literal (no `..`) so a future hyperparameter
+        // field fails to compile here instead of silently reverting
+        // to its default in every chain. The constants cache is left
+        // empty: `Solver::init` derives it from the chain's own
+        // dimension.
+        let cma = Self {
+            lambda_override: self.lambda_override,
+            constants: None,
+            rng: ChaCha8Rng::seed_from_u64(seed),
+            _marker: PhantomData,
+        };
         (cma, CmaEsState::new(x.clone(), scale))
     }
 
     /// Reset the local iteration counter so the resumed segment starts
     /// at iter 0; the evolution state (`m`, `σ`, `C`, paths, previous
-    /// generation) persists — that's the chain.
+    /// generation) persists—that's the chain.
     fn prepare_resume(&self, state: &mut Self::State) {
         state.iter = 0;
     }
