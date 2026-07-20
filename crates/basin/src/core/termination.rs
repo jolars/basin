@@ -51,7 +51,9 @@ pub enum TerminationReason {
     /// CMA-ES search distribution collapsed below TolX:
     /// `σ · maxᵢ dᵢ < tol_x` (Hansen 2016 Appendix B.3).
     CmaEsTolerance,
-    /// NEWUOA trust-region radius reached the configured floor: `ρ ≤ rho_end`.
+    /// Trust-region radius or step size `ρ` reached the configured
+    /// floor: `ρ ≤ rho_end` (Powell-family trust region, Solis-Wets
+    /// mutation step).
     RhoTolerance,
     /// MADS poll size reached the configured floor: `Δᵖ ≤ poll_size_min`.
     MeshTolerance,
@@ -654,18 +656,20 @@ where
     }
 }
 
-/// Stop a Powell-family DFO solver once its trust-region radius `ρ` shrinks to
-/// `rho_end`.
+/// Stop once the solver's radius or step size `ρ` shrinks to `rho_end`.
 ///
 /// Binds on any [`RhoState`] ([`NewuoaState`](crate::core::state::NewuoaState),
-/// [`BobyqaState`](crate::core::state::BobyqaState)). This is the
-/// natural convergence test of these solvers; both
-/// [`Newuoa`](crate::solver::Newuoa) and [`Bobyqa`](crate::solver::Bobyqa)
-/// already self-terminate when `ρ` reaches the `ρ_end` they were configured with
-/// (which drives Powell's schedule), so this criterion is mainly useful to stop
-/// **early** at a coarser `ρ` than the configured floor (e.g. a quick
-/// low-accuracy solve). The threshold should satisfy `rho_end ≥` the solver's
-/// configured `ρ_end` to fire first.
+/// [`BobyqaState`](crate::core::state::BobyqaState),
+/// [`SolisWetsState`](crate::core::state::SolisWetsState), …). For the
+/// Powell-family solvers `ρ` is the trust-region radius and this criterion is
+/// mainly useful to stop **early** at a coarser `ρ` than the configured floor
+/// (both [`Newuoa`](crate::solver::Newuoa) and
+/// [`Bobyqa`](crate::solver::Bobyqa) already self-terminate when `ρ` reaches
+/// the `ρ_end` driving Powell's schedule), so the threshold should satisfy
+/// `rho_end ≥` the solver's configured `ρ_end` to fire first. For
+/// [`SolisWets`](crate::solver::SolisWets), whose `ρ` is the adaptive mutation
+/// standard deviation and which never self-terminates, this criterion *is* the
+/// primary convergence test.
 pub struct RhoTolerance<F = f64> {
     rho_end: F,
 }

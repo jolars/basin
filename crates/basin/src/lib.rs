@@ -92,6 +92,7 @@
 //! | `NelderMead` | `BasicSimplexState` | ✓ |
 //! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
 //! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
+//! | `SolisWets` | `SolisWetsState` | ✓ |
 //! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
 //! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma` | `CmaEsState` | ✗ (needs a step-size σ) |
 //! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
@@ -213,7 +214,7 @@ pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, BobyqaState, CmaEsState, CobylaState,
     ConstrainedMadsState, CountsMirror, GradientState, IntoInitialSimplex, LbfgsState, LincoaState,
     MadsState, MeshState, NewuoaState, NllsState, PopulationState, RhoState, ScalarGradientState,
-    ScalarState, SimplexState, State,
+    ScalarState, SimplexState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
@@ -233,5 +234,5 @@ pub use crate::solver::{
     BoundedCmaInject, Brent, BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject,
     GaussNewton, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsChCma,
     MaLsChState, Mads, MemeticInner, Metropolis, NelderMead, Newuoa, ProjectedGradientDescent,
-    RandomDisplacement, RandomSearch, Sgd, Ssga, StepTaker, Trf,
+    RandomDisplacement, RandomSearch, Sgd, SolisWets, Ssga, StepTaker, Trf,
 };
