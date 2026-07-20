@@ -69,9 +69,12 @@ fn different_seeds_yield_different_trajectories() {
 /// undergoes ≥2 LS applications over the run, which requires its
 /// `(SolisWets, SolisWetsState)` pair to have been preserved and
 /// re-entered between outer iterations (`ResumableInner::prepare_resume`
-/// plus the resume-idempotent `SolisWets::init`). Mirrors the CMA
-/// variant's chain test; see there for why max-over-the-run is tracked
-/// instead of the final state.
+/// plus the resume-idempotent `SolisWets::init`). `δ_LS_min = 0` makes
+/// the chain store-back unconditional, so a count of 2 cannot be
+/// reached by two independent fresh seeds (a displaced individual
+/// resets to 0): the second application *must* have resumed the stored
+/// pair. Mirrors the CMA variant's chain test; see there for why
+/// max-over-the-run is tracked instead of the final state.
 #[test]
 fn chain_resumes_at_least_one_individual_twice() {
     let problem = RastriginBoxed::<DVector<f64>>::with_standard_bounds(5);
@@ -82,7 +85,8 @@ fn chain_resumes_at_least_one_individual_twice() {
             .with_pop_size(pop_size)
             .with_nam_pool(pop_size)
             .with_ls_intensity(30)
-            .with_nfrec(5),
+            .with_nfrec(5)
+            .with_ls_improvement_threshold(0.0),
         MaLsChSwState::new(),
     )
     .max_iter(40)
