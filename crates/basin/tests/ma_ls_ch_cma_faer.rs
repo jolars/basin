@@ -5,45 +5,13 @@
 
 #![cfg(feature = "faer")]
 
-use basin::problems::RastriginBoxed;
-use basin::{CostFunction, Executor, MaLsChCma, MaLsChState, MaxCostEvals};
+use basin::problems::{RastriginBoxed, SphereBoxed};
+use basin::{Executor, MaLsChCma, MaLsChState, MaxCostEvals};
 use faer::{Col, Mat};
-
-struct BoxedSphere {
-    lower: Col<f64>,
-    upper: Col<f64>,
-}
-
-impl BoxedSphere {
-    fn new(n: usize, half_width: f64) -> Self {
-        Self {
-            lower: Col::from_fn(n, |_| -half_width),
-            upper: Col::from_fn(n, |_| half_width),
-        }
-    }
-}
-
-impl CostFunction for BoxedSphere {
-    type Param = Col<f64>;
-    type Output = f64;
-    type Error = std::convert::Infallible;
-    fn cost(&self, x: &Col<f64>) -> Result<f64, std::convert::Infallible> {
-        Ok(x.iter().map(|v| v * v).sum())
-    }
-}
-
-impl basin::BoxConstraints for BoxedSphere {
-    fn lower(&self) -> &Col<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Col<f64> {
-        &self.upper
-    }
-}
 
 #[test]
 fn converges_on_sphere_d10() {
-    let problem = BoxedSphere::new(10, 5.0);
+    let problem = SphereBoxed::new(Col::from_fn(10, |_| -5.0), Col::from_fn(10, |_| 5.0));
     let solver = MaLsChCma::<Col<f64>, Mat<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
