@@ -105,6 +105,13 @@ the reference code while writing the Rust.
 The pipeline is unproven. Record concrete pain points here as you hit them
 and revisit when several have accumulated:
 
+- [ ] **Scanned PDFs produce a silently empty stage 1.** solis-wets-1981 (a
+      1981 journal scan with no text layer) gave a 0-byte `source.md` with no
+      error. The recovery that worked: Read the PDF pages visually to locate
+      the algorithm, transcribe into NOTES.md, and run the marker pass (which
+      OCRs) on just those pages as the cross-check artifact. The task recipe
+      could detect `len(text) == 0` and say "scan detected: use marker" up
+      front.
 - [ ] **Ligature normalization.** pymupdf4llm preserves `ﬁnd`, `efﬁcient`, etc.
       as Unicode ligatures. A post-processing pass (`unicodedata.normalize`)
       would clean these up. Cheap to add if it bites.
