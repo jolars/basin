@@ -121,14 +121,17 @@ fn different_seeds_yield_different_trajectories() {
 ///
 /// Setup: tiny `pop_size = 4` (minimum NAM-feasible) so the
 /// "first-time LS" branch saturates within a handful of iters and the
-/// Molina §4.3 fallback (`S_LS = ∅` → apply LS to the best) fires
-/// repeatedly on the best individual.
+/// best individual is re-picked repeatedly (`δ_LS_min = 0` keeps every
+/// individual in `S_LS`).
 #[test]
 fn chain_resumes_at_least_one_individual_twice() {
     // Rastrigin is multimodal; random SSGA offspring almost never
     // beat the worst, so the population stabilizes after a few iters
-    // and the Molina §4.3 fallback (S_LS = ∅ → LS the best) fires
-    // repeatedly on the same individual.
+    // and the best individual is re-picked repeatedly. `δ_LS_min = 0`
+    // keeps every individual eligible and makes the chain store-back
+    // unconditional, so a count of 2 cannot come from two independent
+    // fresh seeds (a displaced individual resets to 0): the second
+    // application must have resumed the stored pair.
     let problem = RastriginBoxed::<DVector<f64>>::with_standard_bounds(5);
     let pop_size = 4;
     let mut stepper = Executor::new(
@@ -137,7 +140,8 @@ fn chain_resumes_at_least_one_individual_twice() {
             .with_pop_size(pop_size)
             .with_nam_pool(pop_size)
             .with_ls_intensity(30)
-            .with_nfrec(5),
+            .with_nfrec(5)
+            .with_ls_improvement_threshold(0.0),
         MaLsChState::new(),
     )
     .max_iter(40)
