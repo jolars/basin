@@ -94,7 +94,7 @@
 //! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
 //! | `SolisWets` | `SolisWetsState` | ✓ |
 //! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
-//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma` | `CmaEsState` | ✗ (needs a step-size σ) |
+//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma`, `MaLsChSw` | `CmaEsState`/`MaLsChState`/… | ✗ (needs a step-size σ / samples the box) |
 //! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
 //! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ (bracket, not a point) |
 //!
@@ -233,7 +233,7 @@ pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping, Bobyqa, BoundedCmaEs,
     BoundedCmaInject, Brent, BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject,
     GaussNewton, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsCh, MaLsChCma,
-    MaLsChGenericState, MaLsChState, Mads, MemeticInner, Metropolis, NelderMead, Newuoa,
-    ProjectedGradientDescent, RandomDisplacement, RandomSearch, Sgd, SolisWets, Ssga, StepTaker,
-    Trf,
+    MaLsChGenericState, MaLsChState, MaLsChSw, MaLsChSwState, Mads, MemeticInner, Metropolis,
+    NelderMead, Newuoa, ProjectedGradientDescent, RandomDisplacement, RandomSearch, Sgd, SolisWets,
+    Ssga, StepTaker, Trf,
 };

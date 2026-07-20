@@ -442,6 +442,47 @@ where
     }
 }
 
+impl<V, F> crate::core::inner::ResumableInner<V, F> for SolisWets<F>
+where
+    F: Scalar,
+    V: Clone + VectorLen + ScaleInPlace<F>,
+{
+    type State = SolisWetsState<V, F>;
+
+    /// Fresh chain: a copy of the prototype's hyperparameters with a
+    /// private RNG stream seeded from `seed` (the prototype's own RNG is
+    /// never drawn), plus a state at `(x, ρ = scale)` with the cost slot
+    /// primed to `fx` — the chain snapshot for Solis-Wets is exactly
+    /// `(#s, #f, bias, ρ)` (MA-SW-Chains §II.C), so a fresh chain spends
+    /// zero budget re-scoring the point the outer already evaluated.
+    fn seed_chain(&self, x: &V, fx: F, scale: F, seed: u64) -> (Self, Self::State) {
+        let sw = Self {
+            rho_init: self.rho_init,
+            bias_gain: self.bias_gain,
+            bias_memory: self.bias_memory,
+            bias_decay: self.bias_decay,
+            expand_threshold: self.expand_threshold,
+            contract_threshold: self.contract_threshold,
+            expand_factor: self.expand_factor,
+            contract_factor: self.contract_factor,
+            rng: ChaCha8Rng::seed_from_u64(seed),
+        };
+        let mut state = SolisWetsState::new(x.clone(), scale);
+        state.cost = Some(fx);
+        (sw, state)
+    }
+
+    /// Reset the local iteration counter so the resumed segment starts
+    /// at iter 0; bias, `ρ`, and the streak counters persist — that's
+    /// the chain.
+    fn prepare_resume(&self, state: &mut Self::State) {
+        state.iter = 0;
+    }
+
+    // `segment_criteria` stays the default (none): the reference
+    // implementation runs Solis-Wets segments purely budget-driven.
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

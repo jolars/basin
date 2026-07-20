@@ -5,9 +5,11 @@
 //! LS intensity, and the chain bookkeeping live here; everything the
 //! chain operator itself must provide is the
 //! [`ResumableInner`](crate::core::inner::ResumableInner) contract (seed
-//! at a point + scale, snapshot, resume). [`MaLsChCma`](crate::solver::MaLsChCma) (CMA-ES chains,
-//! Molina et al. 2010) is the type alias `MaLsCh<V, CmaEs<V, M>>`; the
-//! Solis-Wets variant of MA-SW-Chains plugs in the same way.
+//! at a point + scale, snapshot, resume).
+//! [`MaLsChCma`](crate::solver::MaLsChCma) (CMA-ES chains, Molina et
+//! al. 2010) is the type alias `MaLsCh<V, CmaEs<V, M>>`;
+//! [`MaLsChSw`](crate::solver::MaLsChSw) (Solis-Wets chains,
+//! MA-SW-Chains, CEC 2010) is `MaLsCh<V, SolisWets>`.
 
 use std::marker::PhantomData;
 
@@ -174,10 +176,12 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///
 /// The operator plugs in through [`ResumableInner`] (seed at a point
 /// with a scale hint, snapshot the `(solver, state)` pair, resume).
-/// Shipped configuration: [`MaLsChCma`](crate::solver::MaLsChCma)
-/// (CMA-ES chains, `MaLsCh<V, CmaEs<V, M>>`), whose specialized alias
-/// has a `new(seed)` constructor; a hand-configured operator prototype
-/// goes through [`with_inner`](Self::with_inner).
+/// Shipped configurations: [`MaLsChCma`](crate::solver::MaLsChCma)
+/// (CMA-ES chains, `MaLsCh<V, CmaEs<V, M>>`) and
+/// [`MaLsChSw`](crate::solver::MaLsChSw) (Solis-Wets chains,
+/// `MaLsCh<V, SolisWets>`). Both specialized aliases have a `new(seed)`
+/// constructor; a hand-configured operator prototype goes through
+/// [`with_inner`](Self::with_inner).
 ///
 /// # Algorithm
 ///
@@ -312,8 +316,9 @@ impl<V, LS> MaLsCh<V, LS> {
     /// chain; its own RNG seed is irrelevant (never drawn), so
     /// `SolisWets::new(0).with_…(…)`-style construction is fine. The
     /// shipped operators also have specialized `new(seed)` constructors
-    /// on their aliases (e.g. [`MaLsChCma`](crate::solver::MaLsChCma))
-    /// that supply a default prototype.
+    /// on the aliases ([`MaLsChCma`](crate::solver::MaLsChCma),
+    /// [`MaLsChSw`](crate::solver::MaLsChSw)) that supply a default
+    /// prototype.
     pub fn with_inner(seed: u64, ls: LS) -> Self {
         Self {
             pop_size: 60,
