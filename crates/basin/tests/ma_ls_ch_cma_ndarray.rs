@@ -5,45 +5,13 @@
 
 #![cfg(feature = "ndarray")]
 
-use basin::problems::RastriginBoxed;
-use basin::{CostFunction, Executor, MaLsChCma, MaLsChState, MaxCostEvals};
+use basin::problems::{RastriginBoxed, SphereBoxed};
+use basin::{Executor, MaLsChCma, MaLsChState, MaxCostEvals};
 use ndarray::{Array1, Array2};
-
-struct BoxedSphere {
-    lower: Array1<f64>,
-    upper: Array1<f64>,
-}
-
-impl BoxedSphere {
-    fn new(n: usize, half_width: f64) -> Self {
-        Self {
-            lower: Array1::from_elem(n, -half_width),
-            upper: Array1::from_elem(n, half_width),
-        }
-    }
-}
-
-impl CostFunction for BoxedSphere {
-    type Param = Array1<f64>;
-    type Output = f64;
-    type Error = std::convert::Infallible;
-    fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
-        Ok(x.iter().map(|v| v * v).sum())
-    }
-}
-
-impl basin::BoxConstraints for BoxedSphere {
-    fn lower(&self) -> &Array1<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Array1<f64> {
-        &self.upper
-    }
-}
 
 #[test]
 fn converges_on_sphere_d10() {
-    let problem = BoxedSphere::new(10, 5.0);
+    let problem = SphereBoxed::new(Array1::from_elem(10, -5.0), Array1::from_elem(10, 5.0));
     let solver = MaLsChCma::<Array1<f64>, Array2<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)

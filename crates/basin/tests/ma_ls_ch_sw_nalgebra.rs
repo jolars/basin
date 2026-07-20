@@ -4,47 +4,20 @@
 //! convergence, reproducibility, the chain-resume mechanism, and the
 //! sorted-population invariant; the other backends run smoke mirrors.
 
-use basin::problems::RastriginBoxed;
-use basin::{
-    CostFunction, Executor, MaLsChSw, MaLsChSwState, MaxCostEvals, PopulationState, StepOutcome,
-};
+use basin::problems::{RastriginBoxed, SphereBoxed};
+use basin::{Executor, MaLsChSw, MaLsChSwState, MaxCostEvals, PopulationState, StepOutcome};
 use nalgebra::DVector;
 
-struct BoxedSphere {
-    lower: DVector<f64>,
-    upper: DVector<f64>,
-}
-
-impl BoxedSphere {
-    fn new(n: usize, half_width: f64) -> Self {
-        Self {
-            lower: DVector::from_element(n, -half_width),
-            upper: DVector::from_element(n, half_width),
-        }
-    }
-}
-
-impl CostFunction for BoxedSphere {
-    type Param = DVector<f64>;
-    type Output = f64;
-    type Error = std::convert::Infallible;
-    fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
-        Ok(x.iter().map(|v| v * v).sum())
-    }
-}
-
-impl basin::BoxConstraints for BoxedSphere {
-    fn lower(&self) -> &DVector<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &DVector<f64> {
-        &self.upper
-    }
+fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {
+    SphereBoxed::new(
+        DVector::from_element(n, -5.0),
+        DVector::from_element(n, 5.0),
+    )
 }
 
 #[test]
 fn converges_on_sphere_d10() {
-    let problem = BoxedSphere::new(10, 5.0);
+    let problem = boxed_sphere(10);
     let solver = MaLsChSw::<DVector<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChSwState::new())
         .max_iter(u64::MAX)
@@ -63,7 +36,7 @@ fn converges_on_sphere_d10() {
 fn same_seed_yields_identical_trajectory() {
     let run = || {
         Executor::new(
-            BoxedSphere::new(5, 5.0),
+            boxed_sphere(5),
             MaLsChSw::<DVector<f64>>::new(99).with_pop_size(15),
             MaLsChSwState::new(),
         )
@@ -81,7 +54,7 @@ fn same_seed_yields_identical_trajectory() {
 fn different_seeds_yield_different_trajectories() {
     let run = |seed| {
         Executor::new(
-            BoxedSphere::new(5, 5.0),
+            boxed_sphere(5),
             MaLsChSw::<DVector<f64>>::new(seed).with_pop_size(15),
             MaLsChSwState::new(),
         )
@@ -137,7 +110,7 @@ fn chain_resumes_at_least_one_individual_twice() {
 fn population_stays_sorted_ascending() {
     let pop_size = 10;
     let mut stepper = Executor::new(
-        BoxedSphere::new(5, 5.0),
+        boxed_sphere(5),
         MaLsChSw::<DVector<f64>>::new(2024).with_pop_size(pop_size),
         MaLsChSwState::new(),
     )

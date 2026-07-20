@@ -9,45 +9,17 @@
 
 #![cfg(feature = "nalgebra")]
 
-use basin::problems::RastriginBoxed;
-use basin::{
-    CostFunction, Executor, MaLsChCma, MaLsChState, MaxCostEvals, PopulationState, StepOutcome,
-};
+use basin::problems::{RastriginBoxed, SphereBoxed};
+use basin::{Executor, MaLsChCma, MaLsChState, MaxCostEvals, PopulationState, StepOutcome};
 use nalgebra::{DMatrix, DVector};
 
-/// Sphere-style problem with a box for SSGA initial sampling. Plain
-/// f(x) = ||x||², not the convex regression target; we want the easy
-/// canary that any working population solver should crush.
-struct BoxedSphere {
-    lower: DVector<f64>,
-    upper: DVector<f64>,
-}
-
-impl BoxedSphere {
-    fn new(n: usize, half_width: f64) -> Self {
-        Self {
-            lower: DVector::from_element(n, -half_width),
-            upper: DVector::from_element(n, half_width),
-        }
-    }
-}
-
-impl CostFunction for BoxedSphere {
-    type Param = DVector<f64>;
-    type Output = f64;
-    type Error = std::convert::Infallible;
-    fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
-        Ok(x.iter().map(|v| v * v).sum())
-    }
-}
-
-impl basin::BoxConstraints for BoxedSphere {
-    fn lower(&self) -> &DVector<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &DVector<f64> {
-        &self.upper
-    }
+/// Sphere with a box for SSGA initial sampling: the easy canary that
+/// any working population solver should crush.
+fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {
+    SphereBoxed::new(
+        DVector::from_element(n, -5.0),
+        DVector::from_element(n, 5.0),
+    )
 }
 
 /// Sphere(D=10) within a generous box. MaLsChCma with the default
@@ -56,7 +28,7 @@ impl basin::BoxConstraints for BoxedSphere {
 /// shouldn't regress it.
 #[test]
 fn converges_on_sphere_d10() {
-    let problem = BoxedSphere::new(10, 5.0);
+    let problem = boxed_sphere(10);
     let solver = MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
@@ -96,7 +68,7 @@ fn converges_on_rastrigin_d10() {
 #[test]
 fn same_seed_yields_identical_trajectory() {
     let result_a = Executor::new(
-        BoxedSphere::new(5, 5.0),
+        boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(99).with_pop_size(15),
         MaLsChState::new(),
     )
@@ -104,7 +76,7 @@ fn same_seed_yields_identical_trajectory() {
     .run()
     .unwrap();
     let result_b = Executor::new(
-        BoxedSphere::new(5, 5.0),
+        boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(99).with_pop_size(15),
         MaLsChState::new(),
     )
@@ -120,7 +92,7 @@ fn same_seed_yields_identical_trajectory() {
 #[test]
 fn different_seeds_yield_different_trajectories() {
     let result_a = Executor::new(
-        BoxedSphere::new(5, 5.0),
+        boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(1).with_pop_size(15),
         MaLsChState::new(),
     )
@@ -128,7 +100,7 @@ fn different_seeds_yield_different_trajectories() {
     .run()
     .unwrap();
     let result_b = Executor::new(
-        BoxedSphere::new(5, 5.0),
+        boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(2).with_pop_size(15),
         MaLsChState::new(),
     )
@@ -199,7 +171,7 @@ fn chain_resumes_at_least_one_individual_twice() {
 /// iteration, bounded by `nfrec + ls_intensity + λ_inner`.
 #[test]
 fn cost_evals_overshoot_is_bounded() {
-    let problem = BoxedSphere::new(5, 5.0);
+    let problem = boxed_sphere(5);
     let budget = 5_000u64;
     let ls_intensity = 100u64;
     let nfrec = 100u64;
@@ -239,7 +211,7 @@ fn cost_evals_overshoot_is_bounded() {
 /// always reports the best.
 #[test]
 fn population_stays_sorted_ascending() {
-    let problem = BoxedSphere::new(4, 5.0);
+    let problem = boxed_sphere(4);
     let pop_size = 12;
     let mut stepper = Executor::new(
         problem,
