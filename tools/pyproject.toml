@@ -19,6 +19,10 @@ dependencies = [
   # >=2.13 too: GHSA-qfhq-4f3w-5fph (fixed 2.10) and GHSA-rrmf-rvhw-rf47
   # (fixed 2.13) are flagged by Dependabot below that.
   "torch>=2.13,<2.14",
+  # Same trick for torchvision (surya-ocr pulls it transitively): direct dep so
+  # the source routing applies and we get the ROCm build instead of PyPI's
+  # CUDA-linked wheel.
+  "torchvision<0.29",
 ]
 
 [tool.uv]
@@ -44,6 +48,7 @@ environments = ["sys_platform == 'linux'"]
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-rocm" }]
+torchvision = [{ index = "pytorch-rocm" }]
 triton-rocm = [{ index = "pytorch-rocm" }]
 
 [[tool.uv.index]]
