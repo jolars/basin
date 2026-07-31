@@ -1,4 +1,4 @@
-//! basin: a numerical optimization library.
+//! Basin: a numerical optimization library.
 //!
 //! The framework lives in [`core`]: problem traits the user implements
 //! ([`CostFunction`], [`Gradient`], [`BoxConstraints`],
@@ -100,7 +100,7 @@
 //!
 //! # Error model
 //!
-//! basin distinguishes *three* outcomes a run can produce. The split is a
+//! Basin distinguishes *three* outcomes a run can produce. The split is a
 //! stable part of the public contract; downstream code can rely on it:
 //!
 //! - **Soft reject**: return `Ok(f64::INFINITY)` from [`CostFunction::cost`]
@@ -139,8 +139,8 @@
 //!
 //! Parameters and linear algebra are generic over the backend. `Vec<f64>` needs
 //! no features; nalgebra, ndarray, and faer are enabled one feature each, each
-//! pinning a single major version. basin pins one major version per backend;
-//! each basin 1.x release supports exactly these versions:
+//! pinning a single major version. Basin pins one major version per backend;
+//! each Basin 1.x release supports exactly these versions:
 //!
 //! | Backend    | Feature      | Version                            |
 //! | ---------- | ------------ | ---------------------------------- |
@@ -150,7 +150,7 @@
 //!
 //! `Vec<f64>` is the built-in default backend, so no feature is needed for that.
 //!
-//! A backend major-version bump is a breaking change and ships only in a basin
+//! A backend major-version bump is a breaking change and ships only in a Basin
 //! major release; within the 1.x series these pins are fixed.
 //!
 //! Two backends have opt-in, BLAS/LAPACK-backed acceleration. Both are off by
