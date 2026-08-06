@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.1](https://github.com/jolars/basin/compare/v1.5.0...v1.5.1) (2026-08-06)
+
+### Bug Fixes
+- **tools:** regenerate lock, route torchvision to ROCm ([`6ef6378`](https://github.com/jolars/basin/commit/6ef63787fe25081f76ba755d176665c0ae5e9525))
+
 ## [1.5.0](https://github.com/jolars/basin/compare/v1.4.0...v1.5.0) (2026-07-20)
 
 ### Features
