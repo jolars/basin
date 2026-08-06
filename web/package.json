@@ -19,8 +19,8 @@
         "collect:solvers": "tsx scripts/collect-solvers.ts"
     },
     "devDependencies": {
-        "@iconify-json/lucide": "^1.2.120",
-        "@iconify-json/simple-icons": "^1.2.92",
+        "@iconify-json/lucide": "^1.2.121",
+        "@iconify-json/simple-icons": "^1.2.93",
         "@sveltejs/adapter-static": "^3.0.0",
         "@sveltejs/kit": "^2.70.2",
         "@sveltejs/vite-plugin-svelte": "^7.2.0",
@@ -32,15 +32,15 @@
         "prettier": "^3.9.6",
         "prettier-plugin-svelte": "^4.1.1",
         "prismjs": "^1.30.0",
-        "shiki": "^4.3.1",
+        "shiki": "^4.4.1",
         "svelte": "^5.56.8",
         "svelte-check": "^4.7.4",
         "tailwindcss": "^4.3.3",
         "tslib": "^2.6.0",
-        "tsx": "^4.23.1",
+        "tsx": "^4.23.5",
         "typescript": "^7.0.2",
         "unplugin-icons": "^23.0.1",
-        "vite": "^8.1.5",
+        "vite": "^8.2.0",
         "vite-plugin-wasm": "^3.4.0"
     }
 }
