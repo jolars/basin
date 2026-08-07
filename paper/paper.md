@@ -37,9 +37,9 @@ its derivatives (`Gradient`, `Jacobian`, or `Hessian`) when a method needs
 them---then hands the problem, a solver, and a starting point to a driver loop
 called the `Executor`. The same problem can be solved by many different
 algorithms without rewriting it. Basin works out of the box on plain Rust
-vectors (`Vec<f64>`), with optional, faster linear-algebra backends available
-behind feature flags. The default build compiles to WebAssembly, so the same
-code that runs on a server also runs in a web browser. Narrative documentation,
+vectors (`Vec<f64>`) and, optionally, with faster linear-algebra backends
+available behind feature flags. The default build compiles to WebAssembly, so
+the same code that runs on a server also runs in a web browser. Documentation,
 an in-browser solver visualizer, and reproducible cross-library benchmarks are
 published at [basin.rs](https://basin.rs), and the programming reference is at
 [docs.rs/basin](https://docs.rs/basin).
@@ -54,35 +54,35 @@ broad solver catalog with first-class constraints and a browser-ready default
 build. Basin was written to close that gap, and its design targets four concrete
 needs.
 
-First, *breadth under one interface*. Real problems rarely announce in advance
-which method will work, so Basin ships many families behind one problem
-definition: first-order and quasi-Newton methods (gradient descent, SGD, BFGS,
-L-BFGS, L-BFGS-B, and a Newton trust-region method); derivative-free methods
-(Nelder--Mead; the one-dimensional Brent and golden-section searches; Powell's
-model-based NEWUOA, BOBYQA, LINCOA, and COBYLA; and mesh adaptive direct
-search); nonlinear least squares (Gauss--Newton, Levenberg--Marquardt, and
-trust-region reflective); and global or stochastic methods (random search,
-CMA-ES, differential evolution, a steady-state genetic algorithm, basin-hopping,
-and memetic combinations). Switching methods is a one-line change.
+First, Basin includes a broad catalog of solvers. Real problems rarely announce
+in advance what optimization algorithm they need, so Basin includes a large set
+of solvers behind a single, consistent API. The catalog includes
 
-Second, *safety at compile time*. Termination criteria and observers in Basin
-bind on the minimum state shape they require, so a method that exposes no
-gradient cannot be paired with a gradient-based stopping rule---such a mismatch
-is a compilation error rather than a silent no-op or a runtime failure.
+- first-order and quasi-Newton methods (gradient descent, SGD, BFGS, L-BFGS,
+  L-BFGS-B, and a Newton trust-region method);
+- derivative-free methods (Nelder--Mead, one-dimensional Brent and
+  golden-section searches, Powell's model-based NEWUOA, BOBYQA, LINCOA, and
+  COBYLA, mesh adaptive direct search);
+- nonlinear least squares (Gauss--Newton, Levenberg--Marquardt, and trust-region
+  reflective); and
+- global or stochastic methods (random search, CMA-ES, differential evolution, a
+  steady-state genetic algorithm, basin-hopping, and memetic combinations).
+
+Switching methods is often as simple as changing a single line of code.
+
+Second, the design enforces correctness at compile time. Termination criteria
+and observers in Basin bind on the minimum state shape they require, so a method
+that exposes no gradient cannot be paired with a gradient-based stopping
+rule---such a mismatch is a compilation error rather than a runtime failure.
 Likewise, handing a constrained problem to a solver that does not support
 constraints does not compile.
 
-Third, *portability*. The default build targets WebAssembly with neither
-BLAS/LAPACK or concurrency dependencies, so Basin runs in the browser without a
-native toolchain. This powers an in-browser solver visualizer that is useful for
-teaching and exploration, and it keeps Basin embeddable in WebAssembly-based
-scientific applications where BLAS-linked stacks cannot go.
+Third, Basin is designed to be portable. The default build targets WebAssembly
+with neither BLAS/LAPACK or concurrency dependencies, so Basin can be run in a
+browser without a native toolchain.
 
-Fourth, *reach into other research ecosystems*. Basin holds a deliberately
-conservative minimum supported Rust version, chosen so that planned R (CRAN) and
-Python bindings remain buildable under the toolchains those ecosystems pin. The
-long-term goal is to make the same solver catalog available to researchers who
-work primarily in R or Python.
+Fourth, support for constraints is first-class. Constraints are problem-side
+rather than solver
 
 The target audience is researchers, engineers, and students who need reliable
 optimization in Rust today, and---through the planned bindings---the wider
