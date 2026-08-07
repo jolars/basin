@@ -197,7 +197,7 @@ methods, used as the authoritative source for the exact formulas and as a
 cross-validation oracle. The bound-constrained L-BFGS-B solver is a port of the
 L-BFGS-B version 3.0 Fortran code by Ciyou Zhu, Richard H. Byrd, Peihuang Lu,
 and Jorge Nocedal, with the improvements by Jos&eacute; Luis Morales and Jorge
-Nocedal\ [@morales2011; @morales2011lbfgsb]. Both are distributed under the BSD
-3-Clause License, and their notices are retained in the Basin source tree.
+Nocedal\ [@morales2011]. Both are distributed under the BSD 3-Clause License,
+and their notices are retained in the Basin source tree.
 
 # References
