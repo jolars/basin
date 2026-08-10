@@ -23,13 +23,13 @@ bibliography: paper.bib
 # Summary
 
 Basin is a numerical optimization library for the
-[`Rust`](https://www.rust-lang.org) programming language. Numerical optimization
-is the task of finding the inputs that minimize a function, and it underlies
-work across the sciences: fitting a model to data, calibrating a simulation,
-training a machine learning model, or choosing engineering parameters that
-minimize cost. Basin gives users a single, consistent way to both state and
-solve such problems, with a broad catalog of solvers and first-class support for
-constraints.
+[`Rust`](https://www.rust-lang.org) programming language\ [@matsakis2014].
+Numerical optimization is the task of finding the inputs that minimize a
+function, and it underlies work across the sciences: fitting a model to data,
+calibrating a simulation, training a machine learning model, or choosing
+engineering parameters that minimize cost. Basin gives users a single,
+consistent way to both state and solve such problems, with a broad catalog of
+solvers and first-class support for constraints.
 
 To use Basin, a user implements one or more small traits describing their
 objective---at minimum a `CostFunction` that returns a value for a given input,
@@ -47,15 +47,11 @@ libraries.
 # Statement of Need
 
 Rust is increasingly used for scientific and numerical computing because it
-combines performance with memory safety\ [@matsakis2014] and a strong package
-ecosystem. Optimization, however, is fragmented across the ecosystem: most
-crates specialize in a single family of methods, such as
-`levenberg-marquardt`\ [@schurg2026] for nonlinear least squares, and no widely
-used library couples a broad solver catalog with first-class constraints and a
-browser-ready default build. Users arriving from Python, where
-`scipy.optimize`\ [@virtanen2020] gathers many families behind one interface,
-find no equivalent entry point in Rust. Basin was written to close that gap, and
-it targets four concrete needs.
+combines performance with memory safety and a strong package ecosystem.
+Optimization, however, is fragmented across the ecosystem: most crates
+specialize in a single family of methods and no widely used library couples a
+broad solver catalog with first-class constraints and a browser-ready default
+build. Basin was written to close that gap, and it targets four concrete needs.
 
 First, Basin includes a broad catalog of solvers. Real problems rarely announce
 in advance what optimization algorithm they need, so Basin includes a large set
@@ -63,17 +59,16 @@ of solvers behind a single, consistent API. The catalog includes
 
 - first-order and quasi-Newton methods (gradient descent, SGD, BFGS, L-BFGS,
   L-BFGS-B, and a Newton trust-region
-  method)\ [@nocedal2006numerical; @byrd1995; @zhu1997];
+  method)\ [@nocedal2006; @byrd1995; @zhu1997];
 - derivative-free methods (Nelder--Mead\ [@nelder1965], one-dimensional
-  Brent\ [@brent1973] and golden-section searches,
-  NEWUOA\ [@powell2006newuoa], BOBYQA\ [@powell2009bobyqa],
-  LINCOA\ [@powell2015lincoa], COBYLA\ [@powell1994cobyla], and mesh adaptive
-  direct search\ [@audet2006]);
+  Brent\ [@brent1973] and golden-section searches, NEWUOA\ [@powell2006],
+  BOBYQA\ [@powell2009], LINCOA\ [@powell2015], COBYLA\ [@powell1994], and mesh
+  adaptive direct search\ [@audet2006]);
 - nonlinear least squares (Gauss--Newton and
   Levenberg--Marquardt\ [@nielsen1999]);
-- global and stochastic methods (random search, CMA-ES\ [@hansen2016],
-  differential evolution\ [@storn1997de], a steady-state genetic algorithm, and
-  basin-hopping\ [@wales1997]); and
+- global and stochastic methods (random search\ [@brooks1958],
+  CMA-ES\ [@hansen2016], differential evolution\ [@storn1997de], a steady-state
+  genetic algorithm\ [@molina2010], and basin-hopping\ [@wales1997]); and
 - memetic combinations (MA-LS-Chain\ [@molina2010], plus CMA-ES and differential
   evolution injection wrappers).
 
@@ -112,12 +107,13 @@ elsewhere, in
 - a richer linear-algebra tier implemented in pure Rust, and
 - generic termination criteria shared between solvers.
 
-`gomez`\ [@nevyhosteny2025] is another Rust crate in this space, implementing a
-small set of derivative-free methods and nonlinear least-squares solvers, and
-supporting constraints. Finally, the `nlopt` crate provides a Rust interface to
-the NLopt C library\ [@johnson2026]. Although NLopt has a broad catalog of
-solvers, it requires a C toolchain to build and is not WebAssembly-compatible.
-It also lacks Basin's generic termination criteria and first-class constraints.
+`gomez`\ [@nevyhosteny2025] is another Rust crate with similar scope,
+implementing a small set of derivative-free methods and nonlinear least-squares
+solvers, and supporting constraints. Finally, the `nlopt` crate provides a Rust
+interface to the NLopt C library\ [@johnson2026]. Although NLopt has a broad
+catalog of solvers, it requires a C toolchain to build and is not
+WebAssembly-compatible. It also lacks Basin's generic termination criteria and
+first-class constraints.
 
 Basin's contribution is to bring a broad catalog natively to Rust and
 WebAssembly, without linking a C or Fortran toolchain in its default
@@ -205,9 +201,9 @@ tolerance on a gradient-free method) a compile error.
 
 ## First-Class Constraints
 
-Constraints describe the *problem*, so in Basin they live in problem-side
-traits rather than in executor configuration or on the state. Solvers declare
-the constraints they consume through those traits, so an unconstrained problem
+Constraints describe the *problem*, so in Basin they live in problem-side traits
+rather than in executor configuration or on the state. Solvers declare the
+constraints they consume through those traits, so an unconstrained problem
 handed to a solver that requires constraints does not compile. For the common
 case of reusing an unconstrained solver, opt-in adapters (a log-barrier method
 and an augmented-Lagrangian method) wrap the *problem*; each adapter consumes
