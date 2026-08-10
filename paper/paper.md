@@ -95,9 +95,10 @@ easily extended through Rust, such as R, Julia, and Python.
 # State of the Field
 
 The closest analog to Basin is `argmin`\ [@kroboth2025], a numerical
-optimization framework that we taken considerable inspiration from, including
-the `Executor` driver loop, `Solver`/`Problem` trait split, per-solver `State`,
-and generic linear algebra backend design. But Basin diverges elsewhere:
+optimization framework that we have taken considerable inspiration from,
+including the `Executor` driver loop, `Solver`/`Problem` trait split, per-solver
+`State`, and generic linear algebra backend design. But Basin diverges
+elsewhere:
 
 - constraints are first-class and problem-side rather than solver configuration,
 - a richer linear-algebra tier implemented in pure Rust, and
