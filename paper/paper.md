@@ -168,43 +168,31 @@ fn main() {
 # Software Design
 
 Basin is organized as a generic core with a broad category of solvers layered on
-top of it. The design is built on a set of principles that make it easy to
-extend and maintain.
+top of it. The design is built on a set of principles that we think make it easy
+to extend and maintain.
 
 ## Tiered Backends
 
-Parameters and linear algebra are generic over the backend. A small universal
-*vector tier*---operations such as scaled addition, dot products, and norms that
-every backend implements well---keeps first-order and derivative-free solvers
+Parameters and linear algebra are generic over the backend. A universal *vector
+tier* (operations such as scaled addition, dot products, and norms that every
+backend implements well) keeps first-order and derivative-free solvers
 backend-generic across `Vec<f64>`, `nalgebra`\ [@crozet2026],
-`ndarray`\ [@ndarray], and `faer`\ [@faer]. A richer *linalg tier* holds matrix
-operations (matrix--vector products, Cholesky and least-squares solves,
-symmetric eigendecomposition), and linear-algebra-heavy solvers bind only the
-minimum subset they need, so a backend that lacks an operation produces a
-compile error instead of a runtime surprise. Coverage broadens only when an
-operation can be added *honestly*---in pure, WebAssembly- clean Rust with no
-BLAS/LAPACK stub. A pure-Rust Jacobi eigensolver, for instance, lets CMA-ES run
-on the default `Vec<f64>` backend.
-
-## One Feature per Backend, One Pinned Version
-
-Each backend is a single Cargo feature pinning one major version; `Vec<f64>`
-needs none. A backend major-version bump becomes a Basin major-version bump.
-This avoids a combinatorial explosion of per-version feature gates and keeps the
-test matrix and maintenance surface small.
+`ndarray`\ [@sverdrup2026], and `faer`\ [@sarrazin2026]. Each backend is a
+single Cargo feature pinning one major version. A backend major-version bump
+becomes a Basin major-version bump.
 
 ## Compile-Time Correctness
 
-Generic stopping conditions---iteration limits, tolerance families, evaluation
-budgets, and wall-clock limits---are configured uniformly on the `Executor`
+Generic stopping conditions (iteration limits, tolerance families, evaluation
+budgets, and wall-clock limits) are configured uniformly on the `Executor`
 rather than reimplemented per solver, and each criterion binds on the minimum
 state shape it needs. This is what makes an ill-typed pairing (a gradient
 tolerance on a gradient-free method) a compile error.
 
 ## First-Class Constraints
 
-Constraints describe the *problem*, so they live in problem-side traits, never
-as executor configuration and never on the state. Solvers declare support
+Constraints describe the *problem*, so in Basin they are tied to problem-side
+traits, not as executor configuration nor on the state. Solvers declare support
 through traits, so a constrained problem handed to an unconstrained solver does
 not compile. For the common case of reusing an unconstrained solver, opt-in
 adapters (projection, a log-barrier method, and an augmented-Lagrangian method)
@@ -212,16 +200,14 @@ wrap it; the adapters consume the constraint trait and expose only
 `CostFunction` and `Gradient`, which is precisely what routes a constrained
 problem onto an unconstrained solver.
 
-## Hard and External Constraints
+## WebAssembly Support
 
 WebAssembly support is a hard constraint on dependencies, not a feature: the
 default build must compile for `wasm32-unknown-unknown`, which is verified in
 continuous integration. Anything incompatible---threads, BLAS/LAPACK, native
 timers---sits behind a non-default feature, and default paths use a
 WebAssembly-safe time shim and a seedable, WebAssembly-safe random number
-generator. Separately, the minimum supported Rust version is treated as
-*externally* constrained by downstream consumers (chiefly CRAN for the planned R
-bindings) and is bumped only after checking those toolchains.
+generator.
 
 ## Scalar Generics
 
