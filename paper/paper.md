@@ -25,9 +25,9 @@ bibliography: paper.bib
 Basin is a numerical optimization library for the
 [`Rust`](https://www.rust-lang.org) programming language\ [@matsakis2014].
 Numerical optimization is the task of finding the inputs that minimize a
-function, and it underlies work across the sciences: fitting a model to data,
-calibrating a simulation, training a machine learning model, or choosing
-engineering parameters that minimize cost. Basin gives users a single,
+function, and it is a fundamental element across the sciences: fitting a model
+to data, calibrating a simulation, training a machine learning model, or
+choosing engineering parameters that minimize cost. Basin gives users a single,
 consistent way to both state and solve such problems, with a broad catalog of
 solvers and first-class support for constraints.
 
@@ -81,8 +81,8 @@ gradient-based stopping rule---mismatches yield compilation errors rather than
 runtime failures.
 
 Third, Basin is designed to be portable. The default build targets WebAssembly
-with neither BLAS/LAPACK nor concurrency dependencies, so Basin can be run in a
-browser without a native toolchain.
+with neither BLAS/LAPACK nor concurrency dependencies, which means that Basin
+can be run in a browser without a native toolchain.
 
 Fourth, support for constraints is first-class. Constraints are declared on the
 problem, not passed to the solver call, and a solver that requires constraints
@@ -98,10 +98,9 @@ easily extended through Rust, such as R, Julia, and Python.
 
 # State of the Field
 
-The closest analog to Basin is `argmin`\ [@kroboth2025], a numerical
-optimization framework from which Basin takes considerable inspiration, and
-whose overall shape it shares (see the acknowledgements). But Basin diverges
-elsewhere, in
+The closest analog to Basin is `argmin`\ [@kroboth2025]: a numerical optimization framework from which Basin takes considerable inspiration from,
+including the `Executor` driver loop, the `Solver`/`Problem` trait split, and
+per-solver `State`. But Basin diverges elsewhere, bringing
 
 - first-class, problem-side constraints rather than solver configuration,
 - a richer linear-algebra tier implemented in pure Rust, and
@@ -113,7 +112,7 @@ solvers, and supporting constraints. Finally, the `nlopt` crate provides a Rust
 interface to the NLopt C library\ [@johnson2026]. Although NLopt has a broad
 catalog of solvers, it requires a C toolchain to build and is not
 WebAssembly-compatible. It also lacks Basin's generic termination criteria and
-first-class constraints.
+first-class constraints support.
 
 Basin's contribution is to bring a broad catalog natively to Rust and
 WebAssembly, without linking a C or Fortran toolchain in its default
@@ -199,36 +198,37 @@ rather than reimplemented per solver, and each criterion binds on the minimum
 state shape it needs. This is what makes an ill-typed pairing (a gradient
 tolerance on a gradient-free method) a compile error.
 
-## First-Class Constraints
+## Constraints
 
-Constraints describe the *problem*, so in Basin they live in problem-side traits
-rather than in executor configuration or on the state. Solvers declare the
-constraints they consume through those traits, so an unconstrained problem
-handed to a solver that requires constraints does not compile. For the common
-case of reusing an unconstrained solver, opt-in adapters (a log-barrier method
-and an augmented-Lagrangian method) wrap the *problem*; each adapter consumes
-the constraint trait and exposes only `CostFunction` and `Gradient`, which is
-precisely what routes a constrained problem onto an unconstrained solver.
+Constraints describe the *problem*, so in Basin they exist as problem-side
+traits rather than in executor configuration or on the state. Solvers declare
+the constraints they consume through those traits, which means that an
+unconstrained problem handed to a solver that requires constraints does not
+compile. For the common case of reusing an unconstrained solver, opt-in adapters
+(a log-barrier method and an augmented-Lagrangian method) wrap the *problem*;
+each adapter consumes the constraint trait and exposes only `CostFunction` and
+`Gradient`, which is precisely what routes a constrained problem onto an
+unconstrained solver.
 
 ## WebAssembly Support
 
-WebAssembly support is a hard constraint on dependencies, not a feature: the
-default build must compile for `wasm32-unknown-unknown`, which is verified in
-continuous integration. Anything incompatible---threads, BLAS/LAPACK, native
-timers---sits behind a non-default feature, and default paths use a
+Basin is WebAssembly-compatible by default. Anything incompatible---threads,
+BLAS/LAPACK, native timers---are opt-in features, and default paths use a
 WebAssembly-safe time shim and a seedable, WebAssembly-safe random number
 generator.
 
 ## Scalar Generics
 
-The whole pipeline is generic over the scalar type, with `f64` as the default so
+The interface is generic over the scalar type, with `f64` as the default so
 existing call sites resolve unchanged, while `f32` works across states, solvers,
 termination criteria, and the math layer.
 
 # Research Impact Statement
 
 Basin is used as the optimizer for Eunoia\ [@larsson2018].^[This package is also
-made by the author.]
+made by the author.] Benchmarks against competitors are available at
+[basin.rs](https://basin.rs/benchmarks). At the time of writing, the crate has
+roughly 25,000 monthly downloads on <https://crates.io/crates/basin>.
 
 # AI Usage Disclosure
 
@@ -238,16 +238,14 @@ author.
 
 # Acknowledgements
 
-Basin owes a substantial intellectual debt to `argmin`\ [@kroboth2025], from
-which the overall shape of the crate---the `Executor` driver loop, the
-`Solver`/`Problem` trait split, and per-solver `State`---is borrowed. The
-Powell-family derivative-free solvers are derived from PRIMA\ [@zhang2023],
-Zaikun Zhang's modern-Fortran reference implementation of M. J. D. Powell's
-methods, used as the authoritative source for the exact formulas and as a
-cross-validation oracle. The bound-constrained L-BFGS-B solver is a port of the
-L-BFGS-B version 3.0 Fortran code by Ciyou Zhu, Richard H. Byrd, Peihuang Lu,
-and Jorge Nocedal, with the improvements by José Luis Morales and Jorge
-Nocedal\ [@morales2011]. Both are distributed under the BSD 3-Clause License,
-and their notices are retained in the Basin source tree.
+As we have previously described, Basin owes a substantial intellectual debt to
+`argmin`\ [@kroboth2025]. The Powell-family derivative-free solvers are derived
+from PRIMA\ [@zhang2023], Zaikun Zhang's modern-Fortran reference implementation
+of M. J. D. Powell's methods, used as the authoritative source for the exact
+formulas and as a cross-validation oracle. The bound-constrained L-BFGS-B solver
+is a port of the L-BFGS-B version 3.0 Fortran code by Ciyou Zhu, Richard H.
+Byrd, Peihuang Lu, and Jorge Nocedal, with the improvements by José Luis Morales
+and Jorge Nocedal\ [@morales2011]. Both are distributed under the BSD 3-Clause
+License, and their notices are retained in the Basin source tree.
 
 # References
