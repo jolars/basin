@@ -5,12 +5,12 @@
 [![docs.rs](https://img.shields.io/docsrs/basin)](https://docs.rs/basin)
 
 A numerical optimization library for Rust, inspired by [argmin]. It pairs a
-small generic core, problem traits you implement, a pluggable termination layer,
-and a driver loop (`Executor`), with a growing set of solvers spanning
-first-order, derivative-free, nonlinear least-squares, and evolutionary methods.
-Solvers are generic over the linear-algebra backend, constraints are
-first-class, and the default build compiles to `wasm32-unknown-unknown` with no
-BLAS/LAPACK or threads.
+generic core, problem traits you implement, a pluggable termination layer, and a
+driver loop (`Executor`), with a growing set of solvers spanning first-order,
+derivative-free, nonlinear least-squares, and evolutionary methods. Solvers are
+generic over the linear-algebra backend, constraints are first-class, and the
+default build compiles to `wasm32-unknown-unknown` with no BLAS/LAPACK or
+threads.
 
 Narrative documentation lives at [basin.rs/docs]; the rustdoc reference is at
 [docs.rs/basin]. There is also an in-browser [solver visualizer] and a

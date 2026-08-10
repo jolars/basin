@@ -11,18 +11,17 @@ opt-in features arrive in minor releases.
 ## What this is
 
 Basin is a Rust library crate for numerical optimization, inspired by `argmin`.
-It pairs a small generic core (problem traits you implement, a pluggable
-termination layer, and an `Executor` driver loop) with a growing set of solvers
-spanning first-order and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B),
+It pairs a generic core (problem traits you implement, a pluggable termination
+layer, and an `Executor` driver loop) with a growing set of solvers spanning
+first-order and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B),
 derivative-free (Nelder-Mead, Brent, Solis-Wets, and Powell's model-based family
 NEWUOA/BOBYQA/LINCOA/COBYLA), nonlinear least squares (Gauss-Newton,
-Levenberg-Marquardt, trust-region-reflective), global and stochastic (random search,
-CMA-ES, a steady-state GA, memetic combinations incl. the MA-LSCh chain family),
-and constrained methods
-(projected gradient, bounded Nelder-Mead, L-BFGS-B, and CMA-ES, log-barrier,
-augmented Lagrangian, and COBYLA for nonlinear inequality constraints). Solvers
-are generic over the linear-algebra backend (`Vec<f64>`, nalgebra, ndarray,
-faer).
+Levenberg-Marquardt, trust-region-reflective), global and stochastic (random
+search, CMA-ES, a steady-state GA, memetic combinations incl. the MA-LSCh chain
+family), and constrained methods (projected gradient, bounded Nelder-Mead,
+L-BFGS-B, and CMA-ES, log-barrier, augmented Lagrangian, and COBYLA for
+nonlinear inequality constraints). Solvers are generic over the linear-algebra
+backend (`Vec<f64>`, nalgebra, ndarray, faer).
 
 ## Commands
 
@@ -45,10 +44,10 @@ different: it links executables, and the `nalgebra-lapack`/`ndarray-blas`
 features deliberately pull in **no** BLAS/LAPACK provider crate (see the
 `Cargo.toml` comments: `nalgebra-lapack` forwards `lapack-custom` precisely so
 the rlib/docs build without a Fortran toolchain). So a bare
-`cargo test --all-features` fails at link time with `undefined reference to
-dsyev_`/`dpotrf_`—this is by design, not a missing system library. Installing
-`liblapack`/`libblas` is not enough on its own; nothing tells the linker to use
-them.
+`cargo test --all-features` fails at link time with
+`undefined reference to dsyev_`/`dpotrf_`—this is by design, not a missing
+system library. Installing `liblapack`/`libblas` is not enough on its own;
+nothing tells the linker to use them.
 
 To actually run the LAPACK-backed tests, supply a provider at link time. With
 any OpenBLAS in scope (it provides both BLAS and LAPACK symbols):
@@ -62,7 +61,8 @@ RUSTFLAGS="-L $OB -l openblas" cargo test -p basin --all-features
 Outside Nix, an `-L <dir> -l openblas` (or `-l lapack -l blas` for reference
 netlib) pointing at your system libraries does the same. CI does **not** run
 `--all-features` *tests*; the routine local test command is the pure-Rust
-feature set: `cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
+feature set:
+`cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
 
 The dev environment is provided by `devenv.nix` (loaded automatically via
 `direnv` from `.envrc`). It pins Rust 1.87.0 (matches `rust-version` in
@@ -80,23 +80,23 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
 - `src/core.rs` + `src/core/`: the framework:
   - `problem.rs`: traits the *user* implements: `CostFunction`, `Gradient`,
     `Residual` + `Jacobian` (least squares), `Hessian` (second order).
-  - `numdiff.rs`: the `FiniteDiff` wrapper: synthesizes `Gradient`/`Jacobian`/`Hessian`
-    from function values via finite differences.
+  - `numdiff.rs`: the `FiniteDiff` wrapper: synthesizes
+    `Gradient`/`Jacobian`/`Hessian` from function values via finite differences.
   - `state.rs` (+ `state/`): the `State` trait and concrete states:
     `BasicState<P>` (single iterate), `BasicSimplexState<V>` (simplex),
     `QuasiNewtonState<V, M>` (BFGS), `LbfgsState` (L-BFGS history),
-    `BasicPopulationState<V>` (population). Extension traits `GradientState`/`SimplexState`/`PopulationState`
-    expose the richer shape that termination
-    criteria bound on. Fields are `pub(crate)`; access goes through trait
-    methods.
+    `BasicPopulationState<V>` (population). Extension traits
+    `GradientState`/`SimplexState`/`PopulationState` expose the richer shape
+    that termination criteria bound on. Fields are `pub(crate)`; access goes
+    through trait methods.
   - `solver.rs`: the `Solver` trait: `init` (one-time setup, e.g. seeding
     cost/gradient at iter 0), `next_iter`, plus a `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
     `run()` returns an `OptimizationResult<S>` (final state +
     `TerminationReason`). Also `run_loop`/`Stepper`.
   - `termination.rs`: `TerminationCriterion<S>` plus shipped criteria
-    (`MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, the `*Tolerance`/`Relative*Tolerance`
-    family, `SimplexTolerance`, `MaxTime`).
+    (`MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, the
+    `*Tolerance`/`Relative*Tolerance` family, `SimplexTolerance`, `MaxTime`).
   - `constraint.rs`, `barrier.rs`, `augmented_lagrangian.rs`: constraint markers
     and the unconstrained-problem adapters (tenet 4).
   - `inner.rs`: `InnerExecutor`/`WarmStart`/`ResumableInner` for solver
@@ -191,9 +191,9 @@ not basin's own preferences:
 The workspace manifest is at the repo root (shared lockfile) with three members:
 
 - `crates/basin`: the library.
-- `crates/basin-wasm`: `wasm-bindgen` JS bindings consumed by the
-  Svelte and Tailwind visualizer in `web/` (deployed to GitHub Pages). `web/` is its
-  own node project, **not** a Cargo workspace member.
+- `crates/basin-wasm`: `wasm-bindgen` JS bindings consumed by the Svelte and
+  Tailwind visualizer in `web/` (deployed to GitHub Pages). `web/` is its own
+  node project, **not** a Cargo workspace member.
 - `crates/competitor-bench`: benchmarks against competing libraries.
 
 Keep optional integrations as Cargo features on `basin` itself (`nalgebra`,

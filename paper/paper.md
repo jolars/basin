@@ -112,7 +112,7 @@ configuration.
 
 # Software Design
 
-Basin is organized as a small generic core with a set of solvers built on top. A
+Basin is organized as a generic core with a set of solvers built on top. A
 driver loop, the `Executor`, iterates a `Solver` over a `State`, calling into
 the user-implemented `Problem` traits until a `TerminationCriterion` fires. This
 uses established optimization-framework vocabulary intentionally, to lower the
