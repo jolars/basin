@@ -81,26 +81,30 @@ Third, Basin is designed to be portable. The default build targets WebAssembly
 with neither BLAS/LAPACK or concurrency dependencies, so Basin can be run in a
 browser without a native toolchain.
 
-Fourth, support for constraints is first-class. Constraints are problem-side
-rather than solver
+Fourth, support for constraints is first-class. Constraints are defined on the
+problem-side, rather than in the solver call. And trying to use a solver that
+doesn't support constraints on a constrained problem is compile error.
 
 The target audience is researchers, engineers, and students who need reliable
-optimization in Rust today, and---through the planned bindings---the wider
-scientific R and Python communities.
+optimization in Rust or any of the scientific programming languages that can be
+easily extended through Rust, such as R, Julia, and Python.
 
 # State of the Field
 
 Within Rust, the closest analog is `argmin`\ [@kroboth2025], a numerical
-optimization framework that Basin openly takes as inspiration: the overall shape
-of the crate---an `Executor` driver loop, the `Solver`/`Problem` trait split,
-and per-solver `State`---follows argmin's conventions so that users familiar
-with it feel at home. Basin diverges deliberately where it improves the design:
-constraints are first-class and problem-side rather than solver configuration;
-backends are tiered so that a missing linear-algebra operation is a compile-time
-error; termination criteria are bound to the state shape a solver actually
-exposes; and the entire numerical pipeline is generic over the scalar type, so
-`f32` and `f64` both work end to end. These are the reasons Basin is a new
-library rather than a set of patches to argmin. Other Rust crates are narrower:
+optimization framework that we have borrowed some of our design from: the
+overall shape of the crate---an `Executor` driver loop, the `Solver`/`Problem`
+trait split, and per-solver `State`---follows argmin's conventions. Basin
+diverges deliberately in a few places:
+
+- constraints are first-class and problem-side rather than solver configuration;
+- backends are tiered so that a missing linear-algebra operation is a
+  compile-time error; 0 termination criteria are bound to the state shape a
+  solver actually exposes; and
+- the entire numerical pipeline is generic over the scalar type, so `f32` and
+  `f64` both work end to end.
+
+These are the reasons Basin exists. Other Rust crates are narrower:
 `gomez`\ [@nevyhosteny2025] targets systems of nonlinear equations and
 derivative-free optimization, and `levenberg-marquardt`\ [@schurg2026]
 implements a single nonlinear-least-squares method.
