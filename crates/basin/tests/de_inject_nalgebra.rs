@@ -12,7 +12,9 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::{AckleyBoxed, RastriginBoxed};
-use basin::{BasicPopulationState, De, DeInject, Executor, MaxCostEvals, NelderMead};
+use basin::{
+    BasicPopulationState, De, DeInject, Executor, MaxCostEvals, NelderMead,
+};
 use nalgebra::DVector;
 
 /// Ackley D=3 within the standard `[-32.768, 32.768]³` box. Ackley's
@@ -117,9 +119,12 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         problem_a,
-        DeInject::with_inner_solver(De::new(7).with_pop_size(10), NelderMead::adaptive())
-            .with_k(1)
-            .with_inner_max_iter(20),
+        DeInject::with_inner_solver(
+            De::new(7).with_pop_size(10),
+            NelderMead::adaptive(),
+        )
+        .with_k(1)
+        .with_inner_max_iter(20),
         BasicPopulationState::<DVector<f64>>::with_size(1),
     )
     .max_iter(15)
@@ -128,9 +133,12 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         problem_b,
-        DeInject::with_inner_solver(De::new(7).with_pop_size(10), NelderMead::adaptive())
-            .with_k(1)
-            .with_inner_max_iter(20),
+        DeInject::with_inner_solver(
+            De::new(7).with_pop_size(10),
+            NelderMead::adaptive(),
+        )
+        .with_k(1)
+        .with_inner_max_iter(20),
         BasicPopulationState::<DVector<f64>>::with_size(1),
     )
     .max_iter(15)

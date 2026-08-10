@@ -8,8 +8,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    Bfgs, BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
-    MoreThuente, NalgebraQuasiNewtonState, ProjectedGradientTolerance,
+    Bfgs, BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
+    MaxIter, MoreThuente, NalgebraQuasiNewtonState, ProjectedGradientTolerance,
 };
 use nalgebra::DVector;
 
@@ -27,9 +27,13 @@ impl CostFunction for Rosen {
 }
 impl Gradient for Rosen {
     type Gradient = DVector<f64>;
-    fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &DVector<f64>,
+    ) -> Result<DVector<f64>, std::convert::Infallible> {
         Ok({
-            let dfdx0 = -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0] * x[0]);
+            let dfdx0 =
+                -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0] * x[0]);
             let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
             DVector::from_vec(vec![dfdx0, dfdx1])
         })
@@ -62,7 +66,8 @@ fn unbounded_rosenbrock_2d_converges() {
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "x = ({}, {})",
         result.param()[0],
         result.param()[1]
@@ -86,7 +91,8 @@ fn booth_at_corner_converges() {
         .unwrap();
 
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-5 && (result.param()[1] - 1.0).abs() < 1e-5,
+        (result.param()[0] - 1.0).abs() < 1e-5
+            && (result.param()[1] - 1.0).abs() < 1e-5,
         "x = ({}, {})",
         result.param()[0],
         result.param()[1]
@@ -115,7 +121,8 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
         .unwrap();
 
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 3.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 3.0).abs() < 1e-4,
         "x = ({}, {})",
         result.param()[0],
         result.param()[1]

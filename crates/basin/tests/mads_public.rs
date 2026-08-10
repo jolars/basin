@@ -8,7 +8,8 @@
 //! and convergence on smooth problems across backends.
 
 use basin::{
-    CostFunction, Executor, Mads, MadsState, MaxCostEvals, MeshTolerance, TerminationReason,
+    CostFunction, Executor, Mads, MadsState, MaxCostEvals, MeshTolerance,
+    TerminationReason,
 };
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
@@ -20,7 +21,9 @@ impl CostFunction for Rosenbrock {
     type Error = std::convert::Infallible;
     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
         Ok((0..x.len() - 1)
-            .map(|i| (1.0 - x[i]).powi(2) + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2))
+            .map(|i| {
+                (1.0 - x[i]).powi(2) + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2)
+            })
             .sum())
     }
 }
@@ -199,7 +202,10 @@ fn backend_generic_nalgebra() {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(x.iter().map(|xi| xi * xi).sum())
         }
     }
@@ -232,7 +238,10 @@ fn backend_generic_ndarray() {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(x.iter().map(|xi| xi * xi).sum())
         }
     }

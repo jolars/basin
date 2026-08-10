@@ -1,5 +1,8 @@
 use basin::problems::Rosenbrock;
-use basin::{Backtracking, BasicState, CostFunction, Executor, GradientDescent, TerminationReason};
+use basin::{
+    Backtracking, BasicState, CostFunction, Executor, GradientDescent,
+    TerminationReason,
+};
 
 #[test]
 fn gradient_descent_decreases_rosenbrock_cost() {

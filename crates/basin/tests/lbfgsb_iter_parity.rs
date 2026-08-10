@@ -14,7 +14,10 @@
 //! reordering of floating-point ops but is tight enough to catch
 //! algorithmic divergence.
 
-use basin::{BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter};
+use basin::{
+    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
+    MaxIter,
+};
 use std::fs;
 
 /// Standard Rosenbrock 5D (basin's coefficient convention).
@@ -42,7 +45,10 @@ impl CostFunction for Rosen5D {
 
 impl Gradient for Rosen5D {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok({
             let n = x.len();
             let mut g = vec![0.0; n];
@@ -86,8 +92,10 @@ fn load_fixture(path: &str, n: usize) -> Vec<FortranIterate> {
         let mut tokens = line.split_whitespace();
         let iter: u64 = tokens.next().unwrap().parse().unwrap();
         let f: f64 = tokens.next().unwrap().parse().unwrap();
-        let x: Vec<f64> = (&mut tokens).take(n).map(|s| s.parse().unwrap()).collect();
-        let g: Vec<f64> = (&mut tokens).take(n).map(|s| s.parse().unwrap()).collect();
+        let x: Vec<f64> =
+            (&mut tokens).take(n).map(|s| s.parse().unwrap()).collect();
+        let g: Vec<f64> =
+            (&mut tokens).take(n).map(|s| s.parse().unwrap()).collect();
         assert_eq!(x.len(), n);
         assert_eq!(g.len(), n);
         out.push(FortranIterate { iter, f, x, g });
@@ -113,10 +121,11 @@ fn rosenbrock_5d_matches_fortran_trajectory() {
     // Match Fortran driver: `factr = 0`, `pgtol = 0`, disabling both
     // convergence tolerances so the parity comparator runs all 30
     // iterations regardless of how small the projected gradient gets.
-    let mut stepper = Executor::new(problem, Lbfgsb::new().with_tol_pg(0.0), state)
-        .terminate_on(MaxIter(30))
-        .into_stepper()
-        .unwrap();
+    let mut stepper =
+        Executor::new(problem, Lbfgsb::new().with_tol_pg(0.0), state)
+            .terminate_on(MaxIter(30))
+            .into_stepper()
+            .unwrap();
 
     // x_tol: variables can be at the boundary or in the interior;
     // either way the trajectory should agree to ~1e-10 absolute. The

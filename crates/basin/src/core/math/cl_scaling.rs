@@ -186,7 +186,12 @@ pub(crate) fn cl_scaling_pair<F: Scalar>(x: F, g: F, l: F, u: F) -> (F, F) {
 /// Helper for `project_strictly_inside`: per-component clamp into the
 /// *open* box. Returns the projected value.
 #[inline]
-pub(crate) fn project_strictly_inside_component<F: Scalar>(x: F, l: F, u: F, rstep: F) -> F {
+pub(crate) fn project_strictly_inside_component<F: Scalar>(
+    x: F,
+    l: F,
+    u: F,
+    rstep: F,
+) -> F {
     let one = F::one();
     let lo_inner = if l.is_finite() {
         l + rstep * l.abs().max(one)
@@ -211,7 +216,12 @@ pub(crate) fn project_strictly_inside_component<F: Scalar>(x: F, l: F, u: F, rst
 /// Helper for `max_feasible_step`: per-component limit, returning
 /// `F::infinity()` when `step_i = 0` or the relevant bound is infinite.
 #[inline]
-pub(crate) fn max_feasible_step_component<F: Scalar>(x: F, step: F, l: F, u: F) -> F {
+pub(crate) fn max_feasible_step_component<F: Scalar>(
+    x: F,
+    step: F,
+    l: F,
+    u: F,
+) -> F {
     let zero = F::zero();
     if step > zero {
         if u.is_finite() {

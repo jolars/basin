@@ -2,7 +2,8 @@
 
 use super::{CauchyPoint, Step, Subproblem, model_decrease, tau_to_boundary};
 use crate::core::math::{
-    Dot, LinearSolveSpd, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+    Dot, LinearSolveSpd, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace,
+    ScaledAdd,
 };
 
 /// Dogleg subproblem solver (Nocedal & Wright, *Numerical Optimization*, 2e,
@@ -28,7 +29,12 @@ pub struct Dogleg;
 impl<V, M, F> Subproblem<V, M, F> for Dogleg
 where
     F: Scalar,
-    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace,
+    V: Clone
+        + Dot<F>
+        + NormSquared<F>
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
+        + NegInPlace,
     M: MatVec<V> + LinearSolveSpd<V>,
 {
     fn solve(&self, g: &V, b: &M, radius: F) -> Step<V, F> {

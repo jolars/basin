@@ -101,7 +101,8 @@ fn planerot<F: Scalar>(x0: F, x1: F) -> (F, F) {
         return (one, zero);
     }
     if x0.is_infinite() && x1.is_infinite() {
-        let inv_sqrt2 = F::from_f64(2.0).expect("2.0 representable").sqrt().recip();
+        let inv_sqrt2 =
+            F::from_f64(2.0).expect("2.0 representable").sqrt().recip();
         return (fsign(inv_sqrt2, x0), fsign(inv_sqrt2, x1));
     }
     if x0.abs() <= zero && x1.abs() <= zero {
@@ -122,7 +123,13 @@ fn planerot<F: Scalar>(x0: F, x1: F) -> (F, F) {
 /// updating the QR and incrementing `nact` (PRIMA `qradd_Rfull`). `Q` is `n × n`
 /// column-major, `R` is `n × n` column-major. It is assumed `c` is not in the
 /// span of the existing active columns (always true in LINCOA).
-fn qradd<F: Scalar>(c: &[F], qfac: &mut [F], rfac: &mut [F], nact: &mut usize, n: usize) {
+fn qradd<F: Scalar>(
+    c: &[F],
+    qfac: &mut [F],
+    rfac: &mut [F],
+    nact: &mut usize,
+    n: usize,
+) {
     let na = *nact;
     // cq = Qᵀ c.
     let mut cq = vec![F::zero(); n];
@@ -171,7 +178,13 @@ fn qradd<F: Scalar>(c: &[F], qfac: &mut [F], rfac: &mut [F], nact: &mut usize, n
 /// Cyclically move active column `icon` to the last (`ncols-1`) position,
 /// re-triangularizing the QR by Givens rotations (PRIMA `qrexc_Rfull`).
 /// `ncols` is the current active count; `n` the matrix dimension.
-fn qrexc<F: Scalar>(qfac: &mut [F], rfac: &mut [F], n: usize, ncols: usize, icon: usize) {
+fn qrexc<F: Scalar>(
+    qfac: &mut [F],
+    rfac: &mut [F],
+    n: usize,
+    ncols: usize,
+    icon: usize,
+) {
     if icon + 1 >= ncols {
         return;
     }
@@ -220,7 +233,13 @@ fn rsolve_upper<F: Scalar>(rfac: &[F], n: usize, b: &[F]) -> Vec<F> {
 
 /// Least-squares multipliers `vlam = R[..nact,..nact]⁻¹ (Qᵀ g)` over the active
 /// columns (PRIMA `lsqr_Rfull`).
-fn lsqr_mult<F: Scalar>(g: &[F], qfac: &[F], rfac: &[F], n: usize, nact: usize) -> Vec<F> {
+fn lsqr_mult<F: Scalar>(
+    g: &[F],
+    qfac: &[F],
+    rfac: &[F],
+    n: usize,
+    nact: usize,
+) -> Vec<F> {
     let mut x = vec![F::zero(); nact];
     for (i, xi) in x.iter_mut().enumerate() {
         let mut s = F::zero();
@@ -285,7 +304,13 @@ fn delact<F: Scalar>(
 
 /// `psd ← −Q[:, nact..n] (Q[:, nact..n]ᵀ g)`: minus the projection of `g` onto
 /// the range of the inactive `Q` columns (PRIMA's projection of `-G`).
-fn project_neg_g<F: Scalar>(g: &[F], qfac: &[F], n: usize, nact: usize, psd: &mut [F]) {
+fn project_neg_g<F: Scalar>(
+    g: &[F],
+    qfac: &[F],
+    n: usize,
+    nact: usize,
+    psd: &mut [F],
+) {
     let zero = F::zero();
     for p in psd.iter_mut() {
         *p = zero;
@@ -530,7 +555,10 @@ mod tests {
         for c in 0..nact {
             for r in 0..n {
                 if r > c {
-                    assert!(at(rfac, r, c, n).abs() < 1e-12, "R[{r},{c}] not zero");
+                    assert!(
+                        at(rfac, r, c, n).abs() < 1e-12,
+                        "R[{r},{c}] not zero"
+                    );
                 }
             }
             assert!(at(rfac, c, c, n) > 0.0, "R[{c},{c}] not positive");

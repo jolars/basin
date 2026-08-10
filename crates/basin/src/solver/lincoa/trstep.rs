@@ -179,7 +179,8 @@ pub(crate) fn trstep<F: Scalar>(
             gamma = zero;
             let mut dproj = vec![zero; n];
             if (0..warm.nact).any(|ic| resact[ic] > c1em4 * delta) {
-                let z = solve_rt(&warm.rfac, n, warm.nact, &resact[..warm.nact]);
+                let z =
+                    solve_rt(&warm.rfac, n, warm.nact, &resact[..warm.nact]);
                 for k in 0..warm.nact {
                     for r in 0..n {
                         dproj[r] = dproj[r] + warm.qfac[r + k * n] * z[k];
@@ -241,7 +242,8 @@ pub(crate) fn trstep<F: Scalar>(
         if resid <= zero || dd <= eps * delsq || ds.is_nan() {
             break;
         }
-        let sqrtd = max3((ds * ds + dd * resid).sqrt(), ds.abs(), (dd * resid).sqrt());
+        let sqrtd =
+            max3((ds * ds + dd * resid).sqrt(), ds.abs(), (dd * resid).sqrt());
         let mut alpha = if ds <= zero {
             (sqrtd - ds) / dd
         } else {
@@ -337,7 +339,9 @@ pub(crate) fn trstep<F: Scalar>(
         }
 
         // Termination tests.
-        if alpha >= alpht || -alphm * (dg + half * alphm * dhd) <= ctest * reduct {
+        if alpha >= alpht
+            || -alphm * (dg + half * alphm * dhd) <= ctest * reduct
+        {
             break;
         }
 
@@ -358,7 +362,8 @@ pub(crate) fn trstep<F: Scalar>(
         } else {
             let mut p = vec![zero; n];
             for col in warm.nact..n {
-                let coeff = (0..n).fold(zero, |a, r| a + g[r] * warm.qfac[r + col * n]);
+                let coeff =
+                    (0..n).fold(zero, |a, r| a + g[r] * warm.qfac[r + col * n]);
                 for r in 0..n {
                     p[r] = p[r] + coeff * warm.qfac[r + col * n];
                 }
@@ -384,7 +389,10 @@ mod tests {
 
     /// A diagonal convex quadratic `0.5 Σ hᵢ (xᵢ − cᵢ)²`. With `npt = 2n+1` the
     /// least-Frobenius model interpolates it exactly (no cross terms).
-    fn diag_quadratic(h: &'static [f64], c: &'static [f64]) -> impl Fn(&[f64]) -> f64 {
+    fn diag_quadratic(
+        h: &'static [f64],
+        c: &'static [f64],
+    ) -> impl Fn(&[f64]) -> f64 {
         move |x: &[f64]| {
             0.5 * (0..x.len())
                 .map(|i| h[i] * (x[i] - c[i]).powi(2))
@@ -398,7 +406,12 @@ mod tests {
     fn unconstrained_reaches_interior_min() {
         let h = &[2.0, 4.0];
         let c = &[0.4, -0.3];
-        let model = QuadraticModel::initialize(vec![0.0, 0.0], 0.3, 5, &diag_quadratic(h, c));
+        let model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.3,
+            5,
+            &diag_quadratic(h, c),
+        );
         let n = 2;
         let mut warm = ActiveSetQr::<f64>::new(n, 0);
         let (step, _) = trstep(&model, 5.0, &[], &[], &mut warm);
@@ -422,7 +435,12 @@ mod tests {
     fn constrained_step_is_feasible_and_kkt() {
         let h = &[2.0, 2.0];
         let c = &[1.0, 0.0]; // unconstrained min at (1, 0)
-        let model = QuadraticModel::initialize(vec![0.0, 0.0], 0.3, 5, &diag_quadratic(h, c));
+        let model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.3,
+            5,
+            &diag_quadratic(h, c),
+        );
         let n = 2;
         let m = 1;
         // Constraint x0 ≤ 0.5 (normal (1,0)). x_opt is near 0, so rescon = 0.5 - x_opt0.
@@ -468,7 +486,12 @@ mod tests {
     fn step_respects_trust_radius() {
         let h = &[1.0, 1.0];
         let c = &[10.0, 10.0]; // far min → boundary solution
-        let model = QuadraticModel::initialize(vec![0.0, 0.0], 0.3, 5, &diag_quadratic(h, c));
+        let model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.3,
+            5,
+            &diag_quadratic(h, c),
+        );
         let n = 2;
         let delta = 1.0;
         let mut warm = ActiveSetQr::<f64>::new(n, 0);

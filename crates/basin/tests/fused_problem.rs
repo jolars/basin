@@ -16,8 +16,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, FiniteDiff, Gradient, GradientDescent, GradientTolerance,
-    MaxIter,
+    BasicState, CostFunction, Executor, FiniteDiff, Gradient, GradientDescent,
+    GradientTolerance, MaxIter,
 };
 
 // ---------------------------------------------------------------------
@@ -35,7 +35,10 @@ impl CostFunction for Sphere {
 }
 impl Gradient for Sphere {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok(x.iter().map(|xi| 2.0 * xi).collect())
     }
 }
@@ -80,10 +83,16 @@ impl CostFunction for Counted {
 }
 impl Gradient for Counted {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok(x.iter().map(|xi| 2.0 * xi).collect())
     }
-    fn cost_and_gradient(&self, x: &Vec<f64>) -> Result<(f64, Vec<f64>), std::convert::Infallible> {
+    fn cost_and_gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<(f64, Vec<f64>), std::convert::Infallible> {
         Ok({
             self.fused_calls.set(self.fused_calls.get() + 1);
             let c = x.iter().map(|xi| xi * xi).sum();
@@ -132,19 +141,28 @@ mod hessian {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(x.dot(x))
         }
     }
     impl Gradient for SphereN {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(2.0 * x)
         }
     }
     impl Hessian for SphereN {
         type Hessian = DMatrix<f64>;
-        fn hessian(&self, x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+        fn hessian(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DMatrix<f64>, std::convert::Infallible> {
             Ok(2.0 * DMatrix::identity(x.len(), x.len()))
         }
     }
@@ -168,25 +186,35 @@ mod hessian {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(x.dot(x))
         }
     }
     impl Gradient for CountedTriple {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(2.0 * x)
         }
     }
     impl Hessian for CountedTriple {
         type Hessian = DMatrix<f64>;
-        fn hessian(&self, x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+        fn hessian(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DMatrix<f64>, std::convert::Infallible> {
             Ok(2.0 * DMatrix::identity(x.len(), x.len()))
         }
         fn cost_and_gradient_and_hessian(
             &self,
             x: &DVector<f64>,
-        ) -> Result<(f64, DVector<f64>, DMatrix<f64>), std::convert::Infallible> {
+        ) -> Result<(f64, DVector<f64>, DMatrix<f64>), std::convert::Infallible>
+        {
             Ok({
                 self.fused_calls.set(self.fused_calls.get() + 1);
                 let c = x.dot(x);
@@ -228,7 +256,10 @@ mod lsq {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(0.5 * ((x[0] - 1.0).powi(2) + (x[1] - 2.0).powi(2)))
         }
     }
@@ -236,19 +267,26 @@ mod lsq {
         type Param = DVector<f64>;
         type Output = DVector<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(DVector::from_vec(vec![x[0] - 1.0, x[1] - 2.0]))
         }
     }
     impl Jacobian for Affine {
         type Jacobian = DMatrix<f64>;
-        fn jacobian(&self, _x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &DVector<f64>,
+        ) -> Result<DMatrix<f64>, std::convert::Infallible> {
             Ok(DMatrix::identity(2, 2))
         }
         fn residual_and_jacobian(
             &self,
             x: &DVector<f64>,
-        ) -> Result<(DVector<f64>, DMatrix<f64>), std::convert::Infallible> {
+        ) -> Result<(DVector<f64>, DMatrix<f64>), std::convert::Infallible>
+        {
             Ok({
                 self.fused_calls.set(self.fused_calls.get() + 1);
                 (
@@ -266,7 +304,8 @@ mod lsq {
             fused_calls: counter.clone(),
         };
         let state = NllsState::new(DVector::from_vec(vec![0.0, 0.0]));
-        let solver: LevenbergMarquardt<DVector<f64>, DMatrix<f64>> = LevenbergMarquardt::new();
+        let solver: LevenbergMarquardt<DVector<f64>, DMatrix<f64>> =
+            LevenbergMarquardt::new();
         let result = Executor::new(problem, solver, state)
             .terminate_on(MaxIter(10))
             .run()

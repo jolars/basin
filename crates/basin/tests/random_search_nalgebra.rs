@@ -1,7 +1,10 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::BoothBoxed;
-use basin::{BasicPopulationState, Executor, PopulationState, RandomSearch, State, StepOutcome};
+use basin::{
+    BasicPopulationState, Executor, PopulationState, RandomSearch, State,
+    StepOutcome,
+};
 use nalgebra::DVector;
 
 /// Same seed → same trajectory, on the nalgebra backend. Sample

@@ -9,8 +9,8 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::{
-    Backtracking, BarrierMethod, BasicState, CostFunction, Executor, Gradient, GradientDescent,
-    LinearInequalityConstraints, TerminationReason,
+    Backtracking, BarrierMethod, BasicState, CostFunction, Executor, Gradient,
+    GradientDescent, LinearInequalityConstraints, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -36,7 +36,10 @@ impl CostFunction for MyProblem {
 // 1b. Its gradient, ∇f(x) = 2(x − 2).
 impl Gradient for MyProblem {
     type Gradient = DVector<f64>;
-    fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &DVector<f64>,
+    ) -> Result<DVector<f64>, std::convert::Infallible> {
         Ok(DVector::from_vec(vec![
             2.0 * (x[0] - 2.0),
             2.0 * (x[1] - 2.0),

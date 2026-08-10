@@ -20,7 +20,9 @@
 //! materialized.
 
 use crate::core::math::Scalar;
-use crate::solver::powell::{QuadraticModel, TrustRegionStep, TrustRegionSubproblem};
+use crate::solver::powell::{
+    QuadraticModel, TrustRegionStep, TrustRegionSubproblem,
+};
 
 /// TRSAPP: NEWUOA's unconstrained trust-region subproblem strategy (Powell
 /// 2006, §5). The unit value carries no state; the model is borrowed per solve.
@@ -30,7 +32,12 @@ impl<F: Scalar> TrustRegionSubproblem<F> for Trsapp {
     /// TRSAPP is unconstrained: the trust ball is its only feasible region.
     type Region = ();
 
-    fn solve(&self, model: &QuadraticModel<F>, delta: F, _region: &()) -> TrustRegionStep<F> {
+    fn solve(
+        &self,
+        model: &QuadraticModel<F>,
+        delta: F,
+        _region: &(),
+    ) -> TrustRegionStep<F> {
         model.trust_region_step(delta)
     }
 }
@@ -161,7 +168,8 @@ impl<F: Scalar> QuadraticModel<F> {
             // Truncation tests (eq. 5.13): gradient small relative to the start,
             // or this segment's decrease small relative to the total so far.
             let new_gnorm_sq = dot(&g, &g);
-            if new_gnorm_sq <= tol_gsq || seg_drop <= tol * predicted_reduction {
+            if new_gnorm_sq <= tol_gsq || seg_drop <= tol * predicted_reduction
+            {
                 return TrustRegionStep {
                     d,
                     crvmin,
@@ -220,21 +228,27 @@ impl<F: Scalar> QuadraticModel<F> {
             let q_of = |theta: F| -> F {
                 let c = theta.cos();
                 let sn = theta.sin();
-                c * d_g0 + sn * s_g0 + half * (c * c * d_hd + two * sn * c * s_hd + sn * sn * s_hs)
+                c * d_g0
+                    + sn * s_g0
+                    + half
+                        * (c * c * d_hd + two * sn * c * s_hd + sn * sn * s_hs)
             };
 
             // Powell minimizes q(θ) over θ ∈ (0, 2π] by sampling IU = 49 equally
             // spaced angles, then a 3-point parabolic refinement (Fortran IU).
             const NTHETA: usize = 49;
-            let pi = F::from_f64(core::f64::consts::PI).expect("π representable");
+            let pi =
+                F::from_f64(core::f64::consts::PI).expect("π representable");
             let two_pi = pi + pi;
-            let step = two_pi / F::from_f64(NTHETA as f64).expect("NTHETA representable");
+            let step = two_pi
+                / F::from_f64(NTHETA as f64).expect("NTHETA representable");
 
             let q_at_zero = q_of(F::zero()); // q at d_{j-1}
             let mut best_theta = F::zero();
             let mut best_q = q_at_zero;
             for k in 1..=NTHETA {
-                let theta = step * F::from_f64(k as f64).expect("k representable");
+                let theta =
+                    step * F::from_f64(k as f64).expect("k representable");
                 let qv = q_of(theta);
                 if qv < best_q {
                     best_q = qv;
@@ -300,7 +314,10 @@ mod tests {
     /// displacement is the origin, so `∇Q(x_opt) = g` and `∇²Q v = G v` exactly,
     /// and `eval_change(d) = Q(d) − Q(0)`. The factored-`H` blocks are unused by
     /// TRSAPP and are filled with zeros. `m = n + 2` is the minimal legal npt.
-    fn pure_quadratic(g: &[f64], gmat: &DenseMatrix<f64>) -> QuadraticModel<f64> {
+    fn pure_quadratic(
+        g: &[f64],
+        gmat: &DenseMatrix<f64>,
+    ) -> QuadraticModel<f64> {
         let n = g.len();
         assert_eq!(gmat.nrows(), n);
         assert_eq!(gmat.ncols(), n);
@@ -349,11 +366,16 @@ mod tests {
     /// is interior, else the Moré–Sorensen boundary point found by bisecting the
     /// secular equation `Σ ĝᵢ²/(λᵢ+μ)² = Δ²` in the eigenbasis. The reference
     /// oracle for tests (a), (b), (d).
-    fn exact_tr_solve_spd(g: &[f64], gmat: &DenseMatrix<f64>, delta: f64) -> Vec<f64> {
+    fn exact_tr_solve_spd(
+        g: &[f64],
+        gmat: &DenseMatrix<f64>,
+        delta: f64,
+    ) -> Vec<f64> {
         let (b, lambda) = gmat.try_eigh().expect("SPD eigendecomposition");
         let ghat = mat_t_vec(&b, g);
         // Newton step in the eigenbasis: yᵢ = −ĝᵢ/λᵢ.
-        let y_newton: Vec<f64> = ghat.iter().zip(&lambda).map(|(gh, l)| -gh / l).collect();
+        let y_newton: Vec<f64> =
+            ghat.iter().zip(&lambda).map(|(gh, l)| -gh / l).collect();
         if norm(&y_newton) <= delta {
             return mat_vec(&b, &y_newton);
         }
@@ -413,7 +435,9 @@ mod tests {
         assert!(trs.crvmin >= lam_min - 1e-9 && trs.crvmin <= lam_max + 1e-9);
 
         // predicted_reduction = Q(x_opt) − Q(x_opt + d) = −eval_change(d).
-        assert!((trs.predicted_reduction + model.eval_change(&trs.d)).abs() < 1e-9);
+        assert!(
+            (trs.predicted_reduction + model.eval_change(&trs.d)).abs() < 1e-9
+        );
         assert!(trs.predicted_reduction > 0.0);
     }
 
@@ -431,13 +455,18 @@ mod tests {
         assert!((norm(&trs.d) - delta).abs() < 1e-9);
         assert_eq!(trs.crvmin, 0.0);
         assert!(trs.predicted_reduction > 0.0);
-        assert!((trs.predicted_reduction + model.eval_change(&trs.d)).abs() < 1e-9);
+        assert!(
+            (trs.predicted_reduction + model.eval_change(&trs.d)).abs() < 1e-9
+        );
         assert!(model.eval_change(&trs.d) < 0.0);
 
         // Matches the exact boundary minimizer's model value (SPD → TRSAPP is
         // optimal here up to the boundary sweep).
         let dstar = exact_tr_solve_spd(&g, &gmat, delta);
-        assert!((model.eval_change(&trs.d) - model.eval_change(&dstar)).abs() < 1e-6);
+        assert!(
+            (model.eval_change(&trs.d) - model.eval_change(&dstar)).abs()
+                < 1e-6
+        );
     }
 
     /// (c) Indefinite `G` with a negative-curvature direction the CG path is
@@ -455,7 +484,9 @@ mod tests {
         assert_eq!(trs.crvmin, 0.0);
         assert!(trs.predicted_reduction > 0.0);
         assert!(model.eval_change(&trs.d) < 0.0);
-        assert!((trs.predicted_reduction + model.eval_change(&trs.d)).abs() < 1e-9);
+        assert!(
+            (trs.predicted_reduction + model.eval_change(&trs.d)).abs() < 1e-9
+        );
     }
 
     /// (d) Random-but-fixed SPD `G` (LCG-seeded), several Δ straddling the
@@ -547,7 +578,10 @@ mod tests {
         for (g, gmat, delta) in cases {
             let model = pure_quadratic(g, gmat);
             let trs = model.trust_region_step(*delta);
-            assert!((trs.predicted_reduction + model.eval_change(&trs.d)).abs() < 1e-9);
+            assert!(
+                (trs.predicted_reduction + model.eval_change(&trs.d)).abs()
+                    < 1e-9
+            );
         }
     }
 }

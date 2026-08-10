@@ -20,10 +20,14 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<Vec<f64>>::new();
     let initial = vec![-1.2, 1.0];
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-15, "cost = {}", result.cost());
@@ -50,10 +54,14 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     let problem = PowellSingular::<Vec<f64>>::new();
     let initial = vec![1.0, 2.0, 1.0, 1.0];
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
@@ -75,10 +83,14 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     let problem = PowellSingular::<Vec<f64>>::new();
     let initial = vec![3.0, -1.0, 0.0, 1.0];
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
@@ -95,10 +107,14 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let problem = RosenbrockResiduals::<Vec<f64>>::new();
     let initial = vec![-1.2, 1.0];
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }

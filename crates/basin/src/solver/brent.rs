@@ -163,7 +163,10 @@ where
             let e_prev = s.e;
             // Accept only if the step is < half of the step before last and
             // stays strictly inside (a, b). Otherwise fall through to golden.
-            if p.abs() < (half * q * e_prev).abs() && p > q * (s.a - s.x) && p < q * (s.b - s.x) {
+            if p.abs() < (half * q * e_prev).abs()
+                && p > q * (s.a - s.x)
+                && p < q * (s.b - s.x)
+            {
                 s.e = s.d;
                 s.d = p / q;
                 let u = s.x + s.d;

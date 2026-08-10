@@ -21,12 +21,15 @@ use crate::core::problem::{CostFunction, EvalCounts, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PopulationState, State};
-use crate::core::termination::{MaxCostEvals, TerminationCriterion, TerminationReason};
+use crate::core::termination::{
+    MaxCostEvals, TerminationCriterion, TerminationReason,
+};
 // Cycle-following in-place permutation: after the call,
 // `slice[i] = original[idx[i]]`.
 use crate::solver::cma_es::{apply_permutation, nan_last_cmp};
 use crate::solver::ssga::{
-    bga_mutate_in_place, blx_alpha_crossover, nam_select, replace_worst_if_better,
+    bga_mutate_in_place, blx_alpha_crossover, nam_select,
+    replace_worst_if_better,
 };
 
 /// State carried by [`MaLsCh`]: a steady-state population plus
@@ -508,7 +511,8 @@ where
     Some(0.5 * best_sq.sqrt())
 }
 
-impl<P, V, LS> Solver<P, MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>>
+impl<P, V, LS>
+    Solver<P, MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>>
     for MaLsCh<V, LS>
 where
     P: CostFunction<Param = V, Output = f64> + BoxConstraints<Param = V>,
@@ -519,15 +523,22 @@ where
         + NormSquared
         + std::ops::Index<usize, Output = f64>
         + std::ops::IndexMut<usize, Output = f64>,
-    LS: ResumableInner<V> + Solver<P, <LS as ResumableInner<V>>::State, Error = P::Error>,
+    LS: ResumableInner<V>
+        + Solver<P, <LS as ResumableInner<V>>::State, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>,
-    ) -> Result<MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>, Self::Error> {
+        mut state: MaLsChGenericState<
+            V,
+            (LS, <LS as ResumableInner<V>>::State),
+        >,
+    ) -> Result<
+        MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>,
+        Self::Error,
+    > {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
@@ -556,7 +567,10 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>,
+        mut state: MaLsChGenericState<
+            V,
+            (LS, <LS as ResumableInner<V>>::State),
+        >,
     ) -> Result<
         (
             MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>,
@@ -577,7 +591,9 @@ where
         // counters so a same-problem inner run earlier on this iteration
         // (none today, but the contract is uniform) wouldn't double-count.
         let phase_start_counts = *problem.counts();
-        while problem.counts().cost_evals - phase_start_counts.cost_evals < nfrec {
+        while problem.counts().cost_evals - phase_start_counts.cost_evals
+            < nfrec
+        {
             let (p1, p2) = nam_select(&state.candidates, self.nam_pool, rng);
             let mut child = blx_alpha_crossover(
                 &state.candidates[p1],
@@ -596,9 +612,12 @@ where
                 rng,
             );
             let c_child = problem.cost(&child)?;
-            if let Some(replaced_idx) =
-                replace_worst_if_better(&mut state.candidates, &mut state.costs, child, c_child)
-            {
+            if let Some(replaced_idx) = replace_worst_if_better(
+                &mut state.candidates,
+                &mut state.costs,
+                child,
+                c_child,
+            ) {
                 // The displaced individual's chain (if any) is orphaned:
                 // the new genome is a fresh point that should start its
                 // own chain on first LS pick.
@@ -622,7 +641,8 @@ where
         let mut best_cost_in_s_ls = f64::INFINITY;
         for i in 0..state.candidates.len() {
             let eligible = state.ls_application_count[i] == 0
-                || (state.last_ls_cost[i] - state.costs[i] >= self.ls_improvement_threshold);
+                || (state.last_ls_cost[i] - state.costs[i]
+                    >= self.ls_improvement_threshold);
             if eligible && state.costs[i] < best_cost_in_s_ls {
                 best_cost_in_s_ls = state.costs[i];
                 c_ls = Some(i);
@@ -674,10 +694,12 @@ where
         // convergence criteria (`ResumableInner::segment_criteria`,
         // built from the segment's starting state), preserving the
         // check order.
-        let mut criteria: Vec<Box<dyn TerminationCriterion<<LS as ResumableInner<V>>::State>>> =
-            vec![Box::new(MaxCostEvals(self.ls_intensity))];
+        let mut criteria: Vec<
+            Box<dyn TerminationCriterion<<LS as ResumableInner<V>>::State>>,
+        > = vec![Box::new(MaxCostEvals(self.ls_intensity))];
         criteria.extend(ls.segment_criteria(&inner_state));
-        let inner_result = run_loop(problem, inner_state, &mut ls, &mut criteria, u64::MAX)?;
+        let inner_result =
+            run_loop(problem, inner_state, &mut ls, &mut criteria, u64::MAX)?;
 
         // -- Phase 5: route failures, write back. --
         // Same-problem composition: inner evals already flowed through the
@@ -710,13 +732,15 @@ where
         // 2) reads `last_ls_cost - costs`, the improvement obtained by
         // the previous LS application (Molina §4.3 step 1b).
         state.last_ls_cost[c_ls] = pre_segment_cost;
-        state.ls_application_count[c_ls] = state.ls_application_count[c_ls].saturating_add(1);
+        state.ls_application_count[c_ls] =
+            state.ls_application_count[c_ls].saturating_add(1);
         // Keep the chain only when the segment cleared δ_LS_min.
         // Rmalschains removes exhausted chains (`m_memory->remove`), so
         // a future pick reseeds at a fresh scale instead of resuming a
         // converged operator that would burn the whole segment budget
         // making no progress.
-        if pre_segment_cost - state.costs[c_ls] >= self.ls_improvement_threshold {
+        if pre_segment_cost - state.costs[c_ls] >= self.ls_improvement_threshold
+        {
             state.chains[c_ls] = Some((ls, inner_result.state));
         }
 

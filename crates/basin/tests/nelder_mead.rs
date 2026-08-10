@@ -1,7 +1,7 @@
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    BasicSimplexState, CostFunction, Executor, NelderMead, SimplexState, SimplexTolerance,
-    TerminationReason,
+    BasicSimplexState, CostFunction, Executor, NelderMead, SimplexState,
+    SimplexTolerance, TerminationReason,
 };
 
 #[test]

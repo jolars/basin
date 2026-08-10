@@ -10,7 +10,10 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{Executor, MaLsChCma, MaLsChState, MaxCostEvals, PopulationState, StepOutcome};
+use basin::{
+    Executor, MaLsChCma, MaLsChState, MaxCostEvals, PopulationState,
+    StepOutcome,
+};
 use nalgebra::{DMatrix, DVector};
 
 /// Sphere with a box for SSGA initial sampling: the easy canary that
@@ -29,7 +32,8 @@ fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {
 #[test]
 fn converges_on_sphere_d10() {
     let problem = boxed_sphere(10);
-    let solver = MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(7).with_pop_size(20);
+    let solver =
+        MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
         .terminate_on(MaxCostEvals(20_000))
@@ -50,7 +54,8 @@ fn converges_on_sphere_d10() {
 #[test]
 fn converges_on_rastrigin_d10() {
     let problem = RastriginBoxed::<DVector<f64>>::with_standard_bounds(10);
-    let solver = MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(42).with_pop_size(30);
+    let solver =
+        MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(42).with_pop_size(30);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
         .terminate_on(MaxCostEvals(50_000))
@@ -219,7 +224,8 @@ fn population_stays_sorted_ascending() {
     let pop_size = 12;
     let mut stepper = Executor::new(
         problem,
-        MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(2024).with_pop_size(pop_size),
+        MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(2024)
+            .with_pop_size(pop_size),
         MaLsChState::new(),
     )
     .max_iter(10)

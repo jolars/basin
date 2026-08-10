@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent, History, Observe, ObserverMode,
-    Report, State,
+    BasicState, CostFunction, Executor, Gradient, GradientDescent, History,
+    Observe, ObserverMode, Report, State,
 };
 
 /// f(x) = ½ ‖x‖²: strictly convex, so GD decreases the cost every step.
@@ -25,7 +25,10 @@ impl CostFunction for Quadratic {
 impl Gradient for Quadratic {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok(x.clone())
     }
 }
@@ -93,7 +96,8 @@ fn history_every_n_thins_iters() {
     .unwrap();
 
     let history = history.0.borrow();
-    let iters: Vec<u64> = history.records().iter().map(|(i, _, _)| *i).collect();
+    let iters: Vec<u64> =
+        history.records().iter().map(|(i, _, _)| *i).collect();
     // init (0) always fires; iter fires on multiples of 3.
     assert_eq!(iters, vec![0, 3, 6, 9]);
 }

@@ -7,13 +7,17 @@ use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
 };
-use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
+use super::sample::{
+    SampleStandardNormal, SampleUniformBox, assert_finite_box,
+};
 use super::{
-    AddDiagonalVectorInPlace, ClampInPlace, ComponentDivAssign, ComponentMaxAssign,
-    ComponentMulAssign, Dot, FloorZerosInPlace, GeneralRankOneUpdate, GramMatrix, LinearSolveError,
-    LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity,
-    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, RankOneUpdate, ScaleInPlace, ScaledAdd,
-    SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
+    AddDiagonalVectorInPlace, ClampInPlace, ComponentDivAssign,
+    ComponentMaxAssign, ComponentMulAssign, Dot, FloorZerosInPlace,
+    GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveSpd,
+    MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity,
+    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, RankOneUpdate,
+    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex,
+    VectorLen,
 };
 
 impl<F, S, D> ScaledAdd<F> for ArrayBase<S, D>
@@ -74,14 +78,20 @@ where
 }
 
 impl<F: Scalar + SampleUniform> SampleUniformBox for Array1<F> {
-    fn sample_uniform_box<R: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut R) -> Self {
+    fn sample_uniform_box<R: Rng + ?Sized>(
+        lower: &Self,
+        upper: &Self,
+        rng: &mut R,
+    ) -> Self {
         assert_eq!(
             lower.len(),
             upper.len(),
             "sample_uniform_box: bounds length mismatch"
         );
         assert_finite_box(lower, upper);
-        Array1::from_shape_fn(lower.len(), |i| rng.random_range(lower[i]..=upper[i]))
+        Array1::from_shape_fn(lower.len(), |i| {
+            rng.random_range(lower[i]..=upper[i])
+        })
     }
 }
 
@@ -165,7 +175,12 @@ impl<F: Scalar> MatDiagonal<Array1<F>> for Array2<F> {
 }
 
 impl<F: Scalar> GeneralRankOneUpdate<Array1<F>, F> for Array2<F> {
-    fn general_rank_one_update(&mut self, alpha: F, u: &Array1<F>, v: &Array1<F>) {
+    fn general_rank_one_update(
+        &mut self,
+        alpha: F,
+        u: &Array1<F>,
+        v: &Array1<F>,
+    ) {
         assert_eq!(
             self.nrows(),
             u.len(),
@@ -246,12 +261,13 @@ impl<F: Scalar> SymmetricEigen<Array1<F>> for Array2<F> {
             .as_slice()
             .expect("as_standard_layout produces a contiguous row-major slice");
         let (eigenvalues, eigenvectors) =
-            super::dense_eig::jacobi_eigen(slice, n).ok_or(SymmetricEigenError::Failed)?;
+            super::dense_eig::jacobi_eigen(slice, n)
+                .ok_or(SymmetricEigenError::Failed)?;
         // `jacobi_eigen` returns the eigenvectors row-major with column `k`
         // the eigenvector for `eigenvalues[k]`, exactly what
         // `Array2::from_shape_vec` with the default C-order produces.
-        let b =
-            Array2::from_shape_vec((n, n), eigenvectors).expect("jacobi_eigen returns n*n entries");
+        let b = Array2::from_shape_vec((n, n), eigenvectors)
+            .expect("jacobi_eigen returns n*n entries");
         Ok((b, Array1::from_vec(eigenvalues)))
     }
 }
@@ -338,7 +354,8 @@ impl<F: Scalar> LinearSolveSpd<Array1<F>> for Array2<F> {
         let slice = standard
             .as_slice()
             .expect("as_standard_layout produces a contiguous row-major slice");
-        let b_slice = b.as_slice().expect("Array1 right-hand side is contiguous");
+        let b_slice =
+            b.as_slice().expect("Array1 right-hand side is contiguous");
         super::dense_chol::cholesky_solve_spd(slice, n, b_slice)
             .map(Array1::from_vec)
             .ok_or(LinearSolveError::NotPositiveDefinite)
@@ -358,7 +375,10 @@ impl<F: Scalar> SampleStandardNormal for Array1<F>
 where
     StandardNormal: Distribution<F>,
 {
-    fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
+    fn sample_standard_normal<R: Rng + ?Sized>(
+        template: &Self,
+        rng: &mut R,
+    ) -> Self {
         Array1::from_shape_fn(template.len(), |_| StandardNormal.sample(rng))
     }
 }
@@ -574,7 +594,12 @@ where
         sum
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
+    fn project_strictly_inside(
+        &mut self,
+        lower: &Self,
+        upper: &Self,
+        rstep: F,
+    ) {
         assert_eq!(
             self.shape(),
             lower.shape(),

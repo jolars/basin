@@ -1,7 +1,7 @@
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
-    Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity, NegInPlace, NormSquared, Scalar,
-    ScaleInPlace, ScaledAdd, VectorLen,
+    Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity, NegInPlace, NormSquared,
+    Scalar, ScaleInPlace, ScaledAdd, VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -125,8 +125,17 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     S: LineSearch<P, V, F, Error = P::Error>,
-    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace + VectorLen,
-    M: MatVec<V> + MatrixIdentity + ScaleInPlace<F> + GeneralRankOneUpdate<V, F>,
+    V: Clone
+        + Dot<F>
+        + NormSquared<F>
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
+        + NegInPlace
+        + VectorLen,
+    M: MatVec<V>
+        + MatrixIdentity
+        + ScaleInPlace<F>
+        + GeneralRankOneUpdate<V, F>,
 {
     type Error = P::Error;
 
@@ -145,7 +154,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: QuasiNewtonState<V, M, F>,
-    ) -> Result<(QuasiNewtonState<V, M, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<
+        (QuasiNewtonState<V, M, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         let g = state
             .gradient
             .take()
@@ -159,9 +171,13 @@ where
         let mut direction = state.inverse_hessian.matvec(&g);
         direction.neg_in_place();
 
-        let alpha = self
-            .line_search
-            .next(problem, &state.param, cost_old, &g, &direction)?;
+        let alpha = self.line_search.next(
+            problem,
+            &state.param,
+            cost_old,
+            &g,
+            &direction,
+        )?;
 
         // Line search bailed (α = 0): direction wasn't descent, or we're
         // at numerical convergence. Restore gradient and cost so the state
@@ -246,7 +262,9 @@ where
 {
     type State = QuasiNewtonState<Vec<F>, crate::core::math::DenseMatrix<F>, F>;
     fn seed(&self, x: &Vec<F>) -> Self::State {
-        QuasiNewtonState::<Vec<F>, crate::core::math::DenseMatrix<F>, F>::new(x.clone())
+        QuasiNewtonState::<Vec<F>, crate::core::math::DenseMatrix<F>, F>::new(
+            x.clone(),
+        )
     }
 }
 
@@ -257,9 +275,12 @@ impl<S, F> InitialState<nalgebra::DVector<F>> for Bfgs<S, F>
 where
     F: Scalar + nalgebra::Scalar + num_traits::Zero,
 {
-    type State = QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
+    type State =
+        QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
     fn seed(&self, x: &nalgebra::DVector<F>) -> Self::State {
-        QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(x.clone())
+        QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(
+            x.clone(),
+        )
     }
 }
 
@@ -281,7 +302,10 @@ where
 }
 
 #[cfg(feature = "faer")]
-impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where F: Scalar + faer_traits::ComplexField {}
+impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where
+    F: Scalar + faer_traits::ComplexField
+{
+}
 
 #[cfg(feature = "ndarray")]
 impl<S, F> InitialState<ndarray::Array1<F>> for Bfgs<S, F>
@@ -290,7 +314,9 @@ where
 {
     type State = QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
     fn seed(&self, x: &ndarray::Array1<F>) -> Self::State {
-        QuasiNewtonState::<ndarray::Array1<F>, ndarray::Array2<F>, F>::new(x.clone())
+        QuasiNewtonState::<ndarray::Array1<F>, ndarray::Array2<F>, F>::new(
+            x.clone(),
+        )
     }
 }
 

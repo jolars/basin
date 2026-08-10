@@ -240,7 +240,8 @@ fn check_parity(text: &str) {
     }
     for want in &expected {
         let found = initial.iter().any(|got| {
-            got.len() == want.len() && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= 1e-12)
+            got.len() == want.len()
+                && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= 1e-12)
         });
         assert!(
             found,

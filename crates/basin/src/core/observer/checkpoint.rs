@@ -83,8 +83,9 @@ impl CheckpointWriter {
     /// sibling `*.tmp` first and renames into place so a crash mid-write can't
     /// truncate the previous good checkpoint.
     fn write<S: Serialize>(&self, state: &S) -> io::Result<()> {
-        let bytes = bincode::serde::encode_to_vec(state, bincode::config::standard())
-            .map_err(io::Error::other)?;
+        let bytes =
+            bincode::serde::encode_to_vec(state, bincode::config::standard())
+                .map_err(io::Error::other)?;
         let tmp = self.path.with_extension("tmp");
         fs::write(&tmp, &bytes)?;
         fs::rename(&tmp, &self.path)
@@ -119,9 +120,12 @@ where
 /// Load a checkpoint previously written by [`CheckpointWriter`] into a concrete
 /// state, ready to hand back to
 /// [`Executor::new`](crate::core::executor::Executor::new) for a warm start.
-pub fn read_checkpoint<S: DeserializeOwned>(path: impl AsRef<Path>) -> io::Result<S> {
+pub fn read_checkpoint<S: DeserializeOwned>(
+    path: impl AsRef<Path>,
+) -> io::Result<S> {
     let bytes = fs::read(path)?;
-    let (state, _) = bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
-        .map_err(io::Error::other)?;
+    let (state, _) =
+        bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
+            .map_err(io::Error::other)?;
     Ok(state)
 }

@@ -245,7 +245,8 @@ pub(crate) fn rescue<F: Scalar, E>(
             } else {
                 let (ip, iq) = decode_ptsid(ptsid[k], n);
                 if ip > 0 && iq > 0 {
-                    xkorig[ip - 1] * ptsaux[ip - 1][0] + xkorig[iq - 1] * ptsaux[iq - 1][0]
+                    xkorig[ip - 1] * ptsaux[ip - 1][0]
+                        + xkorig[iq - 1] * ptsaux[iq - 1][0]
                 } else if ip > 0 {
                     xkorig[ip - 1] * ptsaux[ip - 1][0]
                 } else if iq > 0 {
@@ -376,9 +377,11 @@ pub(crate) fn rescue<F: Scalar, E>(
                 for i in 0..n {
                     for j in 0..n {
                         let add = g_kpt * row[i] * row[j];
-                        model
-                            .gamma_explicit
-                            .set(i, j, model.gamma_explicit.get(i, j) + add);
+                        model.gamma_explicit.set(
+                            i,
+                            j,
+                            model.gamma_explicit.get(i, j) + add,
+                        );
                     }
                 }
             }
@@ -418,15 +421,23 @@ pub(crate) fn rescue<F: Scalar, E>(
             let mut vquad = fbase;
             if ip > 0 && iq > 0 {
                 let (p, qq) = (ip - 1, iq - 1);
-                vquad = vquad + xp * (model.gq[p] + half * xp * model.gamma_explicit.get(p, p));
-                vquad = vquad + xq * (model.gq[qq] + half * xq * model.gamma_explicit.get(qq, qq));
+                vquad = vquad
+                    + xp * (model.gq[p]
+                        + half * xp * model.gamma_explicit.get(p, p));
+                vquad = vquad
+                    + xq * (model.gq[qq]
+                        + half * xq * model.gamma_explicit.get(qq, qq));
                 vquad = vquad + xp * xq * model.gamma_explicit.get(p, qq);
             } else if ip > 0 {
                 let p = ip - 1;
-                vquad = vquad + xp * (model.gq[p] + half * xp * model.gamma_explicit.get(p, p));
+                vquad = vquad
+                    + xp * (model.gq[p]
+                        + half * xp * model.gamma_explicit.get(p, p));
             } else if iq > 0 {
                 let qq = iq - 1;
-                vquad = vquad + xq * (model.gq[qq] + half * xq * model.gamma_explicit.get(qq, qq));
+                vquad = vquad
+                    + xq * (model.gq[qq]
+                        + half * xq * model.gamma_explicit.get(qq, qq));
             }
             let xnew = model.xpt_row(kpt).to_vec();
             let mut implicit = zero;
@@ -462,22 +473,27 @@ pub(crate) fn rescue<F: Scalar, E>(
                 if ipk > 0 && iqk > 0 {
                     let (p, qq) = (ipk - 1, iqk - 1);
                     let (ap, aq) = (ptsaux[p][0], ptsaux[qq][0]);
-                    let dpp = model.gamma_explicit.get(p, p) + pqinc[k] * ap * ap;
+                    let dpp =
+                        model.gamma_explicit.get(p, p) + pqinc[k] * ap * ap;
                     model.gamma_explicit.set(p, p, dpp);
-                    let dqq = model.gamma_explicit.get(qq, qq) + pqinc[k] * aq * aq;
+                    let dqq =
+                        model.gamma_explicit.get(qq, qq) + pqinc[k] * aq * aq;
                     model.gamma_explicit.set(qq, qq, dqq);
-                    let dpq = model.gamma_explicit.get(p, qq) + pqinc[k] * ap * aq;
+                    let dpq =
+                        model.gamma_explicit.get(p, qq) + pqinc[k] * ap * aq;
                     model.gamma_explicit.set(p, qq, dpq);
                     model.gamma_explicit.set(qq, p, dpq);
                 } else if ipk > 0 {
                     let p = ipk - 1;
                     let ap = ptsaux[p][0];
-                    let dpp = model.gamma_explicit.get(p, p) + pqinc[k] * ap * ap;
+                    let dpp =
+                        model.gamma_explicit.get(p, p) + pqinc[k] * ap * ap;
                     model.gamma_explicit.set(p, p, dpp);
                 } else if iqk > 0 {
                     let qq = iqk - 1;
                     let aq = ptsaux[qq][1];
-                    let dqq = model.gamma_explicit.get(qq, qq) + pqinc[k] * aq * aq;
+                    let dqq =
+                        model.gamma_explicit.get(qq, qq) + pqinc[k] * aq * aq;
                     model.gamma_explicit.set(qq, qq, dqq);
                 }
             }
@@ -501,7 +517,12 @@ pub(crate) fn rescue<F: Scalar, E>(
 /// silently skipped to protect `H`, matching PRIMA, which calls this without
 /// capturing its optional `info` here (the entry gate at the call site already
 /// rejects bad denominators, so the skip is not expected to trigger).
-fn updateh_rsc<F: Scalar>(model: &mut QuadraticModel<F>, knew: usize, beta: F, vlag: &mut [F]) {
+fn updateh_rsc<F: Scalar>(
+    model: &mut QuadraticModel<F>,
+    knew: usize,
+    beta: F,
+    vlag: &mut [F],
+) {
     let n = model.n();
     let m = model.m();
     let rank = m - n - 1;
@@ -586,7 +607,8 @@ fn updateh_rsc<F: Scalar>(model: &mut QuadraticModel<F>, knew: usize, beta: F, v
     let half = F::from_f64(0.5).expect("0.5 representable");
     for r in 0..n {
         for c in (r + 1)..n {
-            let avg = half * (model.bmat_ups.get(r, c) + model.bmat_ups.get(c, r));
+            let avg =
+                half * (model.bmat_ups.get(r, c) + model.bmat_ups.get(c, r));
             model.bmat_ups.set(r, c, avg);
             model.bmat_ups.set(c, r, avg);
         }
@@ -621,7 +643,11 @@ mod tests {
             for ip in 1..=n {
                 for iq in 1..=n {
                     let pid = ip as f64 + iq as f64 / np1 + sfrac;
-                    assert_eq!(decode_ptsid(pid, n), (ip, iq), "n={n} pair ({ip},{iq})");
+                    assert_eq!(
+                        decode_ptsid(pid, n),
+                        (ip, iq),
+                        "n={n} pair ({ip},{iq})"
+                    );
                 }
             }
         }
@@ -632,18 +658,18 @@ mod tests {
     /// `Ω`-signs all +1), and the model must still interpolate `F` at every
     /// point. This single check validates the provisional-H construction, the
     /// reinstatement loop, `updateh_rsc`, and the model rebuild together.
-    fn rescue_rebuilds_and_interpolates(n: usize, m: usize, rho: f64, f: impl Fn(&[f64]) -> f64) {
+    fn rescue_rebuilds_and_interpolates(
+        n: usize,
+        m: usize,
+        rho: f64,
+        f: impl Fn(&[f64]) -> f64,
+    ) {
         let lower = vec![-5.0; n];
         let upper = vec![5.0; n];
         let x0 = vec![0.5; n];
-        let mut init = QuadraticModel::try_initialize_bounded::<core::convert::Infallible>(
-            x0,
-            &lower,
-            &upper,
-            rho,
-            m,
-            &mut |x| Ok(f(x)),
-        )
+        let mut init = QuadraticModel::try_initialize_bounded::<
+            core::convert::Infallible,
+        >(x0, &lower, &upper, rho, m, &mut |x| Ok(f(x)))
         .expect("infallible objective");
 
         let mut evaluated = Vec::new();
@@ -687,14 +713,20 @@ mod tests {
     fn rescue_quadratic_2d() {
         // A convex quadratic with a cross term.
         let f = |x: &[f64]| {
-            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0] - 2.0 * x[1] + 0.7
+            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0]
+                - 2.0 * x[1]
+                + 0.7
         };
         rescue_rebuilds_and_interpolates(2, 5, 0.3, f);
     }
 
     #[test]
     fn rescue_quadratic_2d_full_npt() {
-        let f = |x: &[f64]| (x[0] - 0.3).powi(2) + 2.0 * (x[1] + 0.4).powi(2) + 0.5 * x[0] * x[1];
+        let f = |x: &[f64]| {
+            (x[0] - 0.3).powi(2)
+                + 2.0 * (x[1] + 0.4).powi(2)
+                + 0.5 * x[0] * x[1]
+        };
         rescue_rebuilds_and_interpolates(2, 6, 0.25, f);
     }
 
@@ -703,7 +735,9 @@ mod tests {
         // Non-quadratic: the model becomes approximate, but the H-algebra and the
         // interpolation conditions are exact regardless of F.
         let f = |x: &[f64]| {
-            (1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0] * x[0]).powi(2) + (x[2] - 0.5).powi(4)
+            (1.0 - x[0]).powi(2)
+                + 100.0 * (x[1] - x[0] * x[0]).powi(2)
+                + (x[2] - 0.5).powi(4)
         };
         rescue_rebuilds_and_interpolates(3, 7, 0.4, f);
     }

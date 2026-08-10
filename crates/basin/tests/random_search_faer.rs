@@ -1,7 +1,10 @@
 #![cfg(feature = "faer")]
 
 use basin::problems::BoothBoxed;
-use basin::{BasicPopulationState, Executor, PopulationState, RandomSearch, State, StepOutcome};
+use basin::{
+    BasicPopulationState, Executor, PopulationState, RandomSearch, State,
+    StepOutcome,
+};
 use faer::Col;
 
 fn col2(a: f64, b: f64) -> Col<f64> {

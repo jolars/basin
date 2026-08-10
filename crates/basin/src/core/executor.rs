@@ -246,7 +246,8 @@ where
             }
             StepOutcome::Stopped(reason) => {
                 self.finished = Some(reason);
-                let state = self.state.as_ref().expect("state slot is Some on Stopped");
+                let state =
+                    self.state.as_ref().expect("state slot is Some on Stopped");
                 for (observer, _mode) in self.observers.iter_mut() {
                     observer.observe_final(state, &reason);
                 }
@@ -261,7 +262,10 @@ where
         loop {
             if let StepOutcome::Stopped(reason) = self.step()? {
                 return Ok(OptimizationResult {
-                    state: self.state.take().expect("state slot is Some on stop"),
+                    state: self
+                        .state
+                        .take()
+                        .expect("state slot is Some on stop"),
                     reason,
                 });
             }
@@ -416,7 +420,9 @@ where
     state.update_best();
     let mut slot = Some(state);
     let reason = loop {
-        match step_once(problem, &baseline, &mut slot, solver, criteria, max_iter)? {
+        match step_once(
+            problem, &baseline, &mut slot, solver, criteria, max_iter,
+        )? {
             StepOutcome::Continue => continue,
             StepOutcome::Stopped(reason) => break reason,
         }

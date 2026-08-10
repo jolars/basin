@@ -24,9 +24,9 @@
 
 use basin::problems::Booth;
 use basin::{
-    Backtracking, BasicState, CostFunction, CountsMirror, EvalCounts, Executor, Gradient,
-    GradientDescent, GradientTolerance, InnerExecutor, Problem, Solver, State,
-    TerminationCriterion, TerminationReason,
+    Backtracking, BasicState, CostFunction, CountsMirror, EvalCounts, Executor,
+    Gradient, GradientDescent, GradientTolerance, InnerExecutor, Problem,
+    Solver, State, TerminationCriterion, TerminationReason,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -120,7 +120,8 @@ fn sort_by_cost(iterates: &mut [Vec<f64>], costs: &mut [f64]) {
             .partial_cmp(&costs[j])
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    let new_iterates: Vec<Vec<f64>> = idx.iter().map(|&i| iterates[i].clone()).collect();
+    let new_iterates: Vec<Vec<f64>> =
+        idx.iter().map(|&i| iterates[i].clone()).collect();
     let new_costs: Vec<f64> = idx.iter().map(|&i| costs[i]).collect();
     iterates.clone_from_slice(&new_iterates);
     costs.clone_from_slice(&new_costs);
@@ -164,7 +165,8 @@ where
         problem: &mut Problem<P>,
         mut state: MultiStartState,
     ) -> Result<(MultiStartState, Option<TerminationReason>), Self::Error> {
-        let mut new_iterates: Vec<Vec<f64>> = Vec::with_capacity(state.iterates.len());
+        let mut new_iterates: Vec<Vec<f64>> =
+            Vec::with_capacity(state.iterates.len());
         let mut new_costs: Vec<f64> = Vec::with_capacity(state.iterates.len());
         let prev_iterates = std::mem::take(&mut state.iterates);
 
@@ -221,9 +223,11 @@ fn inner_executor_polishes_starts_to_booth_optimum() {
     let starts = vec![vec![0.0, 0.0], vec![-1.0, 5.0], vec![3.0, 1.0]];
     let outer_state = MultiStartState::new(starts);
 
-    let inner = InnerExecutor::new(GradientDescent::with_line_search(Backtracking::new()))
-        .max_iter(50)
-        .terminate_on(GradientTolerance(1e-8));
+    let inner = InnerExecutor::new(GradientDescent::with_line_search(
+        Backtracking::new(),
+    ))
+    .max_iter(50)
+    .terminate_on(GradientTolerance(1e-8));
     let outer = PerVertexRefine::new(inner);
 
     let result = Executor::new(problem, outer, outer_state)
@@ -255,9 +259,11 @@ fn inner_executor_aggregates_cost_evals_into_outer() {
     let starts = vec![vec![0.0, 0.0], vec![-1.0, 5.0], vec![3.0, 1.0]];
     let outer_state = MultiStartState::new(starts);
 
-    let inner = InnerExecutor::new(GradientDescent::with_line_search(Backtracking::new()))
-        .max_iter(50)
-        .terminate_on(GradientTolerance(1e-8));
+    let inner = InnerExecutor::new(GradientDescent::with_line_search(
+        Backtracking::new(),
+    ))
+    .max_iter(50)
+    .terminate_on(GradientTolerance(1e-8));
     let outer = PerVertexRefine::new(inner);
 
     let result = Executor::new(problem, outer, outer_state)
@@ -303,10 +309,12 @@ fn inner_executor_resets_criteria_once_per_run() {
     let outer_state = MultiStartState::new(starts);
 
     let resets = Rc::new(RefCell::new(0u32));
-    let inner = InnerExecutor::new(GradientDescent::with_line_search(Backtracking::new()))
-        .max_iter(50)
-        .terminate_on(GradientTolerance(1e-8))
-        .terminate_on(CountResets(Rc::clone(&resets)));
+    let inner = InnerExecutor::new(GradientDescent::with_line_search(
+        Backtracking::new(),
+    ))
+    .max_iter(50)
+    .terminate_on(GradientTolerance(1e-8))
+    .terminate_on(CountResets(Rc::clone(&resets)));
     let outer = PerVertexRefine::new(inner);
 
     Executor::new(problem, outer, outer_state)

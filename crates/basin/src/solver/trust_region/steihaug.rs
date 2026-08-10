@@ -1,8 +1,11 @@
 //! Steihaug truncated conjugate-gradient trust-region subproblem.
 
-use super::{Step, Subproblem, SubproblemHvp, model_decrease_from_bd, tau_to_boundary};
+use super::{
+    Step, Subproblem, SubproblemHvp, model_decrease_from_bd, tau_to_boundary,
+};
 use crate::core::math::{
-    Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+    Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+    VectorLen,
 };
 
 /// Steihaug truncated conjugate-gradient subproblem solver (Nocedal &
@@ -177,7 +180,13 @@ impl Default for Steihaug {
 impl<V, M, F> Subproblem<V, M, F> for Steihaug
 where
     F: Scalar,
-    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace + VectorLen,
+    V: Clone
+        + Dot<F>
+        + NormSquared<F>
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
+        + NegInPlace
+        + VectorLen,
     M: MatVec<V>,
 {
     fn solve(&self, g: &V, b: &M, radius: F) -> Step<V, F> {
@@ -193,7 +202,13 @@ where
 impl<V, F> SubproblemHvp<V, F> for Steihaug
 where
     F: Scalar,
-    V: Clone + Dot<F> + NormSquared<F> + ScaledAdd<F> + ScaleInPlace<F> + NegInPlace + VectorLen,
+    V: Clone
+        + Dot<F>
+        + NormSquared<F>
+        + ScaledAdd<F>
+        + ScaleInPlace<F>
+        + NegInPlace
+        + VectorLen,
 {
     fn solve_hvp<E>(
         &self,

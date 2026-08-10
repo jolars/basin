@@ -5,7 +5,8 @@
 
 use basin::problems::Sphere;
 use basin::{
-    BasicState, Executor, FiniteDiff, GradientDescent, GradientTolerance, TerminationReason,
+    BasicState, Executor, FiniteDiff, GradientDescent, GradientTolerance,
+    TerminationReason,
 };
 
 #[test]
@@ -18,11 +19,15 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
     let problem = FiniteDiff::new(Sphere::<Vec<f64>>::new());
     let initial = vec![1.5, -2.0, 0.75, 3.0];
 
-    let result = Executor::new(problem, GradientDescent::new(0.2), BasicState::new(initial))
-        .max_iter(500)
-        .terminate_on(GradientTolerance(1e-9))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        GradientDescent::new(0.2),
+        BasicState::new(initial),
+    )
+    .max_iter(500)
+    .terminate_on(GradientTolerance(1e-9))
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     assert!(result.cost() < 1e-12, "cost = {}", result.cost());
@@ -35,8 +40,8 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
 mod nalgebra {
     use basin::problems::{Rosenbrock, RosenbrockResiduals};
     use basin::{
-        BasicState, Executor, FiniteDiff, GradientTolerance, LevenbergMarquardt, Method, NllsState,
-        TerminationReason, TrustRegion,
+        BasicState, Executor, FiniteDiff, GradientTolerance,
+        LevenbergMarquardt, Method, NllsState, TerminationReason, TrustRegion,
     };
     use nalgebra::DVector;
 
@@ -46,8 +51,8 @@ mod nalgebra {
         // gradient and the (central-difference) Hessian the trust-region
         // Newton solver consumes. The FD Hessian is only ~√ε accurate, so a
         // strong-but-not-machine-precision bound is the honest check.
-        let problem =
-            FiniteDiff::new(Rosenbrock::<DVector<f64>>::new()).hessian_method(Method::Central);
+        let problem = FiniteDiff::new(Rosenbrock::<DVector<f64>>::new())
+            .hessian_method(Method::Central);
 
         let result = Executor::new(
             problem,
@@ -112,7 +117,9 @@ mod nalgebra {
 #[cfg(feature = "faer")]
 mod faer {
     use basin::problems::RosenbrockResiduals;
-    use basin::{Executor, FiniteDiff, LevenbergMarquardt, NllsState, TerminationReason};
+    use basin::{
+        Executor, FiniteDiff, LevenbergMarquardt, NllsState, TerminationReason,
+    };
     use faer::Col;
 
     #[test]

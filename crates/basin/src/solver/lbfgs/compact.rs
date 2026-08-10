@@ -88,7 +88,11 @@ pub(crate) enum FormtError {
 /// Mirrors LINPACK's `dpofa`. Returns `false` if a pivot is
 /// non-positive (matches `dpofa`'s `info > 0` exit; Fortran flags it
 /// as `info = -3` in `formt`).
-pub(crate) fn cholesky_upper_in_place<F: Scalar>(t: &mut [F], col: usize, m: usize) -> bool {
+pub(crate) fn cholesky_upper_in_place<F: Scalar>(
+    t: &mut [F],
+    col: usize,
+    m: usize,
+) -> bool {
     if col == 0 {
         return true;
     }
@@ -120,7 +124,12 @@ pub(crate) fn cholesky_upper_in_place<F: Scalar>(t: &mut [F], col: usize, m: usi
 /// Cholesky factor stored in the upper triangle of `j_upper`
 /// (row-major, stride `m`, leading `col × col` live). Mirrors LINPACK's
 /// `dtrsl(..., job=01, ...)`.
-pub(crate) fn solve_upper_tri<F: Scalar>(j_upper: &[F], col: usize, m: usize, b: &mut [F]) {
+pub(crate) fn solve_upper_tri<F: Scalar>(
+    j_upper: &[F],
+    col: usize,
+    m: usize,
+    b: &mut [F],
+) {
     if col == 0 {
         return;
     }

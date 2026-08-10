@@ -77,7 +77,8 @@ fn aggregates_inner_cost_evals_into_outer() {
     .run()
     .unwrap();
 
-    let min_extra = (outer_iters.saturating_sub(1)) * (k as u64) * (n as u64 + 2);
+    let min_extra =
+        (outer_iters.saturating_sub(1)) * (k as u64) * (n as u64 + 2);
     assert!(
         memetic.cost_evals() >= vanilla.cost_evals() + min_extra,
         "memetic cost_evals = {} should exceed vanilla {} by at least \

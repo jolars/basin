@@ -218,7 +218,12 @@ where
             let warn_stpmin = stp == self.stpmin && (f > ftest || g >= gtest);
             let converged = f <= ftest && g.abs() <= self.gtol * (-ginit);
 
-            if warn_rounding || warn_xtol || warn_stpmax || warn_stpmin || converged {
+            if warn_rounding
+                || warn_xtol
+                || warn_stpmax
+                || warn_stpmin
+                || converged
+            {
                 return Ok(stp);
             }
 
@@ -294,7 +299,11 @@ where
             // (Fortran 3658–3659). The Fortran is
             // `(brackt ∧ (A ∨ B)) ∨ (brackt ∧ C)` ≡
             // `brackt ∧ (A ∨ B ∨ C)`.
-            if brackt && (stp <= stmin || stp >= stmax || stmax - stmin <= self.xtol * stmax) {
+            if brackt
+                && (stp <= stmin
+                    || stp >= stmax
+                    || stmax - stmin <= self.xtol * stmax)
+            {
                 stp = stx;
             }
         }
@@ -354,7 +363,9 @@ fn dcstep<F: Scalar>(
         let q = ((gamma - *dx) + gamma) + dp;
         let r = p / q;
         let stpc = *stx + r * (*stp - *stx);
-        let stpq = *stx + ((*dx / ((*fx - fp) / (*stp - *stx) + *dx)) / two) * (*stp - *stx);
+        let stpq = *stx
+            + ((*dx / ((*fx - fp) / (*stp - *stx) + *dx)) / two)
+                * (*stp - *stx);
         stpf = if (stpc - *stx).abs() < (stpq - *stx).abs() {
             stpc
         } else {
@@ -387,7 +398,8 @@ fn dcstep<F: Scalar>(
         // `gamma = 0` only arises if the cubic does not tend to infinity
         // in the direction of the step. The `max(0, ·)` guards a
         // negative argument to sqrt from rounding.
-        let mut gamma = s * (zero.max((theta / s).powi(2) - (*dx / s) * (dp / s))).sqrt();
+        let mut gamma =
+            s * (zero.max((theta / s).powi(2) - (*dx / s) * (dp / s))).sqrt();
         if *stp > *stx {
             gamma = -gamma;
         }
@@ -427,7 +439,8 @@ fn dcstep<F: Scalar>(
         stpf = if *brackt {
             let theta = three * (fp - *fy) / (*sty - *stp) + *dy + dp;
             let s = theta.abs().max(dy.abs()).max(dp.abs());
-            let mut gamma = s * ((theta / s).powi(2) - (*dy / s) * (dp / s)).sqrt();
+            let mut gamma =
+                s * ((theta / s).powi(2) - (*dy / s) * (dp / s)).sqrt();
             if *stp > *sty {
                 gamma = -gamma;
             }
@@ -479,7 +492,10 @@ mod tests {
 
     impl Gradient for Quadratic {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok(vec![2.0 * (x[0] - 3.0)])
         }
     }
@@ -504,7 +520,10 @@ mod tests {
 
     impl Gradient for Cubic {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             let t = x[0] - 2.0;
             Ok(vec![3.0 * t.powi(2) - 3.0])
         }
@@ -518,8 +537,10 @@ mod tests {
         let g = p.gradient(&x).unwrap();
         let d = vec![-g[0]]; // = +6
         let mut ls = MoreThuente::new();
-        let alpha =
-            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Quadratic, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &d,
+        )
+        .unwrap();
 
         assert!(alpha > 0.0);
 
@@ -548,8 +569,10 @@ mod tests {
         let g = p.gradient(&x).unwrap();
         let d = vec![6.0];
         let mut ls = MoreThuente::new();
-        let alpha =
-            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Quadratic, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &d,
+        )
+        .unwrap();
 
         assert!(
             (alpha - 0.5).abs() < 0.5,
@@ -570,8 +593,10 @@ mod tests {
         let baseline = *p.counts();
         let d = vec![g[0]]; // d = -6 → gᵀd = +36 > 0 (ascent)
         let mut ls = MoreThuente::new();
-        let alpha =
-            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Quadratic, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &d,
+        )
+        .unwrap();
 
         assert_eq!(alpha, 0.0);
         // Early-bail path makes no probes.
@@ -587,7 +612,10 @@ mod tests {
         let g = p.gradient(&x).unwrap();
         let d = vec![-1.0];
         let mut ls = MoreThuente::new().alpha_init(3.0);
-        let alpha = LineSearch::<Cubic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Cubic, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &d,
+        )
+        .unwrap();
 
         assert!(alpha > 0.0);
         let mut x_new = x.clone();
@@ -618,8 +646,10 @@ mod tests {
         let g = p.gradient(&x).unwrap();
         let d = vec![6.0];
         let mut ls = MoreThuente::new().stpmax(0.1).alpha_init(0.1);
-        let alpha =
-            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Quadratic, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &d,
+        )
+        .unwrap();
 
         assert!((alpha - 0.1).abs() < 1e-12, "expected α=0.1, got {alpha}",);
     }

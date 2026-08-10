@@ -23,8 +23,8 @@
 
 use basin::problems::{RastriginBoxed, Rosenbrock};
 use basin::{
-    BasicPopulationState, CmaEs, CmaEsState, De, DenseMatrix, Executor, OptimizationResult,
-    RandomSearch, State,
+    BasicPopulationState, CmaEs, CmaEsState, De, DenseMatrix, Executor,
+    OptimizationResult, RandomSearch, State,
 };
 use std::fmt::Debug;
 
@@ -122,8 +122,10 @@ fn random_search_reproducible_and_counts_match() {
     );
 }
 
-fn assert_bit_identical<S: State>(a: &OptimizationResult<S>, b: &OptimizationResult<S>)
-where
+fn assert_bit_identical<S: State>(
+    a: &OptimizationResult<S>,
+    b: &OptimizationResult<S>,
+) where
     S::Param: PartialEq + Debug,
     S::Float: PartialEq + Debug,
 {

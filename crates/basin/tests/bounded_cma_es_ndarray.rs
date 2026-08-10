@@ -2,8 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState,
+    StepOutcome, TerminationReason,
 };
 use ndarray::{Array1, Array2};
 
@@ -105,8 +105,8 @@ fn with_stds_anisotropic_recovers_minimum() {
 #[should_panic(expected = "stds.len() == mean.len()")]
 fn with_stds_panics_on_length_mismatch() {
     let m0 = Array1::from_vec(vec![0.0, 0.0]);
-    let _ =
-        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5).with_stds(Array1::from_vec(vec![1.0]));
+    let _ = CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5)
+        .with_stds(Array1::from_vec(vec![1.0]));
 }
 
 /// Slack bounds: the unconstrained Booth minimum (1, 3) is interior to

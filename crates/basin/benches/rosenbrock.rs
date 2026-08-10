@@ -3,7 +3,12 @@ use basin::{BasicState, Executor, GradientDescent, Problem, Solver};
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-fn bench<S, R>(name: &str, iters: u32, mut setup: impl FnMut() -> S, mut run: impl FnMut(S) -> R) {
+fn bench<S, R>(
+    name: &str,
+    iters: u32,
+    mut setup: impl FnMut() -> S,
+    mut run: impl FnMut(S) -> R,
+) {
     for _ in 0..3 {
         let _ = black_box(run(setup()));
     }
@@ -33,7 +38,9 @@ fn main() {
                 .unwrap();
             (solver, problem, state)
         },
-        |(mut solver, mut problem, state)| solver.next_iter(&mut problem, state).unwrap(),
+        |(mut solver, mut problem, state)| {
+            solver.next_iter(&mut problem, state).unwrap()
+        },
     );
 
     bench(

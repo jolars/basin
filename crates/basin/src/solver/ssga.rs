@@ -1,7 +1,9 @@
 use rand_distr::uniform::SampleUniform;
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{NormSquared, SampleUniformBox, Scalar, ScaledAdd, VectorLen};
+use crate::core::math::{
+    NormSquared, SampleUniformBox, Scalar, ScaledAdd, VectorLen,
+};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
@@ -302,7 +304,11 @@ where
 ///
 /// `pub(crate)` so [`MaLsChCma`](crate::solver::ma_ls_ch_cma::MaLsChCma)
 /// reuses the operator directly; not a stable public surface.
-pub(crate) fn nam_select<V, F, R>(pop: &[V], pool: usize, rng: &mut R) -> (usize, usize)
+pub(crate) fn nam_select<V, F, R>(
+    pop: &[V],
+    pool: usize,
+    rng: &mut R,
+) -> (usize, usize)
 where
     F: Scalar,
     V: Clone + ScaledAdd<F> + NormSquared<F>,
@@ -363,7 +369,9 @@ pub(crate) fn bga_mutate_in_place<V, F, R>(
     rng: &mut R,
 ) where
     F: Scalar,
-    V: VectorLen + std::ops::Index<usize, Output = F> + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     R: Rng + ?Sized,
 {
     let n = child.vec_len();
@@ -482,7 +490,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicPopulationState<V, F>,
-    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<
+        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -509,7 +520,12 @@ where
                 rng,
             );
             let c_child = problem.cost(&child)?;
-            replace_worst_if_better(&mut state.candidates, &mut state.costs, child, c_child);
+            replace_worst_if_better(
+                &mut state.candidates,
+                &mut state.costs,
+                child,
+                c_child,
+            );
         }
 
         sort_population_ascending(&mut state.candidates, &mut state.costs);
@@ -568,7 +584,8 @@ mod tests {
     }
 
     #[test]
-    fn nam_picks_farthest_in_pool_deterministically_when_pool_covers_population() {
+    fn nam_picks_farthest_in_pool_deterministically_when_pool_covers_population()
+     {
         // 4 individuals on a 1D line; pool=4 means every candidate is
         // sampled with high probability (uniform sampling with
         // replacement → most runs the farthest from p1 is picked).

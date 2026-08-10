@@ -11,7 +11,9 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 use crate::CostFunction;
 
 /// Standard lower bound on `x` (the asymmetric Bukin domain).
@@ -100,7 +102,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(bukin_n6(x.as_slice()))
         }
     }
@@ -116,7 +121,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(bukin_n6(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -135,7 +143,8 @@ mod faer_impl {
         fn cost(&self, x: &Col<f64>) -> Result<f64, std::convert::Infallible> {
             debug_assert_eq!(x.nrows(), 2);
             let (a, b) = (x[0], x[1]);
-            Ok(100.0 * (b - 0.01 * a * a).abs().sqrt() + 0.01 * (a + 10.0).abs())
+            Ok(100.0 * (b - 0.01 * a * a).abs().sqrt()
+                + 0.01 * (a + 10.0).abs())
         }
     }
 }

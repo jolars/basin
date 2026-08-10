@@ -1,6 +1,7 @@
 use basin::problems::RastriginBoxed;
 use basin::{
-    BasicPopulationState, Executor, MaxCostEvals, PopulationState, Ssga, State, StepOutcome,
+    BasicPopulationState, Executor, MaxCostEvals, PopulationState, Ssga, State,
+    StepOutcome,
 };
 
 /// Convergence on Rastrigin(D=5) within the [-5.12, 5.12] standard box.

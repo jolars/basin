@@ -255,7 +255,10 @@ where
 /// for the one slot Nelder-Mead just rewrote (or the four slots after a
 /// shrink), so each call does only a handful of swaps in the steady
 /// state, and crucially, allocates nothing.
-fn insertion_sort_simplex<V, F: PartialOrd>(vertices: &mut [V], costs: &mut [F]) {
+fn insertion_sort_simplex<V, F: PartialOrd>(
+    vertices: &mut [V],
+    costs: &mut [F],
+) {
     for i in 1..vertices.len() {
         let mut j = i;
         while j > 0
@@ -449,7 +452,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: BasicSimplexState<V, F>,
-    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
@@ -490,12 +494,15 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: BasicSimplexState<V, F>,
-    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
-        next_iter_inner(problem, state, p, &|v: &mut V| v.clamp_in_place(&lo, &hi))
+        next_iter_inner(problem, state, p, &|v: &mut V| {
+            v.clamp_in_place(&lo, &hi)
+        })
     }
 }

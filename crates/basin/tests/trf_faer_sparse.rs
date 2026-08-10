@@ -5,9 +5,13 @@ use basin::{Executor, NllsState, TerminationReason, Trf};
 use faer::Col;
 use faer::sparse::{SparseColMat, Triplet};
 
-type FaerSparseLeastSquaresBoxed = SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>;
+type FaerSparseLeastSquaresBoxed =
+    SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>;
 
-fn fixture(lower: Col<f64>, upper: Col<f64>) -> (FaerSparseLeastSquaresBoxed, Col<f64>) {
+fn fixture(
+    lower: Col<f64>,
+    upper: Col<f64>,
+) -> (FaerSparseLeastSquaresBoxed, Col<f64>) {
     let triplets = [
         Triplet::new(0_usize, 0_usize, 1.0),
         Triplet::new(1, 1, 1.0),
@@ -19,8 +23,8 @@ fn fixture(lower: Col<f64>, upper: Col<f64>) -> (FaerSparseLeastSquaresBoxed, Co
         Triplet::new(5, 1, 1.0),
         Triplet::new(5, 2, 1.0),
     ];
-    let a =
-        SparseColMat::<usize, f64>::try_new_from_triplets(6, 3, &triplets).expect("triplets valid");
+    let a = SparseColMat::<usize, f64>::try_new_from_triplets(6, 3, &triplets)
+        .expect("triplets valid");
     let b = Col::<f64>::from_fn(6, |i| [1.0, 2.0, 3.0, 3.0, 4.0, 5.0][i]);
     let initial = Col::<f64>::from_fn(3, |i| [0.5, 0.5, 0.5][i]);
     (SparseLeastSquaresBoxed::new(a, b, lower, upper), initial)

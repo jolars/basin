@@ -55,18 +55,21 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use argmin::core::observers::{Observe, ObserverMode};
-use argmin::core::{Error, Executor as ArgminExecutor, KV, State as ArgminState};
+use argmin::core::{
+    Error, Executor as ArgminExecutor, KV, State as ArgminState,
+};
 use argmin::solver::gradientdescent::SteepestDescent;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use argmin::solver::quasinewton::LBFGS as ArgminLBFGS;
 use basin::problems::{
-    Rosenbrock, StyblinskiTang, rosenbrock, rosenbrock_gradient, styblinski_tang,
+    Rosenbrock, StyblinskiTang, rosenbrock, rosenbrock_gradient,
+    styblinski_tang,
 };
 use basin::{
-    BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent, IntoInitialSimplex,
-    LbfgsState, Lbfgsb, MoreThuente, NelderMead, Newuoa, NewuoaState, Solver, State as BasinState,
-    StepOutcome,
+    BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent,
+    IntoInitialSimplex, LbfgsState, Lbfgsb, MoreThuente, NelderMead, Newuoa,
+    NewuoaState, Solver, State as BasinState, StepOutcome,
 };
 use competitor_bench::{ArgminProblem, GomezProblem};
 use gomez::OptimizerDriver;
@@ -137,7 +140,10 @@ fn st_fopt(n: usize) -> f64 {
 /// the GD, NM, and L-BFGS cases run the full `MAX_ITERS` budget, but NEWUOA stops
 /// earlier on its own ρ-convergence, so it passes a generous cap that only
 /// bounds a pathological run.
-fn basin_trace<P, S, So>(exec: Executor<P, S, So>, max_iter: u64) -> Vec<(u128, f64)>
+fn basin_trace<P, S, So>(
+    exec: Executor<P, S, So>,
+    max_iter: u64,
+) -> Vec<(u128, f64)>
 where
     S: BasinState<Float = f64> + CountsMirror,
     So: Solver<P, S>,
@@ -183,7 +189,12 @@ impl TraceObserver {
 }
 
 impl<I: ArgminState<Float = f64>> Observe<I> for TraceObserver {
-    fn observe_init(&mut self, _name: &str, state: &I, _kv: &KV) -> Result<(), Error> {
+    fn observe_init(
+        &mut self,
+        _name: &str,
+        state: &I,
+        _kv: &KV,
+    ) -> Result<(), Error> {
         self.record(state);
         Ok(())
     }
@@ -279,25 +290,27 @@ fn nlopt_trace(
         best: f0,
         points: vec![(0u128, f0)],
     };
-    let obj = move |x: &[f64], g: Option<&mut [f64]>, st: &mut NloptState| -> f64 {
-        if let Some(g) = g {
-            grad(x, g);
-        }
-        let f = cost(x);
-        let t = match st.start {
-            Some(t0) => t0.elapsed().as_nanos(),
-            None => {
-                st.start = Some(Instant::now());
-                0
+    let obj =
+        move |x: &[f64], g: Option<&mut [f64]>, st: &mut NloptState| -> f64 {
+            if let Some(g) = g {
+                grad(x, g);
             }
+            let f = cost(x);
+            let t = match st.start {
+                Some(t0) => t0.elapsed().as_nanos(),
+                None => {
+                    st.start = Some(Instant::now());
+                    0
+                }
+            };
+            if f < st.best {
+                st.best = f;
+                st.points.push((t, st.best));
+            }
+            f
         };
-        if f < st.best {
-            st.best = f;
-            st.points.push((t, st.best));
-        }
-        f
-    };
-    let mut opt = nlopt::Nlopt::new(algo, N, obj, nlopt::Target::Minimize, state);
+    let mut opt =
+        nlopt::Nlopt::new(algo, N, obj, nlopt::Target::Minimize, state);
     opt.set_maxeval(MAX_ITERS as u32).unwrap();
     // Zero tolerances so NLopt runs the full eval budget (no early
     // stop), matching the other libraries' policy in this harness.
@@ -321,21 +334,22 @@ fn nlopt_newuoa_trace(f0: f64) -> Vec<(u128, f64)> {
         best: f0,
         points: vec![(0u128, f0)],
     };
-    let obj = move |x: &[f64], _g: Option<&mut [f64]>, st: &mut NloptState| -> f64 {
-        let f = styblinski_tang(x);
-        let t = match st.start {
-            Some(t0) => t0.elapsed().as_nanos(),
-            None => {
-                st.start = Some(Instant::now());
-                0
+    let obj =
+        move |x: &[f64], _g: Option<&mut [f64]>, st: &mut NloptState| -> f64 {
+            let f = styblinski_tang(x);
+            let t = match st.start {
+                Some(t0) => t0.elapsed().as_nanos(),
+                None => {
+                    st.start = Some(Instant::now());
+                    0
+                }
+            };
+            if f < st.best {
+                st.best = f;
+                st.points.push((t, st.best));
             }
+            f
         };
-        if f < st.best {
-            st.best = f;
-            st.points.push((t, st.best));
-        }
-        f
-    };
     let mut opt = nlopt::Nlopt::new(
         nlopt::Algorithm::Newuoa,
         N_ST,
@@ -485,16 +499,20 @@ fn main() {
             library: "argmin",
             points: finite_start(
                 median_reps(|| {
-                    let simplex = IntoInitialSimplex::into_initial_simplex(start(), 0.05);
+                    let simplex =
+                        IntoInitialSimplex::into_initial_simplex(start(), 0.05);
                     let nm = ArgminNelderMead::new(simplex)
                         .with_sd_tolerance(0.0)
                         .unwrap();
                     let (obs, points) = observer();
-                    ArgminExecutor::new(ArgminProblem::new(rosenbrock, rosenbrock_gradient), nm)
-                        .configure(|s| s.max_iters(MAX_ITERS))
-                        .add_observer(obs, ObserverMode::Always)
-                        .run()
-                        .unwrap();
+                    ArgminExecutor::new(
+                        ArgminProblem::new(rosenbrock, rosenbrock_gradient),
+                        nm,
+                    )
+                    .configure(|s| s.max_iters(MAX_ITERS))
+                    .add_observer(obs, ObserverMode::Always)
+                    .run()
+                    .unwrap();
                     drain(&points)
                 }),
                 f0,
@@ -515,7 +533,12 @@ fn main() {
             f_opt: F_OPT,
             library: "nlopt",
             points: median_reps(|| {
-                nlopt_trace(nlopt::Algorithm::Neldermead, rosenbrock, noop_grad, f0)
+                nlopt_trace(
+                    nlopt::Algorithm::Neldermead,
+                    rosenbrock,
+                    noop_grad,
+                    f0,
+                )
             }),
         },
         // ---- L-BFGS (limited memory m = 10, More-Thuente) ----
@@ -546,17 +569,21 @@ fn main() {
                 median_reps(|| {
                     let ls: MoreThuenteLineSearch<Vec<f64>, Vec<f64>, f64> =
                         MoreThuenteLineSearch::new();
-                    let lbfgs: ArgminLBFGS<_, Vec<f64>, Vec<f64>, f64> = ArgminLBFGS::new(ls, 10)
-                        .with_tolerance_grad(0.0)
-                        .unwrap()
-                        .with_tolerance_cost(0.0)
-                        .unwrap();
+                    let lbfgs: ArgminLBFGS<_, Vec<f64>, Vec<f64>, f64> =
+                        ArgminLBFGS::new(ls, 10)
+                            .with_tolerance_grad(0.0)
+                            .unwrap()
+                            .with_tolerance_cost(0.0)
+                            .unwrap();
                     let (obs, points) = observer();
-                    ArgminExecutor::new(ArgminProblem::new(rosenbrock, rosenbrock_gradient), lbfgs)
-                        .configure(|s| s.param(start()).max_iters(MAX_ITERS))
-                        .add_observer(obs, ObserverMode::Always)
-                        .run()
-                        .unwrap();
+                    ArgminExecutor::new(
+                        ArgminProblem::new(rosenbrock, rosenbrock_gradient),
+                        lbfgs,
+                    )
+                    .configure(|s| s.param(start()).max_iters(MAX_ITERS))
+                    .add_observer(obs, ObserverMode::Always)
+                    .run()
+                    .unwrap();
                     drain(&points)
                 }),
                 f0,
@@ -569,7 +596,12 @@ fn main() {
             f_opt: F_OPT,
             library: "nlopt",
             points: median_reps(|| {
-                nlopt_trace(nlopt::Algorithm::Lbfgs, rosenbrock, rosenbrock_gradient, f0)
+                nlopt_trace(
+                    nlopt::Algorithm::Lbfgs,
+                    rosenbrock,
+                    rosenbrock_gradient,
+                    f0,
+                )
             }),
         },
         // ---- NEWUOA (Powell's model-based DFO): same algorithm, two
@@ -601,7 +633,9 @@ fn main() {
             n: N_ST,
             f_opt: st_fopt(N_ST),
             library: "nlopt",
-            points: median_reps(|| nlopt_newuoa_trace(styblinski_tang(&st_start()))),
+            points: median_reps(|| {
+                nlopt_newuoa_trace(styblinski_tang(&st_start()))
+            }),
         },
     ];
 

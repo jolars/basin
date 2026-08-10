@@ -190,7 +190,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicPopulationState<V, F>,
-    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<
+        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         // Snapshot the elite before resampling; this is what makes
         // state.cost() monotone.
         let elite_x = state.candidates[0].clone();

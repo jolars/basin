@@ -8,7 +8,8 @@ use basin::core::math::DenseMatrix;
 use basin::core::problem::{CostFunction, Gradient, Hessian, HessianProduct};
 use basin::core::state::{BasicState, LbfgsState, State};
 use basin::core::termination::{
-    CostTolerance, GradientTolerance, MaxIter, RelativeCostTolerance, TargetCost,
+    CostTolerance, GradientTolerance, MaxIter, RelativeCostTolerance,
+    TargetCost,
 };
 use basin::line_search::{Backtracking, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
@@ -63,7 +64,9 @@ fn unbounded_lbfgs_f32_round_trips_state_solver_termination() {
     };
     let state = LbfgsState::<Vec<f32>, f32>::new(vec![0.0_f32; 3], 5);
     let solver: Lbfgs<Unbounded, MoreThuente<f32>, f32> =
-        Lbfgs::<Unbounded, MoreThuente<f32>, f32>::with_line_search(MoreThuente::new());
+        Lbfgs::<Unbounded, MoreThuente<f32>, f32>::with_line_search(
+            MoreThuente::new(),
+        );
 
     let result = Executor::new(problem, solver, state)
         .terminate_on(MaxIter(100))
@@ -93,7 +96,11 @@ impl Hessian for ShiftedQuadF32 {
 }
 
 impl HessianProduct for ShiftedQuadF32 {
-    fn hessian_product(&self, _x: &Vec<f32>, v: &Vec<f32>) -> Result<Vec<f32>, Self::Error> {
+    fn hessian_product(
+        &self,
+        _x: &Vec<f32>,
+        v: &Vec<f32>,
+    ) -> Result<Vec<f32>, Self::Error> {
         // ∇²f = 2 I, so ∇²f·v = 2 v.
         Ok(v.iter().map(|vi| 2.0 * vi).collect())
     }
@@ -156,7 +163,8 @@ fn trust_region_f32_round_trips_state_solver_termination() {
         c: vec![1.0_f32, 2.0, 3.0],
     };
     let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
-    let solver: TrustRegion<Steihaug, f32> = TrustRegion::with_subproblem(Steihaug::new());
+    let solver: TrustRegion<Steihaug, f32> =
+        TrustRegion::with_subproblem(Steihaug::new());
 
     let result = Executor::new(problem, solver, state)
         .terminate_on(MaxIter(100))

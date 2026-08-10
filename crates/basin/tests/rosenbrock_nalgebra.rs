@@ -2,8 +2,8 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    Backtracking, BasicSimplexState, BasicState, CostFunction, Executor, GradientDescent,
-    NelderMead,
+    Backtracking, BasicSimplexState, BasicState, CostFunction, Executor,
+    GradientDescent, NelderMead,
 };
 use nalgebra::DVector;
 

@@ -171,7 +171,12 @@ fn check_parity(text: &str) {
     for (k, (f_prima, cstrv_prima, x)) in fx.evals.iter().enumerate() {
         let f_rust = objective(&fx.problem, x);
         let c_rust = constraints(&fx.problem, x);
-        assert_eq!(c_rust.len(), m, "{}: constraint count mismatch", fx.problem);
+        assert_eq!(
+            c_rust.len(),
+            m,
+            "{}: constraint count mismatch",
+            fx.problem
+        );
         let cstrv_rust = violation(&c_rust);
         let f_tol = 1e-12 * f_prima.abs().max(1.0);
         assert!(
@@ -198,12 +203,19 @@ fn check_parity(text: &str) {
     // Drive basin once, recording every evaluation it makes. The eval closure
     // returns the (raw) objective and constraint vector, as `CobylaWork` expects.
     let trace = std::cell::RefCell::new(Vec::<Vec<f64>>::new());
-    let mut eval = |x: &[f64]| -> Result<(f64, Vec<f64>), std::convert::Infallible> {
-        trace.borrow_mut().push(x.to_vec());
-        Ok((objective(&fx.problem, x), constraints(&fx.problem, x)))
-    };
-    let (mut work, _bx, _bf) =
-        CobylaWork::try_init(fx.x0.clone(), m, fx.rho_beg, fx.rho_end, &mut eval).unwrap();
+    let mut eval =
+        |x: &[f64]| -> Result<(f64, Vec<f64>), std::convert::Infallible> {
+            trace.borrow_mut().push(x.to_vec());
+            Ok((objective(&fx.problem, x), constraints(&fx.problem, x)))
+        };
+    let (mut work, _bx, _bf) = CobylaWork::try_init(
+        fx.x0.clone(),
+        m,
+        fx.rho_beg,
+        fx.rho_end,
+        &mut eval,
+    )
+    .unwrap();
 
     let mut converged = false;
     for _ in 0..fx.max_fun {
@@ -235,7 +247,8 @@ fn check_parity(text: &str) {
     let initial = &trace_ref[..npt];
     for (f_prima, _cstrv, want) in &fx.evals[..npt] {
         let found = initial.iter().any(|got| {
-            got.len() == want.len() && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= 1e-12)
+            got.len() == want.len()
+                && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= 1e-12)
         });
         assert!(
             found,

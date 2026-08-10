@@ -170,7 +170,9 @@ pub(crate) fn subsm<F: Scalar>(
         let js = col + jy;
         for i in 0..nsub {
             let k = ind[i];
-            d[i] = d[i] + wy_cols[jy][k] * wv[jy] / theta + ws_cols[jy][k] * wv[js];
+            d[i] = d[i]
+                + wy_cols[jy][k] * wv[jy] / theta
+                + ws_cols[jy][k] * wv[js];
         }
     }
     for slot in d.iter_mut().take(nsub) {
@@ -315,8 +317,8 @@ mod tests {
         let mut wv = vec![0.0; 2];
 
         let status = subsm(
-            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols, &wy_cols, &wn, &mut wv, 1,
-            0, 1.0,
+            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols,
+            &wy_cols, &wn, &mut wv, 1, 0, 1.0,
         )
         .unwrap();
         assert_eq!(status, SubsmStatus::InteriorStep);
@@ -347,8 +349,8 @@ mod tests {
         let mut wv = vec![0.0; 2];
 
         let status = subsm(
-            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols, &wy_cols, &wn, &mut wv, 1,
-            0, 1.0,
+            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols,
+            &wy_cols, &wn, &mut wv, 1, 0, 1.0,
         )
         .unwrap();
         assert_eq!(status, SubsmStatus::InteriorStep);
@@ -376,8 +378,8 @@ mod tests {
         let wn = Vec::<f64>::new();
         let mut wv = vec![0.0; 2];
         subsm(
-            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols, &wy_cols, &wn, &mut wv, 1,
-            0, 2.0,
+            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols,
+            &wy_cols, &wn, &mut wv, 1, 0, 2.0,
         )
         .unwrap();
         // d_in = 4, θ = 2 ⇒ d_out = 2, x_new = 1 + 2 = 3.
@@ -408,8 +410,8 @@ mod tests {
         let mut wv = vec![0.0; 2];
 
         let status = subsm(
-            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols, &wy_cols, &wn, &mut wv, 1,
-            0, 1.0,
+            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols,
+            &wy_cols, &wn, &mut wv, 1, 0, 1.0,
         )
         .unwrap();
         assert_eq!(status, SubsmStatus::BoundEncountered);
@@ -436,8 +438,8 @@ mod tests {
         let mut wv = vec![0.0; 2];
 
         let status = subsm(
-            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols, &wy_cols, &wn, &mut wv, 1,
-            0, 1.0,
+            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols,
+            &wy_cols, &wn, &mut wv, 1, 0, 1.0,
         )
         .unwrap();
         assert_eq!(status, SubsmStatus::BoundEncountered);
@@ -493,8 +495,8 @@ mod tests {
         let mut wv = vec![0.0_f64; 2 * m];
 
         let status = subsm(
-            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols, &wy_cols, &wn, &mut wv, m,
-            1, theta,
+            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols,
+            &wy_cols, &wn, &mut wv, m, 1, theta,
         )
         .unwrap();
         assert_eq!(status, SubsmStatus::InteriorStep);
@@ -548,8 +550,8 @@ mod tests {
         let mut wv = vec![0.0; 2];
 
         let status = subsm(
-            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols, &wy_cols, &wn, &mut wv, 1,
-            0, 1.0,
+            &mut x, &mut d, &mut xp, &xx, &gg, &ind, &l, &u, &ws_cols,
+            &wy_cols, &wn, &mut wv, 1, 0, 1.0,
         )
         .unwrap();
         assert_eq!(status, SubsmStatus::BoundEncountered);

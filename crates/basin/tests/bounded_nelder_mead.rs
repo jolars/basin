@@ -9,7 +9,10 @@
 //! coverage here only if a backend-specific bug surfaces.
 
 use basin::problems::{BoothBoxed, RastriginBoxed};
-use basin::{BasicSimplexState, Executor, NelderMead, SimplexTolerance, TerminationReason};
+use basin::{
+    BasicSimplexState, Executor, NelderMead, SimplexTolerance,
+    TerminationReason,
+};
 
 /// Slack bounds: the unconstrained Booth minimum `(1, 3)` lies inside
 /// `[-5, 5]²`, so the projection step should be a no-op for any vertex

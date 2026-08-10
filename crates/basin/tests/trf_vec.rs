@@ -14,7 +14,8 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
     // Bounds `[-5, 5]²` are wide enough that Booth's unconstrained min
     // `(1, 3)` is interior; no constraint binds. TRF should reach it
     // to ‖·‖ < 1e-5 in a handful of iterations.
-    let problem = BoothBoxedResiduals::<Vec<f64>>::new(vec![-5.0, -5.0], vec![5.0, 5.0]);
+    let problem =
+        BoothBoxedResiduals::<Vec<f64>>::new(vec![-5.0, -5.0], vec![5.0, 5.0]);
     let initial = vec![0.0, 0.0];
 
     let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
@@ -42,7 +43,8 @@ fn trf_with_tight_bounds_converges_to_box_corner() {
     // box vertex closest to `(1, 3)`). TRF should converge to that
     // corner, a load-bearing demonstration that the BCL scaled-gradient
     // metric vanishes at face-active KKT points.
-    let problem = BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
+    let problem =
+        BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
     let initial = vec![0.0, 0.0];
 
     let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
@@ -74,10 +76,12 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
     // the closed face, because `D` is undefined where `v_i = 0`.
     // Asserted via `MaxIter(0)` so only `init` runs; the state we read
     // is what `init` produced.
-    let problem = BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
+    let problem =
+        BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
     let initial = vec![10.0, 10.0];
 
-    let mut executor = Executor::new(problem, Trf::new(), NllsState::new(initial));
+    let mut executor =
+        Executor::new(problem, Trf::new(), NllsState::new(initial));
     executor = executor.terminate_on(MaxIter(0));
     let result = executor.run().unwrap();
 
@@ -105,7 +109,8 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
     // BCL scaled-gradient `‖D·Jᵀr‖_∞` falls below the threshold. Check
     // both the convergence and the explicit reason, mirror of the LM
     // test for the same property.
-    let problem = BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
+    let problem =
+        BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
     let initial = vec![0.0, 0.0];
 
     let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
@@ -129,7 +134,8 @@ fn trf_caches_residual_and_jacobian_across_iterations() {
     // extra (uncounted-against-iter) J evaluation that muddies the
     // count. Run on slack-bounded Booth so no face binds and the
     // dynamics reduce to LM's.
-    let problem = BoothBoxedResiduals::<Vec<f64>>::new(vec![-5.0, -5.0], vec![5.0, 5.0]);
+    let problem =
+        BoothBoxedResiduals::<Vec<f64>>::new(vec![-5.0, -5.0], vec![5.0, 5.0]);
     let initial = vec![0.0, 0.0];
 
     let result = Executor::new(

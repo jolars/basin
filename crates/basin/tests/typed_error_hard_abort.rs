@@ -8,7 +8,9 @@ use std::cell::Cell;
 use std::convert::Infallible;
 use std::mem::size_of;
 
-use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent, MaxIter};
+use basin::{
+    BasicState, CostFunction, Executor, Gradient, GradientDescent, MaxIter,
+};
 
 /// `Result<f64, Infallible>` must be the same size as `f64`: the entire
 /// rationale for choosing `Infallible` as the default error in the

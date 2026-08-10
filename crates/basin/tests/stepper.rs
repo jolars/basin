@@ -2,8 +2,8 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicState, CostFunction, Executor, GradientDescent, GradientTolerance, State, StepOutcome,
-    TerminationReason,
+    BasicState, CostFunction, Executor, GradientDescent, GradientTolerance,
+    State, StepOutcome, TerminationReason,
 };
 
 #[test]

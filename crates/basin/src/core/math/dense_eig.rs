@@ -48,7 +48,10 @@ fn off_diagonal_sum_sq<F: Scalar>(m: &[F], n: usize) -> F {
 /// Returns `None` if the sweep budget is exhausted before the off-diagonal mass
 /// falls below tolerance: a failure the caller maps to
 /// [`SymmetricEigenError::Failed`](super::SymmetricEigenError::Failed).
-pub(super) fn jacobi_eigen<F: Scalar>(a: &[F], n: usize) -> Option<(Vec<F>, Vec<F>)> {
+pub(super) fn jacobi_eigen<F: Scalar>(
+    a: &[F],
+    n: usize,
+) -> Option<(Vec<F>, Vec<F>)> {
     debug_assert_eq!(a.len(), n * n, "jacobi_eigen: expected an n×n buffer");
 
     let zero = F::zero();
@@ -247,8 +250,8 @@ mod tests {
         // Build an SPD matrix A = MᵀM + 5I (well-conditioned, like a covariance).
         let n = 5;
         let mraw = [
-            1.0, 0.3, -0.2, 0.5, 0.1, 0.0, 1.2, 0.4, -0.1, 0.2, 0.3, 0.0, 0.9, 0.6, -0.3, -0.4,
-            0.1, 0.2, 1.1, 0.0, 0.2, -0.5, 0.3, 0.1, 1.3,
+            1.0, 0.3, -0.2, 0.5, 0.1, 0.0, 1.2, 0.4, -0.1, 0.2, 0.3, 0.0, 0.9,
+            0.6, -0.3, -0.4, 0.1, 0.2, 1.1, 0.0, 0.2, -0.5, 0.3, 0.1, 1.3,
         ];
         let mut a = vec![0.0; n * n];
         for i in 0..n {

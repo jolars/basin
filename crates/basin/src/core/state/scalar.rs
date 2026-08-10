@@ -86,9 +86,9 @@ impl<F: Scalar> State for ScalarState<F> {
     }
 
     fn best_param(&self) -> &F {
-        self.best_param
-            .as_ref()
-            .expect("ScalarState::best_param read before Solver::init populated it")
+        self.best_param.as_ref().expect(
+            "ScalarState::best_param read before Solver::init populated it",
+        )
     }
 
     fn best_cost(&self) -> F {

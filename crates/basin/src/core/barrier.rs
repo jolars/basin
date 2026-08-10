@@ -48,7 +48,8 @@
 
 use crate::core::constraint::LinearInequalityConstraints;
 use crate::core::math::{
-    MatTransposeVec, MatVec, NegInPlace, Scalar, ScaledAdd, VectorIndex, VectorLen,
+    MatTransposeVec, MatVec, NegInPlace, Scalar, ScaledAdd, VectorIndex,
+    VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient};
 
@@ -83,7 +84,8 @@ impl<'a, P, F: Scalar> LogBarrier<'a, P, F> {
 impl<P, V, M, F> CostFunction for LogBarrier<'_, P, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + LinearInequalityConstraints<Param = V, Matrix = M>,
+    P: CostFunction<Param = V, Output = F>
+        + LinearInequalityConstraints<Param = V, Matrix = M>,
     M: MatVec<V>,
     V: ScaledAdd<F> + NegInPlace + VectorIndex<F> + VectorLen,
 {
@@ -167,14 +169,20 @@ mod tests {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(0.5 * x.dot(x))
         }
     }
 
     impl Gradient for Probe {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(x.clone())
         }
     }
@@ -222,7 +230,8 @@ mod tests {
             let mut xm = x.clone();
             xp[j] += h;
             xm[j] -= h;
-            let fd = (lb.cost(&xp).unwrap() - lb.cost(&xm).unwrap()) / (2.0 * h);
+            let fd =
+                (lb.cost(&xp).unwrap() - lb.cost(&xm).unwrap()) / (2.0 * h);
             assert!(
                 (analytic[j] - fd).abs() < 1e-5,
                 "component {j}: analytic {} vs fd {}",

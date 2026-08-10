@@ -2,8 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    Backtracking, BasicState, Executor, ProjectedGradientDescent, ProjectedGradientTolerance,
-    TerminationReason,
+    Backtracking, BasicState, Executor, ProjectedGradientDescent,
+    ProjectedGradientTolerance, TerminationReason,
 };
 use faer::Col;
 
@@ -13,7 +13,8 @@ fn col(values: [f64; 2]) -> Col<f64> {
 
 #[test]
 fn slack_bounds_recover_unconstrained_minimum() {
-    let problem = BoothBoxed::<Col<f64>>::new(col([-5.0, -5.0]), col([5.0, 5.0]));
+    let problem =
+        BoothBoxed::<Col<f64>>::new(col([-5.0, -5.0]), col([5.0, 5.0]));
     let initial = col([0.0, 0.0]);
 
     let result = Executor::new(
@@ -39,7 +40,8 @@ fn slack_bounds_recover_unconstrained_minimum() {
 
 #[test]
 fn tight_bounds_converge_to_box_corner() {
-    let problem = BoothBoxed::<Col<f64>>::new(col([-1.0, -1.0]), col([1.0, 1.0]));
+    let problem =
+        BoothBoxed::<Col<f64>>::new(col([-1.0, -1.0]), col([1.0, 1.0]));
     let initial = col([0.0, 0.0]);
 
     let result = Executor::new(
@@ -65,7 +67,8 @@ fn tight_bounds_converge_to_box_corner() {
 
 #[test]
 fn infeasible_initial_param_is_projected_at_init() {
-    let problem = BoothBoxed::<Col<f64>>::new(col([-1.0, -1.0]), col([1.0, 1.0]));
+    let problem =
+        BoothBoxed::<Col<f64>>::new(col([-1.0, -1.0]), col([1.0, 1.0]));
     let initial = col([10.0, 10.0]);
 
     let result = Executor::new(

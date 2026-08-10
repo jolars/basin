@@ -110,7 +110,12 @@ mod tests {
     }
 
     /// (alpha, cost_evals consumed by the line search).
-    fn run(ls: &mut Backtracking, x: &[f64], grad: &[f64], dir: &[f64]) -> (f64, u64) {
+    fn run(
+        ls: &mut Backtracking,
+        x: &[f64],
+        grad: &[f64],
+        dir: &[f64],
+    ) -> (f64, u64) {
         let mut p = Problem::new(Quadratic);
         let x = x.to_vec();
         let f0 = p.cost(&x).unwrap();

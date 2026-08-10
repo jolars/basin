@@ -274,14 +274,24 @@ where
                 .equalities()
                 .map(|(a, b)| extract_rows(a, b))
                 .unwrap_or_default();
-            let lower: Option<Vec<F>> = inner.lower().map(|v| (0..n).map(|i| v[i]).collect());
-            let upper: Option<Vec<F>> = inner.upper().map(|v| (0..n).map(|i| v[i]).collect());
-            fold_constraints(n, &x0, lower.as_deref(), upper.as_deref(), &eq, &ineq)
+            let lower: Option<Vec<F>> =
+                inner.lower().map(|v| (0..n).map(|i| v[i]).collect());
+            let upper: Option<Vec<F>> =
+                inner.upper().map(|v| (0..n).map(|i| v[i]).collect());
+            fold_constraints(
+                n,
+                &x0,
+                lower.as_deref(),
+                upper.as_deref(),
+                &eq,
+                &ineq,
+            )
         };
 
         let (work, best_x, best_f) = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             LincoaWork::try_init(
                 x0,
                 amat,
@@ -304,7 +314,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: LincoaState<V, F>,
-    ) -> Result<(LincoaState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(LincoaState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let template = state.param.clone();
         let work = self
             .work
@@ -312,8 +323,9 @@ where
             .expect("Lincoa::init must run before next_iter");
 
         let out = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             work.step(&mut eval)?
         };
         state.rho = work.rho();

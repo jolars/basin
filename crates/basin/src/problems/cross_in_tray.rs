@@ -12,7 +12,9 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 use crate::CostFunction;
 
 /// Standard lower bound on each coordinate.
@@ -96,7 +98,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(cross_in_tray(x.as_slice()))
         }
     }
@@ -112,7 +117,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(cross_in_tray(x.as_slice().expect("Array1 is contiguous")))
         }
     }

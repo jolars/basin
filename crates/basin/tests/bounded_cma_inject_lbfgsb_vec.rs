@@ -7,7 +7,9 @@
 //! (`tests/bounded_cma_inject_lbfgsb_nalgebra.rs`).
 
 use basin::problems::BoothBoxed;
-use basin::{BoundedCmaEs, BoundedCmaInject, CmaEsState, DenseMatrix, Executor, Lbfgsb};
+use basin::{
+    BoundedCmaEs, BoundedCmaInject, CmaEsState, DenseMatrix, Executor, Lbfgsb,
+};
 
 /// BoundedCmaEs + L-Bfgs-B on Booth with slack bounds `[-5, 5]²`; the
 /// global min `(1, 3)` is strictly interior, so the inner polish must

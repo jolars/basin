@@ -11,8 +11,12 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
-use crate::{BoxConstraints, CostFunction, DenseMatrix, Gradient, Jacobian, Residual};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
+use crate::{
+    BoxConstraints, CostFunction, DenseMatrix, Gradient, Jacobian, Residual,
+};
 
 /// Evaluates the Booth function at `x`. Requires `x.len() == 2`.
 pub fn booth(x: &[f64]) -> f64 {
@@ -121,7 +125,10 @@ impl CostFunction for Booth<Vec<f64>> {
 
 impl Gradient for Booth<Vec<f64>> {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; x.len()];
         booth_gradient(x, &mut out);
         Ok(out)
@@ -168,7 +175,10 @@ impl CostFunction for BoothBoxed<Vec<f64>> {
 
 impl Gradient for BoothBoxed<Vec<f64>> {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; x.len()];
         booth_gradient(x, &mut out);
         Ok(out)
@@ -252,7 +262,10 @@ impl Residual for BoothResiduals<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
     type Error = std::convert::Infallible;
-    fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn residual(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; 2];
         booth_residuals(x, &mut out);
         Ok(out)
@@ -261,7 +274,10 @@ impl Residual for BoothResiduals<Vec<f64>> {
 
 impl Jacobian for BoothResiduals<Vec<f64>> {
     type Jacobian = DenseMatrix<f64>;
-    fn jacobian(&self, _x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
+    fn jacobian(
+        &self,
+        _x: &Vec<f64>,
+    ) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
         // Constant 2×2 Jacobian, independent of x. `buf` is row-major,
         // which is `DenseMatrix`'s native layout.
         let mut buf = [0.0_f64; 4];
@@ -283,7 +299,10 @@ impl Residual for BoothBoxedResiduals<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
     type Error = std::convert::Infallible;
-    fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn residual(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; 2];
         booth_residuals(x, &mut out);
         Ok(out)
@@ -292,7 +311,10 @@ impl Residual for BoothBoxedResiduals<Vec<f64>> {
 
 impl Jacobian for BoothBoxedResiduals<Vec<f64>> {
     type Jacobian = DenseMatrix<f64>;
-    fn jacobian(&self, _x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
+    fn jacobian(
+        &self,
+        _x: &Vec<f64>,
+    ) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
         let mut buf = [0.0_f64; 4];
         booth_residuals_jacobian(&mut buf);
         Ok(DenseMatrix::from_row_slice(2, 2, &buf))
@@ -311,8 +333,8 @@ impl BoxConstraints for BoothBoxedResiduals<Vec<f64>> {
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
     use super::{
-        Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth, booth_gradient,
-        booth_residuals, booth_residuals_jacobian,
+        Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth,
+        booth_gradient, booth_residuals, booth_residuals_jacobian,
     };
     use crate::{BoxConstraints, CostFunction, Gradient, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
@@ -321,14 +343,20 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice()))
         }
     }
 
     impl Gradient for Booth<DVector<f64>> {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut out = DVector::zeros(x.len());
             booth_gradient(x.as_slice(), out.as_mut_slice());
             Ok(out)
@@ -339,14 +367,20 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice()))
         }
     }
 
     impl Gradient for BoothBoxed<DVector<f64>> {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut out = DVector::zeros(x.len());
             booth_gradient(x.as_slice(), out.as_mut_slice());
             Ok(out)
@@ -366,7 +400,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice()))
         }
     }
@@ -375,7 +412,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = DVector<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut out = DVector::zeros(2);
             booth_residuals(x.as_slice(), out.as_mut_slice());
             Ok(out)
@@ -384,7 +424,10 @@ mod nalgebra_impl {
 
     impl Jacobian for BoothResiduals<DVector<f64>> {
         type Jacobian = DMatrix<f64>;
-        fn jacobian(&self, _x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &DVector<f64>,
+        ) -> Result<DMatrix<f64>, std::convert::Infallible> {
             // Constant 2×2 Jacobian, independent of x.
             let mut buf = [0.0_f64; 4];
             booth_residuals_jacobian(&mut buf);
@@ -396,7 +439,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice()))
         }
     }
@@ -405,7 +451,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = DVector<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut out = DVector::zeros(2);
             booth_residuals(x.as_slice(), out.as_mut_slice());
             Ok(out)
@@ -414,7 +463,10 @@ mod nalgebra_impl {
 
     impl Jacobian for BoothBoxedResiduals<DVector<f64>> {
         type Jacobian = DMatrix<f64>;
-        fn jacobian(&self, _x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &DVector<f64>,
+        ) -> Result<DMatrix<f64>, std::convert::Infallible> {
             let mut buf = [0.0_f64; 4];
             booth_residuals_jacobian(&mut buf);
             Ok(DMatrix::from_row_slice(2, 2, &buf))
@@ -434,8 +486,8 @@ mod nalgebra_impl {
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
     use super::{
-        Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth, booth_gradient,
-        booth_residuals, booth_residuals_jacobian,
+        Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth,
+        booth_gradient, booth_residuals, booth_residuals_jacobian,
     };
     use crate::{BoxConstraints, CostFunction, Gradient, Jacobian, Residual};
     use ndarray::{Array1, Array2};
@@ -444,14 +496,20 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice().expect("Array1 is contiguous")))
         }
     }
 
     impl Gradient for Booth<Array1<f64>> {
         type Gradient = Array1<f64>;
-        fn gradient(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             let mut out = Array1::zeros(x.len());
             booth_gradient(
                 x.as_slice().expect("Array1 is contiguous"),
@@ -465,14 +523,20 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice().expect("Array1 is contiguous")))
         }
     }
 
     impl Gradient for BoothBoxed<Array1<f64>> {
         type Gradient = Array1<f64>;
-        fn gradient(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             let mut out = Array1::zeros(x.len());
             booth_gradient(
                 x.as_slice().expect("Array1 is contiguous"),
@@ -495,7 +559,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -504,7 +571,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = Array1<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             let mut out = Array1::zeros(2);
             booth_residuals(
                 x.as_slice().expect("Array1 is contiguous"),
@@ -516,13 +586,17 @@ mod ndarray_impl {
 
     impl Jacobian for BoothResiduals<Array1<f64>> {
         type Jacobian = Array2<f64>;
-        fn jacobian(&self, _x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &Array1<f64>,
+        ) -> Result<Array2<f64>, std::convert::Infallible> {
             // Constant 2×2 Jacobian, independent of x. `buf` is row-major,
             // so the default C-order `from_shape_vec` matches the nalgebra
             // `from_row_slice` mirror.
             let mut buf = [0.0_f64; 4];
             booth_residuals_jacobian(&mut buf);
-            Ok(Array2::from_shape_vec((2, 2), buf.to_vec()).expect("4 entries for a 2×2"))
+            Ok(Array2::from_shape_vec((2, 2), buf.to_vec())
+                .expect("4 entries for a 2×2"))
         }
     }
 
@@ -530,7 +604,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(booth(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -539,7 +616,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = Array1<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             let mut out = Array1::zeros(2);
             booth_residuals(
                 x.as_slice().expect("Array1 is contiguous"),
@@ -551,10 +631,14 @@ mod ndarray_impl {
 
     impl Jacobian for BoothBoxedResiduals<Array1<f64>> {
         type Jacobian = Array2<f64>;
-        fn jacobian(&self, _x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &Array1<f64>,
+        ) -> Result<Array2<f64>, std::convert::Infallible> {
             let mut buf = [0.0_f64; 4];
             booth_residuals_jacobian(&mut buf);
-            Ok(Array2::from_shape_vec((2, 2), buf.to_vec()).expect("4 entries for a 2×2"))
+            Ok(Array2::from_shape_vec((2, 2), buf.to_vec())
+                .expect("4 entries for a 2×2"))
         }
     }
 
@@ -570,7 +654,10 @@ mod ndarray_impl {
 
 #[cfg(feature = "faer")]
 mod faer_impl {
-    use super::{Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth_residuals_jacobian};
+    use super::{
+        Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals,
+        booth_residuals_jacobian,
+    };
     use crate::{BoxConstraints, CostFunction, Gradient, Jacobian, Residual};
     use faer::{Col, Mat};
 
@@ -606,7 +693,10 @@ mod faer_impl {
 
     impl Gradient for Booth<Col<f64>> {
         type Gradient = Col<f64>;
-        fn gradient(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             Ok(grad_inline(x))
         }
     }
@@ -622,7 +712,10 @@ mod faer_impl {
 
     impl Gradient for BoothBoxed<Col<f64>> {
         type Gradient = Col<f64>;
-        fn gradient(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             Ok(grad_inline(x))
         }
     }
@@ -656,14 +749,20 @@ mod faer_impl {
         type Param = Col<f64>;
         type Output = Col<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             Ok(residuals_inline(x))
         }
     }
 
     impl Jacobian for BoothResiduals<Col<f64>> {
         type Jacobian = Mat<f64>;
-        fn jacobian(&self, _x: &Col<f64>) -> Result<Mat<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &Col<f64>,
+        ) -> Result<Mat<f64>, std::convert::Infallible> {
             let mut buf = [0.0_f64; 4];
             booth_residuals_jacobian(&mut buf);
             Ok(Mat::from_fn(2, 2, |i, j| buf[i * 2 + j]))
@@ -683,14 +782,20 @@ mod faer_impl {
         type Param = Col<f64>;
         type Output = Col<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             Ok(residuals_inline(x))
         }
     }
 
     impl Jacobian for BoothBoxedResiduals<Col<f64>> {
         type Jacobian = Mat<f64>;
-        fn jacobian(&self, _x: &Col<f64>) -> Result<Mat<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &Col<f64>,
+        ) -> Result<Mat<f64>, std::convert::Infallible> {
             let mut buf = [0.0_f64; 4];
             booth_residuals_jacobian(&mut buf);
             Ok(Mat::from_fn(2, 2, |i, j| buf[i * 2 + j]))

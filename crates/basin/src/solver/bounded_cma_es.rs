@@ -3,9 +3,10 @@ use std::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{
-    ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace,
-    ScaledAdd, SymmetricEigen, VectorLen,
+    ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, NormSquared, RankOneUpdate,
+    SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
+    VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
@@ -14,7 +15,9 @@ use crate::core::state::CmaEsState;
 use crate::core::state::cma_es::BoundPenalty;
 use crate::core::termination::TerminationReason;
 
-use super::cma_es::{CmaConstants, compute_constants, sort_population_ascending};
+use super::cma_es::{
+    CmaConstants, compute_constants, sort_population_ascending,
+};
 
 /// Box-constrained `(µ/µ_W, λ)`-CMA-ES with adaptive quadratic boundary
 /// penalty (Hansen `BoundPenalty`, the default in `pycma`).
@@ -205,7 +208,10 @@ impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
 
 /// Compute the derived bounded-CMA constants (shared CMA constants plus
 /// the BoundPenalty constants) for dimension `n` and population `lambda`.
-fn compute_bounded_constants<F: Scalar>(n: usize, lambda: usize) -> BoundedCmaConstants<F> {
+fn compute_bounded_constants<F: Scalar>(
+    n: usize,
+    lambda: usize,
+) -> BoundedCmaConstants<F> {
     let cma = compute_constants::<F>(n, lambda);
     let one = F::one();
     let n_f = F::from_usize(n).unwrap();
@@ -218,8 +224,8 @@ fn compute_bounded_constants<F: Scalar>(n: usize, lambda: usize) -> BoundedCmaCo
     // mirror but defensively floor to avoid div-by-zero on pathological
     // `lambda` (mu_eff is always > 0 for lambda >= 4 with the default
     // weights).
-    let edist_threshold =
-        three * n_f.sqrt().max(one) / cma.mu_eff.max(F::from_f64(f64::MIN_POSITIVE).unwrap());
+    let edist_threshold = three * n_f.sqrt().max(one)
+        / cma.mu_eff.max(F::from_f64(f64::MIN_POSITIVE).unwrap());
     let hist_cap = 20 + (3 * n) / lambda;
 
     BoundedCmaConstants {
@@ -326,7 +332,8 @@ fn update_gamma<P, V, M, F>(
     // Fitness IQR (pycma's offset definition: indices 3l/4 and l/4 with
     // l = 1 + λ, no interpolation), normalized by mean per-axis variance.
     let mut sorted = pen.raw_costs.clone();
-    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    sorted
+        .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let l = 1 + sorted.len();
     let val = (sorted[3 * l / 4] - sorted[l / 4]) / mean_varis;
 
@@ -350,7 +357,8 @@ fn update_gamma<P, V, M, F>(
 
     // dfit = median(hist).
     let mut hsorted: Vec<F> = pen.hist.iter().copied().collect();
-    hsorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    hsorted
+        .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let dfit = hsorted[hsorted.len() / 2];
 
     // Initialize γ on the first generation that sees an infeasible mean.
@@ -436,7 +444,8 @@ where
         let bd_z = b.matvec(&bd_z);
         let mut x_k = m.clone();
         x_k.scaled_add(*sigma, &bd_z);
-        let (raw, p) = evaluate_with_penalty(problem, &x_k, lo, hi, &pen.gamma, n)?;
+        let (raw, p) =
+            evaluate_with_penalty(problem, &x_k, lo, hi, &pen.gamma, n)?;
         candidates.push(x_k);
         costs.push(p);
         pen.raw_costs.push(raw);
@@ -515,13 +524,22 @@ where
             let hi = problem.inner().upper().clone();
             state.m.clamp_in_place(&lo, &hi);
 
-            sample_and_penalize(&mut state, lambda, n, &mut self.rng, problem, &lo, &hi)?;
+            sample_and_penalize(
+                &mut state,
+                lambda,
+                n,
+                &mut self.rng,
+                problem,
+                &lo,
+                &hi,
+            )?;
             sort_population_ascending(&mut state.candidates, &mut state.costs);
 
             // Evaluate the mean (penalized, consistent with samples) so
             // param()/cost() report `m` (xfavorite).
             let gamma = &state.penalty.as_ref().unwrap().gamma;
-            let (_raw, pen_m) = evaluate_with_penalty(problem, &state.m, &lo, &hi, gamma, n)?;
+            let (_raw, pen_m) =
+                evaluate_with_penalty(problem, &state.m, &lo, &hi, gamma, n)?;
             state.m_cost = Some(pen_m);
         }
         Ok(state)
@@ -531,7 +549,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: CmaEsState<V, M, F>,
-    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error>
+    {
         let k = self
             .constants
             .as_ref()
@@ -581,7 +600,8 @@ where
 
         // σ ← σ exp((c_σ / d_σ) (‖p_σ‖ / E‖N(0,I)‖ − 1)).
         let p_sigma_norm = state.p_sigma.norm_squared().sqrt();
-        let log_factor = (kc.c_sigma / kc.d_sigma) * (p_sigma_norm / kc.expected_norm - one);
+        let log_factor =
+            (kc.c_sigma / kc.d_sigma) * (p_sigma_norm / kc.expected_norm - one);
         state.sigma = state.sigma * log_factor.exp();
 
         // h_σ test (Hansen 2016 p. 31, denominator uses 2(g+1)).
@@ -628,7 +648,9 @@ where
         // Refresh eigendecomposition of the new C.
         let (b_new, eigs) = match state.c.try_eigh() {
             Ok(pair) => pair,
-            Err(_) => return Ok((state, Some(TerminationReason::SolverFailed))),
+            Err(_) => {
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
         };
         state.b = b_new;
         let eig_floor = F::from_f64(1e-30).unwrap();
@@ -650,12 +672,21 @@ where
         let lambda = kc.lambda;
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
-        sample_and_penalize(&mut state, lambda, n, &mut self.rng, problem, &lo, &hi)?;
+        sample_and_penalize(
+            &mut state,
+            lambda,
+            n,
+            &mut self.rng,
+            problem,
+            &lo,
+            &hi,
+        )?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
 
         // Evaluate the mean (penalized) so param()/cost() report `m`.
         let gamma = &state.penalty.as_ref().unwrap().gamma;
-        let (_raw, pen_m) = evaluate_with_penalty(problem, &state.m, &lo, &hi, gamma, n)?;
+        let (_raw, pen_m) =
+            evaluate_with_penalty(problem, &state.m, &lo, &hi, gamma, n)?;
         state.m_cost = Some(pen_m);
 
         Ok((state, None))

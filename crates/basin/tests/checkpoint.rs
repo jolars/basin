@@ -4,8 +4,8 @@
 #![cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 
 use basin::{
-    BasicState, CheckpointWriter, CostFunction, Executor, Gradient, GradientDescent, ObserverMode,
-    State, read_checkpoint,
+    BasicState, CheckpointWriter, CostFunction, Executor, Gradient,
+    GradientDescent, ObserverMode, State, read_checkpoint,
 };
 
 struct Quadratic;
@@ -23,14 +23,18 @@ impl CostFunction for Quadratic {
 impl Gradient for Quadratic {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok(x.clone())
     }
 }
 
 #[test]
 fn checkpoint_resume_matches_uninterrupted_run() {
-    let dir = std::env::temp_dir().join(format!("basin-ckpt-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("basin-ckpt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("run.ckpt");
 
@@ -65,10 +69,11 @@ fn checkpoint_resume_matches_uninterrupted_run() {
 
     // `max_iter` is checked against the absolute `state.iter()`, and the
     // reloaded state already stands at iter 12, so 20 means "8 more".
-    let resumed = Executor::new(Quadratic, GradientDescent::new(step), reloaded)
-        .max_iter(20)
-        .run()
-        .unwrap();
+    let resumed =
+        Executor::new(Quadratic, GradientDescent::new(step), reloaded)
+            .max_iter(20)
+            .run()
+            .unwrap();
 
     // Same optimum, reached identically.
     assert_eq!(resumed.iter(), 20);

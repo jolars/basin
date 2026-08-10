@@ -6,7 +6,8 @@ use crate::core::constraint::LinearInequalityConstraints;
 use crate::core::executor::run_loop;
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
-    MatTransposeVec, MatVec, NegInPlace, NormSquared, Scalar, ScaledAdd, VectorIndex, VectorLen,
+    MatTransposeVec, MatVec, NegInPlace, NormSquared, Scalar, ScaledAdd,
+    VectorIndex, VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -271,9 +272,18 @@ where
         + Gradient<Gradient = V>
         + LinearInequalityConstraints<Param = V, Matrix = M>,
     M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<F> + NegInPlace + VectorIndex<F> + VectorLen + NormSquared<F> + Clone,
+    V: ScaledAdd<F>
+        + NegInPlace
+        + VectorIndex<F>
+        + VectorLen
+        + NormSquared<F>
+        + Clone,
     So: WarmStart<V>
-        + for<'a> Solver<LogBarrier<'a, P, F>, So::State, Error = <P as CostFunction>::Error>,
+        + for<'a> Solver<
+            LogBarrier<'a, P, F>,
+            So::State,
+            Error = <P as CostFunction>::Error,
+        >,
     So::State: GradientState<Param = V, Float = F> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
@@ -290,7 +300,8 @@ where
         let mut slack = problem.inner().a().matvec(state.param());
         slack.neg_in_place();
         slack.scaled_add(F::one(), problem.inner().b());
-        self.infeasible = (0..slack.vec_len()).any(|i| slack.get_scalar(i) <= F::zero());
+        self.infeasible =
+            (0..slack.vec_len()).any(|i| slack.get_scalar(i) <= F::zero());
 
         // Seed the *true* objective so framework criteria and the public
         // result read f, not the barrier value.
@@ -304,7 +315,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         if self.infeasible {
             // Phase 1 deferred: bubble an infeasible start as a failure.
             return Ok((state, Some(TerminationReason::SolverFailed)));
@@ -315,7 +327,8 @@ where
         // inner state (rather than threading the outer one) keeps the
         // inner solver's iteration counter from polluting the outer's.
         // Fresh criteria each call satisfies the statelessness contract.
-        let mut barrier_wrapper = Problem::new(LogBarrier::new(problem.inner(), self.mu));
+        let mut barrier_wrapper =
+            Problem::new(LogBarrier::new(problem.inner(), self.mu));
         let mut criteria: Vec<Box<dyn TerminationCriterion<So::State>>> = vec![
             Box::new(MaxIter(self.inner_max_iter)),
             Box::new(GradientTolerance(self.inner_grad_tol)),
@@ -349,12 +362,16 @@ where
         state.gradient = Some(grad);
 
         // Record the duality gap for this μ, then shrink for the next solve.
-        self.gap = F::from_usize(problem.inner().b().vec_len()).unwrap() * self.mu;
+        self.gap =
+            F::from_usize(problem.inner().b().vec_len()).unwrap() * self.mu;
         self.mu = self.mu / self.reduction;
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicState<V, F>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &BasicState<V, F>,
+    ) -> Option<TerminationReason> {
         // Log-barrier duality-gap bound m·μ from the most recent solve.
         if self.gap <= self.tol {
             Some(TerminationReason::SolverConverged)

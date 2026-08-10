@@ -2,8 +2,8 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaEsTolerance, CostFunction, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    CmaEs, CmaEsState, CmaEsTolerance, CostFunction, Executor, PopulationState,
+    StepOutcome, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -201,7 +201,10 @@ fn with_stds_preconditions_ill_scaled_quadratic() {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(x[0] * x[0] + 1e6 * x[1] * x[1])
         }
     }

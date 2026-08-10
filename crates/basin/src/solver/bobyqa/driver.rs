@@ -153,7 +153,9 @@ impl<F: Scalar> BobyqaWork<F> {
             rho_beg > rho_end && rho_end > F::zero(),
             "BOBYQA needs rho_beg > rho_end > 0"
         );
-        let init = QuadraticModel::try_initialize_bounded(x0, lower, upper, rho_beg, npt, eval)?;
+        let init = QuadraticModel::try_initialize_bounded(
+            x0, lower, upper, rho_beg, npt, eval,
+        )?;
         let best_x = init.model.best_point();
         let best_f = init.model.fopt();
         let big = F::from_f64(1e30).expect("1e30 representable");
@@ -278,7 +280,9 @@ impl<F: Scalar> BobyqaWork<F> {
         let n = self.model.n();
         let xopt = self.model.xpt_row(self.model.kopt()).to_vec();
         let xopt_sq = xopt.iter().fold(F::zero(), |a, v| a + *v * *v);
-        let thr = F::from_f64(1e3).expect("1e3 representable") * self.delta * self.delta;
+        let thr = F::from_f64(1e3).expect("1e3 representable")
+            * self.delta
+            * self.delta;
         if xopt_sq >= thr {
             for i in 0..n {
                 self.sl[i] = (self.sl[i] - xopt[i]).min(F::zero());
@@ -315,7 +319,9 @@ impl<F: Scalar> BobyqaWork<F> {
         let dnorm = self.delta.min(norm(&d));
         let shortd = dnorm < half * self.rho;
         // PRIMA `.not. (qred > 1e-5·ρ²)`: tiny or negative qred, or NaN.
-        let qred_thr = F::from_f64(1e-5).expect("1e-5 representable") * self.rho * self.rho;
+        let qred_thr = F::from_f64(1e-5).expect("1e-5 representable")
+            * self.rho
+            * self.rho;
         let trfail = qred <= qred_thr || qred.is_nan();
 
         let mut ratio = -F::one();
@@ -332,7 +338,8 @@ impl<F: Scalar> BobyqaWork<F> {
             let f_opt = self.model.fopt();
             let kopt = self.model.kopt();
             let xopt = self.model.xpt_row(kopt).to_vec();
-            let (xabs, f_new, moderr) = self.commit_eval_only(&xopt, &d, eval)?;
+            let (xabs, f_new, moderr) =
+                self.commit_eval_only(&xopt, &d, eval)?;
             let mut ximproved = f_new < f_opt;
             evaluated.push((xabs, f_new));
 
@@ -345,7 +352,8 @@ impl<F: Scalar> BobyqaWork<F> {
             }
 
             // Displacement of the trust-region candidate from x0 (= x_opt + d).
-            let mut xnew_disp: Vec<F> = (0..n).map(|i| xopt[i] + d[i]).collect();
+            let mut xnew_disp: Vec<F> =
+                (0..n).map(|i| xopt[i] + d[i]).collect();
 
             // RESCUE if rounding has damaged the denominator for d (§5;
             // PRIMA bobyqb:348-375). The test uses the same `vlag = H·w + e_opt`
@@ -354,8 +362,10 @@ impl<F: Scalar> BobyqaWork<F> {
             let need_rescue = ximproved && {
                 let ctx = self.model.prepare_update(&xnew_disp);
                 let sum_abs = ctx.hw.iter().fold(zero, |a, v| a + v.abs());
-                let maxsq = (0..m).fold(zero, |a, k| a.max(ctx.hw[k] * ctx.hw[k]));
-                let any_good = (0..m).any(|k| self.model.update_params(k, &ctx).sigma > maxsq);
+                let maxsq =
+                    (0..m).fold(zero, |a, k| a.max(ctx.hw[k] * ctx.hw[k]));
+                let any_good = (0..m)
+                    .any(|k| self.model.update_params(k, &ctx).sigma > maxsq);
                 !(sum_abs.is_finite() && any_good)
             };
             if need_rescue {
@@ -399,8 +409,9 @@ impl<F: Scalar> BobyqaWork<F> {
         let accurate_mod = self.moderr_rec.iter().all(|e| e.abs() <= ebound)
             && self.dnorm_rec.iter().all(|&dn| dn <= self.rho);
         let (far_k, far_d2) = self.far_point();
-        let close_itpset =
-            far_d2 <= (self.delta * self.delta).max((ten * self.rho) * (ten * self.rho));
+        let close_itpset = far_d2
+            <= (self.delta * self.delta)
+                .max((ten * self.rho) * (ten * self.rho));
         let adequate_geo = (shortd && accurate_mod) || close_itpset;
         let small_trrad = self.delta.max(dnorm) <= self.rho;
 
@@ -411,8 +422,10 @@ impl<F: Scalar> BobyqaWork<F> {
 
         if improve_geo {
             let knew_geo = far_k;
-            let delbar = ((tenth * far_d2.sqrt()).min(self.delta)).max(self.rho);
-            let dgeo = geostep(&self.model, knew_geo, delbar, &self.sl, &self.su);
+            let delbar =
+                ((tenth * far_d2.sqrt()).min(self.delta)).max(self.rho);
+            let dgeo =
+                geostep(&self.model, knew_geo, delbar, &self.sl, &self.su);
             let kopt = self.model.kopt();
             let xopt = self.model.xpt_row(kopt).to_vec();
             let xnew_disp: Vec<F> = (0..n).map(|i| xopt[i] + dgeo[i]).collect();
@@ -424,7 +437,8 @@ impl<F: Scalar> BobyqaWork<F> {
             let sum_abs = ctx.hw.iter().fold(zero, |a, v| a + v.abs());
             let vlag_knew = ctx.hw[knew_geo];
             let den_knew = self.model.update_params(knew_geo, &ctx).sigma;
-            let need_rescue = !(sum_abs.is_finite() && den_knew > half * vlag_knew * vlag_knew);
+            let need_rescue = !(sum_abs.is_finite()
+                && den_knew > half * vlag_knew * vlag_knew);
 
             if need_rescue {
                 rescue(
@@ -442,8 +456,12 @@ impl<F: Scalar> BobyqaWork<F> {
                 // The geometry step `dgeo` is discarded; the next iteration
                 // recomputes a trust-region step on the rescued model.
             } else {
-                let (xabs, f_new, moderr) = self.commit_eval_only(&xopt, &dgeo, eval)?;
-                Self::push_ring(&mut self.dnorm_rec, self.delta.min(norm(&dgeo)));
+                let (xabs, f_new, moderr) =
+                    self.commit_eval_only(&xopt, &dgeo, eval)?;
+                Self::push_ring(
+                    &mut self.dnorm_rec,
+                    self.delta.min(norm(&dgeo)),
+                );
                 Self::push_ring(&mut self.moderr_rec, moderr);
                 let sc = self.model.update_params(knew_geo, &ctx);
                 if sc.sigma != zero {
@@ -478,8 +496,10 @@ impl<F: Scalar> BobyqaWork<F> {
             let rho_new = redrho(self.rho, self.rho_end);
             self.delta = (half * self.rho).max(rho_new);
             self.rho = rho_new;
-            self.dnorm_rec = [F::from_f64(1e30).expect("1e30 representable"); 3];
-            self.moderr_rec = [F::from_f64(1e30).expect("1e30 representable"); 3];
+            self.dnorm_rec =
+                [F::from_f64(1e30).expect("1e30 representable"); 3];
+            self.moderr_rec =
+                [F::from_f64(1e30).expect("1e30 representable"); 3];
             transition = Transition::RhoReduced;
         }
 
@@ -503,7 +523,8 @@ impl<F: Scalar> BobyqaWork<F> {
         let xnew_disp: Vec<F> = (0..n).map(|i| xopt[i] + d[i]).collect();
         let xabs = self.abs_point(&xnew_disp);
         let f_new = eval(&xabs)?;
-        let q_change = self.model.eval_change(&xnew_disp) - self.model.eval_change(xopt);
+        let q_change =
+            self.model.eval_change(&xnew_disp) - self.model.eval_change(xopt);
         let moderr = f_new - f_opt - q_change;
         Ok((xabs, f_new, moderr))
     }

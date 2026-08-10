@@ -467,9 +467,9 @@ impl<P: Clone, F: Scalar> State for BasicState<P, F> {
     }
 
     fn best_param(&self) -> &P {
-        self.best_param
-            .as_ref()
-            .expect("BasicState::best_param read before Solver::init populated it")
+        self.best_param.as_ref().expect(
+            "BasicState::best_param read before Solver::init populated it",
+        )
     }
 
     fn best_cost(&self) -> F {
@@ -654,7 +654,10 @@ impl IntoInitialSimplex<Self> for faer::Col<f64> {
 
 #[cfg(feature = "ndarray")]
 impl IntoInitialSimplex<ndarray::Array1<f64>> for ndarray::Array1<f64> {
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<ndarray::Array1<f64>> {
+    fn into_initial_simplex(
+        self,
+        relative_step: f64,
+    ) -> Vec<ndarray::Array1<f64>> {
         let n = self.len();
         let mut simplex = Vec::with_capacity(n + 1);
         simplex.push(self.clone());
@@ -681,7 +684,10 @@ impl<V, F: Scalar> BasicSimplexState<V, F> {
 
     /// Like `new`, but with a custom relative step (default is `0.05`).
     /// Zero coordinates still use the FMINSEARCH absolute step `0.00025`.
-    pub fn with_step<X: IntoInitialSimplex<V>>(x0: X, relative_step: f64) -> Self {
+    pub fn with_step<X: IntoInitialSimplex<V>>(
+        x0: X,
+        relative_step: f64,
+    ) -> Self {
         Self::from_simplex(x0.into_initial_simplex(relative_step))
     }
 }
@@ -870,7 +876,8 @@ pub type NalgebraQuasiNewtonState<F = f64> =
 /// `QuasiNewtonState::<Col<f64>, Mat<f64>>::new(x)`. The scalar `F` defaults
 /// to `f64`.
 #[cfg(feature = "faer")]
-pub type FaerQuasiNewtonState<F = f64> = QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
+pub type FaerQuasiNewtonState<F = f64> =
+    QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
 
 /// [`QuasiNewtonState`] pinned to the ndarray `Array1<F>`/`Array2<F>`
 /// backend (feature `ndarray`).
@@ -911,8 +918,9 @@ impl<V: Clone, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
     /// the cached cost. See [`BasicState::cost`] for the full safety
     /// argument; same contract.
     fn cost(&self) -> F {
-        self.cost
-            .expect("QuasiNewtonState::cost read before Solver::init populated it")
+        self.cost.expect(
+            "QuasiNewtonState::cost read before Solver::init populated it",
+        )
     }
 
     fn best_param(&self) -> &V {

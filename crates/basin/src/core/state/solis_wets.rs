@@ -170,9 +170,9 @@ impl<V: Clone, F: Scalar> State for SolisWetsState<V, F> {
     }
 
     fn best_param(&self) -> &V {
-        self.best_param
-            .as_ref()
-            .expect("SolisWetsState::best_param read before Solver::init populated it")
+        self.best_param.as_ref().expect(
+            "SolisWetsState::best_param read before Solver::init populated it",
+        )
     }
 
     fn best_cost(&self) -> F {

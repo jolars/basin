@@ -16,12 +16,21 @@
 
 use crate::core::math::Scalar;
 
-use super::linalg::{col, dot, eye, hypotenuse, isminor, planerot, row_times_mat};
+use super::linalg::{
+    col, dot, eye, hypotenuse, isminor, planerot, row_times_mat,
+};
 
 /// Solve the COBYLA trust-region LP. `a` is the `n × m` column-major matrix of
 /// constraint gradients, `b` the length-`m` right-hand side, `g` the length-`n`
 /// objective gradient, `delta` the trust-region radius. Returns the step `d`.
-pub(crate) fn trstlp<F: Scalar>(a: &[F], n: usize, m: usize, b: &[F], delta: F, g: &[F]) -> Vec<F> {
+pub(crate) fn trstlp<F: Scalar>(
+    a: &[F],
+    n: usize,
+    m: usize,
+    b: &[F],
+    delta: F,
+    g: &[F],
+) -> Vec<F> {
     let mcon = m + 1;
     // A_aug = [A, g] (n × (m+1)); b_aug = [b, 0].
     let mut a_aug = vec![F::zero(); n * mcon];
@@ -84,14 +93,25 @@ pub(crate) fn trstlp<F: Scalar>(a: &[F], n: usize, m: usize, b: &[F], delta: F, 
 }
 
 /// `zdota(0..nact)` recomputed from `z` and the active columns of `a`.
-fn zdota_active<F: Scalar>(a: &[F], n: usize, iact: &[usize], nact: usize, z: &[F]) -> Vec<F> {
+fn zdota_active<F: Scalar>(
+    a: &[F],
+    n: usize,
+    iact: &[usize],
+    nact: usize,
+    z: &[F],
+) -> Vec<F> {
     (0..nact)
         .map(|k| dot(col(z, n, k), col(a, n, iact[k])))
         .collect()
 }
 
 /// The active-column matrix `A(:, iact(0..nact))` (n × nact, column-major).
-fn active_cols<F: Scalar>(a: &[F], n: usize, iact: &[usize], nact: usize) -> Vec<F> {
+fn active_cols<F: Scalar>(
+    a: &[F],
+    n: usize,
+    iact: &[usize],
+    nact: usize,
+) -> Vec<F> {
     let mut out = vec![F::zero(); n * nact];
     for k in 0..nact {
         out[k * n..(k + 1) * n].copy_from_slice(col(a, n, iact[k]));
@@ -101,7 +121,13 @@ fn active_cols<F: Scalar>(a: &[F], n: usize, iact: &[usize], nact: usize) -> Vec
 
 /// QR rank-one add (PRIMA `qradd_Rdiag`): attempt to append column `c` to the
 /// active set, updating `z` (Q) and `zdota` (diag R). `nact` may grow by one.
-fn qradd<F: Scalar>(c: &[F], z: &mut [F], zdota: &mut [F], nact: &mut usize, n: usize) {
+fn qradd<F: Scalar>(
+    c: &[F],
+    z: &mut [F],
+    zdota: &mut [F],
+    nact: &mut usize,
+    n: usize,
+) {
     let mut cq = row_times_mat(c, z, n, n);
     let cabs: Vec<F> = c.iter().map(|&x| x.abs()).collect();
     let zabs: Vec<F> = z.iter().map(|&x| x.abs()).collect();
@@ -139,12 +165,20 @@ fn qradd<F: Scalar>(c: &[F], z: &mut [F], zdota: &mut [F], nact: &mut usize, n: 
 /// QR column-exchange (PRIMA `qrexc_Rdiag`): rearrange active columns
 /// `[i, i+1, …, nact-1]` to `[i+1, …, nact-1, i]` (0-based `i`), updating `z`
 /// and `zdota`. `aact` is the active-column matrix (n × nact).
-fn qrexc<F: Scalar>(aact: &[F], z: &mut [F], zdota: &mut [F], n: usize, nact: usize, i: usize) {
+fn qrexc<F: Scalar>(
+    aact: &[F],
+    z: &mut [F],
+    zdota: &mut [F],
+    n: usize,
+    nact: usize,
+    i: usize,
+) {
     if i + 1 >= nact {
         return;
     }
     for k in i..(nact - 1) {
-        let (cc, ss) = planerot(zdota[k + 1], dot(col(z, n, k), col(aact, n, k + 1)));
+        let (cc, ss) =
+            planerot(zdota[k + 1], dot(col(z, n, k), col(aact, n, k + 1)));
         // Q(:, [k, k+1]) = [Q(:, k+1), Q(:, k)] * G^T.
         for r in 0..n {
             let p1 = z[r + (k + 1) * n]; // Q(:, k+1)
@@ -328,7 +362,8 @@ fn trstlp_sub<F: Scalar>(
                     let vd = lsqr(&aact, &target, z, &zdasav, n, *nact);
                     vmultd[..*nact].copy_from_slice(&vd);
                 }
-                let any_pos = (0..*nact).any(|k| vmultd[k] > zero && iact[k] < m_real);
+                let any_pos =
+                    (0..*nact).any(|k| vmultd[k] > zero && iact[k] < m_real);
                 if !any_pos {
                     break;
                 }
@@ -341,7 +376,9 @@ fn trstlp_sub<F: Scalar>(
                 for k in 0..*nact {
                     vmultc[k] = zero.max(vmultc[k] - frac * vmultd[k]);
                 }
-                if zdota[*nact - 1].is_nan() || zdota[*nact - 1].abs() <= eps * eps {
+                if zdota[*nact - 1].is_nan()
+                    || zdota[*nact - 1].abs() <= eps * eps
+                {
                     break;
                 }
                 let nm1 = *nact - 1;
@@ -361,7 +398,8 @@ fn trstlp_sub<F: Scalar>(
                 vmultc.swap(*nact - 2, *nact - 1);
             }
 
-            if zdota[*nact - 1].is_nan() || zdota[*nact - 1].abs() <= eps * eps {
+            if zdota[*nact - 1].is_nan() || zdota[*nact - 1].abs() <= eps * eps
+            {
                 break;
             }
 
@@ -400,7 +438,10 @@ fn trstlp_sub<F: Scalar>(
             if stage == 2 && *nact == 0 {
                 break;
             }
-            if *nact > 0 && (zdota[*nact - 1].is_nan() || zdota[*nact - 1].abs() <= eps * eps) {
+            if *nact > 0
+                && (zdota[*nact - 1].is_nan()
+                    || zdota[*nact - 1].abs() <= eps * eps)
+            {
                 break;
             }
 

@@ -26,8 +26,13 @@
 use std::hint::black_box;
 
 use basin::problems::{ExponentialFit, PowellSingular};
-use basin::{Executor, GramMatrix, LevenbergMarquardt, LinearSolveSpd, MatTransposeVec, NllsState};
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use basin::{
+    Executor, GramMatrix, LevenbergMarquardt, LinearSolveSpd, MatTransposeVec,
+    NllsState,
+};
+use criterion::{
+    BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
+};
 
 use faer::{Col, Mat};
 use nalgebra::{DMatrix, DVector};
@@ -82,9 +87,11 @@ fn bench_gram(c: &mut Criterion) {
         let data = jac_data(m, n);
 
         let jn = DMatrix::from_column_slice(m, n, &data);
-        g.bench_with_input(BenchmarkId::new("nalgebra", &label), &jn, |b, j| {
-            b.iter(|| black_box(j.gram()))
-        });
+        g.bench_with_input(
+            BenchmarkId::new("nalgebra", &label),
+            &jn,
+            |b, j| b.iter(|| black_box(j.gram())),
+        );
 
         let jf = Mat::from_fn(m, n, |i, j| data[i + j * m]);
         g.bench_with_input(BenchmarkId::new("faer", &label), &jf, |b, j| {
@@ -111,9 +118,11 @@ fn bench_mat_transpose_vec(c: &mut Criterion) {
 
         let jf = Mat::from_fn(m, n, |i, j| data[i + j * m]);
         let rf = Col::from_fn(m, |i| rdata[i]);
-        g.bench_with_input(BenchmarkId::new("faer", &label), &(jf, rf), |b, (j, r)| {
-            b.iter(|| black_box(j.mat_transpose_vec(r)))
-        });
+        g.bench_with_input(
+            BenchmarkId::new("faer", &label),
+            &(jf, rf),
+            |b, (j, r)| b.iter(|| black_box(j.mat_transpose_vec(r))),
+        );
     }
     g.finish();
 }
@@ -152,7 +161,9 @@ fn bench_full_solve(c: &mut Criterion) {
         b.iter_batched(
             || {
                 (
-                    ExponentialFit::<DVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
+                    ExponentialFit::<DVector<f64>>::sampled(
+                        1.0e5, -1.0, 10, 0.4,
+                    ),
                     DVector::from_vec(vec![5.0e4, -0.3]),
                 )
             },

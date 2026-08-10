@@ -16,7 +16,9 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 use crate::{CostFunction, Gradient};
 
 /// Evaluates the Goldstein-Price function at `x`. Requires `x.len() == 2`.
@@ -24,9 +26,11 @@ pub fn goldstein_price(x: &[f64]) -> f64 {
     debug_assert_eq!(x.len(), 2);
     let (a, b) = (x[0], x[1]);
     let u = a + b + 1.0;
-    let p = 19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b + 6.0 * a * b + 3.0 * b * b;
+    let p =
+        19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b + 6.0 * a * b + 3.0 * b * b;
     let v = 2.0 * a - 3.0 * b;
-    let q = 18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b + 27.0 * b * b;
+    let q =
+        18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b + 27.0 * b * b;
     let big_a = 1.0 + u * u * p;
     let big_b = 30.0 + v * v * q;
     big_a * big_b
@@ -41,7 +45,8 @@ pub fn goldstein_price_gradient(x: &[f64], out: &mut [f64]) {
 
     // First factor A = 1 + u² · P, with u = x + y + 1.
     let u = a + b + 1.0;
-    let p = 19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b + 6.0 * a * b + 3.0 * b * b;
+    let p =
+        19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b + 6.0 * a * b + 3.0 * b * b;
     // ∂P/∂x = ∂P/∂y = -14 + 6x + 6y; ∂u/∂x = ∂u/∂y = 1, hence ∂A/∂x = ∂A/∂y.
     let dp = -14.0 + 6.0 * a + 6.0 * b;
     let big_a = 1.0 + u * u * p;
@@ -50,7 +55,8 @@ pub fn goldstein_price_gradient(x: &[f64], out: &mut [f64]) {
 
     // Second factor B = 30 + v² · Q, with v = 2x - 3y.
     let v = 2.0 * a - 3.0 * b;
-    let q = 18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b + 27.0 * b * b;
+    let q =
+        18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b + 27.0 * b * b;
     // ∂Q/∂x = -32 + 24x - 36y; ∂Q/∂y = 48 - 36x + 54y.
     // ∂(v²)/∂x = 4v; ∂(v²)/∂y = -6v.
     let dqdx = -32.0 + 24.0 * a - 36.0 * b;
@@ -129,7 +135,10 @@ impl CostFunction for GoldsteinPrice<Vec<f64>> {
 
 impl Gradient for GoldsteinPrice<Vec<f64>> {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; x.len()];
         goldstein_price_gradient(x, &mut out);
         Ok(out)
@@ -146,14 +155,20 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(goldstein_price(x.as_slice()))
         }
     }
 
     impl Gradient for GoldsteinPrice<DVector<f64>> {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut out = DVector::zeros(x.len());
             goldstein_price_gradient(x.as_slice(), out.as_mut_slice());
             Ok(out)
@@ -171,14 +186,20 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(goldstein_price(x.as_slice().expect("Array1 is contiguous")))
         }
     }
 
     impl Gradient for GoldsteinPrice<Array1<f64>> {
         type Gradient = Array1<f64>;
-        fn gradient(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             let mut out = Array1::zeros(x.len());
             goldstein_price_gradient(
                 x.as_slice().expect("Array1 is contiguous"),
@@ -206,27 +227,36 @@ mod faer_impl {
             debug_assert_eq!(x.nrows(), 2);
             let (a, b) = (x[0], x[1]);
             let u = a + b + 1.0;
-            let p = 19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b + 6.0 * a * b + 3.0 * b * b;
+            let p = 19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b
+                + 6.0 * a * b
+                + 3.0 * b * b;
             let v = 2.0 * a - 3.0 * b;
-            let q = 18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b + 27.0 * b * b;
+            let q = 18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b
+                + 27.0 * b * b;
             Ok((1.0 + u * u * p) * (30.0 + v * v * q))
         }
     }
 
     impl Gradient for GoldsteinPrice<Col<f64>> {
         type Gradient = Col<f64>;
-        fn gradient(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             debug_assert_eq!(x.nrows(), 2);
             let (a, b) = (x[0], x[1]);
             let u = a + b + 1.0;
-            let p = 19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b + 6.0 * a * b + 3.0 * b * b;
+            let p = 19.0 - 14.0 * a + 3.0 * a * a - 14.0 * b
+                + 6.0 * a * b
+                + 3.0 * b * b;
             let dp = -14.0 + 6.0 * a + 6.0 * b;
             let big_a = 1.0 + u * u * p;
             let dadx = 2.0 * u * p + u * u * dp;
             let dady = dadx;
 
             let v = 2.0 * a - 3.0 * b;
-            let q = 18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b + 27.0 * b * b;
+            let q = 18.0 - 32.0 * a + 12.0 * a * a + 48.0 * b - 36.0 * a * b
+                + 27.0 * b * b;
             let dqdx = -32.0 + 24.0 * a - 36.0 * b;
             let dqdy = 48.0 - 36.0 * a + 54.0 * b;
             let big_b = 30.0 + v * v * q;

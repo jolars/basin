@@ -16,7 +16,9 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::BoothBoxedResiduals;
-use basin::{BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, LevenbergMarquardt};
+use basin::{
+    BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, LevenbergMarquardt,
+};
 use nalgebra::{DMatrix, DVector};
 
 #[test]
@@ -44,7 +46,9 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     //    inner cleanly once ‖Jᵀr‖_∞ ≤ 1e-8 (2–3 iters on this
     //    quadratic), so we don't need to cap inner iters explicitly.
     // -----------------------------------------------------------------
-    let solver = BoundedCmaInject::with_inner_solver(cma, LevenbergMarquardt::new()).with_k(1);
+    let solver =
+        BoundedCmaInject::with_inner_solver(cma, LevenbergMarquardt::new())
+            .with_k(1);
 
     // -----------------------------------------------------------------
     // 4. Drive.
@@ -57,7 +61,9 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
 
     let p = result.param();
     eprintln!();
-    eprintln!("=== BoundedCmaInject + Levenberg-Marquardt on BoothBoxedResiduals ===");
+    eprintln!(
+        "=== BoundedCmaInject + Levenberg-Marquardt on BoothBoxedResiduals ==="
+    );
     eprintln!("bounds:           [-1, 1]²");
     eprintln!("unconstrained min: (1, 3)  (outside the box)");
     eprintln!("constrained min:   (1, 1)  (corner of the box)");

@@ -64,7 +64,8 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
     );
     let initial = Col::<f64>::from_fn(2, |i| [10.0, 10.0][i]);
 
-    let mut executor = Executor::new(problem, Trf::new(), NllsState::new(initial));
+    let mut executor =
+        Executor::new(problem, Trf::new(), NllsState::new(initial));
     executor = executor.terminate_on(MaxIter(0));
     let result = executor.run().unwrap();
 

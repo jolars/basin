@@ -20,14 +20,17 @@
 use basin::problems::{ackley, beale, beale_gradient, booth, booth_gradient};
 use basin::problems::{goldstein_price, goldstein_price_gradient};
 use basin::problems::{matyas, matyas_gradient, mccormick, mccormick_gradient};
-use basin::problems::{rastrigin, rosenbrock, rosenbrock_gradient, sphere, sphere_gradient};
+use basin::problems::{
+    rastrigin, rosenbrock, rosenbrock_gradient, sphere, sphere_gradient,
+};
 use basin::problems::{styblinski_tang, styblinski_tang_gradient};
 use basin::solver::lbfgs::{Lbfgs, Unbounded as LbfgsUnbounded};
 use basin::{
-    Backtracking, BasicPopulationState, BasicSimplexState, BasicState, BoxConstraints, CmaEs,
-    CmaEsState, Constant, CostFunction, De, DenseMatrix, Executor, FiniteDiff, Gradient,
-    GradientDescent, LbfgsState, Mads, MadsState, MoreThuente, NelderMead, PopulationState,
-    RandomSearch, Ssga, State, StepOutcome, Stepper, TerminationReason,
+    Backtracking, BasicPopulationState, BasicSimplexState, BasicState,
+    BoxConstraints, CmaEs, CmaEsState, Constant, CostFunction, De, DenseMatrix,
+    Executor, FiniteDiff, Gradient, GradientDescent, LbfgsState, Mads,
+    MadsState, MoreThuente, NelderMead, PopulationState, RandomSearch, Ssga,
+    State, StepOutcome, Stepper, TerminationReason,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -222,7 +225,10 @@ impl BoxConstraints for Problem2DBounded {
 impl Gradient for Problem2D {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; x.len()];
         match self.0 {
             ProblemKind::Sphere => sphere_gradient(x, &mut out),
@@ -231,8 +237,12 @@ impl Gradient for Problem2D {
             ProblemKind::Booth => booth_gradient(x, &mut out),
             ProblemKind::Matyas => matyas_gradient(x, &mut out),
             ProblemKind::McCormick => mccormick_gradient(x, &mut out),
-            ProblemKind::GoldsteinPrice => goldstein_price_gradient(x, &mut out),
-            ProblemKind::StyblinskiTang => styblinski_tang_gradient(x, &mut out),
+            ProblemKind::GoldsteinPrice => {
+                goldstein_price_gradient(x, &mut out)
+            }
+            ProblemKind::StyblinskiTang => {
+                styblinski_tang_gradient(x, &mut out)
+            }
             // Rastrigin and Ackley ship without an analytic gradient in the
             // corpus; synthesize one via central finite differences. Doubles
             // the per-step cost evals on these two problems, which is invisible
@@ -295,22 +305,41 @@ pub fn eval_grid(
 /// Concrete L-Bfgs stepper type. Aliased to keep the [`Inner`] variant
 /// readable (the boxed, fully-monomorphized generic otherwise trips
 /// `clippy::type_complexity`).
-type LbfgsStepper = Stepper<Problem2D, LbfgsState<Vec<f64>>, Lbfgs<LbfgsUnbounded, MoreThuente>>;
+type LbfgsStepper = Stepper<
+    Problem2D,
+    LbfgsState<Vec<f64>>,
+    Lbfgs<LbfgsUnbounded, MoreThuente>,
+>;
 /// Concrete population-solver stepper aliases. Same motivation as
 /// [`LbfgsStepper`]: keep the [`Inner`] variants readable.
-type CmaEsStepper =
-    Stepper<Problem2D, CmaEsState<Vec<f64>, DenseMatrix>, CmaEs<Vec<f64>, DenseMatrix>>;
+type CmaEsStepper = Stepper<
+    Problem2D,
+    CmaEsState<Vec<f64>, DenseMatrix>,
+    CmaEs<Vec<f64>, DenseMatrix>,
+>;
 type DeStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, De>;
-type RandomSearchStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, RandomSearch>;
-type SsgaStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, Ssga>;
+type RandomSearchStepper =
+    Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, RandomSearch>;
+type SsgaStepper =
+    Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, Ssga>;
 
 /// Inner enum dispatching by `(state shape, solver type)`. Each variant
 /// is fully concrete so the resulting wasm is tight and no `dyn Solver`
 /// gymnastics are needed.
 enum Inner {
-    GdConstant(Stepper<Problem2D, BasicState<Vec<f64>>, GradientDescent<Constant, Vec<f64>>>),
+    GdConstant(
+        Stepper<
+            Problem2D,
+            BasicState<Vec<f64>>,
+            GradientDescent<Constant, Vec<f64>>,
+        >,
+    ),
     GdBacktracking(
-        Stepper<Problem2D, BasicState<Vec<f64>>, GradientDescent<Backtracking, Vec<f64>>>,
+        Stepper<
+            Problem2D,
+            BasicState<Vec<f64>>,
+            GradientDescent<Backtracking, Vec<f64>>,
+        >,
     ),
     NelderMead(Stepper<Problem2D, BasicSimplexState<Vec<f64>>, NelderMead>),
     Mads(Stepper<Problem2D, MadsState<Vec<f64>>, Mads>),
@@ -459,7 +488,8 @@ impl Run {
         // serde_wasm_bindgen reaches into JS, so deserialization can't
         // happen in the native-testable core; do it here and hand a plain
         // Rust struct to `new_inner`.
-        let opts: RunOptions = serde_wasm_bindgen::from_value(opts).unwrap_or_default();
+        let opts: RunOptions =
+            serde_wasm_bindgen::from_value(opts).unwrap_or_default();
         Self::new_inner(problem, solver, x0, y0, opts, max_iter, stop_at_cost)
     }
 
@@ -566,7 +596,8 @@ impl Run {
                 } else {
                     Inner::GdConstant(make_stepper(
                         p,
-                        GradientDescent::new(opts.gd_alpha).with_momentum(opts.gd_beta),
+                        GradientDescent::new(opts.gd_alpha)
+                            .with_momentum(opts.gd_beta),
                         &initial,
                         max_iter,
                     ))
@@ -584,11 +615,14 @@ impl Run {
                 Inner::NelderMead(stepper)
             }
             SolverKind::Mads => {
-                let stepper =
-                    Executor::new(p, Mads::new(), MadsState::<Vec<f64>>::new(initial.clone()))
-                        .max_iter(max_iter as u64)
-                        .into_stepper()
-                        .unwrap();
+                let stepper = Executor::new(
+                    p,
+                    Mads::new(),
+                    MadsState::<Vec<f64>>::new(initial.clone()),
+                )
+                .max_iter(max_iter as u64)
+                .into_stepper()
+                .unwrap();
                 Inner::Mads(stepper)
             }
             SolverKind::Lbfgs => {
@@ -610,10 +644,13 @@ impl Run {
                 // σ ≈ 1.5 on Sphere [-3,3]², σ ≈ 1 on Goldstein-Price [-2,2]²,
                 // σ ≈ 5 on Booth [-10,10]², all fine starting points; the slider
                 // overrides this whenever the user touches it.
-                let sigma = if opts.cma_sigma.is_finite() && opts.cma_sigma > 0.0 {
+                let sigma = if opts.cma_sigma.is_finite()
+                    && opts.cma_sigma > 0.0
+                {
                     opts.cma_sigma
                 } else {
-                    0.25 * 0.5 * ((opts.xmax - opts.xmin) + (opts.ymax - opts.ymin))
+                    0.25 * 0.5
+                        * ((opts.xmax - opts.xmin) + (opts.ymax - opts.ymin))
                 };
                 let mut solver = CmaEs::<Vec<f64>, DenseMatrix>::new(opts.seed);
                 // λ < 4 is invalid for CMA-ES recombination weights; treat
@@ -624,7 +661,10 @@ impl Run {
                 let stepper = Executor::new(
                     p,
                     solver,
-                    CmaEsState::<Vec<f64>, DenseMatrix>::new(initial.clone(), sigma),
+                    CmaEsState::<Vec<f64>, DenseMatrix>::new(
+                        initial.clone(),
+                        sigma,
+                    ),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -648,11 +688,14 @@ impl Run {
                 if opts.de_pop_size >= 4 {
                     solver = solver.with_pop_size(opts.de_pop_size);
                 }
-                let stepper =
-                    Executor::new(pb, solver, BasicPopulationState::<Vec<f64>>::with_size(pop))
-                        .max_iter(max_iter as u64)
-                        .into_stepper()
-                        .unwrap();
+                let stepper = Executor::new(
+                    pb,
+                    solver,
+                    BasicPopulationState::<Vec<f64>>::with_size(pop),
+                )
+                .max_iter(max_iter as u64)
+                .into_stepper()
+                .unwrap();
                 Inner::De(Box::new(stepper))
             }
             SolverKind::RandomSearch => {
@@ -687,11 +730,14 @@ impl Run {
                     // documented default by sizing the state buffer at 20.
                     20
                 };
-                let stepper =
-                    Executor::new(pb, solver, BasicPopulationState::<Vec<f64>>::with_size(pop))
-                        .max_iter(max_iter as u64)
-                        .into_stepper()
-                        .unwrap();
+                let stepper = Executor::new(
+                    pb,
+                    solver,
+                    BasicPopulationState::<Vec<f64>>::with_size(pop),
+                )
+                .max_iter(max_iter as u64)
+                .into_stepper()
+                .unwrap();
                 Inner::Ssga(Box::new(stepper))
             }
         };
@@ -755,7 +801,8 @@ fn make_stepper<L>(
     max_iter: u32,
 ) -> Stepper<Problem2D, BasicState<Vec<f64>>, GradientDescent<L, Vec<f64>>>
 where
-    GradientDescent<L, Vec<f64>>: basin::Solver<Problem2D, BasicState<Vec<f64>>>,
+    GradientDescent<L, Vec<f64>>:
+        basin::Solver<Problem2D, BasicState<Vec<f64>>>,
 {
     Executor::new(problem, solver, BasicState::new(initial.to_vec()))
         .max_iter(max_iter as u64)
@@ -772,8 +819,12 @@ fn reason_str(r: TerminationReason) -> &'static str {
         TerminationReason::MaxCostEvals => "max_cost_evals",
         TerminationReason::MaxGradientEvals => "max_gradient_evals",
         TerminationReason::GradientTolerance => "gradient_tolerance",
-        TerminationReason::RelativeGradientTolerance => "relative_gradient_tolerance",
-        TerminationReason::ProjectedGradientTolerance => "projected_gradient_tolerance",
+        TerminationReason::RelativeGradientTolerance => {
+            "relative_gradient_tolerance"
+        }
+        TerminationReason::ProjectedGradientTolerance => {
+            "projected_gradient_tolerance"
+        }
         TerminationReason::ParamTolerance => "param_tolerance",
         TerminationReason::RelativeParamTolerance => "relative_param_tolerance",
         TerminationReason::CostTolerance => "cost_tolerance",

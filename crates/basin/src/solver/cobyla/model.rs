@@ -25,7 +25,12 @@ pub(crate) fn build_g<F: Scalar>(fval: &[F], simi: &[F], n: usize) -> Vec<F> {
 /// Constraint-model gradients `A` (n × m, column-major; column `i` is the
 /// gradient of constraint `i`):
 /// `A[l, i] = Σ_j (conmat[i, j] − conmat[i, n]) · simi[j, l]`.
-pub(crate) fn build_a<F: Scalar>(conmat: &[F], simi: &[F], n: usize, m: usize) -> Vec<F> {
+pub(crate) fn build_a<F: Scalar>(
+    conmat: &[F],
+    simi: &[F],
+    n: usize,
+    m: usize,
+) -> Vec<F> {
     let mut a = vec![F::zero(); n * m];
     for i in 0..m {
         let pole = conmat[i + n * m];

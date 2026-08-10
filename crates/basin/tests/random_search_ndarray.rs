@@ -1,7 +1,10 @@
 #![cfg(feature = "ndarray")]
 
 use basin::problems::BoothBoxed;
-use basin::{BasicPopulationState, Executor, PopulationState, RandomSearch, State, StepOutcome};
+use basin::{
+    BasicPopulationState, Executor, PopulationState, RandomSearch, State,
+    StepOutcome,
+};
 use ndarray::Array1;
 
 #[test]

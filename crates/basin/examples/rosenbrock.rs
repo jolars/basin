@@ -17,7 +17,10 @@ impl CostFunction for Rosenbrock {
 impl Gradient for Rosenbrock {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let a = 1.0;
         let b = 100.0;
         Ok(vec![

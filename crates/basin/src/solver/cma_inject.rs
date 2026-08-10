@@ -1,14 +1,15 @@
 use crate::core::executor::OptimizationResult;
 use crate::core::inner::{InitialState, InnerExecutor, WarmStart};
 use crate::core::math::{
-    ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NormSquared,
-    RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
-    VectorLen,
+    ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, Scalar,
+    ScaleInPlace, ScaledAdd, SymmetricEigen, VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{
-    BasicSimplexState, CmaEsState, CountsMirror, IntoInitialSimplex, LbfgsState, NllsState, State,
+    BasicSimplexState, CmaEsState, CountsMirror, IntoInitialSimplex,
+    LbfgsState, NllsState, State,
 };
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
@@ -103,7 +104,11 @@ where
 {
     type Error = I::Error;
 
-    fn init(&mut self, problem: &mut Problem<P>, state: S) -> Result<S, Self::Error> {
+    fn init(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: S,
+    ) -> Result<S, Self::Error> {
         self.inner.init(problem, state)
     }
     fn next_iter(
@@ -156,7 +161,10 @@ where
 impl<Mode, V, F> InitialState<V> for NelderMead<Mode, F>
 where
     F: Scalar,
-    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + Clone
+        + IntoInitialSimplex<V>
+        + std::ops::IndexMut<usize, Output = F>,
 {
     type State = BasicSimplexState<V, F>;
     fn seed(&self, x: &V) -> BasicSimplexState<V, F> {
@@ -170,14 +178,20 @@ where
 impl<Mode, V, F> WarmStart<V> for NelderMead<Mode, F>
 where
     F: Scalar,
-    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + Clone
+        + IntoInitialSimplex<V>
+        + std::ops::IndexMut<usize, Output = F>,
 {
 }
 
 impl<Mode, V, F> MemeticInner<V, F> for NelderMead<Mode, F>
 where
     F: Scalar,
-    V: VectorLen + Clone + IntoInitialSimplex<V> + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + Clone
+        + IntoInitialSimplex<V>
+        + std::ops::IndexMut<usize, Output = F>,
 {
     fn seed_scaled(&self, x: &V, sigma: F) -> BasicSimplexState<V, F> {
         // σ-scaled axis-aligned simplex: edge = current CMA step-size,
@@ -422,7 +436,8 @@ impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>> for CmaInject<I, V, M, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    I: MemeticInner<V, F> + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
+    I: MemeticInner<V, F>
+        + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone
@@ -459,7 +474,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: CmaEsState<V, M, F>,
-    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error>
+    {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
         //    previous generation, sample λ fresh candidates sorted by
         //    cost ascending.
@@ -480,7 +496,8 @@ where
             // 2. Seed the inner state via the trait. The σ argument
             //    lets seeders that scale with the CMA distribution
             //    (NM's σ-scaled simplex) track the current spread.
-            let inner_state = self.inner.solver().seed_scaled(&state.candidates[i], sigma);
+            let inner_state =
+                self.inner.solver().seed_scaled(&state.candidates[i], sigma);
 
             // 3. Drive the inner. Same-problem composition: inner shares
             //    the outer wrapper, so its evals flow into the outer's

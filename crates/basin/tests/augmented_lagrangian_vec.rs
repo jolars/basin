@@ -5,8 +5,8 @@
 
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
-    AugmentedLagrangianMethod, Backtracking, BasicState, DenseMatrix, Executor, GradientDescent,
-    GradientState, Lbfgsb, TerminationReason,
+    AugmentedLagrangianMethod, Backtracking, BasicState, DenseMatrix, Executor,
+    GradientDescent, GradientState, Lbfgsb, TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. The unconstrained min (2,2) is
@@ -29,7 +29,9 @@ fn converges_to_affine_projection() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(Backtracking::new())),
+        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(
+            Backtracking::new(),
+        )),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -38,7 +40,8 @@ fn converges_to_affine_projection() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "expected (1, 1), got {:?}",
         result.param()
     );
@@ -58,7 +61,9 @@ fn fully_determined_system() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(Backtracking::new())),
+        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(
+            Backtracking::new(),
+        )),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -67,7 +72,8 @@ fn fully_determined_system() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
-        (result.param()[0] - 0.5).abs() < 1e-4 && (result.param()[1] - 1.5).abs() < 1e-4,
+        (result.param()[0] - 0.5).abs() < 1e-4
+            && (result.param()[1] - 1.5).abs() < 1e-4,
         "expected (0.5, 1.5), got {:?}",
         result.param()
     );
@@ -80,7 +86,9 @@ fn eval_counts_are_recorded() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(Backtracking::new())),
+        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(
+            Backtracking::new(),
+        )),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -116,7 +124,8 @@ fn lbfgs_inner_converges_to_affine_projection() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "expected (1, 1), got {:?}",
         result.param()
     );

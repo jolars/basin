@@ -210,7 +210,8 @@ pub(crate) fn formk<F: Scalar>(
                 temp4 = temp4 + ws_cols[iy][k1] * ws_cols[jy][k1];
             }
             wn1[iy * two_m + jy] = wn1[iy * two_m + jy] + temp1 - temp3;
-            wn1[(m + iy) * two_m + (m + jy)] = wn1[(m + iy) * two_m + (m + jy)] + (-temp2 + temp4);
+            wn1[(m + iy) * two_m + (m + jy)] =
+                wn1[(m + iy) * two_m + (m + jy)] + (-temp2 + temp4);
         }
     }
 
@@ -249,7 +250,8 @@ pub(crate) fn formk<F: Scalar>(
         // (1,1) and (2,2) upper triangles, from wn1's lower triangles.
         for jy in 0..=iy {
             wn[jy * two_m + iy] = wn1[iy * two_m + jy] / theta;
-            wn[(col + jy) * two_m + (col + iy)] = wn1[(m + iy) * two_m + (m + jy)] * theta;
+            wn[(col + jy) * two_m + (col + iy)] =
+                wn1[(m + iy) * two_m + (m + jy)] * theta;
         }
         // (1,2) block, rows 0..col, col `col + iy`. Strict-lower part
         // of wn1's (2,1) goes in with a `−` sign (L_a'); the
@@ -334,7 +336,8 @@ pub(crate) fn formk<F: Scalar>(
         for i in (j + 1)..col {
             let mut s = wn[(col + j) * two_m + (col + i)];
             for k in 0..j {
-                s = s - wn[(col + k) * two_m + (col + j)] * wn[(col + k) * two_m + (col + i)];
+                s = s - wn[(col + k) * two_m + (col + j)]
+                    * wn[(col + k) * two_m + (col + i)];
             }
             wn[(col + j) * two_m + (col + i)] = s / djj;
         }
@@ -382,8 +385,8 @@ mod tests {
         let mut wn1 = vec![0.0_f64; two_m * two_m];
 
         formk(
-            &mut wn, &mut wn1, m, 1, theta, &sy, &ws_cols, &wy_cols, 1, &ind, nenter, ileave,
-            &indx2, 1, true,
+            &mut wn, &mut wn1, m, 1, theta, &sy, &ws_cols, &wy_cols, 1, &ind,
+            nenter, ileave, &indx2, 1, true,
         )
         .unwrap();
 
@@ -427,7 +430,8 @@ mod tests {
         let mut wn1 = vec![0.0_f64; two_m * two_m];
 
         formk(
-            &mut wn, &mut wn1, m, 1, theta, &sy, &ws_cols, &wy_cols, 2, // both free
+            &mut wn, &mut wn1, m, 1, theta, &sy, &ws_cols, &wy_cols,
+            2, // both free
             &ind, 0, 2, // no entering / leaving
             &indx2, 1, true,
         )
@@ -470,7 +474,8 @@ mod tests {
         let mut wn1 = vec![0.0_f64; two_m * two_m];
 
         let res = formk(
-            &mut wn, &mut wn1, m, 1, 1.0, &sy, &ws_cols, &wy_cols, 2, &ind, 0, 2, &indx2, 1, true,
+            &mut wn, &mut wn1, m, 1, 1.0, &sy, &ws_cols, &wy_cols, 2, &ind, 0,
+            2, &indx2, 1, true,
         );
         assert_eq!(res, Err(FormkError::NotPositiveDefiniteFirst));
     }

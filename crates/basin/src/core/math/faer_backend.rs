@@ -10,15 +10,18 @@ use super::cl_scaling::{
     project_strictly_inside_component,
 };
 use super::linalg::{
-    AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate, GramMatrix,
-    LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen, SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate,
+    GramMatrix, LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec,
+    MatVec, MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, RankOneUpdate,
+    SymmetricEigen, SymmetricEigenError,
 };
-use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
+use super::sample::{
+    SampleStandardNormal, SampleUniformBox, assert_finite_box,
+};
 use super::{
-    ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
-    FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared, ScaleInPlace, ScaledAdd, VectorIndex,
-    VectorLen,
+    ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
+    Dot, FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared,
+    ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
 
 // The vector-tier ops used here (`Col::iter`, `Col::from_fn`, indexing, the
@@ -60,7 +63,11 @@ impl<F: Scalar> NegInPlace for Col<F> {
 }
 
 impl<F: Scalar + SampleUniform> SampleUniformBox for Col<F> {
-    fn sample_uniform_box<R: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut R) -> Self {
+    fn sample_uniform_box<R: Rng + ?Sized>(
+        lower: &Self,
+        upper: &Self,
+        rng: &mut R,
+    ) -> Self {
         assert_eq!(
             lower.nrows(),
             upper.nrows(),
@@ -90,7 +97,10 @@ impl<F: Scalar> SampleStandardNormal for Col<F>
 where
     StandardNormal: Distribution<F>,
 {
-    fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
+    fn sample_standard_normal<R: Rng + ?Sized>(
+        template: &Self,
+        rng: &mut R,
+    ) -> Self {
         Self::from_fn(template.nrows(), |_| StandardNormal.sample(rng))
     }
 }
@@ -108,7 +118,8 @@ impl<F: Scalar> ComponentMulAssign for Col<F> {
             other.nrows(),
             "component_mul_assign: shape mismatch"
         );
-        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x = *x * *y);
+        faer::zip!(self.as_mut(), other.as_ref())
+            .for_each(|faer::unzip!(x, y)| *x = *x * *y);
     }
 }
 
@@ -119,7 +130,8 @@ impl<F: Scalar> ComponentMaxAssign for Col<F> {
             other.nrows(),
             "component_max_assign: shape mismatch"
         );
-        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x = x.max(*y));
+        faer::zip!(self.as_mut(), other.as_ref())
+            .for_each(|faer::unzip!(x, y)| *x = x.max(*y));
     }
 }
 
@@ -140,7 +152,8 @@ impl<F: Scalar> ComponentDivAssign for Col<F> {
             other.nrows(),
             "component_div_assign: shape mismatch"
         );
-        faer::zip!(self.as_mut(), other.as_ref()).for_each(|faer::unzip!(x, y)| *x = *x / *y);
+        faer::zip!(self.as_mut(), other.as_ref())
+            .for_each(|faer::unzip!(x, y)| *x = *x / *y);
     }
 }
 
@@ -178,8 +191,16 @@ impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
             gradient.nrows(),
             "compute_cl_scaling: gradient shape mismatch"
         );
-        assert_eq!(n, lower.nrows(), "compute_cl_scaling: lower shape mismatch");
-        assert_eq!(n, upper.nrows(), "compute_cl_scaling: upper shape mismatch");
+        assert_eq!(
+            n,
+            lower.nrows(),
+            "compute_cl_scaling: lower shape mismatch"
+        );
+        assert_eq!(
+            n,
+            upper.nrows(),
+            "compute_cl_scaling: upper shape mismatch"
+        );
         assert_eq!(n, d_sq.nrows(), "compute_cl_scaling: d_sq shape mismatch");
         assert_eq!(
             n,
@@ -188,7 +209,8 @@ impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
         );
         // Faer's `zip!` macro caps at four operands; do an indexed loop.
         for i in 0..n {
-            let (d_sq_i, c_i) = cl_scaling_pair::<F>(self[i], gradient[i], lower[i], upper[i]);
+            let (d_sq_i, c_i) =
+                cl_scaling_pair::<F>(self[i], gradient[i], lower[i], upper[i]);
             d_sq[i] = d_sq_i;
             c_diag[i] = c_i;
         }
@@ -201,7 +223,9 @@ impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
         assert_eq!(n, upper.nrows(), "max_feasible_step: upper shape mismatch");
         let mut tau = F::infinity();
         for i in 0..n {
-            let t = max_feasible_step_component::<F>(self[i], step[i], lower[i], upper[i]);
+            let t = max_feasible_step_component::<F>(
+                self[i], step[i], lower[i], upper[i],
+            );
             if t < tau {
                 tau = t;
             }
@@ -233,7 +257,12 @@ impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
             .sum()
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
+    fn project_strictly_inside(
+        &mut self,
+        lower: &Self,
+        upper: &Self,
+        rstep: F,
+    ) {
         let n = self.nrows();
         assert_eq!(
             n,
@@ -246,7 +275,9 @@ impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
             "project_strictly_inside: upper shape mismatch"
         );
         for i in 0..n {
-            self[i] = project_strictly_inside_component::<F>(self[i], lower[i], upper[i], rstep);
+            self[i] = project_strictly_inside_component::<F>(
+                self[i], lower[i], upper[i], rstep,
+            );
         }
     }
 }
@@ -401,7 +432,11 @@ impl<F: Scalar> MatrixFromDiagonal<Col<F>> for Mat<F> {
 
 impl<F: Scalar> DenseMatrixFromFn<F> for Col<F> {
     type Matrix = Mat<F>;
-    fn dense_from_fn<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, f: G) -> Mat<F> {
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+    ) -> Mat<F> {
         Mat::from_fn(rows, cols, f)
     }
 }
@@ -686,7 +721,11 @@ mod tests {
         );
         for r in 0..2 {
             for c_idx in 0..2 {
-                assert!(approx_eq(recomposed[(r, c_idx)], c[(r, c_idx)], 1e-10));
+                assert!(approx_eq(
+                    recomposed[(r, c_idx)],
+                    c[(r, c_idx)],
+                    1e-10
+                ));
             }
         }
     }
@@ -694,7 +733,9 @@ mod tests {
     #[test]
     fn add_diagonal_vector_in_place_adds_per_index() {
         let mut a = Mat::<f64>::from_fn(3, 3, |i, j| (i * 3 + j + 1) as f64);
-        a.add_diagonal_vector_in_place(&Col::<f64>::from_fn(3, |i| [10.0, 100.0, 1000.0][i]));
+        a.add_diagonal_vector_in_place(&Col::<f64>::from_fn(3, |i| {
+            [10.0, 100.0, 1000.0][i]
+        }));
         // Diagonal: 1+10=11, 5+100=105, 9+1000=1009; off-diagonal untouched.
         assert!(approx_eq(a[(0, 0)], 11.0, 1e-12));
         assert!(approx_eq(a[(1, 1)], 105.0, 1e-12));

@@ -107,7 +107,8 @@ fn aggregates_inner_cost_evals_into_outer() {
     // k = 1 that's ≥ outer_iters · (n + 2). Using a slightly weaker
     // lower bound to absorb the iter-0 skip + any early-terminating
     // NM iter:
-    let min_extra = (outer_iters.saturating_sub(1)) * (k as u64) * (n as u64 + 2);
+    let min_extra =
+        (outer_iters.saturating_sub(1)) * (k as u64) * (n as u64 + 2);
     assert!(
         memetic.cost_evals() >= vanilla.cost_evals() + min_extra,
         "memetic cost_evals = {} should exceed vanilla {} by at least \

@@ -224,8 +224,9 @@ where
         let template = state.param.clone();
 
         let (work, best_x, best_f) = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             BobyqaWork::try_init(
                 x0,
                 &lower,
@@ -248,7 +249,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BobyqaState<V, F>,
-    ) -> Result<(BobyqaState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BobyqaState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let template = state.param.clone();
         let work = self
             .work
@@ -256,8 +258,9 @@ where
             .expect("Bobyqa::init must run before next_iter");
 
         let out = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             work.step(&mut eval)?
         };
         state.rho = work.rho();
@@ -339,10 +342,14 @@ mod tests {
             lower: vec![0.9, -2.2],
             upper: vec![1.1, -1.8],
         };
-        let result = Executor::new(problem, Bobyqa::new(), BobyqaState::new(vec![1.0, -2.0]))
-            .terminate_on(MaxCostEvals(500))
-            .run()
-            .unwrap();
+        let result = Executor::new(
+            problem,
+            Bobyqa::new(),
+            BobyqaState::new(vec![1.0, -2.0]),
+        )
+        .terminate_on(MaxCostEvals(500))
+        .run()
+        .unwrap();
         let x = result.best_param();
         assert!((x[0] - 1.0).abs() < 1e-3, "x0 = {}", x[0]);
         assert!((x[1] + 2.0).abs() < 1e-3, "x1 = {}", x[1]);
@@ -380,7 +387,10 @@ mod tests {
             type Param = Vec<f64>;
             type Output = f64;
             type Error = std::convert::Infallible;
-            fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+            fn cost(
+                &self,
+                x: &Vec<f64>,
+            ) -> Result<f64, std::convert::Infallible> {
                 Ok((x[0] - 5.0).powi(2) + (x[1] - 5.0).powi(2))
             }
         }
@@ -420,7 +430,10 @@ mod tests {
             type Param = Vec<f64>;
             type Output = f64;
             type Error = std::convert::Infallible;
-            fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
+            fn cost(
+                &self,
+                x: &Vec<f64>,
+            ) -> Result<f64, std::convert::Infallible> {
                 Ok(100.0 * (x[1] - x[0] * x[0]).powi(2) + (1.0 - x[0]).powi(2))
             }
         }

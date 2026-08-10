@@ -108,7 +108,9 @@ impl<F: Scalar> BrentDerivative<F> {
 impl<P, F> Solver<P, ScalarGradientState<F>> for BrentDerivative<F>
 where
     F: Scalar,
-    P: CostFunction<Param = F, Output = F> + Gradient<Gradient = F> + BoxConstraints,
+    P: CostFunction<Param = F, Output = F>
+        + Gradient<Gradient = F>
+        + BoxConstraints,
 {
     type Error = P::Error;
 
@@ -157,7 +159,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: ScalarGradientState<F>,
-    ) -> Result<(ScalarGradientState<F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(ScalarGradientState<F>, Option<TerminationReason>), Self::Error>
+    {
         let s = self
             .inner
             .as_mut()
@@ -197,8 +200,10 @@ where
             // downhill (opposite sign to `f'(x)`).
             let u1 = s.x + d1;
             let u2 = s.x + d2;
-            let ok1 = (s.a - u1) * (u1 - s.b) > F::zero() && s.dx * d1 <= F::zero();
-            let ok2 = (s.a - u2) * (u2 - s.b) > F::zero() && s.dx * d2 <= F::zero();
+            let ok1 =
+                (s.a - u1) * (u1 - s.b) > F::zero() && s.dx * d1 <= F::zero();
+            let ok2 =
+                (s.a - u2) * (u2 - s.b) > F::zero() && s.dx * d2 <= F::zero();
             let olde = s.e;
             s.e = s.d;
             let chosen = if ok1 && ok2 {
@@ -300,7 +305,10 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &ScalarGradientState<F>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &ScalarGradientState<F>,
+    ) -> Option<TerminationReason> {
         let s = self.inner.as_ref()?;
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();

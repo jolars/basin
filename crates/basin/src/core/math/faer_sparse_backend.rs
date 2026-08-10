@@ -18,8 +18,8 @@ use faer::{Accum, Col, Par, Side};
 
 use super::Scalar;
 use super::linalg::{
-    AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
-    MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
+    AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveLstsq,
+    LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
 };
 
 // As with the dense faer backend, sparse matmul/Cholesky/QR all
@@ -221,10 +221,11 @@ where
         // case; LltError::Generic covers OOM/index overflow, which
         // we surface as NotPositiveDefinite (the trait's only
         // backend-portable failure for this path).
-        let llt = Self::sp_cholesky(self, Side::Lower).map_err(|e| match e {
-            LltError::Numeric(_) => LinearSolveError::NotPositiveDefinite,
-            LltError::Generic(_) => LinearSolveError::NotPositiveDefinite,
-        })?;
+        let llt =
+            Self::sp_cholesky(self, Side::Lower).map_err(|e| match e {
+                LltError::Numeric(_) => LinearSolveError::NotPositiveDefinite,
+                LltError::Generic(_) => LinearSolveError::NotPositiveDefinite,
+            })?;
         let mut x = b.clone();
         llt.solve_in_place(&mut x);
         Ok(x)
@@ -268,7 +269,8 @@ mod tests {
             Triplet::new(0, 1, row0[1]),
             Triplet::new(1, 1, row1[1]),
         ];
-        SparseColMat::try_new_from_triplets(2, 2, &triplets).expect("triplets must build")
+        SparseColMat::try_new_from_triplets(2, 2, &triplets)
+            .expect("triplets must build")
     }
 
     #[test]
@@ -351,7 +353,9 @@ mod tests {
     #[test]
     fn add_diagonal_vector_in_place_adds_per_index() {
         let mut a = csc2([1.0, 2.0], [3.0, 4.0]);
-        a.add_diagonal_vector_in_place(&Col::<f64>::from_fn(2, |i| [10.0, 100.0][i]));
+        a.add_diagonal_vector_in_place(&Col::<f64>::from_fn(2, |i| {
+            [10.0, 100.0][i]
+        }));
         // Original [[1,2],[3,4]] + diag(10, 100) → [[11,2],[3,104]].
         let e0 = Col::<f64>::from_fn(2, |i| if i == 0 { 1.0 } else { 0.0 });
         let e1 = Col::<f64>::from_fn(2, |i| if i == 1 { 1.0 } else { 0.0 });
@@ -387,8 +391,9 @@ mod tests {
             Triplet::new(2, 0, 1.0),
             Triplet::new(2, 1, 1.0),
         ];
-        let a = SparseColMat::<usize, f64>::try_new_from_triplets(3, 2, &triplets)
-            .expect("triplets must build");
+        let a =
+            SparseColMat::<usize, f64>::try_new_from_triplets(3, 2, &triplets)
+                .expect("triplets must build");
         let b = Col::<f64>::from_fn(3, |i| [1.0, 2.0, 4.0][i]);
         let x = a.solve_lstsq(&b).expect("least-squares solve must succeed");
         assert_eq!(x.nrows(), 2);

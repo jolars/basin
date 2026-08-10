@@ -17,7 +17,9 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 use crate::{CostFunction, Gradient};
 
 /// Standard lower bound on each coordinate.
@@ -118,7 +120,10 @@ impl CostFunction for SchafferN2<Vec<f64>> {
 
 impl Gradient for SchafferN2<Vec<f64>> {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; x.len()];
         schaffer_n2_gradient(x, &mut out);
         Ok(out)
@@ -199,7 +204,9 @@ impl CostFunction for SchafferN4<Vec<f64>> {
 
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
-    use super::{SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4};
+    use super::{
+        SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4,
+    };
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
@@ -207,14 +214,20 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(schaffer_n2(x.as_slice()))
         }
     }
 
     impl Gradient for SchafferN2<DVector<f64>> {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut out = DVector::zeros(x.len());
             schaffer_n2_gradient(x.as_slice(), out.as_mut_slice());
             Ok(out)
@@ -225,7 +238,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(schaffer_n4(x.as_slice()))
         }
     }
@@ -233,7 +249,9 @@ mod nalgebra_impl {
 
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
-    use super::{SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4};
+    use super::{
+        SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4,
+    };
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
@@ -241,14 +259,20 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(schaffer_n2(x.as_slice().expect("Array1 is contiguous")))
         }
     }
 
     impl Gradient for SchafferN2<Array1<f64>> {
         type Gradient = Array1<f64>;
-        fn gradient(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             let mut out = Array1::zeros(x.len());
             schaffer_n2_gradient(
                 x.as_slice().expect("Array1 is contiguous"),
@@ -262,7 +286,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(schaffer_n4(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -293,7 +320,10 @@ mod faer_impl {
 
     impl Gradient for SchafferN2<Col<f64>> {
         type Gradient = Col<f64>;
-        fn gradient(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             debug_assert_eq!(x.nrows(), 2);
             let (a, b) = (x[0], x[1]);
             let u = a * a - b * b;

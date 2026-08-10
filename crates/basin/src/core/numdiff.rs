@@ -74,8 +74,12 @@
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{DenseMatrixFromFn, VectorIndex, VectorLen};
-use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with, try_map_slice_with};
-use crate::core::problem::{CostFunction, Gradient, Hessian, HessianProduct, Jacobian, Residual};
+use crate::core::parallel::{
+    MaybeSend, MaybeSync, try_map_range_with, try_map_slice_with,
+};
+use crate::core::problem::{
+    CostFunction, Gradient, Hessian, HessianProduct, Jacobian, Residual,
+};
 
 /// Which finite-difference stencil to use for a given derivative.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,7 +229,10 @@ impl<P: Residual> Residual for FiniteDiff<P> {
     type Param = P::Param;
     type Output = P::Output;
     type Error = P::Error;
-    fn residual(&self, param: &Self::Param) -> Result<Self::Output, Self::Error> {
+    fn residual(
+        &self,
+        param: &Self::Param,
+    ) -> Result<Self::Output, Self::Error> {
         self.problem.residual(param)
     }
 }
@@ -275,7 +282,12 @@ where
 impl<P, V> Jacobian for FiniteDiff<P>
 where
     P: Residual<Param = V, Output = V> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync + MaybeSend,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn
+        + MaybeSync
+        + MaybeSend,
     <P as Residual>::Error: MaybeSend,
 {
     type Jacobian = <V as DenseMatrixFromFn>::Matrix;
@@ -470,7 +482,12 @@ pub fn forward_difference_jacobian<P, V>(
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
     P: Residual<Param = V, Output = V> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync + MaybeSend,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn
+        + MaybeSync
+        + MaybeSend,
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
@@ -514,7 +531,12 @@ pub fn central_difference_jacobian<P, V>(
 ) -> Result<<V as DenseMatrixFromFn>::Matrix, P::Error>
 where
     P: Residual<Param = V, Output = V> + MaybeSync,
-    V: Clone + VectorLen + VectorIndex + DenseMatrixFromFn + MaybeSync + MaybeSend,
+    V: Clone
+        + VectorLen
+        + VectorIndex
+        + DenseMatrixFromFn
+        + MaybeSync
+        + MaybeSend,
     P::Error: MaybeSend,
 {
     let n = x.vec_len();
@@ -532,7 +554,10 @@ where
             let rm = problem.residual(probe)?;
             probe.set_scalar(j, xj);
             for i in 0..m {
-                col.set_scalar(i, (col.get_scalar(i) - rm.get_scalar(i)) / (2.0 * h));
+                col.set_scalar(
+                    i,
+                    (col.get_scalar(i) - rm.get_scalar(i)) / (2.0 * h),
+                );
             }
             Ok(col)
         },
@@ -564,7 +589,8 @@ where
         .map(|j| nr_step(x.get_scalar(j), scale, fixed_step))
         .collect();
     // Upper-triangular entries (i ≤ j); each is independent given `f0`/`h`.
-    let pairs: Vec<(usize, usize)> = (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
+    let pairs: Vec<(usize, usize)> =
+        (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
     let values = try_map_slice_with(
         &pairs,
         || x.clone(),
@@ -638,7 +664,8 @@ where
         },
     )?;
     // Upper-triangular entries (i ≤ j); each is independent given `fi`/`f0`/`h`.
-    let pairs: Vec<(usize, usize)> = (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
+    let pairs: Vec<(usize, usize)> =
+        (0..n).flat_map(|i| (i..n).map(move |j| (i, j))).collect();
     let values = try_map_slice_with(
         &pairs,
         || x.clone(),
@@ -896,7 +923,10 @@ mod tests {
     }
     impl Gradient for DiagQuadraticGrad {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok(x.iter()
                 .zip(&self.a)
                 .map(|(xi, ai)| 2.0 * ai * xi)
@@ -912,12 +942,24 @@ mod tests {
         let p = DiagQuadraticGrad { a: a.clone() };
         let x = vec![-1.2, 0.7, 3.0];
         let v = vec![1.0, -2.0, 0.25];
-        let fwd = forward_difference_hessian_product(&p, &x, &v, f64::EPSILON, None).unwrap();
-        let cen = central_difference_hessian_product(&p, &x, &v, f64::EPSILON, None).unwrap();
+        let fwd =
+            forward_difference_hessian_product(&p, &x, &v, f64::EPSILON, None)
+                .unwrap();
+        let cen =
+            central_difference_hessian_product(&p, &x, &v, f64::EPSILON, None)
+                .unwrap();
         for i in 0..3 {
             let want = 2.0 * a[i] * v[i];
-            assert!(approx(fwd[i], want, 1e-5), "fwd i={i} {} vs {want}", fwd[i]);
-            assert!(approx(cen[i], want, 1e-7), "cen i={i} {} vs {want}", cen[i]);
+            assert!(
+                approx(fwd[i], want, 1e-5),
+                "fwd i={i} {} vs {want}",
+                fwd[i]
+            );
+            assert!(
+                approx(cen[i], want, 1e-7),
+                "cen i={i} {} vs {want}",
+                cen[i]
+            );
         }
     }
 
@@ -926,7 +968,9 @@ mod tests {
         let p = DiagQuadraticGrad { a: vec![1.0, 2.0] };
         let x = vec![-1.2, 0.7];
         let v = vec![0.0, 0.0];
-        let hv = central_difference_hessian_product(&p, &x, &v, f64::EPSILON, None).unwrap();
+        let hv =
+            central_difference_hessian_product(&p, &x, &v, f64::EPSILON, None)
+                .unwrap();
         assert_eq!(hv, vec![0.0, 0.0]);
     }
 
@@ -1002,7 +1046,12 @@ mod tests {
             let mut want = vec![0.0; x.len()];
             sphere_gradient(&x, &mut want);
             for i in 0..x.len() {
-                assert!(approx(g[i], want[i], 1e-8), "i={i} {} vs {}", g[i], want[i]);
+                assert!(
+                    approx(g[i], want[i], 1e-8),
+                    "i={i} {} vs {}",
+                    g[i],
+                    want[i]
+                );
             }
         }
 
@@ -1015,7 +1064,12 @@ mod tests {
             let mut want = vec![0.0; x.len()];
             rosenbrock_gradient(&x, &mut want);
             for i in 0..x.len() {
-                assert!(approx(g[i], want[i], 1e-4), "i={i} {} vs {}", g[i], want[i]);
+                assert!(
+                    approx(g[i], want[i], 1e-4),
+                    "i={i} {} vs {}",
+                    g[i],
+                    want[i]
+                );
             }
         }
     }
@@ -1028,8 +1082,13 @@ mod tests {
         use crate::core::constraint::BoxConstraints;
         use crate::problems::rastrigin::RastriginBoxed;
 
-        fn _assert_constrained_and_differentiable<T: BoxConstraints + Gradient>() {}
-        _assert_constrained_and_differentiable::<FiniteDiff<RastriginBoxed<Vec<f64>>>>();
+        fn _assert_constrained_and_differentiable<
+            T: BoxConstraints + Gradient,
+        >() {
+        }
+        _assert_constrained_and_differentiable::<
+            FiniteDiff<RastriginBoxed<Vec<f64>>>,
+        >();
 
         let lower = vec![-5.12, -5.12];
         let upper = vec![5.12, 5.12];
@@ -1052,9 +1111,10 @@ mod tests {
             let analytic = RosenbrockResiduals::<DVector<f64>>::new()
                 .jacobian(&x)
                 .unwrap();
-            let fd = FiniteDiff::new(RosenbrockResiduals::<DVector<f64>>::new())
-                .jacobian(&x)
-                .unwrap();
+            let fd =
+                FiniteDiff::new(RosenbrockResiduals::<DVector<f64>>::new())
+                    .jacobian(&x)
+                    .unwrap();
             assert_eq!(fd.shape(), (2, 2));
             for i in 0..2 {
                 for j in 0..2 {
@@ -1074,10 +1134,11 @@ mod tests {
             let analytic = RosenbrockResiduals::<DVector<f64>>::new()
                 .jacobian(&x)
                 .unwrap();
-            let central = FiniteDiff::new(RosenbrockResiduals::<DVector<f64>>::new())
-                .jacobian_method(Method::Central)
-                .jacobian(&x)
-                .unwrap();
+            let central =
+                FiniteDiff::new(RosenbrockResiduals::<DVector<f64>>::new())
+                    .jacobian_method(Method::Central)
+                    .jacobian(&x)
+                    .unwrap();
             for i in 0..2 {
                 for j in 0..2 {
                     assert!(approx(central[(i, j)], analytic[(i, j)], 1e-7));
@@ -1095,7 +1156,11 @@ mod tests {
             for i in 0..3 {
                 for j in 0..3 {
                     let want = if i == j { 2.0 } else { 0.0 };
-                    assert!(approx(h[(i, j)], want, 1e-3), "({i},{j}) {}", h[(i, j)]);
+                    assert!(
+                        approx(h[(i, j)], want, 1e-3),
+                        "({i},{j}) {}",
+                        h[(i, j)]
+                    );
                 }
             }
         }
@@ -1115,8 +1180,14 @@ mod tests {
             ];
             for i in 0..2 {
                 for j in 0..2 {
-                    let rel = (h[(i, j)] - want[i][j]).abs() / want[i][j].abs().max(1.0);
-                    assert!(rel < 1e-3, "({i},{j}) {} vs {}", h[(i, j)], want[i][j]);
+                    let rel = (h[(i, j)] - want[i][j]).abs()
+                        / want[i][j].abs().max(1.0);
+                    assert!(
+                        rel < 1e-3,
+                        "({i},{j}) {} vs {}",
+                        h[(i, j)],
+                        want[i][j]
+                    );
                     // symmetry
                     assert!(approx(h[(i, j)], h[(j, i)], 1e-9));
                 }
@@ -1134,7 +1205,8 @@ mod tests {
         #[test]
         fn forward_jacobian_matches_analytic() {
             let x = Col::<f64>::from_fn(2, |i| [-1.2, 1.0][i]);
-            let analytic = RosenbrockResiduals::<Col<f64>>::new().jacobian(&x).unwrap();
+            let analytic =
+                RosenbrockResiduals::<Col<f64>>::new().jacobian(&x).unwrap();
             let fd = FiniteDiff::new(RosenbrockResiduals::<Col<f64>>::new())
                 .jacobian(&x)
                 .unwrap();
@@ -1161,7 +1233,11 @@ mod tests {
             for i in 0..3 {
                 for j in 0..3 {
                     let want = if i == j { 2.0 } else { 0.0 };
-                    assert!(approx(h[(i, j)], want, 1e-3), "({i},{j}) {}", h[(i, j)]);
+                    assert!(
+                        approx(h[(i, j)], want, 1e-3),
+                        "({i},{j}) {}",
+                        h[(i, j)]
+                    );
                 }
             }
         }

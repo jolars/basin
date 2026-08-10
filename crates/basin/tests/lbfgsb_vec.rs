@@ -17,7 +17,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter, ProjectedGradientTolerance,
+    CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
+    ProjectedGradientTolerance,
 };
 
 /// Unbounded Rosenbrock 2D from `(-1.2, 1.0)`. With infinite bounds
@@ -39,9 +40,13 @@ fn unbounded_rosenbrock_2d_converges() {
     }
     impl Gradient for Rosen {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok({
-                let dfdx0 = -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0] * x[0]);
+                let dfdx0 =
+                    -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0] * x[0]);
                 let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
                 vec![dfdx0, dfdx1]
             })
@@ -185,7 +190,10 @@ fn quadratic_5d_diagonal_converges_quickly() {
     }
     impl Gradient for Quadratic {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok({
                 let mut g = vec![0.0; x.len()];
                 for (i, xi) in x.iter().enumerate() {

@@ -27,9 +27,9 @@ use std::time::{Duration, Instant};
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, CountsMirror, DenseMatrix,
-    DenseQuasiNewtonState, Executor, GradientDescent, LbfgsState, Lbfgsb, MoreThuente, NelderMead,
-    Solver, State as BasinState, StepOutcome,
+    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, CountsMirror,
+    DenseMatrix, DenseQuasiNewtonState, Executor, GradientDescent, LbfgsState,
+    Lbfgsb, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome,
 };
 
 /// Wall-clock budget per (solver, start, rep). 20 ms gives GD room to either
@@ -129,7 +129,10 @@ fn sample_start(p: &ProblemConfig, seed: u64) -> Vec<f64> {
 /// Step a basin solve until the wall-clock budget runs out, the solver
 /// stops on its own, or `f - f*` drops below `TARGET`. Returns
 /// `(elapsed_ns, cost)` at iter 0 and after every completed iteration.
-fn basin_trace<P, S, So>(exec: Executor<P, S, So>, budget: Duration) -> Vec<(u128, f64)>
+fn basin_trace<P, S, So>(
+    exec: Executor<P, S, So>,
+    budget: Duration,
+) -> Vec<(u128, f64)>
 where
     S: BasinState<Float = f64> + CountsMirror,
     So: Solver<P, S>,
@@ -208,7 +211,8 @@ fn downsample(pts: &[(u128, f64)], budget_ns: u128) -> Vec<(u128, f64)> {
     let mut next = iter.next();
 
     while grid_idx < GRID_POINTS {
-        let g_log_t = log_lo + (log_hi - log_lo) * grid_idx as f64 / (GRID_POINTS as f64 - 1.0);
+        let g_log_t = log_lo
+            + (log_hi - log_lo) * grid_idx as f64 / (GRID_POINTS as f64 - 1.0);
         let g_t = 10f64.powf(g_log_t) as u128;
         if g_t > t_stop {
             break;

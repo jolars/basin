@@ -76,7 +76,11 @@ impl<F: Scalar> QuadraticModel<F> {
     ///
     /// `pub(crate)` so RESCUE (the `bobyqa::rescue` module) can reuse it to
     /// form `vlag = H·(w−v)` against the rebuilt provisional `H`.
-    pub(crate) fn apply_h(&self, v_lambda: &[F], v_g: &[F]) -> (Vec<F>, Vec<F>) {
+    pub(crate) fn apply_h(
+        &self,
+        v_lambda: &[F],
+        v_g: &[F],
+    ) -> (Vec<F>, Vec<F>) {
         let n = self.n;
         let m = self.m;
         let rank = m - n - 1;
@@ -282,7 +286,11 @@ impl<F: Scalar> QuadraticModel<F> {
     /// The per-`t` denominator scalars `α = Ω_{tt}`, `τ = (H w)_t`, and
     /// `σ = αβ + τ²` (Powell 2006, eq. 4.12). Cheap (`O(m)`), so MOVE can scan
     /// every candidate `t` before committing.
-    pub(crate) fn update_params(&self, t: usize, ctx: &UpdateContext<F>) -> UpdateScalars<F> {
+    pub(crate) fn update_params(
+        &self,
+        t: usize,
+        ctx: &UpdateContext<F>,
+    ) -> UpdateScalars<F> {
         let m = self.m;
         let n = self.n;
         let rank = m - n - 1;
@@ -366,7 +374,8 @@ impl<F: Scalar> QuadraticModel<F> {
         for i in 0..m {
             let mut acc = F::zero();
             for k in 0..rank {
-                acc = acc + self.zsign[k] * self.zmat.get(i, k) * self.zmat.get(t, k);
+                acc = acc
+                    + self.zsign[k] * self.zmat.get(i, k) * self.zmat.get(t, k);
             }
             het_lambda[i] = acc;
         }
@@ -384,15 +393,18 @@ impl<F: Scalar> QuadraticModel<F> {
         // bottom-left (g × λ) block ⇒ Ξ; bottom-right (g × g) ⇒ Υ.
         for r in 0..n {
             for j in 0..m {
-                let term = alpha * ehw_g[r] * ehw_lambda[j] - beta * het_g[r] * het_lambda[j]
-                    + tau * (het_g[r] * ehw_lambda[j] + ehw_g[r] * het_lambda[j]);
+                let term = alpha * ehw_g[r] * ehw_lambda[j]
+                    - beta * het_g[r] * het_lambda[j]
+                    + tau
+                        * (het_g[r] * ehw_lambda[j] + ehw_g[r] * het_lambda[j]);
                 let updated = self.bmat_xi.get(r, j) + inv_sigma * term;
                 self.bmat_xi.set(r, j, updated);
             }
         }
         for r in 0..n {
             for s in 0..n {
-                let term = alpha * ehw_g[r] * ehw_g[s] - beta * het_g[r] * het_g[s]
+                let term = alpha * ehw_g[r] * ehw_g[s]
+                    - beta * het_g[r] * het_g[s]
                     + tau * (het_g[r] * ehw_g[s] + ehw_g[r] * het_g[s]);
                 let updated = self.bmat_ups.get(r, s) + inv_sigma * term;
                 self.bmat_ups.set(r, s, updated);
@@ -413,7 +425,8 @@ impl<F: Scalar> QuadraticModel<F> {
         for i in 0..m {
             let mut acc = F::zero();
             for k in 0..rank {
-                acc = acc + self.zsign[k] * self.zmat.get(i, k) * self.zmat.get(t, k);
+                acc = acc
+                    + self.zsign[k] * self.zmat.get(i, k) * self.zmat.get(t, k);
             }
             hcol_lambda[i] = acc;
         }
@@ -427,8 +440,11 @@ impl<F: Scalar> QuadraticModel<F> {
         for i in 0..n {
             for j in 0..n {
                 let add = old_gamma_t * old_xt[i] * old_xt[j];
-                self.gamma_explicit
-                    .set(i, j, self.gamma_explicit.get(i, j) + add);
+                self.gamma_explicit.set(
+                    i,
+                    j,
+                    self.gamma_explicit.get(i, j) + add,
+                );
             }
         }
         // λ⁺ = df · (H⁺ e_t)_λ ; γ⁺_t = λ⁺_t, γ⁺_j = γ_j + λ⁺_j (j ≠ t).
@@ -463,7 +479,14 @@ impl<F: Scalar> QuadraticModel<F> {
     ///
     /// `chop` is `ehw_lambda = (e_t − H w)` restricted to its first `m`
     /// components (eq. 4.18).
-    fn update_omega_factorization(&mut self, t: usize, chop: &[F], tau: F, sigma: F, beta: F) {
+    fn update_omega_factorization(
+        &mut self,
+        t: usize,
+        chop: &[F],
+        tau: F,
+        sigma: F,
+        beta: F,
+    ) {
         let m = self.m;
         let n = self.n;
         let rank = m - n - 1;
@@ -513,7 +536,11 @@ impl<F: Scalar> QuadraticModel<F> {
                 let inv_sqrt = F::one() / sigma.abs().sqrt();
                 for i in 0..m {
                     let zi = self.zmat.get(i, kk);
-                    self.zmat.set(i, kk, inv_sqrt * (tau * zi + ztkk * chop[i]));
+                    self.zmat.set(
+                        i,
+                        kk,
+                        inv_sqrt * (tau * zi + ztkk * chop[i]),
+                    );
                 }
                 self.zsign[kk] = sign_sigma * self.zsign[kk];
             }
@@ -522,7 +549,8 @@ impl<F: Scalar> QuadraticModel<F> {
             // avoid cancellation, the branch depending on the sign of β.
             (Some(kp), Some(kn)) => {
                 #[cfg(test)]
-                CANCELLATION_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                CANCELLATION_HITS
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
                 // Capture the OLD columns z_1 (positive) and z_2 (negative);
                 // both new columns are linear combinations of them.
@@ -537,9 +565,12 @@ impl<F: Scalar> QuadraticModel<F> {
                     let inv_sqrt_zeta = F::one() / zeta.abs().sqrt();
                     let inv_sqrt_zs = F::one() / (zeta * sigma).abs().sqrt();
                     for i in 0..m {
-                        let new1 = inv_sqrt_zeta * (tau * z1[i] + zt1 * chop[i]);
+                        let new1 =
+                            inv_sqrt_zeta * (tau * z1[i] + zt1 * chop[i]);
                         let new2 = inv_sqrt_zs
-                            * (-beta * zt1 * zt2 * z1[i] + zeta * z2[i] + tau * zt2 * chop[i]);
+                            * (-beta * zt1 * zt2 * z1[i]
+                                + zeta * z2[i]
+                                + tau * zt2 * chop[i]);
                         self.zmat.set(i, kp, new1);
                         self.zmat.set(i, kn, new2);
                     }
@@ -552,8 +583,11 @@ impl<F: Scalar> QuadraticModel<F> {
                     let inv_sqrt_zs = F::one() / (zeta * sigma).abs().sqrt();
                     for i in 0..m {
                         let new1 = inv_sqrt_zs
-                            * (zeta * z1[i] + beta * zt1 * zt2 * z2[i] + tau * zt1 * chop[i]);
-                        let new2 = inv_sqrt_zeta * (tau * z2[i] + zt2 * chop[i]);
+                            * (zeta * z1[i]
+                                + beta * zt1 * zt2 * z2[i]
+                                + tau * zt1 * chop[i]);
+                        let new2 =
+                            inv_sqrt_zeta * (tau * z2[i] + zt2 * chop[i]);
                         self.zmat.set(i, kp, new1);
                         self.zmat.set(i, kn, new2);
                     }
@@ -562,7 +596,9 @@ impl<F: Scalar> QuadraticModel<F> {
                 }
             }
             (None, None) => {
-                panic!("commit_update: Ω_tt = 0 (no factor column couples to t)");
+                panic!(
+                    "commit_update: Ω_tt = 0 (no factor column couples to t)"
+                );
             }
         }
     }
@@ -572,7 +608,13 @@ impl<F: Scalar> QuadraticModel<F> {
     /// (Powell 2006, eq. 4.17). Valid only when the two columns share a sign,
     /// which preserves `Ω`. `pub(crate)` so RESCUE's `updateh_rsc` can reuse it
     /// for the `planerot` collapse of the `knew`-th row of `Z`.
-    pub(crate) fn rotate_zmat_cols(&mut self, c1: usize, c2: usize, cos: F, sin: F) {
+    pub(crate) fn rotate_zmat_cols(
+        &mut self,
+        c1: usize,
+        c2: usize,
+        cos: F,
+        sin: F,
+    ) {
         for i in 0..self.m {
             let z1 = self.zmat.get(i, c1);
             let z2 = self.zmat.get(i, c2);
@@ -591,7 +633,9 @@ fn dot<F: Scalar>(a: &[F], b: &[F]) -> F {
 mod tests {
     use super::*;
     use crate::core::math::DenseMatrix;
-    use crate::solver::powell::kkt::{assert_h_matches_inverse, build_w_dense, invert_dense};
+    use crate::solver::powell::kkt::{
+        assert_h_matches_inverse, build_w_dense, invert_dense,
+    };
 
     /// Build the full `(m+n+1)` vector `w` (Powell 2006, eq. 4.10) for a new
     /// displacement `xnew`, in the *unsuppressed* index order
@@ -618,9 +662,15 @@ mod tests {
     /// brute-force linear algebra, before any mutation.
     #[test]
     fn update_params_match_dense_inverse() {
-        let model = QuadraticModel::initialize(vec![0.4, -0.3], 0.25, 6, |x: &[f64]| {
-            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0] - 2.0 * x[1]
-        });
+        let model = QuadraticModel::initialize(
+            vec![0.4, -0.3],
+            0.25,
+            6,
+            |x: &[f64]| {
+                2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0]
+                    - 2.0 * x[1]
+            },
+        );
         let n = model.n();
         let m = model.m();
         let w_dense = build_w_dense(&model);
@@ -683,9 +733,12 @@ mod tests {
     /// in both the `λ` and `g` blocks (the suppressed `c` entry excluded).
     #[test]
     fn apply_h_matches_dense_inverse() {
-        let model = QuadraticModel::initialize(vec![0.0, 0.0], 0.3, 5, |x: &[f64]| {
-            x[0] * x[0] + 2.0 * x[1] * x[1] + x[0] - x[1]
-        });
+        let model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.3,
+            5,
+            |x: &[f64]| x[0] * x[0] + 2.0 * x[1] * x[1] + x[0] - x[1],
+        );
         let n = model.n();
         let m = model.m();
         let h = invert_dense(&build_w_dense(&model)).unwrap();
@@ -738,7 +791,8 @@ mod tests {
         // F(x) = 2x0² + 1.5 x0 x1 + 3 x1² + x0 − 2 x1;
         // ∇F = (4x0 + 1.5x1 + 1, 1.5x0 + 6x1 − 2).
         let f = |x: &[f64]| {
-            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0] - 2.0 * x[1]
+            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0]
+                - 2.0 * x[1]
         };
         let x0 = [0.4, -0.3];
         let mut model = QuadraticModel::initialize(x0.to_vec(), 0.25, 6, f);
@@ -839,7 +893,9 @@ mod tests {
     /// Ω-factorization normal branch) together (n=2, m=5).
     #[test]
     fn update_preserves_kkt_identity() {
-        let f = |x: &[f64]| x[0] * x[0] + 2.0 * x[1] * x[1] + 0.5 * x[0] * x[1] + x[0] - x[1];
+        let f = |x: &[f64]| {
+            x[0] * x[0] + 2.0 * x[1] * x[1] + 0.5 * x[0] * x[1] + x[0] - x[1]
+        };
         let x0 = vec![0.3, -0.2];
         let mut model = QuadraticModel::initialize(x0.clone(), 0.2, 5, f);
 
@@ -860,7 +916,9 @@ mod tests {
     #[test]
     fn long_run_preserves_kkt_identity() {
         let f = |x: &[f64]| {
-            100.0 * (x[1] - x[0] * x[0]).powi(2) + (1.0 - x[0]).powi(2) + 0.5 * x[2] * x[2]
+            100.0 * (x[1] - x[0] * x[0]).powi(2)
+                + (1.0 - x[0]).powi(2)
+                + 0.5 * x[2] * x[2]
         };
         let n = 3;
         let m = 7;
@@ -877,8 +935,10 @@ mod tests {
         };
 
         for _ in 0..120 {
-            let xopt: Vec<f64> = (0..n).map(|k| model.xpt_row(model.kopt())[k]).collect();
-            let xnew: Vec<f64> = (0..n).map(|k| xopt[k] + 0.25 * rand()).collect();
+            let xopt: Vec<f64> =
+                (0..n).map(|k| model.xpt_row(model.kopt())[k]).collect();
+            let xnew: Vec<f64> =
+                (0..n).map(|k| xopt[k] + 0.25 * rand()).collect();
 
             let ctx = model.prepare_update(&xnew);
             let t = best_t(&model, &ctx);
@@ -887,7 +947,8 @@ mod tests {
             if scalars.sigma.abs() < 1e-10 {
                 continue;
             }
-            let xabs: Vec<f64> = x0.iter().zip(&xnew).map(|(a, b)| a + b).collect();
+            let xabs: Vec<f64> =
+                x0.iter().zip(&xnew).map(|(a, b)| a + b).collect();
             model.commit_update(t, &ctx, &scalars, f(&xabs));
 
             assert_h_matches_inverse(&model, 1e-7);
@@ -955,7 +1016,8 @@ mod tests {
             let alpha = zt1 * zt1 - zt2 * zt2; // s_1 z_{1,t}² + s_2 z_{2,t}²
             let sigma = alpha * beta + tau * tau;
             // b = Ω column t = s_1 z_{1,t} z_1 + s_2 z_{2,t} z_2.
-            let b: Vec<f64> = (0..m).map(|i| zt1 * z1[i] - zt2 * z2[i]).collect();
+            let b: Vec<f64> =
+                (0..m).map(|i| zt1 * z1[i] - zt2 * z2[i]).collect();
 
             let old_omega = omega_from_factorization(&model);
             model.update_omega_factorization(t, &chop, tau, sigma, beta);

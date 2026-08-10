@@ -9,8 +9,8 @@
 use basin::problems::{ExponentialFit, PowellSingular};
 use basin::{Executor, LevenbergMarquardt, NllsState};
 use competitor_bench::{
-    LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
-    vardim_start,
+    LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim,
+    UnderDet, VarDim, vardim_start,
 };
 use faer::Col;
 use levenberg_marquardt::LeastSquaresProblem;
@@ -37,7 +37,11 @@ fn main() {
     let p = prob.params();
     println!(
         "  lm-crate    {:>5} evals  cost={:.3e}  a={:.6}  b={:.6}  ({:?})",
-        rep.number_of_evaluations, rep.objective_function, p[0], p[1], rep.termination
+        rep.number_of_evaluations,
+        rep.objective_function,
+        p[0],
+        p[1],
+        rep.termination
     );
 
     let r = Executor::new(
@@ -84,7 +88,13 @@ fn main() {
     let p = prob.params();
     println!(
         "  lm-crate    {:>5} evals  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({:?})",
-        rep.number_of_evaluations, rep.objective_function, p[0], p[1], p[2], p[3], rep.termination
+        rep.number_of_evaluations,
+        rep.objective_function,
+        p[0],
+        p[1],
+        p[2],
+        p[3],
+        rep.termination
     );
 
     let r = Executor::new(
@@ -137,7 +147,8 @@ fn main() {
         println!("\n== vardim  n={n}, m={}  optimum 0 ==", n + 2);
         let start = vardim_start(n);
 
-        let (prob, rep) = levenberg_marquardt::LevenbergMarquardt::new().minimize(LmVarDim::new(n));
+        let (prob, rep) = levenberg_marquardt::LevenbergMarquardt::new()
+            .minimize(LmVarDim::new(n));
         println!(
             "  lm-crate    {:>5} evals  cost={:.3e}  ‖x−1‖∞={:.2e}  ({:?})",
             rep.number_of_evaluations,
@@ -198,8 +209,8 @@ fn main() {
     for (m, n) in [(7usize, 15usize), (15, 20), (12, 25)] {
         println!("\n== underdet  n={n}, m={m}  (m < n) ==");
 
-        let (prob, rep) =
-            levenberg_marquardt::LevenbergMarquardt::new().minimize(LmUnderDet::new(m, n));
+        let (prob, rep) = levenberg_marquardt::LevenbergMarquardt::new()
+            .minimize(LmUnderDet::new(m, n));
         println!(
             "  lm-crate    {:>5} evals  cost={:.6e}  ‖x‖∞={:.2e}  ({:?})",
             rep.number_of_evaluations,

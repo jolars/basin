@@ -11,8 +11,8 @@
 
 use basin::core::constraint::LinearConstraints;
 use basin::{
-    CostFunction, DenseMatrix, Executor, Lincoa, LincoaState, MaxCostEvals, RhoTolerance,
-    TerminationReason,
+    CostFunction, DenseMatrix, Executor, Lincoa, LincoaState, MaxCostEvals,
+    RhoTolerance, TerminationReason,
 };
 
 /// `min ‖x − c‖²` subject to `A x ≤ b`, on `Vec<f64>` with the pure-Rust
@@ -268,7 +268,10 @@ fn backend_generic_nalgebra() {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
         }
     }
@@ -316,7 +319,10 @@ fn backend_generic_ndarray() {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
         }
     }

@@ -242,7 +242,8 @@ impl BoxConstraints for Tracing<'_> {
 /// `true` if `xs` contains a point within `tol` (∞-norm) of `want`.
 fn contains(xs: &[Vec<f64>], want: &[f64], tol: f64) -> bool {
     xs.iter().any(|got| {
-        got.len() == want.len() && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= tol)
+        got.len() == want.len()
+            && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= tol)
     })
 }
 

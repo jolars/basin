@@ -2,8 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState,
+    StepOutcome, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -228,7 +228,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(1234).with_lambda(lambda),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(1234)
+            .with_lambda(lambda),
         CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
     )
     .max_iter(10)

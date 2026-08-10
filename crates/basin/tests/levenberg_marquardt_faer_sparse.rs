@@ -5,7 +5,8 @@ use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
 use faer::Col;
 use faer::sparse::{SparseColMat, Triplet};
 
-type FaerSparseLeastSquares = SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>;
+type FaerSparseLeastSquares =
+    SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>;
 
 /// Mirror of the GN sparse fixture: 6×3 design with `b = A·[1,2,3]` so
 /// the closed-form least-squares minimum has zero residual at
@@ -22,8 +23,8 @@ fn fixture() -> (FaerSparseLeastSquares, Col<f64>) {
         Triplet::new(5, 1, 1.0),
         Triplet::new(5, 2, 1.0),
     ];
-    let a =
-        SparseColMat::<usize, f64>::try_new_from_triplets(6, 3, &triplets).expect("triplets valid");
+    let a = SparseColMat::<usize, f64>::try_new_from_triplets(6, 3, &triplets)
+        .expect("triplets valid");
     let b = Col::<f64>::from_fn(6, |i| [1.0, 2.0, 3.0, 3.0, 4.0, 5.0][i]);
     let initial = Col::<f64>::zeros(3);
     (SparseLeastSquares::new(a, b), initial)
@@ -32,10 +33,14 @@ fn fixture() -> (FaerSparseLeastSquares, Col<f64>) {
 #[test]
 fn levenberg_marquardt_converges_on_sparse_linear_regression() {
     let (problem, initial) = fixture();
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-15, "cost = {}", result.cost());
@@ -79,9 +84,13 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
 #[test]
 fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let (problem, initial) = fixture();
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }

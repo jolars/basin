@@ -9,8 +9,8 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaEsTolerance, CostFunction, DenseMatrix, Executor, PopulationState,
-    StepOutcome, TerminationReason,
+    CmaEs, CmaEsState, CmaEsTolerance, CostFunction, DenseMatrix, Executor,
+    PopulationState, StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory on the `Vec<f64>` backend. Reproducibility is

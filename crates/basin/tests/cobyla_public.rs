@@ -14,8 +14,8 @@
 //! `lincoa_public.rs` does for the linear-constrained family.
 
 use basin::{
-    Cobyla, CobylaState, CostFunction, Executor, MaxCostEvals, NonlinearInequalityConstraints,
-    RhoTolerance, TerminationReason,
+    Cobyla, CobylaState, CostFunction, Executor, MaxCostEvals,
+    NonlinearInequalityConstraints, RhoTolerance, TerminationReason,
 };
 
 /// `min x0·x1` s.t. `x0² + x1² ≤ 1` on `Vec<f64>` (default features). The
@@ -32,7 +32,10 @@ impl CostFunction for Disk {
 }
 
 impl NonlinearInequalityConstraints for Disk {
-    fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn constraints(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
     }
     fn num_constraints(&self) -> usize {
@@ -115,12 +118,18 @@ fn backend_generic_nalgebra() {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(x[0] * x[1])
         }
     }
     impl NonlinearInequalityConstraints for Disk {
-        fn constraints(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn constraints(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(DVector::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0]))
         }
         fn num_constraints(&self) -> usize {
@@ -159,12 +168,18 @@ fn backend_generic_ndarray() {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(x[0] * x[1])
         }
     }
     impl NonlinearInequalityConstraints for Disk {
-        fn constraints(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn constraints(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             Ok(Array1::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0]))
         }
         fn num_constraints(&self) -> usize {
@@ -208,7 +223,10 @@ fn backend_generic_faer() {
         }
     }
     impl NonlinearInequalityConstraints for Disk {
-        fn constraints(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn constraints(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             let c = x[0] * x[0] + x[1] * x[1] - 1.0;
             Ok(Col::from_fn(1, |_| c))
         }

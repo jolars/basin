@@ -15,7 +15,9 @@
 //! generic parameters `M` and `V` pin the matrix and vector backend.
 //! Per-backend impls live in feature-gated submodules below.
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 
 /// Sparse linear least-squares problem `min_x ½ ‖A · x − b‖²`. Holds
 /// the design matrix and target on the struct; `M` is the sparse
@@ -106,7 +108,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             // ½ ‖A·x − b‖² (LM convention).
             let mut r = self.a.matvec(x);
             r.scaled_add(-1.0, &self.b);
@@ -118,7 +123,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = DVector<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut r = self.a.matvec(x);
             r.scaled_add(-1.0, &self.b);
             Ok(r)
@@ -127,7 +135,10 @@ mod nalgebra_impl {
 
     impl Jacobian for SparseLeastSquares<CscMatrix<f64>, DVector<f64>> {
         type Jacobian = CscMatrix<f64>;
-        fn jacobian(&self, _x: &DVector<f64>) -> Result<CscMatrix<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &DVector<f64>,
+        ) -> Result<CscMatrix<f64>, std::convert::Infallible> {
             // J(x) = A, constant in x for linear residuals.
             Ok(self.a.clone())
         }
@@ -137,7 +148,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             let mut r = self.a.matvec(x);
             r.scaled_add(-1.0, &self.b);
             Ok(0.5 * r.iter().map(|v| v * v).sum::<f64>())
@@ -148,7 +162,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = DVector<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut r = self.a.matvec(x);
             r.scaled_add(-1.0, &self.b);
             Ok(r)
@@ -157,7 +174,10 @@ mod nalgebra_impl {
 
     impl Jacobian for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>> {
         type Jacobian = CscMatrix<f64>;
-        fn jacobian(&self, _x: &DVector<f64>) -> Result<CscMatrix<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            _x: &DVector<f64>,
+        ) -> Result<CscMatrix<f64>, std::convert::Infallible> {
             Ok(self.a.clone())
         }
     }
@@ -200,7 +220,10 @@ mod faer_impl {
         type Param = Col<f64>;
         type Output = Col<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             let mut r = self.a.matvec(x);
             r.scaled_add(-1.0, &self.b);
             Ok(r)
@@ -212,13 +235,16 @@ mod faer_impl {
         fn jacobian(
             &self,
             _x: &Col<f64>,
-        ) -> Result<SparseColMat<usize, f64>, std::convert::Infallible> {
+        ) -> Result<SparseColMat<usize, f64>, std::convert::Infallible>
+        {
             // J(x) = A, constant in x for linear residuals.
             Ok(self.a.clone())
         }
     }
 
-    impl CostFunction for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>> {
+    impl CostFunction
+        for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>
+    {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -237,7 +263,10 @@ mod faer_impl {
         type Param = Col<f64>;
         type Output = Col<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             let mut r = self.a.matvec(x);
             r.scaled_add(-1.0, &self.b);
             Ok(r)
@@ -249,12 +278,15 @@ mod faer_impl {
         fn jacobian(
             &self,
             _x: &Col<f64>,
-        ) -> Result<SparseColMat<usize, f64>, std::convert::Infallible> {
+        ) -> Result<SparseColMat<usize, f64>, std::convert::Infallible>
+        {
             Ok(self.a.clone())
         }
     }
 
-    impl BoxConstraints for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>> {
+    impl BoxConstraints
+        for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>
+    {
         fn lower(&self) -> &Col<f64> {
             &self.lower
         }
@@ -294,7 +326,9 @@ mod tests {
             Triplet::new(2, 0, 1.0),
             Triplet::new(2, 1, 1.0),
         ];
-        let a = SparseColMat::<usize, f64>::try_new_from_triplets(3, 2, &triplets).unwrap();
+        let a =
+            SparseColMat::<usize, f64>::try_new_from_triplets(3, 2, &triplets)
+                .unwrap();
         let b = Col::<f64>::from_fn(3, |i| [1.0, 2.0, 4.0][i]);
         let prob = SparseLeastSquares::new(a, b);
         let r = prob.residual(&Col::<f64>::zeros(2)).unwrap();

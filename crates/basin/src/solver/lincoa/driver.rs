@@ -151,7 +151,9 @@ impl<F: Scalar> LincoaWork<F> {
         let n = x0.len();
         let m = bvec_abs.len();
         let LinearSetup { model, amat, bvec } =
-            QuadraticModel::try_initialize_linear(x0, amat, bvec_abs, rho_beg, npt, eval)?;
+            QuadraticModel::try_initialize_linear(
+                x0, amat, bvec_abs, rho_beg, npt, eval,
+            )?;
 
         // Initial RESCON: true residual b − A x_opt, with the far-constraint
         // negative encoding (≥ rhobeg ⟹ store negated). PRIMA lincob:305-306.
@@ -225,7 +227,8 @@ impl<F: Scalar> LincoaWork<F> {
     fn record_moderr(&mut self, f_new: F, f_opt: F, xopt: &[F], d: &[F]) {
         let n = self.n;
         let xnew: Vec<F> = (0..n).map(|i| xopt[i] + d[i]).collect();
-        let q_change = self.model.eval_change(&xnew) - self.model.eval_change(xopt);
+        let q_change =
+            self.model.eval_change(&xnew) - self.model.eval_change(xopt);
         let moderr = f_new - f_opt - q_change;
         let moderr_alt = f_new - f_opt - self.model.alt_model_change(d);
         let tenth = F::from_f64(0.1).expect("0.1 representable");
@@ -249,10 +252,13 @@ impl<F: Scalar> LincoaWork<F> {
     fn maybe_shift_origin(&mut self) {
         let xopt = self.model.xpt_row(self.model.kopt()).to_vec();
         let xopt_sq = xopt.iter().fold(F::zero(), |a, v| a + *v * *v);
-        let thr = F::from_f64(1e3).expect("1e3 representable") * self.delta * self.delta;
+        let thr = F::from_f64(1e3).expect("1e3 representable")
+            * self.delta
+            * self.delta;
         if xopt_sq >= thr {
             for j in 0..self.m {
-                self.bvec[j] = self.bvec[j] - col_dot(&xopt, &self.amat, j, self.n);
+                self.bvec[j] =
+                    self.bvec[j] - col_dot(&xopt, &self.amat, j, self.n);
             }
             self.model.shift_origin();
         }
@@ -284,7 +290,8 @@ impl<F: Scalar> LincoaWork<F> {
         let d = trs.d;
         let qred = trs.predicted_reduction;
         let dnorm = self.delta.min(norm(&d));
-        let shortd = (dnorm < half * self.delta && ngetact < 2) || dnorm < pt1999 * self.delta;
+        let shortd = (dnorm < half * self.delta && ngetact < 2)
+            || dnorm < pt1999 * self.delta;
 
         // dnorm_rec ring of the last 4 trust-region DNORMs (PRIMA lincob:373-381).
         self.dnorm_rec = [
@@ -297,7 +304,9 @@ impl<F: Scalar> LincoaWork<F> {
             self.dnorm_rec = [big; 4];
         }
 
-        let qred_thr = F::from_f64(1e-5).expect("1e-5 representable") * self.rho * self.rho;
+        let qred_thr = F::from_f64(1e-5).expect("1e-5 representable")
+            * self.rho
+            * self.rho;
         let trfail = qred <= qred_thr || qred.is_nan(); // tiny or negative qred, or NaN
 
         let mut ratio = -F::one();
@@ -324,7 +333,8 @@ impl<F: Scalar> LincoaWork<F> {
             }
             let ximproved = f_new < f_opt;
 
-            knew_tr = setdrop_tr(&self.model, ximproved, &d, self.delta, self.rho);
+            knew_tr =
+                setdrop_tr(&self.model, ximproved, &d, self.delta, self.rho);
             if let Some(knew) = knew_tr {
                 let old_kopt = self.model.kopt();
                 let ctx = self.model.prepare_update(&xnew_disp);
@@ -338,7 +348,8 @@ impl<F: Scalar> LincoaWork<F> {
                     // matches argmin here, but the geometry path needs the guard.)
                     self.model.kopt = if ximproved { knew } else { old_kopt };
                     self.try_qalt();
-                    let new_xopt = self.model.xpt_row(self.model.kopt()).to_vec();
+                    let new_xopt =
+                        self.model.xpt_row(self.model.kopt()).to_vec();
                     update_rescon(
                         ximproved,
                         &self.amat,
@@ -465,11 +476,15 @@ mod tests {
             evals.set(evals.get() + 1);
             Ok(f(x))
         };
-        let (mut work, _x0_best, _f0_best) =
-            LincoaWork::try_init(x0, amat, bvec, rho_beg, rho_end, npt, &mut eval).unwrap();
+        let (mut work, _x0_best, _f0_best) = LincoaWork::try_init(
+            x0, amat, bvec, rho_beg, rho_end, npt, &mut eval,
+        )
+        .unwrap();
         for _ in 0..max_evals {
             let out = work.step(&mut eval).unwrap();
-            if matches!(out.transition, Transition::Converged) || evals.get() >= max_evals {
+            if matches!(out.transition, Transition::Converged)
+                || evals.get() >= max_evals
+            {
                 break;
             }
         }
@@ -482,7 +497,8 @@ mod tests {
     #[test]
     fn unconstrained_sphere_converges() {
         let f = |x: &[f64]| (x[0] - 1.0).powi(2) + (x[1] + 2.0).powi(2);
-        let (x, fx, _evals) = run(vec![0.0, 0.0], vec![], vec![], 0.5, 1e-6, 5, 200, f);
+        let (x, fx, _evals) =
+            run(vec![0.0, 0.0], vec![], vec![], 0.5, 1e-6, 5, 200, f);
         assert!((x[0] - 1.0).abs() < 1e-4, "x0 = {}", x[0]);
         assert!((x[1] + 2.0).abs() < 1e-4, "x1 = {}", x[1]);
         assert!(fx < 1e-8, "f = {fx}");
@@ -495,8 +511,14 @@ mod tests {
         let c = [2.0, 2.0];
         let f = move |x: &[f64]| (x[0] - c[0]).powi(2) + (x[1] - c[1]).powi(2);
         let x0 = vec![0.0, 0.0];
-        let (amat, bvec) =
-            fold_constraints::<f64>(2, &x0, None, None, &[], &[(vec![1.0, 1.0], 2.0)]);
+        let (amat, bvec) = fold_constraints::<f64>(
+            2,
+            &x0,
+            None,
+            None,
+            &[],
+            &[(vec![1.0, 1.0], 2.0)],
+        );
         let (x, fx, _evals) = run(x0, amat, bvec, 0.5, 1e-7, 5, 300, f);
         assert!((x[0] - 1.0).abs() < 1e-3, "x0 = {}", x[0]);
         assert!((x[1] - 1.0).abs() < 1e-3, "x1 = {}", x[1]);
@@ -512,8 +534,14 @@ mod tests {
         let c = [5.0, 5.0];
         let f = move |x: &[f64]| (x[0] - c[0]).powi(2) + (x[1] - c[1]).powi(2);
         let x0 = vec![0.0, 0.0];
-        let (amat, bvec) =
-            fold_constraints::<f64>(2, &x0, Some(&[-1.0, -1.0]), Some(&[1.0, 1.0]), &[], &[]);
+        let (amat, bvec) = fold_constraints::<f64>(
+            2,
+            &x0,
+            Some(&[-1.0, -1.0]),
+            Some(&[1.0, 1.0]),
+            &[],
+            &[],
+        );
         let (x, _fx, _evals) = run(x0, amat, bvec, 0.3, 1e-7, 5, 300, f);
         assert!((x[0] - 1.0).abs() < 1e-3, "x0 = {}", x[0]);
         assert!((x[1] - 1.0).abs() < 1e-3, "x1 = {}", x[1]);

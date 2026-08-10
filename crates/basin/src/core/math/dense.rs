@@ -37,9 +37,10 @@
 
 use super::Scalar;
 use super::{
-    AddDiagonalVectorInPlace, GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveSpd,
-    MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, MaxDiagonal,
-    RankOneUpdate, ScaleInPlace, SymmetricEigen, SymmetricEigenError,
+    AddDiagonalVectorInPlace, GeneralRankOneUpdate, GramMatrix,
+    LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, RankOneUpdate,
+    ScaleInPlace, SymmetricEigen, SymmetricEigenError,
 };
 
 /// Row-major dense matrix, the matrix companion to `Vec<F>` as the param
@@ -96,7 +97,11 @@ impl<F: Scalar> DenseMatrix<F> {
     /// Build a `rows × cols` matrix from a per-entry closure `(i, j) -> A[i,
     /// j]`. Mirrors `faer::Mat::from_fn`. The closure is called once per entry
     /// in row-major order.
-    pub fn from_fn<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, mut f: G) -> Self {
+    pub fn from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        mut f: G,
+    ) -> Self {
         let mut data = Vec::with_capacity(rows * cols);
         for i in 0..rows {
             for j in 0..cols {
@@ -304,7 +309,8 @@ impl<F: Scalar> SymmetricEigen<Vec<F>> for DenseMatrix<F> {
         );
         let n = self.rows;
         let (eigenvalues, eigenvectors) =
-            super::dense_eig::jacobi_eigen(&self.data, n).ok_or(SymmetricEigenError::Failed)?;
+            super::dense_eig::jacobi_eigen(&self.data, n)
+                .ok_or(SymmetricEigenError::Failed)?;
         // `jacobi_eigen` returns the eigenvectors row-major with column `k` the
         // eigenvector for `eigenvalues[k]`, exactly `DenseMatrix`'s layout.
         let b = Self {
@@ -511,7 +517,11 @@ mod tests {
         // Original (1,2,3,4,5,6) doubled.
         assert_eq!(
             a,
-            DenseMatrix::from_row_slice(2, 3, &[2.0, 4.0, 6.0, 8.0, 10.0, 12.0])
+            DenseMatrix::from_row_slice(
+                2,
+                3,
+                &[2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+            )
         );
     }
 
@@ -588,7 +598,8 @@ mod tests {
     #[test]
     fn solve_spd_round_trips() {
         // [[4, 1], [1, 3]] x = (1, 2) ⇒ x = (1/11, 7/11).
-        let a: DenseMatrix = DenseMatrix::from_row_slice(2, 2, &[4.0, 1.0, 1.0, 3.0]);
+        let a: DenseMatrix =
+            DenseMatrix::from_row_slice(2, 2, &[4.0, 1.0, 1.0, 3.0]);
         let x = a.solve_spd(&vec![1.0, 2.0]).unwrap();
         assert!((x[0] - 1.0 / 11.0).abs() < 1e-12, "x[0] = {}", x[0]);
         assert!((x[1] - 7.0 / 11.0).abs() < 1e-12, "x[1] = {}", x[1]);
@@ -597,7 +608,8 @@ mod tests {
     #[test]
     fn solve_spd_rejects_non_positive_definite() {
         // Indefinite matrix ⇒ NotPositiveDefinite.
-        let a: DenseMatrix = DenseMatrix::from_row_slice(2, 2, &[1.0, 2.0, 2.0, 1.0]);
+        let a: DenseMatrix =
+            DenseMatrix::from_row_slice(2, 2, &[1.0, 2.0, 2.0, 1.0]);
         assert_eq!(
             a.solve_spd(&vec![1.0, 1.0]),
             Err(LinearSolveError::NotPositiveDefinite)
@@ -609,7 +621,8 @@ mod tests {
     #[test]
     fn gram_damp_solve_pipeline() {
         // A 3×2 Jacobian with rank 2 ⇒ AᵀA is 2×2 SPD.
-        let j: DenseMatrix = DenseMatrix::from_row_slice(3, 2, &[1.0, 0.0, 1.0, 1.0, 0.0, 1.0]);
+        let j: DenseMatrix =
+            DenseMatrix::from_row_slice(3, 2, &[1.0, 0.0, 1.0, 1.0, 0.0, 1.0]);
         let mut g = j.gram(); // [[2, 1], [1, 2]]
         assert_eq!(g, DenseMatrix::from_row_slice(2, 2, &[2.0, 1.0, 1.0, 2.0]));
         g.add_diagonal_vector_in_place(&vec![1.0, 1.0]); // [[3, 1], [1, 3]]

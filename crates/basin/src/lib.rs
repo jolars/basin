@@ -179,29 +179,36 @@ pub mod solver;
 pub use crate::core::augmented_lagrangian::AugmentedLagrangian;
 pub use crate::core::barrier::LogBarrier;
 pub use crate::core::constraint::{
-    BoxConstraints, LinearConstraints, LinearEqualityConstraints, LinearInequalityConstraints,
-    NonlinearInequalityConstraints,
+    BoxConstraints, LinearConstraints, LinearEqualityConstraints,
+    LinearInequalityConstraints, NonlinearInequalityConstraints,
 };
-pub use crate::core::executor::{Executor, OptimizationResult, StepOutcome, Stepper, run_loop};
-pub use crate::core::inner::{InitialState, InnerExecutor, ResumableInner, WarmStart};
+pub use crate::core::executor::{
+    Executor, OptimizationResult, StepOutcome, Stepper, run_loop,
+};
+pub use crate::core::inner::{
+    InitialState, InnerExecutor, ResumableInner, WarmStart,
+};
 pub use crate::core::math::{
-    ClampInPlace, ComponentMulAssign, DenseMatrix, DenseMatrixFromFn, Dot, GramMatrix,
-    LinearSolveError, LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, NegInPlace, NormInfinity, NormSquared,
-    SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
-    SymmetricEigenError, VectorIndex, VectorLen,
+    ClampInPlace, ComponentMulAssign, DenseMatrix, DenseMatrixFromFn, Dot,
+    GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
+    MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NegInPlace,
+    NormInfinity, NormSquared, SampleStandardNormal, SampleUniformBox, Scalar,
+    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex,
+    VectorLen,
 };
 pub use crate::core::numdiff::{
-    FiniteDiff, Method, central_difference_gradient, central_difference_hessian,
-    central_difference_hessian_product, central_difference_jacobian, forward_difference_gradient,
-    forward_difference_hessian, forward_difference_hessian_product, forward_difference_jacobian,
+    FiniteDiff, Method, central_difference_gradient,
+    central_difference_hessian, central_difference_hessian_product,
+    central_difference_jacobian, forward_difference_gradient,
+    forward_difference_hessian, forward_difference_hessian_product,
+    forward_difference_jacobian,
 };
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
 pub use crate::core::observer::{History, Observe, ObserverMode, Report};
 pub use crate::core::problem::{
-    CostFunction, EvalCounts, Gradient, Hessian, HessianProduct, Jacobian, MiniBatchGradient,
-    Problem, Residual,
+    CostFunction, EvalCounts, Gradient, Hessian, HessianProduct, Jacobian,
+    MiniBatchGradient, Problem, Residual,
 };
 pub use crate::core::solver::Solver;
 #[cfg(feature = "faer")]
@@ -211,29 +218,34 @@ pub use crate::core::state::NalgebraQuasiNewtonState;
 #[cfg(feature = "ndarray")]
 pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
-    BasicPopulationState, BasicSimplexState, BasicState, BobyqaState, CmaEsState, CobylaState,
-    ConstrainedMadsState, CountsMirror, GradientState, IntoInitialSimplex, LbfgsState, LincoaState,
-    MadsState, MeshState, NewuoaState, NllsState, PopulationState, RhoState, ScalarGradientState,
+    BasicPopulationState, BasicSimplexState, BasicState, BobyqaState,
+    CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror, GradientState,
+    IntoInitialSimplex, LbfgsState, LincoaState, MadsState, MeshState,
+    NewuoaState, NllsState, PopulationState, RhoState, ScalarGradientState,
     ScalarState, SimplexState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
-    CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter,
-    MaxTime, MeshTolerance, NoImprovement, ParamTolerance, ProjectedGradientTolerance,
-    RelativeCostTolerance, RelativeGradientTolerance, RelativeParamTolerance, RhoTolerance,
+    CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals,
+    MaxGradientEvals, MaxIter, MaxTime, MeshTolerance, NoImprovement,
+    ParamTolerance, ProjectedGradientTolerance, RelativeCostTolerance,
+    RelativeGradientTolerance, RelativeParamTolerance, RhoTolerance,
     SimplexTolerance, TargetCost, TerminationCriterion, TerminationReason,
 };
-pub use crate::line_search::{Backtracking, Constant, LineSearch, MoreThuente, Wolfe};
+pub use crate::line_search::{
+    Backtracking, Constant, LineSearch, MoreThuente, Wolfe,
+};
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::trust_region::{
     CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion,
 };
 pub use crate::solver::{
-    AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping, Bobyqa, BoundedCmaEs,
-    BoundedCmaInject, Brent, BrentDerivative, ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject,
-    GaussNewton, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsCh, MaLsChCma,
-    MaLsChGenericState, MaLsChState, MaLsChSw, MaLsChSwState, Mads, MemeticInner, Metropolis,
-    NelderMead, Newuoa, ProjectedGradientDescent, RandomDisplacement, RandomSearch, Sgd, SolisWets,
-    Ssga, StepTaker, Trf,
+    AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
+    Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative,
+    ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton,
+    GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsCh,
+    MaLsChCma, MaLsChGenericState, MaLsChState, MaLsChSw, MaLsChSwState, Mads,
+    MemeticInner, Metropolis, NelderMead, Newuoa, ProjectedGradientDescent,
+    RandomDisplacement, RandomSearch, Sgd, SolisWets, Ssga, StepTaker, Trf,
 };

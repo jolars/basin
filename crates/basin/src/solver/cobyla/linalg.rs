@@ -24,7 +24,12 @@ pub(crate) fn col<F>(a: &[F], r: usize, j: usize) -> &[F] {
 
 /// `xᵀ A = Aᵀ x` for an `r × c` column-major `A` and length-`r` `x`; result
 /// length `c` (PRIMA's `matprod(x, A)` with `x` a row vector).
-pub(crate) fn row_times_mat<F: Scalar>(x: &[F], a: &[F], r: usize, c: usize) -> Vec<F> {
+pub(crate) fn row_times_mat<F: Scalar>(
+    x: &[F],
+    a: &[F],
+    r: usize,
+    c: usize,
+) -> Vec<F> {
     (0..c).map(|j| dot(x, col(a, r, j))).collect()
 }
 

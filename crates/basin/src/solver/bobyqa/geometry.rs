@@ -144,7 +144,8 @@ pub(crate) fn geostep<F: Scalar>(
 
     // Fallback: a finite displacement toward XPT(knew) if the gradient is NaN.
     if glag.iter().any(|v| v.is_nan()) {
-        let d: Vec<F> = (0..n).map(|i| model.xpt_row(knew)[i] - xopt[i]).collect();
+        let d: Vec<F> =
+            (0..n).map(|i| model.xpt_row(knew)[i] - xopt[i]).collect();
         let dn = (0..n).fold(zero, |a, i| a + d[i] * d[i]).sqrt();
         let scale = half.min(delbar / dn);
         return (0..n).map(|i| scale * d[i]).collect();
@@ -310,8 +311,8 @@ pub(crate) fn geostep<F: Scalar>(
         let mut s = vec![zero; n];
         let mut mask_free = vec![false; n];
         for i in 0..n {
-            mask_free[i] =
-                (xopt[i] - sl[i]).min(glag[i]) > zero || (xopt[i] - su[i]).max(glag[i]) < zero;
+            mask_free[i] = (xopt[i] - sl[i]).min(glag[i]) > zero
+                || (xopt[i] - su[i]).max(glag[i]) < zero;
             if mask_free[i] {
                 s[i] = bigstp;
             }

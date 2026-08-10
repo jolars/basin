@@ -324,9 +324,15 @@ where
         let template = state.param.clone();
 
         let (work, best_x, best_f) = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
-            MadsWork::try_init(x0, self.poll_size_init, self.poll_size_min, &mut eval)?
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
+            MadsWork::try_init(
+                x0,
+                self.poll_size_init,
+                self.poll_size_min,
+                &mut eval,
+            )?
         };
 
         state.param = fill_from(&template, &best_x);
@@ -349,8 +355,9 @@ where
             .expect("Mads::init must run before next_iter");
 
         let out = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             work.step(&mut eval)?
         };
         state.poll_size = work.poll_size();
@@ -424,7 +431,12 @@ where
                 let c = problem.inner().constraints(&xv)?;
                 Ok((f, violation(&c, m)))
             };
-            PbWork::try_init(x0, self.poll_size_init, self.poll_size_min, &mut eval)?
+            PbWork::try_init(
+                x0,
+                self.poll_size_init,
+                self.poll_size_min,
+                &mut eval,
+            )?
         };
 
         state.param = fill_from(&template, &best_x);
@@ -440,7 +452,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: ConstrainedMadsState<V, F>,
-    ) -> Result<(ConstrainedMadsState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<
+        (ConstrainedMadsState<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         let m = problem.inner().num_constraints();
         let template = state.param.clone();
         let work = self
@@ -520,7 +535,12 @@ where
                     problem.cost(&fill_from(&template, slice))
                 }
             };
-            MadsWork::try_init(x0, self.poll_size_init, self.poll_size_min, &mut eval)?
+            MadsWork::try_init(
+                x0,
+                self.poll_size_init,
+                self.poll_size_min,
+                &mut eval,
+            )?
         };
 
         state.param = fill_from(&template, &best_x);

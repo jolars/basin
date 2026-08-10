@@ -23,7 +23,8 @@ use super::update::{NO_DROP, updatepole, updatexfc};
 
 /// A point evaluator: maps `x` to its (raw) objective value and constraint
 /// vector, propagating the problem's error type `E`.
-pub(crate) type EvalFn<'a, F, E> = dyn FnMut(&[F]) -> Result<(F, Vec<F>), E> + 'a;
+pub(crate) type EvalFn<'a, F, E> =
+    dyn FnMut(&[F]) -> Result<(F, Vec<F>), E> + 'a;
 
 /// Outcome of one [`CobylaWork::step`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -96,8 +97,10 @@ impl<F: Scalar> CobylaWork<F> {
         let eta2 = F::from_f64(0.7).unwrap();
         let gamma1 = F::from_f64(0.5).unwrap();
         let gamma2 = F::from_f64(2.0).unwrap();
-        let gamma3 =
-            F::one().max((F::from_f64(0.75).unwrap() * gamma2).min(F::from_f64(1.5).unwrap()));
+        let gamma3 = F::one().max(
+            (F::from_f64(0.75).unwrap() * gamma2)
+                .min(F::from_f64(1.5).unwrap()),
+        );
         let ctol = F::epsilon().sqrt();
         let cweight = F::from_f64(1.0e8).unwrap();
         let cpenmin = F::epsilon();
@@ -150,7 +153,8 @@ impl<F: Scalar> CobylaWork<F> {
                     work.sim[r + n * n]
                 };
             }
-            let constr: Vec<F> = (0..m).map(|i| work.conmat[i + j * m]).collect();
+            let constr: Vec<F> =
+                (0..m).map(|i| work.conmat[i + j * m]).collect();
             work.save_to_filter(&x, work.fval[j], work.cval[j], &constr);
         }
 
@@ -199,7 +203,10 @@ impl<F: Scalar> CobylaWork<F> {
     }
 
     /// Evaluate `(f, constr, cstrv)` at `x`, moderated.
-    fn eval_moderated<E>(eval: &mut EvalFn<F, E>, x: &[F]) -> Result<(F, Vec<F>, F), E> {
+    fn eval_moderated<E>(
+        eval: &mut EvalFn<F, E>,
+        x: &[F],
+    ) -> Result<(F, Vec<F>, F), E> {
         let (f_raw, c_raw) = eval(x)?;
         let f = moderatef(f_raw);
         let constr: Vec<F> = c_raw.iter().map(|&v| moderatef(v)).collect();
@@ -212,7 +219,10 @@ impl<F: Scalar> CobylaWork<F> {
     }
 
     /// One iteration of PRIMA's `do tr` loop.
-    pub(crate) fn step<E>(&mut self, eval: &mut EvalFn<F, E>) -> Result<Transition, E> {
+    pub(crate) fn step<E>(
+        &mut self,
+        eval: &mut EvalFn<F, E>,
+    ) -> Result<Transition, E> {
         let n = self.n;
         let m = self.m;
         let zero = F::zero();
@@ -260,8 +270,11 @@ impl<F: Scalar> CobylaWork<F> {
         lin_cv = lin_cv.max(zero);
         let prerec = self.cval[n] - lin_cv;
         let prerem = preref + self.cpen * prerec;
-        let trfail =
-            !(prerem > F::from_f64(1.0e-5).unwrap() * self.cpen.min(one) * self.rho * self.rho);
+        let trfail = !(prerem
+            > F::from_f64(1.0e-5).unwrap()
+                * self.cpen.min(one)
+                * self.rho
+                * self.rho);
 
         let mut ratio = -one;
         let mut jdrop_tr = NO_DROP;
@@ -277,7 +290,8 @@ impl<F: Scalar> CobylaWork<F> {
             let (f, constr, cstrv) = Self::eval_moderated(eval, &x)?;
             self.save_to_filter(&x, f, cstrv, &constr);
 
-            let actrem = (self.fval[n] + self.cpen * self.cval[n]) - (f + self.cpen * cstrv);
+            let actrem = (self.fval[n] + self.cpen * self.cval[n])
+                - (f + self.cpen * cstrv);
             ratio = redrat(actrem, prerem, self.eta1);
             self.delta = trrad(
                 self.delta,
@@ -315,9 +329,11 @@ impl<F: Scalar> CobylaWork<F> {
         }
 
         // (3) Decide geometry / ρ-reduction.
-        let bad_trstep = shortd || trfail || ratio <= zero || jdrop_tr == NO_DROP;
+        let bad_trstep =
+            shortd || trfail || ratio <= zero || jdrop_tr == NO_DROP;
         let improve_geo = bad_trstep && !adequate_geo;
-        let reduce_rho = bad_trstep && adequate_geo && self.delta.max(dnorm) <= self.rho;
+        let reduce_rho =
+            bad_trstep && adequate_geo && self.delta.max(dnorm) <= self.rho;
 
         if improve_geo
             && !assess_geo(
@@ -386,9 +402,15 @@ impl<F: Scalar> CobylaWork<F> {
                 }
                 return Ok(Transition::Converged);
             }
-            self.delta = (F::from_f64(0.5).unwrap() * self.rho).max(redrho(self.rho, self.rho_end));
+            self.delta = (F::from_f64(0.5).unwrap() * self.rho)
+                .max(redrho(self.rho, self.rho_end));
             self.rho = redrho(self.rho, self.rho_end);
-            self.cpen = F::epsilon().max(self.cpen.min(fcratio(&self.conmat, &self.fval, n, m)));
+            self.cpen = F::epsilon().max(self.cpen.min(fcratio(
+                &self.conmat,
+                &self.fval,
+                n,
+                m,
+            )));
             if !updatepole(
                 self.cpen,
                 &mut self.conmat,
@@ -510,9 +532,17 @@ fn redrat<F: Scalar>(ared: F, pred: F, rshrink: F) -> F {
         } else {
             -realmax
         }
-    } else if pred.is_infinite() && pred > F::zero() && ared.is_infinite() && ared > F::zero() {
+    } else if pred.is_infinite()
+        && pred > F::zero()
+        && ared.is_infinite()
+        && ared > F::zero()
+    {
         F::one()
-    } else if pred.is_infinite() && pred > F::zero() && ared.is_infinite() && ared < F::zero() {
+    } else if pred.is_infinite()
+        && pred > F::zero()
+        && ared.is_infinite()
+        && ared < F::zero()
+    {
         -realmax
     } else {
         ared / pred

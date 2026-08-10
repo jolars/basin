@@ -1,5 +1,7 @@
 use crate::core::inner::{InitialState, WarmStart};
-use crate::core::math::{SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, VectorLen};
+use crate::core::math::{
+    SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
@@ -338,10 +340,11 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: SolisWetsState<V, F>,
-    ) -> Result<(SolisWetsState<V, F>, Option<TerminationReason>), Self::Error> {
-        let f_x = state
-            .cost
-            .expect("SolisWets::next_iter called before init evaluated the start point");
+    ) -> Result<(SolisWetsState<V, F>, Option<TerminationReason>), Self::Error>
+    {
+        let f_x = state.cost.expect(
+            "SolisWets::next_iter called before init evaluated the start point",
+        );
 
         // d ~ N(0, ρ² I). Sampled unconditionally first, so the RNG
         // advances by exactly n draws per iteration whichever branch
@@ -463,7 +466,13 @@ where
     /// primed to `fx`—the chain snapshot for Solis-Wets is exactly
     /// `(#s, #f, bias, ρ)` (MA-SW-Chains §II.C), so a fresh chain spends
     /// zero budget re-scoring the point the outer already evaluated.
-    fn seed_chain(&self, x: &V, fx: F, scale: F, seed: u64) -> (Self, Self::State) {
+    fn seed_chain(
+        &self,
+        x: &V,
+        fx: F,
+        scale: F,
+        seed: u64,
+    ) -> (Self, Self::State) {
         // Struct-update over a clone so a future hyperparameter can't
         // be forgotten here; only the RNG stream is replaced.
         let sw = Self {
@@ -702,7 +711,8 @@ mod tests {
         assert!((s.rho() - 0.25).abs() < 1e-15);
         assert_eq!(s.x, vec![1.0, 2.0]);
 
-        let s: SolisWetsState<Vec<f64>> = solver.seed_scaled(&vec![1.0, 2.0], 0.05);
+        let s: SolisWetsState<Vec<f64>> =
+            solver.seed_scaled(&vec![1.0, 2.0], 0.05);
         assert!((s.rho() - 0.05).abs() < 1e-15);
     }
 }

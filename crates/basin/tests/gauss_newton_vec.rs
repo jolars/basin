@@ -18,10 +18,11 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<Vec<f64>>::new();
     let initial = vec![-1.2, 1.0];
 
-    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
-        .max_iter(20)
-        .run()
-        .unwrap();
+    let result =
+        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+            .max_iter(20)
+            .run()
+            .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-20, "cost = {}", result.cost());
@@ -46,10 +47,11 @@ fn gauss_newton_single_step_matches_normal_equation_solution() {
     let problem = RosenbrockResiduals::<Vec<f64>>::new();
     let initial = vec![-1.2, 1.0];
 
-    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
-        .max_iter(1)
-        .run()
-        .unwrap();
+    let result =
+        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+            .max_iter(1)
+            .run()
+            .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxIter);
     assert_eq!(result.iter(), 1);
@@ -76,10 +78,11 @@ fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
     let problem = PowellSingular::<Vec<f64>>::new();
     let initial = vec![1.0, 2.0, 1.0, 1.0];
 
-    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result =
+        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+            .max_iter(100)
+            .run()
+            .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverFailed);
 }

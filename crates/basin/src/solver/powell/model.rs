@@ -156,7 +156,11 @@ impl<F: Scalar> QuadraticModel<F> {
     /// are the `Ω`-column of `H` returned by
     /// [`lagrange_coeffs`](Self::lagrange_coeffs). BIGLAG (Powell 2006, §6) uses
     /// this for the gradient recurrence (eq. 6.14).
-    pub(crate) fn lagrange_hessian_matvec(&self, lambda: &[F], u: &[F]) -> Vec<F> {
+    pub(crate) fn lagrange_hessian_matvec(
+        &self,
+        lambda: &[F],
+        u: &[F],
+    ) -> Vec<F> {
         assert_eq!(
             lambda.len(),
             self.m,
@@ -296,7 +300,8 @@ mod tests {
         let n = 2;
         let m = 5;
         // A non-trivial explicit part and two active implicit rank-one terms.
-        let gamma_explicit = DenseMatrix::from_row_slice(2, 2, &[3.0, 1.0, 1.0, 4.0]);
+        let gamma_explicit =
+            DenseMatrix::from_row_slice(2, 2, &[3.0, 1.0, 1.0, 4.0]);
         let gamma = vec![0.5, 0.0, -0.25, 0.0, 0.0];
         let xpt_rows: &[&[f64]] = &[
             &[1.0, 0.0],
@@ -305,7 +310,8 @@ mod tests {
             &[-1.0, 0.0],
             &[0.0, -1.0],
         ];
-        let model = model_with(n, m, vec![0.0, 0.0], gamma_explicit, gamma, xpt_rows);
+        let model =
+            model_with(n, m, vec![0.0, 0.0], gamma_explicit, gamma, xpt_rows);
 
         let dense = model.dense_hessian();
         for j in 0..n {
@@ -328,8 +334,11 @@ mod tests {
     fn hessian_matvec_is_symmetric() {
         let n = 3;
         let m = 7;
-        let gamma_explicit =
-            DenseMatrix::from_row_slice(3, 3, &[2.0, -1.0, 0.5, -1.0, 3.0, 0.25, 0.5, 0.25, 1.0]);
+        let gamma_explicit = DenseMatrix::from_row_slice(
+            3,
+            3,
+            &[2.0, -1.0, 0.5, -1.0, 3.0, 0.25, 0.5, 0.25, 1.0],
+        );
         let gamma = vec![0.3, -0.1, 0.0, 0.2, 0.0, 0.0, 0.15];
         let xpt_rows: &[&[f64]] = &[
             &[1.0, 0.0, 0.0],
@@ -340,7 +349,8 @@ mod tests {
             &[-1.0, 0.0, 2.0],
             &[0.0, 1.0, -1.0],
         ];
-        let model = model_with(n, m, vec![0.0; n], gamma_explicit, gamma, xpt_rows);
+        let model =
+            model_with(n, m, vec![0.0; n], gamma_explicit, gamma, xpt_rows);
         let h = model.dense_hessian();
         for i in 0..n {
             for j in 0..n {
@@ -360,7 +370,8 @@ mod tests {
         let n = 2;
         let m = 5;
         let b = vec![2.0, -3.0];
-        let gamma_explicit = DenseMatrix::from_row_slice(2, 2, &[3.0, 1.0, 1.0, 4.0]);
+        let gamma_explicit =
+            DenseMatrix::from_row_slice(2, 2, &[3.0, 1.0, 1.0, 4.0]);
         let gamma = vec![0.5, 0.0, -0.25, 0.0, 0.0];
         let xpt_rows: &[&[f64]] = &[
             &[1.0, 0.0],
@@ -369,7 +380,8 @@ mod tests {
             &[-1.0, 0.0],
             &[0.0, -1.0],
         ];
-        let model = model_with(n, m, b.clone(), gamma_explicit, gamma, xpt_rows);
+        let model =
+            model_with(n, m, b.clone(), gamma_explicit, gamma, xpt_rows);
         let dense = model.dense_hessian();
 
         for d in [vec![0.7, -1.2], vec![-2.0, 0.3], vec![1.0, 1.0]] {

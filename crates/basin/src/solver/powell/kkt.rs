@@ -122,7 +122,9 @@ pub(crate) fn invert_dense(a: &DenseMatrix<f64>) -> Option<DenseMatrix<f64>> {
 
 /// Reconstruct the dense `Ω = Σ_k sₖ zₖ zₖᵀ` (`m × m`) from the model's stored
 /// factorization (columns of `zmat`, signs `zsign`).
-pub(crate) fn omega_from_factorization(model: &QuadraticModel<f64>) -> DenseMatrix<f64> {
+pub(crate) fn omega_from_factorization(
+    model: &QuadraticModel<f64>,
+) -> DenseMatrix<f64> {
     let m = model.m();
     let n = model.n();
     let rank = m - n - 1;
@@ -207,7 +209,11 @@ mod tests {
     #[test]
     fn invert_dense_round_trips() {
         use crate::core::math::LinearSolveSpd;
-        let a = DenseMatrix::from_row_slice(3, 3, &[4.0, 1.0, 0.5, 1.0, 3.0, 0.25, 0.5, 0.25, 2.0]);
+        let a = DenseMatrix::from_row_slice(
+            3,
+            3,
+            &[4.0, 1.0, 0.5, 1.0, 3.0, 0.25, 0.5, 0.25, 2.0],
+        );
         let inv = invert_dense(&a).unwrap();
 
         // A · inv = I.

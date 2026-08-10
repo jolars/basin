@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
 
 use crate::core::math::{
-    ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NormSquared,
-    RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
-    VectorLen,
+    ComponentMulAssign, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, Scalar,
+    ScaleInPlace, ScaledAdd, SymmetricEigen, VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
@@ -284,7 +284,8 @@ pub(crate) fn compute_weights<F: Scalar>(
     // Three bounds on the negative-weight scale (eqs. 50–52).
     let alpha_mu_minus = one + c_1 / c_mu;
     let alpha_mu_eff_minus = one + two * mu_eff_neg / (mu_eff + two);
-    let alpha_pos_def_minus = (one - c_1 - c_mu) / (F::from_usize(n).unwrap() * c_mu);
+    let alpha_pos_def_minus =
+        (one - c_1 - c_mu) / (F::from_usize(n).unwrap() * c_mu);
     let alpha_neg = alpha_mu_minus
         .min(alpha_mu_eff_minus)
         .min(alpha_pos_def_minus);
@@ -312,7 +313,10 @@ pub(crate) fn compute_weights<F: Scalar>(
 /// Compute the derived CMA-ES constants (Hansen 2016 Table 1) for
 /// dimension `n` and population size `lambda`. Shared by [`CmaEs`] and
 /// [`BoundedCmaEs`](crate::solver::BoundedCmaEs)'s init.
-pub(crate) fn compute_constants<F: Scalar>(n: usize, lambda: usize) -> CmaConstants<F> {
+pub(crate) fn compute_constants<F: Scalar>(
+    n: usize,
+    lambda: usize,
+) -> CmaConstants<F> {
     let mu = lambda / 2;
     let one = F::one();
     let two = F::from_f64(2.0).unwrap();
@@ -332,12 +336,15 @@ pub(crate) fn compute_constants<F: Scalar>(n: usize, lambda: usize) -> CmaConsta
         .map(|i| ((lambda_f + one) / two).ln() - F::from_usize(i).unwrap().ln())
         .collect();
     let sum_pos: F = raw[..mu].iter().copied().sum();
-    let mu_eff_provisional = sum_pos * sum_pos / raw[..mu].iter().map(|w| *w * *w).sum::<F>();
+    let mu_eff_provisional =
+        sum_pos * sum_pos / raw[..mu].iter().map(|w| *w * *w).sum::<F>();
 
     let c_1 = alpha_cov
-        / ((n_f + F::from_f64(1.3).unwrap()) * (n_f + F::from_f64(1.3).unwrap())
+        / ((n_f + F::from_f64(1.3).unwrap())
+            * (n_f + F::from_f64(1.3).unwrap())
             + mu_eff_provisional);
-    let c_mu_unbounded = alpha_cov * (mu_eff_provisional - two + one / mu_eff_provisional)
+    let c_mu_unbounded = alpha_cov
+        * (mu_eff_provisional - two + one / mu_eff_provisional)
         / ((n_f + two) * (n_f + two) + alpha_cov * mu_eff_provisional / two);
     let c_mu = (one - c_1).min(c_mu_unbounded);
 
@@ -354,7 +361,8 @@ pub(crate) fn compute_constants<F: Scalar>(n: usize, lambda: usize) -> CmaConsta
         / (n_f + F::from_f64(4.0).unwrap() + two * mu_eff / n_f);
 
     let expected_norm = expected_norm_n01::<F>(n);
-    let h_sigma_threshold = (F::from_f64(1.4).unwrap() + two / (n_f + one)) * expected_norm;
+    let h_sigma_threshold =
+        (F::from_f64(1.4).unwrap() + two / (n_f + one)) * expected_norm;
 
     CmaConstants {
         n,
@@ -384,7 +392,11 @@ pub(crate) fn sample_generation<V, M, F>(
     rng: &mut ChaCha8Rng,
 ) where
     F: Scalar,
-    V: VectorLen + Clone + ScaledAdd<F> + ComponentMulAssign + SampleStandardNormal,
+    V: VectorLen
+        + Clone
+        + ScaledAdd<F>
+        + ComponentMulAssign
+        + SampleStandardNormal,
     M: MatVec<V>,
 {
     state.candidates.clear();
@@ -402,7 +414,10 @@ pub(crate) fn sample_generation<V, M, F>(
 /// Sort `candidates` and `costs` jointly by ascending cost. NaN costs
 /// sort last, so index 0 holds the best finite candidate whenever one
 /// exists.
-pub(crate) fn sort_population_ascending<V, F: PartialOrd>(candidates: &mut [V], costs: &mut [F]) {
+pub(crate) fn sort_population_ascending<V, F: PartialOrd>(
+    candidates: &mut [V],
+    costs: &mut [F],
+) {
     let n = candidates.len();
     debug_assert_eq!(n, costs.len());
     let mut idx: Vec<usize> = (0..n).collect();
@@ -512,7 +527,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: CmaEsState<V, M, F>,
-    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error>
+    {
         let k = self
             .constants
             .as_ref()
@@ -560,7 +576,8 @@ where
 
         // σ ← σ exp((c_σ / d_σ) (‖p_σ‖ / E‖N(0,I)‖ − 1)).
         let p_sigma_norm = state.p_sigma.norm_squared().sqrt();
-        let log_factor = (k.c_sigma / k.d_sigma) * (p_sigma_norm / k.expected_norm - one);
+        let log_factor =
+            (k.c_sigma / k.d_sigma) * (p_sigma_norm / k.expected_norm - one);
         state.sigma = state.sigma * log_factor.exp();
 
         // h_σ test (Hansen 2016 p. 31, denominator uses 2(g+1)).
@@ -616,7 +633,9 @@ where
         // Refresh eigendecomposition of the new C.
         let (b_new, eigs) = match state.c.try_eigh() {
             Ok(pair) => pair,
-            Err(_) => return Ok((state, Some(TerminationReason::SolverFailed))),
+            Err(_) => {
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
         };
         state.b = b_new;
         // d_i = √max(λ_i, 0); d_inv_i = 1/d_i. Floating-point can produce
@@ -651,7 +670,10 @@ where
 impl<V, M, F> crate::core::inner::ResumableInner<V, F> for CmaEs<V, M, F>
 where
     F: Scalar,
-    V: VectorLen + Clone + ScaleInPlace<F> + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + Clone
+        + ScaleInPlace<F>
+        + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity,
 {
     type State = CmaEsState<V, M, F>;
@@ -662,7 +684,13 @@ where
     /// `(x, σ = scale)`. `fx` is ignored: `CmaEsState` has no slot for
     /// a pre-evaluated mean cost (`Solver::init` evaluates `f(m)`
     /// itself), so priming would change the eval trajectory.
-    fn seed_chain(&self, x: &V, _fx: F, scale: F, seed: u64) -> (Self, Self::State) {
+    fn seed_chain(
+        &self,
+        x: &V,
+        _fx: F,
+        scale: F,
+        seed: u64,
+    ) -> (Self, Self::State) {
         // Exhaustive literal (no `..`) so a future hyperparameter
         // field fails to compile here instead of silently reverting
         // to its default in every chain. The constants cache is left
@@ -689,7 +717,8 @@ where
     fn segment_criteria(
         &self,
         state: &Self::State,
-    ) -> Vec<Box<dyn crate::core::termination::TerminationCriterion<Self::State>>> {
+    ) -> Vec<Box<dyn crate::core::termination::TerminationCriterion<Self::State>>>
+    {
         let tol_x = F::from_f64(1e-12).unwrap() * state.sigma();
         vec![Box::new(crate::core::termination::CmaEsTolerance::new(
             tol_x,

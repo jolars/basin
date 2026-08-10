@@ -342,7 +342,9 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
 impl<P, V, S, F> Solver<P, LbfgsState<V, F>> for Lbfgs<Bounded, S, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V> + BoxConstraints,
+    P: CostFunction<Param = V, Output = F>
+        + Gradient<Gradient = V>
+        + BoxConstraints,
     V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F>,
     S: LineSearch<P, V, F, Error = P::Error>,
 {
@@ -380,7 +382,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: LbfgsState<V, F>,
-    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         // Take the gradient and cost cached at the current `param`;
         // restore them on early exits.
         let g_v = state
@@ -446,8 +449,10 @@ where
                 // Unbounded with history: skip GCP, set z := x.
                 work.z.copy_from_slice(state.param.as_float_slice());
             } else {
-                let ws_cols: Vec<&[F]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
-                let wy_cols: Vec<&[F]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
+                let ws_cols: Vec<&[F]> =
+                    state.ws.iter().map(|v| v.as_float_slice()).collect();
+                let wy_cols: Vec<&[F]> =
+                    state.wy.iter().map(|v| v.as_float_slice()).collect();
                 let cauchy_res = cauchy(
                     state.param.as_float_slice(),
                     problem.inner().lower().as_float_slice(),
@@ -471,10 +476,14 @@ where
                     &mut work.wa_v,
                 );
                 if cauchy_res.is_err() {
-                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget) {
+                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
+                    {
                         continue;
                     } else {
-                        return Ok((state, Some(TerminationReason::SolverFailed)));
+                        return Ok((
+                            state,
+                            Some(TerminationReason::SolverFailed),
+                        ));
                     }
                 }
             }
@@ -501,8 +510,10 @@ where
             // -------------------------------------------------------
             if nfree > 0 && col > 0 {
                 if wrk {
-                    let ws_cols: Vec<&[F]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
-                    let wy_cols: Vec<&[F]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
+                    let ws_cols: Vec<&[F]> =
+                        state.ws.iter().map(|v| v.as_float_slice()).collect();
+                    let wy_cols: Vec<&[F]> =
+                        state.wy.iter().map(|v| v.as_float_slice()).collect();
                     if formk(
                         &mut work.wn,
                         &mut work.wn1,
@@ -522,10 +533,18 @@ where
                     )
                     .is_err()
                     {
-                        if try_restart(&mut state, &g_v, f_old, &mut restart_budget) {
+                        if try_restart(
+                            &mut state,
+                            &g_v,
+                            f_old,
+                            &mut restart_budget,
+                        ) {
                             continue;
                         } else {
-                            return Ok((state, Some(TerminationReason::SolverFailed)));
+                            return Ok((
+                                state,
+                                Some(TerminationReason::SolverFailed),
+                            ));
                         }
                     }
                 }
@@ -552,16 +571,22 @@ where
                 )
                 .is_err()
                 {
-                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget) {
+                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
+                    {
                         continue;
                     } else {
-                        return Ok((state, Some(TerminationReason::SolverFailed)));
+                        return Ok((
+                            state,
+                            Some(TerminationReason::SolverFailed),
+                        ));
                     }
                 }
 
                 // subsm: writes the subspace minimizer into `z`.
-                let ws_cols: Vec<&[F]> = state.ws.iter().map(|v| v.as_float_slice()).collect();
-                let wy_cols: Vec<&[F]> = state.wy.iter().map(|v| v.as_float_slice()).collect();
+                let ws_cols: Vec<&[F]> =
+                    state.ws.iter().map(|v| v.as_float_slice()).collect();
+                let wy_cols: Vec<&[F]> =
+                    state.wy.iter().map(|v| v.as_float_slice()).collect();
                 let subsm_res = subsm(
                     &mut work.z,
                     &mut work.r,
@@ -580,10 +605,14 @@ where
                     theta,
                 );
                 if subsm_res.is_err() {
-                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget) {
+                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
+                    {
                         continue;
                     } else {
-                        return Ok((state, Some(TerminationReason::SolverFailed)));
+                        return Ok((
+                            state,
+                            Some(TerminationReason::SolverFailed),
+                        ));
                     }
                 }
                 // We don't read `SubsmStatus`; the projected step
@@ -597,7 +626,8 @@ where
             for i in 0..n {
                 work.d[i] = work.z[i] - state.param.as_float_slice()[i];
             }
-            let dtd: F = work.d.iter().fold(F::zero(), |acc, x| acc + (*x) * (*x));
+            let dtd: F =
+                work.d.iter().fold(F::zero(), |acc, x| acc + (*x) * (*x));
             let dnorm = dtd.sqrt();
             work.dnorm = dnorm;
 
@@ -647,9 +677,13 @@ where
             // tight-bound problems may need a constraint-aware
             // wrapper down the road.
             let _ = (alpha_init, stpmx);
-            let stp = self
-                .line_search
-                .next(problem, &state.param, f_old, &g_v, &d_v)?;
+            let stp = self.line_search.next(
+                problem,
+                &state.param,
+                f_old,
+                &g_v,
+                &d_v,
+            )?;
 
             if !(stp.is_finite() && stp > F::zero()) {
                 // Line search bailed. If col == 0, abnormal
@@ -717,7 +751,16 @@ where
 
                     // Rebuild T = θ SᵀS + L D⁻¹ Lᵀ. On failure, reset.
                     let new_col = state.ws.len();
-                    if formt(state.theta, &state.sy, &state.ss, new_col, m, &mut work.wt).is_err() {
+                    if formt(
+                        state.theta,
+                        &state.sy,
+                        &state.ss,
+                        new_col,
+                        m,
+                        &mut work.wt,
+                    )
+                    .is_err()
+                    {
                         // Reset history; the next iter starts fresh.
                         state.ws.clear();
                         state.wy.clear();
@@ -776,7 +819,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: LbfgsState<V, F>,
-    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let g_v = state
             .gradient
             .take()
@@ -860,9 +904,9 @@ where
             acc
         };
 
-        let stp = self
-            .line_search
-            .next(problem, &state.param, f_old, &g_v, &d_v)?;
+        let stp =
+            self.line_search
+                .next(problem, &state.param, f_old, &g_v, &d_v)?;
 
         if !(stp.is_finite() && stp > F::zero()) {
             // Line search bailed. Restore cached cost and gradient so
@@ -1263,7 +1307,8 @@ mod tests {
         impl Gradient for Rosen {
             type Gradient = Vec<f64>;
             fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
-                let dfdx0 = -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0] * x[0]);
+                let dfdx0 =
+                    -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0] * x[0]);
                 let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
                 Ok(vec![dfdx0, dfdx1])
             }

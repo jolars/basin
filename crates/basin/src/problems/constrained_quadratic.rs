@@ -13,7 +13,9 @@
 //! `M` and `V` pin the matrix and vector backend, and per-backend impls live
 //! in feature-gated submodules below.
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 
 /// Linearly-constrained quadratic `min Σ (xᵢ − cᵢ)² s.t. A x ≤ b`. Holds the
 /// objective center `c`, constraint matrix `A`, and right-hand side `b`; `M`
@@ -74,19 +76,27 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok((x - &self.c).norm_squared())
         }
     }
 
     impl Gradient for ConstrainedQuadratic<DMatrix<f64>, DVector<f64>> {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(2.0 * (x - &self.c))
         }
     }
 
-    impl LinearInequalityConstraints for ConstrainedQuadratic<DMatrix<f64>, DVector<f64>> {
+    impl LinearInequalityConstraints
+        for ConstrainedQuadratic<DMatrix<f64>, DVector<f64>>
+    {
         type Matrix = DMatrix<f64>;
         fn a(&self) -> &DMatrix<f64> {
             &self.a
@@ -119,7 +129,10 @@ mod faer_impl {
 
     impl Gradient for ConstrainedQuadratic<Mat<f64>, Col<f64>> {
         type Gradient = Col<f64>;
-        fn gradient(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             Ok(Col::from_fn(x.nrows(), |i| 2.0 * (x[i] - self.c[i])))
         }
     }
@@ -154,7 +167,10 @@ mod vec_impl {
 
     impl Gradient for ConstrainedQuadratic<DenseMatrix, Vec<f64>> {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok(x.iter()
                 .zip(&self.c)
                 .map(|(xi, ci)| 2.0 * (xi - ci))
@@ -162,7 +178,9 @@ mod vec_impl {
         }
     }
 
-    impl LinearInequalityConstraints for ConstrainedQuadratic<DenseMatrix, Vec<f64>> {
+    impl LinearInequalityConstraints
+        for ConstrainedQuadratic<DenseMatrix, Vec<f64>>
+    {
         type Matrix = DenseMatrix;
         fn a(&self) -> &DenseMatrix {
             &self.a
@@ -183,19 +201,27 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok((x - &self.c).mapv(|v| v * v).sum())
         }
     }
 
     impl Gradient for ConstrainedQuadratic<Array2<f64>, Array1<f64>> {
         type Gradient = Array1<f64>;
-        fn gradient(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             Ok((x - &self.c).mapv(|v| 2.0 * v))
         }
     }
 
-    impl LinearInequalityConstraints for ConstrainedQuadratic<Array2<f64>, Array1<f64>> {
+    impl LinearInequalityConstraints
+        for ConstrainedQuadratic<Array2<f64>, Array1<f64>>
+    {
         type Matrix = Array2<f64>;
         fn a(&self) -> &Array2<f64> {
             &self.a

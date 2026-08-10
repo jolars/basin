@@ -16,8 +16,9 @@ use std::rc::Rc;
 use basin::core::rng::Rng;
 use basin::problems::{Ackley, Rastrigin};
 use basin::{
-    BasicState, BasinHopping, Executor, InitialState, MaxIter, NelderMead, Problem,
-    SimplexTolerance, Solver, State, StepTaker, TerminationReason, WarmStart,
+    BasicState, BasinHopping, Executor, InitialState, MaxIter, NelderMead,
+    Problem, SimplexTolerance, Solver, State, StepTaker, TerminationReason,
+    WarmStart,
 };
 
 /// Same seed in, same trajectory out: the reproducibility contract every
@@ -164,7 +165,11 @@ struct RecordingStep {
 }
 
 impl StepTaker<Vec<f64>, f64> for RecordingStep {
-    fn take_step<R: Rng + ?Sized>(&mut self, x: &Vec<f64>, _rng: &mut R) -> Vec<f64> {
+    fn take_step<R: Rng + ?Sized>(
+        &mut self,
+        x: &Vec<f64>,
+        _rng: &mut R,
+    ) -> Vec<f64> {
         self.calls.borrow_mut().0 += 1;
         x.clone()
     }
@@ -230,7 +235,11 @@ where
 {
     type Error = I::Error;
 
-    fn init(&mut self, problem: &mut Problem<P>, state: S) -> Result<S, Self::Error> {
+    fn init(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: S,
+    ) -> Result<S, Self::Error> {
         // Delegate so the inner state's cost gets populated; the outer reads it.
         self.0.init(problem, state)
     }

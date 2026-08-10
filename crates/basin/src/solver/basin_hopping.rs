@@ -269,8 +269,13 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// // iterate may be a transiently accepted uphill hop.
 /// assert!(result.best_cost() < 1e-6, "Ackley best cost {}", result.best_cost());
 /// ```
-pub struct BasinHopping<I, V, F = f64, S = RandomDisplacement<F>, A = Metropolis<F>>
-where
+pub struct BasinHopping<
+    I,
+    V,
+    F = f64,
+    S = RandomDisplacement<F>,
+    A = Metropolis<F>,
+> where
     F: Scalar,
     I: WarmStart<V>,
 {
@@ -375,7 +380,10 @@ where
     }
 
     /// Replace the acceptance test. Changes the `A` type parameter.
-    pub fn with_acceptance_test<A2>(self, accept: A2) -> BasinHopping<I, V, F, S, A2> {
+    pub fn with_acceptance_test<A2>(
+        self,
+        accept: A2,
+    ) -> BasinHopping<I, V, F, S, A2> {
         BasinHopping {
             inner: self.inner,
             step: self.step,
@@ -469,11 +477,13 @@ where
     }
 }
 
-impl<P, I, V, F, S, A> Solver<P, BasicState<V, F>> for BasinHopping<I, V, F, S, A>
+impl<P, I, V, F, S, A> Solver<P, BasicState<V, F>>
+    for BasinHopping<I, V, F, S, A>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    I: WarmStart<V> + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
+    I: WarmStart<V>
+        + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
     <I as InitialState<V>>::State: State<Param = V, Float = F> + CountsMirror,
     V: Clone,
     S: StepTaker<V, F>,
@@ -504,7 +514,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let f_old = state.cost();
 
         // 1. Perturb the current iterate.
@@ -542,7 +553,8 @@ where
         // uses the *cumulative* (lifetime) acceptance rate — `naccept`/`nstep`
         // are never reset — and fires when `nstep % interval == 0`.
         if self.adaptive && self.nstep % self.interval == 0 {
-            let rate = F::from_u64(self.naccept).unwrap() / F::from_u64(self.nstep).unwrap();
+            let rate = F::from_u64(self.naccept).unwrap()
+                / F::from_u64(self.nstep).unwrap();
             let factor = if rate > self.target_accept_rate {
                 // Accepting too many → enlarge the step (factor < 1, so 1/factor > 1).
                 F::one() / self.stepwise_factor

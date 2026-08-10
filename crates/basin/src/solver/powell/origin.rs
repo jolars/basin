@@ -65,8 +65,11 @@ impl<F: Scalar> QuadraticModel<F> {
         for a in 0..n {
             for b in 0..n {
                 let add = v[a] * s[b] + s[a] * v[b];
-                self.gamma_explicit
-                    .set(a, b, self.gamma_explicit.get(a, b) + add);
+                self.gamma_explicit.set(
+                    a,
+                    b,
+                    self.gamma_explicit.get(a, b) + add,
+                );
             }
         }
 
@@ -116,8 +119,11 @@ impl<F: Scalar> QuadraticModel<F> {
         }
         for a in 0..n {
             for b in 0..n {
-                self.bmat_ups
-                    .set(a, b, self.bmat_ups.get(a, b) + ups_add[a][b]);
+                self.bmat_ups.set(
+                    a,
+                    b,
+                    self.bmat_ups.get(a, b) + ups_add[a][b],
+                );
             }
         }
 
@@ -165,7 +171,12 @@ mod tests {
     /// for the `W` built from the *new* geometry (the master KKT identity).
     #[test]
     fn shift_preserves_kkt_identity() {
-        let mut model = QuadraticModel::initialize(vec![0.0, 0.0], 0.5, 5, &offset_quadratic);
+        let mut model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.5,
+            5,
+            &offset_quadratic,
+        );
         // The best initial sample is off-center, so s = x_opt − x0 ≠ 0.
         assert_ne!(model.kopt(), usize::MAX);
         assert!(model.xpt_row(model.kopt()).iter().any(|v| v.abs() > 0.0));
@@ -180,7 +191,12 @@ mod tests {
     /// value between any two absolute points are invariant.
     #[test]
     fn shift_preserves_the_quadratic() {
-        let mut model = QuadraticModel::initialize(vec![0.0, 0.0], 0.5, 5, &offset_quadratic);
+        let mut model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.5,
+            5,
+            &offset_quadratic,
+        );
         let m = model.m();
         let kopt = model.kopt();
 
@@ -212,7 +228,8 @@ mod tests {
             // a *difference* of probes, which cancels that constant.
             let after = model.eval_change(&d);
             let q0 = {
-                let d0: Vec<f64> = (0..2).map(|i| probes[0][i] - x0_new[i]).collect();
+                let d0: Vec<f64> =
+                    (0..2).map(|i| probes[0][i] - x0_new[i]).collect();
                 model.eval_change(&d0)
             };
             let want = before[k] - before[0];
@@ -245,14 +262,16 @@ mod tests {
                 + 100.0 * (x[1] - x[0] * x[0]).powi(2)
                 + (x[2] - 0.5).powi(2) * (x[2] - 0.5).powi(2)
         };
-        let mut model = QuadraticModel::initialize(vec![-1.0, 1.0, 0.0], 0.4, 7, &f);
+        let mut model =
+            QuadraticModel::initialize(vec![-1.0, 1.0, 0.0], 0.4, 7, &f);
         // A few accepted "steps": move the best point around to grow ‖x_opt−x0‖.
         for step in 0..6 {
             let kopt = model.kopt();
             let xopt = model.xpt_row(kopt).to_vec();
             let d = [0.15 * (step as f64 + 1.0) * 0.3, -0.1, 0.05];
             let xnew_disp: Vec<f64> = (0..3).map(|i| xopt[i] + d[i]).collect();
-            let xabs: Vec<f64> = (0..3).map(|i| model.x0()[i] + xnew_disp[i]).collect();
+            let xabs: Vec<f64> =
+                (0..3).map(|i| model.x0()[i] + xnew_disp[i]).collect();
             let f_new = f(&xabs);
             let ctx = model.prepare_update(&xnew_disp);
             // Drop the point furthest from the new candidate (any valid t).

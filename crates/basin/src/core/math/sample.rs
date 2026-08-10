@@ -40,7 +40,11 @@ use super::{Scalar, VectorLen};
 pub trait SampleUniformBox: Sized {
     /// Sample a fresh value with each component drawn uniformly from
     /// `[lower[i], upper[i]]`.
-    fn sample_uniform_box<R: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut R) -> Self;
+    fn sample_uniform_box<R: Rng + ?Sized>(
+        lower: &Self,
+        upper: &Self,
+        rng: &mut R,
+    ) -> Self;
 }
 
 /// Assert every component of `lower`/`upper` is finite: the
@@ -91,5 +95,8 @@ where
 pub trait SampleStandardNormal: Sized {
     /// Sample a fresh value with each component drawn from `N(0, 1)`.
     /// `template` provides the shape (`len`); its values are unused.
-    fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self;
+    fn sample_standard_normal<R: Rng + ?Sized>(
+        template: &Self,
+        rng: &mut R,
+    ) -> Self;
 }

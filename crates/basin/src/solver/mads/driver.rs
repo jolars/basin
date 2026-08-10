@@ -109,7 +109,8 @@ impl<F: Scalar> MadsWork<F> {
         self.t_max = self.t_max.max(t);
 
         let (mesh_f64, _) = mesh_and_poll_size(self.ell);
-        let mesh = self.scale * F::from_f64(mesh_f64).expect("mesh size representable");
+        let mesh = self.scale
+            * F::from_f64(mesh_f64).expect("mesh size representable");
         let dirs = poll_directions(t, self.ell, self.n);
 
         // Opportunistic poll: move to the first improving mesh point.
@@ -118,7 +119,8 @@ impl<F: Scalar> MadsWork<F> {
         for d in &dirs {
             let mut trial = self.x.clone();
             for i in 0..self.n {
-                let di = F::from_i64(d[i]).expect("integer direction representable");
+                let di =
+                    F::from_i64(d[i]).expect("integer direction representable");
                 trial[i] = trial[i] + mesh * di;
             }
             let f = eval(&trial)?;

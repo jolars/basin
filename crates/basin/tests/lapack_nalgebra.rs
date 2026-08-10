@@ -81,10 +81,11 @@ fn gauss_newton_converges_through_lapack_cholesky() {
 
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
-    let result = Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
-        .max_iter(20)
-        .run()
-        .unwrap();
+    let result =
+        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+            .max_iter(20)
+            .run()
+            .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     let x = result.param();

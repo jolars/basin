@@ -156,7 +156,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let grad = state
             .gradient
             .take()
@@ -166,9 +167,13 @@ where
             .expect("cost not set: Solver::init must run before next_iter");
         let mut direction = grad.clone();
         direction.neg_in_place();
-        let alpha = self
-            .line_search
-            .next(problem, &state.param, prev_cost, &grad, &direction)?;
+        let alpha = self.line_search.next(
+            problem,
+            &state.param,
+            prev_cost,
+            &grad,
+            &direction,
+        )?;
 
         if self.beta == F::zero() {
             // No momentum: the plain steepest-descent step, bit-identical to
@@ -329,7 +334,8 @@ mod tests {
 
         let run = |solver: &mut GradientDescent<Constant, Vec<f64>>| {
             let mut p = Problem::new(Quadratic);
-            let mut state = solver.init(&mut p, BasicState::new(start.clone())).unwrap();
+            let mut state =
+                solver.init(&mut p, BasicState::new(start.clone())).unwrap();
             for _ in 0..10 {
                 let (next, _) = solver.next_iter(&mut p, state).unwrap();
                 state = next;

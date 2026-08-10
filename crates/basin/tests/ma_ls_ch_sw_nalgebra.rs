@@ -5,7 +5,10 @@
 //! sorted-population invariant; the other backends run smoke mirrors.
 
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{Executor, MaLsChSw, MaLsChSwState, MaxCostEvals, PopulationState, StepOutcome};
+use basin::{
+    Executor, MaLsChSw, MaLsChSwState, MaxCostEvals, PopulationState,
+    StepOutcome,
+};
 use nalgebra::DVector;
 
 fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {

@@ -5,8 +5,8 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaInject, DenseMatrix, Executor, RhoTolerance, SolisWets, SolisWetsState,
-    State, StepOutcome, TerminationReason,
+    CmaEs, CmaEsState, CmaInject, DenseMatrix, Executor, RhoTolerance,
+    SolisWets, SolisWetsState, State, StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory. Load-bearing reproducibility check for
@@ -119,11 +119,14 @@ fn cost_is_monotone_nonincreasing() {
 /// identical to handing in the equivalent explicit state.
 #[test]
 fn from_start_matches_explicit_state() {
-    let via_seed =
-        Executor::from_start(Sphere::<Vec<f64>>::new(), SolisWets::new(5), vec![1.0, 2.0])
-            .max_iter(100)
-            .run()
-            .unwrap();
+    let via_seed = Executor::from_start(
+        Sphere::<Vec<f64>>::new(),
+        SolisWets::new(5),
+        vec![1.0, 2.0],
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     let via_state = Executor::new(
         Sphere::<Vec<f64>>::new(),

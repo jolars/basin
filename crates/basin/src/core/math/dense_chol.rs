@@ -30,8 +30,16 @@ use super::Scalar;
 /// is not positive definite (e.g. `A = JᵀJ` with rank-deficient `J`). The
 /// caller maps this to
 /// [`LinearSolveError::NotPositiveDefinite`](super::LinearSolveError::NotPositiveDefinite).
-pub(super) fn cholesky_solve_spd<F: Scalar>(a: &[F], n: usize, b: &[F]) -> Option<Vec<F>> {
-    debug_assert_eq!(a.len(), n * n, "cholesky_solve_spd: expected an n×n buffer");
+pub(super) fn cholesky_solve_spd<F: Scalar>(
+    a: &[F],
+    n: usize,
+    b: &[F],
+) -> Option<Vec<F>> {
+    debug_assert_eq!(
+        a.len(),
+        n * n,
+        "cholesky_solve_spd: expected an n×n buffer"
+    );
     debug_assert_eq!(b.len(), n, "cholesky_solve_spd: expected a length-n rhs");
 
     let zero = F::zero();
@@ -115,8 +123,8 @@ mod tests {
         // SPD A = MᵀM + 5I; pick a known x, form b = A x, recover x.
         let n = 5;
         let mraw = [
-            1.0, 0.3, -0.2, 0.5, 0.1, 0.0, 1.2, 0.4, -0.1, 0.2, 0.3, 0.0, 0.9, 0.6, -0.3, -0.4,
-            0.1, 0.2, 1.1, 0.0, 0.2, -0.5, 0.3, 0.1, 1.3,
+            1.0, 0.3, -0.2, 0.5, 0.1, 0.0, 1.2, 0.4, -0.1, 0.2, 0.3, 0.0, 0.9,
+            0.6, -0.3, -0.4, 0.1, 0.2, 1.1, 0.0, 0.2, -0.5, 0.3, 0.1, 1.3,
         ];
         let mut a = vec![0.0; n * n];
         for i in 0..n {

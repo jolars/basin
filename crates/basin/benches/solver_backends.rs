@@ -36,13 +36,18 @@
 use std::hint::black_box;
 use std::time::Duration;
 
-use basin::problems::{Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, StyblinskiTang};
-use basin::{
-    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix, DenseQuasiNewtonState,
-    Executor, FaerQuasiNewtonState, GaussNewton, GradientDescent, LbfgsState, Lbfgsb,
-    LevenbergMarquardt, MoreThuente, NalgebraQuasiNewtonState, NelderMead, NllsState,
+use basin::problems::{
+    Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, StyblinskiTang,
 };
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use basin::{
+    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix,
+    DenseQuasiNewtonState, Executor, FaerQuasiNewtonState, GaussNewton,
+    GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente,
+    NalgebraQuasiNewtonState, NelderMead, NllsState,
+};
+use criterion::{
+    BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
+};
 
 use faer::sparse::{SparseColMat, Triplet};
 use faer::{Col, Mat};
@@ -166,7 +171,8 @@ fn sparse_lsq_nalgebra(n: usize) -> (NalgebraSparseLsq, DVector<f64>) {
     for (i, j, v) in entries {
         coo.push(i, j, v);
     }
-    let problem = SparseLeastSquares::new(CscMatrix::from(&coo), DVector::from_vec(b));
+    let problem =
+        SparseLeastSquares::new(CscMatrix::from(&coo), DVector::from_vec(b));
     (problem, DVector::zeros(n))
 }
 
@@ -327,9 +333,13 @@ fn bench_lm(c: &mut Criterion) {
                 || sparse_lsq_nalgebra(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
-                            .max_iter(MAX_ITERS)
-                            .run(),
+                        Executor::new(
+                            p,
+                            LevenbergMarquardt::new(),
+                            NllsState::new(x0),
+                        )
+                        .max_iter(MAX_ITERS)
+                        .run(),
                     )
                 },
                 BatchSize::SmallInput,
@@ -340,9 +350,13 @@ fn bench_lm(c: &mut Criterion) {
                 || sparse_lsq_faer(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, LevenbergMarquardt::new(), NllsState::new(x0))
-                            .max_iter(MAX_ITERS)
-                            .run(),
+                        Executor::new(
+                            p,
+                            LevenbergMarquardt::new(),
+                            NllsState::new(x0),
+                        )
+                        .max_iter(MAX_ITERS)
+                        .run(),
                     )
                 },
                 BatchSize::SmallInput,
@@ -363,9 +377,13 @@ fn bench_gn(c: &mut Criterion) {
                 || sparse_lsq_nalgebra(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, GaussNewton::new(), NllsState::new(x0))
-                            .max_iter(MAX_ITERS)
-                            .run(),
+                        Executor::new(
+                            p,
+                            GaussNewton::new(),
+                            NllsState::new(x0),
+                        )
+                        .max_iter(MAX_ITERS)
+                        .run(),
                     )
                 },
                 BatchSize::SmallInput,
@@ -376,9 +394,13 @@ fn bench_gn(c: &mut Criterion) {
                 || sparse_lsq_faer(n),
                 |(p, x0)| {
                     black_box(
-                        Executor::new(p, GaussNewton::new(), NllsState::new(x0))
-                            .max_iter(MAX_ITERS)
-                            .run(),
+                        Executor::new(
+                            p,
+                            GaussNewton::new(),
+                            NllsState::new(x0),
+                        )
+                        .max_iter(MAX_ITERS)
+                        .run(),
                     )
                 },
                 BatchSize::SmallInput,

@@ -8,7 +8,8 @@
 //! budget/early-stop termination paths.
 
 use basin::{
-    CostFunction, Executor, MaxCostEvals, Newuoa, NewuoaState, RhoTolerance, TerminationReason,
+    CostFunction, Executor, MaxCostEvals, Newuoa, NewuoaState, RhoTolerance,
+    TerminationReason,
 };
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
@@ -20,7 +21,9 @@ impl CostFunction for Rosenbrock {
     type Error = std::convert::Infallible;
     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
         Ok((0..x.len() - 1)
-            .map(|i| (1.0 - x[i]).powi(2) + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2))
+            .map(|i| {
+                (1.0 - x[i]).powi(2) + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2)
+            })
             .sum())
     }
 }
@@ -107,9 +110,15 @@ fn backend_generic_nalgebra() {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok((0..x.len() - 1)
-                .map(|i| (1.0 - x[i]).powi(2) + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2))
+                .map(|i| {
+                    (1.0 - x[i]).powi(2)
+                        + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2)
+                })
                 .sum())
         }
     }

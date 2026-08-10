@@ -180,7 +180,10 @@ impl<F: Scalar> PbWork<F> {
 
     /// Run one PB iteration: poll the `2n` directions around both incumbents,
     /// classify, then update `ℓ` and `h_max`.
-    pub(crate) fn step<E>(&mut self, eval: &mut PbEval<F, E>) -> Result<PbOutcome<F>, E> {
+    pub(crate) fn step<E>(
+        &mut self,
+        eval: &mut PbEval<F, E>,
+    ) -> Result<PbOutcome<F>, E> {
         // 1. Incumbents at the start of the iteration.
         let feas_pre = self.feasible.clone();
         let inf_pre = self.select_x_inf().map(|i| self.infeasible[i].clone());
@@ -196,7 +199,8 @@ impl<F: Scalar> PbWork<F> {
         self.t_max = self.t_max.max(t);
 
         let (mesh_f64, _) = mesh_and_poll_size(self.ell);
-        let mesh = self.scale * F::from_f64(mesh_f64).expect("mesh size representable");
+        let mesh = self.scale
+            * F::from_f64(mesh_f64).expect("mesh size representable");
         let dirs = poll_directions(t, self.ell, self.n);
 
         // Poll around both incumbents (those that exist). Opportunistic: stop on
@@ -214,7 +218,8 @@ impl<F: Scalar> PbWork<F> {
             for d in &dirs {
                 let mut trial = center.clone();
                 for i in 0..self.n {
-                    let di = F::from_i64(d[i]).expect("integer direction representable");
+                    let di = F::from_i64(d[i])
+                        .expect("integer direction representable");
                     trial[i] = trial[i] + mesh * di;
                 }
                 let (f, h) = eval(&trial)?;
@@ -290,9 +295,10 @@ mod tests {
     where
         O: FnMut(&[f64]) -> (f64, f64),
     {
-        let mut eval = |x: &[f64]| -> Result<(f64, f64), Infallible> { Ok(oracle(x)) };
-        let (mut work, _, _, _) =
-            PbWork::try_init(x0, 1.0, 1e-9, &mut eval).expect("init infallible");
+        let mut eval =
+            |x: &[f64]| -> Result<(f64, f64), Infallible> { Ok(oracle(x)) };
+        let (mut work, _, _, _) = PbWork::try_init(x0, 1.0, 1e-9, &mut eval)
+            .expect("init infallible");
         for _ in 0..steps {
             work.step(&mut eval).expect("step infallible");
         }

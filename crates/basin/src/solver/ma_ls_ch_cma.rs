@@ -45,7 +45,8 @@ pub type MaLsChCma<V, M> = MaLsCh<V, CmaEs<V, M>>;
 /// evolution state (mean, sigma, covariance, paths) and the previous
 /// generation's λ candidates the next CMA `next_iter` needs as the
 /// recombination basis.
-pub type MaLsChState<V, M> = MaLsChGenericState<V, (CmaEs<V, M>, CmaEsState<V, M>)>;
+pub type MaLsChState<V, M> =
+    MaLsChGenericState<V, (CmaEs<V, M>, CmaEsState<V, M>)>;
 
 impl<V, M> MaLsCh<V, CmaEs<V, M>> {
     /// Build a new `MaLsChCma` with the Molina 2010 §4.4.7 defaults
@@ -76,7 +77,10 @@ impl<V, M> MaLsCh<V, CmaEs<V, M>> {
     /// [`with_initial_scale_fallback`](MaLsCh::with_initial_scale_fallback):
     /// σ is CMA-ES's name for the chain scale, but the knob is
     /// operator-agnostic, so the generic builder uses the neutral name.
-    #[deprecated(since = "1.5.0", note = "renamed to `with_initial_scale_fallback`")]
+    #[deprecated(
+        since = "1.5.0",
+        note = "renamed to `with_initial_scale_fallback`"
+    )]
     pub fn with_initial_sigma_fallback(self, sigma: f64) -> Self {
         self.with_initial_scale_fallback(sigma)
     }

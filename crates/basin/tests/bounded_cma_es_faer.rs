@@ -2,8 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState,
+    StepOutcome, TerminationReason,
 };
 use faer::{Col, Mat};
 

@@ -48,12 +48,19 @@ fn inv_error<F: Scalar>(simi: &[F], sim: &[F], n: usize) -> F {
 /// Identify the best vertex of the simplex w.r.t. the merit `φ = f + cpen·cstrv`,
 /// preferring smaller `cstrv` on ties; returns its 0-based index in `0..=n`
 /// (default `n`, the pole). PRIMA `findpole`.
-pub(crate) fn findpole<F: Scalar>(cpen: F, cval: &[F], fval: &[F], n: usize) -> usize {
+pub(crate) fn findpole<F: Scalar>(
+    cpen: F,
+    cval: &[F],
+    fval: &[F],
+    n: usize,
+) -> usize {
     let np = n + 1;
     let phi: Vec<F> = (0..np).map(|k| fval[k] + cpen * cval[k]).collect();
     let phimin = phi.iter().cloned().fold(F::infinity(), F::min);
     let mut jopt = n;
-    if phimin < phi[jopt] || (0..np).any(|k| cval[k] < cval[jopt] && phi[k] <= phi[jopt]) {
+    if phimin < phi[jopt]
+        || (0..np).any(|k| cval[k] < cval[jopt] && phi[k] <= phi[jopt])
+    {
         // argmin cval over {phi <= phimin}, first such index.
         let cmin = (0..np)
             .filter(|&k| phi[k] <= phimin)
@@ -176,7 +183,8 @@ pub(crate) fn updatexfc<F: Scalar>(
         for l in 0..n {
             denom = denom + simi[jdrop + l * n] * d[l];
         }
-        let simi_jdrop: Vec<F> = (0..n).map(|l| simi[jdrop + l * n] / denom).collect();
+        let simi_jdrop: Vec<F> =
+            (0..n).map(|l| simi[jdrop + l * n] / denom).collect();
         // md = simi · d.
         let md: Vec<F> = (0..n)
             .map(|i| (0..n).map(|l| simi[i + l * n] * d[l]).sum::<F>())

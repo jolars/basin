@@ -125,7 +125,13 @@ where
     /// scale hint (MA-LSCh passes half the nearest-neighbor distance;
     /// it becomes CMA-ES's σ or Solis-Wets's ρ). `seed` seeds the
     /// chain's private RNG stream.
-    fn seed_chain(&self, x: &V, fx: F, scale: F, seed: u64) -> (Self, Self::State);
+    fn seed_chain(
+        &self,
+        x: &V,
+        fx: F,
+        scale: F,
+        seed: u64,
+    ) -> (Self, Self::State);
 
     /// Prepare a stored snapshot for its next run segment: reset the
     /// local iteration counter and any per-segment bookkeeping. Must

@@ -7,8 +7,8 @@
 
 use basin::solver::lbfgs::{Bounded, Unbounded};
 use basin::{
-    CostFunction, Executor, Gradient, GradientTolerance, Lbfgs, LbfgsState, Lbfgsb, MaxIter,
-    MoreThuente,
+    CostFunction, Executor, Gradient, GradientTolerance, Lbfgs, LbfgsState,
+    Lbfgsb, MaxIter, MoreThuente,
 };
 
 /// 2-D Rosenbrock: `f(x) = (1 − x₀)² + 100 (x₁ − x₀²)²`. Used by all
@@ -37,7 +37,10 @@ fn rosenbrock_vec() {
     }
     impl Gradient for Rosen {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok({
                 let (a, b) = rosenbrock::grad(x[0], x[1]);
                 vec![a, b]
@@ -54,7 +57,8 @@ fn rosenbrock_vec() {
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "x = {:?}",
         result.param()
     );
@@ -70,13 +74,19 @@ fn rosenbrock_nalgebra() {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(rosenbrock::cost(x[0], x[1]))
         }
     }
     impl Gradient for Rosen {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok({
                 let (a, b) = rosenbrock::grad(x[0], x[1]);
                 DVector::from_vec(vec![a, b])
@@ -93,7 +103,8 @@ fn rosenbrock_nalgebra() {
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "x = {:?}",
         result.param()
     );
@@ -115,7 +126,10 @@ fn rosenbrock_faer() {
     }
     impl Gradient for Rosen {
         type Gradient = Col<f64>;
-        fn gradient(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             Ok({
                 let (a, b) = rosenbrock::grad(x[0], x[1]);
                 Col::from_fn(2, |i| if i == 0 { a } else { b })
@@ -133,7 +147,8 @@ fn rosenbrock_faer() {
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "x = {:?}",
         (result.param()[0], result.param()[1])
     );
@@ -149,13 +164,19 @@ fn rosenbrock_ndarray() {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(rosenbrock::cost(x[0], x[1]))
         }
     }
     impl Gradient for Rosen {
         type Gradient = Array1<f64>;
-        fn gradient(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             Ok({
                 let (a, b) = rosenbrock::grad(x[0], x[1]);
                 array![a, b]
@@ -172,7 +193,8 @@ fn rosenbrock_ndarray() {
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "x = {:?}",
         result.param()
     );

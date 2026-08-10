@@ -14,8 +14,8 @@ use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
 use basin::{
-    BasicSimplexState, BasicState, Executor, GradientDescent, IntoInitialSimplex, MoreThuente,
-    NelderMead,
+    BasicSimplexState, BasicState, Executor, GradientDescent,
+    IntoInitialSimplex, MoreThuente, NelderMead,
 };
 use competitor_bench::ArgminProblem;
 
@@ -23,7 +23,9 @@ const MAX_ITERS: u64 = 200;
 
 fn main() {
     let start = vec![-1.2, 1.0];
-    println!("Rosenbrock 2D from {start:?}, fixed {MAX_ITERS} iters (no early stop)\n");
+    println!(
+        "Rosenbrock 2D from {start:?}, fixed {MAX_ITERS} iters (no early stop)\n"
+    );
 
     // ---- Steepest descent + More-Thuente line search ----
     println!("== gradient descent (steepest + More-Thuente) ==");
@@ -38,7 +40,8 @@ fn main() {
     .unwrap();
     println!("  basin   {:>4} iters  cost={:.6e}", r.iter(), r.cost());
 
-    let ls: MoreThuenteLineSearch<Vec<f64>, Vec<f64>, f64> = MoreThuenteLineSearch::new();
+    let ls: MoreThuenteLineSearch<Vec<f64>, Vec<f64>, f64> =
+        MoreThuenteLineSearch::new();
     let res = ArgminExecutor::new(
         ArgminProblem::new(rosenbrock, rosenbrock_gradient),
         SteepestDescent::new(ls),
@@ -72,10 +75,13 @@ fn main() {
     let nm = ArgminNelderMead::new(simplex)
         .with_sd_tolerance(0.0)
         .unwrap();
-    let res = ArgminExecutor::new(ArgminProblem::new(rosenbrock, rosenbrock_gradient), nm)
-        .configure(|s| s.max_iters(MAX_ITERS))
-        .run()
-        .unwrap();
+    let res = ArgminExecutor::new(
+        ArgminProblem::new(rosenbrock, rosenbrock_gradient),
+        nm,
+    )
+    .configure(|s| s.max_iters(MAX_ITERS))
+    .run()
+    .unwrap();
     println!(
         "  argmin  {:>4} iters  cost={:.6e}",
         res.state().get_iter(),

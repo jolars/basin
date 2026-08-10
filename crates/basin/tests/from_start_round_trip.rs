@@ -20,9 +20,10 @@ use basin::MoreThuente;
 use basin::core::math::DenseMatrix;
 use basin::solver::lbfgs::Unbounded;
 use basin::{
-    BasicSimplexState, BasicState, Bfgs, CostFunction, Executor, Gradient, GradientDescent,
-    Hessian, Jacobian, Lbfgs, LbfgsState, LevenbergMarquardt, Mads, MadsState, MaxIter, NelderMead,
-    Newuoa, NewuoaState, NllsState, QuasiNewtonState, Residual, Steihaug, TrustRegion,
+    BasicSimplexState, BasicState, Bfgs, CostFunction, Executor, Gradient,
+    GradientDescent, Hessian, Jacobian, Lbfgs, LbfgsState, LevenbergMarquardt,
+    Mads, MadsState, MaxIter, NelderMead, Newuoa, NewuoaState, NllsState,
+    QuasiNewtonState, Residual, Steihaug, TrustRegion,
 };
 
 /// f(x) = Σ (xᵢ − cᵢ)², minimum 0 at x = c. Smooth, with an exact gradient
@@ -108,10 +109,14 @@ fn gradient_descent_basic_state() {
         .terminate_on(MaxIter(50))
         .run()
         .unwrap();
-    let b = Executor::new(problem(), GradientDescent::new(0.01), BasicState::new(x0()))
-        .terminate_on(MaxIter(50))
-        .run()
-        .unwrap();
+    let b = Executor::new(
+        problem(),
+        GradientDescent::new(0.01),
+        BasicState::new(x0()),
+    )
+    .terminate_on(MaxIter(50))
+    .run()
+    .unwrap();
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
 }
@@ -146,20 +151,28 @@ fn nelder_mead_simplex_state() {
         .terminate_on(MaxIter(50))
         .run()
         .unwrap();
-    let b = Executor::new(problem(), NelderMead::new(), BasicSimplexState::new(x0()))
-        .terminate_on(MaxIter(50))
-        .run()
-        .unwrap();
+    let b = Executor::new(
+        problem(),
+        NelderMead::new(),
+        BasicSimplexState::new(x0()),
+    )
+    .terminate_on(MaxIter(50))
+    .run()
+    .unwrap();
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
 }
 
 #[test]
 fn lbfgs_unbounded_history_state() {
-    let a = Executor::from_start(problem(), Lbfgs::<Unbounded, MoreThuente>::new(), x0())
-        .terminate_on(MaxIter(50))
-        .run()
-        .unwrap();
+    let a = Executor::from_start(
+        problem(),
+        Lbfgs::<Unbounded, MoreThuente>::new(),
+        x0(),
+    )
+    .terminate_on(MaxIter(50))
+    .run()
+    .unwrap();
     let b = Executor::new(
         problem(),
         Lbfgs::<Unbounded, MoreThuente>::new(),
@@ -201,10 +214,11 @@ fn levenberg_marquardt_nlls_state() {
         .terminate_on(MaxIter(50))
         .run()
         .unwrap();
-    let b = Executor::new(prob(), LevenbergMarquardt::new(), NllsState::new(x0()))
-        .terminate_on(MaxIter(50))
-        .run()
-        .unwrap();
+    let b =
+        Executor::new(prob(), LevenbergMarquardt::new(), NllsState::new(x0()))
+            .terminate_on(MaxIter(50))
+            .run()
+            .unwrap();
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
 }
@@ -260,7 +274,10 @@ fn bfgs_from_start_nalgebra_backend() {
     }
     impl Gradient for QuadN {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, Self::Error> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, Self::Error> {
             Ok(DVector::from_fn(x.len(), |i, _| {
                 2.0 * (x[i] - (i as f64 + 1.0))
             }))
@@ -313,10 +330,14 @@ fn bfgs_from_start_faer_backend() {
         .terminate_on(MaxIter(50))
         .run()
         .unwrap();
-    let b = Executor::new(QuadF, Bfgs::new(), basin::FaerQuasiNewtonState::new(x0()))
-        .terminate_on(MaxIter(50))
-        .run()
-        .unwrap();
+    let b = Executor::new(
+        QuadF,
+        Bfgs::new(),
+        basin::FaerQuasiNewtonState::new(x0()),
+    )
+    .terminate_on(MaxIter(50))
+    .run()
+    .unwrap();
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
     assert!(a.cost() < 1e-12);

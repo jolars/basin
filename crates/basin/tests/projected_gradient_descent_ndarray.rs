@@ -2,8 +2,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    Backtracking, BasicState, Executor, ProjectedGradientDescent, ProjectedGradientTolerance,
-    TerminationReason,
+    Backtracking, BasicState, Executor, ProjectedGradientDescent,
+    ProjectedGradientTolerance, TerminationReason,
 };
 use ndarray::Array1;
 

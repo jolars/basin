@@ -1,7 +1,10 @@
 #![cfg(feature = "nalgebra")]
 
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
-use basin::{Executor, LevenbergMarquardt, NllsState, RelativeCostTolerance, TerminationReason};
+use basin::{
+    Executor, LevenbergMarquardt, NllsState, RelativeCostTolerance,
+    TerminationReason,
+};
 use nalgebra::DVector;
 
 #[test]
@@ -14,10 +17,14 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-15, "cost = {}", result.cost());
@@ -44,10 +51,14 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     let problem = PowellSingular::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![1.0, 2.0, 1.0, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
@@ -70,10 +81,14 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     let problem = PowellSingular::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![3.0, -1.0, 0.0, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
@@ -91,10 +106,14 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }
@@ -113,10 +132,14 @@ fn levenberg_marquardt_converges_fast_on_poorly_scaled_exponential_fit() {
     let problem = ExponentialFit::<DVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
     let initial = DVector::from_vec(vec![5.0e4, -0.3]);
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
@@ -281,7 +304,12 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
     // so the relative gtol must stop at the same iteration for both,
     // where the absolute ‖Jᵀr‖∞ would not (it scales with c²).
     let solve = |scale: f64| {
-        let problem = ExponentialFit::<DVector<f64>>::sampled(1.0e3 * scale, -1.0, 10, 0.4);
+        let problem = ExponentialFit::<DVector<f64>>::sampled(
+            1.0e3 * scale,
+            -1.0,
+            10,
+            0.4,
+        );
         let initial = DVector::from_vec(vec![5.0e2 * scale, -0.3]);
         Executor::new(
             problem,

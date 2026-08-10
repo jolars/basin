@@ -124,8 +124,10 @@ impl<F: Scalar> QuadraticModel<F> {
         // Off-diagonals from the paired points (eq 3.5):
         // (∇²Q)_{pq} = σ_p σ_q ρ⁻² (F(x0) − F(p̂) − F(q̂) + F(paired)).
         for &(ip, p_idx, q_idx, phat, qhat) in &extras {
-            let val =
-                sigma[p_idx] * sigma[q_idx] * (f0 - fval[phat] - fval[qhat] + fval[ip]) / rho2;
+            let val = sigma[p_idx]
+                * sigma[q_idx]
+                * (f0 - fval[phat] - fval[qhat] + fval[ip])
+                / rho2;
             gamma_explicit.set(p_idx, q_idx, val);
             gamma_explicit.set(q_idx, p_idx, val);
         }
@@ -194,9 +196,19 @@ impl<F: Scalar> QuadraticModel<F> {
 
     /// Infallible convenience wrapper around [`try_initialize`](Self::try_initialize)
     /// for an objective that cannot fail (the standalone driver and the tests).
-    pub(crate) fn initialize(x0: Vec<F>, rho_beg: F, m: usize, f: impl Fn(&[F]) -> F) -> Self {
-        Self::try_initialize::<core::convert::Infallible>(x0, rho_beg, m, &mut |x| Ok(f(x)))
-            .expect("infallible objective")
+    pub(crate) fn initialize(
+        x0: Vec<F>,
+        rho_beg: F,
+        m: usize,
+        f: impl Fn(&[F]) -> F,
+    ) -> Self {
+        Self::try_initialize::<core::convert::Infallible>(
+            x0,
+            rho_beg,
+            m,
+            &mut |x| Ok(f(x)),
+        )
+        .expect("infallible objective")
     }
 }
 
@@ -235,7 +247,11 @@ mod tests {
         let (c1, c2) = (3.0, 5.0);
         let b = [1.0, -2.0];
         let x0v = [0.25, -0.5];
-        let f = |x: &[f64]| 0.5 * (c1 * x[0] * x[0] + c2 * x[1] * x[1]) + b[0] * x[0] + b[1] * x[1];
+        let f = |x: &[f64]| {
+            0.5 * (c1 * x[0] * x[0] + c2 * x[1] * x[1])
+                + b[0] * x[0]
+                + b[1] * x[1]
+        };
         let model = QuadraticModel::initialize(x0v.to_vec(), 0.2, 5, f);
 
         assert!((model.gamma_explicit.get(0, 0) - c1).abs() < 1e-12);
@@ -256,7 +272,9 @@ mod tests {
         let g = [[4.0, 1.5], [1.5, 3.0]];
         let b = [1.0, 2.0];
         let f = |x: &[f64]| {
-            0.5 * (g[0][0] * x[0] * x[0] + 2.0 * g[0][1] * x[0] * x[1] + g[1][1] * x[1] * x[1])
+            0.5 * (g[0][0] * x[0] * x[0]
+                + 2.0 * g[0][1] * x[0] * x[1]
+                + g[1][1] * x[1] * x[1])
                 + b[0] * x[0]
                 + b[1] * x[1]
         };
@@ -279,21 +297,34 @@ mod tests {
     #[test]
     fn init_satisfies_kkt_identity() {
         // n=1, m=3.
-        let m1 = QuadraticModel::initialize(vec![0.5], 0.1, 3, |x: &[f64]| {
-            1.0 + 0.3 * x[0] + 0.5 * x[0] * x[0]
-        });
+        let m1 =
+            QuadraticModel::initialize(vec![0.5], 0.1, 3, |x: &[f64]| {
+                1.0 + 0.3 * x[0] + 0.5 * x[0] * x[0]
+            });
         assert_h_matches_inverse(&m1, 1e-10);
 
         // n=2, m=5.
-        let m2 = QuadraticModel::initialize(vec![0.25, -0.5], 0.2, 5, |x: &[f64]| {
-            x[0] * x[0] + 2.0 * x[1] * x[1] + x[0] - x[1]
-        });
+        let m2 = QuadraticModel::initialize(
+            vec![0.25, -0.5],
+            0.2,
+            5,
+            |x: &[f64]| x[0] * x[0] + 2.0 * x[1] * x[1] + x[0] - x[1],
+        );
         assert_h_matches_inverse(&m2, 1e-10);
 
         // n=2, m=6 (one off-diagonal pair).
-        let m3 = QuadraticModel::initialize(vec![0.0, 0.0], 0.3, 6, |x: &[f64]| {
-            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 1.5 * x[1] * x[1] + x[0] + 2.0 * x[1]
-        });
+        let m3 = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.3,
+            6,
+            |x: &[f64]| {
+                2.0 * x[0] * x[0]
+                    + 1.5 * x[0] * x[1]
+                    + 1.5 * x[1] * x[1]
+                    + x[0]
+                    + 2.0 * x[1]
+            },
+        );
         assert_h_matches_inverse(&m3, 1e-10);
     }
 
@@ -302,14 +333,17 @@ mod tests {
     #[test]
     fn init_interpolates_at_all_points() {
         let f = |x: &[f64]| {
-            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0] - 2.0 * x[1] + 0.7
+            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0]
+                - 2.0 * x[1]
+                + 0.7
         };
         let x0v = vec![0.4, -0.3];
         let model = QuadraticModel::initialize(x0v.clone(), 0.25, 6, f);
         let f0 = f(x0v.as_slice());
         for j in 0..model.m() {
             let disp = model.xpt_row(j).to_vec();
-            let xj: Vec<f64> = x0v.iter().zip(&disp).map(|(a, b)| a + b).collect();
+            let xj: Vec<f64> =
+                x0v.iter().zip(&disp).map(|(a, b)| a + b).collect();
             let expected = f(xj.as_slice()) - f0;
             assert!(
                 (model.eval_change(&disp) - expected).abs() < 1e-10,

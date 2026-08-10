@@ -26,11 +26,14 @@ pub(crate) fn isbetter<F: Scalar>(f1: F, c1: F, f2: F, c2: F, ctol: F) -> bool {
     let ten = F::from_f64(10.0).unwrap();
     let constrmax = funcmax::<F>();
     let mut better = false;
-    better = better || ((f1.is_nan() || c1.is_nan()) && !(f2.is_nan() || c2.is_nan()));
+    better = better
+        || ((f1.is_nan() || c1.is_nan()) && !(f2.is_nan() || c2.is_nan()));
     better = better || (f1 < f2 && c1 <= c2);
     better = better || (f1 <= f2 && c1 < c2);
-    let cref = ten * eps.max(ctol.min(F::from_f64(1.0e-2).unwrap() * constrmax));
-    better = better || (f1 < realmax && c1 <= ctol && (c2 > ctol.max(cref) || c2.is_nan()));
+    let cref =
+        ten * eps.max(ctol.min(F::from_f64(1.0e-2).unwrap() * constrmax));
+    better = better
+        || (f1 < realmax && c1 <= ctol && (c2 > ctol.max(cref) || c2.is_nan()));
     better
 }
 
@@ -132,7 +135,12 @@ pub(crate) fn savefilt<F: Scalar>(
 
 /// Select the index of the point to return from the filter, by the merit
 /// function `φ = f + cweight · max(cstrv − ctol, 0)`. PRIMA `selectx`.
-pub(crate) fn selectx<F: Scalar>(ffilt: &[F], cfilt: &[F], cweight: F, ctol: F) -> usize {
+pub(crate) fn selectx<F: Scalar>(
+    ffilt: &[F],
+    cfilt: &[F],
+    cweight: F,
+    ctol: F,
+) -> usize {
     let nhist = ffilt.len();
     let zero = F::zero();
     let eps = F::epsilon();
@@ -142,7 +150,9 @@ pub(crate) fn selectx<F: Scalar>(ffilt: &[F], cfilt: &[F], cweight: F, ctol: F) 
     let constrmax = funcmax;
 
     // Reference bounds (tiering against the large sentinels).
-    let (mut fref, mut cref) = if (0..nhist).any(|k| ffilt[k] < funcmax && cfilt[k] < constrmax) {
+    let (mut fref, mut cref) = if (0..nhist)
+        .any(|k| ffilt[k] < funcmax && cfilt[k] < constrmax)
+    {
         (funcmax, constrmax)
     } else if (0..nhist).any(|k| ffilt[k] < realmax && cfilt[k] < constrmax) {
         (realmax, constrmax)
@@ -156,7 +166,8 @@ pub(crate) fn selectx<F: Scalar>(ffilt: &[F], cfilt: &[F], cweight: F, ctol: F) 
         return nhist - 1;
     }
 
-    let cshift: Vec<F> = (0..nhist).map(|k| (cfilt[k] - ctol).max(zero)).collect();
+    let cshift: Vec<F> =
+        (0..nhist).map(|k| (cfilt[k] - ctol).max(zero)).collect();
     let cmin = (0..nhist)
         .filter(|&k| ffilt[k] < fref)
         .map(|k| cshift[k])

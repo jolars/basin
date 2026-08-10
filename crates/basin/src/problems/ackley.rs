@@ -15,7 +15,9 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 use crate::{BoxConstraints, CostFunction};
 
 /// First Ackley constant (overall amplitude of the funnel).
@@ -39,7 +41,9 @@ pub fn ackley(x: &[f64]) -> f64 {
         sum_sq += v * v;
         sum_cos += (c * v).cos();
     }
-    -A * (-B * (sum_sq / n).sqrt()).exp() - (sum_cos / n).exp() + A + core::f64::consts::E
+    -A * (-B * (sum_sq / n).sqrt()).exp() - (sum_cos / n).exp()
+        + A
+        + core::f64::consts::E
 }
 
 /// Pre-wrapped Ackley problem. Cost-only (non-differentiable at the origin), so
@@ -126,7 +130,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(ackley(x.as_slice()))
         }
     }
@@ -142,7 +149,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(ackley(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -258,7 +268,10 @@ mod nalgebra_boxed_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(ackley(x.as_slice()))
         }
     }
@@ -294,7 +307,10 @@ mod ndarray_boxed_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(ackley(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -409,7 +425,9 @@ mod tests {
         let unboxed: Ackley<Vec<f64>> = Ackley::default();
         let boxed = AckleyBoxed::<Vec<f64>>::with_standard_bounds(3);
         let x = vec![0.3, -0.7, 1.2];
-        assert!((unboxed.cost(&x).unwrap() - boxed.cost(&x).unwrap()).abs() < 1e-12);
+        assert!(
+            (unboxed.cost(&x).unwrap() - boxed.cost(&x).unwrap()).abs() < 1e-12
+        );
     }
 
     #[test]

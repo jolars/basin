@@ -37,7 +37,8 @@
 use std::collections::VecDeque;
 
 use crate::core::math::{
-    ComponentMulAssign, MatrixFromDiagonal, MatrixIdentity, Scalar, ScaleInPlace, VectorLen,
+    ComponentMulAssign, MatrixFromDiagonal, MatrixIdentity, Scalar,
+    ScaleInPlace, VectorLen,
 };
 use crate::core::problem::EvalCounts;
 use crate::core::state::{CountsMirror, PopulationState, State};
@@ -116,7 +117,10 @@ pub(crate) struct BoundPenalty<V, F = f64> {
 
 impl<V, M, F> CmaEsState<V, M, F>
 where
-    V: VectorLen + Clone + ScaleInPlace<F> + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + Clone
+        + ScaleInPlace<F>
+        + std::ops::IndexMut<usize, Output = F>,
     M: MatrixIdentity,
     F: Scalar,
 {
@@ -173,7 +177,10 @@ where
 
 impl<V, M, F> CmaEsState<V, M, F>
 where
-    V: VectorLen + Clone + ComponentMulAssign + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + Clone
+        + ComponentMulAssign
+        + std::ops::IndexMut<usize, Output = F>,
     M: MatrixFromDiagonal<V>,
     F: Scalar,
 {
@@ -280,14 +287,15 @@ impl<V: Clone, M, F: Scalar> State for CmaEsState<V, M, F> {
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
     /// are safe.
     fn cost(&self) -> F {
-        self.m_cost
-            .expect("CmaEsState::cost read before Solver::init evaluated the mean")
+        self.m_cost.expect(
+            "CmaEsState::cost read before Solver::init evaluated the mean",
+        )
     }
 
     fn best_param(&self) -> &V {
-        self.best_param
-            .as_ref()
-            .expect("CmaEsState::best_param read before Solver::init populated it")
+        self.best_param.as_ref().expect(
+            "CmaEsState::best_param read before Solver::init populated it",
+        )
     }
 
     fn best_cost(&self) -> F {

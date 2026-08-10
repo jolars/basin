@@ -5,11 +5,15 @@ use rand_distr::uniform::SampleUniform;
 use crate::core::constraint::BoxConstraints;
 use crate::core::executor::OptimizationResult;
 use crate::core::inner::{InitialState, InnerExecutor};
-use crate::core::math::{SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen};
+use crate::core::math::{
+    SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicPopulationState, CountsMirror, State};
-use crate::core::termination::{MaxCostEvals, TerminationCriterion, TerminationReason};
+use crate::core::termination::{
+    MaxCostEvals, TerminationCriterion, TerminationReason,
+};
 use crate::solver::cma_es::sort_population_ascending;
 use crate::solver::cma_inject::MemeticInner;
 use crate::solver::de::De;
@@ -274,7 +278,8 @@ impl<P, I, V, F> Solver<P, BasicPopulationState<V, F>> for DeInject<I, V, F>
 where
     F: Scalar + SampleUniform,
     P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
-    I: MemeticInner<V, F> + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
+    I: MemeticInner<V, F>
+        + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone
@@ -301,7 +306,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: BasicPopulationState<V, F>,
-    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<
+        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         // 1. Vanilla DE generation: mutation, repair, crossover,
         //    selection, ascending sort.
         let (mut state, reason) = self.de.next_iter(problem, state)?;
@@ -331,7 +339,8 @@ where
             //    LM and L-BFGS-B ignore it.
             let x_seed = state.candidates[i].clone();
             let c_orig = state.costs[i];
-            let inner_state = self.inner.solver().seed_scaled(&x_seed, F::one());
+            let inner_state =
+                self.inner.solver().seed_scaled(&x_seed, F::one());
 
             // 4. Drive the inner. Same-problem composition: inner shares
             //    the outer wrapper, so its evals flow into the outer's
@@ -381,8 +390,13 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, state: &BasicPopulationState<V, F>) -> Option<TerminationReason> {
-        <De<F> as Solver<P, BasicPopulationState<V, F>>>::terminate(&self.de, state)
+    fn terminate(
+        &self,
+        state: &BasicPopulationState<V, F>,
+    ) -> Option<TerminationReason> {
+        <De<F> as Solver<P, BasicPopulationState<V, F>>>::terminate(
+            &self.de, state,
+        )
     }
 }
 
@@ -394,20 +408,22 @@ mod tests {
     #[test]
     #[should_panic(expected = "DeInject requires k >= 1")]
     fn with_k_zero_panics() {
-        let _ = DeInject::<NelderMead<crate::solver::nelder_mead::Unbounded, f64>, Vec<f64>, f64>::with_inner_solver(
-            De::new(0),
-            NelderMead::new(),
-        )
+        let _ = DeInject::<
+            NelderMead<crate::solver::nelder_mead::Unbounded, f64>,
+            Vec<f64>,
+            f64,
+        >::with_inner_solver(De::new(0), NelderMead::new())
         .with_k(0);
     }
 
     #[test]
     #[should_panic(expected = "DeInject requires refine_every >= 1")]
     fn with_refine_every_zero_panics() {
-        let _ = DeInject::<NelderMead<crate::solver::nelder_mead::Unbounded, f64>, Vec<f64>, f64>::with_inner_solver(
-            De::new(0),
-            NelderMead::new(),
-        )
+        let _ = DeInject::<
+            NelderMead<crate::solver::nelder_mead::Unbounded, f64>,
+            Vec<f64>,
+            f64,
+        >::with_inner_solver(De::new(0), NelderMead::new())
         .with_refine_every(0);
     }
 }

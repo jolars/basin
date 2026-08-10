@@ -24,7 +24,9 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 use crate::{CostFunction, DenseMatrix, Jacobian, Residual};
 
 /// Catalog entry for Powell's singular function.
@@ -165,7 +167,10 @@ impl Residual for PowellSingular<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
     type Error = std::convert::Infallible;
-    fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn residual(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; 4];
         powell_singular_residuals(x, &mut out);
         Ok(out)
@@ -174,7 +179,10 @@ impl Residual for PowellSingular<Vec<f64>> {
 
 impl Jacobian for PowellSingular<Vec<f64>> {
     type Jacobian = DenseMatrix<f64>;
-    fn jacobian(&self, x: &Vec<f64>) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
+    fn jacobian(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<DenseMatrix<f64>, std::convert::Infallible> {
         let mut buf = [0.0_f64; 16];
         powell_singular_jacobian(x, &mut buf);
         // `from_row_slice` interprets `buf` in row-major order, matching
@@ -186,7 +194,8 @@ impl Jacobian for PowellSingular<Vec<f64>> {
 #[cfg(feature = "nalgebra")]
 mod nalgebra_impl {
     use super::{
-        PowellSingular, powell_singular, powell_singular_jacobian, powell_singular_residuals,
+        PowellSingular, powell_singular, powell_singular_jacobian,
+        powell_singular_residuals,
     };
     use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
@@ -195,7 +204,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(powell_singular(x.as_slice()))
         }
     }
@@ -204,7 +216,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = DVector<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             let mut out = DVector::zeros(4);
             powell_singular_residuals(x.as_slice(), out.as_mut_slice());
             Ok(out)
@@ -213,7 +228,10 @@ mod nalgebra_impl {
 
     impl Jacobian for PowellSingular<DVector<f64>> {
         type Jacobian = DMatrix<f64>;
-        fn jacobian(&self, x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DMatrix<f64>, std::convert::Infallible> {
             let mut buf = [0.0_f64; 16];
             powell_singular_jacobian(x.as_slice(), &mut buf);
             // `from_row_slice` interprets `buf` in row-major order, matching
@@ -226,7 +244,8 @@ mod nalgebra_impl {
 #[cfg(feature = "ndarray")]
 mod ndarray_impl {
     use super::{
-        PowellSingular, powell_singular, powell_singular_jacobian, powell_singular_residuals,
+        PowellSingular, powell_singular, powell_singular_jacobian,
+        powell_singular_residuals,
     };
     use crate::{CostFunction, Jacobian, Residual};
     use ndarray::{Array1, Array2};
@@ -236,7 +255,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(powell_singular(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -245,7 +267,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = Array1<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Array1<f64>) -> Result<Array1<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array1<f64>, std::convert::Infallible> {
             let mut out = Array1::zeros(4);
             powell_singular_residuals(
                 x.as_slice().expect("Array1 is contiguous"),
@@ -257,12 +282,19 @@ mod ndarray_impl {
 
     impl Jacobian for PowellSingular<Array1<f64>> {
         type Jacobian = Array2<f64>;
-        fn jacobian(&self, x: &Array1<f64>) -> Result<Array2<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<Array2<f64>, std::convert::Infallible> {
             let mut buf = [0.0_f64; 16];
-            powell_singular_jacobian(x.as_slice().expect("Array1 is contiguous"), &mut buf);
+            powell_singular_jacobian(
+                x.as_slice().expect("Array1 is contiguous"),
+                &mut buf,
+            );
             // `buf` is row-major (4×4); the default C-order `from_shape_vec`
             // matches the nalgebra `from_row_slice` mirror above.
-            Ok(Array2::from_shape_vec((4, 4), buf.to_vec()).expect("16 entries for a 4×4"))
+            Ok(Array2::from_shape_vec((4, 4), buf.to_vec())
+                .expect("16 entries for a 4×4"))
         }
     }
 }
@@ -295,7 +327,10 @@ mod faer_impl {
         type Param = Col<f64>;
         type Output = Col<f64>;
         type Error = std::convert::Infallible;
-        fn residual(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+        fn residual(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Col<f64>, std::convert::Infallible> {
             let mut out = Col::<f64>::zeros(4);
             out[0] = x[0] + 10.0 * x[1];
             out[1] = SQRT_5 * (x[2] - x[3]);
@@ -309,7 +344,10 @@ mod faer_impl {
 
     impl Jacobian for PowellSingular<Col<f64>> {
         type Jacobian = Mat<f64>;
-        fn jacobian(&self, x: &Col<f64>) -> Result<Mat<f64>, std::convert::Infallible> {
+        fn jacobian(
+            &self,
+            x: &Col<f64>,
+        ) -> Result<Mat<f64>, std::convert::Infallible> {
             // Route through the row-major raw fn for a single source of
             // truth. The Col → slice copy is 4 entries.
             let xs = [x[0], x[1], x[2], x[3]];
@@ -408,7 +446,11 @@ mod tests {
         powell_singular_jacobian(&[0.0; 4], &mut j);
         for k in 0..4 {
             assert_eq!(j[8 + k], 0.0, "row 2 col {k} should be zero at origin");
-            assert_eq!(j[12 + k], 0.0, "row 3 col {k} should be zero at origin");
+            assert_eq!(
+                j[12 + k],
+                0.0,
+                "row 3 col {k} should be zero at origin"
+            );
         }
     }
 

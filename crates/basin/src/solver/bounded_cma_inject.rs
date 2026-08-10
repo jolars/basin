@@ -2,9 +2,10 @@ use crate::core::constraint::BoxConstraints;
 use crate::core::executor::OptimizationResult;
 use crate::core::inner::{InitialState, InnerExecutor};
 use crate::core::math::{
-    ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, NormSquared, RankOneUpdate, SampleStandardNormal, Scalar, ScaleInPlace,
-    ScaledAdd, SymmetricEigen, VectorLen,
+    ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, NormSquared, RankOneUpdate,
+    SampleStandardNormal, Scalar, ScaleInPlace, ScaledAdd, SymmetricEigen,
+    VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -154,11 +155,13 @@ where
     }
 }
 
-impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>> for BoundedCmaInject<I, V, M, F>
+impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>>
+    for BoundedCmaInject<I, V, M, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
-    I: MemeticInner<V, F> + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
+    I: MemeticInner<V, F>
+        + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone
@@ -195,7 +198,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: CmaEsState<V, M, F>,
-    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error>
+    {
         // 1. Standard BoundedCmaEs iteration first.
         let (mut state, reason) = self.cma.next_iter(problem, state)?;
         if let Some(r) = reason {
@@ -212,7 +216,8 @@ where
 
         for i in 0..refine {
             // 2. Seed inner state via the trait.
-            let inner_state = self.inner.solver().seed_scaled(&state.candidates[i], sigma);
+            let inner_state =
+                self.inner.solver().seed_scaled(&state.candidates[i], sigma);
 
             // 3. Drive the inner solver. Same-problem composition: inner
             //    shares the outer wrapper, so its evals flow into the
@@ -270,7 +275,9 @@ where
                 .gamma
                 .clone();
             let cost_new = {
-                let (_raw, pen) = evaluate_with_penalty(problem, &x_inj, &lo, &hi, &gamma, n)?;
+                let (_raw, pen) = evaluate_with_penalty(
+                    problem, &x_inj, &lo, &hi, &gamma, n,
+                )?;
                 pen
             };
 

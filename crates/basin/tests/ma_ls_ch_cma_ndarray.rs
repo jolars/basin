@@ -11,8 +11,12 @@ use ndarray::{Array1, Array2};
 
 #[test]
 fn converges_on_sphere_d10() {
-    let problem = SphereBoxed::new(Array1::from_elem(10, -5.0), Array1::from_elem(10, 5.0));
-    let solver = MaLsChCma::<Array1<f64>, Array2<f64>>::new(7).with_pop_size(20);
+    let problem = SphereBoxed::new(
+        Array1::from_elem(10, -5.0),
+        Array1::from_elem(10, 5.0),
+    );
+    let solver =
+        MaLsChCma::<Array1<f64>, Array2<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
         .terminate_on(MaxCostEvals(20_000))
@@ -29,7 +33,8 @@ fn converges_on_sphere_d10() {
 #[test]
 fn converges_on_rastrigin_d10() {
     let problem = RastriginBoxed::<Array1<f64>>::with_standard_bounds(10);
-    let solver = MaLsChCma::<Array1<f64>, Array2<f64>>::new(42).with_pop_size(30);
+    let solver =
+        MaLsChCma::<Array1<f64>, Array2<f64>>::new(42).with_pop_size(30);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
         .terminate_on(MaxCostEvals(50_000))

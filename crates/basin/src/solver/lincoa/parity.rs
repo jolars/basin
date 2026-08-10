@@ -190,7 +190,8 @@ fn check_parity(text: &str) {
     let ineq: Vec<(Vec<f64>, f64)> = (0..fx.m_ineq)
         .map(|j| (fx.aineq[j * n..j * n + n].to_vec(), fx.bineq[j]))
         .collect();
-    let (amat, bvec) = fold_constraints::<f64>(n, &fx.x0, None, None, &[], &ineq);
+    let (amat, bvec) =
+        fold_constraints::<f64>(n, &fx.x0, None, None, &[], &ineq);
 
     // Drive basin once, recording every evaluation it makes.
     let trace = std::cell::RefCell::new(Vec::<Vec<f64>>::new());
@@ -244,7 +245,8 @@ fn check_parity(text: &str) {
     }
     for want in &expected {
         let found = initial.iter().any(|got| {
-            got.len() == want.len() && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= 1e-12)
+            got.len() == want.len()
+                && got.iter().zip(want).all(|(a, b)| (a - b).abs() <= 1e-12)
         });
         assert!(
             found,

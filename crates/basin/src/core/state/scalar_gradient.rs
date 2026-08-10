@@ -90,8 +90,9 @@ impl<F: Scalar> State for ScalarGradientState<F> {
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult) are
     /// safe.
     fn cost(&self) -> F {
-        self.cost
-            .expect("ScalarGradientState::cost read before Solver::init populated it")
+        self.cost.expect(
+            "ScalarGradientState::cost read before Solver::init populated it",
+        )
     }
 
     fn best_param(&self) -> &F {

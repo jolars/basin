@@ -8,15 +8,18 @@ use super::cl_scaling::{
     project_strictly_inside_component,
 };
 use super::linalg::{
-    AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate, GramMatrix,
-    LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, MaxDiagonal, RankOneUpdate, SymmetricEigen, SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate,
+    GramMatrix, LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec,
+    MatVec, MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, RankOneUpdate,
+    SymmetricEigen, SymmetricEigenError,
 };
-use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
+use super::sample::{
+    SampleStandardNormal, SampleUniformBox, assert_finite_box,
+};
 use super::{
-    ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
-    FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared, ScaleInPlace, ScaledAdd, VectorIndex,
-    VectorLen,
+    ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
+    Dot, FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared,
+    ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
 
 // `F: Scalar` (basin's alias) bundles `Float + FromPrimitive + Sum + Debug +
@@ -87,7 +90,11 @@ where
 }
 
 impl<F: Scalar + SampleUniform> SampleUniformBox for DVector<F> {
-    fn sample_uniform_box<G: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut G) -> Self {
+    fn sample_uniform_box<G: Rng + ?Sized>(
+        lower: &Self,
+        upper: &Self,
+        rng: &mut G,
+    ) -> Self {
         assert_eq!(
             lower.len(),
             upper.len(),
@@ -117,7 +124,10 @@ impl<F: Scalar> SampleStandardNormal for DVector<F>
 where
     StandardNormal: Distribution<F>,
 {
-    fn sample_standard_normal<G: Rng + ?Sized>(template: &Self, rng: &mut G) -> Self {
+    fn sample_standard_normal<G: Rng + ?Sized>(
+        template: &Self,
+        rng: &mut G,
+    ) -> Self {
         Self::from_fn(template.len(), |_, _| StandardNormal.sample(rng))
     }
 }
@@ -222,7 +232,9 @@ where
         );
         // `iter_mut` and `iter` both traverse in column-major order, so
         // zipping is consistent across self/lower/upper.
-        for ((x, &lo), &hi) in self.iter_mut().zip(lower.iter()).zip(upper.iter()) {
+        for ((x, &lo), &hi) in
+            self.iter_mut().zip(lower.iter()).zip(upper.iter())
+        {
             // `Float` has no `clamp`; `max(lo).min(hi)` matches the
             // `f64::clamp` result on finite, ordered bounds.
             *x = (*x).max(lo).min(hi);
@@ -343,7 +355,12 @@ where
             .sum()
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
+    fn project_strictly_inside(
+        &mut self,
+        lower: &Self,
+        upper: &Self,
+        rstep: F,
+    ) {
         let shape = self.shape();
         assert_eq!(
             shape,
@@ -355,7 +372,8 @@ where
             upper.shape(),
             "project_strictly_inside: upper shape mismatch"
         );
-        for ((x, &l), &u) in self.iter_mut().zip(lower.iter()).zip(upper.iter()) {
+        for ((x, &l), &u) in self.iter_mut().zip(lower.iter()).zip(upper.iter())
+        {
             *x = project_strictly_inside_component::<F>(*x, l, u, rstep);
         }
     }
@@ -440,7 +458,10 @@ impl<F: Scalar> MatDiagonal<DVector<F>> for DMatrix<F> {
             self.nrows(),
             self.ncols()
         );
-        DVector::from_iterator(self.nrows(), (0..self.nrows()).map(|i| self[(i, i)]))
+        DVector::from_iterator(
+            self.nrows(),
+            (0..self.nrows()).map(|i| self[(i, i)]),
+        )
     }
 }
 
@@ -484,7 +505,11 @@ impl<F: Scalar> MatrixFromDiagonal<DVector<F>> for DMatrix<F> {
 
 impl<F: Scalar> DenseMatrixFromFn<F> for DVector<F> {
     type Matrix = DMatrix<F>;
-    fn dense_from_fn<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, f: G) -> DMatrix<F> {
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+    ) -> DMatrix<F> {
         DMatrix::from_fn(rows, cols, f)
     }
 }
@@ -531,7 +556,9 @@ where
 macro_rules! lapack_symmetric_eigen_impl {
     ($scalar:ty) => {
         impl SymmetricEigen<DVector<$scalar>> for DMatrix<$scalar> {
-            fn try_eigh(&self) -> Result<(Self, DVector<$scalar>), SymmetricEigenError> {
+            fn try_eigh(
+                &self,
+            ) -> Result<(Self, DVector<$scalar>), SymmetricEigenError> {
                 assert_eq!(
                     self.nrows(),
                     self.ncols(),
@@ -585,7 +612,12 @@ impl<F> GeneralRankOneUpdate<DVector<F>, F> for DMatrix<F>
 where
     F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
 {
-    fn general_rank_one_update(&mut self, alpha: F, u: &DVector<F>, v: &DVector<F>) {
+    fn general_rank_one_update(
+        &mut self,
+        alpha: F,
+        u: &DVector<F>,
+        v: &DVector<F>,
+    ) {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -622,7 +654,10 @@ impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::ComplexField,
 {
-    fn solve_spd(&self, b: &DVector<F>) -> Result<DVector<F>, LinearSolveError> {
+    fn solve_spd(
+        &self,
+        b: &DVector<F>,
+    ) -> Result<DVector<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -657,7 +692,10 @@ impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra_lapack::CholeskyScalar + num_traits::Zero,
 {
-    fn solve_spd(&self, b: &DVector<F>) -> Result<DVector<F>, LinearSolveError> {
+    fn solve_spd(
+        &self,
+        b: &DVector<F>,
+    ) -> Result<DVector<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -754,8 +792,14 @@ mod tests {
 
     #[test]
     fn add_diagonal_vector_in_place_adds_per_index() {
-        let mut a = DMatrix::from_row_slice(3, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
-        a.add_diagonal_vector_in_place(&DVector::from_vec(vec![10.0, 100.0, 1000.0]));
+        let mut a = DMatrix::from_row_slice(
+            3,
+            3,
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        );
+        a.add_diagonal_vector_in_place(&DVector::from_vec(vec![
+            10.0, 100.0, 1000.0,
+        ]));
         // Diagonal: 11, 105, 1009; off-diagonal untouched.
         assert!(approx_eq(a[(0, 0)], 11.0, 1e-12));
         assert!(approx_eq(a[(1, 1)], 105.0, 1e-12));
@@ -819,7 +863,11 @@ mod tests {
         let recomposed = &b * &lambda_diag * b.transpose();
         for r in 0..2 {
             for c_idx in 0..2 {
-                assert!(approx_eq(recomposed[(r, c_idx)], c[(r, c_idx)], 1e-10));
+                assert!(approx_eq(
+                    recomposed[(r, c_idx)],
+                    c[(r, c_idx)],
+                    1e-10
+                ));
             }
         }
     }

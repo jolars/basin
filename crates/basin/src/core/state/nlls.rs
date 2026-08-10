@@ -123,9 +123,9 @@ impl<P: Clone, F: Scalar> State for NllsState<P, F> {
     }
 
     fn best_param(&self) -> &P {
-        self.best_param
-            .as_ref()
-            .expect("NllsState::best_param read before Solver::init populated it")
+        self.best_param.as_ref().expect(
+            "NllsState::best_param read before Solver::init populated it",
+        )
     }
 
     fn best_cost(&self) -> F {
@@ -170,7 +170,8 @@ where
         // tracked separately.
         self.cost_evals = delta.cost_evals + delta.residual_evals;
         self.residual_evals = delta.residual_evals;
-        self.jacobian_evals =
-            delta.jacobian_evals + delta.hessian_evals + delta.hessian_product_evals;
+        self.jacobian_evals = delta.jacobian_evals
+            + delta.hessian_evals
+            + delta.hessian_product_evals;
     }
 }

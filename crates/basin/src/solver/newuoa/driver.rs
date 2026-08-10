@@ -241,7 +241,8 @@ impl<F: Scalar> NewuoaWork<F> {
                 if self.rho <= self.rho_end {
                     // Box 13: evaluate the final short step; it is often a good
                     // move in variable space.
-                    let (xabs, f_new) = eval_step(&self.model, &xopt_disp, &d, eval)?;
+                    let (xabs, f_new) =
+                        eval_step(&self.model, &xopt_disp, &d, eval)?;
                     evaluated.push((xabs, f_new));
                     return Ok(StepOutcome {
                         transition: Transition::Converged,
@@ -290,7 +291,8 @@ impl<F: Scalar> NewuoaWork<F> {
 
         // Box 4: evaluate F at x⁺ = x_opt + d.
         let xnew_disp: Vec<F> = (0..n).map(|i| xopt_disp[i] + d[i]).collect();
-        let xabs: Vec<F> = (0..n).map(|i| self.model.x0()[i] + xnew_disp[i]).collect();
+        let xabs: Vec<F> =
+            (0..n).map(|i| self.model.x0()[i] + xnew_disp[i]).collect();
         let f_new = eval(&xabs)?;
         evaluated.push((xabs, f_new));
 
@@ -300,18 +302,21 @@ impl<F: Scalar> NewuoaWork<F> {
         } else {
             F::zero()
         };
-        self.delta = revise_delta(self.delta, dnorm, ratio, self.rho, half, c01, c07, c15, two);
+        self.delta = revise_delta(
+            self.delta, dnorm, ratio, self.rho, half, c01, c07, c15, two,
+        );
 
         // §7 origin shift (eq. 7.10): if x_opt has drifted far from x0, re-center
         // before the update so the §4 algebra stays accurate. The shift moves x0
         // onto x_opt, so x_opt's displacement becomes 0 and x⁺ = x_opt + d has
         // displacement d (the absolute point is unchanged, so f_new / pred still
         // apply).
-        let (xnew_disp, xopt_disp) = if maybe_shift_origin(&mut self.model, dnorm) {
-            (d.clone(), vec![F::zero(); n])
-        } else {
-            (xnew_disp, xopt_disp)
-        };
+        let (xnew_disp, xopt_disp) =
+            if maybe_shift_origin(&mut self.model, dnorm) {
+                (d.clone(), vec![F::zero(); n])
+            } else {
+                (xnew_disp, xopt_disp)
+            };
 
         // Record the model error |F(x⁺) − Q(x⁺)| = |f_new − f_opt + pred|
         // (eq. 7.7), then Box 5: σ-weighted MOVE update (eqs. 7.2–7.5).
@@ -569,7 +574,10 @@ fn do_geometry<F: Scalar, E>(
 /// step is small relative to the drift `‖x_opt − x0‖`, keeping the `H` algebra
 /// accurate. Returns whether the model was shifted (in which case `x_opt` now
 /// sits at `x0`, so its displacement is the zero vector).
-fn maybe_shift_origin<F: Scalar>(model: &mut QuadraticModel<F>, dnorm: F) -> bool {
+fn maybe_shift_origin<F: Scalar>(
+    model: &mut QuadraticModel<F>,
+    dnorm: F,
+) -> bool {
     let c1em3 = F::from_f64(1e-3).expect("1e-3 representable");
     let xopt = model.xpt_row(model.kopt());
     let xopt_sq: F = xopt.iter().map(|x| *x * *x).sum();
@@ -605,7 +613,11 @@ fn apply_move_update<F: Scalar>(
 
     // t* = argmax_t w_t |σ_t| over T (eq. 7.4). T excludes kopt when the step
     // does not strictly improve, to keep the best point (eq. 7.2 preamble).
-    let mut chosen: Option<(usize, crate::solver::powell::update::UpdateScalars<F>, F)> = None;
+    let mut chosen: Option<(
+        usize,
+        crate::solver::powell::update::UpdateScalars<F>,
+        F,
+    )> = None;
     for t in 0..m {
         if f_new >= f_opt && t == kopt {
             continue;
@@ -745,7 +757,9 @@ mod tests {
     /// before geometry landed.
     #[test]
     fn rosenbrock_2d() {
-        let f = |x: &[f64]| (1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0] * x[0]).powi(2);
+        let f = |x: &[f64]| {
+            (1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0] * x[0]).powi(2)
+        };
         let out = minimize(vec![-1.2, 1.0], &cfg(2, 0.5, 1e-8), f);
         assert!(out.f < 1e-7, "f = {}, x = {:?}", out.f, out.x);
     }
@@ -762,7 +776,10 @@ mod tests {
         let n = 6;
         let f = |x: &[f64]| {
             (0..x.len() - 1)
-                .map(|i| (1.0 - x[i]).powi(2) + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2))
+                .map(|i| {
+                    (1.0 - x[i]).powi(2)
+                        + 100.0 * (x[i + 1] - x[i] * x[i]).powi(2)
+                })
                 .sum::<f64>()
         };
         let out = minimize(vec![-1.0; n], &cfg(n, 0.5, 1e-7), f);
@@ -786,11 +803,13 @@ mod tests {
 
         let n = 8;
         let f = |x: &[f64]| {
-            let s: f64 = (0..x.len()).map(|l| (l as f64 + 1.0) * (x[l] - 1.0)).sum();
+            let s: f64 =
+                (0..x.len()).map(|l| (l as f64 + 1.0) * (x[l] - 1.0)).sum();
             let sq: f64 = (0..x.len()).map(|l| (x[l] - 1.0).powi(2)).sum();
             sq + s * s + s.powi(4)
         };
-        let x_start: Vec<f64> = (0..n).map(|l| 1.0 - (l as f64 + 1.0) / n as f64).collect();
+        let x_start: Vec<f64> =
+            (0..n).map(|l| 1.0 - (l as f64 + 1.0) / n as f64).collect();
 
         let adopt0 = QINT_ADOPTIONS.load(Ordering::Relaxed);
         let out = minimize(
@@ -814,7 +833,9 @@ mod tests {
     /// The budget stop fires when `max_fun` is too small to converge.
     #[test]
     fn respects_max_fun() {
-        let f = |x: &[f64]| (1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0] * x[0]).powi(2);
+        let f = |x: &[f64]| {
+            (1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0] * x[0]).powi(2)
+        };
         let out = minimize(
             vec![-1.2, 1.0],
             &NewuoaConfig {

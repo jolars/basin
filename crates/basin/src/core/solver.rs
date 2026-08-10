@@ -85,7 +85,11 @@ pub trait Solver<P, S: State> {
     /// - **Implementor may:** return `Err` to abort the run before the
     ///   first iteration; the error bubbles out of
     ///   [`Executor::run`](crate::core::executor::Executor::run).
-    fn init(&mut self, _problem: &mut Problem<P>, state: S) -> Result<S, Self::Error> {
+    fn init(
+        &mut self,
+        _problem: &mut Problem<P>,
+        state: S,
+    ) -> Result<S, Self::Error> {
         Ok(state)
     }
 

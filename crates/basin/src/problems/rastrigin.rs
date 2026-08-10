@@ -24,7 +24,9 @@
 
 use core::marker::PhantomData;
 
-use super::spec::{Dimensionality, HasSpec, ProblemSpec, Properties, Reference};
+use super::spec::{
+    Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
+};
 use crate::{BoxConstraints, CostFunction};
 
 /// Rastrigin amplitude constant. Fixed at 10 by Mühlenbein et al.
@@ -137,7 +139,10 @@ mod nalgebra_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(rastrigin(x.as_slice()))
         }
     }
@@ -153,7 +158,10 @@ mod ndarray_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(rastrigin(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -271,7 +279,10 @@ mod nalgebra_boxed_impl {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(rastrigin(x.as_slice()))
         }
     }
@@ -307,7 +318,10 @@ mod ndarray_boxed_impl {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &Array1<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &Array1<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(rastrigin(x.as_slice().expect("Array1 is contiguous")))
         }
     }
@@ -448,7 +462,9 @@ mod tests {
         let unboxed: Rastrigin<Vec<f64>> = Rastrigin::default();
         let boxed = RastriginBoxed::<Vec<f64>>::with_standard_bounds(3);
         let x = vec![0.3, -0.7, 1.2];
-        assert!((unboxed.cost(&x).unwrap() - boxed.cost(&x).unwrap()).abs() < 1e-12);
+        assert!(
+            (unboxed.cost(&x).unwrap() - boxed.cost(&x).unwrap()).abs() < 1e-12
+        );
     }
 
     #[test]

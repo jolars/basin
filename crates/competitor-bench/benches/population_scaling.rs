@@ -40,8 +40,8 @@ use std::hint::black_box;
 use std::sync::Once;
 
 use basin::{
-    BasicPopulationState, BoxConstraints, CmaEs, CmaEsState, CostFunction, De, DenseMatrix,
-    Executor, RandomSearch,
+    BasicPopulationState, BoxConstraints, CmaEs, CmaEsState, CostFunction, De,
+    DenseMatrix, Executor, RandomSearch,
 };
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -118,8 +118,12 @@ fn bench_cma_es(c: &mut Criterion) {
                     black_box(
                         Executor::new(
                             ExpensiveSphere::new(dim),
-                            CmaEs::<Vec<f64>, DenseMatrix>::new(7).with_lambda(lambda),
-                            CmaEsState::<Vec<f64>, DenseMatrix>::new(vec![1.0; dim], 0.5),
+                            CmaEs::<Vec<f64>, DenseMatrix>::new(7)
+                                .with_lambda(lambda),
+                            CmaEsState::<Vec<f64>, DenseMatrix>::new(
+                                vec![1.0; dim],
+                                0.5,
+                            ),
                         )
                         .max_iter(GENERATIONS)
                         .run(),
@@ -135,19 +139,22 @@ fn bench_de(c: &mut Criterion) {
     announce_threads();
     let mut g = c.benchmark_group("de_expensive_sphere");
     for &(dim, np) in &[(10usize, 128usize), (20, 256)] {
-        g.bench_function(BenchmarkId::from_parameter(format!("d{dim}_np{np}")), |b| {
-            b.iter(|| {
-                black_box(
-                    Executor::new(
-                        ExpensiveSphere::new(dim),
-                        De::<f64>::new(99).with_pop_size(np),
-                        BasicPopulationState::<Vec<f64>>::with_size(np),
+        g.bench_function(
+            BenchmarkId::from_parameter(format!("d{dim}_np{np}")),
+            |b| {
+                b.iter(|| {
+                    black_box(
+                        Executor::new(
+                            ExpensiveSphere::new(dim),
+                            De::<f64>::new(99).with_pop_size(np),
+                            BasicPopulationState::<Vec<f64>>::with_size(np),
+                        )
+                        .max_iter(GENERATIONS)
+                        .run(),
                     )
-                    .max_iter(GENERATIONS)
-                    .run(),
-                )
-            })
-        });
+                })
+            },
+        );
     }
     g.finish();
 }

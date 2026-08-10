@@ -9,8 +9,8 @@
 
 use basin::problems::RastriginBoxed;
 use basin::{
-    BasicPopulationState, BasicState, ClosureInner, De, DeInject, Executor, Problem, Solver, State,
-    TerminationReason,
+    BasicPopulationState, BasicState, ClosureInner, De, DeInject, Executor,
+    Problem, Solver, State, TerminationReason,
 };
 use nalgebra::DVector;
 
@@ -35,9 +35,10 @@ fn bubbles_inner_failure() {
     let problem = RastriginBoxed::<DVector<f64>>::with_standard_bounds(3);
 
     let de = De::new(5).with_pop_size(8);
-    let inner = ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
-        BasicState::new(x.clone())
-    });
+    let inner =
+        ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
+            BasicState::new(x.clone())
+        });
     let solver = DeInject::with_inner_solver(de, inner);
 
     let result = Executor::new(

@@ -1,7 +1,9 @@
 use rand_distr::uniform::SampleUniform;
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen};
+use crate::core::math::{
+    SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
@@ -217,7 +219,11 @@ impl<F: Scalar> De<F> {
 ///
 /// `pub(crate)` so a future memetic or strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
-pub(crate) fn pick_three_distinct<R>(n: usize, exclude: usize, rng: &mut R) -> (usize, usize, usize)
+pub(crate) fn pick_three_distinct<R>(
+    n: usize,
+    exclude: usize,
+    rng: &mut R,
+) -> (usize, usize, usize)
 where
     R: Rng + ?Sized,
 {
@@ -267,10 +273,16 @@ where
 ///
 /// `pub(crate)` so a future memetic or strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
-pub(crate) fn repair_reinit_per_coord<V, F, R>(v: &mut V, lower: &V, upper: &V, rng: &mut R)
-where
+pub(crate) fn repair_reinit_per_coord<V, F, R>(
+    v: &mut V,
+    lower: &V,
+    upper: &V,
+    rng: &mut R,
+) where
     F: Scalar + SampleUniform,
-    V: VectorLen + std::ops::Index<usize, Output = F> + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
     R: Rng + ?Sized,
 {
     let n = v.vec_len();
@@ -287,7 +299,12 @@ where
 ///
 /// `pub(crate)` so a future memetic or strategy-variant DE can reuse the
 /// operator directly; not a stable public surface.
-pub(crate) fn binomial_crossover<V, F, R>(target: &V, donor: &V, cr: f64, rng: &mut R) -> V
+pub(crate) fn binomial_crossover<V, F, R>(
+    target: &V,
+    donor: &V,
+    cr: f64,
+    rng: &mut R,
+) -> V
 where
     F: Scalar,
     V: VectorLen
@@ -363,7 +380,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicPopulationState<V, F>,
-    ) -> Result<(BasicPopulationState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<
+        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -386,7 +406,8 @@ where
                 self.f,
             );
             repair_reinit_per_coord(&mut donor, &lo, &hi, rng);
-            let trial = binomial_crossover(&state.candidates[i], &donor, self.cr, rng);
+            let trial =
+                binomial_crossover(&state.candidates[i], &donor, self.cr, rng);
             trials.push(trial);
         }
         // All trials are built from the frozen current generation, so they
@@ -398,7 +419,9 @@ where
         // over, which keeps the population moving on plateaus without
         // disturbing strict best-so-far monotonicity at index 0 (sort
         // after the sweep restores it).
-        for (i, (trial, c_trial)) in trials.into_iter().zip(trial_costs).enumerate() {
+        for (i, (trial, c_trial)) in
+            trials.into_iter().zip(trial_costs).enumerate()
+        {
             if c_trial <= state.costs[i] {
                 state.candidates[i] = trial;
                 state.costs[i] = c_trial;

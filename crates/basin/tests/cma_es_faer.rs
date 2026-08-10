@@ -2,7 +2,8 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome, TerminationReason,
+    CmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
+    TerminationReason,
 };
 use faer::{Col, Mat};
 

@@ -24,7 +24,10 @@ impl CostFunction for Prob {
     }
 }
 impl NonlinearInequalityConstraints for Prob {
-    fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn constraints(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok((self.c)(x))
     }
     fn num_constraints(&self) -> usize {

@@ -8,7 +8,9 @@
 //! barrier eval closure, which is backend-agnostic).
 
 use basin::problems::BoothBoxed;
-use basin::{Executor, Mads, MadsState, MaxCostEvals, State, TerminationReason};
+use basin::{
+    Executor, Mads, MadsState, MaxCostEvals, State, TerminationReason,
+};
 
 /// Slack bounds: the unconstrained Booth minimum `(1, 3)` lies inside `[-5, 5]²`,
 /// so the barrier never fires and MADS recovers the unconstrained optimum.

@@ -340,7 +340,11 @@ pub trait DenseMatrixFromFn<F = f64>: Sized {
     type Matrix;
 
     /// Build a `rows × cols` matrix with entry `(i, j) = f(i, j)`.
-    fn dense_from_fn<G: FnMut(usize, usize) -> F>(rows: usize, cols: usize, f: G) -> Self::Matrix;
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+    ) -> Self::Matrix;
 }
 
 /// Symmetric (self-adjoint) eigendecomposition `A = U diag(λ) Uᵀ`. The
@@ -413,7 +417,9 @@ pub enum SymmetricEigenError {
 impl core::fmt::Display for SymmetricEigenError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Failed => f.write_str("symmetric eigendecomposition failed to converge"),
+            Self::Failed => {
+                f.write_str("symmetric eigendecomposition failed to converge")
+            }
         }
     }
 }
@@ -501,7 +507,9 @@ pub enum LinearSolveError {
 impl core::fmt::Display for LinearSolveError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::NotPositiveDefinite => f.write_str("matrix is not positive definite"),
+            Self::NotPositiveDefinite => {
+                f.write_str("matrix is not positive definite")
+            }
             Self::Singular => f.write_str("matrix is singular"),
         }
     }

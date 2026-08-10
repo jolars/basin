@@ -105,7 +105,9 @@ pub mod trust_region;
 
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
-pub use basin_hopping::{AcceptanceTest, BasinHopping, Metropolis, RandomDisplacement, StepTaker};
+pub use basin_hopping::{
+    AcceptanceTest, BasinHopping, Metropolis, RandomDisplacement, StepTaker,
+};
 pub use bfgs::Bfgs;
 pub use bobyqa::Bobyqa;
 pub use bounded_cma_es::BoundedCmaEs;
@@ -134,4 +136,6 @@ pub use sgd::Sgd;
 pub use solis_wets::SolisWets;
 pub use ssga::Ssga;
 pub use trf::Trf;
-pub use trust_region::{CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion};
+pub use trust_region::{
+    CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion,
+};

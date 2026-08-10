@@ -1,9 +1,10 @@
 use basin::{
-    Backtracking, BasicSimplexState, BasicState, CostFunction, CostTolerance, Executor, Gradient,
-    GradientDescent, GradientState, GradientTolerance, MaxCostEvals, MaxGradientEvals, MaxIter,
-    MaxTime, NelderMead, NoImprovement, ParamTolerance, Problem, RelativeCostTolerance,
-    RelativeGradientTolerance, RelativeParamTolerance, Solver, State, TargetCost,
-    TerminationCriterion, TerminationReason,
+    Backtracking, BasicSimplexState, BasicState, CostFunction, CostTolerance,
+    Executor, Gradient, GradientDescent, GradientState, GradientTolerance,
+    MaxCostEvals, MaxGradientEvals, MaxIter, MaxTime, NelderMead,
+    NoImprovement, ParamTolerance, Problem, RelativeCostTolerance,
+    RelativeGradientTolerance, RelativeParamTolerance, Solver, State,
+    TargetCost, TerminationCriterion, TerminationReason,
 };
 use std::time::Duration;
 
@@ -23,7 +24,10 @@ impl CostFunction for Quadratic {
 impl Gradient for Quadratic {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok(x.clone())
     }
 }
@@ -431,20 +435,28 @@ impl Solver<Quadratic, BasicState<Vec<f64>>> for AlwaysConverged {
         &mut self,
         _problem: &mut Problem<Quadratic>,
         state: BasicState<Vec<f64>>,
-    ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error>
+    {
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicState<Vec<f64>>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &BasicState<Vec<f64>>,
+    ) -> Option<TerminationReason> {
         Some(TerminationReason::SolverConverged)
     }
 }
 
 #[test]
 fn solver_terminate_hook_is_honored() {
-    let result = Executor::new(Quadratic, AlwaysConverged, BasicState::new(vec![1.0, 2.0]))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        Quadratic,
+        AlwaysConverged,
+        BasicState::new(vec![1.0, 2.0]),
+    )
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert_eq!(result.iter(), 0);
@@ -464,7 +476,8 @@ impl Solver<Quadratic, BasicState<Vec<f64>>> for FailsOnSecondCall {
         &mut self,
         _problem: &mut Problem<Quadratic>,
         state: BasicState<Vec<f64>>,
-    ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error>
+    {
         Ok({
             self.calls += 1;
             if self.calls >= 2 {
@@ -526,7 +539,9 @@ fn cost_evals_exceeds_iter_with_backtracking() {
     // most iterations, so cost_evals > iter + 1.
     let result = Executor::new(
         Quadratic,
-        GradientDescent::with_line_search(Backtracking::new().alpha_init(8.0).rho(0.5)),
+        GradientDescent::with_line_search(
+            Backtracking::new().alpha_init(8.0).rho(0.5),
+        ),
         BasicState::new(vec![1.0, 1.0]),
     )
     .terminate_on(MaxIter(10))

@@ -7,8 +7,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, CmaEsTolerance, DenseMatrix, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    BoundedCmaEs, CmaEsState, CmaEsTolerance, DenseMatrix, Executor,
+    PopulationState, StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory on the bounded `Vec<f64>` path.

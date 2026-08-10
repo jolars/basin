@@ -1,7 +1,8 @@
 use crate::core::math::{
-    AddDiagonalVectorInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
-    FloorZerosInPlace, GramMatrix, LinearSolveSpd, MatDiagonal, MatTransposeVec, NegInPlace,
-    NormInfinity, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+    AddDiagonalVectorInPlace, ComponentDivAssign, ComponentMaxAssign,
+    ComponentMulAssign, Dot, FloorZerosInPlace, GramMatrix, LinearSolveSpd,
+    MatDiagonal, MatTransposeVec, NegInPlace, NormInfinity, NormSquared,
+    Scalar, ScaleInPlace, ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
@@ -476,14 +477,16 @@ where
         // `diag(JᵀJ)ⱼ = 0` and `gⱼ = 0`; flooring the denominator to 1
         // makes that term `0/1 = 0` rather than `0/0 = NaN`, which is
         // MINPACK's "skip zero columns" behavior.
-        let abs_converged = self.tol_grad > F::zero() && g.norm_infinity() <= self.tol_grad;
+        let abs_converged =
+            self.tol_grad > F::zero() && g.norm_infinity() <= self.tol_grad;
         let rel_converged = self.tol_grad_rel > F::zero() && {
             let mut cos_sq = g.clone();
             cos_sq.component_mul_assign(&g);
             let mut denom = diag_cur.clone();
             denom.floor_zeros_in_place(F::one());
             cos_sq.component_div_assign(&denom);
-            cos_sq.norm_infinity() <= self.tol_grad_rel * self.tol_grad_rel * r.norm_squared()
+            cos_sq.norm_infinity()
+                <= self.tol_grad_rel * self.tol_grad_rel * r.norm_squared()
         };
         if abs_converged || rel_converged {
             // Restore the caches so a subsequent `run()` (e.g. via
@@ -546,7 +549,10 @@ where
                         self.r_cache = Some(r);
                         self.gram_cache = Some(a);
                         self.jtr_cache = Some(g);
-                        return Ok((state, Some(TerminationReason::SolverFailed)));
+                        return Ok((
+                            state,
+                            Some(TerminationReason::SolverFailed),
+                        ));
                     }
                     mu = mu * nu;
                     nu = nu * two;
@@ -638,7 +644,9 @@ where
             && rho <= two;
         let step_rel_converged = self.tol_step_rel > F::zero()
             && h.norm_squared()
-                <= self.tol_step_rel * self.tol_step_rel * state.param.norm_squared();
+                <= self.tol_step_rel
+                    * self.tol_step_rel
+                    * state.param.norm_squared();
         if cost_rel_converged || step_rel_converged {
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }

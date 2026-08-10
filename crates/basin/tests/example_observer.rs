@@ -16,8 +16,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent, GradientState,
-    GradientTolerance, Observe, ObserverMode, State, TerminationReason,
+    BasicState, CostFunction, Executor, Gradient, GradientDescent,
+    GradientState, GradientTolerance, Observe, ObserverMode, State,
+    TerminationReason,
 };
 
 /// f(x) = ½ ‖x‖²: convex quadratic, min at origin, gradient = x. Cheap
@@ -38,7 +39,10 @@ impl CostFunction for Quadratic {
 impl Gradient for Quadratic {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         Ok(x.clone())
     }
 }

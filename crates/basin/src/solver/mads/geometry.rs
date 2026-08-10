@@ -29,7 +29,11 @@ pub(crate) fn mesh_and_poll_size(ell: i32) -> (f64, f64) {
 /// is a nondecreasing step function whose steps occur at the breakpoints
 /// `(2j+1)/(2|c_i|)`; `q_{t,ℓ}` is its value on the highest plateau with
 /// `‖q_t(α)‖ ≤ 2^{|ℓ|/2}` (problem (5), solved exactly via those breakpoints).
-pub(crate) fn adjusted_halton_direction(t: usize, ell: i32, n: usize) -> Vec<i64> {
+pub(crate) fn adjusted_halton_direction(
+    t: usize,
+    ell: i32,
+    n: usize,
+) -> Vec<i64> {
     let u = halton_direction(t, n);
     // Centered direction w = 2u − e and its unit vector c = w/‖w‖.
     let w: Vec<f64> = u.iter().map(|&ui| 2.0 * ui - 1.0).collect();
@@ -42,8 +46,9 @@ pub(crate) fn adjusted_halton_direction(t: usize, ell: i32, n: usize) -> Vec<i64
     let target = 2f64.powf(f64::from(ell.unsigned_abs()) / 2.0); // 2^{|ℓ|/2}
     let target_sq = target * target; // 2^{|ℓ|}, exact for the ℓ range we hit
 
-    let q_at =
-        |alpha: f64| -> Vec<i64> { c.iter().map(|ci| (alpha * ci).round() as i64).collect() };
+    let q_at = |alpha: f64| -> Vec<i64> {
+        c.iter().map(|ci| (alpha * ci).round() as i64).collect()
+    };
     let norm_sq = |q: &[i64]| -> i64 { q.iter().map(|qi| qi * qi).sum() };
 
     // Beyond α where the largest single component alone exceeds the target,
@@ -199,7 +204,11 @@ mod tests {
             assert_eq!(norm_sq(&dirs[i]), nsq, "equal column norms");
             for j in 0..4 {
                 if i != j {
-                    assert_eq!(dot(&dirs[i], &dirs[j]), 0, "columns {i},{j} orthogonal");
+                    assert_eq!(
+                        dot(&dirs[i], &dirs[j]),
+                        0,
+                        "columns {i},{j} orthogonal"
+                    );
                 }
             }
         }

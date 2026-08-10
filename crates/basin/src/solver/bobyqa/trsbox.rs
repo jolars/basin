@@ -24,7 +24,9 @@
 //! `trsbox`, with `interval_fun_trsbox` and `common/univar.f90:interval_max`).
 
 use crate::core::math::Scalar;
-use crate::solver::powell::{QuadraticModel, TrustRegionStep, TrustRegionSubproblem};
+use crate::solver::powell::{
+    QuadraticModel, TrustRegionStep, TrustRegionSubproblem,
+};
 
 /// The shifted box `sl ≤ x_opt + d ≤ su` that TRSBOX confines its step to
 /// (`sl = a − x0 ≤ 0`, `su = b − x0 ≥ 0`).
@@ -311,7 +313,11 @@ pub(crate) fn trsbox<F: Scalar>(
             gredsq = dot_free(&gnew, &gnew, &xbdi);
         } else if stplen < bstep {
             // Interior CG step: continue or stop on the §3 tolerance (eq. 3.4).
-            if itercg >= n - nact || sdec <= ctest * qred || sdec.is_nan() || qred.is_nan() {
+            if itercg >= n - nact
+                || sdec <= ctest * qred
+                || sdec.is_nan()
+                || qred.is_nan()
+            {
                 break;
             }
             beta = gredsq / ggsav;
@@ -371,7 +377,10 @@ pub(crate) fn trsbox<F: Scalar>(
 
         // S: in span{P d, P g}, orthogonal to P d, descent on g.
         let temp0 = gredsq * dredsq - dredg * dredg;
-        if temp0 <= ctest * ctest * qred * qred || temp0.is_nan() || qred.is_nan() {
+        if temp0 <= ctest * ctest * qred * qred
+            || temp0.is_nan()
+            || qred.is_nan()
+        {
             break;
         }
         let temp = temp0.sqrt();
@@ -435,7 +444,8 @@ pub(crate) fn trsbox<F: Scalar>(
         if args.iter().any(|a| a.is_nan()) {
             break;
         }
-        let gs_f = F::from_f64(17.0).unwrap() * hangt_bd + F::from_f64(4.1).unwrap();
+        let gs_f =
+            F::from_f64(17.0).unwrap() * hangt_bd + F::from_f64(4.1).unwrap();
         let grid_size = 2 * (gs_f.to_f64().unwrap().round() as usize).max(2);
         let hangt = interval_max(zero, hangt_bd, &args, grid_size);
         let sdec = interval_fun(hangt, &args);
@@ -520,14 +530,9 @@ mod tests {
         m: usize,
         f: impl Fn(&[f64]) -> f64,
     ) -> (QuadraticModel<f64>, Vec<f64>, Vec<f64>) {
-        let out = QuadraticModel::try_initialize_bounded::<core::convert::Infallible>(
-            x0,
-            lower,
-            upper,
-            rho,
-            m,
-            &mut |x| Ok(f(x)),
-        )
+        let out = QuadraticModel::try_initialize_bounded::<
+            core::convert::Infallible,
+        >(x0, lower, upper, rho, m, &mut |x| Ok(f(x)))
         .unwrap();
         (out.model, out.sl, out.su)
     }
@@ -555,7 +560,14 @@ mod tests {
     fn interior_unconstrained_equivalent() {
         // Convex quadratic with min at (1, -2), well inside a slack box.
         let f = |x: &[f64]| (x[0] - 1.0).powi(2) + 2.0 * (x[1] + 2.0).powi(2);
-        let (model, sl, su) = model_for(vec![0.0, 0.0], &[-10.0, -10.0], &[10.0, 10.0], 0.5, 5, f);
+        let (model, sl, su) = model_for(
+            vec![0.0, 0.0],
+            &[-10.0, -10.0],
+            &[10.0, 10.0],
+            0.5,
+            5,
+            f,
+        );
         let step = trsbox(&model, 100.0, &sl, &su);
 
         assert!(step.predicted_reduction > 0.0);
@@ -574,7 +586,14 @@ mod tests {
     #[test]
     fn boundary_step_resets_crvmin() {
         let f = |x: &[f64]| (x[0] - 5.0).powi(2) + (x[1] - 5.0).powi(2);
-        let (model, sl, su) = model_for(vec![0.0, 0.0], &[-10.0, -10.0], &[10.0, 10.0], 0.5, 5, f);
+        let (model, sl, su) = model_for(
+            vec![0.0, 0.0],
+            &[-10.0, -10.0],
+            &[10.0, 10.0],
+            0.5,
+            5,
+            f,
+        );
         let delta = 0.5;
         let step = trsbox(&model, delta, &sl, &su);
         assert!(
@@ -593,7 +612,8 @@ mod tests {
     fn active_bound_keeps_feasible() {
         // Min at (5, 5) but the box caps x at 2.
         let f = |x: &[f64]| (x[0] - 5.0).powi(2) + (x[1] - 5.0).powi(2);
-        let (model, sl, su) = model_for(vec![0.0, 0.0], &[-2.0, -2.0], &[2.0, 2.0], 0.5, 5, f);
+        let (model, sl, su) =
+            model_for(vec![0.0, 0.0], &[-2.0, -2.0], &[2.0, 2.0], 0.5, 5, f);
         let xopt = model.xpt_row(model.kopt()).to_vec();
         // Big Δ so only the box (not the trust region) limits the step.
         let step = trsbox(&model, 100.0, &sl, &su);
@@ -610,7 +630,8 @@ mod tests {
             );
         }
         // At least one coordinate should be driven to its upper bound.
-        let at_bound = (0..2).any(|i| (xopt[i] + step.d[i] - su[i]).abs() < 1e-7);
+        let at_bound =
+            (0..2).any(|i| (xopt[i] + step.d[i] - su[i]).abs() < 1e-7);
         assert!(at_bound, "expected a coordinate pinned to the upper bound");
     }
 }

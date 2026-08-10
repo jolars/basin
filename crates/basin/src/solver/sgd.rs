@@ -329,7 +329,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let bs = self.effective_batch;
         let n = self.perm.len();
 
@@ -444,7 +445,11 @@ mod tests {
         fn n_samples(&self) -> usize {
             self.centers.len()
         }
-        fn batch_gradient(&self, x: &Vec<f64>, batch: &[usize]) -> Result<Vec<f64>, Self::Error> {
+        fn batch_gradient(
+            &self,
+            x: &Vec<f64>,
+            batch: &[usize],
+        ) -> Result<Vec<f64>, Self::Error> {
             let d = x.len();
             let inv = 2.0 / batch.len() as f64;
             let mut g = vec![0.0; d];
@@ -482,13 +487,17 @@ mod tests {
         let problem = problem_5_centers();
         let centroid = problem.centroid();
         let sgd = Sgd::new(0.01, 2, 0xABCDEF);
-        let result = Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
-            .terminate_on(MaxIter(3_000))
-            .run()
-            .unwrap();
+        let result =
+            Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
+                .terminate_on(MaxIter(3_000))
+                .run()
+                .unwrap();
         let x = result.param();
         for (xi, ci) in x.iter().zip(centroid.iter()) {
-            assert!((xi - ci).abs() < 5e-2, "x = {x:?}, centroid = {centroid:?}",);
+            assert!(
+                (xi - ci).abs() < 5e-2,
+                "x = {x:?}, centroid = {centroid:?}",
+            );
         }
     }
 
@@ -501,10 +510,11 @@ mod tests {
         let problem = problem_5_centers();
         let centroid = problem.centroid();
         let sgd = Sgd::new(0.1, problem.n_samples(), 0);
-        let result = Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
-            .terminate_on(MaxIter(500))
-            .run()
-            .unwrap();
+        let result =
+            Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
+                .terminate_on(MaxIter(500))
+                .run()
+                .unwrap();
         let x = result.param();
         for (xi, ci) in x.iter().zip(centroid.iter()) {
             assert!((xi - ci).abs() < 1e-6, "x={x:?}, centroid={centroid:?}");
@@ -535,18 +545,23 @@ mod tests {
     fn different_seeds_diverge() {
         let run = |seed: u64| {
             let sgd = Sgd::new(0.05, 2, seed);
-            Executor::new(problem_5_centers(), sgd, BasicState::new(vec![0.5, -0.5]))
-                .terminate_on(MaxIter(20))
-                .run()
-                .unwrap()
-                .param()
-                .clone()
+            Executor::new(
+                problem_5_centers(),
+                sgd,
+                BasicState::new(vec![0.5, -0.5]),
+            )
+            .terminate_on(MaxIter(20))
+            .run()
+            .unwrap()
+            .param()
+            .clone()
         };
         let xa = run(1);
         let xb = run(2);
         // Different seeds produce different batch orderings → different
         // trajectories after a handful of steps.
-        let diff: f64 = xa.iter().zip(xb.iter()).map(|(a, b)| (a - b).abs()).sum();
+        let diff: f64 =
+            xa.iter().zip(xb.iter()).map(|(a, b)| (a - b).abs()).sum();
         assert!(diff > 1e-6, "seeds 1 and 2 produced identical trajectory");
     }
 
@@ -559,7 +574,8 @@ mod tests {
 
         let run_once = |solver: &mut Sgd<Vec<f64>>| {
             let mut p = Problem::new(problem_5_centers());
-            let mut state = solver.init(&mut p, BasicState::new(start.clone())).unwrap();
+            let mut state =
+                solver.init(&mut p, BasicState::new(start.clone())).unwrap();
             for _ in 0..15 {
                 let (next, _) = solver.next_iter(&mut p, state).unwrap();
                 state = next;
@@ -570,7 +586,10 @@ mod tests {
         let first = run_once(&mut sgd);
         let second = run_once(&mut sgd);
         for (a, b) in first.iter().zip(second.iter()) {
-            assert!((a - b).abs() < 1e-15, "first={first:?}, second={second:?}");
+            assert!(
+                (a - b).abs() < 1e-15,
+                "first={first:?}, second={second:?}"
+            );
         }
     }
 
@@ -587,7 +606,8 @@ mod tests {
         };
         let mut sgd = Sgd::new(0.01, 3, 99);
         let mut p = Problem::new(problem);
-        let mut state = sgd.init(&mut p, BasicState::new(vec![0.0, 0.0])).unwrap();
+        let mut state =
+            sgd.init(&mut p, BasicState::new(vec![0.0, 0.0])).unwrap();
         // 3 steps: enough to trigger the reshuffle at step 3 (cursor
         // would be 6, and 6 + 3 > 7).
         for _ in 0..3 {
@@ -628,7 +648,8 @@ mod tests {
         let initial_cost = problem.cost(&vec![10.0, 10.0]).unwrap();
         let mut sgd = Sgd::new(0.05, 2, 42);
         let mut p = Problem::new(problem);
-        let state = sgd.init(&mut p, BasicState::new(vec![10.0, 10.0])).unwrap();
+        let state =
+            sgd.init(&mut p, BasicState::new(vec![10.0, 10.0])).unwrap();
         assert_eq!(state.cost(), initial_cost);
         let (state, _) = sgd.next_iter(&mut p, state).unwrap();
         assert_eq!(
@@ -652,7 +673,8 @@ mod tests {
         let initial_cost = problem.cost(&vec![10.0, 10.0]).unwrap();
         let mut sgd = Sgd::new(0.05, 2, 42).with_cost_eval_every(1);
         let mut p = Problem::new(problem);
-        let state = sgd.init(&mut p, BasicState::new(vec![10.0, 10.0])).unwrap();
+        let state =
+            sgd.init(&mut p, BasicState::new(vec![10.0, 10.0])).unwrap();
         let (state, _) = sgd.next_iter(&mut p, state).unwrap();
         assert_ne!(
             state.cost(),

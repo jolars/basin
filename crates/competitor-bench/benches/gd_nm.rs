@@ -24,11 +24,13 @@ use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
 use basin::{
-    BasicSimplexState, BasicState, Executor, GradientDescent, IntoInitialSimplex, MoreThuente,
-    NelderMead,
+    BasicSimplexState, BasicState, Executor, GradientDescent,
+    IntoInitialSimplex, MoreThuente, NelderMead,
 };
 use competitor_bench::ArgminProblem;
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{
+    BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
+};
 
 const MAX_ITERS: u64 = 200;
 
@@ -51,7 +53,9 @@ fn bench_gd(c: &mut Criterion) {
                     black_box(
                         Executor::new(
                             Rosenbrock::<Vec<f64>>::default(),
-                            GradientDescent::with_line_search(MoreThuente::new()),
+                            GradientDescent::with_line_search(
+                                MoreThuente::new(),
+                            ),
                             BasicState::new(x0),
                         )
                         .max_iter(MAX_ITERS)
@@ -110,7 +114,12 @@ fn bench_nm(c: &mut Criterion) {
 
         g.bench_function(BenchmarkId::from_parameter("argmin"), |b| {
             b.iter_batched(
-                || IntoInitialSimplex::into_initial_simplex(rosenbrock_start(n), 0.05),
+                || {
+                    IntoInitialSimplex::into_initial_simplex(
+                        rosenbrock_start(n),
+                        0.05,
+                    )
+                },
                 |simplex| {
                     let nm = ArgminNelderMead::new(simplex)
                         .with_sd_tolerance(0.0)

@@ -43,7 +43,8 @@ pub(crate) fn assess_geo<F: Scalar>(
 ) -> bool {
     let vs = vsig(simi, n);
     let ve = veta(sim, n);
-    vs.iter().all(|&s| s >= factor_alpha * delta) && ve.iter().all(|&e| e <= factor_beta * delta)
+    vs.iter().all(|&s| s >= factor_alpha * delta)
+        && ve.iter().all(|&e| e <= factor_beta * delta)
 }
 
 /// Pick the vertex to drop for a geometry-improving step (eq. 15–16). Returns a

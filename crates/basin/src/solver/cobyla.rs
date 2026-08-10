@@ -231,7 +231,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: CobylaState<V, F>,
-    ) -> Result<(CobylaState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(CobylaState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let template = state.param.clone();
         let m = problem.inner().num_constraints();
         let work = self

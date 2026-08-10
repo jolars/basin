@@ -42,8 +42,12 @@ pub use steihaug::Steihaug;
 use std::marker::PhantomData;
 
 use crate::core::inner::InitialState;
-use crate::core::math::{Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd};
-use crate::core::problem::{CostFunction, Gradient, Hessian, HessianProduct, Problem};
+use crate::core::math::{
+    Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+};
+use crate::core::problem::{
+    CostFunction, Gradient, Hessian, HessianProduct, Problem,
+};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
@@ -587,7 +591,12 @@ fn tr_next_iter<P, V, F>(
     max_inner: u32,
     problem: &mut Problem<P>,
     mut state: BasicState<V, F>,
-    mut attempt: impl FnMut(&mut Problem<P>, &V, &V, F) -> Result<Step<V, F>, P::Error>,
+    mut attempt: impl FnMut(
+        &mut Problem<P>,
+        &V,
+        &V,
+        F,
+    ) -> Result<Step<V, F>, P::Error>,
 ) -> Result<(BasicState<V, F>, Option<TerminationReason>), P::Error>
 where
     F: Scalar,
@@ -667,10 +676,13 @@ where
     Ok((state, None))
 }
 
-impl<P, Sub, V, M, F> Solver<P, BasicState<V, F>> for TrustRegion<Sub, F, ExactHessian>
+impl<P, Sub, V, M, F> Solver<P, BasicState<V, F>>
+    for TrustRegion<Sub, F, ExactHessian>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V> + Hessian<Hessian = M>,
+    P: CostFunction<Param = V, Output = F>
+        + Gradient<Gradient = V>
+        + Hessian<Hessian = M>,
     V: Clone + ScaledAdd<F> + NormSquared<F>,
     Sub: Subproblem<V, M, F>,
 {
@@ -688,7 +700,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         // One Hessian per outer iteration, reused across all inner radius
         // reductions at zero extra derivative evaluations (the gradient is
         // likewise fixed while x is).
@@ -706,10 +719,13 @@ where
     }
 }
 
-impl<P, Sub, V, F> Solver<P, BasicState<V, F>> for TrustRegion<Sub, F, MatrixFree>
+impl<P, Sub, V, F> Solver<P, BasicState<V, F>>
+    for TrustRegion<Sub, F, MatrixFree>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V> + HessianProduct,
+    P: CostFunction<Param = V, Output = F>
+        + Gradient<Gradient = V>
+        + HessianProduct,
     V: Clone + ScaledAdd<F> + NormSquared<F>,
     Sub: SubproblemHvp<V, F>,
 {
@@ -727,7 +743,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         // No Hessian is formed: every product goes through the problem's
         // counted `hessian_product`. Unlike exact mode, an inner radius
         // reduction re-pays its CG products at the same iterate (the
@@ -742,7 +759,8 @@ where
             problem,
             state,
             |problem, x, g, radius| {
-                subproblem.solve_hvp(g, radius, |v| problem.hessian_product(x, v))
+                subproblem
+                    .solve_hvp(g, radius, |v| problem.hessian_product(x, v))
             },
         )
     }
@@ -919,7 +937,11 @@ mod tests {
         }
     }
     impl HessianProduct for QuadraticHvOnly {
-        fn hessian_product(&self, _x: &Vec<f64>, v: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+        fn hessian_product(
+            &self,
+            _x: &Vec<f64>,
+            v: &Vec<f64>,
+        ) -> Result<Vec<f64>, Self::Error> {
             Ok(vec![v[0], 100.0 * v[1]])
         }
     }
@@ -943,7 +965,11 @@ mod tests {
         }
     }
     impl HessianProduct for RosenbrockHvOnly {
-        fn hessian_product(&self, x: &Vec<f64>, v: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+        fn hessian_product(
+            &self,
+            x: &Vec<f64>,
+            v: &Vec<f64>,
+        ) -> Result<Vec<f64>, Self::Error> {
             let h11 = 2.0 + 1200.0 * x[0] * x[0] - 400.0 * x[1];
             let h12 = -400.0 * x[0];
             Ok(vec![h11 * v[0] + h12 * v[1], h12 * v[0] + 200.0 * v[1]])

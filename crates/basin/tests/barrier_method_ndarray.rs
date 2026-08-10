@@ -5,8 +5,8 @@
 
 use basin::problems::ConstrainedQuadratic;
 use basin::{
-    Backtracking, BarrierMethod, BasicState, Executor, GradientDescent, GradientState,
-    TerminationReason,
+    Backtracking, BarrierMethod, BasicState, Executor, GradientDescent,
+    GradientState, TerminationReason,
 };
 use ndarray::{Array1, Array2, array};
 
@@ -22,7 +22,9 @@ fn active_constraint_converges_to_projection() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(Backtracking::new())),
+        BarrierMethod::new(GradientDescent::with_line_search(
+            Backtracking::new(),
+        )),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -31,7 +33,8 @@ fn active_constraint_converges_to_projection() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
-        (result.param()[0] - 1.0).abs() < 1e-4 && (result.param()[1] - 1.0).abs() < 1e-4,
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
         "expected (1, 1), got {:?}",
         result.param()
     );
@@ -44,7 +47,9 @@ fn infeasible_start_is_reported_as_failure() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(Backtracking::new())),
+        BarrierMethod::new(GradientDescent::with_line_search(
+            Backtracking::new(),
+        )),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -61,7 +66,9 @@ fn eval_counts_are_recorded() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(Backtracking::new())),
+        BarrierMethod::new(GradientDescent::with_line_search(
+            Backtracking::new(),
+        )),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -88,7 +95,9 @@ fn two_constraints_both_active() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(Backtracking::new())),
+        BarrierMethod::new(GradientDescent::with_line_search(
+            Backtracking::new(),
+        )),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -97,7 +106,8 @@ fn two_constraints_both_active() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
-        (result.param()[0] - 0.5).abs() < 1e-4 && (result.param()[1] - 1.5).abs() < 1e-4,
+        (result.param()[0] - 0.5).abs() < 1e-4
+            && (result.param()[1] - 1.5).abs() < 1e-4,
         "expected (0.5, 1.5), got {:?}",
         result.param()
     );

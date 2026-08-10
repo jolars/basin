@@ -121,7 +121,12 @@ fn col_dot<F: Scalar>(v: &[F], amat: &[F], j: usize, n: usize) -> F {
 /// feasible, the least-violation point is forced feasible so `kopt` is defined
 /// (LINCOA assumes a feasible start, but rounding can leave every cross point a
 /// hair outside).
-fn feasible_kopt<F: Scalar>(model: &QuadraticModel<F>, amat: &[F], bvec: &[F], n: usize) -> usize {
+fn feasible_kopt<F: Scalar>(
+    model: &QuadraticModel<F>,
+    amat: &[F],
+    bvec: &[F],
+    n: usize,
+) -> usize {
     let zero = F::zero();
     let npt = model.m();
     let m = bvec.len();
@@ -212,8 +217,14 @@ mod tests {
     /// `(1/√2, 1/√2)` with `b = 2/√2`.
     #[test]
     fn single_inequality_is_normalized() {
-        let (amat, bvec) =
-            fold_constraints::<f64>(2, &[0.0, 0.0], None, None, &[], &[(vec![1.0, 1.0], 2.0)]);
+        let (amat, bvec) = fold_constraints::<f64>(
+            2,
+            &[0.0, 0.0],
+            None,
+            None,
+            &[],
+            &[(vec![1.0, 1.0], 2.0)],
+        );
         let s = 1.0 / 2.0_f64.sqrt();
         assert!((amat[0] - s).abs() < 1e-12);
         assert!((amat[1] - s).abs() < 1e-12);
@@ -252,8 +263,14 @@ mod tests {
     #[test]
     fn equality_folds_to_two_inequalities() {
         // x0 = (0.5, 0.5) satisfies x0 + x1 = 1 exactly (no relaxation).
-        let (amat, bvec) =
-            fold_constraints::<f64>(2, &[0.5, 0.5], None, None, &[(vec![1.0, 1.0], 1.0)], &[]);
+        let (amat, bvec) = fold_constraints::<f64>(
+            2,
+            &[0.5, 0.5],
+            None,
+            None,
+            &[(vec![1.0, 1.0], 1.0)],
+            &[],
+        );
         assert_eq!(bvec.len(), 2);
         let s = 1.0 / 2.0_f64.sqrt();
         // First column is -a (from -a·x <= -b), second is +a.
@@ -267,8 +284,14 @@ mod tests {
     #[test]
     fn infeasible_start_relaxes_b() {
         // x0 = (3, 3) violates x0 + x1 <= 2: A x0 = 6 > 2.
-        let (_amat, bvec) =
-            fold_constraints::<f64>(2, &[3.0, 3.0], None, None, &[], &[(vec![1.0, 1.0], 2.0)]);
+        let (_amat, bvec) = fold_constraints::<f64>(
+            2,
+            &[3.0, 3.0],
+            None,
+            None,
+            &[],
+            &[(vec![1.0, 1.0], 2.0)],
+        );
         let s = 1.0 / 2.0_f64.sqrt();
         // Relaxed (absolute, normalized): max(2, 6)/√2 = 6/√2.
         assert!((bvec[0] - 6.0 * s).abs() < 1e-12);
@@ -282,18 +305,25 @@ mod tests {
         let c = [2.0, 2.0];
         let f = |x: &[f64]| (x[0] - c[0]).powi(2) + (x[1] - c[1]).powi(2);
         let x0 = vec![0.0, 0.0];
-        let (amat, bvec_abs) =
-            fold_constraints::<f64>(2, &x0, None, None, &[], &[(vec![1.0, 1.0], 2.0)]);
+        let (amat, bvec_abs) = fold_constraints::<f64>(
+            2,
+            &x0,
+            None,
+            None,
+            &[],
+            &[(vec![1.0, 1.0], 2.0)],
+        );
 
-        let setup = QuadraticModel::try_initialize_linear::<core::convert::Infallible>(
-            x0.clone(),
-            amat,
-            bvec_abs.clone(),
-            0.3,
-            5,
-            &mut |x| Ok(f(x)),
-        )
-        .expect("infallible");
+        let setup =
+            QuadraticModel::try_initialize_linear::<core::convert::Infallible>(
+                x0.clone(),
+                amat,
+                bvec_abs.clone(),
+                0.3,
+                5,
+                &mut |x| Ok(f(x)),
+            )
+            .expect("infallible");
 
         // b shifted to x0-relative: since x0 = 0, no shift.
         assert!((setup.bvec[0] - bvec_abs[0]).abs() < 1e-12);

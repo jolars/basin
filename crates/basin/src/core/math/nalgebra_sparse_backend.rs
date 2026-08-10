@@ -21,8 +21,8 @@ use nalgebra_sparse::{CscMatrix, SparseEntryMut};
 
 use super::Scalar;
 use super::linalg::{
-    AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveSpd, MatDiagonal,
-    MatTransposeVec, MatVec, MaxDiagonal,
+    AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveSpd,
+    MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
 };
 
 // Bound stack mirrors the dense nalgebra backend: matvec/gram routes go
@@ -186,7 +186,10 @@ impl<F> LinearSolveSpd<DVector<F>> for CscMatrix<F>
 where
     F: Scalar + nalgebra::RealField,
 {
-    fn solve_spd(&self, b: &DVector<F>) -> Result<DVector<F>, LinearSolveError> {
+    fn solve_spd(
+        &self,
+        b: &DVector<F>,
+    ) -> Result<DVector<F>, LinearSolveError> {
         assert_eq!(
             self.nrows(),
             self.ncols(),
@@ -205,7 +208,8 @@ where
         // `DMatrix`, so we round-trip the DVector through a 1-column
         // dense matrix. One small allocation per solve; the Cholesky
         // factorization itself dominates cost.
-        let chol = CscCholesky::factor(self).map_err(|_| LinearSolveError::NotPositiveDefinite)?;
+        let chol = CscCholesky::factor(self)
+            .map_err(|_| LinearSolveError::NotPositiveDefinite)?;
         let b_mat = DMatrix::from_column_slice(b.len(), 1, b.as_slice());
         let x_mat = chol.solve(&b_mat);
         Ok(DVector::from_column_slice(x_mat.column(0).as_slice()))

@@ -1,6 +1,7 @@
 use basin::problems::BoothBoxed;
 use basin::{
-    BasicPopulationState, Executor, MaxIter, PopulationState, RandomSearch, State, StepOutcome,
+    BasicPopulationState, Executor, MaxIter, PopulationState, RandomSearch,
+    State, StepOutcome,
 };
 
 /// Same seed → same trajectory. Load-bearing reproducibility check

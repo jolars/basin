@@ -6,8 +6,12 @@
 use web_time::{Duration, Instant};
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorLen};
-use crate::core::state::{CmaEsState, GradientState, MeshState, RhoState, SimplexState, State};
+use crate::core::math::{
+    ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorLen,
+};
+use crate::core::state::{
+    CmaEsState, GradientState, MeshState, RhoState, SimplexState, State,
+};
 
 /// Why the executor stopped. Returned on
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
@@ -468,9 +472,9 @@ where
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let curr = state.cost();
-        let triggered = self
-            .last
-            .is_some_and(|l| curr.is_finite() && (l - curr).abs() <= self.tol * l.abs());
+        let triggered = self.last.is_some_and(|l| {
+            curr.is_finite() && (l - curr).abs() <= self.tol * l.abs()
+        });
         self.last = Some(curr);
         triggered.then_some(TerminationReason::RelativeCostTolerance)
     }
@@ -564,7 +568,8 @@ where
             None
         } else {
             self.stalled += 1;
-            (self.stalled >= self.patience).then_some(TerminationReason::NoImprovement)
+            (self.stalled >= self.patience)
+                .then_some(TerminationReason::NoImprovement)
         }
     }
 
@@ -650,7 +655,10 @@ where
     F: Scalar,
     V: VectorLen + std::ops::Index<usize, Output = F>,
 {
-    fn check(&mut self, state: &CmaEsState<V, M, F>) -> Option<TerminationReason> {
+    fn check(
+        &mut self,
+        state: &CmaEsState<V, M, F>,
+    ) -> Option<TerminationReason> {
         (state.sigma() * state.max_axis_std() < self.tol_x)
             .then_some(TerminationReason::CmaEsTolerance)
     }
@@ -716,7 +724,8 @@ where
     S::Float: Scalar,
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
-        (state.poll_size() <= self.poll_size_min).then_some(TerminationReason::MeshTolerance)
+        (state.poll_size() <= self.poll_size_min)
+            .then_some(TerminationReason::MeshTolerance)
     }
 }
 

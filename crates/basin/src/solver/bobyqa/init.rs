@@ -227,12 +227,16 @@ impl<F: Scalar> QuadraticModel<F> {
             let fb = fval[i + 1 + n] - fbase;
             // Two-point (general α/β) gradient and three-point diagonal Hessian.
             gq[i] = (fa / xa[i] * xb[i] - fb / xb[i] * xa[i]) / (xb[i] - xa[i]);
-            gamma_explicit.set(i, i, two * (fa / xa[i] - fb / xb[i]) / (xa[i] - xb[i]));
+            gamma_explicit.set(
+                i,
+                i,
+                two * (fa / xa[i] - fb / xb[i]) / (xa[i] - xb[i]),
+            );
         }
         for &(t, p, q) in &extras {
             let ip = 2 * n + 1 + t;
-            let val =
-                (fbase - fval[p + 1] - fval[q + 1] + fval[ip]) / (xpt.get(ip, p) * xpt.get(ip, q));
+            let val = (fbase - fval[p + 1] - fval[q + 1] + fval[ip])
+                / (xpt.get(ip, p) * xpt.get(ip, q));
             gamma_explicit.set(p, q, val);
             gamma_explicit.set(q, p, val);
         }
@@ -252,7 +256,11 @@ impl<F: Scalar> QuadraticModel<F> {
         for i in 0..n {
             bmat_xi.set(i, 0, -(xa[i] + xb[i]) / (xa[i] * xb[i]));
             bmat_xi.set(i, i + n + 1, -half / xa[i]);
-            bmat_xi.set(i, i + 1, -bmat_xi.get(i, 0) - bmat_xi.get(i, i + n + 1));
+            bmat_xi.set(
+                i,
+                i + 1,
+                -bmat_xi.get(i, 0) - bmat_xi.get(i, i + n + 1),
+            );
 
             zmat.set(0, i, sqrt2 / (xa[i] * xb[i]));
             zmat.set(i + 1, i, -zmat.get(0, i) - sqrt_half / rhosq);
@@ -327,11 +335,14 @@ mod tests {
         let g = [[4.0, 1.5], [1.5, 3.0]];
         let b = [1.0, 2.0];
         let f = |x: &[f64]| {
-            0.5 * (g[0][0] * x[0] * x[0] + 2.0 * g[0][1] * x[0] * x[1] + g[1][1] * x[1] * x[1])
+            0.5 * (g[0][0] * x[0] * x[0]
+                + 2.0 * g[0][1] * x[0] * x[1]
+                + g[1][1] * x[1] * x[1])
                 + b[0] * x[0]
                 + b[1] * x[1]
         };
-        let out = init(vec![0.0, 0.0], &[-10.0, -10.0], &[10.0, 10.0], 0.3, 6, f);
+        let out =
+            init(vec![0.0, 0.0], &[-10.0, -10.0], &[10.0, 10.0], 0.3, 6, f);
         let model = &out.model;
 
         assert!((model.gamma_explicit.get(0, 0) - g[0][0]).abs() < 1e-12);
@@ -350,7 +361,9 @@ mod tests {
     #[test]
     fn lower_bound_start_is_exact_and_kkt() {
         let f = |x: &[f64]| {
-            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0] - 2.0 * x[1] + 0.7
+            2.0 * x[0] * x[0] + 1.5 * x[0] * x[1] + 3.0 * x[1] * x[1] + x[0]
+                - 2.0 * x[1]
+                + 0.7
         };
         // x0_0 sits exactly on the lower bound; x0_1 interior.
         let out = init(vec![0.0, 0.5], &[0.0, -5.0], &[5.0, 5.0], 0.25, 6, f);
@@ -363,7 +376,8 @@ mod tests {
         let f0 = f(x0);
         for j in 0..model.m() {
             let disp = model.xpt_row(j).to_vec();
-            let xj: Vec<f64> = x0.iter().zip(&disp).map(|(a, d)| a + d).collect();
+            let xj: Vec<f64> =
+                x0.iter().zip(&disp).map(|(a, d)| a + d).collect();
             assert!(
                 (model.eval_change(&disp) - (f(&xj) - f0)).abs() < 1e-9,
                 "interpolation at point {j}"
@@ -395,7 +409,11 @@ mod tests {
         // coord 1: 0.4 from the lower bound (½ρ < 0.4 < ρ) → pushed to a + ρ = 0.5.
         let out = init(vec![0.2, 0.4], &[0.0, 0.0], &[10.0, 10.0], rho, 5, f);
         assert_eq!(out.model.x0()[0], 0.0, "within ½ρ snaps to the bound");
-        assert_eq!(out.model.x0()[1], 0.5, "between ½ρ and ρ pushed ρ interior");
+        assert_eq!(
+            out.model.x0()[1],
+            0.5,
+            "between ½ρ and ρ pushed ρ interior"
+        );
         // coord 0 is bound-active (sl = 0); coord 1 is interior (sl < 0 < su).
         assert_eq!(out.sl[0], 0.0);
         assert!(out.sl[1] < 0.0 && out.su[1] > 0.0);

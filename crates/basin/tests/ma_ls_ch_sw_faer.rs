@@ -9,7 +9,8 @@ use faer::Col;
 
 #[test]
 fn converges_on_sphere_d10() {
-    let problem = SphereBoxed::new(Col::from_fn(10, |_| -5.0), Col::from_fn(10, |_| 5.0));
+    let problem =
+        SphereBoxed::new(Col::from_fn(10, |_| -5.0), Col::from_fn(10, |_| 5.0));
     let solver = MaLsChSw::<Col<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChSwState::new())
         .max_iter(u64::MAX)

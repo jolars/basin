@@ -140,7 +140,8 @@ pub(crate) fn cauchy<F: Scalar>(
     // Per-variable classify / direction / breakpoint (Fortran loop 50).
     for i in 0..n {
         let neggi = -g[i];
-        if iwhere[i] != iwhere::ALWAYS_FIXED && iwhere[i] != iwhere::ALWAYS_FREE {
+        if iwhere[i] != iwhere::ALWAYS_FIXED && iwhere[i] != iwhere::ALWAYS_FREE
+        {
             let lower_finite = l[i].is_finite();
             let upper_finite = u[i].is_finite();
             let tl = if lower_finite { x[i] - l[i] } else { zero };
@@ -424,7 +425,12 @@ fn finalize_with_free_move<F: Scalar>(
 ///   min-heap.
 ///
 /// Callers decrement `nleft` themselves after consuming the popped min.
-fn hpsolb<F: Scalar>(nleft: usize, t: &mut [F], iorder: &mut [usize], first: bool) {
+fn hpsolb<F: Scalar>(
+    nleft: usize,
+    t: &mut [F],
+    iorder: &mut [usize],
+    first: bool,
+) {
     if first {
         // Build a min-heap on `t[0..nleft]` by sift-up insertion of
         // positions 1..nleft.

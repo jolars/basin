@@ -110,7 +110,8 @@ impl<F: Scalar> QuadraticModel<F> {
         let mut ell_d = ell(&d); // ℓ_t(x_opt + d), signed
         // ∇ℓ_t(x_opt + d) = ∇ℓ_t(x_opt) + ∇²ℓ_t d.
         let hd0 = self.lagrange_hessian_matvec(&lambda, &d);
-        let mut grad_cur: Vec<F> = (0..n).map(|i| grad_opt[i] + hd0[i]).collect();
+        let mut grad_cur: Vec<F> =
+            (0..n).map(|i| grad_opt[i] + hd0[i]).collect();
 
         let delta_sq = delta_bar * delta_bar;
         // Near-degenerate cutoff for s_j ‖orthogonal component‖² (eq. 6.12):
@@ -128,7 +129,8 @@ impl<F: Scalar> QuadraticModel<F> {
                 let dg = dot(&d, &grad_opt);
                 let gg = dot(&grad_opt, &grad_opt);
                 let cond_i = dg * dg <= from::<F>(0.99) * delta_sq * gg; // (6.10a)
-                let cond_ii = gg.sqrt() * delta_bar >= from::<F>(0.1) * ell_d.abs(); // (6.10b)
+                let cond_ii =
+                    gg.sqrt() * delta_bar >= from::<F>(0.1) * ell_d.abs(); // (6.10b)
                 if cond_i && cond_ii {
                     &grad_opt
                 } else {
@@ -154,7 +156,8 @@ impl<F: Scalar> QuadraticModel<F> {
 
             // ℓ_t(x_opt + d(θ)) with d(θ) = cosθ d + sinθ s. Using
             // ∇²ℓ_t d = ∇ℓ_t(x_opt + d) − ∇ℓ_t(x_opt) = grad_cur − grad_opt:
-            let hd: Vec<F> = (0..n).map(|i| grad_cur[i] - grad_opt[i]).collect();
+            let hd: Vec<F> =
+                (0..n).map(|i| grad_cur[i] - grad_opt[i]).collect();
             let d_g0 = dot(&d, &grad_opt);
             let s_g0 = dot(&s, &grad_opt);
             let d_hd = dot(&d, &hd);
@@ -165,7 +168,8 @@ impl<F: Scalar> QuadraticModel<F> {
                 let sn = theta.sin();
                 base + c * d_g0
                     + sn * s_g0
-                    + half * (c * c * d_hd + two * sn * c * s_hd + sn * sn * s_hs)
+                    + half
+                        * (c * c * d_hd + two * sn * c * s_hd + sn * sn * s_hs)
             };
 
             // Maximize |ℓ_t(x_opt + d(θ))| over θ ∈ [0, 2π): the θ = 0 incumbent
@@ -174,13 +178,16 @@ impl<F: Scalar> QuadraticModel<F> {
             // then a 3-point parabolic refinement, mirroring TRSAPP's boundary
             // sweep (trsapp.rs) but on the modulus rather than the model value.
             const NTHETA: usize = 49;
-            let pi = F::from_f64(core::f64::consts::PI).expect("π representable");
-            let step =
-                (pi + pi) / F::from_f64((NTHETA + 1) as f64).expect("NTHETA+1 representable");
+            let pi =
+                F::from_f64(core::f64::consts::PI).expect("π representable");
+            let step = (pi + pi)
+                / F::from_f64((NTHETA + 1) as f64)
+                    .expect("NTHETA+1 representable");
             let mut best_theta = F::zero();
             let mut best_abs = ell_of(F::zero()).abs(); // θ = 0 ⇒ d_{j-1}
             for k in 1..=NTHETA {
-                let theta = step * F::from_f64(k as f64).expect("k representable");
+                let theta =
+                    step * F::from_f64(k as f64).expect("k representable");
                 let av = ell_of(theta).abs();
                 if av > best_abs {
                     best_abs = av;
@@ -212,7 +219,9 @@ impl<F: Scalar> QuadraticModel<F> {
 
             // ∇ℓ_t(x_opt + d_j) via the recurrence (eq. 6.14).
             grad_cur = (0..n)
-                .map(|i| (F::one() - c) * grad_opt[i] + c * grad_cur[i] + sn * hs[i])
+                .map(|i| {
+                    (F::one() - c) * grad_opt[i] + c * grad_cur[i] + sn * hs[i]
+                })
                 .collect();
 
             // Termination (6.13): the iteration barely improved |ℓ_t|.
@@ -311,7 +320,10 @@ mod tests {
         let (t, _) = (0..model.m())
             .map(|j| {
                 let r = model.xpt_row(j);
-                let dist: f64 = (0..2).map(|i| (r[i] - xopt[i]).powi(2)).sum::<f64>().sqrt();
+                let dist: f64 = (0..2)
+                    .map(|i| (r[i] - xopt[i]).powi(2))
+                    .sum::<f64>()
+                    .sqrt();
                 (j, dist)
             })
             .filter(|(j, _)| *j != kopt)
@@ -352,13 +364,18 @@ mod tests {
     /// trust-region disk (it should not leave a much better point on the table).
     #[test]
     fn near_optimal_vs_brute_force() {
-        let model = QuadraticModel::initialize(vec![0.4, -0.6, 0.2], 0.5, 7, &|x: &[f64]| {
-            (0..3)
-                .map(|i| (x[i] - 0.5 * (i as f64)).powi(2))
-                .sum::<f64>()
-                + 0.3 * x[0] * x[1]
-                - 0.2 * x[1] * x[2]
-        });
+        let model = QuadraticModel::initialize(
+            vec![0.4, -0.6, 0.2],
+            0.5,
+            7,
+            &|x: &[f64]| {
+                (0..3)
+                    .map(|i| (x[i] - 0.5 * (i as f64)).powi(2))
+                    .sum::<f64>()
+                    + 0.3 * x[0] * x[1]
+                    - 0.2 * x[1] * x[2]
+            },
+        );
         let n = 3;
         let kopt = model.kopt();
         let xopt = model.xpt_row(kopt).to_vec();
@@ -369,7 +386,8 @@ mod tests {
             }
             let (g_x0, lambda) = model.lagrange_coeffs(t);
             let h_xopt = model.lagrange_hessian_matvec(&lambda, &xopt);
-            let grad_opt: Vec<f64> = (0..n).map(|i| g_x0[i] + h_xopt[i]).collect();
+            let grad_opt: Vec<f64> =
+                (0..n).map(|i| g_x0[i] + h_xopt[i]).collect();
             let ell = |d: &[f64]| -> f64 {
                 let hd = model.lagrange_hessian_matvec(&lambda, d);
                 dot(d, &grad_opt) + 0.5 * dot(d, &hd)
@@ -380,7 +398,8 @@ mod tests {
             for a in 0..steps {
                 let theta = std::f64::consts::PI * (a as f64) / (steps as f64);
                 for b in 0..(2 * steps) {
-                    let phi = std::f64::consts::PI * (b as f64) / (steps as f64);
+                    let phi =
+                        std::f64::consts::PI * (b as f64) / (steps as f64);
                     let d = [
                         delta_bar * theta.sin() * phi.cos(),
                         delta_bar * theta.sin() * phi.sin(),
@@ -409,7 +428,10 @@ mod tests {
             .filter(|j| *j != kopt)
             .map(|j| {
                 let r = model.xpt_row(j);
-                let dist: f64 = (0..2).map(|i| (r[i] - xopt[i]).powi(2)).sum::<f64>().sqrt();
+                let dist: f64 = (0..2)
+                    .map(|i| (r[i] - xopt[i]).powi(2))
+                    .sum::<f64>()
+                    .sqrt();
                 (j, dist)
             })
             .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())

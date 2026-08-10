@@ -6,11 +6,13 @@ use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
     project_strictly_inside_component,
 };
-use super::sample::{SampleStandardNormal, SampleUniformBox, assert_finite_box};
+use super::sample::{
+    SampleStandardNormal, SampleUniformBox, assert_finite_box,
+};
 use super::{
-    ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign, Dot,
-    FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared, ScaleInPlace, ScaledAdd, VectorIndex,
-    VectorLen,
+    ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
+    Dot, FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared,
+    ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
 
 impl<F: Scalar> ScaledAdd<F> for Vec<F> {
@@ -125,7 +127,10 @@ impl<F: Scalar> SampleStandardNormal for Vec<F>
 where
     StandardNormal: Distribution<F>,
 {
-    fn sample_standard_normal<R: Rng + ?Sized>(template: &Self, rng: &mut R) -> Self {
+    fn sample_standard_normal<R: Rng + ?Sized>(
+        template: &Self,
+        rng: &mut R,
+    ) -> Self {
         let n = template.len();
         let mut out = Self::with_capacity(n);
         for _ in 0..n {
@@ -136,7 +141,11 @@ where
 }
 
 impl<F: Scalar + SampleUniform> SampleUniformBox for Vec<F> {
-    fn sample_uniform_box<R: Rng + ?Sized>(lower: &Self, upper: &Self, rng: &mut R) -> Self {
+    fn sample_uniform_box<R: Rng + ?Sized>(
+        lower: &Self,
+        upper: &Self,
+        rng: &mut R,
+    ) -> Self {
         assert_eq!(
             lower.len(),
             upper.len(),
@@ -164,7 +173,9 @@ impl<F: Scalar> ClampInPlace for Vec<F> {
             upper.len(),
             "clamp_in_place: upper length mismatch"
         );
-        for ((x, &lo), &hi) in self.iter_mut().zip(lower.iter()).zip(upper.iter()) {
+        for ((x, &lo), &hi) in
+            self.iter_mut().zip(lower.iter()).zip(upper.iter())
+        {
             // `Float` has no `clamp`; `max(lo).min(hi)` matches the
             // `f64::clamp` result on finite, ordered bounds.
             *x = (*x).max(lo).min(hi);
@@ -196,7 +207,8 @@ impl<F: Scalar> BoxAffineScaling<F> for Vec<F> {
             "compute_cl_scaling: c_diag length mismatch"
         );
         for i in 0..n {
-            let (d_sq_i, c_i) = cl_scaling_pair::<F>(self[i], gradient[i], lower[i], upper[i]);
+            let (d_sq_i, c_i) =
+                cl_scaling_pair::<F>(self[i], gradient[i], lower[i], upper[i]);
             d_sq[i] = d_sq_i;
             c_diag[i] = c_i;
         }
@@ -209,7 +221,9 @@ impl<F: Scalar> BoxAffineScaling<F> for Vec<F> {
         assert_eq!(n, upper.len(), "max_feasible_step: upper length mismatch");
         let mut tau = F::infinity();
         for i in 0..n {
-            let t = max_feasible_step_component::<F>(self[i], step[i], lower[i], upper[i]);
+            let t = max_feasible_step_component::<F>(
+                self[i], step[i], lower[i], upper[i],
+            );
             if t < tau {
                 tau = t;
             }
@@ -237,7 +251,12 @@ impl<F: Scalar> BoxAffineScaling<F> for Vec<F> {
             .sum()
     }
 
-    fn project_strictly_inside(&mut self, lower: &Self, upper: &Self, rstep: F) {
+    fn project_strictly_inside(
+        &mut self,
+        lower: &Self,
+        upper: &Self,
+        rstep: F,
+    ) {
         let n = self.len();
         assert_eq!(
             n,
@@ -250,7 +269,9 @@ impl<F: Scalar> BoxAffineScaling<F> for Vec<F> {
             "project_strictly_inside: upper length mismatch"
         );
         for i in 0..n {
-            self[i] = project_strictly_inside_component::<F>(self[i], lower[i], upper[i], rstep);
+            self[i] = project_strictly_inside_component::<F>(
+                self[i], lower[i], upper[i], rstep,
+            );
         }
     }
 }

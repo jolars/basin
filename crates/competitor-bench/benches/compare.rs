@@ -18,10 +18,12 @@ use std::hint::black_box;
 use basin::problems::{ExponentialFit, PowellSingular};
 use basin::{Executor, LevenbergMarquardt, NllsState};
 use competitor_bench::{
-    LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim, UnderDet, VarDim,
-    vardim_start,
+    LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim,
+    UnderDet, VarDim, vardim_start,
 };
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{
+    BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
+};
 use faer::Col;
 use nalgebra::DVector;
 
@@ -39,7 +41,11 @@ fn bench_exp_fit(c: &mut Criterion) {
     g.bench_function(BenchmarkId::from_parameter("lm-crate"), |b| {
         b.iter_batched(
             || LmExponentialFit::sampled(1.0e5, -1.0, 10, 0.4, 5.0e4, -0.3),
-            |p| black_box(levenberg_marquardt::LevenbergMarquardt::new().minimize(p)),
+            |p| {
+                black_box(
+                    levenberg_marquardt::LevenbergMarquardt::new().minimize(p),
+                )
+            },
             BatchSize::SmallInput,
         )
     });
@@ -48,7 +54,9 @@ fn bench_exp_fit(c: &mut Criterion) {
         b.iter_batched(
             || {
                 (
-                    ExponentialFit::<DVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
+                    ExponentialFit::<DVector<f64>>::sampled(
+                        1.0e5, -1.0, 10, 0.4,
+                    ),
                     DVector::from_vec(vec![5.0e4, -0.3]),
                 )
             },
@@ -91,7 +99,11 @@ fn bench_powell(c: &mut Criterion) {
     g.bench_function(BenchmarkId::from_parameter("lm-crate"), |b| {
         b.iter_batched(
             || LmPowellSingular::new([3.0, -1.0, 0.0, 1.0]),
-            |p| black_box(levenberg_marquardt::LevenbergMarquardt::new().minimize(p)),
+            |p| {
+                black_box(
+                    levenberg_marquardt::LevenbergMarquardt::new().minimize(p),
+                )
+            },
             BatchSize::SmallInput,
         )
     });
@@ -149,7 +161,12 @@ fn bench_vardim(c: &mut Criterion) {
         g.bench_function(BenchmarkId::from_parameter("lm-crate"), |b| {
             b.iter_batched(
                 || LmVarDim::new(n),
-                |p| black_box(levenberg_marquardt::LevenbergMarquardt::new().minimize(p)),
+                |p| {
+                    black_box(
+                        levenberg_marquardt::LevenbergMarquardt::new()
+                            .minimize(p),
+                    )
+                },
                 BatchSize::SmallInput,
             )
         });
@@ -205,7 +222,12 @@ fn bench_underdet(c: &mut Criterion) {
         g.bench_function(BenchmarkId::from_parameter("lm-crate"), |b| {
             b.iter_batched(
                 || LmUnderDet::new(m, n),
-                |p| black_box(levenberg_marquardt::LevenbergMarquardt::new().minimize(p)),
+                |p| {
+                    black_box(
+                        levenberg_marquardt::LevenbergMarquardt::new()
+                            .minimize(p),
+                    )
+                },
                 BatchSize::SmallInput,
             )
         });

@@ -44,7 +44,9 @@
 //! impls (tenet 5).
 
 use crate::core::constraint::LinearEqualityConstraints;
-use crate::core::math::{Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaledAdd};
+use crate::core::math::{
+    Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaledAdd,
+};
 use crate::core::problem::{CostFunction, Gradient};
 
 /// A [`LinearEqualityConstraints`] problem rewritten as the unconstrained
@@ -88,7 +90,8 @@ impl<'a, P, V, F: Scalar> AugmentedLagrangian<'a, P, V, F> {
 impl<P, V, M, F> CostFunction for AugmentedLagrangian<'_, P, V, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + LinearEqualityConstraints<Param = V, Matrix = M>,
+    P: CostFunction<Param = V, Output = F>
+        + LinearEqualityConstraints<Param = V, Matrix = M>,
     M: MatVec<V>,
     V: ScaledAdd<F> + Dot<F> + NormSquared<F>,
 {
@@ -161,14 +164,20 @@ mod tests {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
-        fn cost(&self, x: &DVector<f64>) -> Result<f64, std::convert::Infallible> {
+        fn cost(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<f64, std::convert::Infallible> {
             Ok(0.5 * x.dot(x))
         }
     }
 
     impl Gradient for Probe {
         type Gradient = DVector<f64>;
-        fn gradient(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(x.clone())
         }
     }
@@ -221,7 +230,8 @@ mod tests {
             let mut xm = x.clone();
             xp[j] += h;
             xm[j] -= h;
-            let fd = (al.cost(&xp).unwrap() - al.cost(&xm).unwrap()) / (2.0 * h);
+            let fd =
+                (al.cost(&xp).unwrap() - al.cost(&xm).unwrap()) / (2.0 * h);
             assert!(
                 (analytic[j] - fd).abs() < 1e-5,
                 "component {j}: analytic {} vs fd {}",

@@ -1,8 +1,9 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::inner::InitialState;
 use crate::core::math::{
-    AddDiagonalVectorInPlace, BoxAffineScaling, Dot, GramMatrix, LinearSolveSpd, MatTransposeVec,
-    MaxDiagonal, NegInPlace, NormSquared, Scalar, ScaledAdd,
+    AddDiagonalVectorInPlace, BoxAffineScaling, Dot, GramMatrix,
+    LinearSolveSpd, MatTransposeVec, MaxDiagonal, NegInPlace, NormSquared,
+    Scalar, ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
@@ -271,8 +272,15 @@ where
 impl<P, V, M, F> Solver<P, NllsState<V, F>> for Trf<V, M, F>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M> + BoxConstraints<Param = V>,
-    V: ScaledAdd<F> + NormSquared<F> + NegInPlace + Dot<F> + BoxAffineScaling<F> + Clone,
+    P: Residual<Param = V, Output = V>
+        + Jacobian<Jacobian = M>
+        + BoxConstraints<Param = V>,
+    V: ScaledAdd<F>
+        + NormSquared<F>
+        + NegInPlace
+        + Dot<F>
+        + BoxAffineScaling<F>
+        + Clone,
     M: GramMatrix
         + MatTransposeVec<V>
         + LinearSolveSpd<V>
@@ -360,7 +368,9 @@ where
         // `d_sq[i] = 1/|v_i|`). Goes to zero at any KKT point, interior
         // *or* face-active. Collapses to LM's `‖Jᵀr‖_∞` when bounds are
         // infinite (then `|v_i| = 1`, `d_sq = 1`, division is identity).
-        if self.tol_grad > F::zero() && g.cl_kkt_inf_norm(&d_sq) <= self.tol_grad {
+        if self.tol_grad > F::zero()
+            && g.cl_kkt_inf_norm(&d_sq) <= self.tol_grad
+        {
             // Restore caches; init resets them on each reuse, but
             // mirroring LM's pattern keeps the contract uniform.
             self.r_cache = Some(r);
@@ -406,7 +416,10 @@ where
                         // State unchanged; restore both caches.
                         self.r_cache = Some(r);
                         self.j_cache = Some(j);
-                        return Ok((state, Some(TerminationReason::SolverFailed)));
+                        return Ok((
+                            state,
+                            Some(TerminationReason::SolverFailed),
+                        ));
                     }
                     mu = mu * nu;
                     nu = nu * two;
@@ -417,10 +430,11 @@ where
         // Step-back to the open feasible region. The unconstrained
         // Newton step h might land on or beyond a face; scale it down
         // by min(1, θ · τ_max) so the iterate stays strictly inside.
-        let tau_max =
-            state
-                .param
-                .max_feasible_step(&h, problem.inner().lower(), problem.inner().upper());
+        let tau_max = state.param.max_feasible_step(
+            &h,
+            problem.inner().lower(),
+            problem.inner().upper(),
+        );
         let alpha = if tau_max >= F::one() {
             F::one()
         } else {
@@ -449,9 +463,10 @@ where
         // Nielsen's LM formula with D folded in.
         let h_t_g = h.dot(&g);
         let dh_norm_sq = h.weighted_norm_squared(&d_sq);
-        let predicted =
-            -alpha * (F::one() - half * alpha) * h_t_g + half * alpha * alpha * mu * dh_norm_sq;
-        let half_s_t_c_s = half * alpha * alpha * h.weighted_norm_squared(&c_diag);
+        let predicted = -alpha * (F::one() - half * alpha) * h_t_g
+            + half * alpha * alpha * mu * dh_norm_sq;
+        let half_s_t_c_s =
+            half * alpha * alpha * h.weighted_norm_squared(&c_diag);
         let actual = prev_cost - f_trial - half_s_t_c_s;
 
         let rho = if predicted > F::zero() {

@@ -129,7 +129,14 @@ pub struct LmExponentialFit {
 impl LmExponentialFit {
     /// Same exact-data instance as `ExponentialFit::sampled`
     /// (`tᵢ = i·dt`, `yᵢ = a·exp(b·tᵢ)`), starting at `x0 = [a0, b0]`.
-    pub fn sampled(a: f64, b: f64, m: usize, dt: f64, a0: f64, b0: f64) -> Self {
+    pub fn sampled(
+        a: f64,
+        b: f64,
+        m: usize,
+        dt: f64,
+        a0: f64,
+        b0: f64,
+    ) -> Self {
         let t: Vec<f64> = (0..m).map(|i| i as f64 * dt).collect();
         let y: Vec<f64> = t.iter().map(|&ti| a * (b * ti).exp()).collect();
         Self {
@@ -247,7 +254,10 @@ impl Residual for VarDim<DVector<f64>> {
     type Param = DVector<f64>;
     type Output = DVector<f64>;
     type Error = std::convert::Infallible;
-    fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+    fn residual(
+        &self,
+        x: &DVector<f64>,
+    ) -> Result<DVector<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; self.n + 2];
         vardim_residual(x.as_slice(), &mut out);
         Ok(DVector::from_vec(out))
@@ -256,7 +266,10 @@ impl Residual for VarDim<DVector<f64>> {
 
 impl Jacobian for VarDim<DVector<f64>> {
     type Jacobian = DMatrix<f64>;
-    fn jacobian(&self, x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+    fn jacobian(
+        &self,
+        x: &DVector<f64>,
+    ) -> Result<DMatrix<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; (self.n + 2) * self.n];
         vardim_jacobian_row_major(x.as_slice(), &mut out);
         Ok(DMatrix::from_row_slice(self.n + 2, self.n, &out))
@@ -267,7 +280,10 @@ impl Residual for VarDim<Col<f64>> {
     type Param = Col<f64>;
     type Output = Col<f64>;
     type Error = std::convert::Infallible;
-    fn residual(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+    fn residual(
+        &self,
+        x: &Col<f64>,
+    ) -> Result<Col<f64>, std::convert::Infallible> {
         let xs: Vec<f64> = (0..self.n).map(|i| x[i]).collect();
         let mut out = vec![0.0; self.n + 2];
         vardim_residual(&xs, &mut out);
@@ -277,7 +293,10 @@ impl Residual for VarDim<Col<f64>> {
 
 impl Jacobian for VarDim<Col<f64>> {
     type Jacobian = Mat<f64>;
-    fn jacobian(&self, x: &Col<f64>) -> Result<Mat<f64>, std::convert::Infallible> {
+    fn jacobian(
+        &self,
+        x: &Col<f64>,
+    ) -> Result<Mat<f64>, std::convert::Infallible> {
         let xs: Vec<f64> = (0..self.n).map(|i| x[i]).collect();
         let mut out = vec![0.0; (self.n + 2) * self.n];
         vardim_jacobian_row_major(&xs, &mut out);
@@ -428,7 +447,10 @@ impl Residual for UnderDet<DVector<f64>> {
     type Param = DVector<f64>;
     type Output = DVector<f64>;
     type Error = std::convert::Infallible;
-    fn residual(&self, x: &DVector<f64>) -> Result<DVector<f64>, std::convert::Infallible> {
+    fn residual(
+        &self,
+        x: &DVector<f64>,
+    ) -> Result<DVector<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; self.data.m];
         self.data.residual(x.as_slice(), &mut out);
         Ok(DVector::from_vec(out))
@@ -437,7 +459,10 @@ impl Residual for UnderDet<DVector<f64>> {
 
 impl Jacobian for UnderDet<DVector<f64>> {
     type Jacobian = DMatrix<f64>;
-    fn jacobian(&self, x: &DVector<f64>) -> Result<DMatrix<f64>, std::convert::Infallible> {
+    fn jacobian(
+        &self,
+        x: &DVector<f64>,
+    ) -> Result<DMatrix<f64>, std::convert::Infallible> {
         let mut out = vec![0.0; self.data.m * self.data.n];
         self.data.jacobian_row_major(x.as_slice(), &mut out);
         Ok(DMatrix::from_row_slice(self.data.m, self.data.n, &out))
@@ -448,7 +473,10 @@ impl Residual for UnderDet<Col<f64>> {
     type Param = Col<f64>;
     type Output = Col<f64>;
     type Error = std::convert::Infallible;
-    fn residual(&self, x: &Col<f64>) -> Result<Col<f64>, std::convert::Infallible> {
+    fn residual(
+        &self,
+        x: &Col<f64>,
+    ) -> Result<Col<f64>, std::convert::Infallible> {
         let xs: Vec<f64> = (0..self.data.n).map(|i| x[i]).collect();
         let mut out = vec![0.0; self.data.m];
         self.data.residual(&xs, &mut out);
@@ -458,7 +486,10 @@ impl Residual for UnderDet<Col<f64>> {
 
 impl Jacobian for UnderDet<Col<f64>> {
     type Jacobian = Mat<f64>;
-    fn jacobian(&self, x: &Col<f64>) -> Result<Mat<f64>, std::convert::Infallible> {
+    fn jacobian(
+        &self,
+        x: &Col<f64>,
+    ) -> Result<Mat<f64>, std::convert::Infallible> {
         let xs: Vec<f64> = (0..self.data.n).map(|i| x[i]).collect();
         let mut out = vec![0.0; self.data.m * self.data.n];
         self.data.jacobian_row_major(&xs, &mut out);

@@ -1,7 +1,7 @@
 use crate::core::inner::InitialState;
 use crate::core::math::{
-    GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity, NormSquared, Scalar,
-    ScaledAdd,
+    GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity,
+    NormSquared, Scalar, ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;

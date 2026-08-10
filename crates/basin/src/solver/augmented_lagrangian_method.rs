@@ -193,7 +193,10 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// # Panics
     ///
     /// Panics unless `0 < feasibility_decrease < 1`.
-    pub fn with_feasibility_decrease(mut self, feasibility_decrease: F) -> Self {
+    pub fn with_feasibility_decrease(
+        mut self,
+        feasibility_decrease: F,
+    ) -> Self {
         assert!(
             feasibility_decrease > F::zero() && feasibility_decrease < F::one(),
             "feasibility_decrease must be in (0, 1)"
@@ -256,7 +259,8 @@ where
     }
 }
 
-impl<P, V, M, So, F> Solver<P, BasicState<V, F>> for AugmentedLagrangianMethod<So, V, F>
+impl<P, V, M, So, F> Solver<P, BasicState<V, F>>
+    for AugmentedLagrangianMethod<So, V, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
@@ -303,14 +307,18 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
         // *separate* inner state seeded (warm-started) at the current
         // iterate. Fresh criteria each call satisfies the statelessness
         // contract.
         let lambda = self.lambda.as_ref().expect("init populates lambda");
-        let mut al_wrapper =
-            Problem::new(AugmentedLagrangian::new(problem.inner(), lambda, self.rho));
+        let mut al_wrapper = Problem::new(AugmentedLagrangian::new(
+            problem.inner(),
+            lambda,
+            self.rho,
+        ));
         let mut criteria: Vec<Box<dyn TerminationCriterion<So::State>>> = vec![
             Box::new(MaxIter(self.inner_max_iter)),
             Box::new(GradientTolerance(self.inner_grad_tol)),
@@ -364,7 +372,10 @@ where
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &BasicState<V, F>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &BasicState<V, F>,
+    ) -> Option<TerminationReason> {
         // Feasibility bound ‖A x − b‖ from the most recent solve. Optimality
         // is handled by the inner solve driving ‖∇L_ρ‖ down.
         if self.c_norm <= self.tol {

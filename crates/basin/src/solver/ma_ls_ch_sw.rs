@@ -92,7 +92,8 @@ pub type MaLsChSw<V> = MaLsCh<V, SolisWets>;
 /// [`SolisWets`] carries the hyperparameters + RNG stream; the
 /// [`SolisWetsState`] carries the iterate, bias, `ρ`, and streak
 /// counters (the MA-SW-Chains §II.C snapshot).
-pub type MaLsChSwState<V> = MaLsChGenericState<V, (SolisWets, SolisWetsState<V>)>;
+pub type MaLsChSwState<V> =
+    MaLsChGenericState<V, (SolisWets, SolisWetsState<V>)>;
 
 impl<V> MaLsCh<V, SolisWets> {
     /// Build a new `MaLsChSw` with the Molina 2010 §4.4.7 framework

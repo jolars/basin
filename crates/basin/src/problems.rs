@@ -55,11 +55,13 @@ pub mod zero;
 pub use ackley::{ACKLEY_SPEC, Ackley, AckleyBoxed, ackley};
 pub use beale::{BEALE_SPEC, Beale, beale, beale_gradient};
 pub use booth::{
-    BOOTH_SPEC, Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth, booth_gradient,
-    booth_residuals, booth_residuals_jacobian,
+    BOOTH_SPEC, Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth,
+    booth_gradient, booth_residuals, booth_residuals_jacobian,
 };
 pub use bukin::{BUKIN_N6_SPEC, BukinN6, bukin_n6};
-pub use constrained_quadratic::{CONSTRAINED_QUADRATIC_SPEC, ConstrainedQuadratic};
+pub use constrained_quadratic::{
+    CONSTRAINED_QUADRATIC_SPEC, ConstrainedQuadratic,
+};
 pub use cross_in_tray::{CROSS_IN_TRAY_SPEC, CrossInTray, cross_in_tray};
 pub use easom::{EASOM_SPEC, Easom, easom, easom_gradient};
 pub use eggholder::{EGGHOLDER_SPEC, Eggholder, eggholder};
@@ -67,30 +69,33 @@ pub use equality_constrained_quadratic::{
     EQUALITY_CONSTRAINED_QUADRATIC_SPEC, EqualityConstrainedQuadratic,
 };
 pub use exponential_fit::{
-    EXPONENTIAL_FIT_SPEC, ExponentialFit, exponential_fit, exponential_fit_jacobian,
-    exponential_fit_residuals,
+    EXPONENTIAL_FIT_SPEC, ExponentialFit, exponential_fit,
+    exponential_fit_jacobian, exponential_fit_residuals,
 };
 pub use goldstein_price::{
-    GOLDSTEIN_PRICE_SPEC, GoldsteinPrice, goldstein_price, goldstein_price_gradient,
+    GOLDSTEIN_PRICE_SPEC, GoldsteinPrice, goldstein_price,
+    goldstein_price_gradient,
 };
-pub use himmelblau::{HIMMELBLAU_SPEC, Himmelblau, himmelblau, himmelblau_gradient};
+pub use himmelblau::{
+    HIMMELBLAU_SPEC, Himmelblau, himmelblau, himmelblau_gradient,
+};
 pub use holder_table::{HOLDER_TABLE_SPEC, HolderTable, holder_table};
 pub use levy::{LEVY_SPEC, Levy, LevyBoxed, levy, levy_gradient};
 pub use matyas::{MATYAS_SPEC, Matyas, matyas, matyas_gradient};
 pub use mccormick::{MCCORMICK_SPEC, McCormick, mccormick, mccormick_gradient};
 pub use picheny::{PICHENY_SPEC, Picheny, picheny, picheny_gradient};
 pub use powell_singular::{
-    POWELL_SINGULAR_SPEC, PowellSingular, powell_singular, powell_singular_jacobian,
-    powell_singular_residuals,
+    POWELL_SINGULAR_SPEC, PowellSingular, powell_singular,
+    powell_singular_jacobian, powell_singular_residuals,
 };
 pub use rastrigin::{RASTRIGIN_SPEC, Rastrigin, RastriginBoxed, rastrigin};
 pub use rosenbrock::{
-    ROSENBROCK_SPEC, Rosenbrock, RosenbrockResiduals, rosenbrock, rosenbrock_gradient,
-    rosenbrock_residuals, rosenbrock_residuals_jacobian,
+    ROSENBROCK_SPEC, Rosenbrock, RosenbrockResiduals, rosenbrock,
+    rosenbrock_gradient, rosenbrock_residuals, rosenbrock_residuals_jacobian,
 };
 pub use schaffer::{
-    SCHAFFER_N2_SPEC, SCHAFFER_N4_SPEC, SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient,
-    schaffer_n4,
+    SCHAFFER_N2_SPEC, SCHAFFER_N4_SPEC, SchafferN2, SchafferN4, schaffer_n2,
+    schaffer_n2_gradient, schaffer_n4,
 };
 pub use sparse_least_squares::{
     SPARSE_LEAST_SQUARES_SPEC, SparseLeastSquares, SparseLeastSquaresBoxed,
@@ -103,7 +108,8 @@ pub use styblinski_tang::{
     styblinski_tang_gradient,
 };
 pub use three_hump_camel::{
-    THREE_HUMP_CAMEL_SPEC, ThreeHumpCamel, three_hump_camel, three_hump_camel_gradient,
+    THREE_HUMP_CAMEL_SPEC, ThreeHumpCamel, three_hump_camel,
+    three_hump_camel_gradient,
 };
 pub use zero::{ZERO_SPEC, Zero, zero, zero_gradient};
 

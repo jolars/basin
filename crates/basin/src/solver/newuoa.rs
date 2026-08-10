@@ -226,9 +226,16 @@ where
         let template = state.param.clone();
 
         let (work, best_x, best_f) = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
-            NewuoaWork::try_init(x0, self.rho_beg, self.rho_end, npt, &mut eval)?
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
+            NewuoaWork::try_init(
+                x0,
+                self.rho_beg,
+                self.rho_end,
+                npt,
+                &mut eval,
+            )?
         };
 
         state.param = fill_from(&template, &best_x);
@@ -242,7 +249,8 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: NewuoaState<V, F>,
-    ) -> Result<(NewuoaState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<(NewuoaState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let template = state.param.clone();
         let work = self
             .work
@@ -250,8 +258,9 @@ where
             .expect("Newuoa::init must run before next_iter");
 
         let out = {
-            let mut eval =
-                |slice: &[F]| -> Result<F, P::Error> { problem.cost(&fill_from(&template, slice)) };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             work.step(&mut eval)?
         };
         state.rho = work.rho();

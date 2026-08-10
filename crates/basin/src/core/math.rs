@@ -49,7 +49,12 @@
 /// - `'static`: matches `f64`'s implicit `'static` so the bound doesn't
 ///   force lifetime plumbing through every solver.
 pub trait Scalar:
-    num_traits::Float + num_traits::FromPrimitive + std::iter::Sum + std::fmt::Debug + Default + 'static
+    num_traits::Float
+    + num_traits::FromPrimitive
+    + std::iter::Sum
+    + std::fmt::Debug
+    + Default
+    + 'static
 {
 }
 
@@ -245,9 +250,9 @@ mod faer_sparse_backend;
 pub use clamp::ClampInPlace;
 pub use dense::DenseMatrix;
 pub use linalg::{
-    DenseMatrixFromFn, GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
-    MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, SymmetricEigen,
-    SymmetricEigenError,
+    DenseMatrixFromFn, GramMatrix, LinearSolveError, LinearSolveLstsq,
+    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, SymmetricEigen, SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 
@@ -258,5 +263,6 @@ pub use sample::{SampleStandardNormal, SampleUniformBox};
 // external request (promotion is non-breaking; the reverse is not).
 pub(crate) use cl_scaling::BoxAffineScaling;
 pub(crate) use linalg::{
-    AddDiagonalVectorInPlace, GeneralRankOneUpdate, MatDiagonal, MaxDiagonal, RankOneUpdate,
+    AddDiagonalVectorInPlace, GeneralRankOneUpdate, MatDiagonal, MaxDiagonal,
+    RankOneUpdate,
 };

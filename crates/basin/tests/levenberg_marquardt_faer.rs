@@ -9,10 +9,14 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-15, "cost = {}", result.cost());
@@ -38,10 +42,14 @@ fn levenberg_marquardt_converges_fast_on_poorly_scaled_exponential_fit() {
     let problem = ExponentialFit::<Col<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
     let initial = Col::from_fn(2, |i| if i == 0 { 5.0e4 } else { -0.3 });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
@@ -161,10 +169,14 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
         _ => 1.0,
     });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
@@ -188,10 +200,14 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
         _ => 1.0,
     });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(
@@ -206,10 +222,14 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let problem = RosenbrockResiduals::<Col<f64>>::new();
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
-    let result = Executor::new(problem, LevenbergMarquardt::new(), NllsState::new(initial))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        LevenbergMarquardt::new(),
+        NllsState::new(initial),
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }

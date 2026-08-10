@@ -77,7 +77,12 @@ fn distsq_to<F: Scalar>(model: &QuadraticModel<F>, center: &[F]) -> Vec<F> {
 /// the span of columns `nact..n` of the orthogonal factor `qfac` (`n × n`,
 /// column-major). Matches the conjugate-gradient projection in
 /// [`trstep`](super::trstep).
-fn project_null<F: Scalar>(qfac: &[F], n: usize, nact: usize, g: &[F]) -> Vec<F> {
+fn project_null<F: Scalar>(
+    qfac: &[F],
+    n: usize,
+    nact: usize,
+    g: &[F],
+) -> Vec<F> {
     let mut p = vec![F::zero(); n];
     for col in nact..n {
         let coeff = (0..n).fold(F::zero(), |a, r| a + g[r] * qfac[r + col * n]);
@@ -194,7 +199,8 @@ pub(crate) fn geostep<F: Scalar>(
         })
         .collect();
 
-    let mut stplen: Vec<F> = (0..model.m()).map(|k| -delbar / distsq[k].sqrt()).collect();
+    let mut stplen: Vec<F> =
+        (0..model.m()).map(|k| -delbar / distsq[k].sqrt()).collect();
     let mut vlagabs: Vec<F> = (0..model.m())
         .map(|k| (stplen[k] * (one - stplen[k]) * dderiv[k]).abs())
         .collect();
@@ -208,7 +214,9 @@ pub(crate) fn geostep<F: Scalar>(
 
     // Pick the line K (default KNEW unless another strictly exceeds it).
     let mut kline = knew;
-    if (0..model.m()).any(|k| vlagabs[k] > vlagabs[knew] && !vlagabs[k].is_nan()) {
+    if (0..model.m())
+        .any(|k| vlagabs[k] > vlagabs[knew] && !vlagabs[k].is_nan())
+    {
         let mut best = F::neg_infinity();
         for k in 0..model.m() {
             if !vlagabs[k].is_nan() && vlagabs[k] > best {
@@ -218,13 +226,15 @@ pub(crate) fn geostep<F: Scalar>(
         }
     }
     let row = model.xpt_row(kline);
-    let mut s: Vec<F> = (0..n).map(|i| stplen[kline] * (row[i] - xopt[i])).collect();
+    let mut s: Vec<F> =
+        (0..n).map(|i| stplen[kline] * (row[i] - xopt[i])).collect();
     let mut denabs = denominators(model, &s)[knew].abs();
 
     // --- Candidate 2: steepest-ascent step of the Lagrange function. ---
     let gnorm = norm(&glag);
     if gnorm > eps && gnorm.is_finite() {
-        let mut gstp: Vec<F> = (0..n).map(|i| (delbar / gnorm) * glag[i]).collect();
+        let mut gstp: Vec<F> =
+            (0..n).map(|i| (delbar / gnorm) * glag[i]).collect();
         let hg = model.lagrange_hessian_matvec(&pqlag, &gstp);
         if dot(&gstp, &hg) < zero {
             for v in gstp.iter_mut() {
@@ -269,7 +279,8 @@ pub(crate) fn geostep<F: Scalar>(
         let pglag = project_null(&warm.qfac, n, warm.nact, &glag);
         let pgnorm = norm(&pglag);
         if pgnorm > eps && pgnorm.is_finite() {
-            let mut pgstp: Vec<F> = (0..n).map(|i| (delbar / pgnorm) * pglag[i]).collect();
+            let mut pgstp: Vec<F> =
+                (0..n).map(|i| (delbar / pgnorm) * pglag[i]).collect();
             let hpg = model.lagrange_hessian_matvec(&pqlag, &pgstp);
             if dot(&pgstp, &hpg) < zero {
                 for v in pgstp.iter_mut() {
@@ -301,10 +312,11 @@ pub(crate) fn geostep<F: Scalar>(
 
     // --- Fallback: a finite displacement toward XPT(knew) if S is NaN. ---
     if s.iter().any(|v| v.is_nan()) {
-        let raw: Vec<F> = (0..n).map(|i| model.xpt_row(knew)[i] - xopt[i]).collect();
+        let raw: Vec<F> =
+            (0..n).map(|i| model.xpt_row(knew)[i] - xopt[i]).collect();
         let scaling = delbar / norm(&raw);
-        let factor =
-            (F::from_f64(0.6).expect("0.6 representable") * scaling).max(half.min(scaling));
+        let factor = (F::from_f64(0.6).expect("0.6 representable") * scaling)
+            .max(half.min(scaling));
         s = raw.iter().map(|&v| factor * v).collect();
         feasible = cstrv_of(&s, &|r| r >= 0) <= zero;
     }
@@ -354,7 +366,10 @@ pub(crate) fn update_rescon<F: Scalar>(
 mod tests {
     use super::*;
 
-    fn diag_quadratic(h: &'static [f64], c: &'static [f64]) -> impl Fn(&[f64]) -> f64 {
+    fn diag_quadratic(
+        h: &'static [f64],
+        c: &'static [f64],
+    ) -> impl Fn(&[f64]) -> f64 {
         move |x: &[f64]| {
             0.5 * (0..x.len())
                 .map(|i| h[i] * (x[i] - c[i]).powi(2))
@@ -406,7 +421,12 @@ mod tests {
     fn setdrop_returns_point_for_improving_step() {
         let h = &[2.0, 4.0];
         let c = &[0.4, -0.3];
-        let model = QuadraticModel::initialize(vec![0.0, 0.0], 0.3, 5, &diag_quadratic(h, c));
+        let model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.3,
+            5,
+            &diag_quadratic(h, c),
+        );
         let d = [0.1, 0.05];
         let knew = setdrop_tr(&model, true, &d, 0.3, 0.3);
         assert!(knew.is_some());
@@ -418,7 +438,12 @@ mod tests {
     fn geostep_unconstrained_has_radius_and_denominator() {
         let h = &[2.0, 4.0];
         let c = &[0.4, -0.3];
-        let model = QuadraticModel::initialize(vec![0.0, 0.0], 0.3, 5, &diag_quadratic(h, c));
+        let model = QuadraticModel::initialize(
+            vec![0.0, 0.0],
+            0.3,
+            5,
+            &diag_quadratic(h, c),
+        );
         let n = 2;
         // knew != kopt.
         let knew = (0..model.m()).find(|&k| k != model.kopt()).unwrap();

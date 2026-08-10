@@ -31,7 +31,9 @@
 
 use std::fmt::Write as _;
 
-use basin::{BasicState, CostFunction, Gradient, GradientDescent, Problem, Solver, State};
+use basin::{
+    BasicState, CostFunction, Gradient, GradientDescent, Problem, Solver, State,
+};
 
 // ---------------------------------------------------------------------------
 // config
@@ -362,7 +364,8 @@ impl Surface {
 
     /// Normalized height in `[0, 1]`.
     fn hn(&self, x: f64, y: f64) -> f64 {
-        ((raw_height(x, y) - self.hmin) / (self.hmax - self.hmin)).clamp(0.0, 1.0)
+        ((raw_height(x, y) - self.hmin) / (self.hmax - self.hmin))
+            .clamp(0.0, 1.0)
     }
 
     /// On-surface screen position of a problem point, lifted by `lift`
@@ -413,7 +416,10 @@ impl CostFunction for Bowl {
 
 impl Gradient for Bowl {
     type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+    fn gradient(
+        &self,
+        x: &Vec<f64>,
+    ) -> Result<Vec<f64>, std::convert::Infallible> {
         let h = 1e-4;
         let mut g = vec![0.0; 2];
         for (k, gk) in g.iter_mut().enumerate() {
@@ -421,7 +427,8 @@ impl Gradient for Bowl {
             let mut xm = x.clone();
             xp[k] += h;
             xm[k] -= h;
-            *gk = (raw_height(xp[0], xp[1]) - raw_height(xm[0], xm[1])) / (2.0 * h);
+            *gk = (raw_height(xp[0], xp[1]) - raw_height(xm[0], xm[1]))
+                / (2.0 * h);
         }
         Ok(g)
     }
@@ -430,7 +437,8 @@ impl Gradient for Bowl {
 /// Trace the river: heavy-ball gradient descent on the bowl, driven
 /// through basin's `Solver` loop, capturing every iterate then decimating.
 fn trace_river() -> Vec<[f64; 2]> {
-    let mut solver = GradientDescent::new(RIVER_ALPHA).with_momentum(RIVER_BETA);
+    let mut solver =
+        GradientDescent::new(RIVER_ALPHA).with_momentum(RIVER_BETA);
     let mut problem = Problem::new(Bowl);
     let mut state = solver
         .init(&mut problem, BasicState::new(RIVER_START.to_vec()))
@@ -568,9 +576,12 @@ fn rgb_to_oklab(c: Rgb) -> [f64; 3] {
     let r = srgb_to_linear(c.0 as f64 / 255.0);
     let g = srgb_to_linear(c.1 as f64 / 255.0);
     let b = srgb_to_linear(c.2 as f64 / 255.0);
-    let l = (0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b).cbrt();
-    let m = (0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b).cbrt();
-    let s = (0.088_302_461_9 * r + 0.281_718_837_6 * g + 0.629_978_700_5 * b).cbrt();
+    let l = (0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b)
+        .cbrt();
+    let m = (0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b)
+        .cbrt();
+    let s = (0.088_302_461_9 * r + 0.281_718_837_6 * g + 0.629_978_700_5 * b)
+        .cbrt();
     [
         0.210_454_255_3 * l + 0.793_617_785_0 * m - 0.004_072_046_8 * s,
         1.977_998_495_1 * l - 2.428_592_205_0 * m + 0.450_593_709_9 * s,
@@ -579,9 +590,12 @@ fn rgb_to_oklab(c: Rgb) -> [f64; 3] {
 }
 
 fn oklab_to_rgb(lab: [f64; 3]) -> Rgb {
-    let l = (lab[0] + 0.396_337_777_4 * lab[1] + 0.215_803_757_3 * lab[2]).powi(3);
-    let m = (lab[0] - 0.105_561_345_8 * lab[1] - 0.063_854_172_8 * lab[2]).powi(3);
-    let s = (lab[0] - 0.089_484_177_5 * lab[1] - 1.291_485_548_0 * lab[2]).powi(3);
+    let l =
+        (lab[0] + 0.396_337_777_4 * lab[1] + 0.215_803_757_3 * lab[2]).powi(3);
+    let m =
+        (lab[0] - 0.105_561_345_8 * lab[1] - 0.063_854_172_8 * lab[2]).powi(3);
+    let s =
+        (lab[0] - 0.089_484_177_5 * lab[1] - 1.291_485_548_0 * lab[2]).powi(3);
     let r = 4.076_741_662_1 * l - 3.307_711_591_3 * m + 0.230_969_929_2 * s;
     let g = -1.268_438_004_6 * l + 2.609_757_401_1 * m - 0.341_319_396_5 * s;
     let b = -0.004_196_086_3 * l - 0.703_418_614_7 * m + 1.707_614_701_0 * s;
@@ -589,7 +603,12 @@ fn oklab_to_rgb(lab: [f64; 3]) -> Rgb {
     Rgb(q(r), q(g), q(b))
 }
 
-fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]) {
+fn draw_terrain(
+    svg: &mut Svg,
+    surf: &Surface,
+    pal: &Palette,
+    river: &[[f64; 2]],
+) {
     let wl = surf.water;
     // True normalized height per node. The lake is carved into *this* mesh by
     // clipping every triangle against the water plane `z = wl`; the river is the
@@ -627,7 +646,8 @@ fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]
                     [tri[1].0 as f64, tri[1].1 as f64, ht[tri[1].1][tri[1].0]],
                     [tri[2].0 as f64, tri[2].1 as f64, ht[tri[2].1][tri[2].0]],
                 ];
-                let depth = verts.iter().map(|v| v[0] + v[1]).sum::<f64>() / 3.0;
+                let depth =
+                    verts.iter().map(|v| v[0] + v[1]).sum::<f64>() / 3.0;
 
                 // Terrain shade from the true-height surface normal.
                 let scaled = |v: [f64; 3]| [v[0], v[1], v[2] * Z_WORLD];
@@ -638,22 +658,30 @@ fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]
                 if n[2] < 0.0 {
                     n = [-n[0], -n[1], -n[2]];
                 }
-                let ndotl = (n[0] * light[0] + n[1] * light[1] + n[2] * light[2]).max(0.0);
+                let ndotl =
+                    (n[0] * light[0] + n[1] * light[1] + n[2] * light[2])
+                        .max(0.0);
 
                 // Terrain (above water) and lake (below water), via the height clip.
                 let land = clip_to_water(&verts, wl, true);
                 if land.len() >= 3 {
-                    let elev = land.iter().map(|v| v[2]).sum::<f64>() / land.len() as f64;
-                    let pts = land.iter().map(|v| project(v[0], v[1], v[2])).collect();
+                    let elev = land.iter().map(|v| v[2]).sum::<f64>()
+                        / land.len() as f64;
+                    let pts = land
+                        .iter()
+                        .map(|v| project(v[0], v[1], v[2]))
+                        .collect();
                     terr.push(Facet {
                         pts,
                         depth,
-                        color: ramp_sample(&pal.terrain, elev).shade(0.70 + 0.5 * ndotl),
+                        color: ramp_sample(&pal.terrain, elev)
+                            .shade(0.70 + 0.5 * ndotl),
                     });
                 }
                 let below = clip_to_water(&verts, wl, false);
                 if below.len() >= 3 {
-                    let pts = below.iter().map(|v| project(v[0], v[1], wl)).collect();
+                    let pts =
+                        below.iter().map(|v| project(v[0], v[1], wl)).collect();
                     lake.push(Facet {
                         pts,
                         depth,
@@ -672,14 +700,17 @@ fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]
                 let (tx0, ty0, tx1, ty1) = tri_bbox(&tri2);
                 let river_color = pal.water.shade(0.70 + 0.5 * ndotl);
                 for (poly, bb) in &shapes {
-                    if bb[0] > tx1 || bb[2] < tx0 || bb[1] > ty1 || bb[3] < ty0 {
+                    if bb[0] > tx1 || bb[2] < tx0 || bb[1] > ty1 || bb[3] < ty0
+                    {
                         continue;
                     }
                     let inter = clip_convex(&tri2, poly);
                     if inter.len() >= 3 {
                         let pts = inter
                             .iter()
-                            .map(|p| project(p[0], p[1], bary_height(*p, &verts)))
+                            .map(|p| {
+                                project(p[0], p[1], bary_height(*p, &verts))
+                            })
                             .collect();
                         rivr.push(Facet {
                             pts,
@@ -709,7 +740,11 @@ fn draw_terrain(svg: &mut Svg, surf: &Surface, pal: &Palette, river: &[[f64; 2]]
 /// against a single half-space; the crossing points land exactly on `z = wl`, so
 /// the land and water pieces share the shoreline edge. Returns the clipped
 /// polygon's vertices (0, 3 or 4).
-fn clip_to_water(verts: &[[f64; 3]; 3], wl: f64, keep_land: bool) -> Vec<[f64; 3]> {
+fn clip_to_water(
+    verts: &[[f64; 3]; 3],
+    wl: f64,
+    keep_land: bool,
+) -> Vec<[f64; 3]> {
     let inside = |z: f64| if keep_land { z >= wl } else { z <= wl };
     let mut out: Vec<[f64; 3]> = Vec::with_capacity(4);
     for k in 0..3 {
@@ -743,7 +778,8 @@ fn river_shapes(river: &[[f64; 2]]) -> Vec<(Vec<[f64; 2]>, [f64; 4])> {
         return Vec::new();
     }
     let stride = (n0 / RIVER_SEGS).max(1);
-    let mut path: Vec<[f64; 2]> = river.iter().step_by(stride).copied().collect();
+    let mut path: Vec<[f64; 2]> =
+        river.iter().step_by(stride).copied().collect();
     if path.last() != river.last() {
         path.push(*river.last().unwrap());
     }
@@ -835,7 +871,9 @@ fn clip_convex(subject: &[[f64; 2]], clip: &[[f64; 2]]) -> Vec<[f64; 2]> {
         let b = cl[(e + 1) % m];
         let edge = [b[0] - a[0], b[1] - a[1]];
         // Inside = left of the directed edge (interior of a CCW polygon).
-        let inside = |p: [f64; 2]| edge[0] * (p[1] - a[1]) - edge[1] * (p[0] - a[0]) >= 0.0;
+        let inside = |p: [f64; 2]| {
+            edge[0] * (p[1] - a[1]) - edge[1] * (p[0] - a[0]) >= 0.0
+        };
         let input = std::mem::take(&mut out);
         let k = input.len();
         for i in 0..k {
@@ -966,7 +1004,11 @@ fn draw_tree(svg: &mut Svg, pal: &Palette, base: (f64, f64)) {
             pal.tree_dark,
             None,
         );
-        svg.polygon(&[apex, (bx, level), (bx + half, level)], pal.tree_lit, None);
+        svg.polygon(
+            &[apex, (bx, level), (bx + half, level)],
+            pal.tree_lit,
+            None,
+        );
     }
 }
 
@@ -1099,7 +1141,9 @@ const STARS: &[(f64, f64, f64, f64)] = &[
 fn draw_creature(svg: &mut Svg, surf: &Surface, pal: &Palette) {
     let (x, y) = (CREATURE_AT[0], CREATURE_AT[1]);
     match pal.theme {
-        Theme::Day => draw_butterfly(svg, surf.surface_point(x, y, CREATURE_HOVER)),
+        Theme::Day => {
+            draw_butterfly(svg, surf.surface_point(x, y, CREATURE_HOVER))
+        }
         Theme::Night => draw_owl(svg, surf.surface_point(x, y, CREATURE_PERCH)),
     }
 }
@@ -1258,12 +1302,18 @@ impl Svg {
     fn points(pts: &[(f64, f64)]) -> String {
         let mut d = String::new();
         for (k, &(x, y)) in pts.iter().enumerate() {
-            let _ = write!(d, "{}{:.2},{:.2}", if k == 0 { "" } else { " " }, x, y);
+            let _ =
+                write!(d, "{}{:.2},{:.2}", if k == 0 { "" } else { " " }, x, y);
         }
         d
     }
 
-    fn polygon(&mut self, pts: &[(f64, f64)], fill: Rgb, stroke: Option<(Rgb, f64)>) {
+    fn polygon(
+        &mut self,
+        pts: &[(f64, f64)],
+        fill: Rgb,
+        stroke: Option<(Rgb, f64)>,
+    ) {
         for &(x, y) in pts {
             self.track(x, y);
         }
@@ -1300,7 +1350,14 @@ impl Svg {
     }
 
     /// A circle with `fill-opacity` (for moon glow or stars).
-    fn circle_opacity(&mut self, cx: f64, cy: f64, r: f64, fill: Rgb, opacity: f64) {
+    fn circle_opacity(
+        &mut self,
+        cx: f64,
+        cy: f64,
+        r: f64,
+        fill: Rgb,
+        opacity: f64,
+    ) {
         self.track(cx - r, cy - r);
         self.track(cx + r, cy + r);
         let _ = write!(
@@ -1318,12 +1375,23 @@ impl Svg {
     /// An axis-aligned ellipse, optionally rotated `rot_deg` about its center
     /// (butterfly wings, owl body). The bounding box is tracked loosely from
     /// the larger radius so rotation can't push it out of frame.
-    fn ellipse(&mut self, cx: f64, cy: f64, rx: f64, ry: f64, rot_deg: f64, fill: Rgb) {
+    fn ellipse(
+        &mut self,
+        cx: f64,
+        cy: f64,
+        rx: f64,
+        ry: f64,
+        rot_deg: f64,
+        fill: Rgb,
+    ) {
         let m = rx.max(ry);
         self.track(cx - m, cy - m);
         self.track(cx + m, cy + m);
         let t = if rot_deg.abs() > 1e-9 {
-            format!(r#" transform="rotate({:.2} {:.2} {:.2})""#, rot_deg, cx, cy)
+            format!(
+                r#" transform="rotate({:.2} {:.2} {:.2})""#,
+                rot_deg, cx, cy
+            )
         } else {
             String::new()
         };

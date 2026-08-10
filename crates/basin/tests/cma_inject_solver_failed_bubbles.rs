@@ -13,8 +13,8 @@
 
 use basin::problems::Sphere;
 use basin::{
-    BasicState, ClosureInner, CmaEs, CmaEsState, CmaInject, Executor, Problem, Solver, State,
-    TerminationReason,
+    BasicState, ClosureInner, CmaEs, CmaEsState, CmaInject, Executor, Problem,
+    Solver, State, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
 
@@ -41,9 +41,10 @@ fn bubbles_inner_failure() {
     let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(5);
 
     // Wrap AlwaysFails in ClosureInner with a BasicState seeder.
-    let inner = ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
-        BasicState::new(x.clone())
-    });
+    let inner =
+        ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
+            BasicState::new(x.clone())
+        });
     let solver = CmaInject::with_inner_solver(cma, inner);
 
     let result = Executor::new(

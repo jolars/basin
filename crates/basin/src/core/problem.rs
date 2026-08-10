@@ -190,7 +190,10 @@ pub trait Gradient: CostFunction {
     type Gradient;
 
     /// Evaluate the gradient at `param`.
-    fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, Self::Error>;
+    fn gradient(
+        &self,
+        param: &Self::Param,
+    ) -> Result<Self::Gradient, Self::Error>;
 
     /// Evaluate cost *and* gradient at `param` in one call. The default
     /// body delegates to [`CostFunction::cost`] and
@@ -387,7 +390,10 @@ pub trait Residual {
     type Error;
 
     /// Evaluate the residual at `param`.
-    fn residual(&self, param: &Self::Param) -> Result<Self::Output, Self::Error>;
+    fn residual(
+        &self,
+        param: &Self::Param,
+    ) -> Result<Self::Output, Self::Error>;
 }
 
 /// Analytic Jacobian `J(x) = ∂r/∂x: Param → Jacobian` for least-squares
@@ -482,7 +488,10 @@ pub trait Jacobian: Residual {
     type Jacobian;
 
     /// Evaluate the Jacobian at `param`.
-    fn jacobian(&self, param: &Self::Param) -> Result<Self::Jacobian, <Self as Residual>::Error>;
+    fn jacobian(
+        &self,
+        param: &Self::Param,
+    ) -> Result<Self::Jacobian, <Self as Residual>::Error>;
 
     /// Evaluate residual *and* Jacobian at `param` in one call. The
     /// default body delegates to [`Residual::residual`] and
@@ -501,7 +510,10 @@ pub trait Jacobian: Residual {
     fn residual_and_jacobian(
         &self,
         param: &Self::Param,
-    ) -> Result<(<Self as Residual>::Output, Self::Jacobian), <Self as Residual>::Error> {
+    ) -> Result<
+        (<Self as Residual>::Output, Self::Jacobian),
+        <Self as Residual>::Error,
+    > {
         Ok((self.residual(param)?, self.jacobian(param)?))
     }
 }
@@ -597,7 +609,10 @@ pub trait Hessian: Gradient {
     type Hessian;
 
     /// Evaluate the Hessian at `param`.
-    fn hessian(&self, param: &Self::Param) -> Result<Self::Hessian, <Self as CostFunction>::Error>;
+    fn hessian(
+        &self,
+        param: &Self::Param,
+    ) -> Result<Self::Hessian, <Self as CostFunction>::Error>;
 
     /// Evaluate cost, gradient, *and* Hessian at `param` in one call.
     /// The default body delegates to [`Gradient::cost_and_gradient`]
@@ -759,7 +774,8 @@ impl EvalCounts {
             residual_evals: self.residual_evals - base.residual_evals,
             jacobian_evals: self.jacobian_evals - base.jacobian_evals,
             hessian_evals: self.hessian_evals - base.hessian_evals,
-            hessian_product_evals: self.hessian_product_evals - base.hessian_product_evals,
+            hessian_product_evals: self.hessian_product_evals
+                - base.hessian_product_evals,
         }
     }
 
@@ -890,7 +906,10 @@ impl<P: CostFunction> Problem<P> {
     /// Population solvers use this for per-generation fitness evaluation:
     /// the λ candidates of one generation are independent, so they evaluate
     /// concurrently. Short-circuits on the first `Err` (hard abort).
-    pub fn cost_batch(&mut self, params: &[P::Param]) -> Result<Vec<P::Output>, P::Error>
+    pub fn cost_batch(
+        &mut self,
+        params: &[P::Param],
+    ) -> Result<Vec<P::Output>, P::Error>
     where
         P: crate::core::parallel::MaybeSync,
         P::Param: crate::core::parallel::MaybeSync,
@@ -899,13 +918,20 @@ impl<P: CostFunction> Problem<P> {
     {
         self.counts.cost_evals += params.len() as u64;
         let inner = &self.inner;
-        crate::core::parallel::try_map_slice_with(params, || (), |(), p| inner.cost(p))
+        crate::core::parallel::try_map_slice_with(
+            params,
+            || (),
+            |(), p| inner.cost(p),
+        )
     }
 }
 
 impl<P: Gradient> Problem<P> {
     /// Counted [`Gradient::gradient`].
-    pub fn gradient(&mut self, param: &P::Param) -> Result<P::Gradient, P::Error> {
+    pub fn gradient(
+        &mut self,
+        param: &P::Param,
+    ) -> Result<P::Gradient, P::Error> {
         self.counts.gradient_evals += 1;
         self.inner.gradient(param)
     }
@@ -954,7 +980,10 @@ impl<P: Residual> Problem<P> {
 
 impl<P: Jacobian> Problem<P> {
     /// Counted [`Jacobian::jacobian`].
-    pub fn jacobian(&mut self, param: &P::Param) -> Result<P::Jacobian, <P as Residual>::Error> {
+    pub fn jacobian(
+        &mut self,
+        param: &P::Param,
+    ) -> Result<P::Jacobian, <P as Residual>::Error> {
         self.counts.jacobian_evals += 1;
         self.inner.jacobian(param)
     }
@@ -965,7 +994,8 @@ impl<P: Jacobian> Problem<P> {
     pub fn residual_and_jacobian(
         &mut self,
         param: &P::Param,
-    ) -> Result<(<P as Residual>::Output, P::Jacobian), <P as Residual>::Error> {
+    ) -> Result<(<P as Residual>::Output, P::Jacobian), <P as Residual>::Error>
+    {
         self.counts.residual_evals += 1;
         self.counts.jacobian_evals += 1;
         self.inner.residual_and_jacobian(param)
@@ -974,7 +1004,10 @@ impl<P: Jacobian> Problem<P> {
 
 impl<P: Hessian> Problem<P> {
     /// Counted [`Hessian::hessian`].
-    pub fn hessian(&mut self, param: &P::Param) -> Result<P::Hessian, <P as CostFunction>::Error> {
+    pub fn hessian(
+        &mut self,
+        param: &P::Param,
+    ) -> Result<P::Hessian, <P as CostFunction>::Error> {
         self.counts.hessian_evals += 1;
         self.inner.hessian(param)
     }
@@ -1029,7 +1062,10 @@ mod problem_wrapper_tests {
     }
     impl Gradient for Sphere {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok(x.iter().map(|xi| 2.0 * xi).collect())
         }
     }

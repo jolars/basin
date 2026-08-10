@@ -50,7 +50,8 @@ use crate::solver::powell::QuadraticModel;
 /// Test-only counter of how many times [`bigden`](QuadraticModel::bigden) has
 /// run, so a test can assert the eq. 6.17 fallback is actually exercised.
 #[cfg(test)]
-pub(crate) static BIGDEN_CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+pub(crate) static BIGDEN_CALLS: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(0);
 
 impl<F: Scalar> QuadraticModel<F> {
     /// The `t`-th column of the `Ω` block of `H` (= the `Ω`-part of `H eₜ`),
@@ -77,7 +78,13 @@ impl<F: Scalar> QuadraticModel<F> {
     /// rows of `θ·Wcheck`, eq. 6.27) and the nine coefficients `denex` of
     /// `σ̂(θ)` (eq. 6.22). Returns `(prod, denex)`. The driver gradient recurrence
     /// reads `prod`; the angle sweep reads `denex`.
-    fn bigden_iter_coeffs(&self, t: usize, alpha: F, d: &[F], s: &[F]) -> (Vec<[F; 5]>, [F; 9]) {
+    fn bigden_iter_coeffs(
+        &self,
+        t: usize,
+        alpha: F,
+        d: &[F],
+        s: &[F],
+    ) -> (Vec<[F; 5]>, [F; 9]) {
         let n = self.n;
         let m = self.m;
         let rank = m - n - 1;
@@ -251,7 +258,8 @@ impl<F: Scalar> QuadraticModel<F> {
         let half = F::from_f64(0.5).expect("0.5 representable");
         let one = F::one();
         let zero = F::zero();
-        let twopi = F::from_f64(2.0 * core::f64::consts::PI).expect("2π representable");
+        let twopi =
+            F::from_f64(2.0 * core::f64::consts::PI).expect("2π representable");
         let onep1 = from::<F>(1.1);
         let c099 = from::<F>(0.99);
         let degen = from::<F>(1e-8);
@@ -262,7 +270,8 @@ impl<F: Scalar> QuadraticModel<F> {
 
         // Seed d from BIGLAG; s usually the direction x_t − x_opt (eq. 6.21).
         let mut d = d0.to_vec();
-        let mut s: Vec<F> = (0..n).map(|i| self.xpt_row(t)[i] - xopt[i]).collect();
+        let mut s: Vec<F> =
+            (0..n).map(|i| self.xpt_row(t)[i] - xopt[i]).collect();
         let mut dd = dot(&d, &d);
         let mut ds = dot(&d, &s);
         let mut ss = dot(&s, &s);
@@ -322,11 +331,13 @@ impl<F: Scalar> QuadraticModel<F> {
             let mut denmax = sum;
             let mut isave: isize = 0;
             let iu = 49usize;
-            let step_t = twopi / F::from_f64((iu + 1) as f64).expect("iu+1 representable");
+            let step_t = twopi
+                / F::from_f64((iu + 1) as f64).expect("iu+1 representable");
             let mut tempa = zero;
             let mut tempb = zero;
             for i in 1..=iu {
-                let angle = F::from_f64(i as f64).expect("i representable") * step_t;
+                let angle =
+                    F::from_f64(i as f64).expect("i representable") * step_t;
                 fill_harmonics(&mut par, angle);
                 let sumold = sum;
                 sum = zero;
@@ -355,7 +366,9 @@ impl<F: Scalar> QuadraticModel<F> {
                     step = half * (ta - tb) / (ta + tb);
                 }
             }
-            let angle = step_t * (F::from_f64(isave as f64).expect("isave representable") + step);
+            let angle = step_t
+                * (F::from_f64(isave as f64).expect("isave representable")
+                    + step);
 
             // Commit d_j = cosθ* d + sinθ* s; recompute σ̂ and the Lagrange vector.
             fill_harmonics(&mut par, angle);
@@ -551,13 +564,18 @@ mod tests {
     /// over the radius-`‖d0‖` disk (it should not leave a far better point).
     #[test]
     fn near_optimal_vs_brute_force() {
-        let model = QuadraticModel::initialize(vec![0.4, -0.6, 0.2], 0.5, 7, &|x: &[f64]| {
-            (0..3)
-                .map(|i| (x[i] - 0.5 * (i as f64)).powi(2))
-                .sum::<f64>()
-                + 0.3 * x[0] * x[1]
-                - 0.2 * x[1] * x[2]
-        });
+        let model = QuadraticModel::initialize(
+            vec![0.4, -0.6, 0.2],
+            0.5,
+            7,
+            &|x: &[f64]| {
+                (0..3)
+                    .map(|i| (x[i] - 0.5 * (i as f64)).powi(2))
+                    .sum::<f64>()
+                    + 0.3 * x[0] * x[1]
+                    - 0.2 * x[1] * x[2]
+            },
+        );
         let t = far_t(&model);
         let d0 = model.biglag(t, 0.3).d;
         let radius = dot(&d0, &d0).sqrt();
@@ -588,7 +606,9 @@ mod tests {
     #[test]
     fn degenerate_n1_returns_seed() {
         let model =
-            QuadraticModel::initialize(vec![0.3], 0.5, 3, &|x: &[f64]| (x[0] - 1.0).powi(2));
+            QuadraticModel::initialize(vec![0.3], 0.5, 3, &|x: &[f64]| {
+                (x[0] - 1.0).powi(2)
+            });
         let kopt = model.kopt();
         let t = (0..model.m()).find(|j| *j != kopt).unwrap();
         let d0 = vec![0.2_f64];

@@ -124,9 +124,12 @@ where
 
             // Armijo failed OR φ stopped decreasing → minimum is in
             // (alpha_prev, alpha). Hand to zoom.
-            if phi > phi0 + self.c1 * alpha * phi0_prime || (i > 0 && phi >= phi_prev) {
+            if phi > phi0 + self.c1 * alpha * phi0_prime
+                || (i > 0 && phi >= phi_prev)
+            {
                 return self.zoom(
-                    problem, param, direction, phi0, phi0_prime, alpha_prev, phi_prev, alpha,
+                    problem, param, direction, phi0, phi0_prime, alpha_prev,
+                    phi_prev, alpha,
                 );
             }
 
@@ -143,7 +146,8 @@ where
             // assumed inside zoom (matches N&W).
             if phi_prime >= F::zero() {
                 return self.zoom(
-                    problem, param, direction, phi0, phi0_prime, alpha, phi, alpha_prev,
+                    problem, param, direction, phi0, phi0_prime, alpha, phi,
+                    alpha_prev,
                 );
             }
 
@@ -198,7 +202,8 @@ impl<F: Scalar> Wolfe<F> {
             trial.scaled_add(alpha_j, direction);
             let phi_j = problem.cost(&trial)?;
 
-            if phi_j > phi0 + self.c1 * alpha_j * phi0_prime || phi_j >= phi_lo {
+            if phi_j > phi0 + self.c1 * alpha_j * phi0_prime || phi_j >= phi_lo
+            {
                 alpha_hi = alpha_j;
             } else {
                 let g_j = problem.gradient(&trial)?;
@@ -216,7 +221,9 @@ impl<F: Scalar> Wolfe<F> {
             }
 
             // Bracket collapsed: return the best α we have.
-            if (alpha_hi - alpha_lo).abs() <= F::epsilon() * alpha_hi.abs().max(F::one()) {
+            if (alpha_hi - alpha_lo).abs()
+                <= F::epsilon() * alpha_hi.abs().max(F::one())
+            {
                 break;
             }
         }
@@ -244,7 +251,10 @@ mod tests {
 
     impl Gradient for Quadratic {
         type Gradient = Vec<f64>;
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+        fn gradient(
+            &self,
+            x: &Vec<f64>,
+        ) -> Result<Vec<f64>, std::convert::Infallible> {
             Ok(vec![2.0 * (x[0] - 3.0)])
         }
     }
@@ -257,8 +267,10 @@ mod tests {
         let g = p.gradient(&x).unwrap();
         let d = vec![-g[0]]; // = +6, descent direction since g[0] = -6
         let mut ls = Wolfe::new();
-        let alpha =
-            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Quadratic, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &d,
+        )
+        .unwrap();
 
         assert!(alpha > 0.0);
 
@@ -296,8 +308,10 @@ mod tests {
         let g = p.gradient(&x).unwrap();
         let d = vec![6.0];
         let mut ls = Wolfe::new();
-        let alpha =
-            LineSearch::<Quadratic, Vec<f64>>::next(&mut ls, &mut p, &x, f0, &g, &d).unwrap();
+        let alpha = LineSearch::<Quadratic, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &d,
+        )
+        .unwrap();
 
         // Strong curvature with c2=0.9 admits a wide range; just check we
         // ended up reasonably close to the line minimum.
