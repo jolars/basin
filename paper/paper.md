@@ -24,19 +24,19 @@ bibliography: paper.bib
 
 Basin is a numerical optimization library for the
 [`Rust`](https://www.rust-lang.org) programming language. Numerical optimization
-is the task of finding the inputs that minimize a function, and is a fundamental
-element across the sciences: fitting a model to data, calibrating a simulation,
+is the task of finding the inputs that minimize a function, and it underlies
+work across the sciences: fitting a model to data, calibrating a simulation,
 training a machine learning model, or choosing engineering parameters that
 minimize cost. Basin gives users a single, consistent way to both state and
 solve such problems, with a broad catalog of solvers and first-class support for
 constraints.
 
-To use Basin, a user implements a small trait describing their objective---at
-minimum a `CostFunction` that returns a value for a given input, and optionally
-its derivatives (`Gradient`, `Jacobian`, or `Hessian`). The user then hands the
-problem, a solver, and a starting point to an `Executor`, which drives the
-optimization loop, handles stopping criteria, and returns the result. Basin
-works out of the box on plain Rust vectors and, optionally, with faster
+To use Basin, a user implements one or more small traits describing their
+objective---at minimum a `CostFunction` that returns a value for a given input,
+and optionally its derivatives (`Gradient`, `Jacobian`, or `Hessian`). The user
+then hands the problem, a solver, and a starting point to an `Executor`, which
+drives the optimization loop, handles stopping criteria, and returns the result.
+Basin works out of the box on plain Rust vectors and, optionally, with faster
 linear-algebra backends available behind feature flags. The default build
 compiles to WebAssembly, which means that Basin can be used in a browser without
 a native toolchain or BLAS/LAPACK support. Documentation is published at
@@ -47,26 +47,35 @@ libraries.
 # Statement of Need
 
 Rust is increasingly used for scientific and numerical computing because it
-combines performance with memory safety and a strong package ecosystem.
-Optimization, however, is fragmented across the ecosystem: most crates
-specialize in a single family of methods, and no widely used library couples a
-broad solver catalog with first-class constraints and a browser-ready default
-build. Basin was written to close that gap, and it targets four concrete needs.
+combines performance with memory safety\ [@matsakis2014] and a strong package
+ecosystem. Optimization, however, is fragmented across the ecosystem: most
+crates specialize in a single family of methods, such as
+`levenberg-marquardt`\ [@schurg2026] for nonlinear least squares, and no widely
+used library couples a broad solver catalog with first-class constraints and a
+browser-ready default build. Users arriving from Python, where
+`scipy.optimize`\ [@virtanen2020] gathers many families behind one interface,
+find no equivalent entry point in Rust. Basin was written to close that gap, and
+it targets four concrete needs.
 
 First, Basin includes a broad catalog of solvers. Real problems rarely announce
 in advance what optimization algorithm they need, so Basin includes a large set
 of solvers behind a single, consistent API. The catalog includes
 
 - first-order and quasi-Newton methods (gradient descent, SGD, BFGS, L-BFGS,
-  L-BFGS-B, and a Newton trust-region method);
-- derivative-free methods (Nelder--Mead, one-dimensional Brent and
-  golden-section searches, NEWUOA, BOBYQA, LINCOA, COBYLA, and mesh adaptive
-  direct search);
-- nonlinear least squares (Gauss--Newton and Levenberg--Marquardt);
-- global or stochastic methods (random search, CMA-ES, differential evolution, a
-  steady-state genetic algorithm, basin-hopping); and
-- memetic combinations (MA-LS-Chain, plus CMA-ES and differential evolution
-  injection wrappers).
+  L-BFGS-B, and a Newton trust-region
+  method)\ [@nocedal2006numerical; @byrd1995; @zhu1997];
+- derivative-free methods (Nelder--Mead\ [@nelder1965], one-dimensional
+  Brent\ [@brent1973] and golden-section searches,
+  NEWUOA\ [@powell2006newuoa], BOBYQA\ [@powell2009bobyqa],
+  LINCOA\ [@powell2015lincoa], COBYLA\ [@powell1994cobyla], and mesh adaptive
+  direct search\ [@audet2006]);
+- nonlinear least squares (Gauss--Newton and
+  Levenberg--Marquardt\ [@nielsen1999]);
+- global and stochastic methods (random search, CMA-ES\ [@hansen2016],
+  differential evolution\ [@storn1997de], a steady-state genetic algorithm, and
+  basin-hopping\ [@wales1997]); and
+- memetic combinations (MA-LS-Chain\ [@molina2010], plus CMA-ES and differential
+  evolution injection wrappers).
 
 Switching methods is often as simple as changing a single line of code.
 
@@ -95,22 +104,20 @@ easily extended through Rust, such as R, Julia, and Python.
 # State of the Field
 
 The closest analog to Basin is `argmin`\ [@kroboth2025], a numerical
-optimization framework that we have taken considerable inspiration from,
-including the `Executor` driver loop, `Solver`/`Problem` trait split, per-solver
-`State`, and generic linear algebra backend design. But Basin diverges
-elsewhere:
+optimization framework from which Basin takes considerable inspiration, and
+whose overall shape it shares (see the acknowledgements). But Basin diverges
+elsewhere, in
 
-- constraints are first-class and problem-side rather than solver configuration,
+- first-class, problem-side constraints rather than solver configuration,
 - a richer linear-algebra tier implemented in pure Rust, and
-- generic termination criteria that are shared between solvers.
+- generic termination criteria shared between solvers.
 
-`gomez`\ [@nevyhosteny2025] is another similar Rust crate, which implements a
-small set of derivative-free methods and nonlinear least-squares solvers as well
-as supports constraints. Finally, there is also the `nlopt` crate, which
-implements a Rust interface to the NLopt C library\ [@johnson2026]. Although
-NLopt has a broad catalog of solvers, it requires a C toolchain to build and is
-not WebAssembly-compatible. It also does not support the same kind of generic
-termination criteria or first-class constraints as Basin.
+`gomez`\ [@nevyhosteny2025] is another Rust crate in this space, implementing a
+small set of derivative-free methods and nonlinear least-squares solvers, and
+supporting constraints. Finally, the `nlopt` crate provides a Rust interface to
+the NLopt C library\ [@johnson2026]. Although NLopt has a broad catalog of
+solvers, it requires a C toolchain to build and is not WebAssembly-compatible.
+It also lacks Basin's generic termination criteria and first-class constraints.
 
 Basin's contribution is to bring a broad catalog natively to Rust and
 WebAssembly, without linking a C or Fortran toolchain in its default
@@ -131,28 +138,28 @@ use std::convert::Infallible;
 
 struct Rosenbrock;
 
+impl CostFunction for Rosenbrock {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+        Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+    }
+}
+
+impl Gradient for Rosenbrock {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+        Ok(vec![
+            -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0].powi(2)),
+            200.0 * (x[1] - x[0].powi(2)),
+        ])
+    }
+}
+
 fn main() {
-    impl CostFunction for Rosenbrock {
-        type Param = Vec<f64>;
-        type Output = f64;
-        type Error = Infallible;
-
-        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
-            Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
-        }
-    }
-
-    impl Gradient for Rosenbrock {
-        type Gradient = Vec<f64>;
-
-        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
-            Ok(vec![
-                -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0].powi(2)),
-                200.0 * (x[1] - x[0].powi(2)),
-            ])
-        }
-    }
-
     let result = Executor::new(
         Rosenbrock,
         GradientDescent::new(1e-3),
@@ -174,7 +181,7 @@ fn main() {
 
 # Software Design
 
-Basin is organized as a generic core with a broad category of solvers layered on
+Basin is organized as a generic core with a broad catalog of solvers layered on
 top of it. The design is built on a set of principles that we think make it easy
 to extend and maintain.
 
@@ -198,14 +205,14 @@ tolerance on a gradient-free method) a compile error.
 
 ## First-Class Constraints
 
-Constraints describe the *problem*, so in Basin they are tied to problem-side
-traits, not as executor configuration nor on the state. Solvers declare support
-through traits, so a constrained problem handed to an unconstrained solver does
-not compile. For the common case of reusing an unconstrained solver, opt-in
-adapters (projection, a log-barrier method, and an augmented-Lagrangian method)
-wrap it; the adapters consume the constraint trait and expose only
-`CostFunction` and `Gradient`, which is precisely what routes a constrained
-problem onto an unconstrained solver.
+Constraints describe the *problem*, so in Basin they live in problem-side
+traits rather than in executor configuration or on the state. Solvers declare
+the constraints they consume through those traits, so an unconstrained problem
+handed to a solver that requires constraints does not compile. For the common
+case of reusing an unconstrained solver, opt-in adapters (a log-barrier method
+and an augmented-Lagrangian method) wrap the *problem*; each adapter consumes
+the constraint trait and exposes only `CostFunction` and `Gradient`, which is
+precisely what routes a constrained problem onto an unconstrained solver.
 
 ## WebAssembly Support
 
@@ -224,7 +231,7 @@ termination criteria, and the math layer.
 
 # Research Impact Statement
 
-Basin is used as the optimizer for Eunoia\ [@larsson2018]^[This package is also
+Basin is used as the optimizer for Eunoia\ [@larsson2018].^[This package is also
 made by the author.]
 
 # AI Usage Disclosure
@@ -243,7 +250,7 @@ Zaikun Zhang's modern-Fortran reference implementation of M. J. D. Powell's
 methods, used as the authoritative source for the exact formulas and as a
 cross-validation oracle. The bound-constrained L-BFGS-B solver is a port of the
 L-BFGS-B version 3.0 Fortran code by Ciyou Zhu, Richard H. Byrd, Peihuang Lu,
-and Jorge Nocedal, with the improvements by Jos&eacute; Luis Morales and Jorge
+and Jorge Nocedal, with the improvements by José Luis Morales and Jorge
 Nocedal\ [@morales2011]. Both are distributed under the BSD 3-Clause License,
 and their notices are retained in the Basin source tree.
 
