@@ -24,25 +24,23 @@ bibliography: paper.bib
 
 Basin is a numerical optimization library for the
 [`Rust`](https://www.rust-lang.org) programming language. Numerical optimization
-is the task of finding the inputs that make a function as small as possible, and
-is a fundamental element across the sciences: fitting a model to data,
-calibrating a simulation, training a machine learning model, or choosing
-engineering parameters that minimize cost. Basin gives users a single,
-consistent way to state such a problem and hand it to any of a broad catalog of
-solution methods.
+is the task of finding the inputs that minimize a function, and is a fundamental
+element across the sciences: fitting a model to data, calibrating a simulation,
+training a machine learning model, or choosing engineering parameters that
+minimize cost. Basin gives users a single, consistent way to both state and
+solve such problems, with a broad catalog of solvers and first-class support for
+constraints.
 
 To use Basin, a user implements a small trait describing their objective---at
 minimum a `CostFunction` that returns a value for a given input, and optionally
-its derivatives (`Gradient`, `Jacobian`, or `Hessian`) when a method needs
-them---then hands the problem, a solver, and a starting point to a driver loop
-called the `Executor`. The same problem can be solved by many different
-algorithms without rewriting it. Basin works out of the box on plain Rust
-vectors (`Vec<f64>`) and, optionally, with faster linear-algebra backends
-available behind feature flags. The default build compiles to WebAssembly, so
-the same code that runs on a server also runs in a web browser. Documentation,
-an in-browser solver visualizer, and reproducible cross-library benchmarks are
-published at [basin.rs](https://basin.rs), and the programming reference is at
-[docs.rs/basin](https://docs.rs/basin).
+its derivatives (`Gradient`, `Jacobian`, or `Hessian`)---then hands the problem,
+a solver, and a starting point to a driver loop called the `Executor`. Basin
+works out of the box on plain Rust vectors (`Vec<f64>`) and, optionally, with
+faster linear-algebra backends available behind feature flags. The default build
+compiles to WebAssembly, so the same code that runs on a server also runs in a
+web browser. Documentation is published at [basin.rs](https://basin.rs), which
+includes a user guide, interactive visualizer, and a benchmark suite comparing
+Basin to other optimization libraries.
 
 # Statement of Need
 
@@ -51,8 +49,7 @@ combines performance with memory safety and a strong package ecosystem.
 Optimization, however, is fragmented across the ecosystem: most crates
 specialize in a single family of methods, and no widely used library couples a
 broad solver catalog with first-class constraints and a browser-ready default
-build. Basin was written to close that gap, and its design targets four concrete
-needs.
+build. Basin was written to close that gap, and it targets four concrete needs.
 
 First, Basin includes a broad catalog of solvers. Real problems rarely announce
 in advance what optimization algorithm they need, so Basin includes a large set
@@ -70,12 +67,11 @@ of solvers behind a single, consistent API. The catalog includes
 
 Switching methods is often as simple as changing a single line of code.
 
-Second, the design enforces correctness at compile time. Termination criteria
-and observers in Basin bind on the minimum state shape they require, so a method
-that exposes no gradient cannot be paired with a gradient-based stopping
-rule---such a mismatch is a compilation error rather than a runtime failure.
-Likewise, handing a constrained problem to a solver that does not support
-constraints does not compile.
+Second, the design enforces correctness at compile time. Solvers, termination
+criteria, and observers in Basin bind on the minimum state shape they require,
+which means that a method that exposes no gradient cannot be paired with a
+gradient-based stopping rule---mismatch yield compilation errors rather than
+runtime failures.
 
 Third, Basin is designed to be portable. The default build targets WebAssembly
 with neither BLAS/LAPACK or concurrency dependencies, so Basin can be run in a
@@ -83,7 +79,7 @@ browser without a native toolchain.
 
 Fourth, support for constraints is first-class. Constraints are defined on the
 problem-side, rather than in the solver call. And trying to use a solver that
-doesn't support constraints on a constrained problem is compile error.
+doesn't support constraints on a constrained problem is also a compile error.
 
 The target audience is researchers, engineers, and students who need reliable
 optimization in Rust or any of the scientific programming languages that can be
@@ -92,41 +88,36 @@ easily extended through Rust, such as R, Julia, and Python.
 # State of the Field
 
 Within Rust, the closest analog is `argmin`\ [@kroboth2025], a numerical
-optimization framework that we have borrowed some of our design from: the
-overall shape of the crate---an `Executor` driver loop, the `Solver`/`Problem`
-trait split, and per-solver `State`---follows argmin's conventions. Basin
-diverges deliberately in a few places:
+optimization framework that we have borrowed parts of our design from, including
+the overall shape of the crate: an `Executor` driver loop, the
+`Solver`/`Problem` trait split, and per-solver `State`. We also use a similar
+linear algebra-agnostic backend idea. But Basin diverges elsewhere:
 
-- constraints are first-class and problem-side rather than solver configuration;
-- backends are tiered so that a missing linear-algebra operation is a
-  compile-time error; 0 termination criteria are bound to the state shape a
-  solver actually exposes; and
-- the entire numerical pipeline is generic over the scalar type, so `f32` and
-  `f64` both work end to end.
+- constraints are first-class and problem-side rather than solver configuration,
+- backends are tiered into a universal vector tier and a richer linear-algebra
+  tier implemented in pure Rust, so linear-algebra-heavy solvers run on every
+  backend without linking BLAS or LAPACK, and
+- termination criteria are generic and shared between solvers, gated on the
+  minimum state shape they need.
 
-These are the reasons Basin exists. Other Rust crates are narrower:
-`gomez`\ [@nevyhosteny2025] targets systems of nonlinear equations and
-derivative-free optimization, and `levenberg-marquardt`\ [@schurg2026]
-implements a single nonlinear-least-squares method.
+These are the primary reasons Basin exists.
 
-Outside Rust, mature multi-method suites exist---most prominently
-NLopt\ [@johnson2026], a C library with bindings for many languages, and SciPy's
-`optimize` module\ [@virtanen2020] in Python. Basin's contribution is to bring a
-comparably broad catalog natively to Rust and WebAssembly, without linking a C
-or Fortran toolchain in its default configuration. To keep this claim honest and
-current, Basin ships a reproducible benchmark harness that compares it against
-argmin, `gomez`, `levenberg-marquardt`, and NLopt; results are published and
-kept up to date on the [benchmarks page](https://basin.rs/benchmarks/) rather
-than frozen into this paper, where they would quickly go stale.
+There is also `gomez`\ [@nevyhosteny2025], which targets systems of nonlinear
+equations and derivative-free optimization, and `nlopt`, which implement a Rust
+interface to the NLopt C library\ [@johnson2026].
+
+Basin's contribution is to bring a comparably broad catalog natively to Rust and
+WebAssembly, without linking a C or Fortran toolchain in its default
+configuration.
 
 # Software Design
 
-Basin is organized as a small generic core with a growing set of solvers built
-on top. A driver loop, the `Executor`, iterates a `Solver` over a `State`,
-calling into the user-implemented `Problem` traits until a
-`TerminationCriterion` fires. This uses established optimization-framework
-vocabulary intentionally, to lower the barrier for users arriving from other
-libraries. Several design decisions shape the API and are worth making explicit.
+Basin is organized as a small generic core with a set of solvers built on top. A
+driver loop, the `Executor`, iterates a `Solver` over a `State`, calling into
+the user-implemented `Problem` traits until a `TerminationCriterion` fires. This
+uses established optimization-framework vocabulary intentionally, to lower the
+barrier for users arriving from other libraries. Several design decisions shape
+the API and are worth making explicit.
 
 *Tiered, broadening backends.* Parameters and linear algebra are generic over
 the backend. A small universal *vector tier*---operations such as scaled
