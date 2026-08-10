@@ -177,9 +177,7 @@ author.]
 
 Generative AI tools, including AI coding agents, were used substantially during
 the development of Basin. All AI-assisted contributions were reviewed by the
-author, and correctness was verified through the library's automated test suite
-and, for the more complex solvers, cross-validation against authoritative
-reference implementations.
+author.
 
 # Acknowledgements
 
