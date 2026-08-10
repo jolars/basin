@@ -1,5 +1,5 @@
 ---
-title: "Basin: Extensible Numerical Optimization in Rust"
+title: "Basin: Efficient and Extensible Numerical Optimization in Rust"
 tags:
   - Rust
   - numerical optimization
@@ -35,12 +35,13 @@ To use Basin, a user implements a small trait describing their objective---at
 minimum a `CostFunction` that returns a value for a given input, and optionally
 its derivatives (`Gradient`, `Jacobian`, or `Hessian`)---then hands the problem,
 a solver, and a starting point to a driver loop called the `Executor`. Basin
-works out of the box on plain Rust vectors (`Vec<f64>`) and, optionally, with
-faster linear-algebra backends available behind feature flags. The default build
-compiles to WebAssembly, so the same code that runs on a server also runs in a
-web browser. Documentation is published at [basin.rs](https://basin.rs), which
-includes a user guide, interactive visualizer, and a benchmark suite comparing
-Basin to other optimization libraries.
+works out of the box on plain Rust vectors and, optionally, with faster
+linear-algebra backends available behind feature flags. The default build
+compiles to WebAssembly, which means that Basin can be used in a browser without
+a native toolchain or BLAS/LAPACK support. Documentation is published at
+[basin.rs](https://basin.rs), which includes a user guide, interactive
+visualizer, and a benchmark suite comparing Basin to other optimization
+libraries.
 
 # Statement of Need
 
@@ -87,91 +88,151 @@ easily extended through Rust, such as R, Julia, and Python.
 
 # State of the Field
 
-Within Rust, the closest analog is `argmin`\ [@kroboth2025], a numerical
-optimization framework that we have borrowed parts of our design from, including
-the overall shape of the crate: an `Executor` driver loop, the
-`Solver`/`Problem` trait split, and per-solver `State`. We also use a similar
-linear algebra-agnostic backend idea. But Basin diverges elsewhere:
+The closest analog to Basin is `argmin`\ [@kroboth2025], a numerical
+optimization framework that we taken considerable inspiration from, including
+the `Executor` driver loop, `Solver`/`Problem` trait split, per-solver `State`,
+and generic linear algebra backend design. But Basin diverges elsewhere:
 
 - constraints are first-class and problem-side rather than solver configuration,
-- backends are tiered into a universal vector tier and a richer linear-algebra
-  tier implemented in pure Rust, so linear-algebra-heavy solvers run on every
-  backend without linking BLAS or LAPACK, and
-- termination criteria are generic and shared between solvers, gated on the
-  minimum state shape they need.
+- a richer linear-algebra tier implemented in pure Rust, and
+- generic termination criteria that are shared between solvers.
 
-These are the primary reasons Basin exists.
+`gomez`\ [@nevyhosteny2025] is another similar Rust crate, which implements a
+small set of derivative-free methods and nonlinear least-squares solvers as well
+as supports constraints. Finally, there is also the `nlopt` crate, which
+implements a Rust interface to the NLopt C library\ [@johnson2026]. Although
+NLopt has a broad catalog of solvers, it requires a C toolchain to build and is
+not WebAssembly-compatible. It also does not support the same kind of generic
+termination criteria or first-class constraints as Basin.
 
-There is also `gomez`\ [@nevyhosteny2025], which targets systems of nonlinear
-equations and derivative-free optimization, and `nlopt`, which implement a Rust
-interface to the NLopt C library\ [@johnson2026].
-
-Basin's contribution is to bring a comparably broad catalog natively to Rust and
+Basin's contribution is to bring a broad catalog natively to Rust and
 WebAssembly, without linking a C or Fortran toolchain in its default
 configuration.
 
+# Example
+
+In the following example, we implement the Rosenbrock function and its gradient,
+then minimize it with gradient descent. The `Executor` driver loop handles the
+iteration, stopping criteria, and error handling.
+
+```rust
+use basin::{
+    BasicState, CostFunction, Executor, Gradient, GradientDescent,
+    GradientTolerance,
+};
+use std::convert::Infallible;
+
+struct Rosenbrock;
+
+fn main() {
+    impl CostFunction for Rosenbrock {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = Infallible;
+
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+        }
+    }
+
+    impl Gradient for Rosenbrock {
+        type Gradient = Vec<f64>;
+
+        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            Ok(vec![
+                -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0].powi(2)),
+                200.0 * (x[1] - x[0].powi(2)),
+            ])
+        }
+    }
+
+    let result = Executor::new(
+        Rosenbrock,
+        GradientDescent::new(1e-3),
+        BasicState::new(vec![-1.2, 1.0]),
+    )
+    .max_iter(50_000)
+    .terminate_on(GradientTolerance(1e-6))
+    .run()
+    .unwrap();
+
+    println!(
+        "x = {:?}, f = {}, stopped: {:?}",
+        result.param(),
+        result.cost(),
+        result.reason
+    );
+}
+```
+
 # Software Design
 
-Basin is organized as a generic core with a set of solvers built on top. A
-driver loop, the `Executor`, iterates a `Solver` over a `State`, calling into
-the user-implemented `Problem` traits until a `TerminationCriterion` fires. This
-uses established optimization-framework vocabulary intentionally, to lower the
-barrier for users arriving from other libraries. Several design decisions shape
-the API and are worth making explicit.
+Basin is organized as a generic core with a broad category of solvers layered on
+top of it. The design is built on a set of principles that make it easy to
+extend and maintain.
 
-*Tiered, broadening backends.* Parameters and linear algebra are generic over
-the backend. A small universal *vector tier*---operations such as scaled
-addition, dot products, and norms that every backend implements well---keeps
-first-order and derivative-free solvers backend-generic across `Vec<f64>`,
-`nalgebra`\ [@crozet2026], `ndarray`\ [@ndarray], and `faer`\ [@faer]. A richer
-*linalg tier* holds matrix operations (matrix--vector products, Cholesky and
-least-squares solves, symmetric eigendecomposition), and linear-algebra-heavy
-solvers bind only the minimum subset they need, so a backend that lacks an
-operation produces a compile error instead of a runtime surprise. Coverage
-broadens only when an operation can be added *honestly*---in pure, WebAssembly-
-clean Rust with no BLAS/LAPACK stub. A pure-Rust Jacobi eigensolver, for
-instance, lets CMA-ES run on the default `Vec<f64>` backend.
+## Tiered Backends
 
-*One feature per backend, one pinned version.* Each backend is a single Cargo
-feature pinning one major version; `Vec<f64>` needs none. A backend
-major-version bump becomes a Basin major-version bump. This avoids a
-combinatorial explosion of per-version feature gates and keeps the test matrix
-and maintenance surface small.
+Parameters and linear algebra are generic over the backend. A small universal
+*vector tier*---operations such as scaled addition, dot products, and norms that
+every backend implements well---keeps first-order and derivative-free solvers
+backend-generic across `Vec<f64>`, `nalgebra`\ [@crozet2026],
+`ndarray`\ [@ndarray], and `faer`\ [@faer]. A richer *linalg tier* holds matrix
+operations (matrix--vector products, Cholesky and least-squares solves,
+symmetric eigendecomposition), and linear-algebra-heavy solvers bind only the
+minimum subset they need, so a backend that lacks an operation produces a
+compile error instead of a runtime surprise. Coverage broadens only when an
+operation can be added *honestly*---in pure, WebAssembly- clean Rust with no
+BLAS/LAPACK stub. A pure-Rust Jacobi eigensolver, for instance, lets CMA-ES run
+on the default `Vec<f64>` backend.
 
-*Framework-level termination.* Generic stopping conditions---iteration limits,
-tolerance families, evaluation budgets, and wall-clock limits---are configured
-uniformly on the `Executor` rather than reimplemented per solver, and each
-criterion binds on the minimum state shape it needs. This is what makes an
-ill-typed pairing (a gradient tolerance on a gradient-free method) a compile
-error.
+## One Feature per Backend, One Pinned Version
 
-*First-class constraints.* Constraints describe the *problem*, so they live in
-problem-side traits, never as executor configuration and never on the state.
-Solvers declare support through traits, so a constrained problem handed to an
-unconstrained solver does not compile. For the common case of reusing an
-unconstrained solver, opt-in adapters (projection, a log-barrier method, and an
-augmented-Lagrangian method) wrap it; the adapters consume the constraint trait
-and expose only `CostFunction` and `Gradient`, which is precisely what routes a
-constrained problem onto an unconstrained solver.
+Each backend is a single Cargo feature pinning one major version; `Vec<f64>`
+needs none. A backend major-version bump becomes a Basin major-version bump.
+This avoids a combinatorial explosion of per-version feature gates and keeps the
+test matrix and maintenance surface small.
 
-*Hard and external constraints.* WebAssembly support is a hard constraint on
-dependencies, not a feature: the default build must compile for
-`wasm32-unknown-unknown`, which is verified in continuous integration. Anything
-incompatible---threads, BLAS/LAPACK, native timers---sits behind a non-default
-feature, and default paths use a WebAssembly-safe time shim and a seedable,
-WebAssembly-safe random number generator. Separately, the minimum supported Rust
-version is treated as *externally* constrained by downstream consumers (chiefly
-CRAN for the planned R bindings) and is bumped only after checking those
-toolchains.
+## Compile-Time Correctness
 
-*Scalar generics.* The whole pipeline is generic over the scalar type, with
-`f64` as the default so existing call sites resolve unchanged, while `f32` works
-across states, solvers, termination criteria, and the math layer.
+Generic stopping conditions---iteration limits, tolerance families, evaluation
+budgets, and wall-clock limits---are configured uniformly on the `Executor`
+rather than reimplemented per solver, and each criterion binds on the minimum
+state shape it needs. This is what makes an ill-typed pairing (a gradient
+tolerance on a gradient-free method) a compile error.
+
+## First-Class Constraints
+
+Constraints describe the *problem*, so they live in problem-side traits, never
+as executor configuration and never on the state. Solvers declare support
+through traits, so a constrained problem handed to an unconstrained solver does
+not compile. For the common case of reusing an unconstrained solver, opt-in
+adapters (projection, a log-barrier method, and an augmented-Lagrangian method)
+wrap it; the adapters consume the constraint trait and expose only
+`CostFunction` and `Gradient`, which is precisely what routes a constrained
+problem onto an unconstrained solver.
+
+## Hard and External Constraints
+
+WebAssembly support is a hard constraint on dependencies, not a feature: the
+default build must compile for `wasm32-unknown-unknown`, which is verified in
+continuous integration. Anything incompatible---threads, BLAS/LAPACK, native
+timers---sits behind a non-default feature, and default paths use a
+WebAssembly-safe time shim and a seedable, WebAssembly-safe random number
+generator. Separately, the minimum supported Rust version is treated as
+*externally* constrained by downstream consumers (chiefly CRAN for the planned R
+bindings) and is bumped only after checking those toolchains.
+
+## Scalar Generics
+
+The whole pipeline is generic over the scalar type, with `f64` as the default so
+existing call sites resolve unchanged, while `f32` works across states, solvers,
+termination criteria, and the math layer.
 
 # Research Impact Statement
 
-Basin is used as the optimizer for Eunoia^[This package is also made by the
-author.]
+Basin is used as the optimizer for Eunoia\ [@larsson2018]^[This package is also
+made by the author.]
 
 # AI Usage Disclosure
 
