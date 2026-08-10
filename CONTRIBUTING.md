@@ -12,9 +12,9 @@ opt-in features arrive in minor releases.
 
 Basin is a Rust library crate for numerical optimization, inspired by `argmin`.
 It pairs a generic core (problem traits you implement, a pluggable termination
-layer, and an `Executor` driver loop) with a growing set of solvers spanning
-first-order and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B),
-derivative-free (Nelder-Mead, Brent, Solis-Wets, and Powell's model-based family
+layer, and an `Executor` driver loop) with a set of solvers spanning first-order
+and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B), derivative-free
+(Nelder-Mead, Brent, Solis-Wets, and Powell's model-based family
 NEWUOA/BOBYQA/LINCOA/COBYLA), nonlinear least squares (Gauss-Newton,
 Levenberg-Marquardt, trust-region-reflective), global and stochastic (random
 search, CMA-ES, a steady-state GA, memetic combinations incl. the MA-LSCh chain

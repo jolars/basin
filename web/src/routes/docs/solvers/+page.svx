@@ -1,7 +1,7 @@
 # Solvers
 
-Basin ships a growing catalog of solvers, all driven by the same `Executor`
-loop. Pick one based on what your problem provides (a gradient? only costs?
+Basin ships a large catalog of solvers, all driven by the same `Executor` loop.
+Pick one based on what your problem provides (a gradient? only costs?
 residuals?) and whether it is constrained.
 
 Each solver name links to its API page on [docs.rs](https://docs.rs/basin); the
@@ -71,10 +71,10 @@ trailing note cites the paper it implements (or the source it ports).
   `NonlinearInequalityConstraints`. Implements Powell (1994), ported from PRIMA.
 - **[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
   adaptive random local search: a randomized hill-climber testing `x + b + d`
-  and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a
-  step size `ρ` that expands after 5 successive successes and contracts after
-  3 failures. The cheapest local search in the library (O(n) memory and time,
-  cost evaluations only) and the classic memetic LS operator. Needs only a
+  and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a step
+  size `ρ` that expands after 5 successive successes and contracts after 3
+  failures. The cheapest local search in the library (O(n) memory and time, cost
+  evaluations only) and the classic memetic LS operator. Needs only a
   `CostFunction`. Implements Solis & Wets (1981).
 - **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)**:
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
@@ -104,10 +104,10 @@ analytic, or synthesized by `FiniteDiff`):
 - **[`TrustRegion`](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)**:
   second-order trust-region Newton minimizer (Nocedal & Wright, 2006, Alg. 4.1).
   The subproblem strategy is pluggable: `Steihaug` (truncated CG, the default),
-  `Dogleg`, or `CauchyPoint`. `TrustRegion::matrix_free()` drives the
-  subproblem purely through Hessian-vector products (`HessianProduct`), never
-  forming a matrix, so it scales to large problems (`Steihaug` and
-  `CauchyPoint` only; `Dogleg` needs the matrix).
+  `Dogleg`, or `CauchyPoint`. `TrustRegion::matrix_free()` drives the subproblem
+  purely through Hessian-vector products (`HessianProduct`), never forming a
+  matrix, so it scales to large problems (`Steihaug` and `CauchyPoint` only;
+  `Dogleg` needs the matrix).
 
 ## Nonlinear Least Squares
 
@@ -247,12 +247,12 @@ interval (1-D), so the vector-backend choice does not apply.
 
 † `DeInject` and `BasinHopping` are themselves backend-generic, but their
 effective coverage is the intersection of the outer driver and the chosen inner
-solver. The shipped inners (`NelderMead`, `LevenbergMarquardt`, `Lbfgsb`) are all
-backend-generic, so a backend-specific inner of your own is the only thing that
-would narrow it.
+solver. The shipped inners (`NelderMead`, `LevenbergMarquardt`, `Lbfgsb`) are
+all backend-generic, so a backend-specific inner of your own is the only thing
+that would narrow it.
 
-§ `MaLsChSw` bounds only on the vector tier—no matrix type is involved at
-all, unlike `MaLsChCma`, whose inner CMA-ES needs each backend's symmetric
+§ `MaLsChSw` bounds only on the vector tier—no matrix type is involved at all,
+unlike `MaLsChCma`, whose inner CMA-ES needs each backend's symmetric
 eigendecomposition.
 
 ‡ `TrustRegion`'s coverage depends on the subproblem strategy: `Steihaug` (the

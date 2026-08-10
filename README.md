@@ -6,7 +6,7 @@
 
 A numerical optimization library for Rust, inspired by [argmin]. It pairs a
 generic core, problem traits you implement, a pluggable termination layer, and a
-driver loop (`Executor`), with a growing set of solvers spanning first-order,
+driver loop (`Executor`), with a set of solvers spanning first-order,
 derivative-free, nonlinear least-squares, and evolutionary methods. Solvers are
 generic over the linear-algebra backend, constraints are first-class, and the
 default build compiles to `wasm32-unknown-unknown` with no BLAS/LAPACK or
