@@ -40,36 +40,51 @@ Implement `CostFunction` (and `Gradient`, when the solver needs derivatives),
 then hand the problem, a solver, and an initial state to the `Executor`:
 
 ```rust
-use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent, GradientTolerance};
+use basin::{
+    BasicState, CostFunction, Executor, Gradient, GradientDescent,
+    GradientTolerance,
+};
 use std::convert::Infallible;
 
 struct Rosenbrock;
 
-impl CostFunction for Rosenbrock {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Error = Infallible;
-    fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
-        Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+fn main() {
+    impl CostFunction for Rosenbrock {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = Infallible;
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+        }
     }
-}
 
-impl Gradient for Rosenbrock {
-    type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
-        Ok(vec![
-            -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0].powi(2)),
-            200.0 * (x[1] - x[0].powi(2)),
-        ])
+    impl Gradient for Rosenbrock {
+        type Gradient = Vec<f64>;
+        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            Ok(vec![
+                -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0].powi(2)),
+                200.0 * (x[1] - x[0].powi(2)),
+            ])
+        }
     }
-}
 
-let result = Executor::new(Rosenbrock, GradientDescent::new(1e-3), BasicState::new(vec![-1.2, 1.0]))
-    .max_iter(50_000).terminate_on(GradientTolerance(1e-6))
+    let result = Executor::new(
+        Rosenbrock,
+        GradientDescent::new(1e-3),
+        BasicState::new(vec![-1.2, 1.0]),
+    )
+    .max_iter(50_000)
+    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 
-println!("x = {:?}, f = {}, stopped: {:?}", result.param(), result.cost(), result.reason);
+    println!(
+        "x = {:?}, f = {}, stopped: {:?}",
+        result.param(),
+        result.cost(),
+        result.reason
+    );
+}
 ```
 
 Termination criteria are framework-level: the same ones compose across solvers,
