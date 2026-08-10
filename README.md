@@ -53,6 +53,7 @@ fn main() {
         type Param = Vec<f64>;
         type Output = f64;
         type Error = Infallible;
+
         fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
             Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
         }
@@ -60,6 +61,7 @@ fn main() {
 
     impl Gradient for Rosenbrock {
         type Gradient = Vec<f64>;
+
         fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
             Ok(vec![
                 -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0].powi(2)),
