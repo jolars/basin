@@ -1,6 +1,3 @@
 extend = "../panache.toml"
 
 flavor = "pandoc"
-
-[formatters]
-rust = "rustfmt"
