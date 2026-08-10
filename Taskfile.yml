@@ -243,7 +243,7 @@ tasks:
 
   bench:backends:
     desc: "Run the backend-axis benchmark and refresh the /benchmarks page data."
-    summary: |
+    summary: >
       Runs the `solver_backends` criterion bench — GD / Nelder-Mead /
       unconstrained L-BFGS on Rosenbrock across all four linear-algebra
       backends (Vec, nalgebra, ndarray, faer) — then parses criterion's output
@@ -275,7 +275,7 @@ tasks:
 
   bench:solvers:
     desc: "Run the solver-axis comparison and refresh the /benchmarks/solvers data."
-    summary: |
+    summary: >
       Runs the `solver_compare` harness — basin's five general optimizers
       (GD / Nelder-Mead / BFGS / L-BFGS / CMA-ES) on Rosenbrock n=2 from six
       curated starting points, each capped on a 20 ms wall-clock budget and
@@ -293,17 +293,19 @@ tasks:
 
   paper:build:
     desc: "Build the JOSS paper (paper/paper.pdf) with the Open Journals inara image."
-    summary: |
+    summary: >
       Runs the openjournals/inara Docker image over paper/ with JOURNAL=joss,
       producing paper/paper.pdf from paper/paper.md and paper/paper.bib. Needs
       Docker and network access (to pull the image on first run).
     cmds:
       - >
-        docker run --rm
-        --volume $PWD/paper:/data
-        --user $(id -u):$(id -g)
+        docker run --rm -it
+        -v $PWD/paper:/data
+        -u $(id -u):$(id -g)
         --env JOURNAL=joss
         openjournals/inara
+        -o pdf,preprint
+        paper.md
 
   paper:preview:
     desc: "Rebuild the paper on save and (re)open it in zathura."
