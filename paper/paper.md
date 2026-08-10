@@ -33,8 +33,9 @@ constraints.
 
 To use Basin, a user implements a small trait describing their objective---at
 minimum a `CostFunction` that returns a value for a given input, and optionally
-its derivatives (`Gradient`, `Jacobian`, or `Hessian`)---then hands the problem,
-a solver, and a starting point to a driver loop called the `Executor`. Basin
+its derivatives (`Gradient`, `Jacobian`, or `Hessian`). The user then hands the
+problem, a solver, and a starting point to an `Executor`, which drives the
+optimization loop, handles stopping criteria, and returns the result. Basin
 works out of the box on plain Rust vectors and, optionally, with faster
 linear-algebra backends available behind feature flags. The default build
 compiles to WebAssembly, which means that Basin can be used in a browser without
@@ -59,28 +60,33 @@ of solvers behind a single, consistent API. The catalog includes
 - first-order and quasi-Newton methods (gradient descent, SGD, BFGS, L-BFGS,
   L-BFGS-B, and a Newton trust-region method);
 - derivative-free methods (Nelder--Mead, one-dimensional Brent and
-  golden-section searches, Powell's model-based NEWUOA, BOBYQA, LINCOA, and
-  COBYLA, mesh adaptive direct search);
-- nonlinear least squares (Gauss--Newton, Levenberg--Marquardt, and trust-region
-  reflective); and
+  golden-section searches, NEWUOA, BOBYQA, LINCOA, COBYLA, and mesh adaptive
+  direct search);
+- nonlinear least squares (Gauss--Newton and Levenberg--Marquardt);
 - global or stochastic methods (random search, CMA-ES, differential evolution, a
-  steady-state genetic algorithm, basin-hopping, and memetic combinations).
+  steady-state genetic algorithm, basin-hopping); and
+- memetic combinations (MA-LS-Chain, plus CMA-ES and differential evolution
+  injection wrappers).
 
 Switching methods is often as simple as changing a single line of code.
 
 Second, the design enforces correctness at compile time. Solvers, termination
 criteria, and observers in Basin bind on the minimum state shape they require,
 which means that a method that exposes no gradient cannot be paired with a
-gradient-based stopping rule---mismatch yield compilation errors rather than
+gradient-based stopping rule---mismatches yield compilation errors rather than
 runtime failures.
 
 Third, Basin is designed to be portable. The default build targets WebAssembly
-with neither BLAS/LAPACK or concurrency dependencies, so Basin can be run in a
+with neither BLAS/LAPACK nor concurrency dependencies, so Basin can be run in a
 browser without a native toolchain.
 
-Fourth, support for constraints is first-class. Constraints are defined on the
-problem-side, rather than in the solver call. And trying to use a solver that
-doesn't support constraints on a constrained problem is also a compile error.
+Fourth, support for constraints is first-class. Constraints are declared on the
+problem, not passed to the solver call, and a solver that requires constraints
+will not accept an unconstrained problem---again a compile error rather than a
+runtime one. Basin supports box bounds, linear equality and inequality
+constraints, and nonlinear inequality constraints, together with opt-in adapters
+(log-barrier and augmented Lagrangian) that recast a constrained problem as an
+unconstrained one so that any unconstrained solver can be applied to it.
 
 The target audience is researchers, engineers, and students who need reliable
 optimization in Rust or any of the scientific programming languages that can be
