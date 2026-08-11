@@ -226,16 +226,23 @@ termination criteria, and the math layer.
 
 # Research Impact Statement
 
-Basin is used as the optimizer for Eunoia\ [@larsson2018].^[This package is also
-made by the author.] Benchmarks against competitors are available at
-[basin.rs](https://basin.rs/benchmarks). At the time of writing, the crate has
-roughly 25,000 monthly downloads on <https://crates.io/crates/basin>.
+Basin is used as the optimizer for the Rust library Eunoia\ [@larsson2026a],
+which in turn is used in the R package eulerr\ [@larsson2018].^[These packages
+are also made by the author.] Benchmarks against competitors are available at
+[basin.rs](https://basin.rs/benchmarks), showing that Basin generally
+outperforms `argmin` and `nlopt` and is on par with `gomez`.
+
+At the time of writing, the crate has roughly 25,000 monthly downloads on
+<https://crates.io/crates/basin>.
 
 # AI Usage Disclosure
 
-Generative AI tools, including AI coding agents, were used substantially during
-the development of Basin. All AI-assisted contributions were reviewed by the
-author.
+Claude Opus 4.8 and 5 and Fable 5 have been used substantially during the
+development of Basin, primarily for code generation and refactoring but also for
+writing documentation and for reviewing this manuscript. All AI-assisted
+contributions were reviewed by the author and the optimizers were verified
+against reference implementations, for instance PRIMA\ [@zhang2023] and
+L-BFGS-B\ [@morales2011].
 
 # Acknowledgements
 
