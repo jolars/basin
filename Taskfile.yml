@@ -313,6 +313,8 @@ tasks:
     sources:
       - paper/paper.md
       - paper/paper.bib
+    generates:
+      - paper/paper.pdf
     cmds:
       - task: paper:build
       - pgrep -f "zathura.*paper/paper.pdf" || (zathura paper/paper.pdf &)
