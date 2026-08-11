@@ -299,7 +299,7 @@ tasks:
       Docker and network access (to pull the image on first run).
     cmds:
       - >
-        docker run --rm -it
+        docker run --rm
         -v $PWD/paper:/data
         -u $(id -u):$(id -g)
         --env JOURNAL=joss
