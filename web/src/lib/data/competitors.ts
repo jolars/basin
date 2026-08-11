@@ -86,17 +86,17 @@ export const COMPETITOR_CASES: CompetitorCase[] = [
     {
         solver: "nm",
         problem: "rosenbrock",
-        blurb: "Derivative-free Nelder–Mead. basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez and nlopt construct their own simplex with their default coefficients. nlopt's curve is a per-eval best-so-far trace (no per-iteration hook), the others are per-iteration raw cost. The implementations diverge in path and per-iteration cost.",
+        blurb: "Derivative-free Nelder–Mead. Basin and argmin run from a bit-identical initial simplex (standard coefficients); gomez and nlopt construct their own simplex with their default coefficients.",
     },
     {
         solver: "lbfgs",
         problem: "rosenbrock",
-        blurb: "Limited-memory BFGS (m = 10), quasi-Newton; basin and argmin both use a More–Thuente line search; nlopt uses its bundled L-BFGS (no line-search knob exposed). nlopt's curve is a per-eval best-so-far trace; the others are per-iteration raw cost.",
+        blurb: "Limited-memory BFGS (m = 10), quasi-Newton; Basin and argmin both use a More–Thuente line search; nlopt uses its bundled L-BFGS (no line-search knob exposed).",
     },
     {
         solver: "newuoa",
         problem: "styblinski",
-        blurb: "Powell's model-based derivative-free NEWUOA, the same algorithm in two implementations: basin vs nlopt's LN_NEWUOA, with matched ρ_beg/ρ_end and npt = 2n+1. The only case off Rosenbrock, the multimodal Styblinski–Tang at n = 5 from the origin, where the quadratic-model method has more to chew on and both implementations descend to the global minimum. Both run to natural ρ-convergence (not the iteration cap). nlopt's curve is a per-eval best-so-far trace; basin's is per-iteration.",
+        blurb: "Powell's model-based derivative-free NEWUOA. Basin's implementation is based on the modernized version from PRIMA, whereas nlopt uses Powell's reference.",
     },
 ];
 

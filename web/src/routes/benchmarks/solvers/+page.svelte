@@ -22,7 +22,7 @@
 
 <Seo
     title="Solver Benchmarks – Basin"
-    description="basin's general optimizers (GD, Nelder–Mead, BFGS, L-BFGS, CMA-ES) head-to-head on standard benchmark problems, as suboptimality-vs-time convergence traces under a fixed wall-clock budget."
+    description="Basin's general optimizers (GD, Nelder–Mead, BFGS, L-BFGS, CMA-ES) head-to-head on standard benchmark problems, as suboptimality-vs-time convergence traces under a fixed wall-clock budget."
 />
 
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
@@ -34,18 +34,16 @@
         <span class="text-stone-400 dark:text-stone-600">/</span> Solvers
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Solvers: head-to-head
+        Solver Benchmarks
     </h1>
     <p class="mt-3 max-w-3xl text-stone-600 dark:text-stone-300">
-        basin's five general optimizers (gradient descent, Nelder–Mead, BFGS,
-        L-BFGS, and CMA-ES) from several seeded starting points sampled
-        uniformly in each problem's domain. Each run is capped on a fixed
-        <strong>{formatDuration(data.budgetNs)} wall-clock budget</strong>
-        and stopped early on reaching suboptimality
-        <code class="font-mono">1e−10</code>, so a line that ends at the right
-        edge of a panel never made it within the time given. Lines within a
-        panel share the same <code class="font-mono">f(x₀)</code>; lower and
-        further left is better.
+        This benchmark compares optimizers from Basin across several starting
+        points sampled randomly. Each run is capped on a fixed
+        {formatDuration(data.budgetNs)} wall-clock budget and stopped early on reaching
+        suboptimality
+        <code class="font-mono">1e−10</code>. Lines within a panel share the
+        same <code class="font-mono">f(x₀)</code>; lower and further left is
+        better.
     </p>
 
     {#each BY_PROBLEM as group}
@@ -127,12 +125,7 @@
         <code class="font-mono">Vec&lt;f64&gt;</code> backend, capped at
         {formatDuration(data.budgetNs)} per (solver, seed) run. Each per-iteration
         timestamp is the median over 11 repetitions of the same deterministic run;
-        absolute times are machine-specific; compare curves within a panel, not across
-        machines. Some seeds land in the basin of Rosenbrock's spurious local minimum
-        near
-        <code class="font-mono">(−1, 1, …, 1)</code> (which appears for
-        <code class="font-mono">n ≥ 4</code>); a line that flattens around
-        <code class="font-mono">f ≈ 4</code> is a solver caught in that trap.
+        absolute times are machine-specific.
     </p>
 
     <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">

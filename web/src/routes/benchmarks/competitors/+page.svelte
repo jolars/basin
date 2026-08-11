@@ -32,7 +32,7 @@
 
 <Seo
     title="Competitor Benchmarks – Basin"
-    description="basin versus established Rust optimization crates such as argmin and gomez on matched problems, as suboptimality-vs-time convergence traces."
+    description="Basin versus established Rust optimization crates such as argmin and gomez on matched problems, as suboptimality-vs-time convergence traces."
 />
 
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
@@ -44,10 +44,10 @@
         <span class="text-stone-400 dark:text-stone-600">/</span> Competitors
     </p>
     <h1 class="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-        Competitors: basin vs argmin, gomez, and nlopt, convergence over time
+        Competitor Benchmarks
     </h1>
     <p class="mt-3 max-w-3xl text-stone-600 dark:text-stone-300">
-        basin against <a
+        This benchmark compars Basin against <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href="https://argmin-rs.org/"
             target="_blank"
@@ -64,20 +64,10 @@
             href="https://nlopt.readthedocs.io/"
             target="_blank"
             rel="noreferrer">nlopt</a
-        >. Each library has only the algorithms it ships, so coverage varies:
-        argmin lines up on GD, NM, and L-BFGS, gomez on derivative-free NM only,
-        and nlopt on NM, L-BFGS, and NEWUOA. Most cases pit different
-        implementations of the same family against each other; the NEWUOA case
-        is the exception: basin and nlopt run the <em>same</em> Powell algorithm
-        (matched ρ_beg/ρ_end), and it's the only case off Rosenbrock
-        (Styblinski–Tang at n = 5). Because no two implementations share a code
-        path, a single mean solve time would hide the differences in path and
-        per-iteration cost. Instead each chart plots
-        <strong>suboptimality</strong>
-        <code class="font-mono">f(x) − f*</code>
-        against <strong>wall-clock time</strong> on log–log axes: how far down the
-        objective each library gets, and how long it spends getting there. Lower and
-        further left is better.
+        >. Each plot shows <em>suboptimality</em>,
+        <code class="font-mono">f(x) − f*</code>, against wall-clock time on
+        log–log axes: how far down the objective each library gets, and how long
+        it spends getting there. Lower and further left is better.
     </p>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
@@ -111,15 +101,10 @@
         own bundled
         <code class="font-mono">nalgebra::DVector&lt;f64&gt;</code>). The GD,
         NM, and L-BFGS cases run from the classic Rosenbrock start to a
-        {data.iterations}-iteration cap (a cap: the quasi-Newton case converges
-        first, and gomez's NM hits its internal no-progress stop before the
-        budget); the NEWUOA case instead runs on Styblinski–Tang (n = 5) from
-        the origin to natural ρ-convergence. Each point is the median wall-clock
+        {data.iterations}-iteration cap. Each point is the median wall-clock
         time per iteration over repeated runs (nlopt, which exposes no
         per-iteration hook, is sampled per function evaluation as a best-so-far
         curve); the solvers are deterministic, so only the timing varies.
-        Absolute times are machine-specific; compare the curves within a chart,
-        not across machines.
     </p>
 
     <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">
