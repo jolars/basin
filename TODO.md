@@ -1,7 +1,7 @@
 # TODO
 
-Ordered by recommended sequence: each item is easier or better-informed once
-the previous lands.
+Ordered by recommended sequence: each item is easier or better-informed once the
+previous lands.
 
 ## General design
 
@@ -19,12 +19,12 @@ the previous lands.
   `GradientDescent`/`BFGS`/unbounded `LBFGS`): see the completed
   inner-solver-agnostic item below. The backend gate is now lifted:
   `MatVec`/`MatTransposeVec` ship for every backend (`Vec<f64>` via the
-  hand-rolled `DenseMatrix`, nalgebra, faer, and `ndarray` via `Array2`),
-  so both methods run on the default backend with no external LA crate.
+  hand-rolled `DenseMatrix`, nalgebra, faer, and `ndarray` via `Array2`), so
+  both methods run on the default backend with no external LA crate.
   Nonlinear inequalities `c(x) ≤ 0` shipped
   (`NonlinearInequalityConstraints`, consumed by `Cobyla` (the
-  derivative-free COBYLA, Powell 1994, ported from PRIMA) via an
-  L-infinity exact-penalty merit function, and by `Mads<Constrained>`
+  derivative-free COBYLA, Powell 1994, ported from PRIMA) via an L-infinity
+  exact-penalty merit function, and by `Mads<Constrained>`
   (`Mads::constrained()`) via the *progressive barrier* (Audet & Dennis
   2009, an aggregate violation `h(x) = Σⱼ max(cⱼ, 0)²` and a threshold
   driven to zero around two incumbents; tolerates an infeasible start);
@@ -36,62 +36,39 @@ the previous lands.
   nonlinear *equality* constraints; and a `NonlinearConstraints` aggregator
   (nonlinear + linear + box, PRIMA's full COBYLA form): deferred-but-wanted,
   must be standalone like `LinearConstraints` (see
-  `.claude/rules/constraints.md`). Keep deferring a `Constraint` supertrait: box
-  (projection), linear-inequality (barrier), linear-equality
+  `.claude/rules/constraints.md`). Keep deferring a `Constraint` supertrait:
+  box (projection), linear-inequality (barrier), linear-equality
   (penalty+multipliers), and nonlinear-inequality (merit) still share no
   feasibility op beyond accessors (tenet 4).
 
-- [ ] **Broaden backend coverage (tenet 5).** Ongoing: most solvers should run
-  on most backends (`Vec<f64>`, nalgebra, ndarray, faer), gated only by
-  honest implementability (`.claude/rules/backends.md`), not by which
-  backend it is. The canonical per-solver record is the matrix in
-  `web/src/routes/docs/solvers/+page.svx` plus each solver's "Backends" doc
-  note: this entry is just the roadmap pointer. Recently landed: `BFGS`
-  on `Vec<f64>` + faer + ndarray (now all four backends); `LBFGS`/`LBFGSB`
-  on ndarray (now all four backends); `CmaEs`/`BoundedCmaEs` on `Vec<f64>`
-  via the pure-Rust cyclic-Jacobi eigensolver (`dense_eig.rs`);
-  `CmaEs`/`BoundedCmaEs` on ndarray (same Jacobi solver wired through
-  `as_standard_layout()` on `Array2`); the least-squares family
-  (`GaussNewton`/`LevenbergMarquardt`/`Trf`) on ndarray, plus `Trf` on
-  `Vec<f64>` (now all four backends each): the whole family is the
-  normal-equations path (`JᵀJ` via `GramMatrix` + a pure-Rust Cholesky
-  `LinearSolveSpd`, the same `dense_chol` reused on `Array2` through
-  `as_standard_layout()`, with `AddDiagonalVectorInPlace`/`MaxDiagonal`
-  for the LM/Trf damping), *not* QR, so no `LinearSolveLstsq` was needed;
-  the memetic family (`CmaInject`, `BoundedCmaInject`, `MaLsChCma`) now has
-  per-backend smoke tests on all four backends (the missing `Vec<f64>`,
-  ndarray, and faer integration tests landed; the trait wiring already
-  resolved everywhere). Remaining honest (pure-Rust, no BLAS) gaps: none
-  recorded. No permanent (BLAS-only) gaps recorded yet.
-
 - [x] **General trust-region Newton solver (the `Hessian`-trait consumer).**
   BUILT (branch `trust-region`): public `TrustRegion<Sub, F>` over
-  `BasicState`, consuming the `Hessian` trait: the second-order solver
-  that trait + `FiniteDiff` were added ahead of. Modeled on argmin's
+  `BasicState`, consuming the `Hessian` trait: the second-order solver that
+  trait + `FiniteDiff` were added ahead of. Modeled on argmin's
   `trustregion` structure (outer loop + pluggable subproblem), anchored to
   Nocedal & Wright Ch. 4 (Algorithm 4.1) and the in-repo TRSAPP truncated-CG
   (NEWUOA), **not** a port. (gomez's TrustRegion was rejected as a model:
-  it's a nonlinear-systems `f(x)=0` root-finder, overlapping LM and `Trf`, not a
-  general minimizer.) Trust radius δ lives in the solver struct (LM's
+  it's a nonlinear-systems `f(x)=0` root-finder, overlapping LM and `Trf`,
+  not a general minimizer.) Trust radius δ lives in the solver struct (LM's
   `mu`/`nu` precedent), not on state; one Hessian per outer iteration is
   reused across an LM-style inner shrink loop (`with_max_inner_attempts`),
   so rejected steps re-solve with smaller δ at zero extra derivative evals.
   New `pub(crate)` `(g, B)` subproblem seam (`Subproblem` trait + `Step`),
   distinct from the Powell `QuadraticModel` `TrustRegionSubproblem` seam
-  (different model type); shared `model_decrease`/`tau_to_boundary`
-  helpers. **v1 subproblems (all shipped):** `Steihaug` (matrix-free,
-  `MatVec` only, all backends, wasm-clean; the default), `Dogleg`
-  (Cholesky Newton step via `LinearSolveSpd` + Cauchy fallback on indefinite
-  B, all backends but ndarray), `CauchyPoint` (closed-form baseline,
-  universal). v1 forms full B once per accepted iterate (Dogleg needs it
-  anyway); DONE post-v1: the matrix-free `HessianProduct` problem trait +
-  `TrustRegion` `MatrixFree` mode (`TrustRegion::matrix_free()`, mode marker
-  type param, `SubproblemHvp` seam for Steihaug/CauchyPoint, counted
+  (different model type); shared `model_decrease`/`tau_to_boundary` helpers.
+  **v1 subproblems (all shipped):** `Steihaug` (matrix-free, `MatVec` only,
+  all backends, wasm-clean; the default), `Dogleg` (Cholesky Newton step via
+  `LinearSolveSpd` + Cauchy fallback on indefinite B, all backends but
+  ndarray), `CauchyPoint` (closed-form baseline, universal). v1 forms full B
+  once per accepted iterate (Dogleg needs it anyway); DONE post-v1: the
+  matrix-free `HessianProduct` problem trait + `TrustRegion` `MatrixFree`
+  mode (`TrustRegion::matrix_free()`, mode marker type param,
+  `SubproblemHvp` seam for Steihaug/CauchyPoint, counted
   `hessian_product_evals`, `FiniteDiff` synthesis per N&W eq. 8.20), so
   Steihaug needn't form B. Tests: Cauchy/Steihaug/Dogleg on quadratic +
   Rosenbrock (analytic `DenseMatrix` Hessian), f32 round-trip, `FiniteDiff`
-  central-difference Hessian on nalgebra Rosenbrock. Web catalog +
-  Backends notes updated.
+  central-difference Hessian on nalgebra Rosenbrock. Web catalog + Backends
+  notes updated.
   - **Deferred: Moré-Sorensen exact subproblem step.** The near-exact global
     solve (secular equation, hard case) via `SymmetricEigen` + Cholesky is out
     of v1 scope. It would require ingesting Moré & Sorensen (1983), "Computing a
