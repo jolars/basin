@@ -67,7 +67,7 @@ of solvers behind a single, consistent API. The catalog includes
 - nonlinear least squares (Gauss--Newton and
   Levenberg--Marquardt\ [@nielsen1999]);
 - global and stochastic methods (random search\ [@brooks1958],
-  CMA-ES\ [@hansen2016], differential evolution\ [@storn1997de], a steady-state
+  CMA-ES\ [@hansen2016], differential evolution\ [@storn1997], a steady-state
   genetic algorithm\ [@molina2010], and basin-hopping\ [@wales1997]); and
 - memetic combinations (MA-LS-Chain\ [@molina2010], plus CMA-ES and differential
   evolution injection wrappers).
