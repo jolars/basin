@@ -49,7 +49,7 @@ libraries.
 Rust is increasingly used for scientific and numerical computing because it
 combines performance with memory safety and a strong package ecosystem.
 Optimization, however, is fragmented across the ecosystem: most crates
-specialize in a single family of methods and no widely used library couples a
+specialize in a single family of methods and no widely used Rust crate couples a
 broad solver catalog with first-class constraints and a browser-ready default
 build. Basin was written to close that gap, and it targets four concrete needs.
 
