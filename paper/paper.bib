@@ -62,11 +62,9 @@
 @online{hansen2016,
   title      = {The {{CMA}} Evolution Strategy: A Tutorial},
   date       = {2016-04-04},
-  url        = {https://arxiv.org/abs/1604.00772v2},
   doi        = {10.48550/arXiv.1604.00772},
   eprint     = {1604.00772},
   author     = {Hansen, Nikolaus},
-  urldate    = {2026-05-08},
   eprinttype = {arXiv},
   langid     = {english},
   pubstate   = {prepublished},
@@ -74,7 +72,7 @@
 }
 
 @software{johnson2026,
-  title    = {{{NLopt}}: Library for Nonlinear Optimization, Wrapping Many
+  title    = {{NLopt}: Library for Nonlinear Optimization, Wrapping Many
               Algorithms for Global and Local, Constrained or Unconstrained,
               Optimization},
   author   = {Johnson, Steven G. and Schueller, Julien},
@@ -169,8 +167,8 @@
 }
 
 @software{nevyhosteny2025,
-  title    = {Gomez: Framework and Implementation for Mathematical Optimization
-              and Solving Non-Linear Systems of Equations},
+  title    = {{gomez}: Framework and Implementation for Mathematical
+              Optimization and Solving Non-Linear Systems of Equations},
   author   = {Nevyhoštěný, Petr},
   version  = {0.5.1},
   date     = {2025-08-23},
@@ -194,55 +192,76 @@
 @book{nocedal2006,
   author    = {Nocedal, Jorge and Wright, Stephen J.},
   title     = {Numerical Optimization},
-  year      = {2006},
-  publisher = {Springer},
-  address   = {New York},
+  date      = {2006},
+  publisher = {Springer New York},
+  series    = {Springer {{Series}} in {{Operations Research}} and
+               {{Financial Engineering}}},
   edition   = {2},
-  doi       = {10.1007/978-0-387-40065-5}
+  isbn      = {978-0-387-30303-1},
+  doi       = {10.1007/978-0-387-40065-5},
+  langid    = {english},
+  pagetotal = {664}
 }
 
-@article{powell1994,
-  author    = {Powell, Michael J. D.},
-  title     = {A direct search optimization method that models the objective and
-               constraint functions by linear interpolation},
-  year      = {1994},
-  journal   = {Advances in Optimization and Numerical Analysis},
+@incollection{powell1994,
+  author    = {Powell, M. J. D.},
+  editor    = {Gomez, Susana and Hennart, Jean-Pierre},
+  title     = {A Direct Search Optimization Method That Models the Objective and
+               Constraint Functions by Linear Interpolation},
+  booktitle = {Advances in {{Optimization}} and {{Numerical Analysis}}},
+  date      = {1994},
+  publisher = {Springer Netherlands},
+  location  = {Dordrecht},
   pages     = {51--67},
   doi       = {10.1007/978-94-015-8330-5_4},
-  booktitle = {Advances in Optimization and Numerical Analysis},
-  publisher = {Springer}
+  isbn      = {978-94-015-8330-5},
+  langid    = {english}
 }
 
-@techreport{powell2006,
-  author      = {Powell, Michael J. D.},
-  title       = {The {NEWUOA} software for unconstrained optimization without
-                 derivatives},
-  institution = {Department of Applied Mathematics and Theoretical Physics,
-                 University of Cambridge},
-  year        = {2006},
-  number      = {DAMTP 2004/NA05},
+@incollection{powell2006,
+  author      = {Powell, M. J. D.},
+  editor      = {Di Pillo, G. and Roma, M.},
+  title       = {The {{NEWUOA}} Software for Unconstrained Optimization without
+                 Derivatives},
+  booktitle   = {Large-Scale Nonlinear Optimization},
+  date        = {2006},
+  publisher   = {Springer US},
+  location    = {Boston, MA},
+  volume      = {83},
+  pages       = {255--297},
   doi         = {10.1007/0-387-30065-1_16},
-  note        = {In: Large-Scale Nonlinear Optimization, pp. 255--297, Springer}
+  editora     = {Pardalos, Panos},
+  editoratype = {redactor},
+  isbn        = {978-0-387-30063-4 978-0-387-30065-8}
 }
 
-@techreport{powell2009,
-  author      = {Powell, Michael J. D.},
-  title       = {The {BOBYQA} algorithm for bound constrained optimization
-                 without derivatives},
-  institution = {Department of Applied Mathematics and Theoretical Physics,
-                 University of Cambridge},
-  year        = {2009},
-  number      = {DAMTP 2009/NA06}
+@report{powell2009,
+  author      = {Powell, M. J. D.},
+  title       = {The {{BOBYQA}} Algorithm for Bound Constrained Optimization
+                 without Derivatives},
+  type        = {Technical report},
+  institution = {Optimization Online},
+  date        = {2009-08},
+  number      = {DAMTP 2009/NA06},
+  url         = {https://optimization-online.org/?p=11137},
+  langid      = {american},
+  pages       = {39},
+  urldate     = {2026-08-11}
 }
 
 @article{powell2015,
-  author  = {Powell, Michael J. D.},
-  title   = {On fast trust region methods for quadratic models with linear
-             constraints},
-  year    = {2015},
-  journal = {Mathematical Programming Computation},
-  volume  = {7},
-  pages   = {237--267}
+  author       = {Powell, M. J. D.},
+  title        = {On Fast Trust Region Methods for Quadratic Models with Linear
+                  Constraints},
+  journaltitle = {Mathematical Programming Computation},
+  date         = {2015-09-01},
+  volume       = {7},
+  number       = {3},
+  pages        = {237--267},
+  issn         = {1867-2957},
+  doi          = {10.1007/s12532-015-0084-4},
+  langid       = {english},
+  shortjournal = {Math. Program. Comput.}
 }
 
 @software{sarrazin2026,
@@ -255,16 +274,19 @@
   url      = {https://faer.veganb.tw}
 }
 
-@article{storn1997de,
-  author  = {Storn, Rainer and Price, Kenneth},
-  title   = {Differential evolution -- a simple and efficient heuristic for
-             global optimization over continuous spaces},
-  year    = {1997},
-  journal = {Journal of Global Optimization},
-  volume  = {11},
-  number  = {4},
-  pages   = {341--359},
-  doi     = {10.1023/A:1008202821328}
+@article{storn1997,
+  author       = {Storn, Rainer and Price, Kenneth},
+  title        = {Differential Evolution – a Simple and Efficient Heuristic for
+                  Global Optimization over Continuous Spaces},
+  journaltitle = {Journal of Global Optimization},
+  date         = {1997-12-01},
+  volume       = {11},
+  number       = {4},
+  pages        = {341--359},
+  issn         = {1573-2916},
+  doi          = {10.1023/A:1008202821328},
+  langid       = {english},
+  shortjournal = {J. Glob. Optim.}
 }
 
 @software{sverdrup2026,
@@ -281,7 +303,7 @@
 @article{wales1997,
   author       = {Wales, David J. and Doye, Jonathan P. K.},
   title        = {Global Optimization by Basin-Hopping and the Lowest Energy
-                  Structures of {{Lennard--Jones}} Clusters Containing up to 110
+                  Structures of {{Lennard-Jones}} Clusters Containing up to 110
                   Atoms},
   journaltitle = {The Journal of Physical Chemistry A},
   date         = {1997-07-01},
@@ -291,8 +313,7 @@
   issn         = {1089-5639},
   doi          = {10.1021/jp970984n},
   publisher    = {American Chemical Society},
-  shortjournal = {J. Phys. Chem. A},
-  urldate      = {2026-06-29}
+  shortjournal = {J. Phys. Chem. A}
 }
 
 @software{zhang2023,
@@ -301,6 +322,7 @@
   author   = {Zhang, Z},
   version  = {0.7.2},
   date     = {2023-10-09},
+  doi      = {10.5281/zenodo.8052654},
   origdate = {2020-06-10T11:33:09Z},
   url      = {https://libprima.net},
   urldate  = {2026-07-12}
