@@ -23,7 +23,7 @@ bibliography: paper.bib
 # Summary
 
 Basin is a numerical optimization library for the
-[`Rust`](https://www.rust-lang.org) programming language\ [@matsakis2014].
+[Rust](https://www.rust-lang.org) programming language\ [@matsakis2014].
 Numerical optimization is the task of finding the inputs that minimize a
 function, and it is a fundamental element across the sciences: fitting a model
 to data, calibrating a simulation, training a machine learning model, or
@@ -72,7 +72,8 @@ of solvers behind a single, consistent API. The catalog includes
 - memetic combinations (MA-LS-Chain\ [@molina2010], plus CMA-ES and differential
   evolution injection wrappers).
 
-Switching methods is often as simple as changing a single line of code.
+Switching methods is simple, sometimes requiring changing only a single line of
+code.
 
 Second, the design enforces correctness at compile time. Solvers, termination
 criteria, and observers in Basin bind on the minimum state shape they require,
@@ -82,7 +83,9 @@ runtime failures.
 
 Third, Basin is designed to be portable. The default build targets WebAssembly
 with neither BLAS/LAPACK nor concurrency dependencies, which means that Basin
-can be run in a browser without a native toolchain.
+can be run in a browser without a native toolchain. It also supports a low
+minimum supported Rust version in order to facilitate its use in R packages and
+other scientific programming languages that can be extended through Rust.
 
 Fourth, support for constraints is first-class. Constraints are declared on the
 problem, not passed to the solver call, and a solver that requires constraints
@@ -98,25 +101,28 @@ easily extended through Rust, such as R, Julia, and Python.
 
 # State of the Field
 
-The closest analog to Basin is `argmin`\ [@kroboth2025]: a numerical
-optimization framework from which Basin takes considerable inspiration from,
-including the `Executor` driver loop, the `Solver`/`Problem` trait split, and
-per-solver `State`. But Basin diverges elsewhere, bringing
+The closest analog to Basin is argmin\ [@kroboth2025]: a numerical optimization
+framework from which Basin takes considerable inspiration, including the
+`Executor` driver loop, the `Solver`/`Problem` trait split, and per-solver
+`State`. But Basin diverges elsewhere, bringing
 
 - first-class, problem-side constraints rather than solver configuration,
 - a richer linear-algebra tier implemented in pure Rust, and
 - generic termination criteria shared between solvers.
 
-`gomez`\ [@nevyhosteny2025] is another Rust crate with similar scope,
-implementing a small set of derivative-free methods and nonlinear least-squares
-solvers, and supporting constraints. Finally, the `nlopt` crate provides a Rust
-interface to the NLopt C library\ [@johnson2026]. Although NLopt has a broad
-catalog of solvers, it requires a C toolchain to build and is not
-WebAssembly-compatible. It also lacks Basin's generic termination criteria and
-first-class constraints support.
+gomez\ [@nevyhosteny2025] is another Rust crate with similar scope, implementing
+a small set of derivative-free methods and nonlinear least-squares solvers, and
+supporting constraints. Compared to Basin, it has a smaller solver catalog, only
+supports box constraints, and does not have a generic backend tier for linear
+algebra.
 
-Basin's contribution is to bring a broad catalog natively to Rust and
-WebAssembly, without linking a C or Fortran toolchain in its default
+Finally, the nlopt crate provides a Rust interface to the NLopt C
+library\ [@johnson2026]. Although NLopt has a broad catalog of solvers, it
+requires a C toolchain to build and is not WebAssembly-compatible. It also lacks
+Basin's generic termination criteria and first-class constraints support.
+
+In summary, Basin's contribution is to bring a broad catalog natively to Rust
+and WebAssembly, without linking a C or Fortran toolchain in its default
 configuration.
 
 # Example
@@ -165,13 +171,6 @@ fn main() {
     .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
-
-    println!(
-        "x = {:?}, f = {}, stopped: {:?}",
-        result.param(),
-        result.cost(),
-        result.reason
-    );
 }
 ```
 
@@ -186,10 +185,13 @@ to extend and maintain.
 Parameters and linear algebra are generic over the backend. A universal *vector
 tier* (operations such as scaled addition, dot products, and norms that every
 backend implements well) keeps first-order and derivative-free solvers
-backend-generic across `Vec<f64>`, `nalgebra`\ [@crozet2026],
-`ndarray`\ [@sverdrup2026], and `faer`\ [@sarrazin2026]. Each backend is a
-single Cargo feature pinning one major version. A backend major-version bump
-becomes a Basin major-version bump.
+backend-generic across `Vec<f64>`, nalgebra\ [@crozet2026],
+ndarray\ [@sverdrup2026], and faer\ [@sarrazin2026]. Each backend is activated
+via a single Cargo feature pinning one major version and a backend major-version
+bump becomes a Basin major-version bump. This differs from argmin, which uses
+versioned backend traits and requires a new trait for each backend version. We
+opted to keep the backend traits versionless and instead version the entire
+crate in order to improve maintainability.
 
 ## Compile-Time Correctness
 
@@ -197,7 +199,9 @@ Generic stopping conditions (iteration limits, tolerance families, evaluation
 budgets, and wall-clock limits) are configured uniformly on the `Executor`
 rather than reimplemented per solver, and each criterion binds on the minimum
 state shape it needs. This is what makes an ill-typed pairing (a gradient
-tolerance on a gradient-free method) a compile error.
+tolerance on a gradient-free method) a compile error. The cost of this is more
+complex generic signatures, but the benefit is that Basin users can be confident
+that their stopping criteria are compatible with their solver and problem.
 
 ## Constraints
 
@@ -211,12 +215,16 @@ each adapter consumes the constraint trait and exposes only `CostFunction` and
 `Gradient`, which is precisely what routes a constrained problem onto an
 unconstrained solver.
 
-## WebAssembly Support
+## Compatiblitiy
 
-Basin is WebAssembly-compatible by default. Anything incompatible---threads,
-BLAS/LAPACK, native timers---are opt-in features, and default paths use a
-WebAssembly-safe time shim and a seedable, WebAssembly-safe random number
-generator.
+Basin is WebAssembly-compatible by default. Parallelism and BLAS/LAPACK
+integration are opt-in features, and default paths use a WebAssembly-safe time
+shim and a seedable, WebAssembly-safe random number generator.
+
+The minimum supported Rust version is kept deliberately low in order to comply
+with the toolchain requirements of the R package network
+[CRAN](https://cran.r-project.org) in order to facilitate Basin's use in R
+packages such as [eulerr](https://cran.r-project.org/package=eulerr).
 
 ## Scalar Generics
 
@@ -228,25 +236,34 @@ termination criteria, and the math layer.
 
 Basin is used as the optimizer for the Rust library Eunoia\ [@larsson2026a],
 which in turn is used in the R package eulerr\ [@larsson2018].^[These packages
-are also made by the author.] Benchmarks against competitors are available at
-[basin.rs](https://basin.rs/benchmarks), showing that Basin generally
-outperforms `argmin` and `nlopt` and is on par with `gomez`.
+are also made by the author.] It is also used in the R package
+balancing\ [@barrett2026], which calculates optimization-based balancing weights
+for causal inference.
 
-At the time of writing, the crate has roughly 25,000 monthly downloads on
-<https://crates.io/crates/basin>.
+Benchmarks against competitors are available at
+[basin.rs](https://basin.rs/benchmarks), showing that Basin generally
+outperforms argmin and nlopt and is on par with gomez.
+
+At the time of writing, the crate has been downloaded roughly 30,000 times on
+<https://crates.io/crates/basin> over the last three months and has been
+featured in *This Week in Rust*\ [@arlynx2026].
 
 # AI Usage Disclosure
 
-Claude Opus 4.8 and 5 and Fable 5 have been used substantially during the
-development of Basin, primarily for code generation and refactoring but also for
-writing documentation and for reviewing this manuscript. All AI-assisted
-contributions were reviewed by the author and the optimizers were verified
-against reference implementations, for instance PRIMA\ [@zhang2023] and
-L-BFGS-B\ [@morales2011].
+Generative AI tools were used substantially during the development of Basin:
+Claude Code, running Claude Opus 4.8, Claude Opus 5, and Fable 5, was used for
+code generation and refactoring, writing unit tests, writing documentation, and
+reviewing this manuscript. The author made all core design decisions---the
+architecture, the design tenets, and the API---and reviewed, edited, and
+validated all AI-assisted contributions. In order to further verify correctness,
+the Powell-family solvers were developed against PRIMA\ [@zhang2023] and
+cross-validated against it numerically, and the L-BFGS-B implementation was
+checked for numerical agreement with the original Fortran code\ [@zhu1997]. The
+remaining solvers are covered by a test suite problems.
 
 # Acknowledgements
 
-As we have previously described, Basin owes a substantial intellectual debt to
+As we have mentioned, Basin owes a substantial intellectual debt to
 `argmin`\ [@kroboth2025]. The Powell-family derivative-free solvers are derived
 from PRIMA\ [@zhang2023], Zaikun Zhang's modern-Fortran reference implementation
 of M. J. D. Powell's methods, used as the authoritative source for the exact
