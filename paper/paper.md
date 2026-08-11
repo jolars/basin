@@ -61,7 +61,7 @@ of solvers behind a single, consistent API. The catalog includes
   L-BFGS-B, and a Newton trust-region
   method)\ [@nocedal2006; @byrd1995; @zhu1997];
 - derivative-free methods (Nelder--Mead\ [@nelder1965], one-dimensional
-  Brent\ [@brent1973] and golden-section searches, NEWUOA\ [@powell2006],
+  Brent\ [@brent2013] and golden-section searches, NEWUOA\ [@powell2006],
   BOBYQA\ [@powell2009], LINCOA\ [@powell2015], COBYLA\ [@powell1994], and mesh
   adaptive direct search\ [@audet2006]);
 - nonlinear least squares (Gauss--Newton and
@@ -98,7 +98,8 @@ easily extended through Rust, such as R, Julia, and Python.
 
 # State of the Field
 
-The closest analog to Basin is `argmin`\ [@kroboth2025]: a numerical optimization framework from which Basin takes considerable inspiration from,
+The closest analog to Basin is `argmin`\ [@kroboth2025]: a numerical
+optimization framework from which Basin takes considerable inspiration from,
 including the `Executor` driver loop, the `Solver`/`Problem` trait split, and
 per-solver `State`. But Basin diverges elsewhere, bringing
 
