@@ -164,6 +164,33 @@
 //!
 //! The default build is wasm-friendly: no BLAS/LAPACK and no threads.
 //! Parallelism is behind the opt-in `parallel` feature.
+//!
+//! # Citation
+//!
+//! If you use Basin in your research, please cite the paper:
+//!
+//! > Larsson, J. (2026). *Basin: Efficient and Extensible Numerical
+//! > Optimization in Rust* (arXiv:2608.11279). arXiv.
+//! > <https://doi.org/10.48550/arXiv.2608.11279>
+//!
+//! ```bibtex
+//! @misc{larsson2026basin,
+//!   title         = {Basin: Efficient and Extensible Numerical Optimization in {{Rust}}},
+//!   shorttitle    = {Basin},
+//!   author        = {Larsson, Johan},
+//!   year          = {2026},
+//!   month         = aug,
+//!   number        = {arXiv:2608.11279},
+//!   eprint        = {2608.11279},
+//!   primaryclass  = {cs.LG},
+//!   publisher     = {arXiv},
+//!   doi           = {10.48550/arXiv.2608.11279},
+//!   archiveprefix = {arXiv}
+//! }
+//! ```
+//!
+//! `CITATION.cff` at the repo root carries the same reference in
+//! machine-readable form.
 #![cfg_attr(docsrs, feature(doc_cfg), doc(auto_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]

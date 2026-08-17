@@ -4,13 +4,30 @@ version: 1.0.0
 license: "MIT or Apache-2.0"
 type: software
 abstract: "Numerical optimization in pure Rust, with pluggable linear-algebra backends and WASM support."
-message: "If you use this software, please cite it as below."
+message: "If you use this software, please cite the paper below."
 authors:
   - given-names: Johan
     family-names: Larsson
-    affiliation: Univeristy of Copenhagen
+    affiliation: University of Copenhagen
     orcid: "https://orcid.org/0000-0002-4029-5945"
 keywords:
   - optimization
   - nonlinear least squares
   - quasi-Newton methods
+preferred-citation:
+  type: article
+  title: "Basin: Efficient and Extensible Numerical Optimization in Rust"
+  authors:
+    - given-names: Johan
+      family-names: Larsson
+      affiliation: University of Copenhagen
+      orcid: "https://orcid.org/0000-0002-4029-5945"
+  year: 2026
+  month: 8
+  journal: arXiv
+  doi: 10.48550/arXiv.2608.11279
+  url: "https://arxiv.org/abs/2608.11279"
+  identifiers:
+    - type: other
+      value: "arXiv:2608.11279"
+      description: "arXiv eprint identifier"

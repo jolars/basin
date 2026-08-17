@@ -148,6 +148,51 @@ The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
 is behind the opt-in `parallel` feature; BLAS/LAPACK acceleration is behind
 `ndarray-blas` and `nalgebra-lapack`.
 
+## Citation
+
+If you use Basin in your research, please cite the paper:
+
+> Larsson, J. (2026). *Basin: Efficient and Extensible Numerical Optimization in
+> Rust* (arXiv:2608.11279). arXiv. <https://doi.org/10.48550/arXiv.2608.11279>
+
+```bibtex
+@misc{larsson2026basin,
+  title         = {Basin: Efficient and Extensible Numerical Optimization in {{Rust}}},
+  shorttitle    = {Basin},
+  author        = {Larsson, Johan},
+  year          = {2026},
+  month         = aug,
+  number        = {arXiv:2608.11279},
+  eprint        = {2608.11279},
+  primaryclass  = {cs.LG},
+  publisher     = {arXiv},
+  doi           = {10.48550/arXiv.2608.11279},
+  archiveprefix = {arXiv}
+}
+```
+
+<details>
+<summary>BibLaTeX</summary>
+
+```bibtex
+@online{larsson2026basin,
+  title       = {Basin: Efficient and Extensible Numerical Optimization in {{Rust}}},
+  shorttitle  = {Basin},
+  author      = {Larsson, Johan},
+  date        = {2026-08-11},
+  eprint      = {2608.11279},
+  eprinttype  = {arXiv},
+  eprintclass = {cs.LG},
+  doi         = {10.48550/arXiv.2608.11279},
+  pubstate    = {prepublished}
+}
+```
+
+</details>
+
+[CITATION.cff](CITATION.cff) carries the same reference in machine-readable
+form, and [basin.rs/docs] renders it in APA, BibTeX, and BibLaTeX.
+
 ## Acknowledgements
 
 Basin owes a substantial intellectual debt to [argmin]: the overall shape of the

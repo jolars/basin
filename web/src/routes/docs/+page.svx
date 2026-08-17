@@ -1,3 +1,7 @@
+<script lang="ts">
+    import Citation from "$lib/docs/Citation.svelte";
+</script>
+
 # Documentation
 
 **Basin** is a numerical optimization library for Rust. It follows the overall
@@ -91,6 +95,17 @@ A rough map from the shape of your problem to where to start. The
   describe the *problem*, so they live problem-side. Bounded solvers (`Lbfgsb`,
   bounded `NelderMead`, `Trf`) consume them directly; adapters (projection,
   log-barrier, augmented Lagrangian, or `Cobyla`) wrap unconstrained solvers.
+
+## Citing Basin
+
+If you use Basin in your research, please cite the paper describing it,
+[arXiv:2608.11279](https://arxiv.org/abs/2608.11279):
+
+<Citation />
+
+The repository's
+[`CITATION.cff`](https://github.com/jolars/basin/blob/main/CITATION.cff) carries
+the same reference in machine-readable form.
 
 ## Where to Go Next
 
