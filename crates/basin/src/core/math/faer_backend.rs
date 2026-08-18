@@ -282,10 +282,8 @@ impl<F: Scalar + faer_traits::ComplexField> BoxAffineScaling<F> for Col<F> {
     }
 }
 
-// ----------------------------------------------------------------------
-// linalg tier: dense ops on Mat<f64> with V = Col<f64>.
+// Dense linear algebra on Mat<F> with V = Col<F>.
 // faer 0.24 has no `*` operator on Mat/Col, so go through `matmul` directly.
-// ----------------------------------------------------------------------
 
 impl<F> MatVec<Col<F>> for Mat<F>
 where

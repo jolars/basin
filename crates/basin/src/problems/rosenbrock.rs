@@ -216,9 +216,7 @@ mod faer_impl {
     }
 }
 
-// ----------------------------------------------------------------------
 // Residual-form Rosenbrock (n = 2 only)
-// ----------------------------------------------------------------------
 // The 2D Rosenbrock factors as a 2-residual least-squares problem:
 //   r₀ = 10·(x₁ − x₀²)
 //   r₁ = 1 − x₀

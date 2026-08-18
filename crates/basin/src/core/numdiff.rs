@@ -212,9 +212,7 @@ impl<P> FiniteDiff<P> {
     }
 }
 
-// ----------------------------------------------------------------------
 // Delegated function-value traits.
-// ----------------------------------------------------------------------
 
 impl<P: CostFunction> CostFunction for FiniteDiff<P> {
     type Param = P::Param;
@@ -250,9 +248,7 @@ impl<P: BoxConstraints> BoxConstraints for FiniteDiff<P> {
     }
 }
 
-// ----------------------------------------------------------------------
 // Synthesized derivative traits.
-// ----------------------------------------------------------------------
 
 impl<P, V> Gradient for FiniteDiff<P>
 where
@@ -369,9 +365,7 @@ where
     }
 }
 
-// ----------------------------------------------------------------------
 // Step-size helper.
-// ----------------------------------------------------------------------
 
 /// Numerical-Recipes adaptive step `scale · max(|xⱼ|, 1)`, re-rounded so
 /// `xⱼ + h` is exactly representable (removes a rounding error in the
@@ -385,9 +379,7 @@ fn nr_step(xj: f64, scale: f64, fixed_step: Option<f64>) -> f64 {
     if reround == 0.0 { h } else { reround }
 }
 
-// ----------------------------------------------------------------------
 // Free functions: the tested numerics core, reused by the wrapper.
-// ----------------------------------------------------------------------
 
 /// Central-difference gradient `∇f(x)ⱼ ≈ (f(x+hⱼeⱼ) − f(x−hⱼeⱼ)) / 2hⱼ`.
 ///

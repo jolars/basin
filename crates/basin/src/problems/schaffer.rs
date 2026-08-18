@@ -27,9 +27,7 @@ pub const STANDARD_LOWER: f64 = -100.0;
 /// Standard upper bound on each coordinate.
 pub const STANDARD_UPPER: f64 = 100.0;
 
-// ----------------------------------------------------------------------
 // Schaffer N.2 (smooth, gradient provided)
-// ----------------------------------------------------------------------
 
 /// Evaluates the Schaffer N.2 function at `x`. Requires `x.len() == 2`.
 pub fn schaffer_n2(x: &[f64]) -> f64 {
@@ -130,9 +128,7 @@ impl Gradient for SchafferN2<Vec<f64>> {
     }
 }
 
-// ----------------------------------------------------------------------
 // Schaffer N.4 (non-differentiable, cost-only)
-// ----------------------------------------------------------------------
 
 /// Evaluates the Schaffer N.4 function at `x`. Requires `x.len() == 2`.
 pub fn schaffer_n4(x: &[f64]) -> f64 {

@@ -3,12 +3,7 @@
 //! Carries the λ sampled candidates (the [`PopulationState`] surface)
 //! **and** the search distribution that defines them: the mean `m`,
 //! step-size `σ`, covariance `C`, its eigenpair `B`/`D` (with `D⁻¹`),
-//! and the evolution paths `p_σ`/`p_c`. Every other basin solver
-//! keeps its iterate in the state; CMA-ES used to park the distribution
-//! on the solver struct, which made its canonical TolX test a hardcoded
-//! `terminate` hook rather than a composable
-//! [`TerminationCriterion`](crate::core::termination::TerminationCriterion).
-//! Holding the distribution here lets
+//! and the evolution paths `p_σ`/`p_c`. Holding the distribution here lets
 //! [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance) bind on
 //! it like [`SimplexTolerance`](crate::core::termination::SimplexTolerance)
 //! binds on a simplex, and lets both [`CmaEs`](crate::solver::CmaEs) and
@@ -53,7 +48,7 @@ use crate::core::state::{CountsMirror, PopulationState, State};
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
 pub struct CmaEsState<V, M, F = f64> {
-    // --- population (PopulationState surface) ---
+    // PopulationState data.
     /// λ sampled candidates, sorted by ascending cost after every
     /// `init`/`next_iter`.
     pub(crate) candidates: Vec<V>,
@@ -61,14 +56,14 @@ pub struct CmaEsState<V, M, F = f64> {
     /// *penalized* cost for the bounded variant).
     pub(crate) costs: Vec<F>,
 
-    // --- mean as the iterate (param/cost) ---
+    // The mean is the recommended iterate.
     /// Distribution mean `m`, the recommended solution (`xfavorite`).
     pub(crate) m: V,
     /// `f(m)`, evaluated once per generation by the solver. `None`
     /// before [`Solver::init`](crate::core::solver::Solver::init).
     pub(crate) m_cost: Option<F>,
 
-    // --- search distribution ---
+    // Search distribution.
     pub(crate) sigma: F,
     pub(crate) p_sigma: V,
     pub(crate) p_c: V,

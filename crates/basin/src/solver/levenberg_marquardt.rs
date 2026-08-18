@@ -208,36 +208,15 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     tau: F,
     max_inner_attempts: u32,
 
-    // Runtime state, populated by `init` and mutated by `next_iter`
-    // through `&mut self`.
     mu: Option<F>,
     nu: F,
 
-    // Marquardt scaling diagonal `D`: the monotone running max of
-    // `diag(JᵀJ)` (Moré 1978). Seeded at `init` from `diag(J(x₀)ᵀJ(x₀))`
-    // with zero columns floored to 1, then maxed against each
-    // iteration's Gram diagonal. The damped system is `(JᵀJ + μ·D) h =
-    // −Jᵀr`.
+    // Monotone Marquardt scaling diagonal D = max diag(JᵀJ). Zero
+    // columns are floored to one so damping keeps the system nonsingular.
     diag: Option<V>,
 
-    // Cross-iteration caches keyed on "did the iterate move?". A
-    // rejected step leaves `x` unchanged, so everything derived from it,
-    // the residual `r`, the Gram `A = JᵀJ`, and the gradient
-    // `g = Jᵀr`, is still valid on the next outer iteration and is
-    // reused. Madsen-Nielsen Algorithm 3.16 recomputes `A` and `g` only
-    // *after* an accepted step (line 13), never on a reject; caching
-    // them here makes basin's executor-driven loop (one `next_iter` per
-    // damping attempt) match that, instead of reforming the
-    // dominant-cost Gram from an unchanged `J` on every rejected step
-    // (issue #10).
-    //
-    // - `r_cache`: refreshed to `r(x_trial)` on accept, to the unchanged
-    //   `r` on reject; the trial residual is computed in the gain-ratio
-    //   test, so accepting never re-evaluates it.
-    // - `gram_cache`/`jtr_cache`: set together on reject (the iterate
-    //   held still), cleared together on accept (the new `J`, and so
-    //   `A`, `g`, must be recomputed at the moved iterate). When both
-    //   are absent the step re-evaluates `J` once and rebuilds them.
+    // Rejected steps leave these quantities valid. Accepted steps retain
+    // the trial residual but invalidate the Gram matrix and gradient.
     r_cache: Option<V>,
     gram_cache: Option<M>,
     jtr_cache: Option<V>,
@@ -404,28 +383,16 @@ where
         problem: &mut Problem<P>,
         mut state: NllsState<V, F>,
     ) -> Result<NllsState<V, F>, Self::Error> {
-        // Seed cost so iter-0 termination criteria see a populated
-        // state. Also evaluate J(x₀) once to seed the Marquardt scaling
-        // diagonal `D`. The Gram `A₀`, gradient `g₀`, and residual `r`
-        // are stashed into the caches so the first `next_iter` reuses
-        // them, with no redundant evaluation (or re-formed Gram) at the
-        // init/iter-0 boundary.
+        // Seed both the state and the cross-iteration caches from one
+        // residual/Jacobian evaluation.
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
         state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
 
-        // A₀ = J(x₀)ᵀJ(x₀); its diagonal is D₀, the per-parameter
-        // curvature. A column that's exactly zero at x₀ contributes 0
-        // there, which would make `μ·D` vanish on that coordinate and
-        // the Gram singular; following MINPACK we floor those to 1 so an
-        // insensitive parameter simply doesn't move. The running max in
-        // `next_iter` then keeps `D` monotone.
         let a = j.gram();
         let mut d = a.diagonal();
         d.floor_zeros_in_place(F::one());
         self.diag = Some(d);
 
-        // μ₀ = τ. Dimensionless: the per-parameter magnitude lives in
-        // `D`, so the initial per-column damping is `τ·diag(J(x₀)ᵀJ(x₀))`.
         self.mu = Some(self.tau);
         self.nu = F::from_f64(2.0).unwrap();
         self.jtr_cache = Some(j.mat_transpose_vec(&r));
@@ -439,23 +406,11 @@ where
         problem: &mut Problem<P>,
         mut state: NllsState<V, F>,
     ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
-        // `r` is at the current `state.param` after init (initial point)
-        // or the previous iteration's bookkeeping (post-accept: r at the
-        // new iterate; post-reject: unchanged). Only count an eval on a
-        // cache miss, so `cost_evals` grows with *actual* invocations.
         let r = match self.r_cache.take() {
             Some(r) => r,
             None => problem.residual(&state.param)?,
         };
 
-        // A = JᵀJ (Gram) and g = Jᵀr (the gradient of ½‖r‖²). On a
-        // rejected step the iterate didn't move, so A and g are unchanged
-        // and reused from the caches; Madsen-Nielsen Algorithm 3.16
-        // recomputes them only after an *accepted* step. When the caches
-        // are cold (post-accept or, but for init's seeding, first
-        // iteration) re-evaluate J once and rebuild them. This is the
-        // issue-#10 fix: a rejected step no longer reforms the
-        // dominant-cost Gram from an unchanged J.
         let (a, g) = match (self.gram_cache.take(), self.jtr_cache.take()) {
             (Some(a), Some(g)) => (a, g),
             _ => {
@@ -463,16 +418,13 @@ where
                 (j.gram(), j.mat_transpose_vec(&r))
             }
         };
-        // The current per-column curvatures `diag(JᵀJ)ⱼ = ‖J·,ⱼ‖²` feed
-        // both the damping and the relative gradient test.
         let diag_cur = a.diagonal();
 
-        // First-order optimality: converge on *either* test, matching
-        // MINPACK's independent checks:
+        // MINPACK's absolute and relative first-order tests:
         //   * absolute   ‖Jᵀr‖_∞ ≤ tol_grad           (Madsen et al. 3.3a)
         //   * relative   max_j |gⱼ|/(‖J·,ⱼ‖·‖r‖) ≤ tol_grad_rel  (MINPACK gtol)
-        // The relative measure is the cosine of the angle between r and
-        // each Jacobian column. Squaring avoids a sqrt: it's
+        // The relative measure is the cosine between r and each Jacobian
+        // column. Squaring avoids a square root:
         // `max_j gⱼ²/diag(JᵀJ)ⱼ ≤ tol_grad_rel²·‖r‖²`. A zero column has
         // `diag(JᵀJ)ⱼ = 0` and `gⱼ = 0`; flooring the denominator to 1
         // makes that term `0/1 = 0` rather than `0/0 = NaN`, which is
@@ -489,10 +441,7 @@ where
                 <= self.tol_grad_rel * self.tol_grad_rel * r.norm_squared()
         };
         if abs_converged || rel_converged {
-            // Restore the caches so a subsequent `run()` (e.g. via
-            // `InnerExecutor`) doesn't see corrupted state, though
-            // in practice `init` resets them on each reuse. The iterate
-            // didn't move, so A and g are still valid.
+            // Termination does not move the iterate, so the caches remain valid.
             self.r_cache = Some(r);
             self.gram_cache = Some(a);
             self.jtr_cache = Some(g);
@@ -502,10 +451,7 @@ where
         let mut neg_g = g.clone();
         neg_g.neg_in_place();
 
-        // Marquardt scaling: maintain `D` as the monotone running max of
-        // `diag(JᵀJ)` (Moré 1978). `D` was floored away from zero at
-        // `init`, and the max only grows entries, so it stays strictly
-        // positive; the damped Gram below is SPD by construction.
+        // Moré's monotone scaling keeps the damped Gram positive definite.
         let mut d = self
             .diag
             .take()
@@ -517,11 +463,7 @@ where
             .expect("mu not set: Solver::init must run before next_iter");
         let mut nu = self.nu;
 
-        // Inner damping loop: bump μ on Cholesky failure. In practice
-        // the first attempt succeeds: a properly damped (JᵀJ + μ·D) is
-        // SPD by construction. The retry path matters only for
-        // pathological cases where the initial μ is too small to
-        // overcome arithmetic roundoff.
+        // Increase damping if roundoff defeats the Cholesky factorization.
         let two = F::from_f64(2.0).unwrap();
         let half = F::from_f64(0.5).unwrap();
         let one_third = F::from_f64(1.0 / 3.0).unwrap();
@@ -529,7 +471,6 @@ where
         let mut attempts: u32 = 0;
         loop {
             let mut a_damped = a.clone();
-            // damping = μ·D, added to the Gram diagonal.
             let mut damping = d.clone();
             damping.scale_in_place(mu);
             a_damped.add_diagonal_vector_in_place(&damping);
@@ -544,8 +485,6 @@ where
                         self.mu = Some(mu);
                         self.nu = nu;
                         self.diag = Some(d);
-                        // State unchanged; r, A and g are all still valid
-                        // at the current iterate.
                         self.r_cache = Some(r);
                         self.gram_cache = Some(a);
                         self.jtr_cache = Some(g);
@@ -560,17 +499,12 @@ where
             }
         }
 
-        // L(0) − L(h) = ½ hᵀ(μ·D·h − g) = ½(μ·hᵀD h − hᵀg) (Nielsen eq.
-        // 2.3, with the scaling diagonal D folded into the quadratic
-        // term; `μI` is the D = I special case). Both terms make the
-        // predicted reduction positive: μ·hᵀD h > 0 since D > 0, and
-        // −hᵀg > 0 since h is a descent direction. Form hᵀD h as
-        // h·(D ⊙ h) to avoid materializing μ·D·h − g.
+        // Predicted reduction, Nielsen eq. 2.3, with diagonal scaling.
+        // Form hᵀDh as h·(D ⊙ h) without materializing μDh − g.
         let mut dh = d.clone();
         dh.component_mul_assign(&h);
         let l_diff = half * (mu * h.dot(&dh) - h.dot(&g));
 
-        // Trial step.
         let mut x_trial = state.param.clone();
         x_trial.scaled_add(F::one(), &h);
         let r_trial = problem.residual(&x_trial)?;
@@ -588,11 +522,7 @@ where
         };
 
         if rho > F::zero() {
-            // Accept. Update x and cost; adapt μ via Nielsen eq. 2.5
-            // with β=2, γ=3, p=3. The trial residual is at the new
-            // iterate, so stash it; the iterate moved, so the Gram and
-            // gradient are stale, so clear them so the next iteration
-            // re-evaluates J(x_trial) and rebuilds A and g.
+            // Nielsen eq. 2.5 with β=2, γ=3, p=3.
             state.param = x_trial;
             state.cost = Some(f_trial);
             let factor = F::one() - (two * rho - F::one()).powi(3);
@@ -602,11 +532,7 @@ where
             self.gram_cache = None;
             self.jtr_cache = None;
         } else {
-            // Reject. Keep state; bump μ geometrically and double ν so
-            // consecutive failures escalate damping faster. The iterate
-            // held still, so r, A and g all remain valid; cache A and g
-            // so the next attempt re-solves with a new μ instead of
-            // reforming the Gram (Madsen-Nielsen Alg. 3.16; issue #10).
+            // Preserve iterate-dependent caches and increase damping.
             mu = mu * nu;
             nu = nu * two;
             self.r_cache = Some(r);
@@ -616,26 +542,12 @@ where
 
         self.mu = Some(mu);
         self.nu = nu;
-        // `d` is unchanged by accept or reject (the running max happens
-        // once, above), so persist it for the next iteration.
         self.diag = Some(d);
 
-        // MINPACK ftol / xtol convergence (Moré 1978), checked after the
-        // accept/reject decision so a converging-but-productive final step
-        // is committed to `state` before we stop. Both default to 0.0
-        // (disabled); converge on *either*, matching MINPACK's
-        // independent `info` codes.
+        // Check MINPACK's ftol and xtol after committing an accepted step.
         //
         //   * tol_cost_rel  |actred| ≤ tol·F  AND  prered ≤ tol·F  AND  ρ ≤ 2.
-        //     Neither the achieved nor the *predicted* reduction is
-        //     meaningful. The `prered ≤ tol·F` clause is load-bearing: it
-        //     separates a true plateau from a temporary settling point
-        //     where one step's actual gain is small but the model still
-        //     predicts progress: there `prered` is large, so we keep
-        //     iterating. `|actred|` (not `actred`) mirrors MINPACK's
-        //     `dabs(actred)`: a step that *raised* the cost only counts as
-        //     converged if the increase is itself below tolerance, so a
-        //     large-jump rejected step keeps the solver going.
+        //     `|actred|` mirrors MINPACK's `dabs(actred)`.
         //   * tol_step_rel  ‖h‖ ≤ tol_step_rel·‖x‖, the step is negligible
         //     relative to the iterate. Squared on both sides to avoid a sqrt.
         let cost_rel_converged = self.tol_cost_rel > F::zero()

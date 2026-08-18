@@ -17,8 +17,8 @@ nalgebra, ndarray, and faer backends.
   broken intra-doc links. Link an unambiguous item when module/function names
   collide.
 - `cargo fmt`: format.
-- Routine pure-Rust feature tests: `cargo test -p basin --features
-  nalgebra,ndarray,faer,problems,parallel`.
+- Routine pure-Rust feature tests:
+  `cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
 
 Do not assume `cargo test --all-features` links without a BLAS/LAPACK provider.
 The `nalgebra-lapack` and `ndarray-blas` features intentionally select no
@@ -32,8 +32,8 @@ tooling. Pre-commit runs all-feature clippy and rustfmt.
 ## Architecture and repository shape
 
 - `crates/basin/src/lib.rs` contains public re-exports only.
-- `core/problem.rs` defines user-implemented cost, gradient, residual,
-  Jacobian, and Hessian traits; `numdiff.rs` provides finite differences.
+- `core/problem.rs` defines user-implemented cost, gradient, residual, Jacobian,
+  and Hessian traits; `numdiff.rs` provides finite differences.
 - `core/state.rs` and `state/` define `State`, concrete state types, and the
   minimum-shape extension traits used by termination criteria.
 - `core/solver.rs` defines `Solver`; `core/executor.rs` owns the driver loop and
@@ -59,8 +59,8 @@ core crate, not merely for tidiness.
 2. Each backend has one Cargo feature pinned to one major version. A backend
    major bump is a Basin major bump; do not add per-version feature gates.
 3. Generic stopping criteria belong to the executor/shared termination layer,
-   while solver-specific controls stay on the solver. Bind each criterion to
-   the minimum state shape it needs.
+   while solver-specific controls stay on the solver. Bind each criterion to the
+   minimum state shape it needs.
 4. Constraints describe problems: keep them problem-side, never on state or as
    executor configuration. Solvers declare supported constraint traits;
    projection, barrier, and penalty adapters are explicit opt-ins.
@@ -77,9 +77,9 @@ WASM rather than weakening the guarantee.
 Do not bump the Rust version casually. The MSRV is constrained primarily by a
 planned CRAN wrapper and secondarily by Python bindings. Check the current CRAN
 toolchain before changing `rust-version`, `rust-toolchain.toml`, or the dev pin.
-Every dependency, including dev dependencies exercised during publishing and
-CI, must compile on the MSRV. Prefer small stable dependency trees and document
-the reason beside any MSRV-driven pin.
+Every dependency, including dev dependencies exercised during publishing and CI,
+must compile on the MSRV. Prefer small stable dependency trees and document the
+reason beside any MSRV-driven pin.
 
 ## Backend math (`crates/basin/src/core/math/**`)
 
@@ -89,16 +89,16 @@ error, not a reason to freeze coverage.
 
 - Keep the shared vector tier small and universal. Traits such as `ScaledAdd`,
   `NormSquared`, `NormInfinity`, `Dot`, `ScaleInPlace`, `NegInPlace`,
-  `VectorLen`, and component-wise operations belong here only when every
-  backend implements them well. First-order and derivative-free solvers should
-  stay generic over this tier.
+  `VectorLen`, and component-wise operations belong here only when every backend
+  implements them well. First-order and derivative-free solvers should stay
+  generic over this tier.
 - Put richer matrix operations in `core/math/linalg.rs`, including `MatVec`,
   `MatTransposeVec`, `GramMatrix`, `SymmetricEigen`, rank-one updates, SPD and
   least-squares solves, diagonal operations, matrix identity/construction, and
   dense matrix construction. LA-heavy solvers must bound only the subset they
   actually need.
-- Add an implementation when it can be honest: pure Rust, WASM-clean, without
-  a BLAS/LAPACK link or fake stub. The `Vec<f64>` cyclic-Jacobi symmetric
+- Add an implementation when it can be honest: pure Rust, WASM-clean, without a
+  BLAS/LAPACK link or fake stub. The `Vec<f64>` cyclic-Jacobi symmetric
   eigensolver is the precedent. Pure-Rust Cholesky and linear solves for
   `DenseMatrix` are welcome when motivated.
 - It is acceptable to omit operations that realistically require optimized
@@ -117,7 +117,8 @@ at `src/problems/<name>.rs`, with sections in this order:
    `name_gradient(&[f64], &mut [f64])`.
 3. `pub struct Name<P = Vec<f64>>(PhantomData<fn() -> P>);`, with `new` and
    `Default`.
-4. `pub static NAME_SPEC: ProblemSpec` and blanket `impl<P> HasSpec for Name<P>`.
+4. `pub static NAME_SPEC: ProblemSpec` and blanket
+   `impl<P> HasSpec for Name<P>`.
 5. `CostFunction` and `Gradient` for `Vec<f64>`, then separate cfg-gated modules
    in nalgebra, ndarray, faer order.
 6. Unit tests.
@@ -127,17 +128,17 @@ Use `PhantomData<fn() -> P>` to retain covariance and avoid unnecessary
 inside feature-rich tests use an explicit `Name::<Vec<f64>>` when inference is
 ambiguous.
 
-Backend implementations must route through the slice primitives for
-`Vec<f64>`, nalgebra (`as_slice`/`as_mut_slice`), and contiguous ndarray arrays.
-Faer's `Col` may implement the math elementwise because its supported API does
-not expose a suitable slice consistently. Keep imports and cfg clutter inside
-each backend module.
+Backend implementations must route through the slice primitives for `Vec<f64>`,
+nalgebra (`as_slice`/`as_mut_slice`), and contiguous ndarray arrays. Faer's
+`Col` may implement the math elementwise because its supported API does not
+expose a suitable slice consistently. Keep imports and cfg clutter inside each
+backend module.
 
 `ProblemSpec` requirements:
 
 - Use a canonical title-cased name and accurate fixed or N-dimensional shape.
-- Be conservative about `unimodal` and `convex` when either depends on
-  dimension or domain; explain qualifications in the description.
+- Be conservative about `unimodal` and `convex` when either depends on dimension
+  or domain; explain qualifications in the description.
 - Include at least one real reference with citation, title, venue/source, and
   DOI when available. A public URL supplements rather than replaces a citation.
   Prefer the original source; if none exists, cite a recognized popularizer.
@@ -183,11 +184,11 @@ authoritative docs.rs API rather than copying it. Its page routes are `/`,
 The prerendered `sitemap.xml`, `robots.txt`, and `llms.txt` endpoints are
 `+server.ts` routes because they need absolute URLs. They share `SITE_ORIGIN`.
 The sitemap globs pages; `llms.txt` is hand-maintained. When a top-level section
-is added, removed, or renamed, update `llms.txt`: core material under `Docs`, API
-and external links under `Reference`, and skippable benchmarks/visualizer links
-under `Optional`. Use absolute `${SITE_ORIGIN}/.../` URLs with trailing slashes,
-and keep it a link-oriented signpost. Verify web changes with `cd web && pnpm
-build`.
+is added, removed, or renamed, update `llms.txt`: core material under `Docs`,
+API and external links under `Reference`, and skippable benchmarks/visualizer
+links under `Optional`. Use absolute `${SITE_ORIGIN}/.../` URLs with trailing
+slashes, and keep it a link-oriented signpost. Verify web changes with
+`cd web && pnpm build`.
 
 ## Solver catalogue synchronization
 
@@ -196,8 +197,8 @@ references, update `web/src/routes/docs/solvers/+page.svx` in the same change:
 
 - The prose catalogue must equal the public solver re-exports in
   `crates/basin/src/lib.rs`.
-- The support matrix must match each solver's rustdoc `# Backends` section.
-  A check means it compiles and runs. For coverage depending on an inner solver,
+- The support matrix must match each solver's rustdoc `# Backends` section. A
+  check means it compiles and runs. For coverage depending on an inner solver,
   show broad coverage and add a footnote.
 - Each bullet must link to docs.rs and reproduce the solver rustdoc reference.
 
@@ -213,14 +214,14 @@ the link because it will become valid when published. Verify with the web build.
 - **Scalar type defaults to `f64`, but the whole pipeline is `F: Scalar`.**
   Every state (`BasicState`, `BasicSimplexState`, `BasicPopulationState`,
   `QuasiNewtonState`, `LbfgsState`, `SolisWetsState`), every solver (gradient
-  descent, BFGS, both L-BFGS modes, NLLS family, CMA-ES, Solis-Wets, barrier
-  and AL, line searches), and every
-  shipped termination criterion carries an `F = f64` default, so existing call
-  sites resolve unchanged while `f32` works end-to-end (see
-  `tests/f32_round_trip.rs`). The `F = f64` default is the ergonomic choice for
-  the common case, not a constraint. When adding a scalar generic to new
-  surface, commit to it properly across state, solver, termination, and math
-  impls rather than adding a fake generic whose defaults only work in `f64`.
+  descent, BFGS, both L-BFGS modes, NLLS family, CMA-ES, Solis-Wets, barrier and
+  AL, line searches), and every shipped termination criterion carries an
+  `F = f64` default, so existing call sites resolve unchanged while `f32` works
+  end-to-end (see `tests/f32_round_trip.rs`). The `F = f64` default is the
+  ergonomic choice for the common case, not a constraint. When adding a scalar
+  generic to new surface, commit to it properly across state, solver,
+  termination, and math impls rather than adding a fake generic whose defaults
+  only work in `f64`.
 
 - **No observer KV/metadata channel.** `Observe` (`core/observer.rs`) passes
   only `&S`. There is no argmin-style stringly-typed key-value store for

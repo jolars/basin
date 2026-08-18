@@ -193,9 +193,7 @@ mod faer_impl {
     }
 }
 
-// ----------------------------------------------------------------------
 // Boxed (constrained) form
-// ----------------------------------------------------------------------
 // Carries element-wise bounds on the struct so it can implement
 // `BoxConstraints` for solvers that require explicit box constraints
 // (CMA-ES variants, projected methods). The standard `[−5.12, 5.12]ⁿ`

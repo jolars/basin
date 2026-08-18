@@ -350,7 +350,7 @@ impl<F: Scalar> QuadraticModel<F> {
         let tau = scalars.tau;
         let sigma = scalars.sigma;
 
-        // --- Phase 0: model residual df (eq. 4.23), using the OLD model. ---
+        // Model residual under the old model (eq. 4.23).
         // df = (F(x⁺) − F(x_opt)) − (Q_old(x⁺) − Q_old(x_opt)), with
         // Q_old(x_opt) = F(x_opt) ⇒ df = F(x⁺) − Q_old(x⁺), no constant needed.
         let xopt_disp = self.xpt.row(self.kopt).to_vec();
@@ -358,7 +358,7 @@ impl<F: Scalar> QuadraticModel<F> {
         let q_opt = self.eval_change(&xopt_disp);
         let df = (f_new - self.fval[self.kopt]) - (q_new - q_opt);
 
-        // --- Phase 1: capture OLD quantities for the H update. ---
+        // Preserve quantities needed for the H update.
         // ehw = e_t − H w (suppressed [λ; g]).
         let mut ehw_lambda = vec![F::zero(); m];
         for i in 0..m {
@@ -389,7 +389,7 @@ impl<F: Scalar> QuadraticModel<F> {
 
         let inv_sigma = F::one() / sigma;
 
-        // --- Phase 2: Ξ⁺ and Υ⁺ from the eq. 4.11 sub-blocks. ---
+        // Update Ξ and Υ from the sub-blocks in eq. 4.11.
         // bottom-left (g × λ) block ⇒ Ξ; bottom-right (g × g) ⇒ Υ.
         for r in 0..n {
             for j in 0..m {
@@ -411,16 +411,16 @@ impl<F: Scalar> QuadraticModel<F> {
             }
         }
 
-        // --- Phase 3: Ω-factorization update (eqs. 4.17–4.20). ---
+        // Update the Ω factorization (eqs. 4.17–4.20).
         self.update_omega_factorization(t, &ehw_lambda, tau, sigma, beta);
 
-        // --- Phase 4: install the new interpolation point. ---
+        // Install the new interpolation point.
         for k in 0..n {
             self.xpt.set(t, k, ctx.xnew[k]);
         }
         self.fval[t] = f_new;
 
-        // --- Phase 5: H⁺ e_t = (Ω⁺ column t, Ξ⁺ column t). ---
+        // H⁺e_t consists of column t of Ω⁺ and Ξ⁺.
         let mut hcol_lambda = vec![F::zero(); m];
         for i in 0..m {
             let mut acc = F::zero();
@@ -435,7 +435,7 @@ impl<F: Scalar> QuadraticModel<F> {
             hcol_g[r] = self.bmat_xi.get(r, t);
         }
 
-        // --- Phase 6: model update (eqs. 4.29, 4.30). ---
+        // Update the model (eqs. 4.29, 4.30).
         // Γ⁺ = Γ + γ_t (x_t^old − x0)(x_t^old − x0)ᵀ.
         for i in 0..n {
             for j in 0..n {
@@ -461,7 +461,6 @@ impl<F: Scalar> QuadraticModel<F> {
             self.gq[k] = self.gq[k] + df * hcol_g[k];
         }
 
-        // --- Phase 7: refresh kopt. ---
         let mut kopt = 0;
         for j in 1..m {
             if self.fval[j] < self.fval[kopt] {

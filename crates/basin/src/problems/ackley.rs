@@ -191,9 +191,7 @@ mod faer_impl {
     }
 }
 
-// ----------------------------------------------------------------------
 // Boxed (constrained) form
-// ----------------------------------------------------------------------
 
 /// Ackley function with explicit element-wise box bounds, suitable for solvers
 /// that require [`BoxConstraints`] (e.g. CMA-ES variants). Carries the bounds

@@ -254,9 +254,7 @@ mod faer_impl {
     }
 }
 
-// ----------------------------------------------------------------------
 // Boxed (constrained) form
-// ----------------------------------------------------------------------
 
 /// Levy function with explicit element-wise box bounds, suitable for
 /// box-constrained solvers (L-BFGS-B, projected gradient, CMA-ES variants).

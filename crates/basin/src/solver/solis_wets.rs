@@ -406,11 +406,9 @@ where
     }
 }
 
-// -----------------------------------------------------------------------
 // Composition impls: fresh-seed tiers (InitialState → WarmStart →
 // MemeticInner), so SolisWets works with `Executor::from_start` and as a
 // CmaInject/DeInject/BasinHopping inner.
-// -----------------------------------------------------------------------
 
 impl<V, F> InitialState<V> for SolisWets<F>
 where

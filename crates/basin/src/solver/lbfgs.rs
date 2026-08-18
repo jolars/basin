@@ -397,24 +397,15 @@ where
         let n = state.param.as_float_slice().len();
         let m = state.m_capacity;
 
-        // Inner restart loop: Fortran's `goto 222` path. At most one
-        // restart per iteration: after clearing history we either
-        // succeed with the (col == 0) line-search-only path or bail.
+        // Match the Fortran `goto 222` recovery path, with one restart.
         let mut restart_budget = 1u8;
 
         loop {
             let work = state.work.as_mut().expect("work missing");
 
-            // -------------------------------------------------------
-            // Phase A: projected gradient norm. Drives both the
-            // built-in convergence check below and the cauchy
-            // short-circuit further down. The framework-side
-            // `ProjectedGradientTolerance` criterion does the same
-            // calculation, but checking it inline here lets a memetic
-            // wrapper (CMA-ES injection, `BoundedCmaInject`) skip
-            // having to register an external criterion against bounds
-            // it can't see at solver-build time.
-            // -------------------------------------------------------
+            // The projected gradient drives convergence and the Cauchy shortcut.
+            // It is checked here because wrapper solvers cannot register a
+            // criterion against the inner problem's bounds.
             let sbgnrm = projected_gradient_norm(
                 state.param.as_float_slice(),
                 g_v.as_float_slice(),
@@ -422,12 +413,7 @@ where
                 problem.inner().upper().as_float_slice(),
             );
 
-            // Built-in convergence: emit `SolverConverged` when the
-            // projected-gradient infinity-norm sits at the tolerance.
-            // Restore the borrowed cost and gradient so callers reading
-            // `state.gradient()`/`state.cost()` on the final result
-            // see the values at the converged iterate. Set
-            // `tol_pg = 0.0` (Fortran `pgtol = 0`) to disable.
+            // Restore values taken from the state before returning.
             if sbgnrm <= self.tol_pg {
                 state.gradient = Some(g_v);
                 state.cost = Some(f_old);
@@ -440,13 +426,9 @@ where
             let boxed = work.boxed;
             let updatd = work.updatd;
 
-            // -------------------------------------------------------
-            // Phase B: generalized Cauchy point (or skip when no
-            // bounds are active and we already have history).
-            // -------------------------------------------------------
+            // Generalized Cauchy point.
             let mut wrk = updatd;
             if !cnstnd && col > 0 {
-                // Unbounded with history: skip GCP, set z := x.
                 work.z.copy_from_slice(state.param.as_float_slice());
             } else {
                 let ws_cols: Vec<&[F]> =
@@ -488,9 +470,7 @@ where
                 }
             }
 
-            // -------------------------------------------------------
-            // Phase C: free and active partition (Fortran `freev`).
-            // -------------------------------------------------------
+            // Partition free and active variables (`freev`).
             let (nfree, nenter, ileave) = freev(
                 n,
                 &work.iwhere,
@@ -504,10 +484,7 @@ where
             let wrk_local = (ileave < n) || (nenter > 0) || wrk;
             wrk = wrk_local;
 
-            // -------------------------------------------------------
-            // Phase D: subspace minimization (when there are free
-            // variables and history to use).
-            // -------------------------------------------------------
+            // Minimize over the free-variable subspace.
             if nfree > 0 && col > 0 {
                 if wrk {
                     let ws_cols: Vec<&[F]> =
@@ -615,14 +592,11 @@ where
                         ));
                     }
                 }
-                // We don't read `SubsmStatus`; the projected step
-                // is already applied to `work.z`, and the
-                // line-search step cap below re-enforces feasibility.
+                // `subsm` writes the projected step to `z`; its status carries
+                // no additional information needed by this implementation.
             }
 
-            // -------------------------------------------------------
-            // Phase E: line search. Direction d = z − x.
-            // -------------------------------------------------------
+            // Line search along d = z − x.
             for i in 0..n {
                 work.d[i] = work.z[i] - state.param.as_float_slice()[i];
             }
@@ -653,12 +627,10 @@ where
                 F::one()
             };
 
-            // Build a V-typed direction for the line search.
             let mut d_v = state.param.clone();
             d_v.as_float_slice_mut().copy_from_slice(&work.d);
 
-            // Save previous iterate before stepping (Fortran `t = x;
-            // r = g`).
+            // Preserve the previous iterate and gradient for the update.
             work.t_buf.copy_from_slice(state.param.as_float_slice());
             work.r.copy_from_slice(g_v.as_float_slice());
             work.gdold = work
@@ -667,15 +639,8 @@ where
                 .zip(g_v.as_float_slice())
                 .fold(F::zero(), |acc, (a, b)| acc + (*a) * (*b));
 
-            // Drive the line search. Fortran `lnsrlb` sets the
-            // initial trial step and the feasibility cap on
-            // `dcsrch`'s `stp`/`stpmax`; we don't have a generic
-            // hook for that on [`LineSearch`], so for now we let the
-            // configured line search keep its own initial and max-step
-            // settings. Parity holds on the Rosenbrock 5D fixture
-            // because the natural Newton step stays interior, but
-            // tight-bound problems may need a constraint-aware
-            // wrapper down the road.
+            // `LineSearch` has no generic hooks for the initial step or the
+            // feasibility cap used by Fortran's `lnsrlb`.
             let _ = (alpha_init, stpmx);
             let stp = self.line_search.next(
                 problem,
@@ -686,11 +651,7 @@ where
             )?;
 
             if !(stp.is_finite() && stp > F::zero()) {
-                // Line search bailed. If col == 0, abnormal
-                // termination; there's no compact-form state to
-                // reset. Otherwise restart with cleared history. The
-                // clone of `g_v` is fine: we're on the cold-path exit
-                // either way.
+                // Restart with cleared history when compact-form state exists.
                 state.gradient = Some(g_v.clone());
                 state.cost = Some(f_old);
                 if state.ws.is_empty() {
@@ -703,18 +664,12 @@ where
                 }
             }
 
-            // Apply the step. x ← x + stp · d.
             state.param.scaled_add(stp, &d_v);
 
-            // Recompute f, g at the new iterate. (MoreThuente
-            // discards the final trial's values; cleanest workaround
-            // is one fused cost+grad eval per iter.)
+            // MoreThuente does not retain the final trial values.
             let (f_new, g_new) = problem.cost_and_gradient(&state.param)?;
 
-            // -------------------------------------------------------
-            // Phase F: limited-memory update. Curvature check
-            // matches Fortran's `dr ≤ epsmch · ddum`.
-            // -------------------------------------------------------
+            // Limited-memory update with the Fortran curvature check.
             // s = stp · d  (in slice form, d holds the unscaled
             // direction; the s vector lives in `d` scaled by stp).
             // y = g_new − g_old.

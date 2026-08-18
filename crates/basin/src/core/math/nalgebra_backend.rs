@@ -379,18 +379,14 @@ where
     }
 }
 
-// ----------------------------------------------------------------------
-// linalg tier: dense ops on DMatrix<F> with V = DVector<F>.
-// Per tenet 5, this is dense-only; sparse comes in S2b.
+// Dense linear algebra on DMatrix<F> with V = DVector<F>.
 //
-// The bound `F: Scalar` (basin's alias) is paired here with nalgebra's
+// `F: Scalar` is paired here with nalgebra's
 // `Closed*Assign` traits; basin's `Float`-based `Scalar` doesn't subsume
 // the `+=`/`*=` requirements that nalgebra's BLAS-2 ops (`Mul`, `tr_mul`,
 // `ger`, …) accumulate into. `f64` and `f32` both satisfy both halves, so
-// the migration covers every scalar a real consumer will use today; the
-// heavyweight factorization impls (`LinearSolveSpd`, `SymmetricEigen`)
-// additionally need `nalgebra::ComplexField`/`RealField`.
-// ----------------------------------------------------------------------
+// f64 and f32 satisfy both sets of bounds. Factorizations additionally
+// require `nalgebra::ComplexField` or `RealField`.
 
 impl<F> MatVec<DVector<F>> for DMatrix<F>
 where

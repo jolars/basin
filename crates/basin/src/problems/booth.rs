@@ -194,9 +194,7 @@ impl BoxConstraints for BoothBoxed<Vec<f64>> {
     }
 }
 
-// ----------------------------------------------------------------------
 // Residual-form Booth (n = 2)
-// ----------------------------------------------------------------------
 // Booth factors as a 2-residual least-squares problem
 // `r = [x+2y−7, 2x+y−5]` with constant Jacobian `[[1,2],[2,1]]` and
 // `Σ rᵢ² == booth(x, y)` exactly (unscaled-sum convention shared with

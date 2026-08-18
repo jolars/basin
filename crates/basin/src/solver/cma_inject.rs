@@ -154,9 +154,7 @@ where
     }
 }
 
-// -----------------------------------------------------------------------
 // WarmStart + MemeticInner impls for the three shipped inners.
-// -----------------------------------------------------------------------
 
 impl<Mode, V, F> InitialState<V> for NelderMead<Mode, F>
 where
@@ -267,9 +265,7 @@ where
     // `seed_scaled` defaults to `seed`; L-BFGS-B ignores σ.
 }
 
-// -----------------------------------------------------------------------
 // CmaInject: memetic CMA-ES with Hansen-2011 injection.
-// -----------------------------------------------------------------------
 
 /// Memetic CMA-ES with Hansen (2011) injection: outer CMA-ES proposes
 /// `λ` candidates per generation, an inner local solver
