@@ -3,54 +3,7 @@ description = "Ad-hoc tooling for basin (paper ingestion etc.). Not published."
 name = "basin-tools"
 version = "0"
 requires-python = ">=3.10"
-dependencies = [
-  # Fast first-pass parser. Pure-Python wrapper over PyMuPDF, ~1s per paper,
-  # produces structured markdown (good for pseudocode and prose; mangles math).
-  "pymupdf4llm",
-  # Heavy second-pass parser. ML-based, slow on CPU (~minutes/paper), produces
-  # LaTeX equations and decent figure handling. Used selectively on pages where
-  # math fidelity matters—see ../README and the ingest-paper skill.
-  "marker-pdf",
-  "cma",
-  # Direct dep (marker pulls it transitively) so the ROCm [tool.uv.sources]
-  # routing below actually applies. Capped below the ROCm channel's ceiling so
-  # uv picks the ROCm wheel (2.13.0+rocm7.1) instead of the newer CUDA wheel
-  # from PyPI. marker-pdf needs torch>=2.7, which 2.13.x satisfies. Keep
-  # >=2.13 too: GHSA-qfhq-4f3w-5fph (fixed 2.10) and GHSA-rrmf-rvhw-rf47
-  # (fixed 2.13) are flagged by Dependabot below that.
-  "torch>=2.13,<2.14",
-  # Same trick for torchvision (surya-ocr pulls it transitively): direct dep so
-  # the source routing applies and we get the ROCm build instead of PyPI's
-  # CUDA-linked wheel.
-  "torchvision<0.29",
-]
+dependencies = ["cma"]
 
 [tool.uv]
-# Don't try to package this—it's just a dependency container.
 package = false
-# Pull torch from the ROCm index so marker's second pass runs on the AMD GPU
-# (Radeon RX 9060 XT/RDNA4) instead of CPU. rocm7.1 is the newest
-# self-consistent channel (torch 2.13.0 + triton-rocm 3.7.1); the older rocm7.0
-# channel was skipped because its torch wheel wanted a pytorch-triton-rocm the
-# index never published. unsafe-best-match lets uv mix the ROCm index with PyPI
-# for everything else. On a non-AMD box, swap the index URL (e.g. /whl/cpu) or
-# drop this block.
-index-strategy = "unsafe-best-match"
-# marker-pdf and surya-ocr cap pillow<11 (even in their latest releases), which
-# leaves us on 10.4.0 with a pile of Dependabot alerts fixed in 12.3.0 (heap
-# OOB writes, decompression-bomb bypasses). Their usage is plain
-# Image.open/resize/draw, so override the cap. Re-check on marker upgrades.
-override-dependencies = ["pillow>=12.3.0"]
-# ROCm wheels are Linux-only; restrict the lock so uv doesn't try (and fail) to
-# resolve torch for macOS/Windows. This tools env only ever runs on the
-# maintainer's Linux box.
-environments = ["sys_platform == 'linux'"]
-
-[tool.uv.sources]
-torch = [{ index = "pytorch-rocm" }]
-torchvision = [{ index = "pytorch-rocm" }]
-triton-rocm = [{ index = "pytorch-rocm" }]
-
-[[tool.uv.index]]
-name = "pytorch-rocm"
-url = "https://download.pytorch.org/whl/rocm7.1"
