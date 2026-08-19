@@ -31,7 +31,9 @@ tooling. Pre-commit runs all-feature clippy and rustfmt.
 
 ## Architecture and repository shape
 
-- `crates/basin/src/lib.rs` contains public re-exports only.
+- `crates/basin/src/lib.rs` defines the documented public surface through crate
+  documentation, module declarations, and re-exports; implementations live in
+  the corresponding modules.
 - `core/problem.rs` defines user-implemented cost, gradient, residual, Jacobian,
   and Hessian traits; `numdiff.rs` provides finite differences.
 - `core/state.rs` and `state/` define `State`, concrete state types, and the
@@ -163,11 +165,11 @@ for intrinsically high-dimensional problems.
 Verify a new problem with:
 
 ```sh
-cargo test --all-features
+cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel
 cargo clippy --all-features --all-targets -- -D warnings
 cargo build --target wasm32-unknown-unknown
 cargo build --target wasm32-unknown-unknown --no-default-features
-cd web && npm run build # when the visualizer changed
+cd web && pnpm build # when the visualizer changed
 ```
 
 Do not use generic backend-dispatch impls that create inference ambiguity, add
