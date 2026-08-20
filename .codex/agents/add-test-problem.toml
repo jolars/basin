@@ -1,13 +1,19 @@
 name = "add_test_problem"
 description = "Adds one optimization benchmark problem from TODO.md to Basin's corpus, including backend implementations, metadata, tests, wiring, and verification."
 developer_instructions = """
-Add exactly one optimization test problem per invocation. Read AGENTS.md first, then use crates/basin/src/problems/sphere.rs as the reference implementation.
+Add exactly one optimization test problem per invocation. Read AGENTS.md first, then use crates/basin/src/problems/sphere.rs as the reference implementation. These instructions are the authoritative test-problem workflow.
 
-Treat the test-problem corpus section of AGENTS.md as the source of truth. Confirm the canonical formula, global minimum, and a real primary citation. Surjanovic and Bingham may be used to check formulae and minima but not as a substitute for the literature citation. If the original source genuinely cannot be identified, use a recognized popularizing source. Ask the user only when competing citations cannot be reconciled.
+Confirm the canonical formula, global minimum, and a real primary citation. Surjanovic and Bingham may be used to check formulae and minima but not as a substitute for the literature citation. If the original source genuinely cannot be identified, use a recognized popularizing source. Ask the user only when competing citations cannot be reconciled.
 
-Derive and implement a symbolic gradient. Add the raw slice functions, generic wrapper, ProblemSpec, HasSpec, all four backend implementations, and required unit tests in the prescribed order. Wire the module, re-exports, ALL_SPECS, and TODO.md entry. If the function is meaningful in two dimensions, also wire the WASM visualizer and web metadata; otherwise report why it was skipped.
+Add crates/basin/src/problems/<name>.rs in this order: module rustdoc with formula, character, global minimum, and source; imports; raw slice cost and symbolic-gradient functions; `pub struct Name<P = Vec<f64>>(PhantomData<fn() -> P>)` with `new` and `Default`; `ProblemSpec` and blanket `HasSpec`; `CostFunction` and `Gradient` for `Vec<f64>`; cfg-gated nalgebra, ndarray, and faer modules; unit tests. Route Vec, nalgebra, and contiguous ndarray implementations through the slice primitives. Faer may operate elementwise. Keep backend imports and cfg clutter inside their modules.
 
-Run every verification command listed in AGENTS.md. Fix underlying failures rather than weakening checks. Report the file added, registry and TODO updates, visualizer status, and verification results in no more than six lines unless something unexpected requires explanation.
+Use a canonical title-cased name and accurate dimensionality. Be conservative about `unimodal` and `convex`; explain domain or dimension qualifications. Include a citation, title, venue or source, and DOI when available. Keep the description to one to three sentences, including the minimizer and value.
+
+Test the minimum value, one hand-computed nontrivial value, a near-zero gradient at the minimum, central finite-difference agreement at a nonsymmetric point with no zero coordinates at about `1e-5` tolerance, and spec wiring, properties, and references. Use an explicit `Name::<Vec<f64>>` where feature-rich tests make inference ambiguous.
+
+Update crates/basin/src/problems.rs module declarations, re-exports, and `ALL_SPECS`, then mark the matching TODO.md entry complete. For a problem meaningful in two dimensions, also add its `ProblemKind` and dispatch in crates/basin-wasm/src/lib.rs and metadata in web/src/lib/problems.ts. Use the documented domain and minimum, a useful intensity (`sqrt` for mild quadratics and `log1p` for high dynamic range), and a gradient-descent step that converges from a typical start. Skip web wiring only for intrinsically high-dimensional problems.
+
+Run all verification commands in AGENTS.md, including the web commands when the visualizer changes. Fix underlying failures rather than weakening checks. Report the file added, registry and TODO updates, visualizer status, and verification results in no more than six lines unless something unexpected requires explanation.
 
 Never add multiple problems, new ProblemSpec/Properties fields for one function, generic backend-dispatch impls, finite-difference production gradients, a references directory, or unrelated integration tests. Never omit a supported backend or bypass the verification gauntlet.
 """

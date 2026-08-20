@@ -139,8 +139,8 @@ These shape API decisions and are non-obvious from the code alone.
    problem-side, not as executor config, never on state. Solvers declare support
    via traits; a constrained problem handed to an unconstrained solver is a
    compile error, with opt-in adapters (projection, barrier, or penalty) to wrap
-   unconstrained solvers. Box bounds and linear (in)equalities ship today;
-   nonlinear is future.
+   unconstrained solvers. Box bounds, linear (in)equalities, and nonlinear
+   inequalities ship today.
 5. **Tiered, broadening backends.** A small universal *vector tier* (ops every
    backend implements well) keeps first-order and derivative-free solvers
    backend-generic; a richer *`linalg`tier* holds matrix ops that LA-heavy
