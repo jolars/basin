@@ -104,10 +104,13 @@ analytic, or synthesized by `FiniteDiff`):
 - **[`TrustRegion`](https://docs.rs/basin/latest/basin/solver/trust_region/struct.TrustRegion.html)**:
   second-order trust-region Newton minimizer (Nocedal & Wright, 2006, Alg. 4.1).
   The subproblem strategy is pluggable: `Steihaug` (truncated CG, the default),
-  `Dogleg`, or `CauchyPoint`. `TrustRegion::matrix_free()` drives the subproblem
-  purely through Hessian-vector products (`HessianProduct`), never forming a
-  matrix, so it scales to large problems (`Steihaug` and `CauchyPoint` only;
-  `Dogleg` needs the matrix).
+  `Dogleg`, `MoreSorensen` (the near-exact secular solve with hard-case
+  treatment; Moré & Sorensen, 1983, “Computing a Trust Region Step”), or
+  `CauchyPoint`.
+  `TrustRegion::matrix_free()` drives the subproblem purely through
+  Hessian-vector products (`HessianProduct`), never forming a matrix, so it
+  scales to large problems (`Steihaug` and `CauchyPoint` only; `Dogleg` and
+  `MoreSorensen` need the matrix).
 
 ## Nonlinear Least Squares
 
@@ -258,11 +261,13 @@ eigendecomposition.
 ‡ `TrustRegion`'s coverage depends on the subproblem strategy: `Steihaug` (the
 default) and `CauchyPoint` need only matrix-vector products, so they run on
 every backend; `Dogleg` additionally needs a Cholesky solve (`LinearSolveSpd`),
-now available on all four backends. In exact mode on `ndarray` the Hessian must
-be supplied analytically as an `Array2<f64>`; `FiniteDiff` cannot synthesize one
-there (no dense-matrix constructor). Matrix-free mode has no such caveat: no
-matrix type is bound at all, and `FiniteDiff` synthesizes the Hessian-vector
-product on every backend.
+now available on all four backends. `MoreSorensen` additionally needs a
+symmetric eigendecomposition (`SymmetricEigen`), also available on all four
+dense backends. In exact mode on `ndarray` the Hessian must be supplied
+analytically as an `Array2<f64>`; `FiniteDiff` cannot synthesize one there (no
+dense-matrix constructor). Matrix-free mode has no such caveat: no matrix type
+is bound at all, and `FiniteDiff` synthesizes the Hessian-vector product on
+every backend.
 
 Each solver's page on [docs.rs](https://docs.rs/basin) carries a **Backends**
 note listing exactly which parameter types it supports.

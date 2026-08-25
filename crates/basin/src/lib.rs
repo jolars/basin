@@ -265,7 +265,8 @@ pub use crate::line_search::{
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::trust_region::{
-    CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion,
+    CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
+    TrustRegion,
 };
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,

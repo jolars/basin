@@ -100,7 +100,8 @@ pub mod lincoa;
 pub mod cobyla;
 
 /// Trust-region Newton solver (Nocedal & Wright Algorithm 4.1) with
-/// pluggable subproblem strategies (Steihaug-CG, dogleg, Cauchy point).
+/// pluggable subproblem strategies (Steihaug-CG, dogleg, Moré–Sorensen,
+/// Cauchy point).
 pub mod trust_region;
 
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
@@ -137,5 +138,6 @@ pub use solis_wets::SolisWets;
 pub use ssga::Ssga;
 pub use trf::Trf;
 pub use trust_region::{
-    CauchyPoint, Dogleg, ExactHessian, MatrixFree, Steihaug, TrustRegion,
+    CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
+    TrustRegion,
 };

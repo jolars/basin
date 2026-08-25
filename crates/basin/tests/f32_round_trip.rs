@@ -13,7 +13,7 @@ use basin::core::termination::{
 };
 use basin::line_search::{Backtracking, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
-use basin::{GradientDescent, MatrixFree, Steihaug, TrustRegion};
+use basin::{GradientDescent, MatrixFree, MoreSorensen, Steihaug, TrustRegion};
 
 /// `f(x) = ‖x − c‖²` with `c = (1, 2, 3)`. Minimum at `c`, cost 0.
 struct ShiftedQuadF32 {
@@ -165,6 +165,27 @@ fn trust_region_f32_round_trips_state_solver_termination() {
     let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
     let solver: TrustRegion<Steihaug, f32> =
         TrustRegion::with_subproblem(Steihaug::new());
+
+    let result = Executor::new(problem, solver, state)
+        .terminate_on(MaxIter(100))
+        .terminate_on(GradientTolerance::<f32>(1e-4))
+        .run()
+        .unwrap();
+
+    let final_x = result.state.param();
+    assert!((final_x[0] - 1.0).abs() < 1e-3);
+    assert!((final_x[1] - 2.0).abs() < 1e-3);
+    assert!((final_x[2] - 3.0).abs() < 1e-3);
+}
+
+#[test]
+fn more_sorensen_f32_round_trips_state_solver_termination() {
+    let problem = ShiftedQuadF32 {
+        c: vec![1.0_f32, 2.0, 3.0],
+    };
+    let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let solver: TrustRegion<MoreSorensen, f32> =
+        TrustRegion::with_subproblem(MoreSorensen::new());
 
     let result = Executor::new(problem, solver, state)
         .terminate_on(MaxIter(100))

@@ -10,8 +10,7 @@
 //!
 //! The trust-region *subproblem*, the constrained quadratic minimization,
 //! is solved by a pluggable strategy implementing the crate-internal
-//! `Subproblem` seam. Three ship today, mirroring the standard textbook
-//! set:
+//! `Subproblem` seam. Four ship today:
 //!
 //! - [`Steihaug`]: truncated conjugate gradient (the default). Matrix-free
 //!   (needs only Hessian-vector products), handles indefinite `B` by
@@ -21,6 +20,10 @@
 //!   Cholesky solve for the Newton step, so it requires a backend with
 //!   [`LinearSolveSpd`](crate::core::math::LinearSolveSpd); it falls back to
 //!   the Cauchy point when `B` is not positive definite.
+//! - [`MoreSorensen`]: a near-exact global solve using the safeguarded secular
+//!   equation and explicit hard-case treatment (Moré & Sorensen 1983). It
+//!   needs a full eigendecomposition plus Cholesky solves; use it when
+//!   subproblem robustness matters more than large-scale cost.
 //! - [`CauchyPoint`]: the steepest-descent-to-boundary closed form (N&W
 //!   eq. 4.11–4.12). A bulletproof baseline with only linear convergence;
 //!   mostly a reference strategy.
@@ -34,9 +37,11 @@
 //! forms a matrix.
 
 pub mod dogleg;
+pub mod more_sorensen;
 pub mod steihaug;
 
 pub use dogleg::Dogleg;
+pub use more_sorensen::MoreSorensen;
 pub use steihaug::Steihaug;
 
 use std::marker::PhantomData;
@@ -60,7 +65,10 @@ pub(crate) struct Step<V, F> {
     pub(crate) d: V,
     /// Predicted reduction `m(0) − m(d) = −(gᵀd) − ½ dᵀBd`, always `≥ 0`
     /// for the shipped strategies. Zero only when `d = 0` (gradient already
-    /// negligible), which the driver reads as convergence.
+    /// negligible), which the driver reads as convergence. A non-finite
+    /// value means the strategy could not solve the subproblem because the
+    /// model data was non-finite; the driver reports that as a solver
+    /// failure so a bad derivative cannot masquerade as a stationary point.
     pub(crate) predicted_reduction: F,
     /// `true` when `‖d‖ ≈ Δ`: the constraint is active. Only then may the
     /// driver grow the radius on a very good step (N&W Algorithm 4.1).
@@ -71,12 +79,15 @@ pub(crate) struct Step<V, F> {
 /// `m(p) = gᵀp + ½ pᵀ B p` over the trust region `‖p‖ ≤ radius`.
 ///
 /// Crate-internal: the shipped strategies ([`Steihaug`], [`Dogleg`],
-/// [`CauchyPoint`]) are the closed set for now. Each binds `M` (the Hessian
-/// matrix type) on only the ops it needs: [`MatVec`] for the matrix-free
-/// strategies, plus [`LinearSolveSpd`](crate::core::math::LinearSolveSpd)
-/// for [`Dogleg`], so a backend missing an op is a compile error for that
-/// strategy alone (tenet 5). Promoting this trait to public is an additive,
-/// non-breaking change if user-defined subproblem solvers are ever wanted.
+/// [`MoreSorensen`], [`CauchyPoint`]) are the closed set for now. Each binds
+/// `M` (the Hessian matrix type) on only the operations it needs: [`MatVec`]
+/// for the universal strategies, [`LinearSolveSpd`](crate::core::math::LinearSolveSpd)
+/// for [`Dogleg`], and Cholesky plus
+/// [`SymmetricEigen`](crate::core::math::SymmetricEigen) for
+/// [`MoreSorensen`]. A missing backend operation is therefore a compile error
+/// for that strategy alone (tenet 5). Promoting this trait to public is an
+/// additive, non-breaking change if user-defined subproblem solvers are ever
+/// wanted.
 pub(crate) trait Subproblem<V, M, F> {
     /// Approximately minimize `m(p) = gᵀp + ½ pᵀ B p` over `‖p‖ ≤ radius`.
     fn solve(&self, gradient: &V, hessian: &M, radius: F) -> Step<V, F>;
@@ -87,9 +98,8 @@ pub(crate) trait Subproblem<V, M, F> {
 /// counted [`HessianProduct`] call, so
 /// errors are the problem's own and must propagate). Crate-internal, like
 /// [`Subproblem`]. [`Steihaug`] and [`CauchyPoint`] implement it; [`Dogleg`]
-/// does not (its Newton step needs the actual matrix for the Cholesky
-/// solve), so pairing `Dogleg` with [`MatrixFree`] mode is a compile error
-/// (tenet 5).
+/// and [`MoreSorensen`] need the actual matrix, so pairing either with
+/// [`MatrixFree`] mode is a compile error (tenet 5).
 pub(crate) trait SubproblemHvp<V, F> {
     /// Approximately minimize `m(p) = gᵀp + ½ pᵀ B p` over `‖p‖ ≤ radius`,
     /// touching `B` only through `bv`.
@@ -280,8 +290,8 @@ where
 /// `v ↦ ∇²f(x)·v` calls. No matrix is ever formed, so the mode scales to
 /// large `n` and runs on any vector backend, including plain `Vec<F>`
 /// (which has no Hessian matrix type at all). [`Steihaug`] and
-/// [`CauchyPoint`] support it; [`Dogleg`] needs the actual matrix for its
-/// Cholesky solve, so pairing it with matrix-free mode is a compile error.
+/// [`CauchyPoint`] support it; [`Dogleg`] and [`MoreSorensen`] need the actual
+/// matrix, so pairing either with matrix-free mode is a compile error.
 ///
 /// One cost asymmetry to know about: exact mode evaluates one Hessian per
 /// outer iteration and reuses it across inner radius reductions for free,
@@ -301,11 +311,13 @@ where
 /// they run on every backend that has a dense matrix type (`Vec<f64>` via
 /// [`DenseMatrix`](crate::core::math::DenseMatrix), nalgebra, faer, and
 /// `ndarray`); [`Dogleg`] additionally needs
-/// [`LinearSolveSpd`](crate::core::math::LinearSolveSpd), which `ndarray`
-/// does not provide (a compile error there, per tenet 5). In
-/// [`MatrixFree`] mode no matrix type is bound at all, so every vector
-/// backend works. All shipped strategies are wasm-clean (pure-Rust, no
-/// BLAS/LAPACK).
+/// [`LinearSolveSpd`](crate::core::math::LinearSolveSpd), while
+/// [`MoreSorensen`] needs that Cholesky solve plus
+/// [`SymmetricEigen`](crate::core::math::SymmetricEigen). Those operations are
+/// available on all four dense backends. In [`MatrixFree`] mode no matrix type
+/// is bound at all, so every vector backend works. All shipped strategies are
+/// wasm-clean in their pure-Rust configurations; the optional nalgebra LAPACK
+/// acceleration remains non-WASM as documented by that feature.
 ///
 /// Second-order information can reach the solver by three routes: an
 /// analytic [`Hessian`] (exact mode), an analytic
@@ -324,6 +336,10 @@ where
 /// Nocedal, J., & Wright, S. J. (2006). *Numerical Optimization* (2nd ed.),
 /// Chapter 4 (trust-region methods). Springer.
 /// [doi:10.1007/978-0-387-40065-5](https://doi.org/10.1007/978-0-387-40065-5).
+///
+/// Moré, J. J., & Sorensen, D. C. (1983). Computing a trust region step.
+/// *SIAM Journal on Scientific and Statistical Computing*, 4(3), 553–572.
+/// [doi:10.1137/0904038](https://doi.org/10.1137/0904038).
 ///
 /// # Examples
 ///
@@ -473,8 +489,8 @@ impl TrustRegion<Steihaug, f64, MatrixFree> {
 
 impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
     /// Matrix-free trust-region solver with an explicit subproblem strategy
-    /// ([`Steihaug`] or [`CauchyPoint`]; [`Dogleg`] needs the actual matrix
-    /// and is a compile error here).
+    /// ([`Steihaug`] or [`CauchyPoint`]; [`Dogleg`] and [`MoreSorensen`] need
+    /// the actual matrix and are compile errors here).
     pub fn matrix_free_with(subproblem: Sub) -> Self {
         Self {
             subproblem,
@@ -490,7 +506,7 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
 
 impl<Sub, F: Scalar> TrustRegion<Sub, F> {
     /// Trust-region solver with an explicit subproblem strategy
-    /// ([`Steihaug`], [`Dogleg`], or [`CauchyPoint`]).
+    /// ([`Steihaug`], [`Dogleg`], [`MoreSorensen`], or [`CauchyPoint`]).
     pub fn with_subproblem(subproblem: Sub) -> Self {
         Self {
             subproblem,
@@ -617,6 +633,15 @@ where
 
     for _ in 0..max_inner {
         let step = attempt(problem, &state.param, &g, *radius)?;
+
+        // A non-finite predicted reduction is the strategies' signal that
+        // the model data itself was non-finite, so no step is trustworthy.
+        // That is a failure, not the stationary point the zero-reduction
+        // branch below describes.
+        if !step.predicted_reduction.is_finite() {
+            state.gradient = Some(g);
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
 
         // Predicted reduction ≤ 0 means the model cannot decrease; for
         // the shipped strategies this only happens at a stationary point
@@ -884,6 +909,64 @@ mod tests {
         assert!(result.cost() < 1e-16, "cost = {}", result.cost());
     }
 
+    /// A quadratic whose gradient is poisoned with a NaN: the subproblem
+    /// cannot produce a trustworthy step from it.
+    struct NonFiniteGradient;
+
+    impl CostFunction for NonFiniteGradient {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = std::convert::Infallible;
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            Ok(0.5 * (x[0] * x[0] + x[1] * x[1]))
+        }
+    }
+    impl Gradient for NonFiniteGradient {
+        type Gradient = Vec<f64>;
+        fn gradient(&self, _x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            Ok(vec![f64::NAN, 1.0])
+        }
+    }
+    impl Hessian for NonFiniteGradient {
+        type Hessian = crate::core::math::DenseMatrix<f64>;
+        fn hessian(&self, _x: &Vec<f64>) -> Result<Self::Hessian, Self::Error> {
+            Ok(crate::core::math::DenseMatrix::from_row_slice(
+                2,
+                2,
+                &[1.0, 0.0, 0.0, 1.0],
+            ))
+        }
+    }
+
+    #[test]
+    fn nonfinite_gradient_is_reported_as_a_failure_not_convergence() {
+        let result = Executor::new(
+            NonFiniteGradient,
+            TrustRegion::with_subproblem(MoreSorensen::new()),
+            BasicState::new(vec![3.0, 3.0]),
+        )
+        .max_iter(10)
+        .run()
+        .unwrap();
+
+        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert!(result.reason.is_failure());
+    }
+
+    #[test]
+    fn more_sorensen_minimizes_quadratic() {
+        let result = Executor::new(
+            Quadratic,
+            TrustRegion::with_subproblem(MoreSorensen::new()),
+            BasicState::new(vec![5.0, 1.0]),
+        )
+        .max_iter(100)
+        .terminate_on(GradientTolerance(1e-10))
+        .run()
+        .unwrap();
+        assert!(result.cost() < 1e-16, "cost = {}", result.cost());
+    }
+
     #[test]
     fn steihaug_minimizes_rosenbrock() {
         // The default subproblem on the canonical nonconvex problem, from
@@ -911,6 +994,20 @@ mod tests {
             BasicState::new(vec![-1.2, 1.0]),
         )
         .max_iter(500)
+        .terminate_on(GradientTolerance(1e-8))
+        .run()
+        .unwrap();
+        assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+    }
+
+    #[test]
+    fn more_sorensen_minimizes_rosenbrock() {
+        let result = Executor::new(
+            Rosenbrock,
+            TrustRegion::with_subproblem(MoreSorensen::new()),
+            BasicState::new(vec![-1.2, 1.0]),
+        )
+        .max_iter(200)
         .terminate_on(GradientTolerance(1e-8))
         .run()
         .unwrap();
