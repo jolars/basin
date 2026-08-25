@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.0](https://github.com/jolars/basin/compare/v1.5.1...v1.6.0) (2026-08-25)
+
+### Features
+- add More-Sorensen trust-region strategy ([`574fe22`](https://github.com/jolars/basin/commit/574fe22822c54d5746d3047628e5c59e069fbec3))
+
 ## [1.5.1](https://github.com/jolars/basin/compare/v1.5.0...v1.5.1) (2026-08-06)
 
 ### Bug Fixes
