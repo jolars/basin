@@ -23,8 +23,7 @@
 //! which folds all three kinds into one `A x ≤ b` system handled by one
 //! active-set feasibility mechanism. It is *not* a parent of the three
 //! siblings above (it neither extends them nor is extended by them), so the
-//! "no `Constraint` parent" decision still stands (see
-//! [`LinearConstraints`] and `.claude/rules/constraints.md`).
+//! "no `Constraint` parent" decision still stands.
 
 use crate::core::problem::CostFunction;
 
@@ -108,10 +107,9 @@ pub trait BoxConstraints: CostFunction {
 /// operations they actually need: the barrier requires
 /// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and
 /// `Aᵀ v`), a strict subset of the LA tier that never includes a linear
-/// solve. With those bounds the barrier is available on the matrix-capable
-/// backends (nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`); `Vec<f64>`
-/// and `ndarray` produce a compile-time error until they grow the two
-/// matvec impls (tenet 5).
+/// solve. All four backends provide those operations: `DenseMatrix`/`Vec`,
+/// nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`, and ndarray
+/// `Array2`/`Array1` (tenet 5).
 pub trait LinearInequalityConstraints: CostFunction {
     /// The `m × n` constraint-matrix type. Consumers bound this on
     /// [`MatVec<Param>`](crate::core::math::MatVec) +
@@ -154,11 +152,10 @@ pub trait LinearInequalityConstraints: CostFunction {
 /// same way the sibling traits leave their carriers unbounded. Consumers add
 /// the operations they actually need: the augmented Lagrangian requires
 /// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and `Aᵀ v`):
-/// a strict subset of the LA tier that never includes a linear solve. With
-/// those bounds the method is available on the matrix-capable backends
-/// (nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`); `Vec<f64>` and
-/// `ndarray` produce a compile-time error until they grow the two matvec
-/// impls (tenet 5).
+/// a strict subset of the LA tier that never includes a linear solve. All four
+/// backends provide those operations: `DenseMatrix`/`Vec`, nalgebra
+/// `DMatrix`/`DVector`, faer `Mat`/`Col`, and ndarray `Array2`/`Array1`
+/// (tenet 5).
 pub trait LinearEqualityConstraints: CostFunction {
     /// The `m × n` constraint-matrix type. Consumers bound this on
     /// [`MatVec<Param>`](crate::core::math::MatVec) +
@@ -293,7 +290,7 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 /// [`BarrierMethod`](crate::solver::BarrierMethod) on
 /// [`LinearInequalityConstraints`], the
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod) on
-/// [`LinearEqualityConstraints`]); see `.claude/rules/constraints.md`.
+/// [`LinearEqualityConstraints`]).
 ///
 /// # Shapes
 ///

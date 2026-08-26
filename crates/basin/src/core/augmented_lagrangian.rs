@@ -39,9 +39,9 @@
 //! [`MatVec`] (`A x`) and
 //! [`MatTransposeVec`] (`Aᵀ v`): a
 //! strict subset of the LA tier that never includes a linear solve. That
-//! covers nalgebra (`DMatrix`/`DVector`) and faer (`Mat`/`Col`); `Vec<f64>`
-//! and `ndarray` are a compile-time error until they grow the two matvec
-//! impls (tenet 5).
+//! covers all four backends: `DenseMatrix`/`Vec`, nalgebra
+//! `DMatrix`/`DVector`, faer `Mat`/`Col`, and ndarray `Array2`/`Array1`
+//! (tenet 5).
 
 use crate::core::constraint::LinearEqualityConstraints;
 use crate::core::math::{
