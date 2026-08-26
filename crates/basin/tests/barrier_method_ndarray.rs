@@ -41,7 +41,7 @@ fn active_constraint_converges_to_projection() {
 }
 
 #[test]
-fn infeasible_start_is_reported_as_failure() {
+fn infeasible_start_runs_phase_one_then_converges() {
     let problem = active_problem();
     let initial = array![2.0, 2.0]; // sum 4.0 > 2 ⇒ infeasible
 
@@ -56,7 +56,13 @@ fn infeasible_start_is_reported_as_failure() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert!(
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
+        "expected (1, 1), got {:?}",
+        result.param()
+    );
 }
 
 #[test]

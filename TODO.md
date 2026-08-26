@@ -4,13 +4,6 @@ Ordered by recommended sequence.
 
 ## General design
 
-- [ ] **Add phase-1 feasibility to `BarrierMethod` (tenet 4).** The log-barrier
-  method currently returns `SolverFailed` when `A x₀ < b` does not hold. Add an
-  auxiliary feasibility solve that finds a strictly interior point when one
-  exists, preserves all four backends and the default wasm build, and reports
-  failure when the constraints have no strict interior. Cover feasible and
-  infeasible starts, empty interiors, and non-finite inputs.
-
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional linear
   inequalities and equalities, and optional box bounds into one `c(x) ≤ 0`

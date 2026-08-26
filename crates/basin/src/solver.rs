@@ -2,8 +2,8 @@
 /// (penalty + multiplier updates over any unconstrained inner solver;
 /// tolerates infeasible starts).
 pub mod augmented_lagrangian_method;
-/// Log-barrier method for linear inequality constraints `A x ≤ b`
-/// (`constrOptim`-style layer over any unconstrained inner solver).
+/// Two-phase log-barrier method for linear inequality constraints `A x ≤ b`;
+/// automatically finds a strictly feasible start when one exists.
 pub mod barrier_method;
 /// Basin-hopping (Wales & Doye 1997): Metropolis Monte-Carlo walk over the
 /// `Ẽ(x) = min{f(x)}` transform, wrapping any [`WarmStart`](crate::core::inner::WarmStart)

@@ -1,7 +1,7 @@
 //! Log-barrier (sequential unconstrained minimization) method for linear
 //! inequality constraints `A x ≤ b`.
 
-use crate::core::barrier::LogBarrier;
+use crate::core::barrier::{LogBarrier, strict_feasibility};
 use crate::core::constraint::LinearInequalityConstraints;
 use crate::core::executor::run_loop;
 use crate::core::inner::{InitialState, WarmStart};
@@ -16,11 +16,12 @@ use crate::core::termination::{
     GradientTolerance, MaxIter, TerminationCriterion, TerminationReason,
 };
 
-/// Log-barrier method for `min f(x) s.t. A x ≤ b`, the constrained
-/// analogue of R's `constrOptim`, layering a barrier on an unconstrained
-/// inner solver.
+/// Two-phase log-barrier method for `min f(x) s.t. A x ≤ b`, layering a
+/// barrier on an unconstrained inner solver.
 ///
-/// Each outer iteration minimizes the log-barrier objective
+/// Phase I automatically finds a strictly feasible point when the supplied
+/// start does not satisfy `A x₀ < b`. Phase II then minimizes the log-barrier
+/// objective
 /// `φ_μ(x) = f(x) − μ · Σ log(bᵢ − aᵢᵀ x)` (the [`LogBarrier`] adapter) with
 /// the inner solver `So`, warm-started from the current iterate, then
 /// shrinks `μ`. As `μ → 0` the central path converges to the constrained
@@ -42,9 +43,10 @@ use crate::core::termination::{
 /// derivative-free solver (Nelder-Mead), ruled out by the [`GradientState`]
 /// bound.
 ///
-/// **The inner solver must keep iterates feasible.** Feasibility is enforced
-/// only by the barrier returning `+∞` outside the feasible set, so the inner
-/// solver's step acceptance has to honor that wall: pair the inner with an
+/// **During Phase II the inner solver must keep iterates feasible.**
+/// Feasibility is enforced only by the barrier returning `+∞` outside the
+/// feasible set, so the inner solver's step acceptance has to honor that wall:
+/// pair the inner with an
 /// **Armijo backtracking** line search
 /// ([`Backtracking`](crate::line_search::Backtracking)), which shrinks any
 /// step whose cost is `+∞`. A fixed step ([`Constant`](crate::line_search::Constant))
@@ -58,14 +60,17 @@ use crate::core::termination::{
 ///
 /// # Algorithm
 ///
-/// Boyd & Vandenberghe, *Convex Optimization* §11.3 (Alg. 11.1), in the
-/// `μ`-shrinking parametrization:
+/// Boyd & Vandenberghe, *Convex Optimization* §11.4.1 followed by §11.3
+/// (Alg. 11.1), in the `μ`-shrinking parametrization:
 ///
 /// ```text
-/// require: strictly feasible x₀ (A x₀ < b)
+/// if A x₀ < b does not hold:
+///   solve min s subject to A x - b ≤ s       # Phase I
+///   stop Phase I as soon as A x < b
+///   if centered and m · μ ≤ phase_one_tol: fail without a strict point
 /// μ ← mu0
 /// repeat:
-///   x ← argmin φ_μ   (inner solver, warm-started at x)
+///   x ← argmin φ_μ                              # Phase II
 ///   if m · μ ≤ tol: stop (SolverConverged)   # log-barrier duality gap
 ///   μ ← μ / reduction
 /// ```
@@ -74,23 +79,37 @@ use crate::core::termination::{
 /// number of constraints), so the returned iterate is within `tol` of the
 /// constrained optimum.
 ///
-/// # Phase 1 (feasibility) is not provided
+/// # Phase I
 ///
-/// The method requires a **strictly feasible** starting point. An
-/// infeasible `x₀` (some `aᵢᵀ x₀ ≥ bᵢ`) is detected at
-/// [`init`](Solver::init) and reported as
-/// [`SolverFailed`](TerminationReason::SolverFailed) on the first
-/// iteration, mirroring R's `constrOptim`, which errors on an infeasible
-/// initial value. A phase-1 solve to *find* a feasible point is deferred.
+/// The auxiliary scalar is eliminated analytically, so the configured inner
+/// solver still works with the original parameter type `V`: for violations
+/// `rᵢ = aᵢᵀx - bᵢ`, the reduced objective chooses the unique
+/// `s > max rᵢ` satisfying `μ Σᵢ 1/(s-rᵢ) = 1`. Its gradient is
+/// `Aᵀ[μ/(s-r)]`. This needs only the same matvec operations as Phase II and
+/// therefore preserves every backend. The inner run stops immediately when it
+/// produces `A x < b`; Phase II then restarts the `μ` schedule at `mu0`.
+///
+/// If a centered Phase I subproblem reaches
+/// [`with_phase_one_tol`](Self::with_phase_one_tol) without finding a strict
+/// point, the constraints are reported as
+/// [`SolverFailed`](TerminationReason::SolverFailed). An inner solve that
+/// exhausts its iteration budget is not a certificate: Phase I retries the
+/// same `μ` from the returned candidate. Numerically, the centered certificate
+/// means "no strict interior at the configured scale": exact zero margin
+/// cannot be distinguished from an arbitrarily thin interior in finite
+/// precision.
 ///
 /// # Termination
 ///
 /// The outer duality-gap test `m · μ ≤ tol` is solver-specific and lives on
 /// the solver (tenet 3): it fires via [`terminate`](Solver::terminate) as
 /// [`SolverConverged`](TerminationReason::SolverConverged). Pair with the
-/// executor's [`MaxIter`] as a safety net; with the defaults the gap
-/// closes in roughly `log(m · mu0 / tol) / log(reduction)` outer iterations
-/// (≈ 9 for the defaults), so an outer `max_iter` of 20–30 is ample.
+/// executor's [`MaxIter`] as a safety net. A strictly feasible start uses only
+/// Phase II; an infeasible or boundary start spends additional outer
+/// iterations in Phase I. With the defaults each continuation closes its gap
+/// in roughly `log(m · mu0 / tol) / log(reduction)` outer iterations
+/// (≈ 9 for the defaults), so an outer `max_iter` of 30–50 is a practical
+/// safety budget for both phases.
 ///
 /// **Do not attach a gradient-norm criterion to the outer executor.** The
 /// gap test is the correct optimality measure here. At a constrained
@@ -110,18 +129,17 @@ use crate::core::termination::{
 /// backend: `Vec<f64>` (via
 /// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
 /// (`DMatrix`/`DVector`), faer (`Mat`/`Col`), and `ndarray`
-/// (`Array2`/`Array1`). A future primal-dual interior point method *would*
-/// need [`LinearSolveSpd`](crate::core::math::LinearSolveSpd) (Newton on the
-/// KKT system) and so would stay nalgebra and faer only.
+/// (`Array2`/`Array1`).
 ///
 /// # Composition
 ///
 /// Internally drives the inner solver via
 /// [`run_loop`] with a **fresh** criteria
 /// vector each outer iteration (`MaxIter` + `GradientTolerance` on the
-/// barrier objective). The fresh vector is intrinsic here, since each outer
-/// iter minimizes a *different* surrogate (`Problem::new(LogBarrier)` with a
-/// shrinking μ), not a reuse-avoidance dodge: criteria
+/// current Phase I or Phase II barrier objective). The fresh vector is
+/// intrinsic here, since each outer iter minimizes a *different* surrogate
+/// (`Problem::new(LogBarrier)` with a shrinking μ), not a reuse-avoidance
+/// dodge: criteria
 /// [reset](crate::core::termination::TerminationCriterion::reset) per run, so
 /// even a stored [`InnerExecutor`](crate::core::inner::InnerExecutor) would
 /// reuse stateful criteria safely. The inner runs on its own `So::State` (seeded via
@@ -145,17 +163,76 @@ pub struct BarrierMethod<So, F = f64> {
     mu: F,
     reduction: F,
     tol: F,
+    phase_one_tol: F,
     /// `m · μ` of the most recent inner solve; `+∞` until the first solve
     /// so [`terminate`](Solver::terminate) cannot fire at iter 0.
     gap: F,
-    infeasible: bool,
+    phase: BarrierPhase,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BarrierPhase {
+    PhaseOne,
+    PhaseTwo,
+    Failed,
+}
+
+/// Delegates to the configured inner solver but ends a Phase I inner run as
+/// soon as the current parameter is strictly feasible for the original
+/// constraints. This is important when the auxiliary LP is unbounded below:
+/// Phase I only needs one interior point, not the LP optimum.
+struct StopAtStrictFeasibility<'a, So> {
+    inner: &'a mut So,
+}
+
+impl<'a, 'p, P, V, M, S, So, F> Solver<LogBarrier<'p, P, F>, S>
+    for StopAtStrictFeasibility<'a, So>
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>
+        + LinearInequalityConstraints<Param = V, Matrix = M>,
+    M: MatVec<V>,
+    V: ScaledAdd<F> + VectorIndex<F> + VectorLen,
+    S: State<Param = V>,
+    So: Solver<LogBarrier<'p, P, F>, S>,
+{
+    type Error = So::Error;
+
+    fn init(
+        &mut self,
+        problem: &mut Problem<LogBarrier<'p, P, F>>,
+        state: S,
+    ) -> Result<S, Self::Error> {
+        self.inner.init(problem, state)
+    }
+
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<LogBarrier<'p, P, F>>,
+        state: S,
+    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
+        let (state, reason) = self.inner.next_iter(problem, state)?;
+        let inner_failed = reason.is_some_and(|reason| reason.is_failure());
+        if !inner_failed
+            && problem.inner().strict_feasibility(state.param()) == Some(true)
+        {
+            Ok((state, Some(TerminationReason::SolverConverged)))
+        } else {
+            Ok((state, reason))
+        }
+    }
+
+    fn terminate(&self, state: &S) -> Option<TerminationReason> {
+        self.inner.terminate(state)
+    }
 }
 
 impl<So> BarrierMethod<So> {
     /// Build a barrier method around an unconstrained inner solver.
     ///
     /// Defaults: `mu0 = 1.0`, `reduction = 10.0`, `tol = 1e-8`,
-    /// `inner_max_iter = 50`, `inner_grad_tol = 1e-8`.
+    /// `phase_one_tol = 1e-8`, `inner_max_iter = 50`,
+    /// `inner_grad_tol = 1e-8`.
     ///
     /// The `inner_max_iter` default is intentionally modest:
     /// [`with_inner_max_iter`](Self::with_inner_max_iter) is the dominant cost lever
@@ -171,8 +248,9 @@ impl<So> BarrierMethod<So> {
             mu: 1.0,
             reduction: 10.0,
             tol: 1e-8,
+            phase_one_tol: 1e-8,
             gap: f64::INFINITY,
-            infeasible: false,
+            phase: BarrierPhase::PhaseTwo,
         }
     }
 }
@@ -211,6 +289,25 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     pub fn with_tol(mut self, tol: F) -> Self {
         assert!(tol > F::zero(), "tol must be > 0");
         self.tol = tol;
+        self
+    }
+
+    /// Phase I accuracy used to classify a constraint system with no strict
+    /// interior (default `1e-8`). If a centered Phase I subproblem has not
+    /// found `A x < b` once its auxiliary duality gap `m · μ` is at most this
+    /// tolerance, the solver reports
+    /// [`SolverFailed`](TerminationReason::SolverFailed).
+    ///
+    /// A finite-precision method cannot distinguish an exactly empty interior
+    /// from an arbitrarily thin one. This tolerance therefore means "no strict
+    /// interior at this numerical scale."
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `phase_one_tol > 0`.
+    pub fn with_phase_one_tol(mut self, phase_one_tol: F) -> Self {
+        assert!(phase_one_tol > F::zero(), "phase_one_tol must be > 0");
+        self.phase_one_tol = phase_one_tol;
         self
     }
 
@@ -296,15 +393,31 @@ where
         self.mu = self.mu0;
         self.gap = F::infinity();
 
-        // Feasibility at x₀: slack s = b − A x₀ must be strictly positive.
-        let mut slack = problem.inner().a().matvec(state.param());
-        slack.neg_in_place();
-        slack.scaled_add(F::one(), problem.inner().b());
-        self.infeasible =
-            (0..slack.vec_len()).any(|i| slack.get_scalar(i) <= F::zero());
+        self.phase = match strict_feasibility(problem.inner(), state.param()) {
+            Some(true) => BarrierPhase::PhaseTwo,
+            Some(false) => BarrierPhase::PhaseOne,
+            None => BarrierPhase::Failed,
+        };
 
-        // Seed the *true* objective so framework criteria and the public
-        // result read f, not the barrier value.
+        if self.phase == BarrierPhase::Failed {
+            // Keep cost-based convergence dormant until `next_iter` can
+            // report the solver failure through the normal soft-stop path.
+            state.cost = Some(F::infinity());
+            state.gradient = None;
+            return Ok(state);
+        }
+
+        if self.phase == BarrierPhase::PhaseOne {
+            // Executor criteria run before `next_iter`, including at iter 0.
+            // The infeasible point is not a candidate for the original
+            // problem, so exposing its true objective or gradient could let a
+            // target or stationarity test bypass Phase I entirely.
+            state.cost = Some(F::infinity());
+            state.gradient = None;
+            return Ok(state);
+        }
+
+        // A feasible start is a valid candidate for the original problem.
         let (cost, grad) = problem.cost_and_gradient(state.param())?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
@@ -317,9 +430,81 @@ where
         mut state: BasicState<V, F>,
     ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        if self.infeasible {
-            // Phase 1 deferred: bubble an infeasible start as a failure.
+        if self.phase == BarrierPhase::Failed {
             return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
+
+        if self.phase == BarrierPhase::PhaseOne {
+            let mut barrier_wrapper =
+                Problem::new(LogBarrier::phase_one(problem.inner(), self.mu));
+            let mut criteria: Vec<Box<dyn TerminationCriterion<So::State>>> = vec![
+                Box::new(MaxIter(self.inner_max_iter)),
+                Box::new(GradientTolerance(self.inner_grad_tol)),
+            ];
+            let inner_state = self.inner_solver.seed(state.param());
+            let mut phase_one_solver = StopAtStrictFeasibility {
+                inner: &mut self.inner_solver,
+            };
+            let result = run_loop(
+                &mut barrier_wrapper,
+                inner_state,
+                &mut phase_one_solver,
+                &mut criteria,
+                self.inner_max_iter,
+            )?;
+
+            let inner_counts = *barrier_wrapper.counts();
+            problem.counts_mut().add(&inner_counts);
+
+            if result.reason.is_failure() {
+                self.phase = BarrierPhase::Failed;
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
+
+            let centered = result.state.gradient().is_some_and(|gradient| {
+                gradient.norm_squared()
+                    <= self.inner_grad_tol * self.inner_grad_tol
+            });
+            let candidate = result.state.param();
+            let feasibility = strict_feasibility(problem.inner(), candidate);
+            let Some(is_strictly_feasible) = feasibility else {
+                self.phase = BarrierPhase::Failed;
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            };
+
+            state.param = candidate.clone();
+
+            if is_strictly_feasible {
+                let (cost, grad) = problem.cost_and_gradient(&state.param)?;
+                state.cost = Some(cost);
+                state.gradient = Some(grad);
+                // Phase II starts a fresh continuation schedule; Phase I's μ
+                // controls feasibility accuracy, not objective optimality.
+                self.phase = BarrierPhase::PhaseTwo;
+                self.mu = self.mu0;
+                self.gap = F::infinity();
+                return Ok((state, None));
+            }
+
+            // An unfinished solve supplies neither a Phase I optimum nor the
+            // associated m·μ bound. Preserve its progress, but retry this μ
+            // instead of turning a shrinking continuation parameter into a
+            // false infeasibility certificate.
+            if centered {
+                let phase_one_gap =
+                    F::from_usize(problem.inner().b().vec_len()).unwrap()
+                        * self.mu;
+                if phase_one_gap <= self.phase_one_tol {
+                    self.phase = BarrierPhase::Failed;
+                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                }
+
+                self.mu = self.mu / self.reduction;
+            }
+
+            state.cost = Some(F::infinity());
+            state.gradient = None;
+            return Ok((state, None));
         }
 
         // Minimize the barrier objective at the current μ on a *separate*
@@ -351,12 +536,18 @@ where
         problem.counts_mut().add(&inner_counts);
 
         if result.reason.is_failure() {
+            self.phase = BarrierPhase::Failed;
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
 
         // Adopt the inner's iterate, then evaluate the *true* f/∇f there
         // (the inner left cost and gradient at the barrier objective).
-        state.param = result.state.param().clone();
+        let candidate = result.state.param();
+        if strict_feasibility(problem.inner(), candidate) != Some(true) {
+            self.phase = BarrierPhase::Failed;
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
+        state.param = candidate.clone();
         let (cost, grad) = problem.cost_and_gradient(&state.param)?;
         state.cost = Some(cost);
         state.gradient = Some(grad);
@@ -373,7 +564,7 @@ where
         _state: &BasicState<V, F>,
     ) -> Option<TerminationReason> {
         // Log-barrier duality-gap bound m·μ from the most recent solve.
-        if self.gap <= self.tol {
+        if self.phase == BarrierPhase::PhaseTwo && self.gap <= self.tol {
             Some(TerminationReason::SolverConverged)
         } else {
             None
@@ -404,6 +595,12 @@ mod tests {
     #[should_panic(expected = "tol must be > 0")]
     fn rejects_nonpositive_tol() {
         let _ = BarrierMethod::new(()).with_tol(0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "phase_one_tol must be > 0")]
+    fn rejects_nonpositive_phase_one_tol() {
+        let _ = BarrierMethod::new(()).with_phase_one_tol(0.0);
     }
 
     #[test]

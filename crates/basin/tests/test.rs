@@ -78,12 +78,13 @@ fn barrier_method_tour() {
     let solver = BarrierMethod::new(inner)
         .mu0(1.0) // initial barrier weight μ
         .with_reduction(10.0) // μ ← μ / 10 each outer iteration
+        .with_phase_one_tol(1e-8) // classify an empty strict interior
         .with_tol(1e-8) // stop once the duality gap m·μ ≤ tol
         .with_inner_max_iter(50); // budget per inner barrier solve (the cost lever)
 
-    // 4. The starting point must be *strictly feasible* (`A x₀ < b`). Here
-    //    (0,0) gives slack 2 > 0. An infeasible start returns `SolverFailed`.
-    let x0 = BasicState::new(DVector::from_vec(vec![0.0, 0.0]));
+    // 4. The start may be infeasible. Here (2,2) violates x₀+x₁≤2; Phase I
+    //    finds a strict point, and Phase II continues to the constrained optimum.
+    let x0 = BasicState::new(DVector::from_vec(vec![2.0, 2.0]));
 
     // 5. Drive it with the usual `Executor`. `max_iter` is only an outer
     //    safety net; convergence comes from the gap test inside the solver.

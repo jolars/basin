@@ -177,9 +177,9 @@ These wrap any gradient inner solver in an outer loop that handles linear
 constraints:
 
 - **[`BarrierMethod`](https://docs.rs/basin/latest/basin/solver/barrier_method/struct.BarrierMethod.html)**:
-  log-barrier interior-point continuation for linear inequality constraints
-  (`A x ≤ b`); needs a strictly feasible start (Boyd & Vandenberghe, *Convex
-  Optimization*, §11.3, Alg. 11.1).
+  two-phase log-barrier interior-point continuation for linear inequality
+  constraints (`A x ≤ b`); automatically finds a strictly feasible start when
+  one exists (Boyd & Vandenberghe, *Convex Optimization*, §§11.3–11.4.1).
 - **[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**:
   quadratic penalty plus multiplier updates for linear equality constraints
   (`A x = b`); tolerates an infeasible start (Nocedal & Wright, §17.3, Alg.

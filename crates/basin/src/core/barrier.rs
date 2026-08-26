@@ -35,6 +35,9 @@
 //! [`gradient`](Gradient::gradient) is only meaningful at feasible points;
 //! it still returns a finite-shaped value at infeasible ones (no panic),
 //! but callers should not rely on it there.
+//! [`BarrierMethod`](crate::solver::BarrierMethod) supplies a Phase I solve
+//! automatically when its starting point is not strictly feasible; standalone
+//! `LogBarrier` users must still provide an interior start themselves.
 //!
 //! # Backends
 //!
@@ -65,6 +68,13 @@ use crate::core::problem::{CostFunction, Gradient};
 pub struct LogBarrier<'a, P, F = f64> {
     problem: &'a P,
     mu: F,
+    objective: BarrierObjective,
+}
+
+#[derive(Clone, Copy)]
+enum BarrierObjective {
+    PhaseOne,
+    PhaseTwo,
 }
 
 impl<'a, P, F: Scalar> LogBarrier<'a, P, F> {
@@ -72,13 +82,144 @@ impl<'a, P, F: Scalar> LogBarrier<'a, P, F> {
     /// hews closer to the true constrained objective but makes `φ_μ`
     /// stiffer near the feasible boundary.
     pub fn new(problem: &'a P, mu: F) -> Self {
-        Self { problem, mu }
+        Self {
+            problem,
+            mu,
+            objective: BarrierObjective::PhaseTwo,
+        }
+    }
+
+    /// Build the reduced Phase I objective. Kept crate-private because Phase I
+    /// is an implementation detail of `BarrierMethod`; the public
+    /// `LogBarrier::new` contract remains the Phase II objective.
+    pub(crate) fn phase_one(problem: &'a P, mu: F) -> Self {
+        Self {
+            problem,
+            mu,
+            objective: BarrierObjective::PhaseOne,
+        }
     }
 
     /// The barrier parameter `μ` this adapter was built with.
     pub fn mu(&self) -> F {
         self.mu
     }
+
+    /// Validate the constraint data at `x` and report strict feasibility.
+    pub(crate) fn strict_feasibility<V, M>(&self, x: &V) -> Option<bool>
+    where
+        P: LinearInequalityConstraints<Param = V, Matrix = M>,
+        M: MatVec<V>,
+        V: ScaledAdd<F> + VectorIndex<F> + VectorLen,
+    {
+        strict_feasibility(self.problem, x)
+    }
+}
+
+/// Return `Some(true)` for `A x < b`, `Some(false)` for finite but non-strict
+/// data, and `None` for a non-finite or inconsistent vector shape.
+pub(crate) fn strict_feasibility<P, V, M, F>(problem: &P, x: &V) -> Option<bool>
+where
+    F: Scalar,
+    P: LinearInequalityConstraints<Param = V, Matrix = M>,
+    M: MatVec<V>,
+    V: ScaledAdd<F> + VectorIndex<F> + VectorLen,
+{
+    if !vector_is_finite(x) || !vector_is_finite(problem.b()) {
+        return None;
+    }
+
+    let mut residual = problem.a().matvec(x);
+    if residual.vec_len() != problem.b().vec_len() {
+        return None;
+    }
+    residual.scaled_add(-F::one(), problem.b());
+    if !vector_is_finite(&residual) {
+        return None;
+    }
+
+    Some((0..residual.vec_len()).all(|i| residual.get_scalar(i) < F::zero()))
+}
+
+fn vector_is_finite<V, F>(x: &V) -> bool
+where
+    F: Scalar,
+    V: VectorIndex<F> + VectorLen,
+{
+    (0..x.vec_len()).all(|i| x.get_scalar(i).is_finite())
+}
+
+/// Replace violations `r = A x - b` by Phase I slacks `s - r` and return
+/// the minimizing auxiliary scalar `s` for the current `x` and `μ`.
+///
+/// The scalar is eliminated by solving
+/// `μ Σᵢ 1/(s-rᵢ) = 1`. If `r_max = max rᵢ`, then
+/// `δ = s-r_max` lies in `(0, mμ]`, which gives a finite bracket requiring
+/// only scalar arithmetic. Slacks are formed as
+/// `δ + (r_max-rᵢ)` so they remain positive even when `s` and `r_max`
+/// round to the same floating-point number.
+fn phase_one_slacks<V, F>(violations: &mut V, mu: F) -> Option<F>
+where
+    F: Scalar,
+    V: VectorIndex<F> + VectorLen,
+{
+    let m = violations.vec_len();
+    if m == 0 || !(mu.is_finite() && mu > F::zero()) {
+        return None;
+    }
+
+    let mut r_max = violations.get_scalar(0);
+    if !r_max.is_finite() {
+        return None;
+    }
+    for i in 1..m {
+        let ri = violations.get_scalar(i);
+        if !ri.is_finite() {
+            return None;
+        }
+        r_max = r_max.max(ri);
+    }
+
+    let upper = F::from_usize(m)? * mu;
+    if !(upper.is_finite() && upper > F::zero()) {
+        return None;
+    }
+    let two = F::one() + F::one();
+    let mut lo = F::zero();
+    let mut hi = upper;
+
+    // 128 bisections exceed the mantissa width of both supported scalar
+    // widths. The equality guards terminate once the bracket can no longer be
+    // represented more finely.
+    for _ in 0..128 {
+        let mid = lo + (hi - lo) / two;
+        if mid == lo || mid == hi {
+            break;
+        }
+        let mut reciprocal_sum = F::zero();
+        for i in 0..m {
+            let slack = mid + (r_max - violations.get_scalar(i));
+            reciprocal_sum = reciprocal_sum + F::one() / slack;
+        }
+        if mu * reciprocal_sum > F::one() {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+
+    let s = r_max + hi;
+    if !s.is_finite() {
+        return None;
+    }
+    for i in 0..m {
+        let slack = hi + (r_max - violations.get_scalar(i));
+        if !(slack.is_finite() && slack > F::zero()) {
+            return None;
+        }
+        violations.set_scalar(i, slack);
+    }
+    Some(s)
 }
 
 impl<P, V, M, F> CostFunction for LogBarrier<'_, P, F>
@@ -98,21 +239,46 @@ where
     type Error = <P as CostFunction>::Error;
 
     fn cost(&self, x: &V) -> Result<F, Self::Error> {
-        // slack s = b − A x.
-        let mut s = self.problem.a().matvec(x);
-        s.neg_in_place();
-        s.scaled_add(F::one(), self.problem.b());
+        if !vector_is_finite(x) || !vector_is_finite(self.problem.b()) {
+            return Ok(F::infinity());
+        }
+
+        let mut values = self.problem.a().matvec(x);
+        if values.vec_len() != self.problem.b().vec_len() {
+            return Ok(F::infinity());
+        }
+
+        let phase_one_s = match self.objective {
+            BarrierObjective::PhaseOne => {
+                // violations r = A x - b, replaced by slacks s - r after
+                // analytically minimizing over the auxiliary scalar s.
+                values.scaled_add(-F::one(), self.problem.b());
+                match phase_one_slacks(&mut values, self.mu) {
+                    Some(s) => Some(s),
+                    None => return Ok(F::infinity()),
+                }
+            }
+            BarrierObjective::PhaseTwo => {
+                // slack = b - A x.
+                values.neg_in_place();
+                values.scaled_add(F::one(), self.problem.b());
+                None
+            }
+        };
 
         let mut log_sum = F::zero();
-        for i in 0..s.vec_len() {
-            let si = s.get_scalar(i);
-            if si <= F::zero() {
+        for i in 0..values.vec_len() {
+            let si = values.get_scalar(i);
+            if !(si.is_finite() && si > F::zero()) {
                 // Infeasible: barrier is +∞, so the whole objective is +∞.
                 return Ok(F::infinity());
             }
             log_sum = log_sum + si.ln();
         }
-        Ok(self.problem.cost(x)? - self.mu * log_sum)
+        match phase_one_s {
+            Some(s) => Ok(s - self.mu * log_sum),
+            None => Ok(self.problem.cost(x)? - self.mu * log_sum),
+        }
     }
 }
 
@@ -128,20 +294,44 @@ where
     type Gradient = V;
 
     fn gradient(&self, x: &V) -> Result<V, <Self as CostFunction>::Error> {
-        // slack s = b − A x, reused in place as the barrier weights
-        // wᵢ = μ / sᵢ. ∇[−μ log(bᵢ − aᵢᵀx)] = μ aᵢ / sᵢ, summed = Aᵀ w.
-        let mut s = self.problem.a().matvec(x);
-        s.neg_in_place();
-        s.scaled_add(F::one(), self.problem.b());
-        for i in 0..s.vec_len() {
-            let si = s.get_scalar(i);
-            s.set_scalar(i, self.mu / si);
+        let mut values = self.problem.a().matvec(x);
+        let valid_shape = values.vec_len() == self.problem.b().vec_len();
+        let valid = valid_shape
+            && vector_is_finite(x)
+            && vector_is_finite(self.problem.b())
+            && match self.objective {
+                BarrierObjective::PhaseOne => {
+                    values.scaled_add(-F::one(), self.problem.b());
+                    phase_one_slacks(&mut values, self.mu).is_some()
+                }
+                BarrierObjective::PhaseTwo => {
+                    values.neg_in_place();
+                    values.scaled_add(F::one(), self.problem.b());
+                    (0..values.vec_len()).all(|i| {
+                        let slack = values.get_scalar(i);
+                        slack.is_finite() && slack > F::zero()
+                    })
+                }
+            };
+
+        for i in 0..values.vec_len() {
+            let weight = if valid {
+                self.mu / values.get_scalar(i)
+            } else {
+                F::zero()
+            };
+            values.set_scalar(i, weight);
         }
 
-        let mut g = self.problem.gradient(x)?;
-        let barrier_grad = self.problem.a().mat_transpose_vec(&s);
-        g.scaled_add(F::one(), &barrier_grad);
-        Ok(g)
+        let barrier_grad = self.problem.a().mat_transpose_vec(&values);
+        match self.objective {
+            BarrierObjective::PhaseOne => Ok(barrier_grad),
+            BarrierObjective::PhaseTwo => {
+                let mut g = self.problem.gradient(x)?;
+                g.scaled_add(F::one(), &barrier_grad);
+                Ok(g)
+            }
+        }
     }
 }
 
@@ -234,6 +424,49 @@ mod tests {
                 (lb.cost(&xp).unwrap() - lb.cost(&xm).unwrap()) / (2.0 * h);
             assert!(
                 (analytic[j] - fd).abs() < 1e-5,
+                "component {j}: analytic {} vs fd {}",
+                analytic[j],
+                fd
+            );
+        }
+    }
+
+    #[test]
+    fn phase_one_auxiliary_scalar_satisfies_stationarity() {
+        let mu = 0.7;
+        let mut violations = DVector::from_vec(vec![2.0, -1.0, 0.5]);
+        let original = violations.clone();
+        let s = phase_one_slacks(&mut violations, mu).unwrap();
+
+        let stationarity: f64 = violations.iter().map(|slack| mu / slack).sum();
+        assert!((stationarity - 1.0).abs() < 1e-14);
+        for i in 0..violations.len() {
+            assert!((violations[i] - (s - original[i])).abs() < 1e-14);
+            assert!(violations[i] > 0.0);
+        }
+    }
+
+    #[test]
+    fn phase_one_reduced_gradient_agrees_with_finite_differences() {
+        let p = Probe::new();
+        let phase_one = LogBarrier::phase_one(&p, 0.7);
+        // Deliberately infeasible for x₀ + x₁ ≤ 2: the reduced
+        // auxiliary objective is nevertheless finite everywhere.
+        let x = DVector::from_vec(vec![2.0, 1.0]);
+        assert!(phase_one.cost(&x).unwrap().is_finite());
+        let analytic = phase_one.gradient(&x).unwrap();
+
+        let h = 1e-6;
+        for j in 0..2 {
+            let mut xp = x.clone();
+            let mut xm = x.clone();
+            xp[j] += h;
+            xm[j] -= h;
+            let fd = (phase_one.cost(&xp).unwrap()
+                - phase_one.cost(&xm).unwrap())
+                / (2.0 * h);
+            assert!(
+                (analytic[j] - fd).abs() < 1e-6,
                 "component {j}: analytic {} vs fd {}",
                 analytic[j],
                 fd

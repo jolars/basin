@@ -44,11 +44,11 @@ use crate::core::termination::{
 ///
 /// # Infeasible starts are fine
 ///
-/// Unlike the [`BarrierMethod`](crate::solver::BarrierMethod), the augmented
-/// Lagrangian is finite and smooth *everywhere* (there is no `+∞`
+/// Unlike the Phase II [`LogBarrier`](crate::core::barrier::LogBarrier), the
+/// augmented Lagrangian is finite and smooth *everywhere* (there is no `+∞`
 /// feasibility wall), so the starting point need **not** satisfy `A x₀ = b`,
 /// and the inner solver may use any line search (Armijo backtracking, Wolfe,
-/// Moré–Thuente) or momentum. No phase-1 feasibility solve is required.
+/// Moré–Thuente) or momentum. No Phase I feasibility solve is required.
 ///
 /// # Algorithm
 ///

@@ -76,7 +76,7 @@ fn inactive_constraint_recovers_unconstrained_minimum() {
 }
 
 #[test]
-fn infeasible_start_is_reported_as_failure() {
+fn infeasible_start_runs_phase_one_then_converges() {
     let problem = active_problem();
     // sum 4.0 > 2 ⇒ A x₀ ≰ b ⇒ infeasible.
     let initial = DVector::from_vec(vec![2.0, 2.0]);
@@ -92,7 +92,13 @@ fn infeasible_start_is_reported_as_failure() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert!(
+        (result.param()[0] - 1.0).abs() < 1e-4
+            && (result.param()[1] - 1.0).abs() < 1e-4,
+        "expected (1, 1), got {:?}",
+        result.param()
+    );
 }
 
 #[test]
@@ -161,7 +167,7 @@ fn two_constraints_both_active() {
 #[test]
 fn bfgs_inner_converges_to_projection() {
     let problem = active_problem();
-    let initial = DVector::from_vec(vec![0.0, 0.0]); // strictly feasible
+    let initial = DVector::from_vec(vec![2.0, 2.0]); // exercises Phase I too
 
     let result = Executor::new(
         problem,
