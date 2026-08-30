@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- export `AddDiagonalVectorInPlace` and `MaxDiagonal` so out-of-tree `Trf` Jacobian types can implement the damped Gram path
+
 ## [1.7.0](https://github.com/jolars/basin/compare/v1.6.0...v1.7.0) (2026-08-27)
 
 ### Features

@@ -210,28 +210,28 @@ pub use crate::core::constraint::{
     LinearInequalityConstraints, NonlinearInequalityConstraints,
 };
 pub use crate::core::executor::{
-    Executor, OptimizationResult, StepOutcome, Stepper, run_loop,
+    run_loop, Executor, OptimizationResult, StepOutcome, Stepper,
 };
 pub use crate::core::inner::{
     InitialState, InnerExecutor, ResumableInner, WarmStart,
 };
 pub use crate::core::math::{
-    ClampInPlace, ComponentMulAssign, DenseMatrix, DenseMatrixFromFn, Dot,
-    GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
-    MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NegInPlace,
-    NormInfinity, NormSquared, SampleStandardNormal, SampleUniformBox, Scalar,
-    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex,
-    VectorLen,
+    AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseMatrix,
+    DenseMatrixFromFn, Dot, GramMatrix, LinearSolveError, LinearSolveLstsq,
+    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity, NormSquared,
+    SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd,
+    SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
 };
 pub use crate::core::numdiff::{
-    FiniteDiff, Method, central_difference_gradient,
-    central_difference_hessian, central_difference_hessian_product,
-    central_difference_jacobian, forward_difference_gradient,
-    forward_difference_hessian, forward_difference_hessian_product,
-    forward_difference_jacobian,
+    central_difference_gradient, central_difference_hessian,
+    central_difference_hessian_product, central_difference_jacobian,
+    forward_difference_gradient, forward_difference_hessian,
+    forward_difference_hessian_product, forward_difference_jacobian,
+    FiniteDiff, Method,
 };
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
-pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
+pub use crate::core::observer::{read_checkpoint, CheckpointWriter};
 pub use crate::core::observer::{History, Observe, ObserverMode, Report};
 pub use crate::core::problem::{
     CostFunction, EvalCounts, Gradient, Hessian, HessianProduct, Jacobian,
@@ -262,12 +262,12 @@ pub use crate::core::termination::{
 pub use crate::line_search::{
     Backtracking, Constant, LineSearch, MoreThuente, Wolfe,
 };
-pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};
 pub use crate::solver::trust_region::{
     CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
     TrustRegion,
 };
+pub use crate::solver::Bfgs;
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
     Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative,

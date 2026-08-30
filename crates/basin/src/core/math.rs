@@ -19,11 +19,12 @@
 //!   a second exception: [`DenseMatrix`] implements it via a pure-Rust
 //!   cyclic Jacobi eigensolver (`dense_eig`), so CMA-ES runs on the default
 //!   backend too. The SPD solve [`LinearSolveSpd`] and its companion
-//!   [`GramMatrix`] (plus the `pub(crate)` `AddDiagonalVectorInPlace`) are a
+//!   [`GramMatrix`] (plus [`AddDiagonalVectorInPlace`]) are a
 //!   third: [`DenseMatrix`] implements them via a pure-Rust Cholesky
 //!   (`dense_chol`), so Gauss-Newton and Levenberg-Marquardt run on the
-//!   default backend. The QR least-squares solve [`LinearSolveLstsq`] (and the
-//!   trust-region-reflective `MaxDiagonal`) stay nalgebra- and faer-only.
+//!   default backend. The QR least-squares solve [`LinearSolveLstsq`] stays
+//!   nalgebra- and faer-only. [`MaxDiagonal`] is public so custom `Trf`
+//!   Jacobian types can implement the same damping path as the shipped backends.
 
 /// Scalar element type for vectors and matrices in the math layer.
 ///
@@ -250,19 +251,16 @@ mod faer_sparse_backend;
 pub use clamp::ClampInPlace;
 pub use dense::DenseMatrix;
 pub use linalg::{
-    DenseMatrixFromFn, GramMatrix, LinearSolveError, LinearSolveLstsq,
-    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, SymmetricEigen, SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseMatrixFromFn, GramMatrix, LinearSolveError,
+    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, SymmetricEigen,
+    SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 
-// Per-solver plumbing ops: expressed as traits for backend portability, but
-// they carry no meaning outside one shipped solver's internals (diagonal
-// pokes, rank-one updates, the Coleman-Li affine scaling). Kept `pub(crate)`
-// so they stay off the frozen public surface; promote to `pub` on a concrete
-// external request (promotion is non-breaking; the reverse is not).
+// Remaining per-solver plumbing: rank-one updates and Coleman-Li affine
+// scaling stay `pub(crate)`. `AddDiagonalVectorInPlace` and `MaxDiagonal`
+// were promoted to `pub` so out-of-tree `Trf` Jacobian types can implement
+// the damped Gram path (non-breaking; the reverse is not).
 pub(crate) use cl_scaling::BoxAffineScaling;
-pub(crate) use linalg::{
-    AddDiagonalVectorInPlace, GeneralRankOneUpdate, MatDiagonal, MaxDiagonal,
-    RankOneUpdate,
-};
+pub(crate) use linalg::{GeneralRankOneUpdate, MatDiagonal, RankOneUpdate};
