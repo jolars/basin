@@ -19,11 +19,12 @@
 //!   a second exception: [`DenseMatrix`] implements it via a pure-Rust
 //!   cyclic Jacobi eigensolver (`dense_eig`), so CMA-ES runs on the default
 //!   backend too. The SPD solve [`LinearSolveSpd`] and its companion
-//!   [`GramMatrix`] (plus the `pub(crate)` `AddDiagonalVectorInPlace`) are a
-//!   third: [`DenseMatrix`] implements them via a pure-Rust Cholesky
-//!   (`dense_chol`), so Gauss-Newton and Levenberg-Marquardt run on the
-//!   default backend. The QR least-squares solve [`LinearSolveLstsq`] (and the
-//!   trust-region-reflective `MaxDiagonal`) stay nalgebra- and faer-only.
+//!   [`GramMatrix`] (plus [`AddDiagonalVectorInPlace`]) are a third:
+//!   [`DenseMatrix`] implements them via a pure-Rust Cholesky (`dense_chol`),
+//!   so Gauss-Newton, Levenberg-Marquardt, and TRF run on the default backend.
+//!   [`AddDiagonalVectorInPlace`] and [`MaxDiagonal`] are public so downstream
+//!   Jacobian types can implement TRF's damping path. The QR least-squares
+//!   solve [`LinearSolveLstsq`] remains backend-specific.
 
 /// Scalar element type for vectors and matrices in the math layer.
 ///
@@ -250,19 +251,14 @@ mod faer_sparse_backend;
 pub use clamp::ClampInPlace;
 pub use dense::DenseMatrix;
 pub use linalg::{
-    DenseMatrixFromFn, GramMatrix, LinearSolveError, LinearSolveLstsq,
-    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, SymmetricEigen, SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseMatrixFromFn, GramMatrix, LinearSolveError,
+    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, SymmetricEigen,
+    SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 
-// Per-solver plumbing ops: expressed as traits for backend portability, but
-// they carry no meaning outside one shipped solver's internals (diagonal
-// pokes, rank-one updates, the Coleman-Li affine scaling). Kept `pub(crate)`
-// so they stay off the frozen public surface; promote to `pub` on a concrete
-// external request (promotion is non-breaking; the reverse is not).
+// Remaining per-solver plumbing ops carry no meaning outside one shipped
+// solver's internals, so they stay off the frozen public surface.
 pub(crate) use cl_scaling::BoxAffineScaling;
-pub(crate) use linalg::{
-    AddDiagonalVectorInPlace, GeneralRankOneUpdate, MatDiagonal, MaxDiagonal,
-    RankOneUpdate,
-};
+pub(crate) use linalg::{GeneralRankOneUpdate, MatDiagonal, RankOneUpdate};

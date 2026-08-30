@@ -176,8 +176,9 @@ pub trait LinearSolveLstsq<V> {
 }
 
 /// `max_i Aᵢᵢ`, the maximum diagonal entry of a square matrix.
-/// Used by Levenberg-Marquardt to size the initial damping parameter
-/// `μ₀ = τ · max diag(J(x₀)ᵀ J(x₀))` (Nielsen 1999 eq. 1.10).
+/// [`Trf`](crate::Trf) uses it to size the initial damping parameter after
+/// applying the Coleman-Li diagonal correction:
+/// `μ₀ = τ · max diag(J(x₀)ᵀ J(x₀) + diag(c))`.
 ///
 /// # Contract
 ///
@@ -185,19 +186,16 @@ pub trait LinearSolveLstsq<V> {
 /// - **Caller must (sparse precondition):** for sparse impls, missing
 ///   diagonal entries from the CSC pattern are treated as the implicit
 ///   zero. The Gram of any `A` with no zero columns has all-positive
-///   diagonal entries, so the relevant case for LM is unaffected.
-/// - **Implementor must:** return `maxᵢ self[(i, i)]` as `f64`. For an
-///   empty matrix (0×0) the result is unspecified; backends may return
-///   `0.0` or `f64::NEG_INFINITY`. Callers should not invoke on empty
-///   matrices.
+///   diagonal entries, so TRF's damping path is unaffected.
+/// - **Implementor must:** return `maxᵢ self[(i, i)]` as `F`. For an empty
+///   matrix (0×0), the result is unspecified; callers should not invoke
+///   this method on empty matrices.
 ///
 /// # Backends
 ///
-/// Same coverage as [`AddDiagonalInPlace`].
+/// Same coverage as [`AddDiagonalVectorInPlace`].
 ///
-/// The `F` parameter is the scalar; it defaults to `f64`, which is the only
-/// scalar every backend currently implements. Future f32/extended-precision
-/// impls would specify it explicitly.
+/// The `F` parameter is the scalar and defaults to `f64`.
 pub trait MaxDiagonal<F = f64> {
     /// Compute the maximum diagonal entry as `F`.
     fn max_diagonal(&self) -> F;

@@ -216,12 +216,12 @@ pub use crate::core::inner::{
     InitialState, InnerExecutor, ResumableInner, WarmStart,
 };
 pub use crate::core::math::{
-    ClampInPlace, ComponentMulAssign, DenseMatrix, DenseMatrixFromFn, Dot,
-    GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
-    MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, NegInPlace,
-    NormInfinity, NormSquared, SampleStandardNormal, SampleUniformBox, Scalar,
-    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex,
-    VectorLen,
+    AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseMatrix,
+    DenseMatrixFromFn, Dot, GramMatrix, LinearSolveError, LinearSolveLstsq,
+    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity, NormSquared,
+    SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd,
+    SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
 };
 pub use crate::core::numdiff::{
     FiniteDiff, Method, central_difference_gradient,
