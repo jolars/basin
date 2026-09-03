@@ -68,19 +68,19 @@ The largest remaining compatibility gaps are:
    outperforms the default More–Thuente setup.
 
 Do not hold the first outreach round for every solver gap. The backend matrix
-and cancellation API are complete; ship migration examples and honest
-checkpoint documentation, then contact the ready targets. Add simulated
-annealing, PSO, and exact stochastic resume before approaching projects that
-depend on those capabilities.
+and cancellation API are complete; ship migration examples and honest checkpoint
+documentation, then contact the ready targets. Add simulated annealing, PSO, and
+exact stochastic resume before approaching projects that depend on those
+capabilities.
 
 ### Backend compatibility
 
-  | Backend                              | Supported versions | Why                                                                                             |
-  | ------------------------------------ | -----------------: | ----------------------------------------------------------------------------------------------- |
-  | `ndarray`                            |   0.15, 0.16, 0.17 | Covers EnzymeML, GlobalSearch/lme-rs/crabSAXS, and current stochastic-rs/PMcore respectively.   |
-  | `nalgebra`                           | 0.32–0.35          | Covers the target projects, preserves the older ecosystem range, and includes the latest release. |
-  | `faer`                               |   0.22, 0.23, 0.24 | Covers the main modern Faer range seen in the reverse-dependency audit.                         |
-  | `Vec<f32/f64>` and primitive scalars |            current | Needed by projects such as molex and argtuner and useful as the lowest-friction migration path. |
+  | Backend                              | Supported versions | Why                                                                                               |
+  | ------------------------------------ | -----------------: | ------------------------------------------------------------------------------------------------- |
+  | `ndarray`                            |   0.15, 0.16, 0.17 | Covers EnzymeML, GlobalSearch/lme-rs/crabSAXS, and current stochastic-rs/PMcore respectively.     |
+  | `nalgebra`                           |          0.32–0.35 | Covers the target projects, preserves the older ecosystem range, and includes the latest release. |
+  | `faer`                               |   0.22, 0.23, 0.24 | Covers the main modern Faer range seen in the reverse-dependency audit.                           |
+  | `Vec<f32/f64>` and primitive scalars |            current | Needed by projects such as molex and argtuner and useful as the lowest-friction migration path.   |
 
 The most valuable target-specific versions—`ndarray` 0.15–0.17, `nalgebra`
 0.33–0.34, and `faer` 0.24—are covered. Older backend releases exist in the full
@@ -301,7 +301,7 @@ metadata.
   |    5 | [crabSAXS](https://github.com/Ojas-Singh/crabSAXS)               | Argmin 0.10; `ndarray` 0.16/`nalgebra` 0.33; Nelder–Mead fitting                                                 | Direct migration, with constrained derivative-free alternatives for physical fitting parameters.                                                                                                        | No substantial solver blocker.                                                                                                                                                                    | Offer a small PR and compare Nelder–Mead with bounded BOBYQA or MADS on one fit.                              |
   |    6 | [system_solver](https://github.com/bcolloran/system_solver)      | Argmin 0.11; `nalgebra` 0.34; Gauss–Newton with line search, L-BFGS, and simulated annealing                     | Basin LM/Gauss–Newton and L-BFGS cover the main continuous paths; constraints and TRF may improve robustness.                                                                                           | Full removal of Argmin is blocked by generic simulated annealing.                                                                                                                                 | Offer a feature-gated Basin implementation for Gauss–Newton/LM first; revisit full migration after SA exists. |
   |    7 | [inlier](https://github.com/soraxas/inlier)                      | Argmin 0.11; `nalgebra` 0.33; hand-built LM-style bundle adjustment                                              | Basin's native LM/TRF and residual/Jacobian traits are a strong conceptual match.                                                                                                                       | The current implementation is specialized; migration value must be demonstrated with numerical and performance tests.                                                                             | Propose a benchmark branch, not an immediate dependency switch.                                               |
-  |    8 | [molex](https://github.com/foldit-org/molex)                     | Argmin 0.11; `Vec`; L-BFGS with progress-driven cancellation                                                     | Basin L-BFGS and `CancellationToken` replace the solver and observer-error cancellation pattern directly.                                                                                              | The progress callback still needs an observer, but it can cancel a cloned token without making observation fallible.                                                                               | Offer a focused migration preserving progress updates and clean cancellation.                                 |
+  |    8 | [molex](https://github.com/foldit-org/molex)                     | Argmin 0.11; `Vec`; L-BFGS with progress-driven cancellation                                                     | Basin L-BFGS and `CancellationToken` replace the solver and observer-error cancellation pattern directly.                                                                                               | The progress callback still needs an observer, but it can cancel a cloned token without making observation fallible.                                                                              | Offer a focused migration preserving progress updates and clean cancellation.                                 |
 
 #### Contact after one specific feature lands
 
@@ -367,71 +367,6 @@ metadata.
   and runtime in any PR.
 - Avoid mass-produced outreach. Each message should cite the exact file or
   routine that motivated it.
-
-### Message templates
-
-#### Direct migration or small proof of concept
-
-> Hi! I maintain [Basin](https://github.com/jolars/basin), a Rust optimization
-> library. I noticed that `<file/routine>` uses Argmin's `<solver>` with
-> `<backend/version>`. Basin now supports that backend version and has a
-> corresponding `<solver>`, plus `<project-specific capability>`.
->
-> I would be happy to prepare a small feature-gated PR that preserves the
-> current algorithm and compares results, evaluation counts, and runtime on your
-> existing tests. Would that be useful, or is there a requirement in the current
-> integration that I should account for first?
-
-#### GlobalSearch-rs
-
-> Hi! I maintain [Basin](https://github.com/jolars/basin). GlobalSearch-rs's
-> local-solver abstraction looks like a particularly good integration point:
-> Basin supports the main local methods you expose and adds several native
-> constrained and derivative-free solvers. It now supports your `ndarray`
-> version as well.
->
-> Would you be open to a feature-gated Basin local-solver backend? I can prepare
-> the first PR and keep Argmin as the default. I would initially map Hager–Zhang
-> configurations to a documented More–Thuente option unless exact Hager–Zhang
-> support is important for acceptance.
-
-#### stochastic-rs
-
-> Hi! I maintain [Basin](https://github.com/jolars/basin). I noticed several
-> Argmin L-BFGS/Nelder–Mead calibration paths in stochastic-rs, including
-> routines that manually project parameters into bounds. Basin now supports
-> `ndarray` 0.17 and provides native L-BFGS-B, finite-difference adapters,
-> bounded derivative-free solvers, and Levenberg–Marquardt/TRF.
->
-> I would be happy to prototype one narrow migration—perhaps a bounded MLE or
-> Whittle fit—and report numerical agreement, evaluation counts, and runtime
-> before suggesting anything broader. Is there one calibration routine you
-> consider the best representative benchmark?
-
-#### PMcore
-
-> Hi! I maintain [Basin](https://github.com/jolars/basin). I saw PMcore's
-> Nelder–Mead use in `bestdose` and the repeated-evaluation averaging used for
-> noisy IOV objectives. Basin supports the relevant backend versions and has
-> Nelder–Mead plus bounded/constrained derivative-free methods such as BOBYQA
-> and MADS.
->
-> I would like to start conservatively with a feature-gated migration of the
-> deterministic `bestdose` path, then separately test whether Basin's methods
-> behave well on the averaged IOV objective. I can prepare the PR and numerical
-> comparison if that would be welcome.
-
-#### Feature-dependent follow-up
-
-> Hi! I maintain [Basin](https://github.com/jolars/basin). I previously held off
-> contacting you because Basin lacked `<required capability>`, which is central
-> to `<project routine>`. That support is now available and tested with
-> `<backend/version>`, including
-> `<resume/cancellation/solver-specific guarantee>`.
->
-> I can prepare a small PR preserving your current algorithm and
-> checkpoint/termination behavior. Would you be interested in reviewing a
-> feature-gated implementation?
 
 ### Pre-outreach release checklist
 
