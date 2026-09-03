@@ -12,14 +12,18 @@
 //!    returned state is what iter-0 sees.
 //! 2. Then, repeatedly, before each [`Solver::next_iter`] call
 //!    (including the first):
-//!    1. The built-in [`MaxIter`](crate::core::termination::MaxIter)
+//!    1. An executor-attached [`CancellationToken`] is checked, when
+//!       configured. Cancellation stops the run with
+//!       [`TerminationReason::Cancelled`]. The borrowed [`run_loop`] path
+//!       has no attached token and skips this step.
+//!    2. The built-in [`MaxIter`](crate::core::termination::MaxIter)
 //!       limit is checked against [`State::iter`]. If
 //!       `state.iter() >= max_iter`, the run stops with
 //!       [`TerminationReason::MaxIter`].
-//!    2. Each registered [`TerminationCriterion`] is checked **in
+//!    3. Each registered [`TerminationCriterion`] is checked **in
 //!       insertion order**. The **first to return `Some(reason)` halts
 //!       the run**, and later criteria do not run that iteration.
-//!    3. The solver's own [`Solver::terminate`] hook is checked.
+//!    4. The solver's own [`Solver::terminate`] hook is checked.
 //!       `Some(_)` halts the run.
 //! 3. If nothing fired, [`Solver::next_iter`] is called. It may itself
 //!    report a mid-iter termination via its return tuple; in that case
@@ -37,6 +41,59 @@ use crate::core::problem::{EvalCounts, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
+/// Shared, one-shot signal for stopping an [`Executor`] between iterations.
+///
+/// Clones refer to the same lock-free flag, so a UI or worker thread can keep
+/// one handle while the executor owns another. Calling [`cancel`](Self::cancel)
+/// is idempotent; a token cannot be reset.
+///
+/// Cancellation is cooperative: the executor checks after solver
+/// initialization and before each new top-level iteration. It does not
+/// interrupt an active [`Solver::next_iter`] or problem evaluation. For
+/// finer-grained cancellation, return a typed error from the problem method.
+///
+/// # Example
+///
+/// ```
+/// use basin::CancellationToken;
+///
+/// let token = CancellationToken::new();
+/// let cancel_handle = token.clone();
+/// assert!(!token.is_cancelled());
+///
+/// cancel_handle.cancel();
+/// assert!(token.is_cancelled());
+/// ```
+#[derive(Clone, Debug, Default)]
+pub struct CancellationToken {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl CancellationToken {
+    /// Create a token in the active (not cancelled) state.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Request cancellation. Calling this more than once has no further
+    /// effect.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether cancellation has been requested through this token or any of
+    /// its clones.
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+}
 
 /// Outcome of an optimization run.
 ///
@@ -157,6 +214,7 @@ pub struct Stepper<P, S, So> {
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
     observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
     max_iter: u64,
+    cancellation_token: Option<CancellationToken>,
     finished: Option<TerminationReason>,
 }
 
@@ -219,14 +277,22 @@ where
         if let Some(reason) = self.finished {
             return Ok(StepOutcome::Stopped(reason));
         }
-        let outcome = step_once(
-            &mut self.problem,
-            &EvalCounts::default(),
-            &mut self.state,
-            &mut self.solver,
-            &mut self.criteria,
-            self.max_iter,
-        )?;
+        let outcome = if self
+            .cancellation_token
+            .as_ref()
+            .is_some_and(CancellationToken::is_cancelled)
+        {
+            StepOutcome::Stopped(TerminationReason::Cancelled)
+        } else {
+            step_once(
+                &mut self.problem,
+                &EvalCounts::default(),
+                &mut self.state,
+                &mut self.solver,
+                &mut self.criteria,
+                self.max_iter,
+            )?
+        };
         match outcome {
             StepOutcome::Continue => {
                 let state = self
@@ -376,7 +442,8 @@ where
 /// mirror computes the delta against that. Nested `run_loop` calls
 /// against the same wrapper therefore see clean per-call counters.
 ///
-/// Semantics match `Executor::run`: each criterion is
+/// Apart from executor-attached cancellation (which is top-level only),
+/// semantics match `Executor::run`: each criterion is
 /// [`reset`](crate::core::termination::TerminationCriterion::reset) at
 /// entry, so a criteria vector reused across calls (as an
 /// [`InnerExecutor`](crate::core::inner::InnerExecutor) does) sees fresh
@@ -478,6 +545,7 @@ pub struct Executor<P, S, So> {
     max_iter: u64,
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
     observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
+    cancellation_token: Option<CancellationToken>,
 }
 
 impl<P, S, So> Executor<P, S, So>
@@ -496,6 +564,7 @@ where
             max_iter: 1000,
             criteria: Vec::new(),
             observers: Vec::new(),
+            cancellation_token: None,
         }
     }
 
@@ -546,14 +615,72 @@ where
         self
     }
 
+    /// Attach a cooperative cancellation token to this run.
+    ///
+    /// The executor checks the token after [`Solver::init`] and before every
+    /// top-level iteration. A cancellation request returns
+    /// `Ok(OptimizationResult)` with [`TerminationReason::Cancelled`]; the
+    /// state remains at the last fully completed iteration, including its
+    /// best-so-far fields. An in-progress iteration or problem evaluation is
+    /// allowed to finish before the token is observed.
+    ///
+    /// Calling this method again replaces the previously configured token.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use basin::{
+    ///     BasicState, CancellationToken, CostFunction, Executor, Gradient,
+    ///     GradientDescent, TerminationReason,
+    /// };
+    ///
+    /// struct Sphere;
+    /// impl CostFunction for Sphere {
+    ///     type Param = Vec<f64>;
+    ///     type Output = f64;
+    ///     type Error = std::convert::Infallible;
+    ///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+    ///         Ok(x.iter().map(|xi| xi * xi).sum())
+    ///     }
+    /// }
+    /// impl Gradient for Sphere {
+    ///     type Gradient = Vec<f64>;
+    ///     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+    ///         Ok(x.iter().map(|xi| 2.0 * xi).collect())
+    ///     }
+    /// }
+    ///
+    /// let token = CancellationToken::new();
+    /// let cancel_handle = token.clone();
+    /// cancel_handle.cancel(); // A UI callback or worker may hold this clone.
+    ///
+    /// let result = Executor::new(
+    ///     Sphere,
+    ///     GradientDescent::new(0.1),
+    ///     BasicState::new(vec![1.0, 1.0]),
+    /// )
+    /// .with_cancellation_token(token)
+    /// .run()
+    /// .unwrap();
+    ///
+    /// assert_eq!(result.reason, TerminationReason::Cancelled);
+    /// assert_eq!(result.iter(), 0);
+    /// ```
+    pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
+        self.cancellation_token = Some(token);
+        self
+    }
+
     /// Register an [`Observe`] hook. Observers fire in registration order;
     /// `mode` gates [`Observe::observe_iter`] only;
     /// [`Observe::observe_init`] and [`Observe::observe_final`] always
     /// fire. See the [`observer`](crate::core::observer) module for the
     /// lifecycle.
     ///
-    /// Observers cannot stop the run; use
-    /// [`terminate_on`](Self::terminate_on) for that.
+    /// Observers cannot fail the run. Use
+    /// [`terminate_on`](Self::terminate_on) for state-based stopping, or let
+    /// an observer cancel a cloned [`CancellationToken`] for a clean
+    /// user-requested stop.
     pub fn observe_with<O>(mut self, observer: O, mode: ObserverMode) -> Self
     where
         O: Observe<S> + 'static,
@@ -565,7 +692,8 @@ where
     /// Convert the executor into a [`Stepper`] for one-iteration-at-a-time
     /// control. `solver.init` runs here so the returned stepper sits at
     /// iter 0 with a complete state; all registered observers' `observe_init`
-    /// fire here too.
+    /// fire here too. Cancellation is first checked by the returned stepper's
+    /// initial [`step`](Stepper::step), after initialization has completed.
     ///
     /// Returns `Err` when [`Solver::init`] does (e.g. the problem's
     /// initial cost/gradient evaluation `Err`-ed). Observers do *not* fire
@@ -578,6 +706,7 @@ where
             max_iter,
             criteria,
             mut observers,
+            cancellation_token,
         } = self;
         let mut problem = Problem::new(problem);
         // Fresh top-level wrapper: reset best-so-far so it tracks
@@ -599,6 +728,7 @@ where
             criteria,
             observers,
             max_iter,
+            cancellation_token,
             finished: None,
         })
     }

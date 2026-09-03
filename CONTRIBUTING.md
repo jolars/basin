@@ -94,7 +94,8 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
     cost/gradient at iter 0), `next_iter`, plus a `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
     `run()` returns an `OptimizationResult<S>` (final state +
-    `TerminationReason`). Also `run_loop`/`Stepper`.
+    `TerminationReason`). Also `run_loop`/`Stepper` and the cooperative,
+    top-level `CancellationToken`.
   - `termination.rs`: `TerminationCriterion<S>` plus shipped criteria
     (`MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, the
     `*Tolerance`/`Relative*Tolerance` family, `SimplexTolerance`, `MaxTime`).
@@ -130,13 +131,15 @@ These shape API decisions and are non-obvious from the code alone.
    additive, so the implementation selects the newest enabled release when
    dependency feature unification enables several versions of one backend.
 3. **Framework-level termination.** Generic stopping conditions (`max_iter`, the
-   `*_tolerance` family, `max_time`, eval budgets) are configured uniformly on
-   the `Executor`/shared termination layer, not per solver; solver-specific
-   knobs stay on the solver. Each criterion binds on the *minimum state shape*
-   it needs (e.g. `GradientTolerance` requires `S: GradientState`), so a
-   derivative-free solver can't be paired with a gradient criterion by mistake.
-   Because derivative-free solvers have no gradient, termination is pluggable
-   and opt-in based on what the state and problem expose.
+   `*_tolerance` family, `max_time`, eval budgets) and cooperative cancellation
+   are configured uniformly on the `Executor`/shared termination layer, not per
+   solver; solver-specific knobs stay on the solver. Each criterion binds on the
+   *minimum state shape* it needs (e.g. `GradientTolerance` requires
+   `S: GradientState`), so a derivative-free solver can't be paired with a
+   gradient criterion by mistake. Because derivative-free solvers have no
+   gradient, termination is pluggable and opt-in based on what the state and
+   problem expose. Executor cancellation is checked between top-level
+   iterations; typed problem errors remain the finer-grained hard-abort path.
 4. **First-class constraints.** Constraints describe the *problem*, so they live
    problem-side, not as executor config, never on state. Solvers declare support
    via traits; a constrained problem handed to an unconstrained solver is a

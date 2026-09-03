@@ -41,39 +41,37 @@ version-specific backend features and supports the backend matrix below.
 ### Executive summary
 
 The best immediate targets are **GlobalSearch-rs**, **stochastic-rs**,
-**lme-rs**, **PMcore**, **crabSAXS**, and the Levenberg–Marquardt/Gauss–Newton
-path in **system_solver**. These projects already map well to Basin's solver
-set, and several have a concrete reason to prefer Basin: native bounds and
-constraints, L-BFGS-B, derivative-free constrained solvers, global/memetic
-solvers, or native Levenberg–Marquardt.
+**lme-rs**, **PMcore**, **crabSAXS**, **molex**, and the
+Levenberg–Marquardt/Gauss–Newton path in **system_solver**. These projects
+already map well to Basin's solver set, and several have a concrete reason to
+prefer Basin: native bounds and constraints, L-BFGS-B, derivative-free
+constrained solvers, global/memetic solvers, native Levenberg–Marquardt, or
+first-class cancellation.
 
 The largest remaining compatibility gaps are:
 
-1. **Cancellation and user-requested termination.** This is an immediate
-   ergonomic blocker for `molex` and is useful for interactive applications
-   generally.
-2. **Reliable checkpoint/resume for stochastic and population solvers.** This is
+1. **Reliable checkpoint/resume for stochastic and population solvers.** This is
    a blocker for `argtuner` and any long-running global optimization workflow.
    The checkpoint must include solver state and RNG state, not only the generic
    optimization state.
-3. **Generic simulated annealing.** Active Argmin users apply it to arbitrary
+2. **Generic simulated annealing.** Active Argmin users apply it to arbitrary
    and sometimes discrete parameter types, which Basin's continuous vector
    optimizers cannot replace directly.
-4. **Particle swarm optimization.** Seven audited package trees contain PSO
+3. **Particle swarm optimization.** Seven audited package trees contain PSO
    usage or integration. CMA-ES and differential evolution are alternatives, but
    PSO support makes migration much less disruptive.
-5. **Brent root finding.** Two current packages use `BrentRoot`. Basin's
+4. **Brent root finding.** Two current packages use `BrentRoot`. Basin's
    existing Brent implementation minimizes a scalar function; it does not
    replace a bracketed root solver.
-6. **Hager–Zhang line search.** This matters particularly to GlobalSearch-rs,
+5. **Hager–Zhang line search.** This matters particularly to GlobalSearch-rs,
    which exposes it as a supported option and has an example where it
    outperforms the default More–Thuente setup.
 
-Do not hold the first outreach round for every solver gap. The backend matrix is
-complete; ship cancellation, migration examples, and honest checkpoint
-documentation, then contact the ready targets. Add simulated annealing, PSO,
-and exact stochastic resume before approaching projects that depend on those
-capabilities.
+Do not hold the first outreach round for every solver gap. The backend matrix
+and cancellation API are complete; ship migration examples and honest
+checkpoint documentation, then contact the ready targets. Add simulated
+annealing, PSO, and exact stochastic resume before approaching projects that
+depend on those capabilities.
 
 ### Backend compatibility
 
@@ -129,31 +127,7 @@ Acceptance criteria:
 - [x] The docs show a complete feature-to-version table.
 - [x] At least one solver test runs for every backend/version combination.
 
-##### 2. First-class cancellation
-
-Add a built-in cancellation mechanism and a distinct termination reason, for
-example:
-
-```rust
-Executor::new(problem, solver)
-    .with_cancellation_token(token)
-    .run()?;
-```
-
-Recommended semantics:
-
-- Check between iterations by default.
-- Return a normal result with `TerminationReason::Cancelled`, preserving the
-  best parameter and state.
-- Permit problem evaluations to return a typed error for finer-grained
-  cancellation during an expensive evaluation.
-- Keep ordinary observers infallible. If a fallible hook is desirable, introduce
-  it separately rather than changing every observer.
-
-This directly removes the awkward observer-error cancellation pattern used by
-[molex](https://github.com/foldit-org/molex/blob/dev/src/xtal/bfactor_refine.rs).
-
-##### 3. Define checkpoint guarantees accurately
+##### 2. Define checkpoint guarantees accurately
 
 The current state-only checkpoint writer is useful for some deterministic local
 solvers, but it is not sufficient to promise exact continuation of stochastic
@@ -181,7 +155,7 @@ Acceptance criteria for exact resume:
 Until this is complete, describe Basin's current facility as state
 checkpointing/warm start, not exact stochastic resume.
 
-##### 4. Publish an Argmin-to-Basin migration guide
+##### 3. Publish an Argmin-to-Basin migration guide
 
 Include compilable before/after examples for the patterns that dominate the
 audit:
@@ -316,7 +290,7 @@ metadata.
 
 ### Outreach targets
 
-#### Ready now that the backend matrix is complete
+#### Ready now that the backend matrix and cancellation API are complete
 
   | Rank | Project                                                          | Current use                                                                                                      | Basin opportunity                                                                                                                                                                                       | Remaining caveat                                                                                                                                                                                  | Suggested offer                                                                                               |
   | ---: | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -327,12 +301,12 @@ metadata.
   |    5 | [crabSAXS](https://github.com/Ojas-Singh/crabSAXS)               | Argmin 0.10; `ndarray` 0.16/`nalgebra` 0.33; Nelder–Mead fitting                                                 | Direct migration, with constrained derivative-free alternatives for physical fitting parameters.                                                                                                        | No substantial solver blocker.                                                                                                                                                                    | Offer a small PR and compare Nelder–Mead with bounded BOBYQA or MADS on one fit.                              |
   |    6 | [system_solver](https://github.com/bcolloran/system_solver)      | Argmin 0.11; `nalgebra` 0.34; Gauss–Newton with line search, L-BFGS, and simulated annealing                     | Basin LM/Gauss–Newton and L-BFGS cover the main continuous paths; constraints and TRF may improve robustness.                                                                                           | Full removal of Argmin is blocked by generic simulated annealing.                                                                                                                                 | Offer a feature-gated Basin implementation for Gauss–Newton/LM first; revisit full migration after SA exists. |
   |    7 | [inlier](https://github.com/soraxas/inlier)                      | Argmin 0.11; `nalgebra` 0.33; hand-built LM-style bundle adjustment                                              | Basin's native LM/TRF and residual/Jacobian traits are a strong conceptual match.                                                                                                                       | The current implementation is specialized; migration value must be demonstrated with numerical and performance tests.                                                                             | Propose a benchmark branch, not an immediate dependency switch.                                               |
+  |    8 | [molex](https://github.com/foldit-org/molex)                     | Argmin 0.11; `Vec`; L-BFGS with progress-driven cancellation                                                     | Basin L-BFGS and `CancellationToken` replace the solver and observer-error cancellation pattern directly.                                                                                              | The progress callback still needs an observer, but it can cancel a cloned token without making observation fallible.                                                                               | Offer a focused migration preserving progress updates and clean cancellation.                                 |
 
 #### Contact after one specific feature lands
 
   | Project                                                                                                                                                   | Wait for                                       | Why it becomes compelling                                                                                                                                                                                           |
   | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | [molex](https://github.com/foldit-org/molex)                                                                                                              | First-class cancellation                       | Its L-BFGS progress callback returns `false` and currently aborts through an observer error. Basin otherwise matches the solver and `Vec` backend well.                                                             |
   | [argtuner](https://github.com/jzombie/rust-argtuner)                                                                                                      | PSO plus tested population/RNG resume          | PSO is central, and the project saves/restores population state while preserving completed expensive trials. Offering a different global algorithm is not an equivalent migration.                                  |
   | [EnzymeML](https://github.com/enzymeml/enzymeml-rs)                                                                                                       | PSO; ideally SR1 trust-region; clear EGO story | Basin already covers BFGS/L-BFGS and observers, but a full switch must also address PSO, SR1 trust-region, and the `egobox-ego` integration, whose runner is built on Argmin. A partial backend is possible sooner. |
   | [finql](https://github.com/xemwebe/finql)                                                                                                                 | Brent root solver                              | Fixed-income yield calculations use bracketed root finding, not minimization.                                                                                                                                       |
@@ -361,18 +335,20 @@ metadata.
 
 ### Contact sequence
 
-1. Publish the migration guide and cancellation API. The backend matrix is
+1. Publish the migration guide; the backend matrix and cancellation API are
    complete.
-2. Prepare one small proof-of-concept PR for lme-rs or crabSAXS to validate the
+2. Offer molex a focused migration that preserves its progress callback and
+   replaces observer-error cancellation with `CancellationToken`.
+3. Prepare one small proof-of-concept PR for lme-rs or crabSAXS to validate the
    guide on a real codebase.
-3. Approach GlobalSearch-rs with a feature-gated Basin backend proposal.
-4. Approach stochastic-rs with a narrow L-BFGS-B migration and benchmark, not a
+4. Approach GlobalSearch-rs with a feature-gated Basin backend proposal.
+5. Approach stochastic-rs with a narrow L-BFGS-B migration and benchmark, not a
    request to replace every optimizer at once.
-5. Approach PMcore with deterministic `bestdose` first and a separate
+6. Approach PMcore with deterministic `bestdose` first and a separate
    noisy-objective experiment.
-6. Approach system_solver and inlier with LM/Gauss–Newton comparison branches.
-7. After PSO and exact resume land, approach argtuner and EnzymeML.
-8. After generic SA and Brent root land, approach the corresponding exact-solver
+7. Approach system_solver and inlier with LM/Gauss–Newton comparison branches.
+8. After PSO and exact resume land, approach argtuner and EnzymeML.
+9. After generic SA and Brent root land, approach the corresponding exact-solver
    targets.
 
 ### Outreach principles
@@ -465,7 +441,7 @@ metadata.
 - [ ] Argmin-to-Basin migration guide published.
 - [ ] Typed-error migration example published.
 - [ ] Bounds and constraint migration example published.
-- [ ] Cancellation returns a normal `Cancelled` result with best-so-far state.
+- [x] Cancellation returns a normal `Cancelled` result with best-so-far state.
 - [ ] Checkpoint documentation distinguishes warm start from exact resume.
 - [ ] One external proof-of-concept migration passes upstream tests.
 - [ ] Benchmark methodology and reproducible commands are included.

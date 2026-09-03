@@ -110,16 +110,17 @@
 //!   should continue."
 //! - **Clean stop**: the run ends *normally* with a
 //!   [`TerminationReason`], either
-//!   because a [`TerminationCriterion`] fired or because the [`Solver`] reported
-//!   a mid-iteration stop. [`Executor::run`] returns
+//!   because a [`TerminationCriterion`] fired, an attached
+//!   [`CancellationToken`] was cancelled, or the [`Solver`] reported a
+//!   mid-iteration stop. [`Executor::run`] returns
 //!   `Ok(`[`OptimizationResult`]`)` carrying that reason. This is **not** an
 //!   error.
 //! - **Hard abort**: return `Err(_)` from a problem-trait method to terminate
 //!   the *entire* solve. The error is your own type and bubbles out of
 //!   [`Executor::run`] untouched, typed as `Result<_, P::Error>`. Use it when
 //!   the failure is not about a particular `x`: a downstream service vanished,
-//!   the user pressed cancel, an early-stop condition in your own problem state
-//!   fired.
+//!   an expensive evaluation detected a fine-grained cancellation request, or
+//!   an early-stop condition in your own problem state fired.
 //!
 //! ## One error type, threaded through
 //!
@@ -331,7 +332,8 @@ pub use crate::core::constraint::{
     LinearInequalityConstraints, NonlinearInequalityConstraints,
 };
 pub use crate::core::executor::{
-    Executor, OptimizationResult, StepOutcome, Stepper, run_loop,
+    CancellationToken, Executor, OptimizationResult, StepOutcome, Stepper,
+    run_loop,
 };
 pub use crate::core::inner::{
     InitialState, InnerExecutor, ResumableInner, WarmStart,

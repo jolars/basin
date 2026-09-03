@@ -41,9 +41,9 @@
 //!   ([`Observe`](observer::Observe) + [`ObserverMode`](observer::ObserverMode)).
 //!   Sibling to [`termination`]: observers watch, criteria decide.
 //! - [`executor`]: the driver: [`Executor`](executor::Executor)/
-//!   [`Stepper`](executor::Stepper)/[`run_loop`](executor::run_loop).
-//!   The canonical iteration ordering is documented on the
-//!   [`executor`] module.
+//!   [`Stepper`](executor::Stepper)/[`run_loop`](executor::run_loop), plus the
+//!   cooperative [`CancellationToken`](executor::CancellationToken). The
+//!   canonical iteration ordering is documented on the [`executor`] module.
 //! - [`inner`]: the composition adapter:
 //!   [`InnerExecutor`](inner::InnerExecutor) wraps `run_loop` for outer
 //!   solvers that drive an inner solver per outer iteration. See

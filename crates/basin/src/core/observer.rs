@@ -13,7 +13,9 @@
 //! - [`Observe`]: returns `()`; the executor ignores any side effects on the
 //!   optimization itself. Failures must be handled inside the observer:
 //!   the trait is infallible by design so a misbehaving logger can't kill
-//!   the run.
+//!   the run. An observer may request a clean stop by cancelling a cloned
+//!   [`CancellationToken`](crate::core::executor::CancellationToken); the
+//!   executor observes it before the next iteration.
 //!
 //! Like termination criteria, observers bind on the minimum
 //! [`State`](crate::core::state::State) shape they need (tenet 3): a logger

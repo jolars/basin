@@ -63,6 +63,8 @@ pub enum TerminationReason {
     MeshTolerance,
     /// Wall-clock time limit reached.
     MaxTime,
+    /// Cancellation was requested through the executor's cancellation token.
+    Cancelled,
     /// Solver determined it has converged (e.g. fixed point reached).
     SolverConverged,
     /// Solver cannot make further progress (e.g. line search failure).
@@ -73,12 +75,12 @@ impl TerminationReason {
     /// Whether this reason represents an unrecoverable failure that an
     /// outer solver should bubble (rather than consume and continue).
     ///
-    /// Currently only [`SolverFailed`](Self::SolverFailed) qualifies:
-    /// [`MaxIter`](Self::MaxIter), the `*Tolerance` reasons, and
-    /// [`SolverConverged`](Self::SolverConverged) are all "clean stops"
-    /// that an outer solver running an inner per outer iter should treat
-    /// as "result is fine, move on". See `CONTRIBUTING.md` "Solver
-    /// composition" for the failure-routing contract.
+    /// Currently only [`SolverFailed`](Self::SolverFailed) qualifies.
+    /// [`Cancelled`](Self::Cancelled) is also a clean result rather than a
+    /// failure; executor-attached tokens are checked only at top-level
+    /// iteration boundaries and do not enter composed inner runs. See
+    /// `CONTRIBUTING.md` "Solver composition" for the failure-routing
+    /// contract.
     pub fn is_failure(&self) -> bool {
         matches!(self, Self::SolverFailed)
     }

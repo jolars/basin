@@ -17,8 +17,12 @@
 //!   solve. The error bubbles all the way out of
 //!   [`Executor::run`](crate::Executor::run) typed as
 //!   `Result<_, P::Error>`. Use this when the failure is *not* about a
-//!   particular `x`: a downstream service vanished, the user pressed
-//!   cancel, an early-stopping criterion in the problem's own state fired.
+//!   particular `x`: a downstream service vanished, an expensive evaluation
+//!   detected a fine-grained cancellation request, or an early-stopping
+//!   criterion in the problem's own state fired. For ordinary cancellation
+//!   between iterations, attach a
+//!   [`CancellationToken`](crate::core::executor::CancellationToken) to the
+//!   executor instead.
 //!
 //! Problems that never fail in this way pick
 //! `type Error = std::convert::Infallible;` (or
