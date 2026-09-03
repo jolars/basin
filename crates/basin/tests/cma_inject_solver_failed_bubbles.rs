@@ -9,14 +9,14 @@
 //! deferred test promoted to a real fixture (S11 hardwired NelderMead
 //! and NelderMead never returns `SolverFailed`).
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::Sphere;
 use basin::{
     BasicState, ClosureInner, CmaEs, CmaEsState, CmaInject, Executor, Problem,
     Solver, State, TerminationReason,
 };
-use nalgebra::{DMatrix, DVector};
 
 /// Inner solver that always returns `SolverFailed` on the first
 /// `next_iter` call. Same shape as the `AlwaysFails` in
@@ -68,3 +68,6 @@ fn bubbles_inner_failure() {
     // so iter == 0.
     assert_eq!(result.iter(), 0, "expected iter = 0 (mid-iter bail)");
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

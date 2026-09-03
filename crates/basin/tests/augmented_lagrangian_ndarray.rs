@@ -1,14 +1,14 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 //! Integration tests for the augmented-Lagrangian [`AugmentedLagrangianMethod`]
 //! on linearly-equality-constrained quadratics (ndarray backend). Exercises the
 //! `MatVec`/`MatTransposeVec` impls on `ndarray::Array2<f64>`.
 
+use crate::backend_aliases::ndarray::{Array1, Array2, array};
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
     AugmentedLagrangianMethod, Backtracking, BasicState, Executor,
     GradientDescent, GradientState, TerminationReason,
 };
-use ndarray::{Array1, Array2, array};
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`; constrained optimum (1,1).
 fn single_row_problem() -> EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>>
@@ -97,3 +97,6 @@ fn eval_counts_are_recorded() {
         "no gradient evals recorded"
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -9,17 +9,22 @@ cargo add basin
 ```
 
 Basin works on plain `Vec<f64>` out of the box. Linear-algebra backends are
-opt-in, one feature each. For example, to use the
+opt-in. For example, to use the latest supported
 [nalgebra](https://nalgebra.org) backend (required by some solvers, see
 [Solvers](../solvers/)):
 
 ```sh
-cargo add basin --features nalgebra
+cargo add basin --features nalgebra_latest
 ```
 
-Available backend features: `nalgebra`, `ndarray`, `faer`. The `problems`
-feature (a corpus of standard test functions) is on by default; disable it with
-`default-features = false` to shrink a wasm build.
+The moving aliases are `nalgebra_latest`, `ndarray_latest`, and `faer_latest`.
+Exact version features are also available for nalgebra 0.32–0.35, ndarray
+0.15–0.17, and faer 0.22–0.24. The original unversioned aliases remain
+available for compatibility: they select nalgebra 0.34, ndarray 0.17, and faer
+0.24. When several releases of one backend are enabled, Basin uses the newest.
+The package MSRV is Rust 1.87; nalgebra 0.35 and `nalgebra_latest` require Rust
+1.89. The `problems` feature (a corpus of standard test functions) is on by
+default; disable it with `default-features = false` to shrink a wasm build.
 
 ## A Simple Example
 

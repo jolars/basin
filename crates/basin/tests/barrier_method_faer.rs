@@ -1,14 +1,14 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 //! Integration tests for the log-barrier [`BarrierMethod`] on linearly
 //! constrained quadratics (faer backend), mirror of
 //! `barrier_method_nalgebra.rs`.
 
+use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, BasicState, Executor, GradientDescent,
     GradientState, TerminationReason,
 };
-use faer::{Col, Mat};
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`; constrained optimum (1, 1).
 fn active_problem() -> ConstrainedQuadratic<Mat<f64>, Col<f64>> {
@@ -125,3 +125,6 @@ fn eval_counts_are_recorded() {
         "no gradient evals recorded"
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -328,7 +328,7 @@ impl BoxConstraints for BoothBoxedResiduals<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{
         Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth,
@@ -481,7 +481,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{
         Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals, booth,
@@ -650,7 +650,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::{
         Booth, BoothBoxed, BoothBoxedResiduals, BoothResiduals,

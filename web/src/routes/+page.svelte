@@ -11,7 +11,7 @@
         },
         {
             title: "Multiple backends",
-            body: "Run on plain Vec<f64>, nalgebra, ndarray, or faer. Each backend sits behind a single feature: no per-version feature explosion.",
+            body: "Run on plain Vec<f64>, or select a compatible nalgebra, ndarray, or faer release with exact-version and latest feature aliases.",
         },
         {
             title: "First-class constraints",

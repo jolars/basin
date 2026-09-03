@@ -1,11 +1,11 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxed;
 use basin::{
     Backtracking, BasicState, Executor, ProjectedGradientDescent,
     ProjectedGradientTolerance, TerminationReason,
 };
-use faer::Col;
 
 fn col(values: [f64; 2]) -> Col<f64> {
     Col::<f64>::from_fn(2, |i| values[i])
@@ -104,3 +104,6 @@ fn projected_gradient_tolerance_triggers_at_corner_minimum() {
 
     assert_eq!(result.reason, TerminationReason::ProjectedGradientTolerance);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

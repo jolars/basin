@@ -1,11 +1,11 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
+use crate::backend_aliases::ndarray::Array1;
 use basin::problems::BoothBoxed;
 use basin::{
     BasicPopulationState, Executor, PopulationState, RandomSearch, State,
     StepOutcome,
 };
-use ndarray::Array1;
 
 #[test]
 fn same_seed_yields_identical_trajectory() {
@@ -109,3 +109,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

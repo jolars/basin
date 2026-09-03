@@ -1090,7 +1090,7 @@ mod tests {
         assert_eq!(wrapped.upper(), &upper);
     }
 
-    #[cfg(all(feature = "problems", feature = "nalgebra"))]
+    #[cfg(all(feature = "problems", feature = "nalgebra_all"))]
     mod nalgebra_matrix {
         use super::*;
         use crate::problems::rosenbrock::{Rosenbrock, RosenbrockResiduals};
@@ -1187,7 +1187,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "problems", feature = "faer"))]
+    #[cfg(all(feature = "problems", feature = "faer_all"))]
     mod faer_matrix {
         use super::*;
         use crate::problems::rosenbrock::RosenbrockResiduals;

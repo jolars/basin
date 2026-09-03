@@ -1,9 +1,9 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::Col;
+use crate::backend_aliases::faer::sparse::{SparseColMat, Triplet};
 use basin::problems::SparseLeastSquaresBoxed;
 use basin::{Executor, NllsState, TerminationReason, Trf};
-use faer::Col;
-use faer::sparse::{SparseColMat, Triplet};
 
 type FaerSparseLeastSquaresBoxed =
     SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>;
@@ -90,3 +90,6 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

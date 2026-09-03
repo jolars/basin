@@ -569,7 +569,7 @@ mod tests {
         assert!(!step.hit_boundary);
     }
 
-    #[cfg(feature = "nalgebra")]
+    #[cfg(feature = "nalgebra_all")]
     #[test]
     fn hard_case_runs_on_nalgebra() {
         use nalgebra::{DMatrix, DVector};
@@ -582,7 +582,7 @@ mod tests {
         assert_close(step.d[1], -0.5, 1e-10);
     }
 
-    #[cfg(feature = "ndarray")]
+    #[cfg(feature = "ndarray_all")]
     #[test]
     fn hard_case_runs_on_ndarray() {
         use ndarray::{Array1, Array2};
@@ -597,7 +597,7 @@ mod tests {
         assert_close(step.d[1], -0.5, 1e-10);
     }
 
-    #[cfg(feature = "faer")]
+    #[cfg(feature = "faer_all")]
     #[test]
     fn hard_case_runs_on_faer() {
         use faer::{Col, Mat};

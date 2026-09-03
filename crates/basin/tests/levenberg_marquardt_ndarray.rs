@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
 //! Levenberg-Marquardt over the `ndarray` backend (`Array1<f64>`/
 //! `Array2<f64>`). Mirrors `tests/levenberg_marquardt_nalgebra.rs`: `Array2`'s
@@ -7,12 +7,12 @@
 //! damping dynamics, rank-deficiency recovery, and MINPACK-style termination
 //! are backend-independent; the assertions match the nalgebra mirror exactly.
 
+use crate::backend_aliases::ndarray::Array1;
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
 use basin::{
     Executor, LevenbergMarquardt, NllsState, RelativeCostTolerance,
     TerminationReason,
 };
-use ndarray::Array1;
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -391,3 +391,6 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
         result.state.jacobian_evals()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

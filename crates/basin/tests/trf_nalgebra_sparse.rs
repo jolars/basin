@@ -1,9 +1,9 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
+use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquaresBoxed;
 use basin::{Executor, NllsState, TerminationReason, Trf};
-use nalgebra::DVector;
-use nalgebra_sparse::{CooMatrix, CscMatrix};
 
 /// 6×3 design: identity stack + pairwise-sum rows. With `b = A·[1, 2, 3]`,
 /// the closed-form unconstrained least-squares minimum lands exactly at
@@ -97,3 +97,6 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

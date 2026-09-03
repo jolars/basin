@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
 //! Trust-region-reflective over the `ndarray` backend (`Array1<f64>`/
 //! `Array2<f64>`). Mirrors `tests/trf_nalgebra.rs`: `Array2`'s `GramMatrix`,
@@ -7,9 +7,9 @@
 //! scaled-gradient dynamics backend-independent; the assertions match the
 //! nalgebra mirror exactly.
 
+use crate::backend_aliases::ndarray::Array1;
 use basin::problems::BoothBoxedResiduals;
 use basin::{Executor, MaxIter, NllsState, TerminationReason, Trf};
-use ndarray::Array1;
 
 #[test]
 fn trf_with_slack_bounds_reaches_unconstrained_min() {
@@ -175,3 +175,6 @@ fn trf_caches_residual_and_jacobian_across_iterations() {
         result.state.jacobian_evals()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

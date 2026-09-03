@@ -31,10 +31,14 @@ publish = false
 basin = { path = "../basin", features = ["nalgebra", "faer", "problems"] }
 levenberg-marquardt = "0.15"
 nalgebra = "0.34"
+# Workspace `--all-features` makes Basin select its newest enabled nalgebra.
+# Keep the benchmark default on 0.34 for the like-for-like LM comparison, but
+# compile its Basin side against 0.35 in the all-feature maintenance build.
+nalgebra_latest = { package = "nalgebra", version = "0.35", optional = true }
 faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }
 # argmin on its default `Vec<f64>` backend. default-features keeps the
-# `vec` math impls (via argmin-math) and `rand`; we don't enable any
-# per-version backend feature (the explosion basin's tenet 2 avoids).
+# `vec` math impls (via argmin-math) and `rand`; this benchmark does not
+# need one of argmin's optional linear-algebra backends.
 argmin = "0.11"
 argmin-math = { version = "0.5", features = ["vec"] }
 # gomez bundles its own nalgebra (0.32). That's a major mismatch with
@@ -60,6 +64,7 @@ nlopt = "0.8"
 rayon = { version = "1", optional = true }
 
 [features]
+basin-latest = ["basin/nalgebra_latest", "dep:nalgebra_latest"]
 # Off by default so the axis-3 competitor benches (`compare`, `gd_nm`)
 # compile basin *without* rayon—a single-threaded basin vs a
 # single-threaded argmin/lm/gomez/nlopt, with no parallelism confound.

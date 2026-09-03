@@ -7,14 +7,14 @@
 //! failure on a NaN-returning problem, exercised at the boundary via
 //! `inner_executor.rs`).
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{RastriginBoxed, SphereBoxed};
 use basin::{
     Executor, MaLsChCma, MaLsChState, MaxCostEvals, PopulationState,
     StepOutcome,
 };
-use nalgebra::{DMatrix, DVector};
 
 /// Sphere with a box for SSGA initial sampling: the easy canary that
 /// any working population solver should crush.
@@ -244,3 +244,6 @@ fn population_stays_sorted_ascending() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

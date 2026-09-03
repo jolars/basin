@@ -1,11 +1,11 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::BoothBoxed;
 use basin::{
     BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState,
     StepOutcome, TerminationReason,
 };
-use faer::{Col, Mat};
 
 /// Same seed → same trajectory on the faer backend's bounded variant.
 /// Same-backend reproducibility is the load-bearing contract; the
@@ -170,3 +170,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

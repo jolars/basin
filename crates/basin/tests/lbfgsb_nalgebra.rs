@@ -1,4 +1,4 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
 //! L-Bfgs-B convergence tests over the nalgebra backend.
 //!
@@ -6,12 +6,12 @@
 //! [`basin::backend::AsFloatSliceMut`]'s `DVector<f64>` impl plumbs
 //! through correctly and parity with the Vec backend holds.
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{
     Bfgs, BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
     MaxIter, MoreThuente, NalgebraQuasiNewtonState, ProjectedGradientTolerance,
 };
-use nalgebra::DVector;
 
 struct Rosen {
     l: DVector<f64>,
@@ -185,3 +185,6 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
         bfgs_result.iter()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

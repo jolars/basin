@@ -130,11 +130,11 @@ fn solver_calls_fused_override() {
 // 3. CostAndGradientAndHessian: defaulted body equals separate calls.
 // ---------------------------------------------------------------------
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod hessian {
     use super::*;
+    use crate::backend_aliases::nalgebra::{DMatrix, DVector};
     use basin::Hessian;
-    use nalgebra::{DMatrix, DVector};
 
     struct SphereN;
     impl CostFunction for SphereN {
@@ -242,11 +242,11 @@ mod hessian {
 // 4. ResidualAndJacobian: LM actually calls the fused override.
 // ---------------------------------------------------------------------
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod lsq {
     use super::*;
+    use crate::backend_aliases::nalgebra::{DMatrix, DVector};
     use basin::{Jacobian, LevenbergMarquardt, NllsState, Residual};
-    use nalgebra::{DMatrix, DVector};
 
     /// `r(x) = (x₀ − 1, x₁ − 2)`, J = I. Minimum at (1, 2).
     struct Affine {
@@ -349,3 +349,6 @@ fn finite_diff_runs_through_solver() {
     assert!((x[0] - 1.0).abs() < 1e-3);
     assert!((x[1] - 1.0).abs() < 1e-3);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

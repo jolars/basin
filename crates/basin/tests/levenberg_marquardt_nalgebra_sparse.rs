@@ -1,9 +1,9 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
+use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquares;
 use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
-use nalgebra::DVector;
-use nalgebra_sparse::{CooMatrix, CscMatrix};
 
 /// Mirror of the GN sparse fixture: 6×3 design with `b = A·[1,2,3]` so
 /// the closed-form least-squares minimum has zero residual at
@@ -96,3 +96,6 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -1,13 +1,13 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 //! Integration tests for the augmented-Lagrangian [`AugmentedLagrangianMethod`]
 //! on linearly-equality-constrained quadratics (nalgebra backend).
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
     AugmentedLagrangianMethod, Backtracking, BasicState, Bfgs, Executor,
     GradientDescent, GradientState, Lbfgsb, TerminationReason,
 };
-use nalgebra::{DMatrix, DVector};
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. The unconstrained min (2,2) is
 /// infeasible (sum 4 ≠ 2); the constrained optimum is the projection of
@@ -156,3 +156,6 @@ fn lbfgs_inner_converges_to_affine_projection() {
         result.param()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

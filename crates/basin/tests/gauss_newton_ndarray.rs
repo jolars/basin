@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
 //! Gauss-Newton over the `ndarray` backend (`Array1<f64>`/`Array2<f64>`).
 //!
@@ -8,9 +8,9 @@
 //! and the rank-deficient failure are backend-independent; the assertions
 //! match the nalgebra mirror exactly.
 
+use crate::backend_aliases::ndarray::Array1;
 use basin::problems::{PowellSingular, RosenbrockResiduals};
 use basin::{Executor, GaussNewton, NllsState, TerminationReason};
-use ndarray::Array1;
 
 #[test]
 fn gauss_newton_converges_on_rosenbrock_residuals() {
@@ -152,3 +152,6 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
          (3 total)"
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

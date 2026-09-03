@@ -178,7 +178,7 @@ tasks:
       regenerated JSON. Deliberately not wired into CI — shared runners are too
       noisy for trustworthy microbenchmarks.
     cmds:
-      - cargo bench --features nalgebra,ndarray,faer --bench solver_backends
+      - cargo bench --features nalgebra_latest,ndarray_latest,faer_latest --bench solver_backends
       - cd web && pnpm collect:benchmarks
 
   bench:competitors:

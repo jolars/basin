@@ -276,6 +276,40 @@ impl Jacobian for VarDim<DVector<f64>> {
     }
 }
 
+#[cfg(feature = "basin-latest")]
+impl Residual for VarDim<nalgebra_latest::DVector<f64>> {
+    type Param = nalgebra_latest::DVector<f64>;
+    type Output = nalgebra_latest::DVector<f64>;
+    type Error = std::convert::Infallible;
+
+    fn residual(
+        &self,
+        x: &nalgebra_latest::DVector<f64>,
+    ) -> Result<nalgebra_latest::DVector<f64>, Self::Error> {
+        let mut out = vec![0.0; self.n + 2];
+        vardim_residual(x.as_slice(), &mut out);
+        Ok(nalgebra_latest::DVector::from_vec(out))
+    }
+}
+
+#[cfg(feature = "basin-latest")]
+impl Jacobian for VarDim<nalgebra_latest::DVector<f64>> {
+    type Jacobian = nalgebra_latest::DMatrix<f64>;
+
+    fn jacobian(
+        &self,
+        x: &nalgebra_latest::DVector<f64>,
+    ) -> Result<nalgebra_latest::DMatrix<f64>, Self::Error> {
+        let mut out = vec![0.0; (self.n + 2) * self.n];
+        vardim_jacobian_row_major(x.as_slice(), &mut out);
+        Ok(nalgebra_latest::DMatrix::from_row_slice(
+            self.n + 2,
+            self.n,
+            &out,
+        ))
+    }
+}
+
 impl Residual for VarDim<Col<f64>> {
     type Param = Col<f64>;
     type Output = Col<f64>;
@@ -466,6 +500,40 @@ impl Jacobian for UnderDet<DVector<f64>> {
         let mut out = vec![0.0; self.data.m * self.data.n];
         self.data.jacobian_row_major(x.as_slice(), &mut out);
         Ok(DMatrix::from_row_slice(self.data.m, self.data.n, &out))
+    }
+}
+
+#[cfg(feature = "basin-latest")]
+impl Residual for UnderDet<nalgebra_latest::DVector<f64>> {
+    type Param = nalgebra_latest::DVector<f64>;
+    type Output = nalgebra_latest::DVector<f64>;
+    type Error = std::convert::Infallible;
+
+    fn residual(
+        &self,
+        x: &nalgebra_latest::DVector<f64>,
+    ) -> Result<nalgebra_latest::DVector<f64>, Self::Error> {
+        let mut out = vec![0.0; self.data.m];
+        self.data.residual(x.as_slice(), &mut out);
+        Ok(nalgebra_latest::DVector::from_vec(out))
+    }
+}
+
+#[cfg(feature = "basin-latest")]
+impl Jacobian for UnderDet<nalgebra_latest::DVector<f64>> {
+    type Jacobian = nalgebra_latest::DMatrix<f64>;
+
+    fn jacobian(
+        &self,
+        x: &nalgebra_latest::DVector<f64>,
+    ) -> Result<nalgebra_latest::DMatrix<f64>, Self::Error> {
+        let mut out = vec![0.0; self.data.m * self.data.n];
+        self.data.jacobian_row_major(x.as_slice(), &mut out);
+        Ok(nalgebra_latest::DMatrix::from_row_slice(
+            self.data.m,
+            self.data.n,
+            &out,
+        ))
     }
 }
 

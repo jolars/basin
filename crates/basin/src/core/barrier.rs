@@ -335,7 +335,7 @@ where
     }
 }
 
-#[cfg(all(test, feature = "nalgebra"))]
+#[cfg(all(test, feature = "nalgebra_all"))]
 mod tests {
     use super::*;
     use nalgebra::{DMatrix, DVector};

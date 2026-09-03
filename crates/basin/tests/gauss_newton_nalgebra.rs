@@ -1,8 +1,8 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{PowellSingular, RosenbrockResiduals};
 use basin::{Executor, GaussNewton, NllsState, TerminationReason};
-use nalgebra::DVector;
 
 #[test]
 fn gauss_newton_converges_on_rosenbrock_residuals() {
@@ -144,3 +144,6 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
          (3 total)"
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

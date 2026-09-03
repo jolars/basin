@@ -88,7 +88,7 @@ impl CostFunction for HolderTable<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{HolderTable, holder_table};
     use crate::CostFunction;
@@ -107,7 +107,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{HolderTable, holder_table};
     use crate::CostFunction;
@@ -126,7 +126,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::HolderTable;
     use crate::CostFunction;

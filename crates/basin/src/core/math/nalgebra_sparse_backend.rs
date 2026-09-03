@@ -13,6 +13,26 @@
 //! Reach for the faer-sparse backend if you need least-squares on
 //! sparse `J`.
 
+#[cfg(all(
+    feature = "nalgebra_v0_32",
+    not(any(
+        feature = "nalgebra_v0_35",
+        feature = "nalgebra_v0_34",
+        feature = "nalgebra_v0_33"
+    ))
+))]
+use nalgebra::{
+    ClosedAdd as ClosedAddAssign, ClosedDiv as ClosedDivAssign,
+    ClosedMul as ClosedMulAssign, ClosedSub as ClosedSubAssign,
+};
+#[cfg(any(
+    feature = "nalgebra_v0_35",
+    feature = "nalgebra_v0_34",
+    feature = "nalgebra_v0_33"
+))]
+use nalgebra::{
+    ClosedAddAssign, ClosedDivAssign, ClosedMulAssign, ClosedSubAssign,
+};
 use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::factorization::CscCholesky;
 use nalgebra_sparse::ops::Op;
@@ -32,7 +52,7 @@ use super::linalg::{
 
 impl<F> MatVec<DVector<F>> for CscMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+    F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn matvec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
@@ -61,7 +81,7 @@ where
 
 impl<F> MatTransposeVec<DVector<F>> for CscMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+    F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn mat_transpose_vec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
@@ -91,10 +111,10 @@ where
 impl<F> GramMatrix for CscMatrix<F>
 where
     F: Scalar
-        + nalgebra::ClosedAddAssign
-        + nalgebra::ClosedSubAssign
-        + nalgebra::ClosedMulAssign
-        + nalgebra::ClosedDivAssign
+        + ClosedAddAssign
+        + ClosedSubAssign
+        + ClosedMulAssign
+        + ClosedDivAssign
         + std::ops::Neg<Output = F>,
 {
     fn gram(&self) -> Self {

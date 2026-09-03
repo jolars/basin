@@ -1,8 +1,8 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxedResiduals;
 use basin::{Executor, MaxIter, NllsState, TerminationReason, Trf};
-use nalgebra::DVector;
 
 #[test]
 fn trf_with_slack_bounds_reaches_unconstrained_min() {
@@ -168,3 +168,6 @@ fn trf_caches_residual_and_jacobian_across_iterations() {
         result.state.jacobian_evals()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

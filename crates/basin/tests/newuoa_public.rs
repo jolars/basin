@@ -100,10 +100,10 @@ fn rho_tolerance_stops_early() {
 
 /// Backend-generic over the parameter vector: drive NEWUOA on `nalgebra`'s
 /// `DVector` to prove the `V`-generic solver and state work outside `Vec<f64>`.
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 #[test]
 fn backend_generic_nalgebra() {
-    use nalgebra::DVector;
+    use crate::backend_aliases::nalgebra::DVector;
 
     struct RosenbrockN;
     impl CostFunction for RosenbrockN {
@@ -139,3 +139,6 @@ fn backend_generic_nalgebra() {
         result.best_cost()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

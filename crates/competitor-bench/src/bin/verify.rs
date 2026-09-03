@@ -14,7 +14,10 @@ use competitor_bench::{
 };
 use faer::Col;
 use levenberg_marquardt::LeastSquaresProblem;
-use nalgebra::DVector;
+#[cfg(not(feature = "basin-latest"))]
+use nalgebra::DVector as BasinDVector;
+#[cfg(feature = "basin-latest")]
+use nalgebra_latest::DVector as BasinDVector;
 
 /// basin LM configured to match the lm crate's default stopping rules:
 /// MINPACK gtol/ftol/xtol all at `30·ε`, absolute gradient test off.
@@ -45,9 +48,9 @@ fn main() {
     );
 
     let r = Executor::new(
-        ExponentialFit::<DVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
+        ExponentialFit::<BasinDVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
         basin_lm(),
-        NllsState::new(DVector::from_vec(vec![5.0e4, -0.3])),
+        NllsState::new(BasinDVector::from_vec(vec![5.0e4, -0.3])),
     )
     .max_iter(200)
     .run()
@@ -98,9 +101,9 @@ fn main() {
     );
 
     let r = Executor::new(
-        PowellSingular::<DVector<f64>>::new(),
+        PowellSingular::<BasinDVector<f64>>::new(),
         basin_lm(),
-        NllsState::new(DVector::from_vec(vec![3.0, -1.0, 0.0, 1.0])),
+        NllsState::new(BasinDVector::from_vec(vec![3.0, -1.0, 0.0, 1.0])),
     )
     .max_iter(200)
     .run()
@@ -161,9 +164,9 @@ fn main() {
         );
 
         let r = Executor::new(
-            VarDim::<DVector<f64>>::new(n),
+            VarDim::<BasinDVector<f64>>::new(n),
             basin_lm(),
-            NllsState::new(DVector::from_vec(start.clone())),
+            NllsState::new(BasinDVector::from_vec(start.clone())),
         )
         .max_iter(500)
         .run()
@@ -219,8 +222,8 @@ fn main() {
             rep.termination
         );
 
-        let p = UnderDet::<DVector<f64>>::new(m, n);
-        let x0 = DVector::from_vec(p.start());
+        let p = UnderDet::<BasinDVector<f64>>::new(m, n);
+        let x0 = BasinDVector::from_vec(p.start());
         let r = Executor::new(p, basin_lm(), NllsState::new(x0))
             .max_iter(500)
             .run()

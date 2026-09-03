@@ -1,8 +1,8 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::{PowellSingular, RosenbrockResiduals};
 use basin::{Executor, GaussNewton, NllsState, TerminationReason};
-use faer::Col;
 
 #[test]
 fn gauss_newton_converges_on_rosenbrock_residuals() {
@@ -91,3 +91,6 @@ fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
 
     assert_eq!(result.reason, TerminationReason::SolverFailed);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

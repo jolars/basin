@@ -233,19 +233,19 @@ mod sample;
 mod scalar;
 mod vec;
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_backend;
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_sparse_backend;
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_backend;
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_backend;
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_sparse_backend;
 
 pub use clamp::ClampInPlace;

@@ -3,11 +3,11 @@
 //! deeper algorithmic invariants are covered by the nalgebra mirror
 //! test (`tests/ma_ls_ch_cma_nalgebra.rs`).
 
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{RastriginBoxed, SphereBoxed};
 use basin::{Executor, MaLsChCma, MaLsChState, MaxCostEvals};
-use faer::{Col, Mat};
 
 #[test]
 fn converges_on_sphere_d10() {
@@ -43,3 +43,6 @@ fn converges_on_rastrigin_d10() {
         result.cost()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

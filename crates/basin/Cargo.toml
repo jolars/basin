@@ -14,7 +14,14 @@ keywords = ["optimization", "math", "numerics", "solver", "nonlinear"]
 categories = ["mathematics", "science", "algorithms"]
 
 [package.metadata.docs.rs]
-all-features = true
+features = [
+  "faer_latest",
+  "nalgebra_latest-lapack",
+  "ndarray_latest-blas",
+  "parallel",
+  "problems",
+  "serde",
+]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
@@ -23,34 +30,133 @@ path = "src/lib.rs"
 
 [features]
 default = ["problems"]
-nalgebra = ["dep:nalgebra", "dep:nalgebra-sparse"]
-ndarray = ["dep:ndarray"]
-ndarray-blas = ["ndarray", "ndarray/blas"]
-nalgebra-lapack = [
-  "nalgebra",
+nalgebra = ["nalgebra_v0_34"]
+nalgebra_latest = ["nalgebra_v0_35"]
+nalgebra_all = []
+nalgebra_v0_32 = [
+  "nalgebra_all",
+  "dep:nalgebra_0_32",
+  "dep:nalgebra_sparse_0_9",
+]
+nalgebra_v0_33 = [
+  "nalgebra_all",
+  "dep:nalgebra_0_33",
+  "dep:nalgebra_sparse_0_10",
+]
+nalgebra_v0_34 = [
+  "nalgebra_all",
+  "dep:nalgebra_0_34",
+  "dep:nalgebra_sparse_0_11",
+]
+nalgebra_v0_35 = [
+  "nalgebra_all",
+  "dep:nalgebra",
+  "dep:nalgebra-sparse",
+]
+nalgebra-lapack = ["nalgebra_v0_34-lapack"]
+nalgebra_latest-lapack = ["nalgebra_v0_35-lapack"]
+nalgebra_v0_32-lapack = [
+  "nalgebra_v0_32",
+  "dep:nalgebra_lapack_0_24",
+]
+nalgebra_v0_33-lapack = [
+  "nalgebra_v0_33",
+  "dep:nalgebra_lapack_0_25",
+]
+nalgebra_v0_34-lapack = [
+  "nalgebra_v0_34",
+  "dep:nalgebra_lapack_0_27",
+  "nalgebra_lapack_0_27/lapack-custom",
+]
+nalgebra_v0_35-lapack = [
+  "nalgebra_v0_35",
   "dep:nalgebra-lapack",
   "nalgebra-lapack/lapack-custom",
 ]
-faer = ["dep:faer", "dep:generativity", "dep:faer-traits"]
-parallel = ["dep:rayon", "faer?/rayon"]
+ndarray = ["ndarray_v0_17"]
+ndarray_latest = ["ndarray_v0_17"]
+ndarray_all = []
+ndarray_v0_15 = ["ndarray_all", "dep:ndarray_0_15"]
+ndarray_v0_16 = ["ndarray_all", "dep:ndarray_0_16"]
+ndarray_v0_17 = ["ndarray_all", "dep:ndarray"]
+ndarray-blas = ["ndarray_v0_17-blas"]
+ndarray_latest-blas = ["ndarray_v0_17-blas"]
+ndarray_v0_15-blas = ["ndarray_v0_15", "ndarray_0_15/blas"]
+ndarray_v0_16-blas = ["ndarray_v0_16", "ndarray_0_16/blas"]
+ndarray_v0_17-blas = ["ndarray_v0_17", "ndarray/blas"]
+faer = ["faer_v0_24"]
+faer_latest = ["faer_v0_24"]
+faer_all = []
+faer_v0_22 = [
+  "faer_all",
+  "dep:faer_0_22",
+  "dep:faer_traits_0_22",
+  "dep:generativity",
+]
+faer_v0_23 = [
+  "faer_all",
+  "dep:faer_0_23",
+  "dep:faer_traits_0_23",
+  "dep:generativity",
+]
+faer_v0_24 = [
+  "faer_all",
+  "dep:faer",
+  "dep:faer-traits",
+  "dep:generativity",
+]
+parallel = [
+  "dep:rayon",
+  "faer?/rayon",
+  "faer_0_22?/rayon",
+  "faer_0_23?/rayon",
+]
 serde = [
   "dep:serde",
   "dep:bincode",
   "nalgebra?/serde-serialize",
+  "nalgebra_0_32?/serde-serialize",
+  "nalgebra_0_33?/serde-serialize",
+  "nalgebra_0_34?/serde-serialize",
   "ndarray?/serde",
+  "ndarray_0_15?/serde",
+  "ndarray_0_16?/serde",
 ]
 problems = []
 
 [dependencies]
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
-nalgebra = { version = "0.34", optional = true }
-nalgebra-sparse = { version = "0.11", optional = true }
-nalgebra-lapack = { version = "0.27", optional = true, default-features = false }
+nalgebra_0_32 = { package = "nalgebra", version = "0.32", optional = true }
+nalgebra_0_33 = { package = "nalgebra", version = "0.33", optional = true }
+nalgebra_0_34 = { package = "nalgebra", version = "0.34", optional = true }
+# nalgebra 0.35 requires Rust 1.89. Older backend features preserve Basin's
+# package MSRV of Rust 1.87; `nalgebra_latest` intentionally uses the dev pin.
+nalgebra = { version = "0.35", optional = true }
+nalgebra_sparse_0_9 = { package = "nalgebra-sparse", version = "0.9", optional = true }
+nalgebra_sparse_0_10 = { package = "nalgebra-sparse", version = "0.10", optional = true }
+nalgebra_sparse_0_11 = { package = "nalgebra-sparse", version = "0.11", optional = true }
+nalgebra-sparse = { version = "0.12", optional = true }
+nalgebra_lapack_0_24 = { package = "nalgebra-lapack", version = "0.24", optional = true, default-features = false }
+nalgebra_lapack_0_25 = { package = "nalgebra-lapack", version = "0.25", optional = true, default-features = false }
+nalgebra_lapack_0_27 = { package = "nalgebra-lapack", version = "0.27", optional = true, default-features = false }
+nalgebra-lapack = { version = "0.28", optional = true, default-features = false }
+ndarray_0_15 = { package = "ndarray", version = "0.15", optional = true, default-features = false }
+ndarray_0_16 = { package = "ndarray", version = "0.16", optional = true, default-features = false }
 ndarray = { version = "0.17", optional = true, default-features = false }
+faer_0_22 = { package = "faer", version = "0.22", optional = true, default-features = false, features = [
+  "std",
+  "linalg",
+] }
+faer_0_23 = { package = "faer", version = "0.23", optional = true, default-features = false, features = [
+  "std",
+  "linalg",
+] }
 faer = { version = "0.24", optional = true, default-features = false, features = [
   "std",
   "linalg",
 ] }
+faer_traits_0_22 = { package = "faer-traits", version = "0.22", optional = true, default-features = false }
+faer_traits_0_23 = { package = "faer-traits", version = "0.23", optional = true, default-features = false }
 generativity = { version = "1", optional = true }
 faer-traits = { version = "0.24", optional = true, default-features = false }
 web-time = "1"
@@ -75,9 +181,9 @@ harness = false
 [[bench]]
 name = "lm_backends"
 harness = false
-required-features = ["nalgebra", "faer", "problems"]
+required-features = ["nalgebra_all", "faer_all", "problems"]
 
 [[bench]]
 name = "solver_backends"
 harness = false
-required-features = ["nalgebra", "ndarray", "faer", "problems"]
+required-features = ["nalgebra_all", "ndarray_all", "faer_all", "problems"]

@@ -1,11 +1,11 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
 //! faer-backend smoke mirror for [`MaLsChSw`]; the deep tests live in
 //! `tests/ma_ls_ch_sw_nalgebra.rs`. Vector type only—no `Mat`.
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::SphereBoxed;
 use basin::{Executor, MaLsChSw, MaLsChSwState, MaxCostEvals};
-use faer::Col;
 
 #[test]
 fn converges_on_sphere_d10() {
@@ -24,3 +24,6 @@ fn converges_on_sphere_d10() {
         result.cost()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

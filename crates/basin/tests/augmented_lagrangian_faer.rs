@@ -1,13 +1,13 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 //! Integration tests for the augmented-Lagrangian [`AugmentedLagrangianMethod`]
 //! on linearly-equality-constrained quadratics (faer backend).
 
+use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
     AugmentedLagrangianMethod, Backtracking, BasicState, Executor,
     GradientDescent, GradientState, TerminationReason,
 };
-use faer::{Col, Mat};
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. Constrained optimum: the
 /// projection of (2,2) onto the line `x₀ + x₁ = 2`, namely (1,1).
@@ -98,3 +98,6 @@ fn eval_counts_are_recorded() {
         "no gradient evals recorded"
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

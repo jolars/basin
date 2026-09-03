@@ -5,11 +5,11 @@
 //! are covered by the nalgebra mirror test
 //! (`tests/bounded_cma_inject_lbfgsb_nalgebra.rs`).
 
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
+use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::BoothBoxed;
 use basin::{BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, Lbfgsb};
-use ndarray::{Array1, Array2};
 
 /// BoundedCmaEs + L-Bfgs-B on Booth with slack bounds `[-5, 5]²`; the
 /// global min `(1, 3)` is strictly interior, so the inner polish must
@@ -96,3 +96,6 @@ fn aggregates_lbfgsb_work_into_outer() {
         min_extra
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -1,14 +1,14 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 //! Integration tests for the log-barrier [`BarrierMethod`] on linearly
 //! constrained quadratics (ndarray backend). Exercises the
 //! `MatVec`/`MatTransposeVec` impls on `ndarray::Array2<f64>`.
 
+use crate::backend_aliases::ndarray::{Array1, Array2, array};
 use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, BasicState, Executor, GradientDescent,
     GradientState, TerminationReason,
 };
-use ndarray::{Array1, Array2, array};
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`; constrained optimum (1,1).
 fn active_problem() -> ConstrainedQuadratic<Array2<f64>, Array1<f64>> {
@@ -118,3 +118,6 @@ fn two_constraints_both_active() {
         result.param()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

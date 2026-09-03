@@ -1,4 +1,4 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
 //! Bfgs convergence over the faer backend (`Col<f64>` and `Mat<f64>`).
 //!
@@ -6,11 +6,11 @@
 //! the same generic `Solver` impl drives faer's dense inverse-Hessian via
 //! `MatVec` + `GeneralRankOneUpdate` on `Mat<f64>`.
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::Rosenbrock;
 use basin::{
     Bfgs, Executor, FaerQuasiNewtonState, GradientTolerance, TerminationReason,
 };
-use faer::Col;
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
@@ -55,3 +55,6 @@ fn bfgs_terminates_on_gradient_tolerance() {
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -138,32 +138,34 @@
 //! # Backends
 //!
 //! Parameters and linear algebra are generic over the backend. `Vec<f64>` needs
-//! no features; nalgebra, ndarray, and faer are enabled one feature each, each
-//! pinning a single major version. Basin pins one major version per backend;
-//! each Basin 1.x release supports exactly these versions:
+//! no features. Each external backend has exact version features and a moving
+//! alias:
 //!
-//! | Backend    | Feature      | Version                            |
-//! | ---------- | ------------ | ---------------------------------- |
-//! | nalgebra   | `nalgebra`   | 0.34 (with `nalgebra-sparse` 0.11) |
-//! | ndarray    | `ndarray`    | 0.17                               |
-//! | faer       | `faer`       | 0.24                               |
+//! | Backend  | Exact features                            | Moving alias      |
+//! | -------- | ----------------------------------------- | ----------------- |
+//! | nalgebra | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra_latest` |
+//! | ndarray  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray_latest`  |
+//! | faer     | `faer_v0_22` through `faer_v0_24`         | `faer_latest`     |
 //!
-//! `Vec<f64>` is the built-in default backend, so no feature is needed for that.
+//! The original features remain frozen for Basin 1.x compatibility:
+//! `nalgebra` selects 0.34, `ndarray` selects 0.17, and `faer` selects 0.24.
+//! If dependency feature unification enables several releases of one backend,
+//! Basin implements the newest enabled release.
 //!
-//! A backend major-version bump is a breaking change and ships only in a Basin
-//! major release; within the 1.x series these pins are fixed.
+//! Each nalgebra release includes its matching `nalgebra-sparse` release:
+//! 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Versioned acceleration uses
+//! the `nalgebra_v0_XX-lapack` and `ndarray_v0_XX-blas` features. The moving
+//! aliases are `nalgebra_latest-lapack` and `ndarray_latest-blas`; the original
+//! `nalgebra-lapack` and `ndarray-blas` features remain frozen at nalgebra 0.34
+//! and ndarray 0.17.
 //!
-//! Two backends have opt-in, BLAS/LAPACK-backed acceleration. Both are off by
-//! default and not wasm-compatible (each links a Fortran/BLAS toolchain), and
-//! both expect you to bring your own BLAS/LAPACK source crate:
+//! BLAS/LAPACK acceleration is off by default, is not wasm-compatible, and
+//! expects the application to supply BLAS/LAPACK symbols at link time. The
+//! default build is wasm-friendly and single-threaded; parallelism is behind
+//! the opt-in `parallel` feature.
 //!
-//! | Feature           | Effect                                                                                        |
-//! | ----------------- | --------------------------------------------------------------------------------------------- |
-//! | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                |
-//! | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky/symmetric eigendecomposition for LAPACK-backed ones.   |
-//!
-//! The default build is wasm-friendly: no BLAS/LAPACK and no threads.
-//! Parallelism is behind the opt-in `parallel` feature.
+//! Basin's package MSRV is Rust 1.87. `nalgebra_v0_35` and
+//! `nalgebra_latest` require Rust 1.89 because nalgebra 0.35 does.
 //!
 //! # Citation
 //!
@@ -194,6 +196,125 @@
 #![cfg_attr(docsrs, feature(doc_cfg), doc(auto_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
+
+// Cargo features are additive, so several versions of one backend may be
+// enabled after dependency feature unification. Bind the unversioned crate
+// name to the newest enabled version, matching argmin-math's selection model.
+#[cfg(feature = "nalgebra_v0_35")]
+extern crate nalgebra;
+#[cfg(all(
+    not(any(
+        feature = "nalgebra_v0_35",
+        feature = "nalgebra_v0_34",
+        feature = "nalgebra_v0_33"
+    )),
+    feature = "nalgebra_v0_32"
+))]
+extern crate nalgebra_0_32 as nalgebra;
+#[cfg(all(
+    not(any(feature = "nalgebra_v0_35", feature = "nalgebra_v0_34")),
+    feature = "nalgebra_v0_33"
+))]
+extern crate nalgebra_0_33 as nalgebra;
+#[cfg(all(not(feature = "nalgebra_v0_35"), feature = "nalgebra_v0_34"))]
+extern crate nalgebra_0_34 as nalgebra;
+
+#[cfg(feature = "nalgebra_v0_35")]
+extern crate nalgebra_sparse;
+#[cfg(all(
+    not(any(feature = "nalgebra_v0_35", feature = "nalgebra_v0_34")),
+    feature = "nalgebra_v0_33"
+))]
+extern crate nalgebra_sparse_0_10 as nalgebra_sparse;
+#[cfg(all(not(feature = "nalgebra_v0_35"), feature = "nalgebra_v0_34"))]
+extern crate nalgebra_sparse_0_11 as nalgebra_sparse;
+#[cfg(all(
+    not(any(
+        feature = "nalgebra_v0_35",
+        feature = "nalgebra_v0_34",
+        feature = "nalgebra_v0_33"
+    )),
+    feature = "nalgebra_v0_32"
+))]
+extern crate nalgebra_sparse_0_9 as nalgebra_sparse;
+
+#[cfg(feature = "nalgebra_v0_35-lapack")]
+extern crate nalgebra_lapack;
+#[cfg(all(
+    not(any(
+        feature = "nalgebra_v0_35",
+        feature = "nalgebra_v0_34",
+        feature = "nalgebra_v0_33"
+    )),
+    feature = "nalgebra_v0_32-lapack"
+))]
+extern crate nalgebra_lapack_0_24 as nalgebra_lapack;
+#[cfg(all(
+    not(any(feature = "nalgebra_v0_35", feature = "nalgebra_v0_34")),
+    feature = "nalgebra_v0_33-lapack"
+))]
+extern crate nalgebra_lapack_0_25 as nalgebra_lapack;
+#[cfg(all(not(feature = "nalgebra_v0_35"), feature = "nalgebra_v0_34-lapack"))]
+extern crate nalgebra_lapack_0_27 as nalgebra_lapack;
+
+#[cfg(feature = "ndarray_v0_17")]
+extern crate ndarray;
+#[cfg(all(
+    not(any(feature = "ndarray_v0_17", feature = "ndarray_v0_16")),
+    feature = "ndarray_v0_15"
+))]
+extern crate ndarray_0_15 as ndarray;
+#[cfg(all(not(feature = "ndarray_v0_17"), feature = "ndarray_v0_16"))]
+extern crate ndarray_0_16 as ndarray;
+
+#[cfg(feature = "faer_v0_24")]
+extern crate faer;
+#[cfg(all(
+    not(any(feature = "faer_v0_24", feature = "faer_v0_23")),
+    feature = "faer_v0_22"
+))]
+extern crate faer_0_22 as faer;
+#[cfg(all(not(feature = "faer_v0_24"), feature = "faer_v0_23"))]
+extern crate faer_0_23 as faer;
+
+#[cfg(feature = "faer_v0_24")]
+extern crate faer_traits;
+#[cfg(all(
+    not(any(feature = "faer_v0_24", feature = "faer_v0_23")),
+    feature = "faer_v0_22"
+))]
+extern crate faer_traits_0_22 as faer_traits;
+#[cfg(all(not(feature = "faer_v0_24"), feature = "faer_v0_23"))]
+extern crate faer_traits_0_23 as faer_traits;
+
+#[cfg(all(
+    feature = "nalgebra_all",
+    not(any(
+        feature = "nalgebra_v0_32",
+        feature = "nalgebra_v0_33",
+        feature = "nalgebra_v0_34",
+        feature = "nalgebra_v0_35"
+    ))
+))]
+compile_error!("`nalgebra_all` is internal; enable a `nalgebra_v*` feature");
+#[cfg(all(
+    feature = "ndarray_all",
+    not(any(
+        feature = "ndarray_v0_15",
+        feature = "ndarray_v0_16",
+        feature = "ndarray_v0_17"
+    ))
+))]
+compile_error!("`ndarray_all` is internal; enable an `ndarray_v*` feature");
+#[cfg(all(
+    feature = "faer_all",
+    not(any(
+        feature = "faer_v0_22",
+        feature = "faer_v0_23",
+        feature = "faer_v0_24"
+    ))
+))]
+compile_error!("`faer_all` is internal; enable a `faer_v*` feature");
 
 pub mod core;
 pub mod line_search;
@@ -238,11 +359,11 @@ pub use crate::core::problem::{
     MiniBatchGradient, Problem, Residual,
 };
 pub use crate::core::solver::Solver;
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 pub use crate::core::state::FaerQuasiNewtonState;
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 pub use crate::core::state::NalgebraQuasiNewtonState;
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
     BasicPopulationState, BasicSimplexState, BasicState, BobyqaState,

@@ -11,11 +11,11 @@
 //! `SolverFailed`-bubbling contract test (CONTRIBUTING.md "Solver composition"
 //! rule 3) see `cma_inject_solver_failed_bubbles.rs`.
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
-use nalgebra::{DMatrix, DVector};
 
 /// Rosenbrock 2-D from `(-1, 1)`: the canonical non-convex banana
 /// valley CMA-ES is famously good at. The point of this test is to
@@ -118,3 +118,6 @@ fn aggregates_inner_cost_evals_into_outer() {
         min_extra
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

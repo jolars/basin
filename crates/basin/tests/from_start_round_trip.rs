@@ -256,10 +256,10 @@ fn mads_state() {
 /// the nalgebra and faer seed impls added alongside it (`WarmStart` was
 /// nalgebra-only before). `ndarray` is intentionally absent: BFGS does not
 /// run on `Array2` (no `GeneralRankOneUpdate`).
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 #[test]
 fn bfgs_from_start_nalgebra_backend() {
-    use nalgebra::DVector;
+    use crate::backend_aliases::nalgebra::DVector;
 
     struct QuadN;
     impl CostFunction for QuadN {
@@ -302,10 +302,10 @@ fn bfgs_from_start_nalgebra_backend() {
     assert!(a.cost() < 1e-12);
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 #[test]
 fn bfgs_from_start_faer_backend() {
-    use faer::Col;
+    use crate::backend_aliases::faer::Col;
 
     struct QuadF;
     impl CostFunction for QuadF {
@@ -391,3 +391,6 @@ fn from_start_round_trips_at_f32() {
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

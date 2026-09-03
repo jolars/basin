@@ -36,14 +36,14 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra {
+    use crate::backend_aliases::nalgebra::DVector;
     use basin::problems::{Rosenbrock, RosenbrockResiduals};
     use basin::{
         BasicState, Executor, FiniteDiff, GradientTolerance,
         LevenbergMarquardt, Method, NllsState, TerminationReason, TrustRegion,
     };
-    use nalgebra::DVector;
 
     #[test]
     fn trust_region_on_finite_diff_hessian_minimizes_rosenbrock() {
@@ -114,13 +114,13 @@ mod nalgebra {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer {
+    use crate::backend_aliases::faer::Col;
     use basin::problems::RosenbrockResiduals;
     use basin::{
         Executor, FiniteDiff, LevenbergMarquardt, NllsState, TerminationReason,
     };
-    use faer::Col;
 
     #[test]
     fn levenberg_marquardt_on_finite_diff_jacobian_matches_analytic() {
@@ -149,3 +149,6 @@ mod faer {
         );
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

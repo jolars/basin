@@ -107,7 +107,7 @@ impl Gradient for Rosenbrock<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{Rosenbrock, rosenbrock, rosenbrock_gradient};
     use crate::{CostFunction, Gradient};
@@ -138,7 +138,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{Rosenbrock, rosenbrock, rosenbrock_gradient};
     use crate::{CostFunction, Gradient};
@@ -173,7 +173,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::Rosenbrock;
     use crate::{CostFunction, Gradient};
@@ -322,7 +322,7 @@ impl Jacobian for RosenbrockResiduals<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_residuals_impl {
     use super::{
         RosenbrockResiduals, rosenbrock, rosenbrock_residuals,
@@ -370,7 +370,7 @@ mod nalgebra_residuals_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_residuals_impl {
     use super::{
         RosenbrockResiduals, rosenbrock, rosenbrock_residuals,
@@ -427,7 +427,7 @@ mod ndarray_residuals_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_residuals_impl {
     use super::{RosenbrockResiduals, rosenbrock_residuals_jacobian};
     use crate::{CostFunction, Jacobian, Residual};
@@ -596,7 +596,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "nalgebra")]
+    #[cfg(feature = "nalgebra_all")]
     mod nalgebra_jacobian_tests {
         use super::super::RosenbrockResiduals;
         use crate::{
@@ -645,7 +645,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "faer")]
+    #[cfg(feature = "faer_all")]
     mod faer_jacobian_tests {
         use super::super::RosenbrockResiduals;
         use crate::{Jacobian, Residual};

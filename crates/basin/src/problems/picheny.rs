@@ -143,7 +143,7 @@ impl Gradient for Picheny<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{Picheny, picheny, picheny_gradient};
     use crate::{CostFunction, Gradient};
@@ -174,7 +174,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{Picheny, picheny, picheny_gradient};
     use crate::{CostFunction, Gradient};
@@ -208,7 +208,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     // Routes through the slice-based primitives via a small stack array, since
     // the math is fixed-2D and reuses the Goldstein-Price free functions.

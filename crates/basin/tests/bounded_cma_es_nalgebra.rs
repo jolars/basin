@@ -1,11 +1,11 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::BoothBoxed;
 use basin::{
     BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState,
     StepOutcome, TerminationReason,
 };
-use nalgebra::{DMatrix, DVector};
 
 /// Same seed → same trajectory on the bounded variant. Reproducibility
 /// is the load-bearing contract for the seeded RNG; this guards the
@@ -248,3 +248,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

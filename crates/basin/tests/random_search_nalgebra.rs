@@ -1,11 +1,11 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{
     BasicPopulationState, Executor, PopulationState, RandomSearch, State,
     StepOutcome,
 };
-use nalgebra::DVector;
 
 /// Same seed → same trajectory, on the nalgebra backend. Sample
 /// reproducibility is platform- and backend-independent.
@@ -117,3 +117,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

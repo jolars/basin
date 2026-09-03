@@ -1,11 +1,11 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     CmaEs, CmaEsState, CmaEsTolerance, CostFunction, Executor, PopulationState,
     StepOutcome, TerminationReason,
 };
-use nalgebra::{DMatrix, DVector};
 
 /// Same seed → same trajectory, on the nalgebra backend. Reproducibility
 /// is the load-bearing contract for the seeded RNG (per
@@ -276,3 +276,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

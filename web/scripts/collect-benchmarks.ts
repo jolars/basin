@@ -9,7 +9,7 @@
  * `web/src/lib/data/backend-benchmarks.json`.
  *
  * Run with: `npm run collect:benchmarks` (uses tsx). Run the bench first:
- *   cargo bench --features nalgebra,ndarray,faer --bench solver_backends
+ *   cargo bench --features nalgebra_latest,ndarray_latest,faer_latest --bench solver_backends
  *
  * The pipeline is deliberately off CI: timings are machine-specific and
  * shared runners are noisy. Refresh locally and commit the regenerated JSON.
@@ -89,7 +89,7 @@ if (!existsSync(criterionDir)) {
     console.error(`✗ no criterion output at ${criterionDir}`);
     console.error(
         "  run the bench first:\n" +
-            "  cargo bench --features nalgebra,ndarray,faer --bench solver_backends",
+            "  cargo bench --features nalgebra_latest,ndarray_latest,faer_latest --bench solver_backends",
     );
     process.exit(1);
 }
@@ -156,7 +156,7 @@ for (const estimatesPath of findEstimates(criterionDir)) {
 if (results.length === 0) {
     console.error(
         "✗ found criterion output but no solver_backends groups—run:\n" +
-            "  cargo bench --features nalgebra,ndarray,faer --bench solver_backends",
+            "  cargo bench --features nalgebra_latest,ndarray_latest,faer_latest --bench solver_backends",
     );
     process.exit(1);
 }

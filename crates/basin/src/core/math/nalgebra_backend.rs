@@ -1,3 +1,18 @@
+#[cfg(all(
+    feature = "nalgebra_v0_32",
+    not(any(
+        feature = "nalgebra_v0_35",
+        feature = "nalgebra_v0_34",
+        feature = "nalgebra_v0_33"
+    ))
+))]
+use nalgebra::{ClosedAdd as ClosedAddAssign, ClosedMul as ClosedMulAssign};
+#[cfg(any(
+    feature = "nalgebra_v0_35",
+    feature = "nalgebra_v0_34",
+    feature = "nalgebra_v0_33"
+))]
+use nalgebra::{ClosedAddAssign, ClosedMulAssign};
 use nalgebra::{DMatrix, DVector, Dim, Matrix, Storage, StorageMut};
 use rand::{Rng, RngExt};
 use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
@@ -21,6 +36,62 @@ use super::{
     Dot, FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared,
     ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
+
+macro_rules! if_selected_nalgebra_lapack {
+    ($item:item) => {
+        #[cfg(any(
+            feature = "nalgebra_v0_35-lapack",
+            all(
+                not(feature = "nalgebra_v0_35"),
+                feature = "nalgebra_v0_34-lapack"
+            ),
+            all(
+                not(any(
+                    feature = "nalgebra_v0_35",
+                    feature = "nalgebra_v0_34"
+                )),
+                feature = "nalgebra_v0_33-lapack"
+            ),
+            all(
+                not(any(
+                    feature = "nalgebra_v0_35",
+                    feature = "nalgebra_v0_34",
+                    feature = "nalgebra_v0_33"
+                )),
+                feature = "nalgebra_v0_32-lapack"
+            )
+        ))]
+        $item
+    };
+}
+
+macro_rules! if_not_selected_nalgebra_lapack {
+    ($item:item) => {
+        #[cfg(not(any(
+            feature = "nalgebra_v0_35-lapack",
+            all(
+                not(feature = "nalgebra_v0_35"),
+                feature = "nalgebra_v0_34-lapack"
+            ),
+            all(
+                not(any(
+                    feature = "nalgebra_v0_35",
+                    feature = "nalgebra_v0_34"
+                )),
+                feature = "nalgebra_v0_33-lapack"
+            ),
+            all(
+                not(any(
+                    feature = "nalgebra_v0_35",
+                    feature = "nalgebra_v0_34",
+                    feature = "nalgebra_v0_33"
+                )),
+                feature = "nalgebra_v0_32-lapack"
+            )
+        )))]
+        $item
+    };
+}
 
 // `F: Scalar` (basin's alias) bundles `Float + FromPrimitive + Sum + Debug +
 // Default + 'static`, which transitively satisfies `nalgebra::Scalar`
@@ -390,7 +461,7 @@ where
 
 impl<F> MatVec<DVector<F>> for DMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+    F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn matvec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
@@ -406,7 +477,7 @@ where
 
 impl<F> MatTransposeVec<DVector<F>> for DMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+    F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn mat_transpose_vec(&self, x: &DVector<F>) -> DVector<F> {
         assert_eq!(
@@ -422,7 +493,7 @@ where
 
 impl<F> GramMatrix for DMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+    F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn gram(&self) -> Self {
         // tr_mul(self) computes Aᵀ A in one pass without an explicit transpose.
@@ -463,7 +534,7 @@ impl<F: Scalar> MatDiagonal<DVector<F>> for DMatrix<F> {
 
 impl<F> AddDiagonalVectorInPlace<DVector<F>> for DMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign,
+    F: Scalar + ClosedAddAssign,
 {
     fn add_diagonal_vector_in_place(&mut self, diag: &DVector<F>) {
         assert_eq!(
@@ -513,7 +584,7 @@ impl<F: Scalar> DenseMatrixFromFn<F> for DVector<F> {
 // Pure-Rust symmetric eigendecomposition (default), generic over every
 // `F: RealField`. Swapped for the LAPACK impl below under `nalgebra-lapack`;
 // the two are mutually exclusive (`#[cfg]`).
-#[cfg(not(feature = "nalgebra-lapack"))]
+if_not_selected_nalgebra_lapack! {
 impl<F> SymmetricEigen<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::RealField,
@@ -537,6 +608,7 @@ where
             .ok_or(SymmetricEigenError::Failed)
     }
 }
+}
 
 // LAPACK-backed symmetric eigendecomposition (`nalgebra-lapack` feature).
 // Behaviorally interchangeable with the pure-Rust impl above for the LAPACK
@@ -548,7 +620,7 @@ where
 // bound, unlike `CholeskyScalar` above. f64 and f32 are the only scalars
 // LAPACK's `dsyev`/`ssyev` cover; see the `nalgebra-lapack` feature note in
 // `Cargo.toml`.
-#[cfg(feature = "nalgebra-lapack")]
+if_selected_nalgebra_lapack! {
 macro_rules! lapack_symmetric_eigen_impl {
     ($scalar:ty) => {
         impl SymmetricEigen<DVector<$scalar>> for DMatrix<$scalar> {
@@ -572,15 +644,18 @@ macro_rules! lapack_symmetric_eigen_impl {
         }
     };
 }
+}
 
-#[cfg(feature = "nalgebra-lapack")]
+if_selected_nalgebra_lapack! {
 lapack_symmetric_eigen_impl!(f64);
-#[cfg(feature = "nalgebra-lapack")]
+}
+if_selected_nalgebra_lapack! {
 lapack_symmetric_eigen_impl!(f32);
+}
 
 impl<F> RankOneUpdate<DVector<F>, F> for DMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+    F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn rank_one_update(&mut self, alpha: F, v: &DVector<F>) {
         assert_eq!(
@@ -606,7 +681,7 @@ where
 
 impl<F> GeneralRankOneUpdate<DVector<F>, F> for DMatrix<F>
 where
-    F: Scalar + nalgebra::ClosedAddAssign + nalgebra::ClosedMulAssign,
+    F: Scalar + ClosedAddAssign + ClosedMulAssign,
 {
     fn general_rank_one_update(
         &mut self,
@@ -645,7 +720,7 @@ where
 // Pure-Rust Cholesky (default). Generic over every `F: ComplexField`. Swapped
 // out for the LAPACK impl below when the `nalgebra-lapack` feature is on; the
 // two are mutually exclusive (`#[cfg]`) so coherence is never violated.
-#[cfg(not(feature = "nalgebra-lapack"))]
+if_not_selected_nalgebra_lapack! {
 impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::ComplexField,
@@ -676,6 +751,7 @@ where
             .map(|chol| chol.solve(b))
     }
 }
+}
 
 // LAPACK-backed Cholesky (`nalgebra-lapack` feature). Behaviorally
 // interchangeable with the pure-Rust impl above for the LAPACK scalar set:
@@ -683,7 +759,7 @@ where
 // The bound narrows from any `F: ComplexField` to `nalgebra_lapack`'s
 // `CholeskyScalar` (f32/f64 and their complex counterparts); see the
 // `nalgebra-lapack` feature note in `Cargo.toml`.
-#[cfg(feature = "nalgebra-lapack")]
+if_selected_nalgebra_lapack! {
 impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra_lapack::CholeskyScalar + num_traits::Zero,
@@ -713,6 +789,7 @@ where
             .ok_or(LinearSolveError::NotPositiveDefinite)?;
         chol.solve(b).ok_or(LinearSolveError::NotPositiveDefinite)
     }
+}
 }
 
 #[cfg(test)]

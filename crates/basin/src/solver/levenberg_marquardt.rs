@@ -168,7 +168,7 @@ use crate::core::termination::TerminationReason;
 /// and runs on the matrix-capable backends:
 ///
 /// ```
-/// # #[cfg(feature = "nalgebra")] {
+/// # #[cfg(feature = "nalgebra_v0_35")] {
 /// use basin::{NllsState, Executor, Jacobian, LevenbergMarquardt, Residual};
 /// use nalgebra::{DMatrix, DVector};
 ///

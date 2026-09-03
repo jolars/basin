@@ -1,15 +1,15 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
 //! nalgebra-backend tests for [`MaLsChSw`]: the deep mirror. Covers
 //! convergence, reproducibility, the chain-resume mechanism, and the
 //! sorted-population invariant; the other backends run smoke mirrors.
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{RastriginBoxed, SphereBoxed};
 use basin::{
     Executor, MaLsChSw, MaLsChSwState, MaxCostEvals, PopulationState,
     StepOutcome,
 };
-use nalgebra::DVector;
 
 fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {
     SphereBoxed::new(
@@ -134,3 +134,6 @@ fn population_stays_sorted_ascending() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

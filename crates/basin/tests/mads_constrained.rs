@@ -125,10 +125,10 @@ fn respects_eval_budget() {
 /// Backend-generic: drive constrained MADS on nalgebra `DVector`. Guards the
 /// support-matrix ✓ for nalgebra (the param vector needs
 /// `VectorLen + Index + IndexMut`).
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 #[test]
 fn backend_generic_nalgebra() {
-    use nalgebra::DVector;
+    use crate::backend_aliases::nalgebra::DVector;
 
     struct Disk;
     impl CostFunction for Disk {
@@ -174,10 +174,10 @@ fn backend_generic_nalgebra() {
 }
 
 /// Backend-generic: drive constrained MADS on ndarray `Array1`.
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 #[test]
 fn backend_generic_ndarray() {
-    use ndarray::Array1;
+    use crate::backend_aliases::ndarray::Array1;
 
     struct Disk;
     impl CostFunction for Disk {
@@ -223,10 +223,10 @@ fn backend_generic_ndarray() {
 }
 
 /// Backend-generic: drive constrained MADS on faer `Col`.
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 #[test]
 fn backend_generic_faer() {
-    use faer::Col;
+    use crate::backend_aliases::faer::Col;
 
     struct Disk;
     impl CostFunction for Disk {
@@ -267,3 +267,6 @@ fn backend_generic_faer() {
     let x = result.best_param();
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -6,11 +6,11 @@
 //! precision) and work-unit aggregation (LM `cost_evals` +
 //! `gradient_evals` roll into the outer's `cost_evals`).
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::RosenbrockResiduals;
 use basin::{CmaEs, CmaEsState, CmaInject, Executor, LevenbergMarquardt};
-use nalgebra::{DMatrix, DVector};
 
 /// CMA-ES + LM on 2-D Rosenbrock-as-residuals. CMA from a wide-σ start
 /// gets near `(1, 1)`; the inner LM (Nielsen damping, default tolerances)
@@ -104,3 +104,6 @@ fn aggregates_lm_work_into_outer() {
         min_extra
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

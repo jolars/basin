@@ -9,13 +9,13 @@
 //! `de_inject_lbfgsb_nalgebra.rs`; for the failure-bubbling contract
 //! test (rule 3) see `de_inject_solver_failed_bubbles.rs`.
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{AckleyBoxed, RastriginBoxed};
 use basin::{
     BasicPopulationState, De, DeInject, Executor, MaxCostEvals, NelderMead,
 };
-use nalgebra::DVector;
 
 /// Ackley D=3 within the standard `[-32.768, 32.768]³` box. Ackley's
 /// exponential-decay global basin is friendly to Nelder-Mead polish:
@@ -148,3 +148,6 @@ fn same_seed_yields_identical_trajectory() {
     assert_eq!(result_a.cost(), result_b.cost());
     assert_eq!(result_a.param(), result_b.param());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -28,7 +28,26 @@ jobs:
       - name: Install clippy
         run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-features --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+
+  msrv:
+    name: MSRV (Rust 1.87)
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: 1.87.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.87.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+      # nalgebra 0.35 requires Rust 1.89. Every backend version and
+      # acceleration feature below that boundary must still compile at Basin's
+      # package MSRV, including tests, examples, and benchmarks.
+      - run: >-
+          cargo check -p basin --all-targets --no-default-features
+          --features
+          nalgebra_v0_32-lapack,nalgebra_v0_33-lapack,nalgebra_v0_34-lapack,ndarray_v0_15-blas,ndarray_v0_16-blas,ndarray_v0_17-blas,faer_v0_22,faer_v0_23,faer_v0_24,parallel,problems,serde
 
   docs:
     name: rustdoc
@@ -36,15 +55,17 @@ jobs:
     env:
       # rustdoc lints (broken links, redundant targets, missing docs, ...)
       # are warnings by default; -D promotes them to hard errors so docs
-      # can't rot. Built with --all-features to exercise the feature-gated
-      # backend impls, mirroring the docs.rs config.
+      # can't rot. Build the latest backend aliases, mirroring the docs.rs
+      # config without documenting every parallel version of each backend.
       RUSTDOCFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v7
       - uses: Swatinem/rust-cache@v2
         with:
           key: docs
-      - run: cargo doc --no-deps -p basin --all-features
+      - run: >-
+          cargo doc --no-deps -p basin
+          --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde
 
   test:
     name: test (${{ matrix.features }})
@@ -55,17 +76,33 @@ jobs:
         include:
           - features: default
             flags: ""
-          - features: nalgebra
-            flags: "--features nalgebra"
-          - features: ndarray
-            flags: "--features ndarray"
-          - features: faer
-            flags: "--features faer"
+          - features: nalgebra 0.32
+            flags: "--no-default-features --features nalgebra_v0_32,problems"
+          - features: nalgebra 0.33
+            flags: "--no-default-features --features nalgebra_v0_33,problems"
+          - features: nalgebra 0.34
+            flags: "--no-default-features --features nalgebra_v0_34,problems"
+          - features: nalgebra 0.35
+            flags: "--no-default-features --features nalgebra_v0_35,problems"
+          - features: ndarray 0.15
+            flags: "--no-default-features --features ndarray_v0_15,problems"
+          - features: ndarray 0.16
+            flags: "--no-default-features --features ndarray_v0_16,problems"
+          - features: ndarray 0.17
+            flags: "--no-default-features --features ndarray_v0_17,problems"
+          - features: faer 0.22
+            flags: "--no-default-features --features faer_v0_22,problems"
+          - features: faer 0.23
+            flags: "--no-default-features --features faer_v0_23,problems"
+          - features: faer 0.24
+            flags: "--no-default-features --features faer_v0_24,problems"
+          # Preserve the pre-versioning feature meanings in Basin 1.x.
+          - features: legacy aliases
+            flags: "--features nalgebra,ndarray,faer"
           # Exercise the rayon-backed `parallel` path (FiniteDiff probe
-          # fan-out). Matrix backends are needed for the FD Jacobian/Hessian
-          # tests; faer + nalgebra cover both.
-          - features: parallel
-            flags: "--features nalgebra,faer,parallel"
+          # fan-out) and the moving aliases together.
+          - features: latest aliases + parallel
+            flags: "--features nalgebra_latest,ndarray_latest,faer_latest,parallel"
     steps:
       - uses: actions/checkout@v7
       - uses: Swatinem/rust-cache@v2
@@ -74,15 +111,22 @@ jobs:
       - run: cargo build -p basin ${{ matrix.flags }}
       - run: cargo test -p basin ${{ matrix.flags }}
 
-  # `nalgebra-lapack` is the one feature that links a system LAPACK, so it gets
-  # its own job rather than a matrix row (and is absent from the wasm matrix —
-  # it must never build for wasm). The feature forwards `lapack-custom`, so the
-  # LAPACK symbols are supplied here at link time by Ubuntu's LP64 OpenBLAS
-  # (`libopenblas-dev`). The integer width matters: the LP64 build (32-bit int)
-  # matches `lapack-sys`; the ILP64 build segfaults at runtime.
+  # The versioned nalgebra LAPACK features link a system LAPACK, so they get a
+  # separate matrix (and remain absent from the wasm matrix). LAPACK symbols
+  # are supplied at link time by Ubuntu's LP64 OpenBLAS (`libopenblas-dev`).
+  # The integer width matters: the LP64 build (32-bit int) matches
+  # `lapack-sys`; the ILP64 build segfaults at runtime.
   lapack:
-    name: test (nalgebra-lapack)
+    name: test (${{ matrix.feature }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          - nalgebra_v0_32-lapack
+          - nalgebra_v0_33-lapack
+          - nalgebra_v0_34-lapack
+          - nalgebra_v0_35-lapack
     env:
       # Override the workflow-level RUSTFLAGS (job env replaces, not merges), so
       # keep `-D warnings` and append the OpenBLAS link directive.
@@ -93,8 +137,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
       - uses: Swatinem/rust-cache@v2
         with:
-          key: nalgebra-lapack
-      - run: cargo test -p basin --features nalgebra-lapack --test lapack_nalgebra
+          key: ${{ matrix.feature }}
+      - run: cargo test -p basin --features ${{ matrix.feature }} --test lapack_nalgebra
 
   wasm:
     name: wasm build (${{ matrix.features }})
@@ -107,6 +151,8 @@ jobs:
             flags: ""
           - features: nalgebra
             flags: "--features nalgebra"
+          - features: nalgebra latest
+            flags: "--features nalgebra_latest"
           - features: ndarray
             flags: "--features ndarray"
           - features: faer

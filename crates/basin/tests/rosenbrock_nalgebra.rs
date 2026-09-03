@@ -1,11 +1,11 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicSimplexState, BasicState, CostFunction, Executor,
     GradientDescent, NelderMead,
 };
-use nalgebra::DVector;
 
 #[test]
 fn gradient_descent_with_nalgebra_dvector() {
@@ -69,3 +69,6 @@ fn nelder_mead_with_nalgebra_dvector() {
 
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;
