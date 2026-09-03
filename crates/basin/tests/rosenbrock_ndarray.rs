@@ -1,11 +1,11 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
+use crate::backend_aliases::ndarray::{Array1, array};
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicSimplexState, BasicState, CostFunction, Executor,
     GradientDescent, NelderMead,
 };
-use ndarray::{Array1, array};
 
 #[test]
 fn gradient_descent_with_ndarray_array1() {
@@ -69,3 +69,6 @@ fn nelder_mead_with_ndarray_array1() {
 
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

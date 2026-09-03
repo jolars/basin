@@ -198,7 +198,7 @@ impl CostFunction for SchafferN4<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{
         SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4,
@@ -243,7 +243,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{
         SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4,
@@ -291,7 +291,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::{SchafferN2, SchafferN4};
     use crate::{CostFunction, Gradient};

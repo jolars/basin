@@ -255,10 +255,10 @@ fn rho_tolerance_stops_early() {
 }
 
 /// Backend-generic: drive LINCOA on nalgebra `DMatrix`/`DVector`.
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 #[test]
 fn backend_generic_nalgebra() {
-    use nalgebra::{DMatrix, DVector};
+    use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 
     struct Proj {
         a: DMatrix<f64>,
@@ -306,10 +306,10 @@ fn backend_generic_nalgebra() {
 /// Backend-generic: drive LINCOA on ndarray `Array2`/`Array1`. Guards the
 /// support-matrix ✓ for ndarray; the param vector must satisfy
 /// `VectorLen + IndexMut` and the constraint matrix `MatTransposeVec`.
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 #[test]
 fn backend_generic_ndarray() {
-    use ndarray::{Array1, Array2};
+    use crate::backend_aliases::ndarray::{Array1, Array2};
 
     struct Proj {
         a: Array2<f64>,
@@ -356,10 +356,10 @@ fn backend_generic_ndarray() {
 
 /// Backend-generic: drive LINCOA on faer `Mat`/`Col`. Guards the
 /// support-matrix ✓ for faer.
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 #[test]
 fn backend_generic_faer() {
-    use faer::{Col, Mat};
+    use crate::backend_aliases::faer::{Col, Mat};
 
     struct Proj {
         a: Mat<f64>,
@@ -400,3 +400,6 @@ fn backend_generic_faer() {
         "x = {x:?}"
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

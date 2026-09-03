@@ -1,11 +1,11 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
 use basin::{
     Executor, LevenbergMarquardt, NllsState, RelativeCostTolerance,
     TerminationReason,
 };
-use nalgebra::DVector;
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -384,3 +384,6 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
         result.state.jacobian_evals()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

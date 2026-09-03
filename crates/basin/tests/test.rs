@@ -6,13 +6,13 @@
 //! `x₀ + x₁ ≤ 2`. The unconstrained minimum `(2,2)` is infeasible, so the
 //! constrained optimum is the projection onto the line `x₀ + x₁ = 2` nearest
 //! `(2,2)`, namely `(1, 1)`.
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::{
     Backtracking, BarrierMethod, BasicState, CostFunction, Executor, Gradient,
     GradientDescent, LinearInequalityConstraints, TerminationReason,
 };
-use nalgebra::{DMatrix, DVector};
 
 // 1. Define the problem. The objective and its gradient are the usual
 //    `CostFunction`/`Gradient` traits; the constraints are the new
@@ -106,3 +106,6 @@ fn barrier_method_tour() {
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!((x[0] - 1.0).abs() < 1e-4 && (x[1] - 1.0).abs() < 1e-4);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

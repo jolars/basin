@@ -1,11 +1,11 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     CmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
     TerminationReason,
 };
-use faer::{Col, Mat};
 
 /// Same seed → same trajectory, on the faer backend. Reproducibility
 /// across faer's `Col<f64>` and `Mat<f64>` types is independent of the
@@ -190,3 +190,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -1,12 +1,12 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
 //! nalgebra-backend mirror of the `Vec<f64>` Solis-Wets suite
 //! (`tests/solis_wets_vec.rs`): reduced to the checks that exercise the
 //! per-backend trait wiring.
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Sphere;
 use basin::{Executor, RhoTolerance, SolisWets, TerminationReason};
-use nalgebra::DVector;
 
 #[test]
 fn same_seed_yields_identical_trajectory() {
@@ -45,3 +45,6 @@ fn converges_on_sphere_5d_via_rho_tolerance() {
         result.cost()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

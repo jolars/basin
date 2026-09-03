@@ -1,15 +1,15 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
 //! L-Bfgs-B convergence tests over the ndarray backend. Mirrors
 //! `tests/lbfgsb_faer.rs` to confirm the `Array1<f64>` impl of
 //! [`basin::backend::AsFloatSliceMut`] plumbs through correctly.
 
+use crate::backend_aliases::ndarray::{Array1, array};
 use basin::problems::BoothBoxed;
 use basin::{
     BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
     MaxIter, ProjectedGradientTolerance,
 };
-use ndarray::{Array1, array};
 
 struct Rosen {
     l: Array1<f64>,
@@ -127,3 +127,6 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
     );
     assert!(result.cost() < 1e-8, "cost = {}", result.cost());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

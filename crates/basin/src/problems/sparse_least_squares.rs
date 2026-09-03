@@ -96,7 +96,7 @@ impl<M, V> HasSpec for SparseLeastSquaresBoxed<M, V> {
     const SPEC: &'static ProblemSpec = &SPARSE_LEAST_SQUARES_SPEC;
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{SparseLeastSquares, SparseLeastSquaresBoxed};
     use crate::core::math::{MatVec, ScaledAdd};
@@ -192,7 +192,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::{SparseLeastSquares, SparseLeastSquaresBoxed};
     use crate::core::math::{MatVec, ScaledAdd};
@@ -312,7 +312,7 @@ mod tests {
         assert!(!spec.references.is_empty());
     }
 
-    #[cfg(feature = "faer")]
+    #[cfg(feature = "faer_all")]
     #[test]
     fn faer_residual_at_zero_returns_minus_b() {
         use crate::Residual;

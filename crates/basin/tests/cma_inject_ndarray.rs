@@ -6,11 +6,11 @@
 //! invariants are covered by the nalgebra mirror test
 //! (`tests/cma_inject_nalgebra.rs`).
 
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
+use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
-use ndarray::{Array1, Array2};
 
 /// Rosenbrock 2-D from `(-1, 1)`: injecting Nelder-Mead refinements
 /// must not break CMA's convergence on the ndarray backend.
@@ -88,3 +88,6 @@ fn aggregates_inner_cost_evals_into_outer() {
         min_extra
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

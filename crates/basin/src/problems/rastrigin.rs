@@ -129,7 +129,7 @@ impl CostFunction for Rastrigin<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{Rastrigin, rastrigin};
     use crate::CostFunction;
@@ -148,7 +148,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{Rastrigin, rastrigin};
     use crate::CostFunction;
@@ -167,7 +167,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::{A, Rastrigin};
     use crate::CostFunction;
@@ -256,7 +256,7 @@ impl BoxConstraints for RastriginBoxed<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_boxed_impl {
     use super::{RastriginBoxed, STANDARD_LOWER, STANDARD_UPPER, rastrigin};
     use crate::{BoxConstraints, CostFunction};
@@ -295,7 +295,7 @@ mod nalgebra_boxed_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_boxed_impl {
     use super::{RastriginBoxed, STANDARD_LOWER, STANDARD_UPPER, rastrigin};
     use crate::{BoxConstraints, CostFunction};
@@ -334,7 +334,7 @@ mod ndarray_boxed_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_boxed_impl {
     use super::{A, RastriginBoxed, STANDARD_LOWER, STANDARD_UPPER};
     use crate::{BoxConstraints, CostFunction};

@@ -1,11 +1,11 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
+use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     CmaEs, CmaEsState, CmaEsTolerance, CostFunction, Executor, PopulationState,
     StepOutcome, TerminationReason,
 };
-use ndarray::{Array1, Array2};
 
 /// Same seed → same trajectory, on the ndarray backend. Reproducibility
 /// is the load-bearing contract for the seeded RNG (per
@@ -276,3 +276,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

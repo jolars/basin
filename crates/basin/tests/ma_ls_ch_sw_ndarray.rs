@@ -1,11 +1,11 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
 //! ndarray-backend smoke mirror for [`MaLsChSw`]; the deep tests live
 //! in `tests/ma_ls_ch_sw_nalgebra.rs`. Vector type only—no `Array2`.
 
+use crate::backend_aliases::ndarray::Array1;
 use basin::problems::SphereBoxed;
 use basin::{Executor, MaLsChSw, MaLsChSwState, MaxCostEvals};
-use ndarray::Array1;
 
 #[test]
 fn converges_on_sphere_d10() {
@@ -26,3 +26,6 @@ fn converges_on_sphere_d10() {
         result.cost()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

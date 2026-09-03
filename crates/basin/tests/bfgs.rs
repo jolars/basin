@@ -1,12 +1,12 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicState, Bfgs, CostFunction, Executor, Gradient,
     GradientDescent, GradientTolerance, NalgebraQuasiNewtonState,
     TerminationReason,
 };
-use nalgebra::DVector;
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
@@ -38,6 +38,9 @@ fn bfgs_converges_on_rosenbrock() {
         result.param()[1]
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;
 
 #[test]
 fn bfgs_terminates_on_gradient_tolerance() {

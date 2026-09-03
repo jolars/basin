@@ -614,7 +614,7 @@ impl IntoInitialSimplex<Self> for Vec<f64> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 impl IntoInitialSimplex<Self> for nalgebra::DVector<f64> {
     fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
         let n = self.len();
@@ -633,7 +633,7 @@ impl IntoInitialSimplex<Self> for nalgebra::DVector<f64> {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 impl IntoInitialSimplex<Self> for faer::Col<f64> {
     fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
         let n = self.nrows();
@@ -652,7 +652,7 @@ impl IntoInitialSimplex<Self> for faer::Col<f64> {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 impl IntoInitialSimplex<ndarray::Array1<f64>> for ndarray::Array1<f64> {
     fn into_initial_simplex(
         self,
@@ -865,7 +865,7 @@ pub type DenseQuasiNewtonState<F = f64> =
 /// `NalgebraQuasiNewtonState::new(x)` instead of
 /// `QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(x)`. The scalar `F`
 /// defaults to `f64`.
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 pub type NalgebraQuasiNewtonState<F = f64> =
     QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
 
@@ -875,7 +875,7 @@ pub type NalgebraQuasiNewtonState<F = f64> =
 /// `FaerQuasiNewtonState::new(x)` instead of
 /// `QuasiNewtonState::<Col<f64>, Mat<f64>>::new(x)`. The scalar `F` defaults
 /// to `f64`.
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 pub type FaerQuasiNewtonState<F = f64> =
     QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
 
@@ -885,7 +885,7 @@ pub type FaerQuasiNewtonState<F = f64> =
 /// `NdarrayQuasiNewtonState::new(x)` instead of
 /// `QuasiNewtonState::<Array1<f64>, Array2<f64>>::new(x)`. The scalar `F`
 /// defaults to `f64`.
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 pub type NdarrayQuasiNewtonState<F = f64> =
     QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
 

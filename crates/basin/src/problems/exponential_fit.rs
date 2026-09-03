@@ -188,7 +188,7 @@ mod vec_impl {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{
         ExponentialFit, exponential_fit, exponential_fit_jacobian,
@@ -243,7 +243,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{
         ExponentialFit, exponential_fit, exponential_fit_jacobian,
@@ -308,7 +308,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::{
         ExponentialFit, exponential_fit, exponential_fit_jacobian,

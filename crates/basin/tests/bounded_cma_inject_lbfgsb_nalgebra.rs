@@ -6,11 +6,11 @@
 //! and work-unit aggregation (L-Bfgs-B `cost_evals` + `gradient_evals`
 //! roll into the outer's `cost_evals`).
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::BoothBoxed;
 use basin::{BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, Lbfgsb};
-use nalgebra::{DMatrix, DVector};
 
 /// BoundedCmaEs + L-Bfgs-B on Booth with slack bounds `[-5, 5]²`. The
 /// global min `(1, 3)` is strictly interior, so both the outer
@@ -117,3 +117,6 @@ fn aggregates_lbfgsb_work_into_outer() {
         min_extra
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

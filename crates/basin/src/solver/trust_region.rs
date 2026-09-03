@@ -348,7 +348,7 @@ where
 /// Hessian uses):
 ///
 /// ```
-/// # #[cfg(feature = "nalgebra")] {
+/// # #[cfg(feature = "nalgebra_v0_35")] {
 /// use basin::{CostFunction, Executor, Gradient, GradientTolerance, Hessian, TrustRegion};
 /// use nalgebra::{DMatrix, DVector};
 ///

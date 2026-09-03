@@ -24,15 +24,17 @@ cargo add basin
 ```
 
 Basin works on plain `Vec<f64>` out of the box. Linear-algebra backends are
-opt-in, one feature each:
+opt-in. Use a moving alias to follow the newest supported release:
 
 ```sh
-cargo add basin --features nalgebra  # or: ndarray, faer
+cargo add basin --features nalgebra_latest  # or: ndarray_latest, faer_latest
 ```
 
-Basin's minimum supported Rust version (MSRV) is **1.87.0**. It is held
-deliberately conservative to keep the planned CRAN (R) bindings buildable, so it
-moves rarely and only after checking downstream toolchains.
+Exact version features, such as `nalgebra_v0_34`, keep dependency resolution
+stable. Basin's package minimum supported Rust version (MSRV) is **1.87.0**.
+The one exception is nalgebra 0.35: `nalgebra_v0_35` and `nalgebra_latest`
+require Rust 1.89. The development environment uses Rust 1.89, while CI checks
+the Rust 1.87-compatible feature set separately.
 
 ## Example
 
@@ -117,36 +119,33 @@ See [Solvers] for which backends each one supports.
 ## Backends
 
 Parameters and linear algebra are generic over the backend. `Vec<f64>` needs no
-features; [nalgebra], [ndarray], and [faer] are enabled one feature each, each
-pinning a single major version. First-order and derivative-free solvers run on
-any backend; linear-algebra-heavy solvers may require a specific one and say so
-in their docs.
+features. Each external backend has exact version features and a `*_latest`
+alias that tracks the newest supported release:
 
-Basin pins one major version per backend. Each basin 1.x release supports
-exactly these versions:
+| Backend    | Exact features                            | Moving alias      |
+| ---------- | ----------------------------------------- | ----------------- |
+| [nalgebra] | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra_latest` |
+| [ndarray]  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray_latest`  |
+| [faer]     | `faer_v0_22` through `faer_v0_24`         | `faer_latest`     |
 
-  | Backend    | Feature    | Version                            |
-  | ---------- | ---------- | ---------------------------------- |
-  | [nalgebra] | `nalgebra` | 0.34 (with `nalgebra-sparse` 0.11) |
-  | [ndarray]  | `ndarray`  | 0.17                               |
-  | [faer]     | `faer`     | 0.24                               |
+The original features remain frozen for compatibility: `nalgebra` selects
+0.34, `ndarray` selects 0.17, and `faer` selects 0.24. If dependency feature
+unification enables several releases of the same backend, Basin implements the
+newest enabled release. First-order and derivative-free solvers run on any
+backend; linear-algebra-heavy solvers may require a specific one and say so in
+their docs.
 
-`Vec<f64>` is built in and needs no features. A backend major-version bump is a
-breaking change and ships only in a basin major release; within the 1.x series
-these pins are fixed.
+Every nalgebra feature includes its matching `nalgebra-sparse` release:
+0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Exact acceleration features
+follow the same naming scheme—`nalgebra_v0_34-lapack` and
+`ndarray_v0_16-blas`, for example. The moving aliases are
+`nalgebra_latest-lapack` and `ndarray_latest-blas`; the original acceleration
+features remain frozen at nalgebra 0.34 and ndarray 0.17.
 
-Two backends have opt-in, BLAS/LAPACK-backed acceleration. Both are off by
-default and not wasm-compatible (each links a Fortran/BLAS toolchain), and both
-expect you to bring your own BLAS/LAPACK source crate:
-
-  | Feature           | Effect                                                                                                                                                           |
-  | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `ndarray-blas`    | Forwards `ndarray/blas` for BLAS-backed ndarray linear algebra.                                                                                                  |
-  | `nalgebra-lapack` | Swaps the nalgebra backend's Cholesky and symmetric eigendecomposition for LAPACK-backed ones (pins `nalgebra-lapack` 0.27, the release tracking nalgebra 0.34). |
-
-The default build is wasm-friendly: no BLAS/LAPACK and no threads. Parallelism
-is behind the opt-in `parallel` feature; BLAS/LAPACK acceleration is behind
-`ndarray-blas` and `nalgebra-lapack`.
+BLAS/LAPACK acceleration is off by default and is not wasm-compatible. These
+features expect you to supply the BLAS/LAPACK symbols at link time. The default
+build remains wasm-friendly and single-threaded; parallelism is behind the
+opt-in `parallel` feature.
 
 ## Citation
 

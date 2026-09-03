@@ -21,7 +21,8 @@
 //!    identical across backends, so the ratio is pure per-solve backend
 //!    cost.
 //!
-//! Run with `cargo bench --features nalgebra,faer,problems --bench lm_backends`.
+//! Run with
+//! `cargo bench --features nalgebra_latest,faer_latest,problems --bench lm_backends`.
 
 use std::hint::black_box;
 
@@ -34,8 +35,8 @@ use criterion::{
     BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
 };
 
-use faer::{Col, Mat};
-use nalgebra::{DMatrix, DVector};
+use crate::backend_aliases::faer::{Col, Mat};
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 
 /// splitmix64-style deterministic pseudo-random in `[-0.5, 0.5)`, so the
 /// nalgebra and faer inputs are bit-identical (fair timing, same
@@ -238,3 +239,6 @@ criterion_group!(
     bench_full_solve
 );
 criterion_main!(benches);
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

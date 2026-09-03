@@ -6,11 +6,11 @@
 //! in the basin within a handful of generations; L-Bfgs-B drives them
 //! to gradient-descent precision. Assert `‖x* − (1, 3)‖_∞ ≤ 1e-6`.
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{BasicPopulationState, De, DeInject, Executor, Lbfgsb};
-use nalgebra::DVector;
 
 #[test]
 fn converges_on_booth_boxed_to_lbfgsb_precision() {
@@ -42,3 +42,6 @@ fn converges_on_booth_boxed_to_lbfgsb_precision() {
         err
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

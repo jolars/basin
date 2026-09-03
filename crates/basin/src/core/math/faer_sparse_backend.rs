@@ -2,8 +2,8 @@
 //! [`faer::sparse::SparseColMat<usize, f64>`] (CSC) over
 //! [`faer::Col<f64>`]. Lands in S2b alongside the dense faer backend.
 //!
-//! Faer's sparse stack covers all five `linalg` traits: SpMV/Aᵀ-SpMV
-//! via [`sparse_dense_matmul`], Gram via
+//! Faer's sparse stack covers all five `linalg` traits: SpMV via
+//! [`sparse_dense_matmul`], Aᵀ-SpMV via a CSC column walk, Gram via
 //! [`sparse_sparse_matmul`], SPD solve via supernodal/simplicial
 //! Cholesky ([`SparseColMat::sp_cholesky`]), and least-squares solve
 //! via sparse QR ([`SparseColMat::sp_qr`]). The QR path is the only
@@ -66,19 +66,15 @@ where
             self.nrows(),
             x.nrows()
         );
-        let mut y = Col::<F>::zeros(self.ncols());
-        // SparseRowMatRef impls SparseDenseMatMul, so transposing the
-        // CSC view (giving a CSR view of Aᵀ) lets us reuse the same
-        // entry point without materializing the transpose.
-        sparse_dense_matmul(
-            y.as_mat_mut(),
-            Accum::Replace,
-            self.as_ref().transpose(),
-            x.as_mat(),
-            F::one(),
-            Par::Seq,
-        );
-        y
+        let col_ptr = self.col_ptr();
+        let row_idx = self.row_idx();
+        let vals = self.val();
+
+        Col::from_fn(self.ncols(), |j| {
+            (col_ptr[j]..col_ptr[j + 1])
+                .map(|k| vals[k] * x[row_idx[k]])
+                .sum()
+        })
     }
 }
 

@@ -29,8 +29,9 @@ backend (`Vec<f64>`, nalgebra, ndarray, faer).
 - `cargo test`: run tests.
 - `cargo test <name>`: run a single test by name.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: lint.
-- `cargo doc --no-deps -p basin --all-features`: build the docs. CI runs this
-  and `lib.rs` has `#![deny(rustdoc::broken_intra_doc_links)]`, so a broken or
+- `cargo doc --no-deps -p basin --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde`:
+  build the public docs with the latest backend versions. CI runs this, and
+  `lib.rs` has `#![deny(rustdoc::broken_intra_doc_links)]`, so a broken or
   ambiguous intra-doc link (e.g. `[`Foo`](super::foo)` where `foo` is both a
   module and a function; link the struct `super::Foo` instead) fails the build.
   Run this before committing any rustdoc changes.
@@ -38,12 +39,11 @@ backend (`Vec<f64>`, nalgebra, ndarray, faer).
 
 ### `cargo test --all-features` needs a BLAS/LAPACK provider
 
-`cargo clippy --all-features` and `cargo doc --all-features` work out of the box
-because they only *check* and never *link*. `cargo test --all-features` is
-different: it links executables, and the `nalgebra-lapack`/`ndarray-blas`
-features deliberately pull in **no** BLAS/LAPACK provider crate (see the
-`Cargo.toml` comments: `nalgebra-lapack` forwards `lapack-custom` precisely so
-the rlib/docs build without a Fortran toolchain). So a bare
+`cargo clippy --all-features` and `cargo doc` with acceleration features work
+out of the box because they only *check* and never *link*.
+`cargo test --all-features` is different: it links executables, and the
+versioned nalgebra LAPACK and ndarray BLAS features deliberately pull in
+**no** BLAS/LAPACK provider crate. So a bare
 `cargo test --all-features` fails at link time with
 `undefined reference to dsyev_`/`dpotrf_`—this is by design, not a missing
 system library. Installing `liblapack`/`libblas` is not enough on its own;
@@ -60,16 +60,17 @@ RUSTFLAGS="-L $OB -l openblas" cargo test -p basin --all-features
 
 Outside Nix, an `-L <dir> -l openblas` (or `-l lapack -l blas` for reference
 netlib) pointing at your system libraries does the same. CI does **not** run
-`--all-features` *tests*; the routine local test command is the pure-Rust
-feature set:
-`cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
+`--all-features` *tests*; the routine local test command is the latest
+pure-Rust feature set:
+`cargo test -p basin --features nalgebra_latest,ndarray_latest,faer_latest,problems,parallel`.
 
 The dev environment is provided by `devenv.nix` (loaded automatically via
-`direnv` from `.envrc`). It pins Rust 1.87.0 (matches `rust-version` in
-`Cargo.toml`) and adds the `wasm32-unknown-unknown` target plus tooling:
+`direnv` from `.envrc`). It pins Rust 1.89.0 and adds the
+`wasm32-unknown-unknown` target plus tooling:
 `cargo-llvm-cov`, `cargo-flamegraph`, `cargo-audit`, `cargo-deny`, `cargo-msrv`,
 `samply`, `wasm-pack`, `go-task`. Pre-commit hooks run `clippy` (with
-`allFeatures = true`) and `rustfmt`.
+`allFeatures = true`) and `rustfmt`. Basin's package MSRV remains Rust 1.87.0;
+the dedicated CI job checks every feature compatible with that toolchain.
 
 ## Architecture
 
@@ -122,11 +123,12 @@ These shape API decisions and are non-obvious from the code alone.
    `IterState`-style `State`) and a generic driver-loop architecture. Familiar
    names lower the barrier for users arriving from existing frameworks; diverge
    only when another tenet demands it.
-2. **One feature per backend, one pinned version.** Each linear-algebra backend
-   (`nalgebra`, `ndarray`, `faer`) is a single Cargo feature pinning one major
-   version; `Vec<f64>` needs none. A backend major bump is a basin major bump.
-   No per-version feature gates (`nalgebra-v0_33`/`-v0_34`): they multiply the
-   test matrix and maintenance surface for little gain.
+2. **Versioned backend compatibility.** Each supported nalgebra, ndarray, and
+   faer release has an exact Cargo feature; `Vec<f64>` needs none. Moving
+   `*_latest` aliases select the newest supported releases, while the original
+   unversioned aliases retain their Basin 1.x meanings. Cargo features are
+   additive, so the implementation selects the newest enabled release when
+   dependency feature unification enables several versions of one backend.
 3. **Framework-level termination.** Generic stopping conditions (`max_iter`, the
    `*_tolerance` family, `max_time`, eval budgets) are configured uniformly on
    the `Executor`/shared termination layer, not per solver; solver-specific
@@ -171,20 +173,22 @@ dependencies, not a feature. CI enforces it
 
 ## MSRV is externally constrained: do not bump casually
 
-Basin's MSRV (pinned in `rust-toolchain.toml`) is set by downstream consumers,
-not basin's own preferences:
+Basin's package MSRV (declared as `rust-version` in `Cargo.toml`) is set by
+downstream consumers, not Basin's own preferences. The development toolchain
+is newer so it can exercise every supported backend:
 
 - **Primary: CRAN.** A planned R-package wrapper must build under CRAN's Rust
   toolchain, which lags stable significantly. Bumping above CRAN's pin makes the
-  R bindings unshippable. Don't bump `rust-version`/the `devenv.nix` pin without
-  checking the current CRAN toolchain first.
+  R bindings unshippable. Do not bump `rust-version` without checking the
+  current CRAN toolchain first.
 - **Secondary (non-binding): Python bindings**: PyO3 and maturin track recent
   stable, so unlikely to bind tighter than CRAN.
-- Every new dep (and dev-dep, which is exercised by `cargo publish --dry-run`
-  and CI) must compile under the MSRV. Prefer small, stable transitive trees
-  over feature-rich ones with sprawling graphs. When MSRV pain forces a pin,
-  document the *reason* in `Cargo.toml` next to it so future-you doesn't lift it
-  without re-checking CRAN.
+- Every new dependency selected by an MSRV-compatible feature, including dev
+  dependencies exercised by `cargo publish --dry-run` and CI, must compile
+  under the MSRV. A feature may require a newer compiler when an explicitly
+  supported dependency release does; document that exception beside the
+  dependency and test the remaining feature set in the MSRV CI job. Prefer
+  small, stable transitive trees over feature-rich ones with sprawling graphs.
 
 ## Repo structure: workspace
 

@@ -35,20 +35,20 @@ impl<F> AsFloatSliceMut<F> for Vec<F> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 impl<F: nalgebra::Scalar> AsFloatSlice<F> for nalgebra::DVector<F> {
     fn as_float_slice(&self) -> &[F] {
         self.as_slice()
     }
 }
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 impl<F: nalgebra::Scalar> AsFloatSliceMut<F> for nalgebra::DVector<F> {
     fn as_float_slice_mut(&mut self) -> &mut [F] {
         self.as_mut_slice()
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 impl<F: faer_traits::ComplexField> AsFloatSlice<F> for faer::Col<F> {
     fn as_float_slice(&self) -> &[F] {
         self.try_as_col_major()
@@ -56,7 +56,7 @@ impl<F: faer_traits::ComplexField> AsFloatSlice<F> for faer::Col<F> {
             .as_slice()
     }
 }
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 impl<F: faer_traits::ComplexField> AsFloatSliceMut<F> for faer::Col<F> {
     fn as_float_slice_mut(&mut self) -> &mut [F] {
         self.try_as_col_major_mut()
@@ -65,13 +65,13 @@ impl<F: faer_traits::ComplexField> AsFloatSliceMut<F> for faer::Col<F> {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 impl<F> AsFloatSlice<F> for ndarray::Array1<F> {
     fn as_float_slice(&self) -> &[F] {
         self.as_slice().expect("Array1 is contiguous")
     }
 }
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 impl<F> AsFloatSliceMut<F> for ndarray::Array1<F> {
     fn as_float_slice_mut(&mut self) -> &mut [F] {
         self.as_slice_mut().expect("Array1 is contiguous")

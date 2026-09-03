@@ -1,8 +1,8 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
 use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
-use faer::Col;
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -233,3 +233,6 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

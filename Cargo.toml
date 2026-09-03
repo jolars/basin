@@ -18,8 +18,8 @@ default-members = [
     "crates/basin-wasm",
 ]
 # Lockfile lives at the workspace root; member crates share dependency
-# resolution. Per CONTRIBUTING.md tenet 2 (no per-version backend feature gates),
-# all members must agree on a single major version per backend.
+# resolution. Basin's versioned backend features may resolve several releases
+# at once; the library consistently implements the newest enabled release.
 
 [workspace.package]
 edition = "2024"

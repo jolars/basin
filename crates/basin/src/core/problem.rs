@@ -453,7 +453,7 @@ pub trait Residual {
 /// # Examples
 ///
 /// ```
-/// # #[cfg(feature = "nalgebra")] {
+/// # #[cfg(feature = "nalgebra_v0_35")] {
 /// use basin::{Jacobian, Residual};
 /// use nalgebra::{DMatrix, DVector};
 ///
@@ -567,7 +567,7 @@ pub trait Jacobian: Residual {
 /// # Examples
 ///
 /// ```
-/// # #[cfg(feature = "nalgebra")] {
+/// # #[cfg(feature = "nalgebra_v0_35")] {
 /// use basin::{CostFunction, Gradient, Hessian};
 /// use nalgebra::{DMatrix, DVector};
 ///

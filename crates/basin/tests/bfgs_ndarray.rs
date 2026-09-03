@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
 //! Bfgs convergence over the ndarray backend (`Array1<f64>` and `Array2<f64>`).
 //!
@@ -7,16 +7,17 @@
 //! ndarray's dense inverse-Hessian via `MatVec` + `GeneralRankOneUpdate` on
 //! `Array2<f64>`.
 
+use crate::backend_aliases::ndarray::array;
 use basin::problems::Rosenbrock;
 use basin::{
     Bfgs, Executor, GradientTolerance, NdarrayQuasiNewtonState,
     TerminationReason,
 };
-use ndarray::array;
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
-    let problem = Rosenbrock::<ndarray::Array1<f64>>::default();
+    let problem =
+        Rosenbrock::<crate::backend_aliases::ndarray::Array1<f64>>::default();
     let initial = array![-1.2, 1.0];
 
     let result = Executor::new(
@@ -47,7 +48,8 @@ fn bfgs_converges_on_rosenbrock() {
 
 #[test]
 fn bfgs_terminates_on_gradient_tolerance() {
-    let problem = Rosenbrock::<ndarray::Array1<f64>>::default();
+    let problem =
+        Rosenbrock::<crate::backend_aliases::ndarray::Array1<f64>>::default();
     let initial = array![-1.2, 1.0];
 
     let result = Executor::new(
@@ -63,3 +65,6 @@ fn bfgs_terminates_on_gradient_tolerance() {
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

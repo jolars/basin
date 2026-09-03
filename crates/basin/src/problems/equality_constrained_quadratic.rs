@@ -70,7 +70,7 @@ impl<M, V> HasSpec for EqualityConstrainedQuadratic<M, V> {
     const SPEC: &'static ProblemSpec = &EQUALITY_CONSTRAINED_QUADRATIC_SPEC;
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::EqualityConstrainedQuadratic;
     use crate::{CostFunction, Gradient, LinearEqualityConstraints};
@@ -111,7 +111,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::EqualityConstrainedQuadratic;
     use crate::{CostFunction, Gradient, LinearEqualityConstraints};
@@ -197,7 +197,7 @@ mod vec_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::EqualityConstrainedQuadratic;
     use crate::{CostFunction, Gradient, LinearEqualityConstraints};

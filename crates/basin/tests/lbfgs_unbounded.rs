@@ -64,10 +64,10 @@ fn rosenbrock_vec() {
     );
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 #[test]
 fn rosenbrock_nalgebra() {
-    use nalgebra::DVector;
+    use crate::backend_aliases::nalgebra::DVector;
 
     struct Rosen;
     impl CostFunction for Rosen {
@@ -110,10 +110,10 @@ fn rosenbrock_nalgebra() {
     );
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 #[test]
 fn rosenbrock_faer() {
-    use faer::Col;
+    use crate::backend_aliases::faer::Col;
 
     struct Rosen;
     impl CostFunction for Rosen {
@@ -154,10 +154,10 @@ fn rosenbrock_faer() {
     );
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 #[test]
 fn rosenbrock_ndarray() {
-    use ndarray::{Array1, array};
+    use crate::backend_aliases::ndarray::{Array1, array};
 
     struct Rosen;
     impl CostFunction for Rosen {
@@ -211,3 +211,6 @@ fn lbfgsb_alias_compiles() {
     // default line search (MoreThuente); same identity as above.
     let _: Lbfgsb = Lbfgs::default();
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

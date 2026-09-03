@@ -5,14 +5,14 @@
 //! Mirror of `cma_inject_solver_failed_bubbles.rs`: same
 //! `AlwaysFails` fixture wrapped in [`ClosureInner`] for the seeder.
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::RastriginBoxed;
 use basin::{
     BasicPopulationState, BasicState, ClosureInner, De, DeInject, Executor,
     Problem, Solver, State, TerminationReason,
 };
-use nalgebra::DVector;
 
 /// Inner solver that always returns `SolverFailed` on the first
 /// `next_iter` call. Same shape as the `AlwaysFails` in
@@ -62,3 +62,6 @@ fn bubbles_inner_failure() {
     // so iter == 0.
     assert_eq!(result.iter(), 0, "expected iter = 0 (mid-iter bail)");
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

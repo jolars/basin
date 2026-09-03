@@ -192,10 +192,10 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
 
 /// Backend-generic over the parameter vector: drive MADS on `nalgebra`'s
 /// `DVector` to prove the `V`-generic solver and state work outside `Vec<f64>`.
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 #[test]
 fn backend_generic_nalgebra() {
-    use nalgebra::DVector;
+    use crate::backend_aliases::nalgebra::DVector;
 
     struct SphereN;
     impl CostFunction for SphereN {
@@ -228,10 +228,10 @@ fn backend_generic_nalgebra() {
 }
 
 /// Backend-generic over `ndarray`'s `Array1`.
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 #[test]
 fn backend_generic_ndarray() {
-    use ndarray::Array1;
+    use crate::backend_aliases::ndarray::Array1;
 
     struct SphereA;
     impl CostFunction for SphereA {
@@ -264,10 +264,10 @@ fn backend_generic_ndarray() {
 }
 
 /// Backend-generic over `faer`'s `Col` vector.
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 #[test]
 fn backend_generic_faer() {
-    use faer::Col;
+    use crate::backend_aliases::faer::Col;
 
     struct SphereF;
     impl CostFunction for SphereF {
@@ -295,3 +295,6 @@ fn backend_generic_faer() {
         result.best_cost()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

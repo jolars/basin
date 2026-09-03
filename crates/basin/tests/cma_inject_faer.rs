@@ -4,11 +4,11 @@
 //! boundary; the deeper algorithmic invariants are covered by the
 //! nalgebra mirror test (`tests/cma_inject_nalgebra.rs`).
 
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
-use faer::{Col, Mat};
 
 /// Rosenbrock 2-D from `(-1, 1)`: injecting Nelder-Mead refinements
 /// must not break CMA's convergence on the faer backend.
@@ -86,3 +86,6 @@ fn aggregates_inner_cost_evals_into_outer() {
         min_extra
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

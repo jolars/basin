@@ -1,23 +1,31 @@
-//! LAPACK-backed nalgebra factorizations (`nalgebra-lapack` feature).
+//! LAPACK-backed nalgebra factorizations (the versioned `*-lapack` features).
 //!
-//! These exercise the `#[cfg(feature = "nalgebra-lapack")]` impls in
-//! `core::math::nalgebra_backend` (LAPACK Cholesky for `LinearSolveSpd`, LAPACK
-//! `dsyev` for `SymmetricEigen`), mirroring the pure-Rust unit tests in that
-//! module so both code paths are checked against the same expectations.
+//! These exercise the LAPACK-selected impls in `core::math::nalgebra_backend`
+//! (LAPACK Cholesky for `LinearSolveSpd` and `dsyev` for `SymmetricEigen`),
+//! mirroring the pure-Rust unit tests in that module so both code paths are
+//! checked against the same expectations.
 //!
 //! Running this test *links* LAPACK, so it needs a provider supplied at link
-//! time (basin's `nalgebra-lapack` feature uses `lapack-custom`). CI installs a
-//! system OpenBLAS and links it via `RUSTFLAGS`; see `.github/workflows/ci.yml`.
+//! time. CI installs a system OpenBLAS and links it via `RUSTFLAGS`; see
+//! `.github/workflows/ci.yml`.
 //! Locally (devenv exposes an LP64 OpenBLAS as `$OPENBLAS_LP64_LIB`):
 //!
 //! ```sh
 //! RUSTFLAGS="-L $OPENBLAS_LP64_LIB -l openblas" \
-//!   cargo test -p basin --features nalgebra-lapack --test lapack_nalgebra
+//!   cargo test -p basin --features nalgebra_latest-lapack --test lapack_nalgebra
 //! ```
-#![cfg(all(feature = "nalgebra", feature = "nalgebra-lapack"))]
+#![cfg(all(
+    feature = "nalgebra_all",
+    any(
+        feature = "nalgebra_v0_32-lapack",
+        feature = "nalgebra_v0_33-lapack",
+        feature = "nalgebra_v0_34-lapack",
+        feature = "nalgebra_v0_35-lapack"
+    )
+))]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::{GramMatrix, LinearSolveError, LinearSolveSpd, SymmetricEigen};
-use nalgebra::{DMatrix, DVector};
 
 fn approx_eq(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() < tol
@@ -92,3 +100,6 @@ fn gauss_newton_converges_through_lapack_cholesky() {
     assert!(approx_eq(x[0], 1.0, 1e-6));
     assert!(approx_eq(x[1], 1.0, 1e-6));
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

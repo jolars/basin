@@ -31,7 +31,7 @@
 //! charged to `iter_batched` setup, not the timed routine.
 //!
 //! Run with
-//! `cargo bench --features nalgebra,ndarray,faer --bench solver_backends`.
+//! `cargo bench --features nalgebra_latest,ndarray_latest,faer_latest --bench solver_backends`.
 
 use std::hint::black_box;
 use std::time::Duration;
@@ -49,11 +49,11 @@ use criterion::{
     BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
 };
 
-use faer::sparse::{SparseColMat, Triplet};
-use faer::{Col, Mat};
-use nalgebra::{DMatrix, DVector};
-use nalgebra_sparse::{CooMatrix, CscMatrix};
-use ndarray::Array1;
+use crate::backend_aliases::faer::sparse::{SparseColMat, Triplet};
+use crate::backend_aliases::faer::{Col, Mat};
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
+use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
+use crate::backend_aliases::ndarray::Array1;
 
 /// Fixed budget, no early stop: identical work across backends (a cap for the
 /// solvers that converge sooner; see the module docs).
@@ -428,3 +428,6 @@ criterion_group! {
     targets = bench_gd, bench_nm, bench_lbfgs, bench_bfgs, bench_cmaes, bench_lm, bench_gn
 }
 criterion_main!(benches);
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -1,13 +1,13 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 //! Integration tests for the log-barrier [`BarrierMethod`] on linearly
 //! constrained quadratics (nalgebra backend).
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, BasicState, Bfgs, Executor, GradientDescent,
     GradientState, TerminationReason,
 };
-use nalgebra::{DMatrix, DVector};
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`. The unconstrained min (2,2) is
 /// infeasible; the constrained optimum is the projection (1,1).
@@ -186,3 +186,6 @@ fn bfgs_inner_converges_to_projection() {
         result.param()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

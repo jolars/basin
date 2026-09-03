@@ -1,11 +1,11 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxed;
 use basin::{
     BasicPopulationState, Executor, PopulationState, RandomSearch, State,
     StepOutcome,
 };
-use faer::Col;
 
 fn col2(a: f64, b: f64) -> Col<f64> {
     Col::<f64>::from_fn(2, |i| if i == 0 { a } else { b })
@@ -100,3 +100,6 @@ fn population_invariants_hold_after_iteration() {
         }
     }
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -18,10 +18,12 @@ and faer backends.
 - Preserve the default `wasm32-unknown-unknown` build. Gate file I/O, threads,
   rayon, and BLAS/LAPACK-linked math behind non-default features. Use `web-time`
   rather than `std::time::Instant` in default paths.
-- Do not bump the Rust version casually. Check the current CRAN toolchain before
-  changing `rust-version`, `rust-toolchain.toml`, or the dev pin. Every dependency,
-  including dev dependencies used during publishing and CI, must compile on the
-  MSRV. Document the reason beside any MSRV-driven pin.
+- Do not bump the package MSRV casually. Check the current CRAN toolchain before
+  changing `rust-version`. The development toolchain may be newer when a
+  versioned opt-in backend requires it. Every dependency selected by the
+  MSRV-compatible features, including dev dependencies used during publishing
+  and CI, must compile on the MSRV. Document the reason beside any MSRV-driven
+  pin or feature-specific exception.
 
 ## Verification
 
@@ -29,9 +31,10 @@ Run focused tests while developing, then the checks matching the changed scope:
 
 - Rust formatting: `cargo fmt --all -- --check`.
 - Routine pure-Rust tests:
-  `cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
+  `cargo test -p basin --features nalgebra_latest,ndarray_latest,faer_latest,problems,parallel`.
 - Workspace lint: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
-- Public documentation: `cargo doc --no-deps -p basin --all-features`.
+- Public documentation:
+  `cargo doc --no-deps -p basin --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde`.
 - WASM-sensitive changes:
   `cargo build --target wasm32-unknown-unknown` and
   `cargo build --target wasm32-unknown-unknown --no-default-features`.
@@ -41,9 +44,10 @@ Run focused tests while developing, then the checks matching the changed scope:
 Do not assume `cargo test --all-features` links without a BLAS/LAPACK provider.
 The `nalgebra-lapack` and `ndarray-blas` features intentionally select no
 provider. Supply one through linker flags when those tests are required; clippy
-and rustdoc with all features only check and do not link. The dev environment
-pins Rust 1.87.0, supplies the WASM target and project tooling, and runs
-all-feature clippy and rustfmt in pre-commit.
+and rustdoc only check and do not link. The package MSRV is Rust 1.87.0; CI
+checks it separately. The dev environment pins Rust 1.89.0, supplies the WASM
+target and project tooling, and runs all-feature clippy and rustfmt in
+pre-commit.
 
 ## Architecture and repository shape
 
@@ -78,8 +82,11 @@ belong in the core crate.
 
 1. Preserve conventional optimization-framework vocabulary and the generic
    driver-loop shape unless another constraint requires divergence.
-2. Each backend has one Cargo feature pinned to one major version. A backend
-   major bump is a Basin major bump; do not add per-version feature gates.
+2. Each supported backend release has an exact version feature. The
+   `*_latest` aliases move to the newest supported release, while the original
+   unversioned features retain their Basin 1.x meanings. If dependency feature
+   unification enables several releases of one backend, implement the newest
+   enabled release.
 3. Generic stopping criteria belong to the executor/shared termination layer;
    solver-specific controls stay on the solver. Bind each criterion to the
    minimum state shape it needs.

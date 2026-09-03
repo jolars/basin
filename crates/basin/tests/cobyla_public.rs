@@ -108,10 +108,10 @@ fn rho_tolerance_stops_early() {
 /// Backend-generic: drive COBYLA on nalgebra `DVector`. Guards the
 /// support-matrix ✓ for nalgebra; the param vector must satisfy
 /// `VectorLen + Index + IndexMut`.
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 #[test]
 fn backend_generic_nalgebra() {
-    use nalgebra::DVector;
+    use crate::backend_aliases::nalgebra::DVector;
 
     struct Disk;
     impl CostFunction for Disk {
@@ -158,10 +158,10 @@ fn backend_generic_nalgebra() {
 
 /// Backend-generic: drive COBYLA on ndarray `Array1`. Guards the
 /// support-matrix ✓ for ndarray.
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 #[test]
 fn backend_generic_ndarray() {
-    use ndarray::Array1;
+    use crate::backend_aliases::ndarray::Array1;
 
     struct Disk;
     impl CostFunction for Disk {
@@ -208,10 +208,10 @@ fn backend_generic_ndarray() {
 
 /// Backend-generic: drive COBYLA on faer `Col`. Guards the support-matrix ✓ for
 /// faer.
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 #[test]
 fn backend_generic_faer() {
-    use faer::Col;
+    use crate::backend_aliases::faer::Col;
 
     struct Disk;
     impl CostFunction for Disk {
@@ -253,3 +253,6 @@ fn backend_generic_faer() {
     let x = result.best_param();
     assert!(x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6, "infeasible {x:?}");
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

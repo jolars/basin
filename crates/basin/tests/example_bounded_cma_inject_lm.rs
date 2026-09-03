@@ -13,13 +13,13 @@
 //! nalgebra -- --nocapture`. The `--nocapture` flag is what lets the
 //! progress prints land in your terminal.
 
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::BoothBoxedResiduals;
 use basin::{
     BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, LevenbergMarquardt,
 };
-use nalgebra::{DMatrix, DVector};
 
 #[test]
 fn example_bounded_cma_inject_lm_on_booth_corner() {
@@ -104,3 +104,6 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
         err
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

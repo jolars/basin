@@ -1,8 +1,8 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxedResiduals;
 use basin::{Executor, MaxIter, NllsState, TerminationReason, Trf};
-use faer::Col;
 
 #[test]
 fn trf_with_slack_bounds_reaches_unconstrained_min() {
@@ -100,3 +100,6 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

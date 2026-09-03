@@ -1,11 +1,11 @@
-#![cfg(feature = "ndarray")]
+#![cfg(feature = "ndarray_all")]
 
+use crate::backend_aliases::ndarray::Array1;
 use basin::problems::BoothBoxed;
 use basin::{
     Backtracking, BasicState, Executor, ProjectedGradientDescent,
     ProjectedGradientTolerance, TerminationReason,
 };
-use ndarray::Array1;
 
 #[test]
 fn slack_bounds_recover_unconstrained_minimum() {
@@ -103,3 +103,6 @@ fn projected_gradient_tolerance_triggers_at_corner_minimum() {
 
     assert_eq!(result.reason, TerminationReason::ProjectedGradientTolerance);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

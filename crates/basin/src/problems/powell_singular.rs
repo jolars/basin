@@ -191,7 +191,7 @@ impl Jacobian for PowellSingular<Vec<f64>> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 mod nalgebra_impl {
     use super::{
         PowellSingular, powell_singular, powell_singular_jacobian,
@@ -241,7 +241,7 @@ mod nalgebra_impl {
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 mod ndarray_impl {
     use super::{
         PowellSingular, powell_singular, powell_singular_jacobian,
@@ -299,7 +299,7 @@ mod ndarray_impl {
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 mod faer_impl {
     use super::{PowellSingular, SQRT_5, SQRT_10, powell_singular_jacobian};
     use crate::{CostFunction, Jacobian, Residual};
@@ -473,7 +473,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "nalgebra")]
+    #[cfg(feature = "nalgebra_all")]
     mod nalgebra_jacobian_tests {
         use super::super::PowellSingular;
         use crate::{GramMatrix, Jacobian, LinearSolveError, LinearSolveSpd};
@@ -518,7 +518,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "faer")]
+    #[cfg(feature = "faer_all")]
     mod faer_jacobian_tests {
         use super::super::PowellSingular;
         use crate::{GramMatrix, Jacobian, LinearSolveError, LinearSolveSpd};

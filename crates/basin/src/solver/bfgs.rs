@@ -270,7 +270,7 @@ where
 
 impl<S, F> WarmStart<Vec<F>> for Bfgs<S, F> where F: Scalar {}
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 impl<S, F> InitialState<nalgebra::DVector<F>> for Bfgs<S, F>
 where
     F: Scalar + nalgebra::Scalar + num_traits::Zero,
@@ -284,13 +284,13 @@ where
     }
 }
 
-#[cfg(feature = "nalgebra")]
+#[cfg(feature = "nalgebra_all")]
 impl<S, F> WarmStart<nalgebra::DVector<F>> for Bfgs<S, F> where
     F: Scalar + nalgebra::Scalar + num_traits::Zero
 {
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 impl<S, F> InitialState<faer::Col<F>> for Bfgs<S, F>
 where
     F: Scalar + faer_traits::ComplexField,
@@ -301,13 +301,13 @@ where
     }
 }
 
-#[cfg(feature = "faer")]
+#[cfg(feature = "faer_all")]
 impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where
     F: Scalar + faer_traits::ComplexField
 {
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 impl<S, F> InitialState<ndarray::Array1<F>> for Bfgs<S, F>
 where
     F: Scalar,
@@ -320,5 +320,5 @@ where
     }
 }
 
-#[cfg(feature = "ndarray")]
+#[cfg(feature = "ndarray_all")]
 impl<S, F> WarmStart<ndarray::Array1<F>> for Bfgs<S, F> where F: Scalar {}

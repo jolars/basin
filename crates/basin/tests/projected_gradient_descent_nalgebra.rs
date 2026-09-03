@@ -1,11 +1,11 @@
-#![cfg(feature = "nalgebra")]
+#![cfg(feature = "nalgebra_all")]
 
+use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{
     Backtracking, BasicState, Executor, ProjectedGradientDescent,
     ProjectedGradientTolerance, TerminationReason,
 };
-use nalgebra::DVector;
 
 /// Slack bounds: the unconstrained Booth minimum (1, 3) is interior to
 /// [-5, 5]², so the projected solver must reach it.
@@ -106,3 +106,6 @@ fn projected_gradient_tolerance_triggers_at_corner_minimum() {
 
     assert_eq!(result.reason, TerminationReason::ProjectedGradientTolerance);
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

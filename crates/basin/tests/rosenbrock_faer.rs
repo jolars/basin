@@ -1,11 +1,11 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicSimplexState, BasicState, CostFunction, Executor,
     GradientDescent, NelderMead,
 };
-use faer::Col;
 
 #[test]
 fn gradient_descent_with_faer_col() {
@@ -69,3 +69,6 @@ fn nelder_mead_with_faer_col() {
 
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -3,11 +3,11 @@
   ...
 }:
 {
-  # LP64 OpenBLAS for running the `nalgebra-lapack` feature's tests locally.
-  # That feature forwards `lapack-custom`, so LAPACK symbols are supplied at
-  # link time — point RUSTFLAGS at this path:
+  # LP64 OpenBLAS for running the nalgebra LAPACK feature tests locally.
+  # The latest feature forwards `lapack-custom`, so LAPACK symbols are supplied
+  # at link time—point RUSTFLAGS at this path:
   #   RUSTFLAGS="-L $OPENBLAS_LP64_LIB -l openblas" \
-  #     cargo test -p basin --features nalgebra-lapack --test lapack_nalgebra
+  #     cargo test -p basin --features nalgebra_latest-lapack --test lapack_nalgebra
   # `openblasCompat` is the LP64 (32-bit int) build that matches `lapack-sys`;
   # the default `openblas` is ILP64 on 64-bit and segfaults at runtime.
   env.OPENBLAS_LP64_LIB = "${pkgs.openblasCompat}/lib";

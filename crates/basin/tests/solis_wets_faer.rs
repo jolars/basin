@@ -1,12 +1,12 @@
-#![cfg(feature = "faer")]
+#![cfg(feature = "faer_all")]
 
 //! faer-backend mirror of the `Vec<f64>` Solis-Wets suite
 //! (`tests/solis_wets_vec.rs`): reduced to the checks that exercise the
 //! per-backend trait wiring.
 
+use crate::backend_aliases::faer::Col;
 use basin::problems::Sphere;
 use basin::{Executor, RhoTolerance, SolisWets, TerminationReason};
-use faer::Col;
 
 fn col(values: &[f64]) -> Col<f64> {
     Col::<f64>::from_fn(values.len(), |i| values[i])
@@ -49,3 +49,6 @@ fn converges_on_sphere_5d_via_rho_tolerance() {
         result.cost()
     );
 }
+
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;

@@ -25,7 +25,10 @@ use criterion::{
     BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
 };
 use faer::Col;
-use nalgebra::DVector;
+#[cfg(not(feature = "basin-latest"))]
+use nalgebra::DVector as BasinDVector;
+#[cfg(feature = "basin-latest")]
+use nalgebra_latest::DVector as BasinDVector;
 
 fn basin_lm<V, M>() -> LevenbergMarquardt<V, M> {
     LevenbergMarquardt::new()
@@ -54,10 +57,10 @@ fn bench_exp_fit(c: &mut Criterion) {
         b.iter_batched(
             || {
                 (
-                    ExponentialFit::<DVector<f64>>::sampled(
+                    ExponentialFit::<BasinDVector<f64>>::sampled(
                         1.0e5, -1.0, 10, 0.4,
                     ),
-                    DVector::from_vec(vec![5.0e4, -0.3]),
+                    BasinDVector::from_vec(vec![5.0e4, -0.3]),
                 )
             },
             |(p, x0)| {
@@ -112,8 +115,8 @@ fn bench_powell(c: &mut Criterion) {
         b.iter_batched(
             || {
                 (
-                    PowellSingular::<DVector<f64>>::new(),
-                    DVector::from_vec(vec![3.0, -1.0, 0.0, 1.0]),
+                    PowellSingular::<BasinDVector<f64>>::new(),
+                    BasinDVector::from_vec(vec![3.0, -1.0, 0.0, 1.0]),
                 )
             },
             |(p, x0)| {
@@ -175,8 +178,8 @@ fn bench_vardim(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     (
-                        VarDim::<DVector<f64>>::new(n),
-                        DVector::from_vec(vardim_start(n)),
+                        VarDim::<BasinDVector<f64>>::new(n),
+                        BasinDVector::from_vec(vardim_start(n)),
                     )
                 },
                 |(p, x0)| {
@@ -235,8 +238,8 @@ fn bench_underdet(c: &mut Criterion) {
         g.bench_function(BenchmarkId::from_parameter("basin/nalgebra"), |b| {
             b.iter_batched(
                 || {
-                    let p = UnderDet::<DVector<f64>>::new(m, n);
-                    let x0 = DVector::from_vec(p.start());
+                    let p = UnderDet::<BasinDVector<f64>>::new(m, n);
+                    let x0 = BasinDVector::from_vec(p.start());
                     (p, x0)
                 },
                 |(p, x0)| {
