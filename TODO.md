@@ -373,9 +373,9 @@ metadata.
 - [x] Backend feature table published.
 - [x] CI covers every advertised backend version.
 - [x] Feature unification selects the newest enabled release of a backend.
-- [ ] Argmin-to-Basin migration guide published.
-- [ ] Typed-error migration example published.
-- [ ] Bounds and constraint migration example published.
+- [x] Argmin-to-Basin migration guide published.
+- [x] Typed-error migration example published.
+- [x] Bounds and constraint migration example published.
 - [x] Cancellation returns a normal `Cancelled` result with best-so-far state.
 - [ ] Checkpoint documentation distinguishes warm start from exact resume.
 - [ ] One external proof-of-concept migration passes upstream tests.

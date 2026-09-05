@@ -25,6 +25,7 @@ export function GET() {
 
 - [Overview](${docs}/): how the problem, solver, state, and executor pieces fit together
 - [Getting started](${docs}/getting-started/): install, backend features, and a first solve
+- [Migrating from Argmin](${docs}/migrating-from-argmin/): map Argmin 0.11 problem traits, solvers, errors, bounds, observers, and backends to Basin
 - [Solvers](${docs}/solvers/): catalog of available solvers and what each one needs
 
 ## Reference

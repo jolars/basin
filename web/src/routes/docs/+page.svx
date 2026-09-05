@@ -110,6 +110,8 @@ the same reference in machine-readable form.
 ## Where to Go Next
 
 - [Getting Started](getting-started/): install Basin and run your first solve.
+- [Migrating from Argmin](migrating-from-argmin/): translate problem traits,
+  solver configuration, errors, bounds, and observers from Argmin 0.11.
 - [Solvers](solvers/): the catalog of solvers and which backends they need.
 
 You can also watch solvers converge interactively in the

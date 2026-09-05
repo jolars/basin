@@ -1,0 +1,629 @@
+# Migrating from Argmin
+
+This guide is for applications that use Argmin 0.11 as an optimization
+framework and want to move their problem definitions and solver runs to Basin
+1.7. The frameworks share the same broad vocabulary—a problem, solver, state,
+and executor—but differ in where initialization, stopping rules, errors, and
+constraints live.
+
+The examples below migrate *uses* of Argmin solvers. A custom Argmin `Solver`
+or state machine is a separate port because Basin does not provide a generic
+adapter for those extension points.
+
+## Install Basin
+
+Plain `Vec<f64>` needs no backend feature:
+
+```toml
+[dependencies]
+basin = "1.7"
+```
+
+For a linear-algebra backend, select the Basin feature matching the version
+already used by your application. The backend dependency and Basin feature
+must name the same release.
+
+| Parameter type | Backend dependency | Basin dependency |
+| --- | --- | --- |
+| `Vec<f64>` | — | `basin = "1.7"` |
+| nalgebra 0.32 | `nalgebra = "0.32"` | `basin = { version = "1.7", features = ["nalgebra_v0_32"] }` |
+| nalgebra 0.33 | `nalgebra = "0.33"` | `basin = { version = "1.7", features = ["nalgebra_v0_33"] }` |
+| nalgebra 0.34 | `nalgebra = "0.34"` | `basin = { version = "1.7", features = ["nalgebra_v0_34"] }` |
+| nalgebra 0.35 | `nalgebra = "0.35"` | `basin = { version = "1.7", features = ["nalgebra_v0_35"] }` |
+| ndarray 0.15 | `ndarray = "0.15"` | `basin = { version = "1.7", features = ["ndarray_v0_15"] }` |
+| ndarray 0.16 | `ndarray = "0.16"` | `basin = { version = "1.7", features = ["ndarray_v0_16"] }` |
+| ndarray 0.17 | `ndarray = "0.17"` | `basin = { version = "1.7", features = ["ndarray_v0_17"] }` |
+| faer 0.22 | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_22"] }` |
+| faer 0.23 | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_23"] }` |
+| faer 0.24 | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_24"] }` |
+
+The moving aliases `nalgebra_latest`, `ndarray_latest`, and `faer_latest` are
+convenient for new applications. Exact features are safer during a migration
+because they cannot silently change the backend release at the next Basin
+upgrade. If dependency feature unification enables several versions of one
+backend, Basin implements the newest enabled release.
+
+## The Basic Executor Migration
+
+Here is a complete Argmin Nelder–Mead run. Argmin receives the simplex when the
+solver is constructed and configures the initial parameter and iteration budget
+through its state.
+
+<!-- compile: argmin-nelder-mead -->
+```rust
+use argmin::core::{CostFunction, Error, Executor, State};
+use argmin::solver::neldermead::NelderMead;
+
+struct Rosenbrock;
+
+impl CostFunction for Rosenbrock {
+    type Param = Vec<f64>;
+    type Output = f64;
+
+    fn cost(&self, x: &Self::Param) -> Result<Self::Output, Error> {
+        Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+    }
+}
+
+fn main() -> Result<(), Error> {
+    let x0 = vec![-1.2, 1.0];
+    let simplex = vec![x0.clone(), vec![-1.26, 1.0], vec![-1.2, 1.05]];
+    let solver = NelderMead::new(simplex).with_sd_tolerance(1e-8)?;
+
+    let result = Executor::new(Rosenbrock, solver)
+        .configure(|state| state.param(x0).max_iters(1_000))
+        .run()?;
+
+    println!("x = {:?}", result.state().get_best_param());
+    Ok(())
+}
+```
+
+In Basin, `Executor::from_start` asks the solver to construct its natural state
+from a point. Nelder–Mead builds its default 5% simplex there; the Argmin
+simplex above uses the same coordinate perturbations. Generic stopping rules
+belong on the executor; `SimplexTolerance` checks both simplex diameter and
+cost spread, rather than Argmin's sample standard deviation of costs alone.
+
+<!-- compile: basin-nelder-mead -->
+```rust
+use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use std::convert::Infallible;
+
+struct Rosenbrock;
+
+impl CostFunction for Rosenbrock {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok((1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2))
+    }
+}
+
+fn main() {
+    let result = Executor::from_start(
+        Rosenbrock,
+        NelderMead::new(),
+        vec![-1.2, 1.0],
+    )
+    .max_iter(1_000)
+    .terminate_on(SimplexTolerance::new(1e-8, 1e-8))
+    .run()
+    .unwrap();
+
+    println!("x = {:?}, f = {}", result.param(), result.cost());
+    assert!(result.cost() < 1e-8);
+}
+```
+
+Use `Executor::new` when you need a custom simplex or another fully constructed
+state. For example, pass `BasicSimplexState::from_simplex(vertices)` as the
+third argument. `from_start` is intentionally unavailable for solvers whose
+initialization needs more than one point, such as CMA-ES and population
+solvers.
+
+## Common API Mappings
+
+| Argmin 0.11 | Basin 1.7 |
+| --- | --- |
+| `Executor::new(problem, solver).configure(|state| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)` |
+| `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new()` with `SimplexTolerance::new(tol_x, tol_f)` on the executor |
+| `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::<Unbounded>::new().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
+| `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
+| `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
+| Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
+| Transforms, clamps, or penalties for box bounds | `BoxConstraints` plus a solver that consumes bounds |
+| Argmin's general `Error` | The application's concrete error type in `CostFunction::Error` or `Residual::Error` |
+| `add_observer(observer, mode)` | `observe_with(observer, mode)` |
+| Returning an observer error to stop | A `CancellationToken` for a clean stop or a typed problem error for a hard abort |
+
+Tolerances with similar names need not use identical norms or stopping
+formulas. Preserve numerical behavior by comparing the final objective,
+parameters, termination reason, and evaluation counts—not merely by copying a
+numeric tolerance.
+
+## L-BFGS and L-BFGS-B
+
+Argmin's `LBFGS` is unconstrained. Basin exposes both algorithms through one
+type-state API: `Lbfgs<Unbounded>` is unconstrained, while `Lbfgsb` (and the
+default `Lbfgs`) requires `BoxConstraints`. Moré–Thuente is Basin's default
+line search for both modes.
+
+<!-- compile: basin-lbfgs -->
+```rust
+use basin::solver::lbfgs::Unbounded;
+use basin::{CostFunction, Executor, Gradient, GradientTolerance, Lbfgs};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|xi| xi * xi).sum())
+    }
+}
+
+impl Gradient for Sphere {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(x.iter().map(|xi| 2.0 * xi).collect())
+    }
+}
+
+fn main() {
+    let solver = Lbfgs::<Unbounded>::new().with_m_capacity(7);
+    let result = Executor::from_start(Sphere, solver, vec![3.0, -4.0])
+        .max_iter(200)
+        .terminate_on(GradientTolerance(1e-12))
+        .run()
+        .unwrap();
+
+    assert!(result.cost() < 1e-12);
+}
+```
+
+For a nondefault line search, use `Lbfgs::<Unbounded>::with_line_search(...)`.
+For bounds, use `Lbfgsb` as shown below. Basin does not currently replace
+Argmin's OWL-QN mode for L1 regularization.
+
+## Nonlinear Least Squares
+
+Basin models nonlinear least squares directly through `Residual` and
+`Jacobian`. Its state cost is `½‖r(x)‖²`. Choose `GaussNewton` when a full
+Gauss–Newton step is appropriate; choose `LevenbergMarquardt` when you need the
+damping that usually motivates an Argmin `GaussNewtonLS` line search.
+
+<!-- compile: basin-gauss-newton -->
+```rust
+use basin::{DenseMatrix, Executor, GaussNewton, Jacobian, Residual};
+use std::convert::Infallible;
+
+struct AffineResidual;
+
+impl Residual for AffineResidual {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Error = Infallible;
+
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok(vec![x[0] - 1.0, x[1] - 2.0])
+    }
+}
+
+impl Jacobian for AffineResidual {
+    type Jacobian = DenseMatrix<f64>;
+
+    fn jacobian(&self, _x: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
+        Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 1.0]))
+    }
+}
+
+fn main() {
+    let solver = GaussNewton::<Vec<f64>, DenseMatrix<f64>>::new();
+    let result = Executor::from_start(
+        AffineResidual,
+        solver,
+        vec![0.0, 0.0],
+    )
+    .max_iter(20)
+    .run()
+    .unwrap();
+
+    assert!(result.cost() < 1e-20);
+}
+```
+
+`LevenbergMarquardt::<Vec<f64>, DenseMatrix<f64>>::new()` is a drop-in solver
+change for the same problem and initial point. Its `with_tol_grad_rel`,
+`with_tol_cost_rel`, and `with_tol_step_rel` methods expose the corresponding
+MINPACK-style stopping tests.
+
+## Typed Errors
+
+Argmin problem methods all return its general `argmin::core::Error`. In Basin,
+`CostFunction` owns an `Error` associated type, and `Gradient` and `Hessian`
+inherit it. A least-squares problem similarly owns its error through
+`Residual`. This lets an application preserve domain-specific failures without
+boxing or stringifying them.
+
+<!-- compile: basin-typed-error -->
+```rust
+use basin::{CostFunction, Executor, NelderMead};
+
+#[derive(Debug, PartialEq)]
+enum ObjectiveError {
+    WrongDimension,
+}
+
+struct FallibleSphere;
+
+impl CostFunction for FallibleSphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = ObjectiveError;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        if x.len() != 2 {
+            return Err(ObjectiveError::WrongDimension);
+        }
+        Ok(x.iter().map(|xi| xi * xi).sum())
+    }
+}
+
+fn main() -> Result<(), ObjectiveError> {
+    let result = Executor::from_start(
+        FallibleSphere,
+        NelderMead::new(),
+        vec![1.0, -1.0],
+    )
+    .max_iter(200)
+    .run()?;
+
+    assert!(result.cost() < 1e-8);
+    Ok(())
+}
+```
+
+Use `Infallible` for a total objective. An application that already uses a
+general error container can select that type instead. A problem error is a hard
+abort: `Executor::run` returns `Err` and no final observer fires.
+
+## Finite Differences
+
+When the old integration manually approximates derivatives, first migrate only
+the value function and wrap it in `FiniteDiff`. The default is a central
+gradient, a central Hessian, and a forward Jacobian. `Method`,
+`function_precision`, and `with_step` customize those choices.
+
+<!-- compile: basin-finite-diff -->
+```rust
+use basin::{
+    CostFunction, Executor, FiniteDiff, GradientDescent, GradientTolerance,
+};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|xi| xi * xi).sum())
+    }
+}
+
+fn main() {
+    let problem = FiniteDiff::new(Sphere);
+    let result = Executor::from_start(
+        problem,
+        GradientDescent::new(0.25),
+        vec![2.0, -1.0],
+    )
+    .max_iter(100)
+    .terminate_on(GradientTolerance(1e-12))
+    .run()
+    .unwrap();
+
+    assert!(result.cost() < 1e-12);
+}
+```
+
+`FiniteDiff` forwards `BoxConstraints`, so adding numerical derivatives does
+not erase bounds. Under the optional `parallel` feature, its coordinate-wise
+evaluations can run in parallel.
+
+## Bounds and Constraints
+
+Bounds describe the problem in Basin. Implement `BoxConstraints`, then choose a
+solver whose type advertises that it consumes bounds. The compiler rejects a
+bounded solver paired with a problem that does not expose them.
+
+<!-- compile: basin-box-constraints -->
+```rust
+use basin::{BoxConstraints, CostFunction, Executor, Gradient, Lbfgsb};
+use std::convert::Infallible;
+
+struct BoundedQuadratic {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl CostFunction for BoundedQuadratic {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok((x[0] - 2.0).powi(2) + (x[1] + 1.0).powi(2))
+    }
+}
+
+impl Gradient for BoundedQuadratic {
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+        Ok(vec![2.0 * (x[0] - 2.0), 2.0 * (x[1] + 1.0)])
+    }
+}
+
+impl BoxConstraints for BoundedQuadratic {
+    fn lower(&self) -> &Self::Param {
+        &self.lower
+    }
+
+    fn upper(&self) -> &Self::Param {
+        &self.upper
+    }
+}
+
+fn main() {
+    let problem = BoundedQuadratic {
+        lower: vec![-1.0, -0.5],
+        upper: vec![1.0, 2.0],
+    };
+    let solver = Lbfgsb::new().with_m_capacity(7);
+    let result = Executor::from_start(problem, solver, vec![0.0, 0.0])
+        .max_iter(200)
+        .run()
+        .unwrap();
+
+    assert!((result.param()[0] - 1.0).abs() < 1e-8);
+    assert!((result.param()[1] + 0.5).abs() < 1e-8);
+}
+```
+
+Other direct consumers include projected `NelderMead`, `Trf`, `Bobyqa`, and
+bounded global solvers. Linear and nonlinear constraints use their corresponding
+problem traits; barrier and augmented-Lagrangian adapters are explicit opt-ins
+when an inner solver is otherwise unconstrained.
+
+## Observers and Cancellation
+
+Basin observers receive read-only state and return `()`. They do not receive
+solver-specific key-value metadata, and an observer failure cannot accidentally
+kill an optimization. Use a cloned `CancellationToken` when a progress callback
+requests a normal stop; the executor returns the best available state with
+`TerminationReason::Cancelled`.
+
+<!-- compile: basin-observer-cancellation -->
+```rust
+use basin::{
+    CancellationToken, CostFunction, Executor, NelderMead, Observe,
+    ObserverMode, State, TerminationReason,
+};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|xi| xi * xi).sum())
+    }
+}
+
+struct Progress {
+    cancel: CancellationToken,
+}
+
+impl<S: State<Float = f64>> Observe<S> for Progress {
+    fn observe_iter(&mut self, state: &S) {
+        println!("iteration {}, cost {}", state.iter(), state.cost());
+        if state.iter() >= 5 {
+            self.cancel.cancel();
+        }
+    }
+}
+
+fn main() {
+    let token = CancellationToken::new();
+    let observer = Progress {
+        cancel: token.clone(),
+    };
+    let result = Executor::from_start(
+        Sphere,
+        NelderMead::new(),
+        vec![2.0, -1.0],
+    )
+    .max_iter(100)
+    .with_cancellation_token(token)
+    .observe_with(observer, ObserverMode::Always)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.reason, TerminationReason::Cancelled);
+    assert_eq!(result.iter(), 5);
+}
+```
+
+Cancellation is cooperative and checked between top-level iterations. If an
+individual cost or derivative evaluation must abort immediately, return the
+problem's typed error instead.
+
+## Complete Backend Examples
+
+These small programs exercise the same derivative-free solve on every
+advertised backend release. Pair each program with the exact dependency row at
+the top of this page. The documentation check compiles and runs the nalgebra
+program against 0.32, 0.33, 0.34, and 0.35; the ndarray program against 0.15,
+0.16, and 0.17; and the faer program against 0.22, 0.23, and 0.24.
+
+### `Vec<f64>`
+
+<!-- compile: basin-backend-vec -->
+```rust
+use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x[0] * x[0] + x[1] * x[1])
+    }
+}
+
+fn main() {
+    let result = Executor::from_start(Sphere, NelderMead::new(), vec![1.0, -1.0])
+        .max_iter(300)
+        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
+        .run()
+        .unwrap();
+    assert!(result.cost() < 1e-10);
+}
+```
+
+### nalgebra 0.32–0.35
+
+<!-- compile: basin-backend-nalgebra -->
+```rust
+use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use nalgebra::DVector;
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = DVector<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x[0] * x[0] + x[1] * x[1])
+    }
+}
+
+fn main() {
+    let x0 = DVector::from_vec(vec![1.0, -1.0]);
+    let result = Executor::from_start(Sphere, NelderMead::new(), x0)
+        .max_iter(300)
+        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
+        .run()
+        .unwrap();
+    assert!(result.cost() < 1e-10);
+}
+```
+
+### ndarray 0.15–0.17
+
+<!-- compile: basin-backend-ndarray -->
+```rust
+use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use ndarray::Array1;
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Array1<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x[0] * x[0] + x[1] * x[1])
+    }
+}
+
+fn main() {
+    let x0 = Array1::from_vec(vec![1.0, -1.0]);
+    let result = Executor::from_start(Sphere, NelderMead::new(), x0)
+        .max_iter(300)
+        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
+        .run()
+        .unwrap();
+    assert!(result.cost() < 1e-10);
+}
+```
+
+### faer 0.22–0.24
+
+<!-- compile: basin-backend-faer -->
+```rust
+use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use faer::Col;
+use std::convert::Infallible;
+
+struct Sphere;
+
+impl CostFunction for Sphere {
+    type Param = Col<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x[0] * x[0] + x[1] * x[1])
+    }
+}
+
+fn main() {
+    let x0 = Col::from_fn(2, |i| [1.0, -1.0][i]);
+    let result = Executor::from_start(Sphere, NelderMead::new(), x0)
+        .max_iter(300)
+        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
+        .run()
+        .unwrap();
+    assert!(result.cost() < 1e-10);
+}
+```
+
+## Check Compatibility Before Removing Argmin
+
+Basin's `Brent` minimizes a scalar objective; it does not replace Argmin's
+`BrentRoot`. Basin also does not yet offer generic simulated annealing,
+particle swarm optimization, Hager–Zhang line search, or a generic adapter for
+an Argmin solver implementation. Moré–Thuente is the usual initial substitute
+for Hager–Zhang, but it is not trajectory-equivalent.
+
+Argmin checkpoints serialize a solver and state together. Basin's current
+`CheckpointWriter` snapshots state for a warm start; it does not promise an
+identical future trajectory for stochastic or population solvers because the
+solver's phase and random-number-generator state are not included.
+
+During a real migration, keep both integrations behind features until tests
+compare numerical results, termination behavior, evaluation counts, and
+runtime. Preserve the current algorithm first; evaluate a different Basin
+solver only after the like-for-like path passes.
+
+## Next
+
+- [Getting Started](../getting-started/): state construction and shared
+  termination criteria.
+- [Solvers](../solvers/): supported algorithms and backend matrix.
+- [Full Basin API](https://docs.rs/basin): authoritative type and method
+  documentation.

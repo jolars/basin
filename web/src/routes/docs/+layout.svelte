@@ -29,6 +29,11 @@
             description:
                 "Install Basin and run your first solve: implement CostFunction, add a Gradient when needed, then drive a solver with the Executor.",
         },
+        "/docs/migrating-from-argmin": {
+            title: "Migrating from Argmin – Basin",
+            description:
+                "Migrate an Argmin 0.11 application to Basin, including executors, solvers, typed errors, finite differences, bounds, observers, and backends.",
+        },
         "/docs/solvers": {
             title: "Solvers – Basin",
             description:

@@ -174,7 +174,7 @@ jobs:
         run: cargo build --target wasm32-unknown-unknown
 
   snippets:
-    name: playground snippets compile
+    name: website snippets compile
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -194,10 +194,10 @@ jobs:
         working-directory: web
         # See web.yml for why the freshness gate is disabled in CI.
         run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
-      # Generates every snippet the landing-page playground can produce and
-      # builds them against the in-repo basin crate, so the demo can't drift
-      # from the real API.
-      - name: Compile generated snippets
+      # Checks every landing-page program plus the migration guide's Argmin
+      # before-example and Basin after-examples. Exact backend versions run in
+      # isolated packages so feature unification cannot hide a broken pairing.
+      - name: Compile and run website snippets
         working-directory: web
         run: pnpm run check:snippets
 

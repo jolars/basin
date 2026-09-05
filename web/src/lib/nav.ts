@@ -33,6 +33,11 @@ export const DOCS_LINKS: NavLink[] = [
         href: "/docs/getting-started/",
         section: "docs",
     },
+    {
+        label: "Migrating from Argmin",
+        href: "/docs/migrating-from-argmin/",
+        section: "docs",
+    },
     { label: "Solvers", href: "/docs/solvers/", section: "docs" },
 ];
 
