@@ -106,9 +106,9 @@ surprise.
   LINCOA, COBYLA); and MADS (OrthoMADS).
 - **Nonlinear least squares:** Gauss-Newton, Levenberg-Marquardt, trust-region
   reflective.
-- **Global and stochastic:** random search, CMA-ES, differential evolution, a
-  steady-state genetic algorithm, and memetic combinations (MA-LS-Chain, plus
-  CMA-ES and DE injection wrappers).
+- **Global and stochastic:** simulated annealing, random search, CMA-ES,
+  differential evolution, a steady-state genetic algorithm, and memetic
+  combinations (MA-LS-Chain, plus CMA-ES and DE injection wrappers).
 - **Constrained:** box bounds via projected gradient descent, bounded
   Nelder-Mead, L-BFGS-B, and bounded CMA-ES; LINCOA for linear constraints and
   COBYLA for nonlinear inequalities; log-barrier and augmented Lagrangian

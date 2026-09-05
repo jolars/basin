@@ -1,8 +1,9 @@
 //! A `serde`-gated observer that snapshots the state to disk.
 //!
 //! Available only with the `serde` feature and off `wasm32` (it does file
-//! I/O). The companion [`read_checkpoint`] reloads a snapshot to warm-start a
-//! later run.
+//! I/O). The companion [`read_checkpoint`] reloads a snapshot for either an
+//! ordinary warm start or, when the state implements
+//! [`ExactResumeState`](crate::core::state::ExactResumeState), exact resume.
 
 use std::fs;
 use std::io;
@@ -18,25 +19,31 @@ use crate::core::termination::TerminationReason;
 /// Write the current state to a file with [`bincode`], overwriting the
 /// previous snapshot, so the file always holds the latest checkpoint.
 ///
-/// Checkpointing "save the iterate periodically so a new run can warm-start"
-/// is exactly an observer's job in basin—no framework support is needed.
+/// Checkpointing is an observer's job in Basin. The executor distinguishes how
+/// a restored snapshot is driven: [`Executor::new`](crate::Executor::new)
+/// requests a warm start, while [`Executor::resume`](crate::Executor::resume)
+/// preserves the history and counters of an
+/// [`ExactResumeState`](crate::ExactResumeState).
 /// Register it with an [`ObserverMode`](super::ObserverMode) to pick the
 /// cadence ([`Every(n)`](super::ObserverMode::Every) for every `n`th iteration,
 /// [`NewBest`](super::ObserverMode::NewBest) to snapshot only on improvement).
 /// The writer always snapshots on `observe_final` as well.
 ///
 /// The state type must be [`Serialize`]; the shipped checkpointable states are
-/// [`BasicState`](crate::core::state::BasicState) and
+/// [`BasicState`](crate::core::state::BasicState),
 /// [`QuasiNewtonState`](crate::core::state::QuasiNewtonState) (with `Vec<f64>`
-/// or nalgebra backends—faer has no serde support). Handing a non-serializable
-/// state is a compile error.
+/// or nalgebra backends—faer has no serde support), and
+/// [`SimulatedAnnealingState`](crate::SimulatedAnnealingState) when its
+/// parameter and neighbor are serializable. Handing a non-serializable state
+/// is a compile error.
 ///
 /// # Resume
 ///
-/// Resume is not framework surface: read the file with [`read_checkpoint`],
-/// deserialize into the concrete state, and hand it to
-/// [`Executor::new`](crate::core::executor::Executor::new). The solver re-runs
-/// its `init`, so any lazily-rebuilt working storage is reconstructed.
+/// Read the file with [`read_checkpoint`] and deserialize into the concrete
+/// state. Hand ordinary states to [`Executor::new`](crate::Executor::new) for a
+/// warm start. Hand an [`ExactResumeState`](crate::ExactResumeState) to
+/// [`Executor::resume`](crate::Executor::resume) to preserve its best history,
+/// absolute counters, and trajectory. Both paths call the solver's `init`.
 ///
 /// ```no_run
 /// # use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
@@ -118,8 +125,9 @@ where
 }
 
 /// Load a checkpoint previously written by [`CheckpointWriter`] into a concrete
-/// state, ready to hand back to
-/// [`Executor::new`](crate::core::executor::Executor::new) for a warm start.
+/// state, ready for [`Executor::new`](crate::Executor::new) as a warm start or
+/// [`Executor::resume`](crate::Executor::resume) when the state implements
+/// [`ExactResumeState`](crate::ExactResumeState).
 pub fn read_checkpoint<S: DeserializeOwned>(
     path: impl AsRef<Path>,
 ) -> io::Result<S> {

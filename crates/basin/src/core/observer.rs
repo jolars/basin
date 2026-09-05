@@ -70,7 +70,8 @@
 //!
 //! Heavier integrations (tracing, slog, a TUI) live in satellite crates; a
 //! `serde`-gated `CheckpointWriter` (non-wasm) snapshots the state to disk for
-//! warm-starting a later run.
+//! warm-starting a later run or exactly resuming a state that implements
+//! [`ExactResumeState`](crate::ExactResumeState).
 
 use crate::core::termination::TerminationReason;
 

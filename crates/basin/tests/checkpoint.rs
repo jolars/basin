@@ -1,6 +1,6 @@
 //! Round-trip test for the `serde`-gated [`CheckpointWriter`] observer: run,
-//! checkpoint, reload, resume, and confirm the resumed run matches an
-//! uninterrupted one.
+//! checkpoint, reload, warm-start, and confirm this deterministic solver
+//! matches an uninterrupted run.
 #![cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 
 use basin::{
@@ -32,7 +32,7 @@ impl Gradient for Quadratic {
 }
 
 #[test]
-fn checkpoint_resume_matches_uninterrupted_run() {
+fn checkpoint_warm_start_matches_uninterrupted_run() {
     let dir =
         std::env::temp_dir().join(format!("basin-ckpt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

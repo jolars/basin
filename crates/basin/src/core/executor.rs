@@ -35,11 +35,16 @@
 //! Because checks happen *before* iter 0, an already-optimal initial
 //! point exits immediately with the corresponding reason rather than
 //! taking one redundant step.
+//!
+//! [`Executor::resume`] uses the same ordering, but restores the evaluation
+//! counters and preserves best-so-far history from an
+//! [`ExactResumeState`]. `init` still runs exactly
+//! once and must recognize an already-initialized state.
 
 use crate::core::observer::{Observe, ObserverMode};
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{CountsMirror, State};
+use crate::core::state::{CountsMirror, ExactResumeState, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use std::sync::{
     Arc,
@@ -546,6 +551,7 @@ pub struct Executor<P, S, So> {
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
     observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
+    resume_counts: Option<EvalCounts>,
 }
 
 impl<P, S, So> Executor<P, S, So>
@@ -565,7 +571,36 @@ where
             criteria: Vec::new(),
             observers: Vec::new(),
             cancellation_token: None,
+            resume_counts: None,
         }
+    }
+
+    /// Build an executor that continues an exact state snapshot.
+    ///
+    /// Unlike [`new`](Self::new), this constructor preserves the state's
+    /// best-so-far history and restores the problem wrapper's cumulative
+    /// evaluation counters. The state must implement [`ExactResumeState`],
+    /// which promises that it contains all solver evolution data required for
+    /// an unchanged continuation. The solver's `init` implementation must be
+    /// resume-idempotent.
+    ///
+    /// `max_iter` remains an absolute iteration limit: resuming a state at
+    /// iteration 40 with `.max_iter(100)` performs at most 60 more iterations.
+    /// Exact continuation also requires the same deterministic problem,
+    /// solver configuration, scalar type, and code. Termination criteria are
+    /// configured anew; state-derived criteria such as
+    /// [`NoAcceptance`](crate::NoAcceptance) and zero-tolerance
+    /// [`NoImprovement`](crate::NoImprovement) preserve history stored in the
+    /// state, while criteria with private clocks or anchors begin a new
+    /// criterion run.
+    pub fn resume(problem: P, solver: So, state: S) -> Self
+    where
+        S: ExactResumeState,
+    {
+        let resume_counts = state.resume_counts();
+        let mut executor = Self::new(problem, solver, state);
+        executor.resume_counts = Some(resume_counts);
+        executor
     }
 
     /// Build an executor seeding the solver's natural initial state at the
@@ -707,12 +742,17 @@ where
             criteria,
             mut observers,
             cancellation_token,
+            resume_counts,
         } = self;
         let mut problem = Problem::new(problem);
-        // Fresh top-level wrapper: reset best-so-far so it tracks
-        // this run's iterates only, matching the `state.mirror`
-        // per-run snapshot discipline.
-        state.reset_best();
+        if let Some(counts) = resume_counts {
+            *problem.counts_mut() = counts;
+        } else {
+            // Fresh top-level wrapper: reset best-so-far so it tracks
+            // this run's iterates only, matching the `state.mirror`
+            // per-run snapshot discipline.
+            state.reset_best();
+        }
         let mut state = solver.init(&mut problem, state)?;
         // Mirror init's work onto the state before any termination
         // check. Baseline is zero: this is a fresh top-level wrapper.

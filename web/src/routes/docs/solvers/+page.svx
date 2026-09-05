@@ -128,6 +128,15 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
 
 ## Global & Stochastic
 
+- **[`SimulatedAnnealing`](https://docs.rs/basin/latest/basin/solver/simulated_annealing/struct.SimulatedAnnealing.html)**:
+  classical single-proposal simulated annealing with a user-supplied `Neighbor`,
+  explicit geometric, reciprocal, or normalized-log cooling, and optional
+  independently composable schedule restart triggers. It accepts arbitrary
+  cloneable parameter types, including discrete structures, and supports exact
+  state-integrated resume.
+  Uses Metropolis et al. (1953; DOI 10.1063/1.1699114), implements Kirkpatrick,
+  Gelatt & Vecchi (1983; DOI 10.1126/science.220.4598.671), and takes its
+  logarithmic-schedule context from Hajek (1988; DOI 10.1287/moor.13.2.311).
 - **[`CmaEs`](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)**/**[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)**:
   covariance-matrix adaptation evolution strategy (Hansen, 2016), unconstrained
   and box-bounded; the bounded variant uses Hansen's adaptive `BoundPenalty`
@@ -231,6 +240,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `GaussNewton`               | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `LevenbergMarquardt`        | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Trf`                       | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `SimulatedAnnealing`        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `CmaEs`                     | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `BoundedCmaEs`              | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `De`                        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |

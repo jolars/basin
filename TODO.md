@@ -50,28 +50,25 @@ first-class cancellation.
 
 The largest remaining compatibility gaps are:
 
-1. **Reliable checkpoint/resume for stochastic and population solvers.** This is
-   a blocker for `argtuner` and any long-running global optimization workflow.
-   The checkpoint must include solver state and RNG state, not only the generic
-   optimization state.
-2. **Generic simulated annealing.** Active Argmin users apply it to arbitrary
-   and sometimes discrete parameter types, which Basin's continuous vector
-   optimizers cannot replace directly.
-3. **Particle swarm optimization.** Seven audited package trees contain PSO
+1. **Reliable checkpoint/resume for the existing stochastic and population
+   solvers.** Generic simulated annealing now has exact state-integrated resume,
+   but DE, SSGA, CMA-ES, and basin-hopping still need complete snapshots. This
+   is a blocker for `argtuner` and other long-running global workflows.
+2. **Particle swarm optimization.** Seven audited package trees contain PSO
    usage or integration. CMA-ES and differential evolution are alternatives, but
    PSO support makes migration much less disruptive.
-4. **Brent root finding.** Two current packages use `BrentRoot`. Basin's
+3. **Brent root finding.** Two current packages use `BrentRoot`. Basin's
    existing Brent implementation minimizes a scalar function; it does not
    replace a bracketed root solver.
-5. **Hager–Zhang line search.** This matters particularly to GlobalSearch-rs,
+4. **Hager–Zhang line search.** This matters particularly to GlobalSearch-rs,
    which exposes it as a supported option and has an example where it
    outperforms the default More–Thuente setup.
 
 Do not hold the first outreach round for every solver gap. The backend matrix
 and cancellation API are complete; ship migration examples and honest checkpoint
-documentation, then contact the ready targets. Add simulated annealing, PSO, and
-exact stochastic resume before approaching projects that depend on those
-capabilities.
+documentation, then contact the ready targets. Add PSO and extend exact resume
+to the existing population solvers before approaching projects that depend on
+those capabilities.
 
 ### Backend compatibility
 
@@ -97,7 +94,7 @@ Basin is already unusually strong for the projects in this audit:
   NEWUOA, BOBYQA, LINCOA, COBYLA, and MADS.
 - Global and hybrid optimization: CMA-ES, bounded CMA-ES, differential
   evolution, steady-state genetic algorithm, random search, Solis–Wets, basin
-  hopping, and memetic CMA/DE/MA-LSCh methods.
+  hopping, generic simulated annealing, and memetic CMA/DE/MA-LSCh methods.
 - Constraints: box, linear, and nonlinear constraints, plus augmented-Lagrangian
   and barrier approaches.
 - Framework capabilities: iteration/time/evaluation limits, typed errors,
@@ -141,19 +138,40 @@ Choose and document two distinct concepts:
 - **Exact resume:** serialize all state needed to continue identically,
   including population/simplex/history, solver phase, counters, and RNG state.
 
-Acceptance criteria for exact resume:
+Before extending exact resume to more solvers, revisit its abstraction boundary:
 
-- Serialize a complete runner checkpoint, not only `State`.
+- [ ] Replace or explicitly affirm the state-only exact-resume design.
+  `SimulatedAnnealingState` currently stores the neighbor, RNG, schedule,
+  reannealing configuration, and all progress, while `SimulatedAnnealing`
+  retains cloned copies used only to seed that state; after initialization,
+  `next_iter` operates almost entirely on the state. Existing stochastic
+  solvers instead keep their RNG in the solver, so requiring every future
+  `ExactResumeState` to absorb all solver evolution would mean restructuring
+  CMA-ES, DE, SSGA, random search, and basin hopping. Prefer keeping observable
+  chain information in the dedicated SA state, leaving algorithm evolution
+  where it naturally belongs, and defining exact checkpoints around the solver,
+  state, and evaluation counters. This matches Argmin's
+  [`Checkpoint`](https://docs.rs/argmin/latest/argmin/core/checkpointing/trait.Checkpoint.html)
+  boundary, which saves and restores `(solver, state)`. If state-only resume is
+  retained as a deliberate Basin-wide direction, document this work as the
+  exact-resume foundation rather than as part of the SA solver alone.
+
+Acceptance criteria for exact resume across the remaining solvers:
+
+- Resolve the checkpoint boundary above, then store and serialize every
+  evolving component.
 - Add serialization to population, CMA-ES, simplex, and nonlinear least-squares
   states as appropriate.
 - Ensure `init` recognizes restored state and does not discard it.
-- Test uninterrupted versus save/reload/resume runs for DE, SSGA, CMA-ES, basin
-  hopping, and any future PSO/SA solver.
+- [x] Test uninterrupted versus save/reload/`Executor::resume` for simulated
+  annealing, including a stateful neighbor and bit-identical serialized output.
+- [ ] Add the same coverage for DE, SSGA, CMA-ES, basin hopping, and future PSO.
 - Version the checkpoint format or record enough metadata to reject incompatible
   checkpoints cleanly.
 
-Until this is complete, describe Basin's current facility as state
-checkpointing/warm start, not exact stochastic resume.
+Until the wider work is complete, describe ordinary state checkpointing as a
+warm start. Promise exact continuation only for states implementing
+`ExactResumeState` and restored through `Executor::resume`.
 
 ##### 3. Publish an Argmin-to-Basin migration guide
 
@@ -179,26 +197,37 @@ maintainer is far more likely to try Basin if they can copy a working
 
 #### P1: solver gaps with a measurable outreach payoff
 
-##### 1. Generic simulated annealing
+##### 1. Generic simulated annealing (complete)
 
-This is the most important *capability* gap because it covers problems that are
-not naturally dense real vectors. Design it over an arbitrary parameter type
-with a user-supplied move/neighbor operation, rather than tying it to a numeric
-backend.
+`SimulatedAnnealing` is generic over arbitrary cloneable parameter types and a
+user-supplied `Neighbor` trait or closure. It implements the classical
+Metropolis rule rather than Argmin's logistic acceptance variant, requires an
+explicit geometric, reciprocal, or normalized-log schedule, supports several
+proposals per temperature level, accepts a seed or custom RNG, and offers one
+optional fixed-interval, rejection-stall, or best-stall reannealing trigger.
 
-Useful API elements:
-
-- `Anneal`/`Neighbor` trait or closure that proposes a state from the current
-  state and temperature.
-- Built-in temperature schedules matching common Argmin options.
-- Caller-supplied seed and preferably caller-supplied RNG.
-- Reannealing and stall limits.
-- Serializable solver/RNG state for exact resume.
-- Examples for both a continuous vector and a discrete/combinatorial state.
+`SimulatedAnnealingState` owns the neighbor, RNG, cooling phase, counters,
+incumbent, and best point. With `serde`, it can be checkpointed and restored
+through `Executor::resume` for bit-identical continuation. Public tests cover
+continuous vectors, discrete permutations, all numeric backends, `f32`, custom
+RNGs, non-finite costs, reannealing, stall criteria, and exact resume.
 
 This enables complete migrations for system_solver's SA route,
 `saltine-gromark`, `scattr`, and `aminograph`. Continuous CMA-ES/DE is not a
 drop-in substitute for their custom transition rules.
+
+- [x] Match Argmin's composable reannealing configuration: allow fixed,
+  accepted-stall, and best-stall triggers to be enabled simultaneously, and
+  provide migration-friendly `with_reannealing_fixed`,
+  `with_reannealing_accepted`, and `with_reannealing_best` builder methods.
+  Reanneal when any enabled trigger fires, reset all reannealing counters, and
+  retain Basin's exact threshold semantics and classical Metropolis acceptance.
+- [x] Make `Neighbor::propose` return `Result<P, Self::Error>` before the API is
+  released. Require `Neighbor` and `CostFunction` to share the run's typed
+  application error so `SimulatedAnnealing` can continue exposing that error
+  directly as `Solver::Error`; use `std::convert::Infallible` when neither the
+  proposal nor the objective can fail. Update the closure blanket implementation
+  and add coverage for both infallible and fallible proposals.
 
 ##### 2. Particle swarm optimization
 

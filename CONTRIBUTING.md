@@ -17,11 +17,11 @@ and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B), derivative-free
 (Nelder-Mead, Brent, Solis-Wets, and Powell's model-based family
 NEWUOA/BOBYQA/LINCOA/COBYLA), nonlinear least squares (Gauss-Newton,
 Levenberg-Marquardt, trust-region-reflective), global and stochastic (random
-search, CMA-ES, a steady-state GA, memetic combinations incl. the MA-LSCh chain
-family), and constrained methods (projected gradient, bounded Nelder-Mead,
-L-BFGS-B, and CMA-ES, log-barrier, augmented Lagrangian, and COBYLA for
-nonlinear inequality constraints). Solvers are generic over the linear-algebra
-backend (`Vec<f64>`, nalgebra, ndarray, faer).
+search, simulated annealing, CMA-ES, a steady-state GA, memetic combinations
+incl. the MA-LSCh chain family), and constrained methods (projected gradient,
+bounded Nelder-Mead, L-BFGS-B, and CMA-ES, log-barrier, augmented Lagrangian,
+and COBYLA for nonlinear inequality constraints). Solvers are generic over the
+linear-algebra backend (`Vec<f64>`, nalgebra, ndarray, faer).
 
 ## Commands
 
@@ -86,16 +86,18 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
   - `state.rs` (+ `state/`): the `State` trait and concrete states:
     `BasicState<P>` (single iterate), `BasicSimplexState<V>` (simplex),
     `QuasiNewtonState<V, M>` (BFGS), `LbfgsState` (L-BFGS history),
-    `BasicPopulationState<V>` (population). Extension traits
-    `GradientState`/`SimplexState`/`PopulationState` expose the richer shape
-    that termination criteria bound on. Fields are `pub(crate)`; access goes
-    through trait methods.
+    `BasicPopulationState<V>` (population), and `SimulatedAnnealingState`
+    (complete Markov-chain state). Extension traits
+    `GradientState`/`SimplexState`/`PopulationState`/`AcceptanceState` expose
+    the richer shapes that termination criteria bind on; `ExactResumeState`
+    marks snapshots that restore counters and evolution exactly. Fields are
+    `pub(crate)`; access goes through trait methods.
   - `solver.rs`: the `Solver` trait: `init` (one-time setup, e.g. seeding
     cost/gradient at iter 0), `next_iter`, plus a `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
     `run()` returns an `OptimizationResult<S>` (final state +
-    `TerminationReason`). Also `run_loop`/`Stepper` and the cooperative,
-    top-level `CancellationToken`.
+    `TerminationReason`). Also `run_loop`/`Stepper`, exact state-integrated
+    `Executor::resume`, and the cooperative, top-level `CancellationToken`.
   - `termination.rs`: `TerminationCriterion<S>` plus shipped criteria
     (`MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, the
     `*Tolerance`/`Relative*Tolerance` family, `SimplexTolerance`, `MaxTime`).

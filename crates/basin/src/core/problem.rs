@@ -731,6 +731,7 @@ pub trait HessianProduct: Gradient {
 /// impl. The wrapper itself is authoritative; the state mirror is the
 /// "available-everywhere" view that termination criteria and
 /// [`OptimizationResult`](crate::core::executor::OptimizationResult) read.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EvalCounts {
     /// [`CostFunction::cost`] calls (including the cost side of fused

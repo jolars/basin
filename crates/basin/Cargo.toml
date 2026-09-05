@@ -114,6 +114,7 @@ parallel = [
 serde = [
   "dep:serde",
   "dep:bincode",
+  "rand_chacha/serde",
   "nalgebra?/serde-serialize",
   "nalgebra_0_32?/serde-serialize",
   "nalgebra_0_33?/serde-serialize",

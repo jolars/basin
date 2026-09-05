@@ -93,6 +93,7 @@
 //! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
 //! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
 //! | `SolisWets` | `SolisWetsState` | ✓ |
+//! | `SimulatedAnnealing` | `SimulatedAnnealingState` | ✓ |
 //! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
 //! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma`, `MaLsChSw` | `CmaEsState`/`MaLsChState`/… | ✗ (needs a step-size σ or samples the box) |
 //! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
@@ -368,19 +369,21 @@ pub use crate::core::state::NalgebraQuasiNewtonState;
 #[cfg(feature = "ndarray_all")]
 pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
-    BasicPopulationState, BasicSimplexState, BasicState, BobyqaState,
-    CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror, GradientState,
-    IntoInitialSimplex, LbfgsState, LincoaState, MadsState, MeshState,
-    NewuoaState, NllsState, PopulationState, RhoState, ScalarGradientState,
-    ScalarState, SimplexState, SolisWetsState, State,
+    AcceptanceState, BasicPopulationState, BasicSimplexState, BasicState,
+    BobyqaState, CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror,
+    ExactResumeState, GradientState, IntoInitialSimplex, LbfgsState,
+    LincoaState, MadsState, MeshState, NewuoaState, NllsState, PopulationState,
+    RhoState, ScalarGradientState, ScalarState, SimplexState,
+    SimulatedAnnealingState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
     CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals,
-    MaxGradientEvals, MaxIter, MaxTime, MeshTolerance, NoImprovement,
-    ParamTolerance, ProjectedGradientTolerance, RelativeCostTolerance,
-    RelativeGradientTolerance, RelativeParamTolerance, RhoTolerance,
-    SimplexTolerance, TargetCost, TerminationCriterion, TerminationReason,
+    MaxGradientEvals, MaxIter, MaxTime, MeshTolerance, NoAcceptance,
+    NoImprovement, ParamTolerance, ProjectedGradientTolerance,
+    RelativeCostTolerance, RelativeGradientTolerance, RelativeParamTolerance,
+    RhoTolerance, SimplexTolerance, TargetCost, TerminationCriterion,
+    TerminationReason,
 };
 pub use crate::line_search::{
     Backtracking, Constant, LineSearch, MoreThuente, Wolfe,
@@ -397,6 +400,8 @@ pub use crate::solver::{
     ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton,
     GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsCh,
     MaLsChCma, MaLsChGenericState, MaLsChState, MaLsChSw, MaLsChSwState, Mads,
-    MemeticInner, Metropolis, NelderMead, Newuoa, ProjectedGradientDescent,
-    RandomDisplacement, RandomSearch, Sgd, SolisWets, Ssga, StepTaker, Trf,
+    MemeticInner, Metropolis, Neighbor, NelderMead, Newuoa,
+    ProjectedGradientDescent, RandomDisplacement, RandomSearch, Reannealing,
+    Sgd, SimulatedAnnealing, SolisWets, Ssga, StepTaker, TemperatureSchedule,
+    Trf,
 };

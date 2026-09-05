@@ -10,7 +10,8 @@ use crate::core::math::{
     ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorLen,
 };
 use crate::core::state::{
-    CmaEsState, GradientState, MeshState, RhoState, SimplexState, State,
+    AcceptanceState, CmaEsState, GradientState, MeshState, RhoState,
+    SimplexState, State,
 };
 
 /// Why the executor stopped. Returned on
@@ -50,6 +51,8 @@ pub enum TerminationReason {
     /// Best-so-far cost has not improved by more than `tol` in
     /// `patience` consecutive iterations: the early-stopping pattern.
     NoImprovement,
+    /// No proposal has been accepted for the configured number of iterations.
+    NoAcceptedMove,
     /// Simplex collapsed below the configured tolerance.
     SimplexTolerance,
     /// CMA-ES search distribution collapsed below TolX:
@@ -517,19 +520,25 @@ where
 /// more than `tol` in `patience` consecutive checks: the early-
 /// stopping pattern from ML, minus the validation set.
 ///
-/// Improvement is counted strictly against a running anchor: an
-/// observation counts as improvement iff
-/// `state.best_cost() < anchor − tol`. So `tol` is the minimum drop
-/// that resets the patience counter (Keras calls this `min_delta`).
-/// `tol = 0.0` means "any strict decrease resets".
+/// Improvement is counted strictly against a running anchor: an observation
+/// counts as improvement iff `state.best_cost() < anchor − tol`. Thus,
+/// `tol` is the minimum drop that resets the patience counter (Keras calls this
+/// `min_delta`). With `tol = 0`, the first check seeds the stall count from
+/// `state.iter() - state.best_iter()` so states whose `best_iter` records strict
+/// cost improvements preserve their history across
+/// [`Executor::resume`](crate::Executor::resume). Later checks use the anchor,
+/// including for constraint-aware states whose `best_iter` tracks their current
+/// incumbent instead.
 ///
-/// Most useful for stochastic/global/non-monotone solvers (random
-/// search, CMA-ES, the steady-state GA, future basin-hopping) and for
+/// Most useful for stochastic/global/non-monotone solvers (simulated
+/// annealing, random search, CMA-ES, the steady-state GA, basin-hopping) and for
 /// non-monotone single-iterate solvers (Brent's rejected probes) where
 /// the one-step [`CostTolerance`] family fires spuriously on accidental
 /// small `|Δf|`. Binds on [`State::best_cost`], which is monotone
-/// non-increasing by construction (executor-maintained), so the
-/// "improvement" check has the same meaning across every state shape.
+/// non-increasing for objective-ranked states. Constraint-aware states may
+/// instead expose a non-monotone objective for their solver-selected incumbent;
+/// the running anchor still recognizes only strict objective decreases as
+/// improvements.
 pub struct NoImprovement<F = f64> {
     patience: u64,
     tol: F,
@@ -560,6 +569,13 @@ where
 {
     fn check(&mut self, state: &S) -> Option<TerminationReason> {
         let curr = state.best_cost();
+        if self.tol == F::zero() && self.anchor.is_none() && curr.is_finite() {
+            self.anchor = Some(curr);
+            self.stalled = state.iter().saturating_sub(state.best_iter());
+            return (self.stalled >= self.patience)
+                .then_some(TerminationReason::NoImprovement);
+        }
+
         let improved = match self.anchor {
             None => curr.is_finite(),
             Some(anchor) => curr.is_finite() && curr < anchor - self.tol,
@@ -578,6 +594,38 @@ where
     fn reset(&mut self) {
         self.anchor = None;
         self.stalled = 0;
+    }
+}
+
+/// Stop after a run of completed iterations with no accepted proposal.
+///
+/// The criterion is stateless: it compares the state's absolute iteration
+/// and last-acceptance counters. It therefore remains exact when attached to
+/// an [`Executor::resume`](crate::Executor::resume) run.
+pub struct NoAcceptance {
+    patience: u64,
+}
+
+impl NoAcceptance {
+    /// Build an acceptance-stall criterion.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `patience == 0`.
+    pub fn new(patience: u64) -> Self {
+        assert!(patience > 0, "NoAcceptance requires patience > 0");
+        Self { patience }
+    }
+}
+
+impl<S> TerminationCriterion<S> for NoAcceptance
+where
+    S: AcceptanceState,
+{
+    fn check(&mut self, state: &S) -> Option<TerminationReason> {
+        (state.iter().saturating_sub(state.last_accepted_iter())
+            >= self.patience)
+            .then_some(TerminationReason::NoAcceptedMove)
     }
 }
 
@@ -800,7 +848,7 @@ mod reset_tests {
     #[test]
     fn no_improvement_clears_stall_counter_after_reset() {
         // patience 2: fires after 2 consecutive non-improving checks.
-        let mut c = NoImprovement::new(2, 0.0_f64);
+        let mut c = NoImprovement::new(2, 0.1_f64);
         let mut state: S = BasicState::new(vec![0.0]);
         state.best_cost = 10.0;
 
@@ -838,6 +886,54 @@ mod reset_tests {
         assert!(
             TerminationCriterion::<()>::check(&mut c, &()).is_none(),
             "reset should restart the wall-clock from the next check"
+        );
+    }
+}
+
+#[cfg(test)]
+mod no_improvement_tests {
+    use super::*;
+    use crate::core::state::{CobylaState, ConstrainedMadsState};
+
+    #[test]
+    fn zero_tolerance_counts_cobyla_stalls_when_best_iter_is_refreshed() {
+        let mut criterion = NoImprovement::new(2, 0.0_f64);
+        let mut state = CobylaState::new(vec![0.0]);
+        state.cost = Some(1.0);
+        state.update_best();
+
+        assert!(criterion.check(&state).is_none());
+
+        state.increment_iter();
+        state.update_best();
+        assert!(criterion.check(&state).is_none());
+
+        state.increment_iter();
+        state.update_best();
+        assert_eq!(
+            criterion.check(&state),
+            Some(TerminationReason::NoImprovement)
+        );
+    }
+
+    #[test]
+    fn zero_tolerance_counts_constrained_mads_stalls() {
+        let mut criterion = NoImprovement::new(2, 0.0_f64);
+        let mut state = ConstrainedMadsState::new(vec![0.0]);
+        state.cost = Some(1.0);
+        state.update_best();
+
+        assert!(criterion.check(&state).is_none());
+
+        state.increment_iter();
+        state.update_best();
+        assert!(criterion.check(&state).is_none());
+
+        state.increment_iter();
+        state.update_best();
+        assert_eq!(
+            criterion.check(&state),
+            Some(TerminationReason::NoImprovement)
         );
     }
 }

@@ -17,6 +17,10 @@
 //! `tests/f32_round_trip.rs` for an end-to-end demonstration that the full
 //! pipeline composes at `F = f32`, and the *Provisional choices* section of
 //! `CONTRIBUTING.md`.
+//!
+//! [`AcceptanceState`] exposes proposal acceptance history to generic stall
+//! criteria. [`ExactResumeState`] marks a state that contains the complete
+//! evolution snapshot needed by [`Executor::resume`](crate::Executor::resume).
 
 /// BOBYQA solver state (`BobyqaState`).
 pub mod bobyqa;
@@ -38,6 +42,8 @@ pub mod nlls;
 pub mod scalar;
 /// One-dimensional gradient-carrying solver state (`ScalarGradientState`).
 pub mod scalar_gradient;
+/// Simulated-annealing Markov-chain state (`SimulatedAnnealingState`).
+pub mod simulated_annealing;
 /// Solis-Wets adaptive random-walk state (`SolisWetsState`).
 pub mod solis_wets;
 
@@ -51,6 +57,7 @@ pub use newuoa::NewuoaState;
 pub use nlls::NllsState;
 pub use scalar::ScalarState;
 pub use scalar_gradient::ScalarGradientState;
+pub use simulated_annealing::SimulatedAnnealingState;
 pub use solis_wets::SolisWetsState;
 
 use crate::core::math::{MatrixIdentity, Scalar, VectorLen};
@@ -200,11 +207,10 @@ pub trait State {
     /// Reset the best-so-far slots to their pre-init defaults
     /// (`best_cost = +∞`, all best counters zero).
     ///
-    /// Called by [`run_loop`](crate::core::executor::run_loop) at run
-    /// entry so a state passed across multiple runs (e.g. an inner
-    /// solver re-driven by an outer) tracks per-run best rather than
-    /// cumulative-across-runs best: the same per-run-snapshot
-    /// discipline [`CountsMirror`] uses for eval counters.
+    /// Called by fresh [`Executor`](crate::Executor) and
+    /// [`run_loop`](crate::core::executor::run_loop) paths at run entry so a
+    /// reused state tracks per-run best. [`Executor::resume`](crate::Executor::resume)
+    /// deliberately preserves the snapshot's best history instead.
     fn reset_best(&mut self);
 }
 
@@ -251,9 +257,9 @@ pub trait GradientState: State {
 /// [`mirror`](Self::mirror) after every successful
 /// [`Solver::init`](crate::core::solver::Solver::init)/
 /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter),
-/// passing the per-run delta of the wrapper's counts so the state
-/// reflects work-since-this-run-started (rather than cumulative across
-/// nested [`run_loop`](crate::core::executor::run_loop) calls).
+/// passing the per-run delta of the wrapper's counts on fresh and nested runs.
+/// Exact-resume execution instead restores the wrapper's cumulative counts and
+/// mirrors those onto the resumed state.
 ///
 /// Public (rather than crate-private) so user-defined state types can
 /// be plugged into the [`Executor`](crate::core::executor::Executor):
@@ -286,6 +292,34 @@ pub trait CountsMirror: State {
     /// [`Solver::init`](crate::core::solver::Solver::init) /
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
     fn mirror(&mut self, delta: &EvalCounts);
+}
+
+/// Capability marker for states that contain enough information to resume an
+/// interrupted run without changing its trajectory.
+///
+/// Implementations must return the complete wrapper-side evaluation counters
+/// represented by the snapshot. [`Executor::resume`](crate::Executor::resume)
+/// restores those counters, preserves best-so-far history and absolute
+/// iteration numbers, and calls the solver's resume-idempotent `init` method.
+/// Solver-specific evolution data—including RNG and adaptive machinery—must
+/// live in the state itself. Exact continuation additionally assumes the same
+/// deterministic problem, solver configuration, scalar type, and code;
+/// executor-owned termination criteria are not part of the snapshot.
+pub trait ExactResumeState: State {
+    /// Complete evaluation counts at the point represented by this snapshot.
+    fn resume_counts(&self) -> EvalCounts;
+}
+
+/// Minimum state shape for acceptance-stall termination criteria.
+pub trait AcceptanceState: State {
+    /// Absolute iteration of the most recently accepted proposal.
+    fn last_accepted_iter(&self) -> u64;
+
+    /// Cumulative number of accepted proposals.
+    fn accepted_moves(&self) -> u64;
+
+    /// Cumulative number of rejected proposals.
+    fn rejected_moves(&self) -> u64;
 }
 
 /// States built around a simplex of `n + 1` vertices and parallel costs.

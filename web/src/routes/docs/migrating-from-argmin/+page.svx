@@ -401,6 +401,44 @@ bounded global solvers. Linear and nonlinear constraints use their corresponding
 problem traits; barrier and augmented-Lagrangian adapters are explicit opt-ins
 when an inner solver is otherwise unconstrained.
 
+## Simulated Annealing Is Deliberately Basin-Native
+
+Basin now supports arbitrary continuous or discrete parameter types through
+`SimulatedAnnealing` and a user-supplied `Neighbor` trait or closure. Migration
+is not trajectory-compatible with Argmin 0.11, because the algorithms differ in
+two material ways:
+
+- Basin always uses the classical Metropolis probability
+  `exp(-(f_new - f_old) / T)` for a strictly uphill proposal and accepts equal
+  costs. Argmin applies a logistic probability to every non-improving proposal,
+  including equality.
+- Basin has no implicit cooling default. Choose geometric, reciprocal, or
+  normalized-log cooling explicitly, and use `with_steps_per_temperature` when
+  several proposals should equilibrate at each level. Basin's normalized-log
+  schedule starts at exactly `T0`; it does not rise above `T0` on its second
+  indexed value.
+
+Argmin's `with_reannealing_fixed`, `with_reannealing_accepted`, and
+`with_reannealing_best` builder names carry over directly. The three triggers
+compose: Basin restarts the schedule when any enabled threshold is reached and
+resets all reannealing progress. Here, accepted-stall counts consecutive
+rejected proposals, while best-stall counts proposals without a new global
+best.
+
+These choices follow Kirkpatrick, Gelatt & Vecchi's classical acceptance rule
+([DOI 10.1126/science.220.4598.671](https://doi.org/10.1126/science.220.4598.671)).
+Hajek's logarithmic convergence result requires a finite-state reversible chain
+and a problem-dependent coefficient
+([DOI 10.1287/moor.13.2.311](https://doi.org/10.1287/moor.13.2.311)), so it does
+not justify a universal schedule default.
+
+For long runs, enable `serde`, checkpoint `SimulatedAnnealingState`, and restore
+it with `Executor::resume`. The state owns the RNG, stateful neighbor, cooling
+phase, reannealing progress, incumbent, best history, and counters. This is an
+exact continuation when the problem, scalar type, code, and resume-safe
+termination criteria are unchanged. Passing the same snapshot to
+`Executor::new` instead requests ordinary warm-start behavior.
+
 ## Observers and Cancellation
 
 Basin observers receive read-only state and return `()`. They do not receive
@@ -598,15 +636,17 @@ fn main() {
 ## Check Compatibility Before Removing Argmin
 
 Basin's `Brent` minimizes a scalar objective; it does not replace Argmin's
-`BrentRoot`. Basin also does not yet offer generic simulated annealing, particle
-swarm optimization, Hager–Zhang line search, or a generic adapter for an Argmin
-solver implementation. Moré–Thuente is the usual initial substitute for
-Hager–Zhang, but it is not trajectory-equivalent.
+`BrentRoot`. Basin also does not yet offer particle swarm optimization,
+Hager–Zhang line search, or a generic adapter for an Argmin solver
+implementation. Moré–Thuente is the usual initial substitute for Hager–Zhang,
+but it is not trajectory-equivalent.
 
 Argmin checkpoints serialize a solver and state together. Basin's current
-`CheckpointWriter` snapshots state for a warm start; it does not promise an
-identical future trajectory for stochastic or population solvers because the
-solver's phase and random-number-generator state are not included.
+`CheckpointWriter` snapshots state. Most Basin states provide a warm start, not
+an identical future trajectory. `SimulatedAnnealingState` is the current
+exception: it implements `ExactResumeState`, contains the complete Markov-chain
+evolution state, and resumes exactly through `Executor::resume`. Check a state's
+API before making the same promise for another stochastic or population solver.
 
 During a real migration, keep both integrations behind features until tests
 compare numerical results, termination behavior, evaluation counts, and runtime.
