@@ -1,13 +1,13 @@
 # Migrating from Argmin
 
-This guide is for applications that use Argmin 0.11 as an optimization
-framework and want to move their problem definitions and solver runs to Basin
-1.7. The frameworks share the same broad vocabulary—a problem, solver, state,
-and executor—but differ in where initialization, stopping rules, errors, and
+This guide is for applications that use Argmin 0.11 as an optimization framework
+and want to move their problem definitions and solver runs to Basin 1.7. The
+frameworks share the same broad vocabulary—a problem, solver, state, and
+executor—but differ in where initialization, stopping rules, errors, and
 constraints live.
 
-The examples below migrate *uses* of Argmin solvers. A custom Argmin `Solver`
-or state machine is a separate port because Basin does not provide a generic
+The examples below migrate *uses* of Argmin solvers. A custom Argmin `Solver` or
+state machine is a separate port because Basin does not provide a generic
 adapter for those extension points.
 
 ## Install Basin
@@ -20,22 +20,22 @@ basin = "1.7"
 ```
 
 For a linear-algebra backend, select the Basin feature matching the version
-already used by your application. The backend dependency and Basin feature
-must name the same release.
+already used by your application. The backend dependency and Basin feature must
+name the same release.
 
-| Parameter type | Backend dependency | Basin dependency |
-| --- | --- | --- |
-| `Vec<f64>` | — | `basin = "1.7"` |
-| nalgebra 0.32 | `nalgebra = "0.32"` | `basin = { version = "1.7", features = ["nalgebra_v0_32"] }` |
-| nalgebra 0.33 | `nalgebra = "0.33"` | `basin = { version = "1.7", features = ["nalgebra_v0_33"] }` |
-| nalgebra 0.34 | `nalgebra = "0.34"` | `basin = { version = "1.7", features = ["nalgebra_v0_34"] }` |
-| nalgebra 0.35 | `nalgebra = "0.35"` | `basin = { version = "1.7", features = ["nalgebra_v0_35"] }` |
-| ndarray 0.15 | `ndarray = "0.15"` | `basin = { version = "1.7", features = ["ndarray_v0_15"] }` |
-| ndarray 0.16 | `ndarray = "0.16"` | `basin = { version = "1.7", features = ["ndarray_v0_16"] }` |
-| ndarray 0.17 | `ndarray = "0.17"` | `basin = { version = "1.7", features = ["ndarray_v0_17"] }` |
-| faer 0.22 | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_22"] }` |
-| faer 0.23 | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_23"] }` |
-| faer 0.24 | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_24"] }` |
+  | Parameter type | Backend dependency                                                                    | Basin dependency                                             |
+  | -------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+  | `Vec<f64>`     | —                                                                                     | `basin = "1.7"`                                              |
+  | nalgebra 0.32  | `nalgebra = "0.32"`                                                                   | `basin = { version = "1.7", features = ["nalgebra_v0_32"] }` |
+  | nalgebra 0.33  | `nalgebra = "0.33"`                                                                   | `basin = { version = "1.7", features = ["nalgebra_v0_33"] }` |
+  | nalgebra 0.34  | `nalgebra = "0.34"`                                                                   | `basin = { version = "1.7", features = ["nalgebra_v0_34"] }` |
+  | nalgebra 0.35  | `nalgebra = "0.35"`                                                                   | `basin = { version = "1.7", features = ["nalgebra_v0_35"] }` |
+  | ndarray 0.15   | `ndarray = "0.15"`                                                                    | `basin = { version = "1.7", features = ["ndarray_v0_15"] }`  |
+  | ndarray 0.16   | `ndarray = "0.16"`                                                                    | `basin = { version = "1.7", features = ["ndarray_v0_16"] }`  |
+  | ndarray 0.17   | `ndarray = "0.17"`                                                                    | `basin = { version = "1.7", features = ["ndarray_v0_17"] }`  |
+  | faer 0.22      | `faer = { version = "0.22", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_22"] }`     |
+  | faer 0.23      | `faer = { version = "0.23", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_23"] }`     |
+  | faer 0.24      | `faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }` | `basin = { version = "1.7", features = ["faer_v0_24"] }`     |
 
 The moving aliases `nalgebra_latest`, `ndarray_latest`, and `faer_latest` are
 convenient for new applications. Exact features are safer during a migration
@@ -82,8 +82,8 @@ fn main() -> Result<(), Error> {
 In Basin, `Executor::from_start` asks the solver to construct its natural state
 from a point. Nelder–Mead builds its default 5% simplex there; the Argmin
 simplex above uses the same coordinate perturbations. Generic stopping rules
-belong on the executor; `SimplexTolerance` checks both simplex diameter and
-cost spread, rather than Argmin's sample standard deviation of costs alone.
+belong on the executor; `SimplexTolerance` checks both simplex diameter and cost
+spread, rather than Argmin's sample standard deviation of costs alone.
 
 <!-- compile: basin-nelder-mead -->
 ```rust
@@ -103,15 +103,12 @@ impl CostFunction for Rosenbrock {
 }
 
 fn main() {
-    let result = Executor::from_start(
-        Rosenbrock,
-        NelderMead::new(),
-        vec![-1.2, 1.0],
-    )
-    .max_iter(1_000)
-    .terminate_on(SimplexTolerance::new(1e-8, 1e-8))
-    .run()
-    .unwrap();
+    let result =
+        Executor::from_start(Rosenbrock, NelderMead::new(), vec![-1.2, 1.0])
+            .max_iter(1_000)
+            .terminate_on(SimplexTolerance::new(1e-8, 1e-8))
+            .run()
+            .unwrap();
 
     println!("x = {:?}, f = {}", result.param(), result.cost());
     assert!(result.cost() < 1e-8);
@@ -121,8 +118,7 @@ fn main() {
 Use `Executor::new` when you need a custom simplex or another fully constructed
 state. For example, pass `BasicSimplexState::from_simplex(vertices)` as the
 third argument. `from_start` is intentionally unavailable for solvers whose
-initialization needs more than one point, such as CMA-ES and population
-solvers.
+initialization needs more than one point, such as CMA-ES and population solvers.
 
 ## Common API Mappings
 
@@ -139,17 +135,17 @@ solvers.
 | `add_observer(observer, mode)` | `observe_with(observer, mode)` |
 | Returning an observer error to stop | A `CancellationToken` for a clean stop or a typed problem error for a hard abort |
 
-Tolerances with similar names need not use identical norms or stopping
-formulas. Preserve numerical behavior by comparing the final objective,
-parameters, termination reason, and evaluation counts—not merely by copying a
-numeric tolerance.
+Tolerances with similar names need not use identical norms or stopping formulas.
+Preserve numerical behavior by comparing the final objective, parameters,
+termination reason, and evaluation counts—not merely by copying a numeric
+tolerance.
 
 ## L-BFGS and L-BFGS-B
 
 Argmin's `LBFGS` is unconstrained. Basin exposes both algorithms through one
 type-state API: `Lbfgs<Unbounded>` is unconstrained, while `Lbfgsb` (and the
-default `Lbfgs`) requires `BoxConstraints`. Moré–Thuente is Basin's default
-line search for both modes.
+default `Lbfgs`) requires `BoxConstraints`. Moré–Thuente is Basin's default line
+search for both modes.
 
 <!-- compile: basin-lbfgs -->
 ```rust
@@ -195,10 +191,10 @@ Argmin's OWL-QN mode for L1 regularization.
 
 ## Nonlinear Least Squares
 
-Basin models nonlinear least squares directly through `Residual` and
-`Jacobian`. Its state cost is `½‖r(x)‖²`. Choose `GaussNewton` when a full
-Gauss–Newton step is appropriate; choose `LevenbergMarquardt` when you need the
-damping that usually motivates an Argmin `GaussNewtonLS` line search.
+Basin models nonlinear least squares directly through `Residual` and `Jacobian`.
+Its state cost is `½‖r(x)‖²`. Choose `GaussNewton` when a full Gauss–Newton step
+is appropriate; choose `LevenbergMarquardt` when you need the damping that
+usually motivates an Argmin `GaussNewtonLS` line search.
 
 <!-- compile: basin-gauss-newton -->
 ```rust
@@ -220,21 +216,20 @@ impl Residual for AffineResidual {
 impl Jacobian for AffineResidual {
     type Jacobian = DenseMatrix<f64>;
 
-    fn jacobian(&self, _x: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
+    fn jacobian(
+        &self,
+        _x: &Self::Param,
+    ) -> Result<Self::Jacobian, Self::Error> {
         Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 1.0]))
     }
 }
 
 fn main() {
     let solver = GaussNewton::<Vec<f64>, DenseMatrix<f64>>::new();
-    let result = Executor::from_start(
-        AffineResidual,
-        solver,
-        vec![0.0, 0.0],
-    )
-    .max_iter(20)
-    .run()
-    .unwrap();
+    let result = Executor::from_start(AffineResidual, solver, vec![0.0, 0.0])
+        .max_iter(20)
+        .run()
+        .unwrap();
 
     assert!(result.cost() < 1e-20);
 }
@@ -249,9 +244,9 @@ MINPACK-style stopping tests.
 
 Argmin problem methods all return its general `argmin::core::Error`. In Basin,
 `CostFunction` owns an `Error` associated type, and `Gradient` and `Hessian`
-inherit it. A least-squares problem similarly owns its error through
-`Residual`. This lets an application preserve domain-specific failures without
-boxing or stringifying them.
+inherit it. A least-squares problem similarly owns its error through `Residual`.
+This lets an application preserve domain-specific failures without boxing or
+stringifying them.
 
 <!-- compile: basin-typed-error -->
 ```rust
@@ -337,8 +332,8 @@ fn main() {
 }
 ```
 
-`FiniteDiff` forwards `BoxConstraints`, so adding numerical derivatives does
-not erase bounds. Under the optional `parallel` feature, its coordinate-wise
+`FiniteDiff` forwards `BoxConstraints`, so adding numerical derivatives does not
+erase bounds. Under the optional `parallel` feature, its coordinate-wise
 evaluations can run in parallel.
 
 ## Bounds and Constraints
@@ -452,16 +447,13 @@ fn main() {
     let observer = Progress {
         cancel: token.clone(),
     };
-    let result = Executor::from_start(
-        Sphere,
-        NelderMead::new(),
-        vec![2.0, -1.0],
-    )
-    .max_iter(100)
-    .with_cancellation_token(token)
-    .observe_with(observer, ObserverMode::Always)
-    .run()
-    .unwrap();
+    let result =
+        Executor::from_start(Sphere, NelderMead::new(), vec![2.0, -1.0])
+            .max_iter(100)
+            .with_cancellation_token(token)
+            .observe_with(observer, ObserverMode::Always)
+            .run()
+            .unwrap();
 
     assert_eq!(result.reason, TerminationReason::Cancelled);
     assert_eq!(result.iter(), 5);
@@ -474,11 +466,11 @@ problem's typed error instead.
 
 ## Complete Backend Examples
 
-These small programs exercise the same derivative-free solve on every
-advertised backend release. Pair each program with the exact dependency row at
-the top of this page. The documentation check compiles and runs the nalgebra
-program against 0.32, 0.33, 0.34, and 0.35; the ndarray program against 0.15,
-0.16, and 0.17; and the faer program against 0.22, 0.23, and 0.24.
+These small programs exercise the same derivative-free solve on every advertised
+backend release. Pair each program with the exact dependency row at the top of
+this page. The documentation check compiles and runs the nalgebra program
+against 0.32, 0.33, 0.34, and 0.35; the ndarray program against 0.15, 0.16, and
+0.17; and the faer program against 0.22, 0.23, and 0.24.
 
 ### `Vec<f64>`
 
@@ -500,11 +492,12 @@ impl CostFunction for Sphere {
 }
 
 fn main() {
-    let result = Executor::from_start(Sphere, NelderMead::new(), vec![1.0, -1.0])
-        .max_iter(300)
-        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
-        .run()
-        .unwrap();
+    let result =
+        Executor::from_start(Sphere, NelderMead::new(), vec![1.0, -1.0])
+            .max_iter(300)
+            .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
+            .run()
+            .unwrap();
     assert!(result.cost() < 1e-10);
 }
 ```
@@ -605,10 +598,10 @@ fn main() {
 ## Check Compatibility Before Removing Argmin
 
 Basin's `Brent` minimizes a scalar objective; it does not replace Argmin's
-`BrentRoot`. Basin also does not yet offer generic simulated annealing,
-particle swarm optimization, Hager–Zhang line search, or a generic adapter for
-an Argmin solver implementation. Moré–Thuente is the usual initial substitute
-for Hager–Zhang, but it is not trajectory-equivalent.
+`BrentRoot`. Basin also does not yet offer generic simulated annealing, particle
+swarm optimization, Hager–Zhang line search, or a generic adapter for an Argmin
+solver implementation. Moré–Thuente is the usual initial substitute for
+Hager–Zhang, but it is not trajectory-equivalent.
 
 Argmin checkpoints serialize a solver and state together. Basin's current
 `CheckpointWriter` snapshots state for a warm start; it does not promise an
@@ -616,9 +609,9 @@ identical future trajectory for stochastic or population solvers because the
 solver's phase and random-number-generator state are not included.
 
 During a real migration, keep both integrations behind features until tests
-compare numerical results, termination behavior, evaluation counts, and
-runtime. Preserve the current algorithm first; evaluate a different Basin
-solver only after the like-for-like path passes.
+compare numerical results, termination behavior, evaluation counts, and runtime.
+Preserve the current algorithm first; evaluate a different Basin solver only
+after the like-for-like path passes.
 
 ## Next
 
