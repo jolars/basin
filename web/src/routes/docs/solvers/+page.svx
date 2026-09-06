@@ -133,7 +133,7 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
   explicit geometric, reciprocal, or normalized-log cooling, and optional
   independently composable schedule restart triggers. It accepts arbitrary
   cloneable parameter types, including discrete structures, and supports exact
-  state-integrated resume.
+  solver-aware resume.
   Uses Metropolis et al. (1953; DOI 10.1063/1.1699114), implements Kirkpatrick,
   Gelatt & Vecchi (1983; DOI 10.1126/science.220.4598.671), and takes its
   logarithmic-schedule context from Hajek (1988; DOI 10.1287/moor.13.2.311).

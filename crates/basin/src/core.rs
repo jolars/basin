@@ -40,6 +40,8 @@
 //! - [`observer`]: read-only side-effect hooks fired around the loop
 //!   ([`Observe`](observer::Observe) + [`ObserverMode`](observer::ObserverMode)).
 //!   Sibling to [`termination`]: observers watch, criteria decide.
+//! - [`checkpoint`]: solver-aware snapshots for exact continuation. State-only
+//!   warm-start files remain an observer concern.
 //! - [`executor`]: the driver: [`Executor`](executor::Executor)/
 //!   [`Stepper`](executor::Stepper)/[`run_loop`](executor::run_loop), plus the
 //!   cooperative [`CancellationToken`](executor::CancellationToken). The
@@ -56,6 +58,7 @@
 
 pub mod augmented_lagrangian;
 pub mod barrier;
+pub mod checkpoint;
 pub mod constraint;
 pub mod executor;
 pub mod inner;

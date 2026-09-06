@@ -290,9 +290,12 @@ pub(crate) struct ReannealingProgress {
 ///
 /// [`SimulatedAnnealingState`] owns the evolving neighbor and RNG. This makes
 /// stateful proposals reproducible and permits exact serialized continuation
-/// through [`Executor::resume`](crate::Executor::resume). A restored run must
-/// use the same deterministic problem, scalar type, code, and resume-safe
-/// termination criteria.
+/// through [`Executor::resume`](crate::Executor::resume). Solver-aware
+/// [`ExactCheckpoint`](crate::ExactCheckpoint) snapshots can instead be
+/// restored with
+/// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
+/// A restored run must use the same deterministic problem, scalar type, code,
+/// and resume-safe termination criteria.
 ///
 /// # Non-finite costs
 ///
@@ -589,7 +592,6 @@ where
                 state.reannealings = state.reannealings.saturating_add(1);
             }
         }
-
         Ok((state, None))
     }
 

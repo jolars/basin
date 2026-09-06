@@ -36,11 +36,11 @@
 //! point exits immediately with the corresponding reason rather than
 //! taking one redundant step.
 //!
-//! [`Executor::resume`] uses the same ordering, but restores the evaluation
-//! counters and preserves best-so-far history from an
-//! [`ExactResumeState`]. `init` still runs exactly
-//! once and must recognize an already-initialized state.
+//! [`Executor::resume`] restores state-carried evolution data and evaluation
+//! counters, while [`Executor::resume_from_checkpoint`] restores the solver,
+//! state, and counters from an [`ExactCheckpoint`] and skips `init`.
 
+use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
 use crate::core::observer::{Observe, ObserverMode};
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::solver::Solver;
@@ -218,6 +218,7 @@ pub struct Stepper<P, S, So> {
     solver: So,
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
     observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
+    checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     max_iter: u64,
     cancellation_token: Option<CancellationToken>,
     finished: Option<TerminationReason>,
@@ -309,6 +310,15 @@ where
                 // strictly improved the incumbent; that is exactly the
                 // `NewBest` firing condition.
                 let is_new_best = state.best_iter() == iter;
+                for (checkpoint, mode) in self.checkpoints.iter_mut() {
+                    if mode.fires_on(iter, is_new_best) {
+                        checkpoint.save(
+                            &self.solver,
+                            state,
+                            self.problem.counts(),
+                        );
+                    }
+                }
                 for (observer, mode) in self.observers.iter_mut() {
                     if mode.fires_on(iter, is_new_best) {
                         observer.observe_iter(state);
@@ -319,6 +329,9 @@ where
                 self.finished = Some(reason);
                 let state =
                     self.state.as_ref().expect("state slot is Some on Stopped");
+                for (checkpoint, _mode) in self.checkpoints.iter_mut() {
+                    checkpoint.save(&self.solver, state, self.problem.counts());
+                }
                 for (observer, _mode) in self.observers.iter_mut() {
                     observer.observe_final(state, &reason);
                 }
@@ -550,8 +563,10 @@ pub struct Executor<P, S, So> {
     max_iter: u64,
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
     observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
+    checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
     resume_counts: Option<EvalCounts>,
+    skip_init: bool,
 }
 
 impl<P, S, So> Executor<P, S, So>
@@ -570,8 +585,10 @@ where
             max_iter: 1000,
             criteria: Vec::new(),
             observers: Vec::new(),
+            checkpoints: Vec::new(),
             cancellation_token: None,
             resume_counts: None,
+            skip_init: false,
         }
     }
 
@@ -600,6 +617,34 @@ where
         let resume_counts = state.resume_counts();
         let mut executor = Self::new(problem, solver, state);
         executor.resume_counts = Some(resume_counts);
+        executor
+    }
+
+    /// Build an executor that continues an exact solver/state checkpoint.
+    ///
+    /// Unlike [`new`](Self::new), this constructor restores the solver and
+    /// problem wrapper's cumulative evaluation counters, preserves the
+    /// state's best-so-far history, and does not call [`Solver::init`].
+    ///
+    /// `max_iter` remains an absolute iteration limit: resuming a state at
+    /// iteration 40 with `.max_iter(100)` performs at most 60 more iterations.
+    /// Exact continuation also requires the same deterministic problem,
+    /// scalar type, backend behavior, and code. The checkpoint does not contain
+    /// the problem, maximum iteration limit, termination criteria, observers,
+    /// cancellation token, or checkpoint sinks; configure that execution
+    /// policy anew. State-derived criteria such as
+    /// [`NoAcceptance`](crate::NoAcceptance) and zero-tolerance
+    /// [`NoImprovement`](crate::NoImprovement) preserve history stored in the
+    /// state, while criteria with private clocks or anchors begin a new
+    /// criterion run.
+    pub fn resume_from_checkpoint(
+        problem: P,
+        checkpoint: ExactCheckpoint<So, S>,
+    ) -> Self {
+        let (solver, state, resume_counts) = checkpoint.into_parts();
+        let mut executor = Self::new(problem, solver, state);
+        executor.resume_counts = Some(resume_counts);
+        executor.skip_init = true;
         executor
     }
 
@@ -724,11 +769,35 @@ where
         self
     }
 
+    /// Register a solver-aware checkpoint destination.
+    ///
+    /// `mode` controls saves after completed iterations. Every sink also saves
+    /// once when the run stops cleanly, regardless of the mode. Checkpoint
+    /// sinks are separate from state-only [`Observe`] implementations because
+    /// exact continuation requires both the solver and state.
+    ///
+    /// Sink failures cannot change the optimization result; implementations
+    /// must record or report their own failures. Calling this method again
+    /// adds another sink.
+    pub fn checkpoint_with<C>(
+        mut self,
+        checkpoint: C,
+        mode: ObserverMode,
+    ) -> Self
+    where
+        C: CheckpointSink<So, S> + 'static,
+    {
+        self.checkpoints.push((Box::new(checkpoint), mode));
+        self
+    }
+
     /// Convert the executor into a [`Stepper`] for one-iteration-at-a-time
-    /// control. `solver.init` runs here so the returned stepper sits at
-    /// iter 0 with a complete state; all registered observers' `observe_init`
-    /// fire here too. Cancellation is first checked by the returned stepper's
-    /// initial [`step`](Stepper::step), after initialization has completed.
+    /// control. On a fresh executor or a legacy state-resume executor,
+    /// `solver.init` runs here so the returned stepper sits at iter 0 with a
+    /// complete state. A solver-aware checkpoint resume skips `init` and uses
+    /// its restored iteration boundary directly. All registered observers'
+    /// `observe_init` hooks fire in either case. Cancellation is first checked
+    /// by the returned stepper's initial [`step`](Stepper::step).
     ///
     /// Returns `Err` when [`Solver::init`] does (e.g. the problem's
     /// initial cost/gradient evaluation `Err`-ed). Observers do *not* fire
@@ -741,8 +810,10 @@ where
             max_iter,
             criteria,
             mut observers,
+            checkpoints,
             cancellation_token,
             resume_counts,
+            skip_init,
         } = self;
         let mut problem = Problem::new(problem);
         if let Some(counts) = resume_counts {
@@ -753,11 +824,16 @@ where
             // per-run snapshot discipline.
             state.reset_best();
         }
-        let mut state = solver.init(&mut problem, state)?;
-        // Mirror init's work onto the state before any termination
-        // check. Baseline is zero: this is a fresh top-level wrapper.
-        state.mirror(problem.counts());
-        state.update_best();
+        let state = if skip_init {
+            state
+        } else {
+            let mut state = solver.init(&mut problem, state)?;
+            // Mirror init's work onto the state before any termination
+            // check. Baseline is zero: this is a fresh top-level wrapper.
+            state.mirror(problem.counts());
+            state.update_best();
+            state
+        };
         for (observer, _mode) in observers.iter_mut() {
             observer.observe_init(&state);
         }
@@ -767,6 +843,7 @@ where
             solver,
             criteria,
             observers,
+            checkpoints,
             max_iter,
             cancellation_token,
             finished: None,

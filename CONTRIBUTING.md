@@ -87,17 +87,20 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
     `BasicState<P>` (single iterate), `BasicSimplexState<V>` (simplex),
     `QuasiNewtonState<V, M>` (BFGS), `LbfgsState` (L-BFGS history),
     `BasicPopulationState<V>` (population), and `SimulatedAnnealingState`
-    (complete Markov-chain state). Extension traits
+    (observable Markov-chain state). Extension traits
     `GradientState`/`SimplexState`/`PopulationState`/`AcceptanceState` expose
-    the richer shapes that termination criteria bind on; `ExactResumeState`
-    marks snapshots that restore counters and evolution exactly. Fields are
+    the richer shapes that termination criteria bind on. Fields are
     `pub(crate)`; access goes through trait methods.
   - `solver.rs`: the `Solver` trait: `init` (one-time setup, e.g. seeding
     cost/gradient at iter 0), `next_iter`, plus a `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
     `run()` returns an `OptimizationResult<S>` (final state +
-    `TerminationReason`). Also `run_loop`/`Stepper`, exact state-integrated
-    `Executor::resume`, and the cooperative, top-level `CancellationToken`.
+    `TerminationReason`). Also `run_loop`/`Stepper`, solver-and-state
+    `Executor::resume`/`Executor::resume_from_checkpoint`, and the cooperative,
+    top-level `CancellationToken`.
+  - `checkpoint.rs`: solver-aware exact checkpoints. The executor captures the
+    solver, state, and authoritative evaluation counts at coherent iteration
+    boundaries; the state-only observer remains a warm-start facility.
   - `termination.rs`: `TerminationCriterion<S>` plus shipped criteria
     (`MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, the
     `*Tolerance`/`Relative*Tolerance` family, `SimplexTolerance`, `MaxTime`).

@@ -432,12 +432,16 @@ and a problem-dependent coefficient
 ([DOI 10.1287/moor.13.2.311](https://doi.org/10.1287/moor.13.2.311)), so it does
 not justify a universal schedule default.
 
-For long runs, enable `serde`, checkpoint `SimulatedAnnealingState`, and restore
-it with `Executor::resume`. The state owns the RNG, stateful neighbor, cooling
-phase, reannealing progress, incumbent, best history, and counters. This is an
-exact continuation when the problem, scalar type, code, and resume-safe
-termination criteria are unchanged. Passing the same snapshot to
-`Executor::new` instead requests ordinary warm-start behavior.
+For long runs, enable `serde` and attach an `ExactCheckpointWriter` with
+`Executor::checkpoint_with`. It writes the solver, state, and authoritative
+evaluation counters together. `read_exact_checkpoint` validates the format,
+Basin version, and concrete types; pass the result to
+`Executor::resume_from_checkpoint`, which restores the iteration boundary
+without rerunning solver initialization. Simulated annealing retains its
+stateful neighbor, RNG, and chain progress in `SimulatedAnnealingState`, while
+the exact checkpoint captures the solver and state together. Reattach
+termination criteria, observers, cancellation, and the checkpoint writer when
+resuming.
 
 ## Observers and Cancellation
 
@@ -641,12 +645,12 @@ Hager–Zhang line search, or a generic adapter for an Argmin solver
 implementation. Moré–Thuente is the usual initial substitute for Hager–Zhang,
 but it is not trajectory-equivalent.
 
-Argmin checkpoints serialize a solver and state together. Basin's current
-`CheckpointWriter` snapshots state. Most Basin states provide a warm start, not
-an identical future trajectory. `SimulatedAnnealingState` is the current
-exception: it implements `ExactResumeState`, contains the complete Markov-chain
-evolution state, and resumes exactly through `Executor::resume`. Check a state's
-API before making the same promise for another stochastic or population solver.
+Like Argmin, Basin's exact checkpoints serialize a solver and state together;
+Basin also records the authoritative evaluation counters. The older
+`CheckpointWriter` still snapshots only state and therefore provides a warm
+start, not a general promise of an identical future trajectory. Exact resume is
+currently tested for simulated annealing. Check a solver's API before making
+the same promise for another stochastic or population solver.
 
 During a real migration, keep both integrations behind features until tests
 compare numerical results, termination behavior, evaluation counts, and runtime.

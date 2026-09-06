@@ -12,11 +12,14 @@ use crate::solver::simulated_annealing::{
 
 /// State for [`SimulatedAnnealing`](crate::solver::SimulatedAnnealing).
 ///
-/// Unlike states used only for warm starts, this type stores every evolving
-/// component of the Markov chain: the stateful neighbor, RNG, cooling phase,
-/// reannealing progress, incumbent, best-so-far history, and counters. With
-/// the `serde` feature, serializing this state and passing the restored value
-/// to [`Executor::resume`](crate::Executor::resume) continues the same chain.
+/// This type stores every evolving component of the Markov chain: the stateful
+/// neighbor, RNG, cooling phase, reannealing progress, incumbent, best-so-far
+/// history, and counters. With the `serde` feature, serializing this state and
+/// passing the restored value to
+/// [`Executor::resume`](crate::Executor::resume) continues the same chain.
+/// Solver-aware [`ExactCheckpoint`](crate::ExactCheckpoint) snapshots remain
+/// available through
+/// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct SimulatedAnnealingState<P, N, F = f64, R = ChaCha8Rng> {

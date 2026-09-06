@@ -70,8 +70,8 @@
 //!
 //! Heavier integrations (tracing, slog, a TUI) live in satellite crates; a
 //! `serde`-gated `CheckpointWriter` (non-wasm) snapshots the state to disk for
-//! warm-starting a later run or exactly resuming a state that implements
-//! [`ExactResumeState`](crate::ExactResumeState).
+//! warm-starting a later run. Solver-aware exact checkpoints live in the
+//! sibling [`checkpoint`](crate::core::checkpoint) module.
 
 use crate::core::termination::TerminationReason;
 

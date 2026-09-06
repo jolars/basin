@@ -51,8 +51,8 @@ first-class cancellation.
 The largest remaining compatibility gaps are:
 
 1. **Reliable checkpoint/resume for the existing stochastic and population
-   solvers.** Generic simulated annealing now has exact state-integrated resume,
-   but DE, SSGA, CMA-ES, and basin-hopping still need complete snapshots. This
+   solvers.** Generic simulated annealing now has exact solver-aware resume, but
+   DE, SSGA, CMA-ES, and basin-hopping still need complete snapshots. This
    is a blocker for `argtuner` and other long-running global workflows.
 2. **Particle swarm optimization.** Seven audited package trees contain PSO
    usage or integration. CMA-ES and differential evolution are alternatives, but
@@ -138,40 +138,37 @@ Choose and document two distinct concepts:
 - **Exact resume:** serialize all state needed to continue identically,
   including population/simplex/history, solver phase, counters, and RNG state.
 
-Before extending exact resume to more solvers, revisit its abstraction boundary:
+The abstraction boundary is now explicit:
 
-- [ ] Replace or explicitly affirm the state-only exact-resume design.
-  `SimulatedAnnealingState` currently stores the neighbor, RNG, schedule,
-  reannealing configuration, and all progress, while `SimulatedAnnealing`
-  retains cloned copies used only to seed that state; after initialization,
-  `next_iter` operates almost entirely on the state. Existing stochastic
-  solvers instead keep their RNG in the solver, so requiring every future
-  `ExactResumeState` to absorb all solver evolution would mean restructuring
-  CMA-ES, DE, SSGA, random search, and basin hopping. Prefer keeping observable
-  chain information in the dedicated SA state, leaving algorithm evolution
-  where it naturally belongs, and defining exact checkpoints around the solver,
-  state, and evaluation counters. This matches Argmin's
-  [`Checkpoint`](https://docs.rs/argmin/latest/argmin/core/checkpointing/trait.Checkpoint.html)
-  boundary, which saves and restores `(solver, state)`. If state-only resume is
-  retained as a deliberate Basin-wide direction, document this work as the
-  exact-resume foundation rather than as part of the SA solver alone.
+- [x] Exact checkpoints store the solver, state, and authoritative evaluation
+  counters. `Executor::resume_from_checkpoint` restores the three together and
+  skips `init`, so evolving data can remain where it naturally belongs.
+  Simulated annealing retains its stateful neighbor and RNG in
+  `SimulatedAnnealingState` for compatibility with state-only exact resume. The
+  separate state-only
+  `CheckpointWriter` remains a warm-start facility.
+- [x] The exact file format records a format version, the exact Basin version,
+  and concrete solver/state type names, rejecting incompatible files before
+  decoding their payload.
 
 Acceptance criteria for exact resume across the remaining solvers:
 
-- Resolve the checkpoint boundary above, then store and serialize every
-  evolving component.
+- Store and serialize every evolving component.
 - Add serialization to population, CMA-ES, simplex, and nonlinear least-squares
   states as appropriate.
-- Ensure `init` recognizes restored state and does not discard it.
-- [x] Test uninterrupted versus save/reload/`Executor::resume` for simulated
-  annealing, including a stateful neighbor and bit-identical serialized output.
+- Restore through `Executor::resume_from_checkpoint`, which does not call
+  `init`.
+- [x] Test uninterrupted versus save/reload/`Executor::resume_from_checkpoint`
+  for simulated annealing, including a stateful neighbor and bit-identical
+  serialized output.
 - [ ] Add the same coverage for DE, SSGA, CMA-ES, basin hopping, and future PSO.
-- Version the checkpoint format or record enough metadata to reject incompatible
-  checkpoints cleanly.
+- [x] Version the checkpoint format and reject incompatible checkpoints
+  cleanly.
 
 Until the wider work is complete, describe ordinary state checkpointing as a
-warm start. Promise exact continuation only for states implementing
-`ExactResumeState` and restored through `Executor::resume`.
+warm start. Promise exact continuation only for a solver/state pair captured by
+the exact checkpoint API and restored through
+`Executor::resume_from_checkpoint`.
 
 ##### 3. Publish an Argmin-to-Basin migration guide
 
@@ -206,11 +203,13 @@ explicit geometric, reciprocal, or normalized-log schedule, supports several
 proposals per temperature level, accepts a seed or custom RNG, and offers one
 optional fixed-interval, rejection-stall, or best-stall reannealing trigger.
 
-`SimulatedAnnealingState` owns the neighbor, RNG, cooling phase, counters,
-incumbent, and best point. With `serde`, it can be checkpointed and restored
-through `Executor::resume` for bit-identical continuation. Public tests cover
-continuous vectors, discrete permutations, all numeric backends, `f32`, custom
-RNGs, non-finite costs, reannealing, stall criteria, and exact resume.
+`SimulatedAnnealingState` owns the evolving neighbor, RNG, cooling and chain
+progress, counters, incumbent, and best point. With `serde`, the solver/state
+pair can be checkpointed and restored through
+`Executor::resume_from_checkpoint` for bit-identical continuation. Public
+tests cover continuous vectors, discrete permutations, all numeric backends,
+`f32`, custom RNGs, non-finite costs, reannealing, stall criteria, and exact
+resume.
 
 This enables complete migrations for system_solver's SA route,
 `saltine-gromark`, `scattr`, and `aminograph`. Continuous CMA-ES/DE is not a
@@ -450,6 +449,8 @@ Key source locations:
   <https://github.com/jolars/basin/blob/main/crates/basin/src/core/observer.rs>
 - Basin checkpoint writer:
   <https://github.com/jolars/basin/blob/main/crates/basin/src/core/observer/checkpoint.rs>
+- Basin exact-checkpoint API:
+  <https://github.com/jolars/basin/blob/main/crates/basin/src/core/checkpoint.rs>
 - Basin termination reasons:
   <https://github.com/jolars/basin/blob/main/crates/basin/src/core/termination.rs>
 

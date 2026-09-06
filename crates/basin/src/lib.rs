@@ -328,6 +328,12 @@ pub mod solver;
 
 pub use crate::core::augmented_lagrangian::AugmentedLagrangian;
 pub use crate::core::barrier::LogBarrier;
+pub use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
+#[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
+pub use crate::core::checkpoint::{
+    CheckpointStatus, CheckpointWriteError, ExactCheckpointWriter,
+    read_exact_checkpoint,
+};
 pub use crate::core::constraint::{
     BoxConstraints, LinearConstraints, LinearEqualityConstraints,
     LinearInequalityConstraints, NonlinearInequalityConstraints,

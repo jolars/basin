@@ -1,9 +1,9 @@
 //! A `serde`-gated observer that snapshots the state to disk.
 //!
 //! Available only with the `serde` feature and off `wasm32` (it does file
-//! I/O). The companion [`read_checkpoint`] reloads a snapshot for either an
-//! ordinary warm start or, when the state implements
-//! [`ExactResumeState`](crate::core::state::ExactResumeState), exact resume.
+//! I/O). The companion [`read_checkpoint`] reloads a state snapshot to warm
+//! start a later run. Exact continuation instead uses the solver-aware
+//! [`ExactCheckpointWriter`](crate::ExactCheckpointWriter).
 
 use std::fs;
 use std::io;
@@ -19,11 +19,8 @@ use crate::core::termination::TerminationReason;
 /// Write the current state to a file with [`bincode`], overwriting the
 /// previous snapshot, so the file always holds the latest checkpoint.
 ///
-/// Checkpointing is an observer's job in Basin. The executor distinguishes how
-/// a restored snapshot is driven: [`Executor::new`](crate::Executor::new)
-/// requests a warm start, while [`Executor::resume`](crate::Executor::resume)
-/// preserves the history and counters of an
-/// [`ExactResumeState`](crate::ExactResumeState).
+/// State-only checkpointing is an observer's job in Basin. It records an
+/// iterate for a later warm start without promising an identical trajectory.
 /// Register it with an [`ObserverMode`](super::ObserverMode) to pick the
 /// cadence ([`Every(n)`](super::ObserverMode::Every) for every `n`th iteration,
 /// [`NewBest`](super::ObserverMode::NewBest) to snapshot only on improvement).
@@ -34,16 +31,14 @@ use crate::core::termination::TerminationReason;
 /// [`QuasiNewtonState`](crate::core::state::QuasiNewtonState) (with `Vec<f64>`
 /// or nalgebra backends—faer has no serde support), and
 /// [`SimulatedAnnealingState`](crate::SimulatedAnnealingState) when its
-/// parameter and neighbor are serializable. Handing a non-serializable state
-/// is a compile error.
+/// parameter, neighbor, and RNG are serializable. Handing a non-serializable
+/// state is a compile error.
 ///
 /// # Resume
 ///
-/// Read the file with [`read_checkpoint`] and deserialize into the concrete
-/// state. Hand ordinary states to [`Executor::new`](crate::Executor::new) for a
-/// warm start. Hand an [`ExactResumeState`](crate::ExactResumeState) to
-/// [`Executor::resume`](crate::Executor::resume) to preserve its best history,
-/// absolute counters, and trajectory. Both paths call the solver's `init`.
+/// Read the file with [`read_checkpoint`], deserialize into the concrete state,
+/// and hand it to [`Executor::new`](crate::Executor::new). The solver runs its
+/// normal `init` path and begins a new run from the restored iterate.
 ///
 /// ```no_run
 /// # use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
@@ -125,9 +120,7 @@ where
 }
 
 /// Load a checkpoint previously written by [`CheckpointWriter`] into a concrete
-/// state, ready for [`Executor::new`](crate::Executor::new) as a warm start or
-/// [`Executor::resume`](crate::Executor::resume) when the state implements
-/// [`ExactResumeState`](crate::ExactResumeState).
+/// state, ready for [`Executor::new`](crate::Executor::new) as a warm start.
 pub fn read_checkpoint<S: DeserializeOwned>(
     path: impl AsRef<Path>,
 ) -> io::Result<S> {
