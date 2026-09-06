@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.8.0](https://github.com/jolars/basin/compare/v1.7.0...v1.8.0) (2026-09-06)
+
+### Features
+- **checkpoint:** resume stochastic solvers ([`cc91fc9`](https://github.com/jolars/basin/commit/cc91fc9da15b8931a5eb1c72e9d32cf52ae7ee9e))
+- **executor:** add exact checkpoints ([`bd27839`](https://github.com/jolars/basin/commit/bd2783910f0b083218f543a48299a94971749fad))
+- **solvers:** add simulated annealing ([`231121c`](https://github.com/jolars/basin/commit/231121c4059c2e0b2c5e839381639cb3ac0dba0a))
+- **executor:** add cancellation tokens ([`7ea852e`](https://github.com/jolars/basin/commit/7ea852e209fde971ccd4c1768d800d4be29ac28e))
+- support versioned linear algebra backends ([`b26e5e8`](https://github.com/jolars/basin/commit/b26e5e82b512a0f03b0e89c07f6d222ab972121c))
+- export TRF damping traits ([`d4b2ca7`](https://github.com/jolars/basin/commit/d4b2ca75e3c363f23af86b5bde443d3e6da9b710)), refs [#84](https://github.com/jolars/basin/issues/84)
+
 ## [1.7.0](https://github.com/jolars/basin/compare/v1.6.0...v1.7.0) (2026-08-27)
 
 ### Features
