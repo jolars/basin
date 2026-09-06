@@ -174,6 +174,14 @@ where
 /// escape hatch for outer solvers that want to reconstruct criteria per
 /// call.
 ///
+/// # Serialization
+///
+/// With the `serde` feature, an inner executor can be serialized when it has
+/// no boxed termination criteria. The inner solver and iteration budget are
+/// stored. Arbitrary criteria cannot be reconstructed from erased trait
+/// objects, so serialization returns an error when any are registered rather
+/// than producing a checkpoint with different execution policy.
+///
 /// # Composition contracts
 ///
 /// Three rules outer solvers must follow when consuming the result of
@@ -230,6 +238,58 @@ pub struct InnerExecutor<S, So> {
     solver: So,
     criteria: Vec<Box<dyn TerminationCriterion<S>>>,
     max_iter: u64,
+}
+
+#[cfg(feature = "serde")]
+impl<S, So> serde::Serialize for InnerExecutor<S, So>
+where
+    So: serde::Serialize,
+{
+    fn serialize<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
+    where
+        Ser: serde::Serializer,
+    {
+        use serde::ser::{Error, SerializeStruct};
+
+        if !self.criteria.is_empty() {
+            return Err(Error::custom(
+                "InnerExecutor cannot serialize boxed termination criteria; \
+                 use an inner iteration budget for an exact checkpoint",
+            ));
+        }
+
+        let mut fields = serializer.serialize_struct("InnerExecutor", 2)?;
+        fields.serialize_field("solver", &self.solver)?;
+        fields.serialize_field("max_iter", &self.max_iter)?;
+        fields.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, S, So> serde::Deserialize<'de> for InnerExecutor<S, So>
+where
+    So: serde::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct StoredInnerExecutor<So> {
+            solver: So,
+            max_iter: u64,
+        }
+
+        let stored =
+            <StoredInnerExecutor<So> as serde::Deserialize>::deserialize(
+                deserializer,
+            )?;
+        Ok(Self {
+            solver: stored.solver,
+            criteria: Vec::new(),
+            max_iter: stored.max_iter,
+        })
+    }
 }
 
 impl<S: State + CountsMirror, So> InnerExecutor<S, So> {

@@ -64,6 +64,7 @@ pub trait AcceptanceTest<F = f64> {
 /// and of SciPy's `RandomDisplacement`. [`adjust_scale`](StepTaker::adjust_scale)
 /// multiplies the step size, so adaptive control widens or narrows the cube.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RandomDisplacement<F = f64> {
     stepsize: F,
 }
@@ -122,6 +123,7 @@ where
 /// convention and SciPy's `Metropolis` (`w = exp(min(0, −(f_new − f_old)·β))`
 /// with `β = 1/T`).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Metropolis<F = f64> {
     beta: F,
 }
@@ -207,6 +209,15 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// `interval = 50`, `target_accept_rate = 0.5`, `stepwise_factor = 0.9`,
 /// adaptive step control on.
 ///
+/// # Exact checkpoints
+///
+/// With the `serde` feature, the inner solver, step taker, acceptance test,
+/// adaptive counters, and live RNG can be captured in a solver-aware exact
+/// checkpoint. The inner executor must use its iteration budget without boxed
+/// termination criteria—arbitrary erased criteria cannot be reconstructed, so
+/// checkpoint serialization rejects that configuration instead of silently
+/// changing the resumed trajectory.
+///
 /// # Inner solver
 ///
 /// Generic over any `I: WarmStart<V>`; the associated `I::State` determines
@@ -269,6 +280,7 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// // iterate may be a transiently accepted uphill hop.
 /// assert!(result.best_cost() < 1e-6, "Ackley best cost {}", result.best_cost());
 /// ```
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasinHopping<
     I,
     V,

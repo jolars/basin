@@ -39,6 +39,11 @@ use crate::core::state::{CountsMirror, State};
 ///
 /// The scalar `F` defaults to `f64` so `NllsState<P>` call sites resolve
 /// unchanged.
+///
+/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
+/// `P` and `F` are), including its cached objective value, best-so-far point,
+/// and residual and Jacobian counters.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NllsState<P, F = f64> {
     pub(crate) param: P,
     pub(crate) cost: Option<F>,

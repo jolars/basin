@@ -95,6 +95,8 @@ use crate::core::termination::TerminationReason;
 /// passed to [`new`](Self::new): same seed → same iterate trajectory
 /// on every platform basin builds for (including
 /// `wasm32-unknown-unknown`).
+/// With the `serde` feature, the live RNG and derived constants are serialized
+/// alongside the complete [`CmaEsState`] in a solver-aware exact checkpoint.
 ///
 /// # Contract
 ///
@@ -146,6 +148,7 @@ use crate::core::termination::TerminationReason;
 /// See [`RandomSearch`](crate::RandomSearch) for the population-based
 /// `Executor` pattern. Construct the solver with `CmaEs::new(seed)` and
 /// the initial distribution with `CmaEsState::new(mean, sigma)`.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CmaEs<V, M, F = f64> {
     lambda_override: Option<usize>,
     /// Derived CMA constants, computed once at [`Solver::init`] from the
@@ -161,6 +164,7 @@ pub struct CmaEs<V, M, F = f64> {
 /// [`Solver::init`] from `n` and `λ`. Pure functions of the
 /// hyperparameters, with no mutable iterate (that lives in
 /// [`CmaEsState`]).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct CmaConstants<F = f64> {
     pub(crate) n: usize,
     pub(crate) lambda: usize,

@@ -66,6 +66,7 @@ use crate::core::termination::TerminationReason;
 /// .unwrap();
 /// assert!(result.cost() < 1e-6);
 /// ```
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NelderMead<Mode = Unbounded, F = f64> {
     config: ParamConfig<F>,
     /// Resolved parameters; populated by `init` once the dimension is known.
@@ -110,6 +111,7 @@ pub struct Unbounded;
 pub struct Projected;
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Params<F> {
     alpha: F,
     beta: F,
@@ -118,6 +120,7 @@ struct Params<F> {
 }
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum ParamConfig<F> {
     Standard,
     Adaptive,

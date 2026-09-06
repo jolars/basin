@@ -47,6 +47,7 @@ use crate::core::state::{CountsMirror, PopulationState, State};
 /// [`Solver::init`](crate::core::solver::Solver::init).
 ///
 /// The scalar `F` defaults to `f64` so call sites resolve unchanged.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CmaEsState<V, M, F = f64> {
     // PopulationState data.
     /// λ sampled candidates, sorted by ascending cost after every
@@ -97,6 +98,7 @@ pub struct CmaEsState<V, M, F = f64> {
 /// derived penalty *constants* (`damp`, `edist_threshold`,
 /// `hist_cap`) stay on the solver; only the per-iteration state lives
 /// here.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct BoundPenalty<V, F = f64> {
     /// Per-coordinate quadratic-penalty weights `γ ∈ Rⁿ`.
     pub(crate) gamma: V,

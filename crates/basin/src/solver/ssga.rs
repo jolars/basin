@@ -66,6 +66,9 @@ use crate::solver::cma_es::sort_population_ascending;
 /// Carries a [`ChaCha8Rng`] seeded from the `seed: u64` passed to
 /// [`new`](Self::new): same seed → same iterate trajectory on every
 /// platform basin builds for (including `wasm32-unknown-unknown`).
+/// With the `serde` feature, both the live RNG and the configuration are
+/// serialized for solver-aware exact checkpoints; pair the solver with its
+/// serialized [`BasicPopulationState`].
 ///
 /// # Contract
 ///
@@ -108,6 +111,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// See [`RandomSearch`](crate::RandomSearch) for the population-based
 /// `Executor` pattern (a `BasicPopulationState` sized to `pop_size`);
 /// `Ssga` likewise requires `BoxConstraints` on the problem.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Ssga<F = f64> {
     pop_size: usize,
     blx_alpha: F,

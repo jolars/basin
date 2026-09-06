@@ -161,7 +161,8 @@ Acceptance criteria for exact resume across the remaining solvers:
 - [x] Test uninterrupted versus save/reload/`Executor::resume_from_checkpoint`
   for simulated annealing, including a stateful neighbor and bit-identical
   serialized output.
-- [ ] Add the same coverage for DE, SSGA, CMA-ES, basin hopping, and future PSO.
+- [x] Add the same coverage for DE, SSGA, CMA-ES, and basin hopping. The future
+  PSO task below independently requires warm-start and exact-resume tests.
 - [x] Version the checkpoint format and reject incompatible checkpoints
   cleanly.
 

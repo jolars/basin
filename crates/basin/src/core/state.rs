@@ -577,6 +577,11 @@ where
 ///
 /// The scalar `F` defaults to `f64` so existing `BasicSimplexState<V>`
 /// call sites resolve unchanged.
+///
+/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
+/// `V` and `F` are), so the complete simplex and solver scratch space can be
+/// checkpointed without losing the next iteration's trajectory.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasicSimplexState<V, F = f64> {
     pub(crate) vertices: Vec<V>,
     pub(crate) costs: Vec<F>,
@@ -1030,6 +1035,10 @@ impl<V: Clone, M, F: Scalar> CountsMirror for QuasiNewtonState<V, M, F> {
 ///
 /// The scalar `F` defaults to `f64` so existing `BasicPopulationState<V>`
 /// call sites resolve unchanged.
+///
+/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
+/// `V` and `F` are), including the full population and best-so-far history.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasicPopulationState<V, F = f64> {
     pub(crate) candidates: Vec<V>,
     pub(crate) costs: Vec<F>,
