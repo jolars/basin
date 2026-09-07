@@ -28,6 +28,61 @@ pub enum LineSearchOutcome<F> {
     Failed,
 }
 
+/// Objective and gradient retained at a line search's accepted point.
+///
+/// A line search returns this alongside [`LineSearchOutcome::Step`] when it has
+/// already evaluated the selected point. Solvers can then adopt the point and
+/// its values without repeating an expensive fused evaluation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct LineSearchEvaluation<V, F> {
+    /// Accepted parameter, equal to `x + alpha * direction`.
+    pub param: V,
+    /// Objective value at [`param`](Self::param).
+    pub cost: F,
+    /// Gradient at [`param`](Self::param).
+    pub gradient: V,
+}
+
+impl<V, F> LineSearchEvaluation<V, F> {
+    /// Construct an evaluation at an accepted line-search point.
+    pub fn new(param: V, cost: F, gradient: V) -> Self {
+        Self {
+            param,
+            cost,
+            gradient,
+        }
+    }
+}
+
+/// Outcome of a line search, optionally carrying its accepted evaluation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct LineSearchResult<V, F> {
+    /// Whether the search selected a step or failed softly.
+    pub outcome: LineSearchOutcome<F>,
+    /// Objective and gradient at the selected step, when retained.
+    pub evaluation: Option<LineSearchEvaluation<V, F>>,
+}
+
+impl<V, F> LineSearchResult<V, F> {
+    /// Construct a result without a retained evaluation.
+    pub fn new(outcome: LineSearchOutcome<F>) -> Self {
+        Self {
+            outcome,
+            evaluation: None,
+        }
+    }
+
+    /// Construct a selected step with its retained evaluation.
+    pub fn with_evaluation(step: F, param: V, cost: F, gradient: V) -> Self {
+        Self {
+            outcome: LineSearchOutcome::Step(step),
+            evaluation: Some(LineSearchEvaluation::new(param, cost, gradient)),
+        }
+    }
+}
+
 /// Compute a step size `α` along a caller-supplied descent direction `d`.
 ///
 /// Convention: `direction` is a *descent* direction (`gᵀd < 0`); the caller
@@ -89,6 +144,28 @@ pub trait LineSearch<P, V, F = f64> {
     ) -> Result<LineSearchOutcome<F>, Self::Error> {
         self.next(problem, param, cost, gradient, direction)
             .map(LineSearchOutcome::Step)
+    }
+
+    /// Returns the outcome and, when available, the evaluation at its step.
+    ///
+    /// The default preserves compatibility with line searches that return only
+    /// a step. Implementations that evaluate both the objective and gradient at
+    /// their selected point can override this method to expose those values and
+    /// prevent the calling solver from evaluating the point again.
+    ///
+    /// When [`LineSearchResult::evaluation`] is [`Some`], the outcome must be
+    /// [`LineSearchOutcome::Step`], and the evaluation's parameter must equal
+    /// `param + step * direction`.
+    fn next_with_evaluation(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        self.next_with_outcome(problem, param, cost, gradient, direction)
+            .map(LineSearchResult::new)
     }
 }
 

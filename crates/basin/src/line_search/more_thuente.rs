@@ -1,6 +1,6 @@
 use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
-use crate::line_search::LineSearch;
+use crate::line_search::{LineSearch, LineSearchOutcome, LineSearchResult};
 
 /// Moré–Thuente line search: port of MINPACK-2's `dcsrch` + `dcstep`.
 ///
@@ -139,22 +139,19 @@ impl<F: Scalar> MoreThuente<F> {
     }
 }
 
-impl<P, V, F> LineSearch<P, V, F> for MoreThuente<F>
-where
-    F: Scalar,
-    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
-    V: ScaledAdd<F> + Dot<F> + Clone,
-{
-    type Error = P::Error;
-
-    fn next(
+impl<F: Scalar> MoreThuente<F> {
+    fn search<P, V>(
         &mut self,
         problem: &mut Problem<P>,
         param: &V,
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<F, Self::Error> {
+    ) -> Result<LineSearchResult<V, F>, P::Error>
+    where
+        P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+        V: ScaledAdd<F> + Dot<F> + Clone,
+    {
         let zero = F::zero();
         let p5 = F::from_f64(0.5).unwrap();
         let p66 = F::from_f64(0.66).unwrap();
@@ -168,10 +165,10 @@ where
         // Defensive: catch ascent direction or non-finite slope. The
         // `!is_finite()` guard routes NaN here too.
         if !ginit.is_finite() || ginit >= zero {
-            return Ok(zero);
+            return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
         }
         if !(self.alpha_init >= self.stpmin && self.alpha_init <= self.stpmax) {
-            return Ok(zero);
+            return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
         }
 
         // Initialization (Fortran lines 3514–3541).
@@ -207,24 +204,36 @@ where
 
             // Warning and convergence tests (Fortran lines 3578–3594).
             //
-            // All four warning conditions and the convergence
-            // condition terminate the search. Treated identically
-            // here: return the current `stp` as the chosen step.
-            // L-BFGS-B's `lnsrlb` routes `WARN`/`CONV` to its
-            // `NEW_X` path, so a warning is not a failure.
+            // Warning conditions and the convergence condition terminate the
+            // search. Treating indistinguishable values at distinct steps as
+            // a rounding warning avoids exhausting the evaluation budget when
+            // the objective has reached its finite-precision floor.
+            //
+            // Warnings normally return the current `stp`; an indistinguishable
+            // non-Armijo trial falls back to the bracket's best `stx`.
+            // L-BFGS-B's `lnsrlb` routes `WARN`/`CONV` to its `NEW_X` path, so
+            // a warning is not a failure.
             let warn_rounding = brackt && (stp <= stmin || stp >= stmax);
+            let warn_no_resolution = stp != stx && f == fx && g == gx;
             let warn_xtol = brackt && stmax - stmin <= self.xtol * stmax;
             let warn_stpmax = stp == self.stpmax && f <= ftest && g <= gtest;
             let warn_stpmin = stp == self.stpmin && (f > ftest || g >= gtest);
             let converged = f <= ftest && g.abs() <= self.gtol * (-ginit);
 
+            if warn_no_resolution && f > ftest {
+                return Ok(LineSearchResult::new(LineSearchOutcome::Step(stx)));
+            }
+
             if warn_rounding
+                || warn_no_resolution
                 || warn_xtol
                 || warn_stpmax
                 || warn_stpmin
                 || converged
             {
-                return Ok(stp);
+                return Ok(LineSearchResult::with_evaluation(
+                    stp, trial, f, g_full,
+                ));
             }
 
             // Step update via `dcstep`, with optional modified-function
@@ -310,7 +319,42 @@ where
 
         // maxfev exhausted: return current best step (Armijo holds
         // at stx by invariant of dcstep, so this is a usable step).
-        Ok(stx)
+        Ok(LineSearchResult::new(LineSearchOutcome::Step(stx)))
+    }
+}
+
+impl<P, V, F> LineSearch<P, V, F> for MoreThuente<F>
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    V: ScaledAdd<F> + Dot<F> + Clone,
+{
+    type Error = P::Error;
+
+    fn next(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<F, Self::Error> {
+        self.search(problem, param, cost, gradient, direction)
+            .map(|result| match result.outcome {
+                LineSearchOutcome::Step(step) => step,
+                LineSearchOutcome::Failed => F::zero(),
+            })
+    }
+
+    fn next_with_evaluation(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        self.search(problem, param, cost, gradient, direction)
     }
 }
 
@@ -529,6 +573,34 @@ mod tests {
         }
     }
 
+    /// A flat, finite-precision region where distinct trial steps produce the
+    /// same objective and directional derivative.
+    struct QuantizedPlateau;
+
+    impl CostFunction for QuantizedPlateau {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = std::convert::Infallible;
+
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            Ok(if x[0] == 0.0 {
+                10.0
+            } else if x[0] >= 0.9 {
+                11.0
+            } else {
+                9.0
+            })
+        }
+    }
+
+    impl Gradient for QuantizedPlateau {
+        type Gradient = Vec<f64>;
+
+        fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            Ok(vec![if x[0] >= 0.9 { 1.0 } else { -1.0 }])
+        }
+    }
+
     #[test]
     fn satisfies_strong_wolfe_on_quadratic() {
         let mut p = Problem::new(Quadratic);
@@ -652,5 +724,24 @@ mod tests {
         .unwrap();
 
         assert!((alpha - 0.1).abs() < 1e-12, "expected α=0.1, got {alpha}",);
+    }
+
+    #[test]
+    fn stops_when_rounding_makes_distinct_trials_indistinguishable() {
+        let mut p = Problem::new(QuantizedPlateau);
+        let x = vec![0.0];
+        let f0 = p.cost(&x).unwrap();
+        let g = p.gradient(&x).unwrap();
+        let baseline = p.counts().cost_evals;
+        let mut ls = MoreThuente::new().xtol(0.0).maxfev(20);
+        let direction = vec![1.0];
+
+        let alpha = LineSearch::<QuantizedPlateau, Vec<f64>>::next(
+            &mut ls, &mut p, &x, f0, &g, &direction,
+        )
+        .unwrap();
+
+        assert!(alpha > 0.0);
+        assert!(p.counts().cost_evals - baseline < u64::from(ls.maxfev));
     }
 }

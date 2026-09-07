@@ -642,13 +642,14 @@ where
             // `LineSearch` has no generic hooks for the initial step or the
             // feasibility cap used by Fortran's `lnsrlb`.
             let _ = (alpha_init, stpmx);
-            let stp = match self.line_search.next_with_outcome(
+            let line_search_result = self.line_search.next_with_evaluation(
                 problem,
                 &state.param,
                 f_old,
                 &g_v,
                 &d_v,
-            )? {
+            )?;
+            let stp = match line_search_result.outcome {
                 LineSearchOutcome::Step(stp) => stp,
                 LineSearchOutcome::Failed => F::zero(),
             };
@@ -667,10 +668,14 @@ where
                 }
             }
 
-            state.param.scaled_add(stp, &d_v);
-
-            // MoreThuente does not retain the final trial values.
-            let (f_new, g_new) = problem.cost_and_gradient(&state.param)?;
+            let (f_new, g_new) =
+                if let Some(evaluation) = line_search_result.evaluation {
+                    state.param = evaluation.param;
+                    (evaluation.cost, evaluation.gradient)
+                } else {
+                    state.param.scaled_add(stp, &d_v);
+                    problem.cost_and_gradient(&state.param)?
+                };
 
             // Limited-memory update with the Fortran curvature check.
             // s = stp · d  (in slice form, d holds the unscaled
@@ -862,13 +867,14 @@ where
             acc
         };
 
-        let stp = match self.line_search.next_with_outcome(
+        let line_search_result = self.line_search.next_with_evaluation(
             problem,
             &state.param,
             f_old,
             &g_v,
             &d_v,
-        )? {
+        )?;
+        let stp = match line_search_result.outcome {
             LineSearchOutcome::Step(stp) => stp,
             LineSearchOutcome::Failed => F::zero(),
         };
@@ -882,9 +888,15 @@ where
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
 
-        // x ← x + stp · d.
-        state.param.scaled_add(stp, &d_v);
-        let (f_new, g_new) = problem.cost_and_gradient(&state.param)?;
+        let (f_new, g_new) =
+            if let Some(evaluation) = line_search_result.evaluation {
+                state.param = evaluation.param;
+                (evaluation.cost, evaluation.gradient)
+            } else {
+                // x ← x + stp · d.
+                state.param.scaled_add(stp, &d_v);
+                problem.cost_and_gradient(&state.param)?
+            };
 
         // Curvature-conditioned limited-memory update. Matches Fortran
         // `dr ≤ epsmch · |ddum|` with `dr = y·s` and `ddum = −gdold·stp`.

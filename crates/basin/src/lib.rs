@@ -400,8 +400,8 @@ pub use crate::core::termination::{
     TerminationReason,
 };
 pub use crate::line_search::{
-    Backtracking, Constant, HagerZhang, LineSearch, LineSearchOutcome,
-    MoreThuente, Wolfe,
+    Backtracking, Constant, HagerZhang, LineSearch, LineSearchEvaluation,
+    LineSearchOutcome, LineSearchResult, MoreThuente, Wolfe,
 };
 pub use crate::root::{
     BrentRoot, BrentRootError, RootResult, RootTerminationReason,
