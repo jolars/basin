@@ -7,11 +7,11 @@
 //! solvers iterate over ([`State`], [`GradientState`], [`SimplexState`]),
 //! the [`Solver`] trait, a pluggable termination layer
 //! ([`TerminationCriterion`]), and a read-only observer layer
-//! ([`Observe`]). Concrete solvers are in [`solver`]; line searches in
-//! [`line_search`].
+//! ([`Observe`]). Concrete optimization solvers are in [`solver`]; line
+//! searches in [`line_search`]; and direct scalar root finders in [`root`].
 //!
-//! Start at [`Executor`] for the user-facing driver, or [`core`] for the
-//! trait taxonomy and the iteration-loop contract.
+//! Start at [`Executor`] for optimization runs, [`root`] for scalar equations,
+//! or [`core`] for the trait taxonomy and the iteration-loop contract.
 //!
 //! See `CONTRIBUTING.md` at the repo root for the design tenets that shape
 //! these APIs (notably tenet 3 on framework-level termination, tenet 4
@@ -135,6 +135,11 @@
 //! Problems that cannot fail pick [`std::convert::Infallible`]; its niche
 //! optimization keeps `Result<f64, Infallible>` the same layout as a bare `f64`,
 //! so the happy path stays zero-cost.
+//!
+//! The direct [`BrentRoot`] API follows the same typed-error principle without
+//! using optimization state: callback failures are wrapped in
+//! [`BrentRootError::Evaluation`], structural bracket failures have distinct
+//! variants, and an iteration-limit exit is a clean [`RootResult`].
 //!
 //! The [`problem`](crate::core::problem) module docs carry the per-trait detail.
 //!
@@ -324,6 +329,8 @@ pub mod line_search;
 /// Catalog of test problems used by the example tests and benchmarks.
 #[cfg(feature = "problems")]
 pub mod problems;
+/// Scalar root-finding algorithms with direct solve APIs.
+pub mod root;
 /// Concrete solver implementations.
 pub mod solver;
 
@@ -395,6 +402,9 @@ pub use crate::core::termination::{
 pub use crate::line_search::{
     Backtracking, Constant, HagerZhang, LineSearch, LineSearchOutcome,
     MoreThuente, Wolfe,
+};
+pub use crate::root::{
+    BrentRoot, BrentRootError, RootResult, RootTerminationReason,
 };
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};

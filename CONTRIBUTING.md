@@ -21,7 +21,9 @@ search, simulated annealing, CMA-ES, a steady-state GA, memetic combinations
 incl. the MA-LSCh chain family), and constrained methods (projected gradient,
 bounded Nelder-Mead, L-BFGS-B, and CMA-ES, log-barrier, augmented Lagrangian,
 and COBYLA for nonlinear inequality constraints). Solvers are generic over the
-linear-algebra backend (`Vec<f64>`, nalgebra, ndarray, faer).
+linear-algebra backend (`Vec<f64>`, nalgebra, ndarray, faer). Scalar root
+finding lives beside this framework as a direct API because its signed
+function values and bracketing semantics do not fit optimization state.
 
 ## Commands
 
@@ -117,6 +119,9 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
 - `src/solver.rs` + `src/solver/`: concrete solvers spanning the families in
   "What this is", with pluggable line searches (`Backtracking`, `Wolfe`,
   `MoreThuente`, `HagerZhang`, `Constant`) where applicable.
+- `src/root.rs` + `src/root/`: direct scalar root-finding algorithms. These
+  return root-specific results and errors rather than routing signed function
+  values through the optimization `State`/`Executor` contract.
 
 Module convention: **no `mod.rs`**: use `src/foo.rs` for the module file and
 `src/foo/bar.rs` for submodules.

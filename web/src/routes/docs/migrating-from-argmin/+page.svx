@@ -130,6 +130,7 @@ initialization needs more than one point, such as CMA-ES and population solvers.
 | `HagerZhangLineSearch::new()` | `HagerZhang::new()` |
 | `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
 | `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `BoxConstraints` and `GlobalBestPsoState::new()` |
+| `BrentRoot::new(lower, upper, tol)` | `BrentRoot::new(lower, upper).with_tol(tol_rel, tol_abs).solve(function)`; no `Executor` is needed |
 | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
 | Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
 | Transforms, clamps, or penalties for box bounds | `BoxConstraints` plus a solver that consumes bounds |
@@ -141,6 +142,34 @@ Tolerances with similar names need not use identical norms or stopping formulas.
 Preserve numerical behavior by comparing the final objective, parameters,
 termination reason, and evaluation counts—not merely by copying a numeric
 tolerance.
+
+## Brent Root Finding
+
+Basin keeps root finding outside its optimization state model: the signed
+function value and sign-changing bracket are part of `RootResult`, rather than
+being represented as an optimization cost and box constraint. Pass the former
+Argmin `CostFunction::cost` body as a fallible closure:
+
+<!-- compile: basin-brent-root -->
+```rust
+use std::convert::Infallible;
+
+use basin::BrentRoot;
+
+fn main() {
+    let result = BrentRoot::new(0.0, 2.0)
+        .solve(|x| Ok::<_, Infallible>(x * x - 2.0))
+        .unwrap();
+
+    assert!(result.converged());
+    assert!((result.root() - 2.0_f64.sqrt()).abs() < 1e-10);
+}
+```
+
+An endpoint root is a successful zero-iteration result. Reversed or
+same-sign brackets, non-finite values, and callback errors are distinct
+`BrentRootError` variants; reaching the iteration limit is a clean
+`RootResult` with `RootTerminationReason::MaxIter`.
 
 ## L-BFGS and L-BFGS-B
 
@@ -725,10 +754,11 @@ fn main() {
 
 ## Check Compatibility Before Removing Argmin
 
-Basin's `Brent` minimizes a scalar objective; it does not replace Argmin's
-`BrentRoot`. Basin also does not offer a generic adapter for an Argmin solver
-implementation. Its Hager–Zhang configuration maps closely to Argmin's, but
-the implementations are not promised to produce identical trial trajectories.
+Basin's `Brent` minimizes a scalar objective, while `BrentRoot` solves a
+bracketed scalar equation through the direct API above. Basin does not offer a
+generic adapter for an Argmin solver implementation. Its Hager–Zhang
+configuration maps closely to Argmin's, but the implementations are not
+promised to produce identical trial trajectories.
 
 Like Argmin, Basin's exact checkpoints serialize a solver and state together;
 Basin also records the authoritative evaluation counters. The older

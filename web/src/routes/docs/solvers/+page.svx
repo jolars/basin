@@ -1,11 +1,20 @@
 # Solvers
 
-Basin ships a large catalog of solvers, all driven by the same `Executor` loop.
-Pick one based on what your problem provides (a gradient? only costs?
-residuals?) and whether it is constrained.
+Basin ships a large catalog of optimization solvers driven by the same
+`Executor` loop, plus a direct scalar root-finding API. Pick an optimization
+solver based on what your problem provides (a gradient? only costs? residuals?)
+and whether it is constrained.
 
-Each solver name links to its API page on [docs.rs](https://docs.rs/basin); the
-trailing note cites the paper it implements (or the source it ports).
+Each algorithm name links to its API page on [docs.rs](https://docs.rs/basin);
+the trailing note cites the paper it implements (or the source it ports).
+
+## Root Finding
+
+- **[`BrentRoot`](https://docs.rs/basin/latest/basin/root/brent/struct.BrentRoot.html)**:
+  bracketed scalar root finding by bisection, secant steps, and inverse
+  quadratic interpolation (Brent, 1971). It uses a direct fallible-closure API
+  rather than `Executor`, preserving the signed function value and final
+  bracket in a root-specific result.
 
 ## First-Order
 
@@ -245,6 +254,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `Cobyla`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
   | `SolisWets`                 | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Brent`                     | Derivative-free |     —      |    —     |    —    |  —   |
+  | `BrentRoot`                 | Root finding    |     —      |    —     |    —    |  —   |
   | `GoldenSection`             | Derivative-free |     —      |    —     |    —    |  —   |
   | `BrentDerivative`           | First-order     |     —      |    —     |    —    |  —   |
   | `Bfgs`                      | Quasi-Newton    |     ✓      |    ✓     |    ✓    |  ✓   |
@@ -270,8 +280,9 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `BarrierMethod`             | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
   | `AugmentedLagrangianMethod` | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
 
-`Brent`, `GoldenSection`, and `BrentDerivative` minimize over a scalar `f64`
-interval (1-D), so the vector-backend choice does not apply.
+`Brent`, `GoldenSection`, and `BrentDerivative` minimize over a scalar interval;
+`BrentRoot` finds a bracketed scalar zero directly. All four support `f64` and
+`f32`, so the vector-backend choice does not apply.
 
 † `DeInject` and `BasinHopping` are themselves backend-generic, but their
 effective coverage is the intersection of the outer driver and the chosen inner
@@ -294,7 +305,7 @@ dense-matrix constructor). Matrix-free mode has no such caveat: no matrix type
 is bound at all, and `FiniteDiff` synthesizes the Hessian-vector product on
 every backend.
 
-Each solver's page on [docs.rs](https://docs.rs/basin) carries a **Backends**
+Each algorithm's page on [docs.rs](https://docs.rs/basin) carries a **Backends**
 note listing exactly which parameter types it supports.
 
 See [Getting Started](../getting-started/) for a worked example, or open the

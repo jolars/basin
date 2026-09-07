@@ -10,7 +10,8 @@ driver loop (`Executor`), with a set of solvers spanning first-order,
 derivative-free, nonlinear least-squares, and evolutionary methods. Solvers are
 generic over the linear-algebra backend, constraints are first-class, and the
 default build compiles to `wasm32-unknown-unknown` with no BLAS/LAPACK or
-threads.
+threads. A direct scalar root-finding API covers bracketed equations without
+forcing their signed function values through the optimization state model.
 
 Narrative documentation lives at [basin.rs/docs]; the rustdoc reference is at
 [docs.rs/basin]. There is also an in-browser [solver visualizer] and a
@@ -113,6 +114,8 @@ surprise.
   Nelder-Mead, L-BFGS-B, and bounded CMA-ES; LINCOA for linear constraints and
   COBYLA for nonlinear inequalities; log-barrier and augmented Lagrangian
   wrappers for more general constraints.
+- **Root finding:** Brent's bracketed scalar method through the direct
+  `BrentRoot::solve` API.
 
 See [Solvers] for which backends each one supports.
 

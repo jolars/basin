@@ -19,6 +19,10 @@ linear, and nonlinear constraints handled problem-side. Every solver is generic
 over the linear-algebra backend, from plain `Vec<f64>` to nalgebra, ndarray, or
 faer.
 
+Bracketed scalar equations use the separate `BrentRoot::solve` API. It accepts
+a fallible closure and returns the signed function value and final bracket
+directly, without representing root finding as objective minimization.
+
 ## A Solver Run at a Glance
 
 The smallest complete program: minimize the sphere function with the
@@ -95,6 +99,9 @@ A rough map from the shape of your problem to where to start. The
   describe the *problem*, so they live problem-side. Bounded solvers (`Lbfgsb`,
   bounded `NelderMead`, `Trf`) consume them directly; adapters (projection,
   log-barrier, augmented Lagrangian, or `Cobyla`) wrap unconstrained solvers.
+- **Scalar equation with a sign-changing interval**: `BrentRoot` combines
+  bisection, secant steps, and inverse quadratic interpolation through a direct
+  root-specific API.
 
 ## Citing Basin
 
@@ -112,7 +119,8 @@ the same reference in machine-readable form.
 - [Getting Started](getting-started/): install Basin and run your first solve.
 - [Migrating from Argmin](migrating-from-argmin/): translate problem traits,
   solver configuration, errors, bounds, and observers from Argmin 0.11.
-- [Solvers](solvers/): the catalog of solvers and which backends they need.
+- [Solvers](solvers/): the catalog of optimization solvers, scalar root finding,
+  and backend support.
 
 You can also watch solvers converge interactively in the
 [visualizer](../visualizer/), or browse the full API on

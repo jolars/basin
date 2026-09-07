@@ -41,34 +41,30 @@ version-specific backend features and supports the backend matrix below.
 ### Executive summary
 
 The best immediate targets are **GlobalSearch-rs**, **stochastic-rs**,
-**lme-rs**, **PMcore**, **crabSAXS**, **molex**, and the
-Levenberg–Marquardt/Gauss–Newton path in **system_solver**. These projects
-already map well to Basin's solver set, and several have a concrete reason to
-prefer Basin: native bounds and constraints, L-BFGS-B, derivative-free
-constrained solvers, global/memetic solvers, native Levenberg–Marquardt, or
-first-class cancellation.
+**lme-rs**, **PMcore**, **crabSAXS**, **molex**, the
+Levenberg–Marquardt/Gauss–Newton path in **system_solver**, and the focused root
+solves in **finql** and **kde_diffusion**. These projects already map well to
+Basin's solver set, and several have a concrete reason to prefer Basin: native
+bounds and constraints, L-BFGS-B, derivative-free constrained solvers,
+global/memetic solvers, native Levenberg–Marquardt, direct bracketed root
+finding, or first-class cancellation.
 
-The largest remaining compatibility gaps are:
+The audit identified four principal compatibility gaps; all are now closed:
 
-1. **Reliable checkpoint/resume for the existing stochastic and population
-   solvers.** Generic simulated annealing now has exact solver-aware resume, but
-   DE, SSGA, CMA-ES, and basin-hopping still need complete snapshots. This is a
-   blocker for `argtuner` and other long-running global workflows.
-2. **Particle swarm optimization.** Seven audited package trees contain PSO
-   usage or integration. CMA-ES and differential evolution are alternatives, but
-   PSO support makes migration much less disruptive.
-3. **Brent root finding.** Two current packages use `BrentRoot`. Basin's
-   existing Brent implementation minimizes a scalar function; it does not
-   replace a bracketed root solver.
-4. **Hager–Zhang line search.** This matters particularly to GlobalSearch-rs,
-   which exposes it as a supported option and has an example where it
-   outperforms the default More–Thuente setup.
+1. **Reliable checkpoint/resume for stochastic and population solvers.** Exact
+   solver-aware continuation is tested for simulated annealing, DE, SSGA,
+   CMA-ES, basin-hopping, and PSO; PSO also supports state-only exact resume.
+2. **Particle swarm optimization.** `GlobalBestPso` supplies the bounded,
+   seeded global-best route needed by the audited PSO consumers.
+3. **Brent root finding.** `BrentRoot` directly solves a bracketed scalar
+   equation while preserving the signed value, bracket, and typed callback
+   errors outside the optimization `Executor` model.
+4. **Hager–Zhang line search.** `HagerZhang` covers the option exposed by
+   GlobalSearch-rs, including its Ackley example with unbounded L-BFGS.
 
-Do not hold the first outreach round for every solver gap. The backend matrix
-and cancellation API are complete; ship migration examples and honest checkpoint
-documentation, then contact the ready targets. Add PSO and extend exact resume
-to the existing population solvers before approaching projects that depend on
-those capabilities.
+The backend matrix and cancellation API are also complete. The remaining
+pre-outreach work is migration polish: finish the checkpoint documentation,
+land a proof-of-concept migration, and publish reproducible benchmark methods.
 
 ### Backend compatibility
 
@@ -92,6 +88,8 @@ Basin is already unusually strong for the projects in this audit:
   Levenberg–Marquardt, and trust-region reflective least squares.
 - Derivative-free optimization: Nelder–Mead, Brent minimization, golden section,
   NEWUOA, BOBYQA, LINCOA, COBYLA, and MADS.
+- Scalar root finding: direct bracketed Brent with typed callback errors and
+  explicit endpoint-root and invalid-bracket handling.
 - Global and hybrid optimization: CMA-ES, bounded CMA-ES, differential
   evolution, steady-state genetic algorithm, random search, Solis–Wets, basin
   hopping, generic simulated annealing, and memetic CMA/DE/MA-LSCh methods.
@@ -259,13 +257,23 @@ available for faithful future implementations. Those algorithms require random
 neighborhood topology, and SPSO-2011 also changes the motion distribution, so
 they are not represented as modes of the global-best update.
 
-##### 3. Brent root solver (discarded)
+##### 3. Brent root solver (complete)
 
-Add a bracketed scalar root solver separately from Brent minimization. This is a
-relatively small implementation with two immediate targets:
+`BrentRoot<F>` combines bisection, secant steps, and inverse quadratic
+interpolation behind a direct fallible-closure API. It deliberately remains
+outside the optimization `Solver`/`State`/`Executor` path, where the signed
+function value and sign-changing bracket would otherwise be misrepresented as
+an objective cost and box constraint. `RootResult` reports the signed value,
+final bracket, iterations, evaluations, and clean termination status;
+`BrentRootError` distinguishes invalid or non-bracketing intervals, non-finite
+values, and typed callback failures. Endpoint roots return successfully without
+iterating. Public tests cover analytic roots, `f32`, evaluation counts, clean
+iteration limits, structural and callback error paths, and overflow-safe
+bracket validation.
+
+This enables focused migrations for
 [finql](https://github.com/xemwebe/finql) and
-[kde_diffusion](https://crates.io/crates/kde_diffusion). Its API should make
-invalid brackets and endpoint roots explicit.
+[kde_diffusion](https://crates.io/crates/kde_diffusion).
 
 ##### 4. Hager–Zhang line search (complete)
 
@@ -352,13 +360,8 @@ metadata.
   |    9 | [argtuner](https://github.com/jzombie/rust-argtuner)                                                                                                      | Argmin PSO over `Vec`; population and completed-trial checkpointing                                              | `GlobalBestPso` covers the central algorithm and preserves particles, velocities, personal/global bests, and the live RNG for bit-identical continuation.                                               | Completed-trial records and persistence orchestration remain application-owned; validate their mapping to Basin's checkpoint format.               | Port the PSO sampler and compare uninterrupted and resumed expensive-trial runs.                                   |
   |   10 | [EnzymeML](https://github.com/enzymeml/enzymeml-rs)                                                                                                       | Argmin BFGS, L-BFGS, PSO, and SR1 trust-region; an `egobox-ego` integration                                      | Basin now covers BFGS, L-BFGS, and PSO, including deterministic PSO resume.                                                                                                                             | A full switch still requires SR1 trust-region and a separate plan for the EGO runner, which is built on Argmin.                                    | Offer a Basin backend for the native quasi-Newton and PSO paths; scope EGO as a separate integration.              |
   |   11 | [scattr](https://crates.io/crates/scattr), [saltine-gromark](https://crates.io/crates/saltine-gromark), [aminograph](https://crates.io/crates/aminograph) | Argmin simulated annealing over custom transitions or discrete states                                            | Basin's generic `Neighbor`, explicit cooling/reannealing configuration, arbitrary cloneable parameters, and exact resume now cover these use cases.                                                     | Basin uses classical Metropolis acceptance rather than Argmin's logistic variant, so behavior and tuning will not match mechanically.              | Offer separate small migrations that preserve each project's transition rule and validate its acceptance behavior. |
-
-#### Contact after one specific feature lands
-
-  | Project                                                 | Wait for          | Why it becomes compelling                                                     |
-  | ------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------- |
-  | [finql](https://github.com/xemwebe/finql)               | Brent root solver | Fixed-income yield calculations use bracketed root finding, not minimization. |
-  | [kde_diffusion](https://crates.io/crates/kde_diffusion) | Brent root solver | Its Argmin dependency is concentrated in a scalar bracketed root solve.       |
+  |   12 | [finql](https://github.com/xemwebe/finql)                                                                                                                 | Argmin `BrentRoot` for fixed-income yield calculations                                                           | `BrentRoot` directly replaces the bracketed scalar solve without routing it through optimization state.                                                                                                | Confirm tolerance semantics and error mapping against the current yield routines.                                                                 | Offer a focused replacement and compare roots, iteration counts, and failure behavior.                             |
+  |   13 | [kde_diffusion](https://crates.io/crates/kde_diffusion)                                                                                                   | Argmin `BrentRoot` in a scalar bandwidth calculation                                                             | Its concentrated Argmin dependency can move to Basin's direct `BrentRoot` API.                                                                                                                         | Confirm the current crate release still has no other Argmin-dependent paths.                                                                      | Offer a minimal dependency replacement with numerical regression tests.                                            |
 
 #### Deprioritize
 
@@ -394,9 +397,10 @@ metadata.
 6. Approach PMcore with deterministic `bestdose` first and a separate
    noisy-objective experiment.
 7. Approach system_solver and inlier with LM/Gauss–Newton comparison branches.
-8. After PSO and exact resume land, approach argtuner and EnzymeML.
-9. After generic SA and Brent root land, approach the corresponding exact-solver
-   targets.
+8. Approach argtuner and EnzymeML with matching PSO paths and resume tests.
+9. Offer focused `BrentRoot` replacements to finql and kde_diffusion.
+10. Approach the generic-SA targets with migrations that preserve their custom
+    transition rules.
 
 ### Outreach principles
 
