@@ -52,8 +52,8 @@ The largest remaining compatibility gaps are:
 
 1. **Reliable checkpoint/resume for the existing stochastic and population
    solvers.** Generic simulated annealing now has exact solver-aware resume, but
-   DE, SSGA, CMA-ES, and basin-hopping still need complete snapshots. This
-   is a blocker for `argtuner` and other long-running global workflows.
+   DE, SSGA, CMA-ES, and basin-hopping still need complete snapshots. This is a
+   blocker for `argtuner` and other long-running global workflows.
 2. **Particle swarm optimization.** Seven audited package trees contain PSO
    usage or integration. CMA-ES and differential evolution are alternatives, but
    PSO support makes migration much less disruptive.
@@ -141,12 +141,11 @@ Choose and document two distinct concepts:
 The abstraction boundary is now explicit:
 
 - [x] Exact checkpoints store the solver, state, and authoritative evaluation
-  counters. `Executor::resume_from_checkpoint` restores the three together and
-  skips `init`, so evolving data can remain where it naturally belongs.
+  counters. `Executor::resume_from_checkpoint` restores the three together
+  and skips `init`, so evolving data can remain where it naturally belongs.
   Simulated annealing retains its stateful neighbor and RNG in
-  `SimulatedAnnealingState` for compatibility with state-only exact resume. The
-  separate state-only
-  `CheckpointWriter` remains a warm-start facility.
+  `SimulatedAnnealingState` for compatibility with state-only exact resume.
+  The separate state-only `CheckpointWriter` remains a warm-start facility.
 - [x] The exact file format records a format version, the exact Basin version,
   and concrete solver/state type names, rejecting incompatible files before
   decoding their payload.
@@ -163,8 +162,7 @@ Acceptance criteria for exact resume across the remaining solvers:
   serialized output.
 - [x] Add the same coverage for DE, SSGA, CMA-ES, and basin hopping. The future
   PSO task below independently requires warm-start and exact-resume tests.
-- [x] Version the checkpoint format and reject incompatible checkpoints
-  cleanly.
+- [x] Version the checkpoint format and reject incompatible checkpoints cleanly.
 
 Until the wider work is complete, describe ordinary state checkpointing as a
 warm start. Promise exact continuation only for a solver/state pair captured by
@@ -206,11 +204,10 @@ optional fixed-interval, rejection-stall, or best-stall reannealing trigger.
 
 `SimulatedAnnealingState` owns the evolving neighbor, RNG, cooling and chain
 progress, counters, incumbent, and best point. With `serde`, the solver/state
-pair can be checkpointed and restored through
-`Executor::resume_from_checkpoint` for bit-identical continuation. Public
-tests cover continuous vectors, discrete permutations, all numeric backends,
-`f32`, custom RNGs, non-finite costs, reannealing, stall criteria, and exact
-resume.
+pair can be checkpointed and restored through `Executor::resume_from_checkpoint`
+for bit-identical continuation. Public tests cover continuous vectors, discrete
+permutations, all numeric backends, `f32`, custom RNGs, non-finite costs,
+reannealing, stall criteria, and exact resume.
 
 This enables complete migrations for system_solver's SA route,
 `saltine-gromark`, `scattr`, and `aminograph`. Continuous CMA-ES/DE is not a
@@ -220,14 +217,16 @@ drop-in substitute for their custom transition rules.
   accepted-stall, and best-stall triggers to be enabled simultaneously, and
   provide migration-friendly `with_reannealing_fixed`,
   `with_reannealing_accepted`, and `with_reannealing_best` builder methods.
-  Reanneal when any enabled trigger fires, reset all reannealing counters, and
-  retain Basin's exact threshold semantics and classical Metropolis acceptance.
+  Reanneal when any enabled trigger fires, reset all reannealing counters,
+  and retain Basin's exact threshold semantics and classical Metropolis
+  acceptance.
 - [x] Make `Neighbor::propose` return `Result<P, Self::Error>` before the API is
   released. Require `Neighbor` and `CostFunction` to share the run's typed
   application error so `SimulatedAnnealing` can continue exposing that error
-  directly as `Solver::Error`; use `std::convert::Infallible` when neither the
-  proposal nor the objective can fail. Update the closure blanket implementation
-  and add coverage for both infallible and fallible proposals.
+  directly as `Solver::Error`; use `std::convert::Infallible` when neither
+  the proposal nor the objective can fail. Update the closure blanket
+  implementation and add coverage for both infallible and fallible
+  proposals.
 
 ##### 2. Particle swarm optimization (complete)
 
@@ -260,7 +259,7 @@ available for faithful future implementations. Those algorithms require random
 neighborhood topology, and SPSO-2011 also changes the motion distribution, so
 they are not represented as modes of the global-best update.
 
-##### 3. Brent root solver
+##### 3. Brent root solver (discarded)
 
 Add a bracketed scalar root solver separately from Brent minimization. This is a
 relatively small implementation with two immediate targets:
