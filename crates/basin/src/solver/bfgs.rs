@@ -7,7 +7,7 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::QuasiNewtonState;
 use crate::core::termination::TerminationReason;
-use crate::line_search::{LineSearch, Wolfe};
+use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 
 /// BFGS quasi-Newton solver.
 ///
@@ -171,13 +171,20 @@ where
         let mut direction = state.inverse_hessian.matvec(&g);
         direction.neg_in_place();
 
-        let alpha = self.line_search.next(
+        let alpha = match self.line_search.next_with_outcome(
             problem,
             &state.param,
             cost_old,
             &g,
             &direction,
-        )?;
+        )? {
+            LineSearchOutcome::Step(alpha) => alpha,
+            LineSearchOutcome::Failed => {
+                state.gradient = Some(g);
+                state.cost = Some(cost_old);
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
+        };
 
         // Line search bailed (α = 0): direction wasn't descent, or we're
         // at numerical convergence. Restore gradient and cost so the state

@@ -5,7 +5,7 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
-use crate::line_search::{Constant, LineSearch};
+use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 
 /// Projected gradient descent for box-constrained problems.
 ///
@@ -202,13 +202,20 @@ where
             .expect("cost not set: Solver::init must run before next_iter");
         let mut direction = grad.clone();
         direction.neg_in_place();
-        let alpha = self.line_search.next(
+        let alpha = match self.line_search.next_with_outcome(
             problem,
             &state.param,
             prev_cost,
             &grad,
             &direction,
-        )?;
+        )? {
+            LineSearchOutcome::Step(alpha) => alpha,
+            LineSearchOutcome::Failed => {
+                state.gradient = Some(grad);
+                state.cost = Some(prev_cost);
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
+        };
         state.param.scaled_add(alpha, &direction);
         state
             .param

@@ -11,8 +11,8 @@ trailing note cites the paper it implements (or the source it ports).
 
 - **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**:
   steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
-  `MoreThuente`, or `Wolfe` line searches) and optional heavy-ball momentum
-  (Polyak, 1964).
+  `MoreThuente`, `Wolfe`, or `HagerZhang` line searches) and optional
+  heavy-ball momentum (Polyak, 1964).
 - **[`Sgd`](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)**:
   mini-batch stochastic gradient descent with a constant learning rate and
   optional Polyak (1964) heavy-ball momentum.
@@ -209,9 +209,12 @@ The pluggable line searches are documented alongside the first-order solvers:
 [`Backtracking`](https://docs.rs/basin/latest/basin/line_search/backtracking/struct.Backtracking.html)
 (Armijo; Nocedal & Wright §3.1),
 [`Wolfe`](https://docs.rs/basin/latest/basin/line_search/wolfe/struct.Wolfe.html)
-(strong Wolfe; Nocedal & Wright Alg. 3.5/3.6), and
+(strong Wolfe; Nocedal & Wright Alg. 3.5/3.6),
 [`MoreThuente`](https://docs.rs/basin/latest/basin/line_search/more_thuente/struct.MoreThuente.html)
-(Moré & Thuente, 1994; a port of MINPACK-2's `dcsrch`).
+(Moré & Thuente, 1994; a port of MINPACK-2's `dcsrch`), and
+[`HagerZhang`](https://docs.rs/basin/latest/basin/line_search/hager_zhang/struct.HagerZhang.html)
+(ordinary and approximate Wolfe; Hager & Zhang, 2005, DOI
+10.1137/030601880).
 
 ## Backends and Constraints
 

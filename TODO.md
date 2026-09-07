@@ -268,12 +268,16 @@ relatively small implementation with two immediate targets:
 [kde_diffusion](https://crates.io/crates/kde_diffusion). Its API should make
 invalid brackets and endpoint roots explicit.
 
-##### 4. Hager–Zhang line search
+##### 4. Hager–Zhang line search (complete)
 
-This is lower-volume than PSO or SA, but unusually relevant to the top-ranked
-GlobalSearch-rs target. More–Thuente is an acceptable default replacement for
-many callers; Hager–Zhang is needed to preserve every exposed GlobalSearch
-configuration and its Ackley example behavior.
+`HagerZhang<F>` implements the reference expansion, contraction, interval
+update, and double-secant procedure with ordinary and approximate-Wolfe
+acceptance. Its public configuration covers `delta`, `sigma`, `epsilon`,
+`theta`, `gamma`, the initial step and bounds, the expansion factor, and a hard
+fused-evaluation budget. The conjugate-gradient-only `eta` parameter is
+intentionally absent. Tests cover cancellation-sensitive acceptance, strict
+failure, non-finite trials, typed errors, all numeric backends, `f32`, and the
+GlobalSearch Ackley example with unbounded L-BFGS.
 
 #### P2: useful migration accelerators
 

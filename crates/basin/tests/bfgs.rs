@@ -4,7 +4,7 @@ use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicState, Bfgs, CostFunction, Executor, Gradient,
-    GradientDescent, GradientTolerance, NalgebraQuasiNewtonState,
+    GradientDescent, GradientTolerance, HagerZhang, NalgebraQuasiNewtonState,
     TerminationReason,
 };
 
@@ -59,6 +59,24 @@ fn bfgs_terminates_on_gradient_tolerance() {
 
     assert_eq!(result.reason, TerminationReason::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
+}
+
+#[test]
+fn bfgs_reports_hager_zhang_budget_exhaustion_as_failure() {
+    let initial = DVector::from_vec(vec![-1.2, 1.0]);
+    let solver = Bfgs::with_line_search(HagerZhang::new().maxfev(1));
+
+    let result = Executor::new(
+        Rosenbrock::<DVector<f64>>::default(),
+        solver,
+        NalgebraQuasiNewtonState::new(initial.clone()),
+    )
+    .max_iter(10)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.param(), &initial);
 }
 
 #[test]

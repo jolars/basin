@@ -11,7 +11,7 @@ use basin::core::termination::{
     CostTolerance, GradientTolerance, MaxIter, RelativeCostTolerance,
     TargetCost,
 };
-use basin::line_search::{Backtracking, MoreThuente};
+use basin::line_search::{Backtracking, HagerZhang, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{GradientDescent, MatrixFree, MoreSorensen, Steihaug, TrustRegion};
 
@@ -74,6 +74,29 @@ fn unbounded_lbfgs_f32_round_trips_state_solver_termination() {
         .terminate_on(CostTolerance::<f32>::new(1e-6))
         .terminate_on(RelativeCostTolerance::<f32>::new(1e-6))
         .terminate_on(TargetCost::<f32>(1e-6))
+        .run()
+        .unwrap();
+
+    let final_x = result.state.param();
+    assert!((final_x[0] - 1.0).abs() < 1e-3);
+    assert!((final_x[1] - 2.0).abs() < 1e-3);
+    assert!((final_x[2] - 3.0).abs() < 1e-3);
+}
+
+#[test]
+fn hager_zhang_f32_round_trips_line_search_and_lbfgs() {
+    let problem = ShiftedQuadF32 {
+        c: vec![1.0_f32, 2.0, 3.0],
+    };
+    let state = LbfgsState::<Vec<f32>, f32>::new(vec![0.0_f32; 3], 5);
+    let solver: Lbfgs<Unbounded, HagerZhang<f32>, f32> =
+        Lbfgs::<Unbounded, HagerZhang<f32>, f32>::with_line_search(
+            HagerZhang::new(),
+        );
+
+    let result = Executor::new(problem, solver, state)
+        .terminate_on(MaxIter(100))
+        .terminate_on(GradientTolerance::<f32>(1e-3))
         .run()
         .unwrap();
 

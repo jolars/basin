@@ -4,15 +4,16 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
-use crate::line_search::{Constant, LineSearch};
+use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 
 /// Steepest-descent solver: step in the direction of `−∇f(x)` with a
 /// pluggable line search and optional heavy-ball momentum.
 ///
 /// The line search type parameter `L` is the strategy
 /// (e.g. [`Constant`], [`Backtracking`](crate::line_search::Backtracking),
-/// [`Wolfe`](crate::line_search::Wolfe)). Use [`GradientDescent::new`]
-/// for a fixed step or
+/// [`Wolfe`](crate::line_search::Wolfe),
+/// [`HagerZhang`](crate::line_search::HagerZhang)). Use
+/// [`GradientDescent::new`] for a fixed step or
 /// [`GradientDescent::with_line_search`] to pick a strategy explicitly.
 ///
 /// # Momentum
@@ -107,7 +108,8 @@ impl<V, F: Scalar> GradientDescent<Constant<F>, V, F> {
 impl<L, V, F: Scalar> GradientDescent<L, V, F> {
     /// Gradient descent with an explicit line-search strategy
     /// (e.g. [`Backtracking`](crate::line_search::Backtracking),
-    /// [`Wolfe`](crate::line_search::Wolfe)).
+    /// [`Wolfe`](crate::line_search::Wolfe), or
+    /// [`HagerZhang`](crate::line_search::HagerZhang)).
     pub fn with_line_search(line_search: L) -> Self {
         Self {
             line_search,
@@ -167,13 +169,20 @@ where
             .expect("cost not set: Solver::init must run before next_iter");
         let mut direction = grad.clone();
         direction.neg_in_place();
-        let alpha = self.line_search.next(
+        let alpha = match self.line_search.next_with_outcome(
             problem,
             &state.param,
             prev_cost,
             &grad,
             &direction,
-        )?;
+        )? {
+            LineSearchOutcome::Step(alpha) => alpha,
+            LineSearchOutcome::Failed => {
+                state.gradient = Some(grad);
+                state.cost = Some(prev_cost);
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
+        };
 
         if self.beta == F::zero() {
             // No momentum: the plain steepest-descent step, bit-identical to

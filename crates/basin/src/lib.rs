@@ -393,7 +393,8 @@ pub use crate::core::termination::{
     TerminationReason,
 };
 pub use crate::line_search::{
-    Backtracking, Constant, LineSearch, MoreThuente, Wolfe,
+    Backtracking, Constant, HagerZhang, LineSearch, LineSearchOutcome,
+    MoreThuente, Wolfe,
 };
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};

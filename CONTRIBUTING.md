@@ -116,7 +116,7 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
   - `rng.rs`: RNG support for stochastic solvers.
 - `src/solver.rs` + `src/solver/`: concrete solvers spanning the families in
   "What this is", with pluggable line searches (`Backtracking`, `Wolfe`,
-  `More-Thuente`, `Constant`) where applicable.
+  `MoreThuente`, `HagerZhang`, `Constant`) where applicable.
 
 Module convention: **no `mod.rs`**: use `src/foo.rs` for the module file and
 `src/foo/bar.rs` for submodules.

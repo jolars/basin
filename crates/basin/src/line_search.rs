@@ -3,17 +3,30 @@
 
 /// Backtracking line search (Armijo-only).
 pub mod backtracking;
+/// Hager–Zhang line search with approximate-Wolfe safeguards.
+pub mod hager_zhang;
 /// Moré–Thuente line search (MINPACK-2 `dcsrch` + `dcstep`).
 pub mod more_thuente;
 /// Strong-Wolfe line search (Nocedal & Wright algorithms 3.5/3.6).
 pub mod wolfe;
 
 pub use backtracking::Backtracking;
+pub use hager_zhang::HagerZhang;
 pub use more_thuente::MoreThuente;
 pub use wolfe::Wolfe;
 
 use crate::core::math::Scalar;
 use crate::core::problem::Problem;
+
+/// Outcome of a line-search attempt.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum LineSearchOutcome<F> {
+    /// The line search selected this step size.
+    Step(F),
+    /// The line search could not produce a usable step.
+    Failed,
+}
 
 /// Compute a step size `α` along a caller-supplied descent direction `d`.
 ///
@@ -59,6 +72,24 @@ pub trait LineSearch<P, V, F = f64> {
         gradient: &V,
         direction: &V,
     ) -> Result<F, Self::Error>;
+
+    /// Returns the step together with a distinguishable soft-failure outcome.
+    ///
+    /// The default wraps [`next`](Self::next) in
+    /// [`LineSearchOutcome::Step`] for compatibility with existing line-search
+    /// implementations. Implementations that can exhaust without a usable step
+    /// should override this method and return [`LineSearchOutcome::Failed`].
+    fn next_with_outcome(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchOutcome<F>, Self::Error> {
+        self.next(problem, param, cost, gradient, direction)
+            .map(LineSearchOutcome::Step)
+    }
 }
 
 /// Constant step size: returns the wrapped `α` regardless of input.

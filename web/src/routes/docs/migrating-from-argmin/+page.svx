@@ -127,6 +127,7 @@ initialization needs more than one point, such as CMA-ES and population solvers.
 | `Executor::new(problem, solver).configure(|state| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)` |
 | `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new()` with `SimplexTolerance::new(tol_x, tol_f)` on the executor |
 | `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::<Unbounded>::new().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
+| `HagerZhangLineSearch::new()` | `HagerZhang::new()` |
 | `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
 | `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `BoxConstraints` and `GlobalBestPsoState::new()` |
 | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
@@ -186,9 +187,15 @@ fn main() {
 }
 ```
 
-For a nondefault line search, use `Lbfgs::<Unbounded>::with_line_search(...)`.
-For bounds, use `Lbfgsb` as shown below. Basin does not currently replace
-Argmin's OWL-QN mode for L1 regularization.
+For a nondefault line search, use
+`Lbfgs::<Unbounded, HagerZhang>::with_line_search(HagerZhang::new())`. The
+`delta`, `sigma`, `epsilon`, `theta`, `gamma`, initial step, step bounds, and
+evaluation budget have direct Basin counterparts. Argmin also exposes an `eta`
+setting on its Hager–Zhang line search, but does not use it there; the parameter
+belongs to the Hager–Zhang conjugate-gradient update, so Basin's line search
+intentionally omits it. A compatibility adapter can safely discard that
+setting. For bounds, use `Lbfgsb` as shown below. Basin does not currently
+replace Argmin's OWL-QN mode for L1 regularization.
 
 ## Nonlinear Least Squares
 
@@ -719,9 +726,9 @@ fn main() {
 ## Check Compatibility Before Removing Argmin
 
 Basin's `Brent` minimizes a scalar objective; it does not replace Argmin's
-`BrentRoot`. Basin also does not yet offer a Hager–Zhang line search or a
-generic adapter for an Argmin solver implementation. Moré–Thuente is the usual
-initial substitute for Hager–Zhang, but it is not trajectory-equivalent.
+`BrentRoot`. Basin also does not offer a generic adapter for an Argmin solver
+implementation. Its Hager–Zhang configuration maps closely to Argmin's, but
+the implementations are not promised to produce identical trial trajectories.
 
 Like Argmin, Basin's exact checkpoints serialize a solver and state together;
 Basin also records the authoritative evaluation counters. The older

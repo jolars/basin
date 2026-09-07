@@ -48,7 +48,7 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::lbfgs::{LbfgsState, LbfgsbWork};
 use crate::core::termination::TerminationReason;
-use crate::line_search::{LineSearch, MoreThuente};
+use crate::line_search::{LineSearch, LineSearchOutcome, MoreThuente};
 
 use self::backend::{AsFloatSlice, AsFloatSliceMut};
 use self::cauchy::{cauchy, iwhere as iwh};
@@ -642,13 +642,16 @@ where
             // `LineSearch` has no generic hooks for the initial step or the
             // feasibility cap used by Fortran's `lnsrlb`.
             let _ = (alpha_init, stpmx);
-            let stp = self.line_search.next(
+            let stp = match self.line_search.next_with_outcome(
                 problem,
                 &state.param,
                 f_old,
                 &g_v,
                 &d_v,
-            )?;
+            )? {
+                LineSearchOutcome::Step(stp) => stp,
+                LineSearchOutcome::Failed => F::zero(),
+            };
 
             if !(stp.is_finite() && stp > F::zero()) {
                 // Restart with cleared history when compact-form state exists.
@@ -859,9 +862,16 @@ where
             acc
         };
 
-        let stp =
-            self.line_search
-                .next(problem, &state.param, f_old, &g_v, &d_v)?;
+        let stp = match self.line_search.next_with_outcome(
+            problem,
+            &state.param,
+            f_old,
+            &g_v,
+            &d_v,
+        )? {
+            LineSearchOutcome::Step(stp) => stp,
+            LineSearchOutcome::Failed => F::zero(),
+        };
 
         if !(stp.is_finite() && stp > F::zero()) {
             // Line search bailed. Restore cached cost and gradient so
