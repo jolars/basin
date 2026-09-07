@@ -128,6 +128,7 @@ initialization needs more than one point, such as CMA-ES and population solvers.
 | `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new()` with `SimplexTolerance::new(tol_x, tol_f)` on the executor |
 | `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::<Unbounded>::new().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
 | `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
+| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `BoxConstraints` and `GlobalBestPsoState::new()` |
 | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
 | Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
 | Transforms, clamps, or penalties for box bounds | `BoxConstraints` plus a solver that consumes bounds |
@@ -401,6 +402,84 @@ bounded global solvers. Linear and nonlinear constraints use their corresponding
 problem traits; barrier and augmented-Lagrangian adapters are explicit opt-ins
 when an inner solver is otherwise unconstrained.
 
+## Particle Swarm Optimization
+
+Argmin 0.11's `ParticleSwarm` and Basin's `GlobalBestPso` share the synchronous,
+coordinate-wise inertia update and the default coefficients
+`w=1/(2 ln 2)`, `c1=c2=1/2+ln 2`. Basin names the global-best topology
+explicitly because Standard PSO 2006 and 2011 require changing random
+neighborhoods, and SPSO-2011 also changes the motion distribution; those are
+future separate solvers, not hidden strategy modes.
+
+Move the box from Argmin's solver constructor to the problem's
+`BoxConstraints` implementation. Set `PsoBoundaryHandling::Preserve` to match
+Argmin's clamp-position/retain-velocity behavior; Basin defaults to absorbing a
+boundary crossing. Basin's default initialization follows the Standard PSO 2006
+profile, `v=(u-x)/2`, rather than Argmin's `v~U(-span, span)`, so use a warm
+state with explicit positions and velocities when testing a migrated setup.
+Even then, compare numerical outcomes rather than requiring seeded trajectory
+identity: the two crates use different RNG versions and vector-sampling
+semantics.
+
+<!-- compile: basin-global-best-pso -->
+```rust
+use basin::{
+    BoxConstraints, CostFunction, Executor, GlobalBestPso,
+    GlobalBestPsoState, PsoBoundaryHandling,
+};
+use std::convert::Infallible;
+
+struct BoundedSphere {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl CostFunction for BoundedSphere {
+    type Param = Vec<f64>;
+    type Output = f64;
+    type Error = Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
+        Ok(x.iter().map(|xi| xi * xi).sum())
+    }
+}
+
+impl BoxConstraints for BoundedSphere {
+    fn lower(&self) -> &Self::Param {
+        &self.lower
+    }
+
+    fn upper(&self) -> &Self::Param {
+        &self.upper
+    }
+}
+
+fn main() {
+    let problem = BoundedSphere {
+        lower: vec![-5.0; 2],
+        upper: vec![5.0; 2],
+    };
+    let solver = GlobalBestPso::new(42)
+        .with_swarm_size(40)
+        .with_boundary_handling(PsoBoundaryHandling::Preserve);
+    let result = Executor::new(
+        problem,
+        solver,
+        GlobalBestPsoState::<Vec<f64>>::new(),
+    )
+    .max_iter(500)
+    .run()
+    .unwrap();
+
+    assert!(result.cost() < 1e-6);
+}
+```
+
+For exact continuation, the initialized `GlobalBestPsoState` owns the live RNG,
+velocities, and personal/global bests. With `serde`, serialize that state and
+pass it with the same problem and solver configuration to `Executor::resume`,
+or use a solver-aware `ExactCheckpointWriter`.
+
 ## Simulated Annealing Is Deliberately Basin-Native
 
 Basin now supports arbitrary continuous or discrete parameter types through
@@ -640,17 +719,18 @@ fn main() {
 ## Check Compatibility Before Removing Argmin
 
 Basin's `Brent` minimizes a scalar objective; it does not replace Argmin's
-`BrentRoot`. Basin also does not yet offer particle swarm optimization,
-Hager–Zhang line search, or a generic adapter for an Argmin solver
-implementation. Moré–Thuente is the usual initial substitute for Hager–Zhang,
-but it is not trajectory-equivalent.
+`BrentRoot`. Basin also does not yet offer a Hager–Zhang line search or a
+generic adapter for an Argmin solver implementation. Moré–Thuente is the usual
+initial substitute for Hager–Zhang, but it is not trajectory-equivalent.
 
 Like Argmin, Basin's exact checkpoints serialize a solver and state together;
 Basin also records the authoritative evaluation counters. The older
 `CheckpointWriter` still snapshots only state and therefore provides a warm
-start, not a general promise of an identical future trajectory. Exact resume is
-currently tested for simulated annealing. Check a solver's API before making
-the same promise for another stochastic or population solver.
+start, not a general promise of an identical future trajectory. State-only
+exact resume is explicitly supported by simulated annealing and global-best
+PSO because their states own every evolving stochastic component. Check a
+solver's API before making the same promise for another stochastic or
+population solver.
 
 During a real migration, keep both integrations behind features until tests
 compare numerical results, termination behavior, evaluation counts, and runtime.

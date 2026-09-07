@@ -9,9 +9,10 @@
 //!
 //! `State::Float` is generic across the trait. The vector-tier-only states
 //! ([`BasicState`], [`BasicSimplexState`], [`BasicPopulationState`]) and the
-//! linalg-tier-using [`QuasiNewtonState`]/[`LbfgsState`] take an `F: Scalar`
-//! parameter that defaults to `f64`, so existing call sites resolve unchanged
-//! while opening the door to `f32`. Solvers (`GradientDescent`, `Bfgs`,
+//! linalg-tier-using [`QuasiNewtonState`]/[`LbfgsState`] and stochastic
+//! [`GlobalBestPsoState`] take an `F: Scalar` parameter that defaults to
+//! `f64`, so existing call sites resolve unchanged while opening the door to
+//! `f32`. Solvers (`GradientDescent`, `Bfgs`,
 //! both `Lbfgs` modes, the NLLS family, CMA-ES, barrier/AL, etc.) and the
 //! shipped termination criteria all carry the same `F = f64` default. See
 //! `tests/f32_round_trip.rs` for an end-to-end demonstration that the full
@@ -28,6 +29,8 @@ pub mod bobyqa;
 pub mod cma_es;
 /// COBYLA solver state (`CobylaState`).
 pub mod cobyla;
+/// Global-best particle-swarm state (`GlobalBestPsoState`).
+pub mod global_best_pso;
 /// Limited-memory BFGS/L-BFGS-B state (`LbfgsState`).
 pub mod lbfgs;
 /// LINCOA solver state (`LincoaState`).
@@ -50,6 +53,7 @@ pub mod solis_wets;
 pub use bobyqa::BobyqaState;
 pub use cma_es::CmaEsState;
 pub use cobyla::CobylaState;
+pub use global_best_pso::GlobalBestPsoState;
 pub use lbfgs::LbfgsState;
 pub use lincoa::LincoaState;
 pub use mads::{ConstrainedMadsState, MadsState};
@@ -265,7 +269,8 @@ pub trait GradientState: State {
 /// be plugged into the [`Executor`](crate::core::executor::Executor):
 /// the trait must be impl'able outside basin. Most users won't need
 /// this: the shipped state types (`BasicState`, `QuasiNewtonState`,
-/// `LbfgsState`, `BasicSimplexState`, `BasicPopulationState`) already
+/// `LbfgsState`, `BasicSimplexState`, `BasicPopulationState`,
+/// `GlobalBestPsoState`) already
 /// implement it.
 ///
 /// # Per-state mapping
@@ -280,7 +285,7 @@ pub trait GradientState: State {
 ///   against `gradient_evals` on `BasicState`. One Hessian-vector
 ///   product costs roughly one gradient, so the fold keeps
 ///   `MaxGradientEvals` an honest cap on matrix-free work.
-/// - **[`BasicSimplexState`]/[`BasicPopulationState`]/`MaLsChState`**
+/// - **[`BasicSimplexState`]/[`BasicPopulationState`]/[`GlobalBestPsoState`]/`MaLsChState`**
 ///   (derivative-free outer, no `gradient_evals` field):
 ///   `cost_evals = total_work` (every kind folded in). Lets a CMA-ES
 ///   outer running e.g. an L-BFGS inner have `state.cost_evals`
@@ -358,7 +363,8 @@ pub trait SimplexState: State {
 /// spread, stall counters) can bound on a richer view than
 /// [`State::param`]/[`State::cost`], which only see the best
 /// candidate. The vehicle for stochastic solvers
-/// ([`RandomSearch`](crate::solver::RandomSearch); CMA-ES once it lands).
+/// ([`RandomSearch`](crate::solver::RandomSearch),
+/// [`GlobalBestPso`](crate::solver::GlobalBestPso), and CMA-ES).
 ///
 /// # Contract
 ///

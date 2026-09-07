@@ -144,6 +144,17 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
 - **[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)**:
   differential evolution (DE/rand/1/bin) over a feasible box (Storn & Price,
   1997).
+- **[`GlobalBestPso`](https://docs.rs/basin/latest/basin/solver/global_best_pso/struct.GlobalBestPso.html)**:
+  synchronous inertia-weight global-best particle swarm optimization over a
+  feasible box, with independent boundary-response and velocity-limit policies.
+  Implements Kennedy & Eberhart's (1995; DOI 10.1109/ICNN.1995.488968) update
+  with Shi & Eberhart's inertia formulation (1998; DOI
+  10.1109/ICEC.1998.699146) and the Standard PSO 2006 coefficient/population
+  profile (Bratton & Kennedy, 2007; DOI 10.1109/SIS.2007.368035), and is
+  cross-validated against Argmin 0.11.0 commit
+  `c94c32adefd6c2525ce05806092ca868ec85fba4`. It remains distinct from
+  SPSO-2011 (Zambrano-Bigiarini, Clerc & Rojas, 2013; DOI
+  10.1109/CEC.2013.6557848).
 - **[`RandomSearch`](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html)**:
   elitist (1+λ) uniform sampling over a box.
 - **[`Ssga`](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html)**:
@@ -244,6 +255,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `CmaEs`                     | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `BoundedCmaEs`              | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `De`                        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `GlobalBestPso`             | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `RandomSearch`              | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Ssga`                      | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `BasinHopping`              | Global          |     ✓†     |    ✓     |   ✓†    |  ✓   |

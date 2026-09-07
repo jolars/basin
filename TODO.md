@@ -229,7 +229,7 @@ drop-in substitute for their custom transition rules.
   proposal nor the objective can fail. Update the closure blanket implementation
   and add coverage for both infallible and fallible proposals.
 
-##### 2. Particle swarm optimization
+##### 2. Particle swarm optimization (complete)
 
 PSO is the largest exact solver-name gap in the current reverse-dependency set.
 Implement bounded continuous PSO with:
@@ -244,6 +244,21 @@ Implement bounded continuous PSO with:
 It unlocks or simplifies outreach to `argtuner`, EnzymeML, `lightcurve-fitting`,
 `atmosim`, `rssn`, and RustQuant data code. It also avoids asking maintainers to
 validate a change of algorithm while simultaneously changing frameworks.
+
+`GlobalBestPso` implements the synchronous inertia-weight global-best rule with
+the Standard PSO 2006 coefficient and swarm-size profile. Boundary response and
+velocity limiting are separate policies, allowing absorb, preserve, or damped
+reflection without conflating them with a span-relative speed cap. The state
+owns current particles, velocities, personal/global bests, evaluation counters,
+and the live RNG, so both state-only and solver-aware checkpoint continuation
+are bit-identical. Public tests cover an Argmin 0.11 one-generation fixture,
+uniform and warm initialization, non-finite costs, all numeric backends, `f32`,
+parallel counts/reproducibility, and exact resume.
+
+The topology-specific name leaves `StandardPso2006` and `StandardPso2011`
+available for faithful future implementations. Those algorithms require random
+neighborhood topology, and SPSO-2011 also changes the motion distribution, so
+they are not represented as modes of the global-best update.
 
 ##### 3. Brent root solver
 

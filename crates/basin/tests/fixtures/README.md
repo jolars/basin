@@ -350,3 +350,39 @@ gfortran -O2 -o /tmp/cobyla_gen /tmp/cobyla_gen.o \
 As with the others, CI never rebuilds these; the committed `.tsv` files are the
 artifacts, and the objective + constraint fns in `cobyla_prima_driver.c` and
 `parity.rs` must stay textually mirrored (the tier-1 check enforces it).
+
+# Global-best PSO parity fixture
+
+`global_best_pso_argmin_0_11.csv` records one warm-started generation from
+Argmin 0.11.0's `ParticleSwarm`. The exact upstream revision is
+`c94c32adefd6c2525ce05806092ca868ec85fba4` (`argmin-v0.11.0`), licensed
+MIT OR Apache-2.0. Basin's test compares positions and costs only: Argmin does
+not expose velocity or personal-best fields, and Basin independently implements
+the documented global-best equation.
+
+The locked setup has two 2-D particles, box `[-1, 1]^2`, `w=0.7`, `c1=1.2`,
+`c2=1.4`, preserved velocities at clamped boundaries, and a scripted RNG. The
+Argmin vector helper skips draws on zero-length ranges and orders descending
+ranges before sampling. The Basin test therefore supplies the equivalent
+effective `r1`/`r2` coefficients to the standard equation instead of asserting
+RNG-consumption parity, which is not an algorithmic invariant. The driver
+prints rows sorted by current cost because Basin's
+`PopulationState` contract sorts every current generation, while Argmin retains
+particle order after a step. Values use 17 significant decimal digits.
+
+To regenerate, create a temporary Cargo binary with these dependencies:
+
+```toml
+argmin = { version = "=0.11.0", features = ["rand"] }
+argmin-math = { version = "=0.5.1", features = ["vec"] }
+rand = "=0.9.2"
+```
+
+Copy `global_best_pso_argmin_0_11_driver.rs` to its `src/main.rs`, then run:
+
+```bash
+cargo run --quiet > global_best_pso_argmin_0_11.csv
+```
+
+Restore the fixture's `# cost,x0,x1` header after regeneration. CI consumes the
+committed CSV and does not depend on Argmin.

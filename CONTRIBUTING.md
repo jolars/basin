@@ -86,7 +86,8 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
   - `state.rs` (+ `state/`): the `State` trait and concrete states:
     `BasicState<P>` (single iterate), `BasicSimplexState<V>` (simplex),
     `QuasiNewtonState<V, M>` (BFGS), `LbfgsState` (L-BFGS history),
-    `BasicPopulationState<V>` (population), and `SimulatedAnnealingState`
+    `BasicPopulationState<V>` (population), `GlobalBestPsoState` (particles,
+    personal/global bests, and live RNG), and `SimulatedAnnealingState`
     (observable Markov-chain state). Extension traits
     `GradientState`/`SimplexState`/`PopulationState`/`AcceptanceState` expose
     the richer shapes that termination criteria bind on. Fields are

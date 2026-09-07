@@ -111,6 +111,7 @@ const checks: PackageCheck[] = [
             migrationSnippet("basin-typed-error"),
             migrationSnippet("basin-finite-diff"),
             migrationSnippet("basin-box-constraints"),
+            migrationSnippet("basin-global-best-pso"),
             migrationSnippet("basin-observer-cancellation"),
             migrationSnippet("basin-backend-vec"),
         ],

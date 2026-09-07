@@ -11,8 +11,8 @@
 //!   This is the parallel analogue of numdiff's
 //!   `gradient_is_bitwise_reproducible_across_calls`: it catches any
 //!   nondeterminism a reordered parallel reduction could introduce.
-//! - **`cost_evals` matches a fixed per-solver formula.** DE and RandomSearch
-//!   hit `λ · (iters + 1)`; CMA-ES adds one `f(m)` mean evaluation per
+//! - **`cost_evals` matches a fixed per-solver formula.** DE, global-best PSO,
+//!   and RandomSearch hit `λ · (iters + 1)`; CMA-ES adds one `f(m)` mean evaluation per
 //!   generation, so it hits `(λ + 1) · (iters + 1)`. The constants below are
 //!   feature-independent: CI runs this file with `--features parallel` *and*
 //!   without, and both must hit the same numbers, proving the batched path
@@ -24,7 +24,7 @@
 use basin::problems::{RastriginBoxed, Rosenbrock};
 use basin::{
     BasicPopulationState, CmaEs, CmaEsState, De, DenseMatrix, Executor,
-    OptimizationResult, RandomSearch, State,
+    GlobalBestPso, GlobalBestPsoState, OptimizationResult, RandomSearch, State,
 };
 use std::fmt::Debug;
 
@@ -92,6 +92,31 @@ fn de_reproducible_and_counts_match() {
         a.cost_evals(),
         expected_cost_evals(lambda as u64, max_iter),
         "DE cost_evals must equal pop·(iters+1) regardless of `parallel`"
+    );
+}
+
+#[test]
+fn global_best_pso_reproducible_and_counts_match() {
+    let swarm_size = 16;
+    let max_iter = 8;
+
+    let run = || {
+        Executor::new(
+            RastriginBoxed::<Vec<f64>>::with_standard_bounds(4),
+            GlobalBestPso::new(99).with_swarm_size(swarm_size),
+            GlobalBestPsoState::<Vec<f64>>::new(),
+        )
+        .max_iter(max_iter)
+        .run()
+        .unwrap()
+    };
+    let (a, b) = (run(), run());
+
+    assert_bit_identical(&a, &b);
+    assert_eq!(
+        a.cost_evals(),
+        expected_cost_evals(swarm_size as u64, max_iter),
+        "global-best PSO cost_evals must equal swarm·(iters+1) regardless of `parallel`"
     );
 }
 

@@ -96,6 +96,7 @@
 //! | `SimulatedAnnealing` | `SimulatedAnnealingState` | ✓ |
 //! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
 //! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma`, `MaLsChSw` | `CmaEsState`/`MaLsChState`/… | ✗ (needs a step-size σ or samples the box) |
+//! | `GlobalBestPso` | `GlobalBestPsoState` | ✗ (samples a swarm from the box) |
 //! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
 //! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ (bracket, not a point) |
 //!
@@ -377,9 +378,9 @@ pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
     AcceptanceState, BasicPopulationState, BasicSimplexState, BasicState,
     BobyqaState, CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror,
-    ExactResumeState, GradientState, IntoInitialSimplex, LbfgsState,
-    LincoaState, MadsState, MeshState, NewuoaState, NllsState, PopulationState,
-    RhoState, ScalarGradientState, ScalarState, SimplexState,
+    ExactResumeState, GlobalBestPsoState, GradientState, IntoInitialSimplex,
+    LbfgsState, LincoaState, MadsState, MeshState, NewuoaState, NllsState,
+    PopulationState, RhoState, ScalarGradientState, ScalarState, SimplexState,
     SimulatedAnnealingState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
@@ -404,10 +405,10 @@ pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
     Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative,
     ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton,
-    GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa, MaLsCh,
-    MaLsChCma, MaLsChGenericState, MaLsChState, MaLsChSw, MaLsChSwState, Mads,
-    MemeticInner, Metropolis, Neighbor, NelderMead, Newuoa,
-    ProjectedGradientDescent, RandomDisplacement, RandomSearch, Reannealing,
-    Sgd, SimulatedAnnealing, SolisWets, Ssga, StepTaker, TemperatureSchedule,
-    Trf,
+    GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa,
+    MaLsCh, MaLsChCma, MaLsChGenericState, MaLsChState, MaLsChSw,
+    MaLsChSwState, Mads, MemeticInner, Metropolis, Neighbor, NelderMead,
+    Newuoa, ProjectedGradientDescent, PsoBoundaryHandling, PsoVelocityLimit,
+    RandomDisplacement, RandomSearch, Reannealing, Sgd, SimulatedAnnealing,
+    SolisWets, Ssga, StepTaker, TemperatureSchedule, Trf,
 };

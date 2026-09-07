@@ -35,6 +35,8 @@ pub mod de;
 pub mod de_inject;
 /// Pure Gauss-Newton solver for nonlinear least squares.
 pub mod gauss_newton;
+/// Synchronous global-best particle swarm optimization.
+pub mod global_best_pso;
 /// Golden-section search (1D minimization on a bracketed interval).
 pub mod golden_section;
 /// Steepest-descent solver with a pluggable line search and optional
@@ -124,6 +126,9 @@ pub use cobyla::Cobyla;
 pub use de::De;
 pub use de_inject::DeInject;
 pub use gauss_newton::GaussNewton;
+pub use global_best_pso::{
+    GlobalBestPso, PsoBoundaryHandling, PsoVelocityLimit,
+};
 pub use golden_section::GoldenSection;
 pub use gradient_descent::GradientDescent;
 pub use levenberg_marquardt::LevenbergMarquardt;
