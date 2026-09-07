@@ -39,8 +39,9 @@ the trailing note cites the paper it implements (or the source it ports).
 - **[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html)**:
   the classic reflection, expansion, and contraction simplex; needs only a
   `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
-  uses the dimension-aware coefficients of Gao & Han (2012), and the projected
-  variant follows Luersen & Le Riche (2004).
+  uses the dimension-aware coefficients of Gao & Han (2012). Its projected
+  variant clamps trial points into box bounds; use `Gbnm` for the full
+  Luersen–Le Riche restart algorithm.
 - **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
   mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
   positive spanning set of `2n` directions on a shrinking mesh, generated from
@@ -137,6 +138,15 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
 
 ## Global & Stochastic
 
+- **[`Gbnm`](https://docs.rs/basin/latest/basin/solver/gbnm/struct.Gbnm.html)**:
+  Globalized Bounded Nelder-Mead over a feasible box. It combines projected
+  local simplex searches with Parzen-density probabilistic restarts and the
+  small-, flat-, and degenerate-simplex restart state machine. It retains the
+  possible local optima found along the way and supports exact solver-aware
+  resume. Implements M. A. Luersen and R. Le Riche, “Globalized Nelder–Mead
+  method for engineering optimization,” _Computers & Structures_ 82 (2004),
+  2251–2260
+  ([doi:10.1016/j.compstruc.2004.03.072](https://doi.org/10.1016/j.compstruc.2004.03.072)).
 - **[`SimulatedAnnealing`](https://docs.rs/basin/latest/basin/solver/simulated_annealing/struct.SimulatedAnnealing.html)**:
   classical single-proposal simulated annealing with a user-supplied `Neighbor`,
   explicit geometric, reciprocal, or normalized-log cooling, and optional
@@ -264,6 +274,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `GaussNewton`               | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `LevenbergMarquardt`        | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Trf`                       | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `Gbnm`                      | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `SimulatedAnnealing`        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `CmaEs`                     | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `BoundedCmaEs`              | Global          |     ✓      |    ✓     |    ✓    |  ✓   |

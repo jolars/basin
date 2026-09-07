@@ -13,7 +13,10 @@ use basin::core::termination::{
 };
 use basin::line_search::{Backtracking, HagerZhang, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
-use basin::{GradientDescent, MatrixFree, MoreSorensen, Steihaug, TrustRegion};
+use basin::{
+    BoxConstraints, Gbnm, GbnmState, GradientDescent, MatrixFree, MoreSorensen,
+    Steihaug, TrustRegion,
+};
 
 /// `f(x) = ‖x − c‖²` with `c = (1, 2, 3)`. Minimum at `c`, cost 0.
 struct ShiftedQuadF32 {
@@ -34,6 +37,56 @@ impl Gradient for ShiftedQuadF32 {
     fn gradient(&self, x: &Vec<f32>) -> Result<Vec<f32>, Self::Error> {
         Ok(x.iter().zip(&self.c).map(|(a, b)| 2.0 * (a - b)).collect())
     }
+}
+
+struct BoundedSphereF32 {
+    lower: Vec<f32>,
+    upper: Vec<f32>,
+}
+
+impl CostFunction for BoundedSphereF32 {
+    type Param = Vec<f32>;
+    type Output = f32;
+    type Error = std::convert::Infallible;
+
+    fn cost(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+        Ok(x.iter().map(|value| value * value).sum())
+    }
+}
+
+impl BoxConstraints for BoundedSphereF32 {
+    fn lower(&self) -> &Self::Param {
+        &self.lower
+    }
+
+    fn upper(&self) -> &Self::Param {
+        &self.upper
+    }
+}
+
+#[test]
+fn gbnm_f32_round_trips_solver_state_and_bounds() {
+    let problem = BoundedSphereF32 {
+        lower: vec![-5.0; 2],
+        upper: vec![5.0; 2],
+    };
+    let solver = Gbnm::<f32>::new(42);
+    let state = GbnmState::<Vec<f32>, f32>::new(vec![3.0, 3.0]);
+
+    let result = Executor::new(problem, solver, state)
+        .terminate_on(MaxIter(300))
+        .run()
+        .unwrap();
+
+    assert!(result.state.best_cost() < 1e-5);
+    assert!(
+        result
+            .state
+            .vertices()
+            .iter()
+            .flatten()
+            .all(|value| (-5.0..=5.0).contains(value))
+    );
 }
 
 #[test]

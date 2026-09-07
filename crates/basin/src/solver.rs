@@ -35,6 +35,8 @@ pub mod de;
 pub mod de_inject;
 /// Pure Gauss-Newton solver for nonlinear least squares.
 pub mod gauss_newton;
+/// Globalized Bounded Nelder-Mead with probabilistic restarts.
+pub mod gbnm;
 /// Synchronous global-best particle swarm optimization.
 pub mod global_best_pso;
 /// Golden-section search (1D minimization on a bracketed interval).
@@ -126,6 +128,7 @@ pub use cobyla::Cobyla;
 pub use de::De;
 pub use de_inject::DeInject;
 pub use gauss_newton::GaussNewton;
+pub use gbnm::Gbnm;
 pub use global_best_pso::{
     GlobalBestPso, PsoBoundaryHandling, PsoVelocityLimit,
 };

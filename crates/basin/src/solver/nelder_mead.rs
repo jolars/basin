@@ -105,9 +105,10 @@ pub struct Unbounded;
 /// onto the same boundary face: the simplex becomes degenerate and the
 /// reflection step loses descent direction. This is a known weakness of
 /// the projection variant; scipy ships it anyway because it works well
-/// enough in practice. For tighter behavior near active bounds consider
-/// a Globalized-and-Bounded Nelder-Mead variant (Luersen & Le Riche
-/// 2004), which adds a restart heuristic on degeneracy.
+/// enough in practice. This type intentionally remains the clamp-only local
+/// method. Use [`Gbnm`](crate::Gbnm) for Luersen and Le Riche's full
+/// Globalized Bounded Nelder-Mead algorithm, including probabilistic,
+/// small-test, and large-test restarts.
 pub struct Projected;
 
 #[derive(Clone, Copy)]
@@ -251,8 +252,8 @@ where
 }
 
 /// In-place insertion sort over `vertices`/`costs` ascending by cost.
-/// NaN costs stay where they are (the `Some(Less)` check fails on NaN),
-/// which means a single bad evaluation can't drag itself to the front.
+/// NaN costs sort last, so a bad evaluation cannot become the simplex's
+/// reported best point.
 ///
 /// Called from `next_iter` where the simplex is already sorted except
 /// for the one slot Nelder-Mead just rewrote (or the four slots after a
@@ -264,15 +265,21 @@ fn insertion_sort_simplex<V, F: PartialOrd>(
 ) {
     for i in 1..vertices.len() {
         let mut j = i;
-        while j > 0
-            && matches!(
-                costs[j].partial_cmp(&costs[j - 1]),
-                Some(std::cmp::Ordering::Less)
-            )
-        {
+        while j > 0 && cost_precedes(&costs[j], &costs[j - 1]) {
             vertices.swap(j, j - 1);
             costs.swap(j, j - 1);
             j -= 1;
+        }
+    }
+}
+
+fn cost_precedes<F: PartialOrd>(left: &F, right: &F) -> bool {
+    match left.partial_cmp(right) {
+        Some(std::cmp::Ordering::Less) => true,
+        Some(_) => false,
+        None => {
+            left.partial_cmp(left).is_some()
+                && right.partial_cmp(right).is_none()
         }
     }
 }

@@ -90,6 +90,7 @@
 //! | `TrustRegion` | `BasicState` | ✓ |
 //! | `GaussNewton`, `LevenbergMarquardt`, `Trf` | `NllsState` | ✓ |
 //! | `NelderMead` | `BasicSimplexState` | ✓ |
+//! | `Gbnm` | `GbnmState` | ✓ |
 //! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
 //! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
 //! | `SolisWets` | `SolisWetsState` | ✓ |
@@ -385,10 +386,10 @@ pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
     AcceptanceState, BasicPopulationState, BasicSimplexState, BasicState,
     BobyqaState, CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror,
-    ExactResumeState, GlobalBestPsoState, GradientState, IntoInitialSimplex,
-    LbfgsState, LincoaState, MadsState, MeshState, NewuoaState, NllsState,
-    PopulationState, RhoState, ScalarGradientState, ScalarState, SimplexState,
-    SimulatedAnnealingState, SolisWetsState, State,
+    ExactResumeState, GbnmState, GlobalBestPsoState, GradientState,
+    IntoInitialSimplex, LbfgsState, LincoaState, MadsState, MeshState,
+    NewuoaState, NllsState, PopulationState, RhoState, ScalarGradientState,
+    ScalarState, SimplexState, SimulatedAnnealingState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::{
@@ -415,7 +416,7 @@ pub use crate::solver::trust_region::{
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
     Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative,
-    ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton,
+    ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton, Gbnm,
     GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa,
     MaLsCh, MaLsChCma, MaLsChGenericState, MaLsChState, MaLsChSw,
     MaLsChSwState, Mads, MemeticInner, Metropolis, Neighbor, NelderMead,
