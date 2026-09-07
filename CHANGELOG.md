@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/jolars/basin/compare/v1.7.0...v1.8.0) (2026-09-07)
+
+### Features
+- add Brent root finder ([`04a3087`](https://github.com/jolars/basin/commit/04a3087b5ce644a1fa443db1c1364b03d13b207e))
+- add Hager-Zhang line search ([`ddcc6c8`](https://github.com/jolars/basin/commit/ddcc6c8f4429addd06c01235916ffd829106bc52))
+- add global-best particle swarm optimizer ([`95dd75d`](https://github.com/jolars/basin/commit/95dd75da750da36edb0ea67aa48d7618806a2154))
+- **checkpoint:** resume stochastic solvers ([`cc91fc9`](https://github.com/jolars/basin/commit/cc91fc9da15b8931a5eb1c72e9d32cf52ae7ee9e))
+- **executor:** add exact checkpoints ([`bd27839`](https://github.com/jolars/basin/commit/bd2783910f0b083218f543a48299a94971749fad))
+- **solvers:** add simulated annealing ([`231121c`](https://github.com/jolars/basin/commit/231121c4059c2e0b2c5e839381639cb3ac0dba0a))
+- **executor:** add cancellation tokens ([`7ea852e`](https://github.com/jolars/basin/commit/7ea852e209fde971ccd4c1768d800d4be29ac28e))
+- support versioned linear algebra backends ([`b26e5e8`](https://github.com/jolars/basin/commit/b26e5e82b512a0f03b0e89c07f6d222ab972121c))
+- export TRF damping traits ([`d4b2ca7`](https://github.com/jolars/basin/commit/d4b2ca75e3c363f23af86b5bde443d3e6da9b710)), refs [#84](https://github.com/jolars/basin/issues/84)
+
 ## [1.7.0](https://github.com/jolars/basin/compare/v1.6.0...v1.7.0) (2026-08-27)
 
 ### Features
