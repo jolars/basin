@@ -30,10 +30,15 @@ code:
 - Lock down the named variant, equations, update ordering, defaults, convergence
   test, constraint model, and documented exceptional cases. Resolve material
   disagreements between paper, pseudocode, and code before implementation.
-- Treat reference code as an oracle unless its license is compatible with
-  Basin and a direct port is intentional. Do not copy or vendor code with an
-  unclear or incompatible license. An independent implementation from the
-  paper may still use reference outputs for parity tests.
+- Use reference code as an oracle only when it implements the requested variant
+  completely and its outputs are legally and practically usable for comparison.
+  Treat incomplete, materially different, or untrusted code as corroborating
+  evidence, not an oracle. Do not copy or vendor code with an unclear or
+  incompatible license.
+- When no usable executable oracle exists, implement independently from the
+  primary equations and state transitions. Replace trajectory parity with
+  analytical or paper-backed invariants and, where applicable, exhaustive
+  decision-table tests. Record why parity was omitted.
 - Put downloaded papers and external source trees under the gitignored
   `references/` directory. Commit only durable, license-compatible artifacts
   needed by tests, such as compact output fixtures and their regeneration
@@ -69,6 +74,12 @@ algorithm, including:
   comparisons; and
 - `f32` round-trip coverage when the new public surface stores or exposes a
   scalar-valued state.
+
+For a solver that wraps or orchestrates an existing solver, concentrate new
+tests on the outer algorithm: state transfer, restart or phase decisions,
+evaluation accounting, and end-to-end behavior. Do not duplicate unchanged
+inner-solver mechanics, but retain at least one public-path test proving that
+the composition works.
 
 Keep parity fixtures small and document their provenance, locked inputs,
 comparison tolerances, and regeneration procedure in
@@ -142,9 +153,9 @@ new default-path solver requires:
 
 ```text
 cargo fmt --all -- --check
-cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel
+cargo test -p basin --features nalgebra_latest,ndarray_latest,faer_latest,problems,parallel
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo doc --no-deps -p basin --all-features
+cargo doc --no-deps -p basin --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde
 cargo build --target wasm32-unknown-unknown
 cargo build --target wasm32-unknown-unknown --no-default-features
 ```
@@ -163,3 +174,8 @@ intentionally needs an explicit BLAS/LAPACK provider to link that matrix. Report
 the research basis and variant, implementation and public-surface changes,
 backend coverage, parity status, and every verification result. Distinguish
 failures caused by the change from pre-existing or environment failures.
+Attempt every required check, but do not broaden the task merely to repair an
+unrelated baseline failure. If a repository-wide check fails only in untouched
+files, confirm that fact from the diff and with the narrow checks that cover the
+changed area. Report the failing command and evidence accurately—a pre-existing
+failure is neither a regression nor a passing check.
