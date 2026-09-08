@@ -14,6 +14,16 @@ Ordered by recommended sequence.
 
 ## Deferred design
 
+- [ ] **Reconsider exact evaluation budgets for Basin 2.0.** In Basin 1.x,
+  `MaxCostEvals` remains a boundary-checked stopping criterion: `Solver::init`
+  and an active `Solver::next_iter` finish before the executor checks it, so
+  initialization and batched iterations may exceed the threshold. A future
+  hard-cap API would need executor/problem-level control flow that prevents
+  callbacks after exhaustion, handles batch reservation and composed problems,
+  and defines the outcome when the budget cannot complete initialization. Cover
+  COBYLA's `n + 1`-point initialization and zero-to-two-evaluation steps in any
+  resulting contract and tests.
+
 - [ ] **Revisit a shared constraint-violation capability (tenet 3).** COBYLA and
   constrained MADS now provide multiple consumers, but they use different
   violation measures, and only `ConstrainedMadsState` exposes its measure.
