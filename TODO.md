@@ -67,6 +67,31 @@ Ordered by recommended sequence.
   the affected layer, and improve it without weakening numerical behavior,
   bounds, error propagation, or strict callback-budget handling.
 
+- [ ] **Add a pivoted-QR solve path for Levenberg-Marquardt.** Basin 1.9 forms
+  `JᵀJ` explicitly and solves the damped normal equations
+  `(JᵀJ + μD)h = -Jᵀr` by Cholesky. The `levenberg-marquardt` crate used
+  by stochastic-rs instead follows MINPACK's `lmder` approach: it factorizes
+  the Jacobian with column-pivoted QR and applies the diagonal regularization
+  without materializing the Gram matrix. The steps are algebraically
+  equivalent, but forming `JᵀJ` can amplify roundoff as μ decreases because
+  its condition number is approximately the square of `J`'s. This difference
+  may matter for correlated or poorly scaled SVI-family calibration
+  parameters; see the migration discussion in
+  [rust-dd/stochastic-rs#32](https://github.com/rust-dd/stochastic-rs/pull/32#issuecomment-5586695436).
+
+  Design a capability-based QR route for the regularized least-squares system
+  `[J; √(μD)]h ≈ [-r; 0]`, including column pivoting and explicit
+  rank-deficiency behavior. Preserve the existing backend guarantees where an
+  honest pure-Rust implementation is available, and document any realistic
+  sparse-backend gap rather than falling back silently to normal equations.
+  Compare both paths against MINPACK-style pivoted QR on ill-conditioned,
+  rank-deficient, and poorly scaled problems, including representative raw
+  SVI and SSVI calibrations with multiple starting points. Record convergence,
+  termination reason, final residual, parameter recovery, and evaluation
+  counts. Decide from those results whether QR should replace Cholesky or be
+  an explicit solver configuration. Update the stale rustdoc claim that QR was
+  deferred until TRF; TRF has shipped and still uses normal equations.
+
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional
   linear inequalities and equalities, and optional box bounds into one
