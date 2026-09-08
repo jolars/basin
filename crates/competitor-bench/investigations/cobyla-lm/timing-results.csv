@@ -1,0 +1,13 @@
+case,mode,mean_us_per_solve,stddev_us_per_solve,runs,solves_per_process
+camel,old,6.824,0.216,15,5000
+camel,basin,57.764,1.988,15,5000
+camel,old-adapter,7.118,0.137,15,5000
+camel,new-adapter,57.282,0.754,15,5000
+sphere,old,464.362,12.715,15,400
+sphere,basin,1222.935,28.072,15,400
+sphere,old-adapter,451.667,4.069,15,400
+sphere,new-adapter,1199.728,9.566,15,400
+quadratic,old,20.877,0.588,15,3000
+quadratic,basin,92.964,0.675,15,3000
+quadratic,old-adapter,24.063,0.344,15,3000
+quadratic,new-adapter,100.580,9.507,15,3000

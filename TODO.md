@@ -8,6 +8,11 @@ Ordered by recommended sequence.
   GlobalSearch-rs migration.** This item records the complete initial
   observation; no external discussion is needed to interpret or reproduce it.
 
+  **Investigation:** the [reproducer and findings](crates/competitor-bench/investigations/cobyla-lm/README.md)
+  locate the main overhead in COBYLA's numerical driver, including scratch
+  allocations, inverse checks, and repeated model construction. Optimization
+  and its numerical regression coverage remain to be implemented.
+
   **Implementations.** The comparison used GlobalSearch-rs commit
   `4bf3eaa6b3677e0a2cc18f61f81603612db66b13`, whose COBYLA adapter uses Basin
   1.8.0, and its direct parent
@@ -19,8 +24,12 @@ Ordered by recommended sequence.
   16 untimed solves before its measured loop. Objective-evaluation tracking
   was enabled for every solve.
 
-  **Problems and solver settings.** All inequality constraints use Basin's
-  nonnegative-is-feasible convention.
+  **Problems and solver settings.** The descriptions below use GlobalSearch's
+  nonnegative-is-feasible convention. Its Basin adapter negates user
+  constraints into Basin's nonpositive-is-feasible convention. At the recorded
+  migration commit, the adapter also floors the final radius at
+  `sqrt(f64::EPSILON) * initial_step_size`, even with zero parameter
+  tolerances. For these cases, that floor is approximately `7.45e-9`.
 
   1. Six-hump camel used
      `f(x,y) = (4 - 2.1*x^2 + x^4/3)*x^2 + x*y + (-4 + 4*y^2)*y^2`, bounds
@@ -78,6 +87,13 @@ Ordered by recommended sequence.
   may matter for correlated or poorly scaled SVI-family calibration
   parameters; see the migration discussion in
   [rust-dd/stochastic-rs#32](https://github.com/rust-dd/stochastic-rs/pull/32#issuecomment-5586695436).
+
+  **Investigation:** the [conditioning and calibration probes](crates/competitor-bench/investigations/cobyla-lm/README.md)
+  confirm the linear-solve accuracy benefit, but substituting QR into the
+  existing damping loop does not close the observed SVI convergence gap.
+  Investigate damping selection and relative stopping tests independently.
+  Validate calibration Jacobians against their actual residual formulas before
+  attributing migration differences to factorization.
 
   Design a capability-based QR route for the regularized least-squares system
   `[J; √(μD)]h ≈ [-r; 0]`, including column pivoting and explicit
