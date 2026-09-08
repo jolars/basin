@@ -4,6 +4,69 @@ Ordered by recommended sequence.
 
 ## General design
 
+- [ ] **Investigate the COBYLA performance gap observed during the
+  GlobalSearch-rs migration.** This item records the complete initial
+  observation; no external discussion is needed to interpret or reproduce it.
+
+  **Implementations.** The comparison used GlobalSearch-rs commit
+  `4bf3eaa6b3677e0a2cc18f61f81603612db66b13`, whose COBYLA adapter uses Basin
+  1.8.0, and its direct parent
+  `1f44818e396567d22cb7137c267c66da2e19f334`, whose otherwise equivalent
+  adapter uses `cobyla` 1.0.2. Both revisions were compiled with Rust 1.88.0
+  using `cargo build --release --no-default-features`. Measurements ran on an
+  Intel Core Ultra 7 155U under NixOS. Hyperfine 1.20.0 performed three
+  process-level warmups followed by 15 timed runs. Each process also performed
+  16 untimed solves before its measured loop. Objective-evaluation tracking
+  was enabled for every solve.
+
+  **Problems and solver settings.** All inequality constraints use Basin's
+  nonnegative-is-feasible convention.
+
+  1. Six-hump camel used
+     `f(x,y) = (4 - 2.1*x^2 + x^4/3)*x^2 + x*y + (-4 + 4*y^2)*y^2`, bounds
+     `x in [-3,3]` and `y in [-2,2]`, start `(0,0)`, initial radius `0.5`, an
+     objective budget of 50, and zero function and parameter tolerances. Each
+     timed process performed 5,000 solves.
+  2. The 10-dimensional sphere used `f(x) = sum(x_i^2)`, bounds `[-5,5]` for
+     every coordinate, start
+     `(2.5,-2,1.5,-1,0.5,2.25,-1.75,1.25,-0.75,0.25)`, initial radius `0.5`,
+     an objective budget of 200, and zero function and parameter tolerances.
+     Each timed process performed 400 solves.
+  3. The constrained quadratic used
+     `f(x,y) = (x - 1)^2 + (y - 1)^2`, bounds `[0,2]` for both coordinates,
+     start `(0.5,0.5)`, constraint `1.5 - x - y >= 0`, initial radius `0.5`, an
+     objective budget of 100, and zero function and parameter tolerances. Each
+     timed process performed 3,000 solves.
+
+  **Results.** Times are the mean wall time per local solve; the parenthesized
+  number is the mean objective-evaluation count per solve.
+
+  | Problem | `cobyla` 1.0.2 | Basin 1.8.0 | Slowdown | Final objective: old / Basin |
+  |---|---:|---:|---:|---:|
+  | Six-hump camel | 10.3 us (50) | 84.7 us (50) | 8.23x | -1.0316284534 / -1.0316284527 |
+  | 10D sphere | 620 us (200) | 1.97 ms (200) | 3.18x | 9.65e-7 / 5.73e-9 |
+  | Constrained quadratic | 35.9 us (100) | 157 us (61) | 4.39x | 0.1250000000 / 0.1249999974 |
+
+  A second six-hump measurement used the public default settings: budget 300,
+  initial radius `0.5`, relative and absolute function tolerances `1e-6` and
+  `1e-8`, respectively, and zero parameter tolerances. The old adapter took
+  10.9 us and 52 evaluations per solve; the Basin adapter took 88.3 us and 50
+  evaluations, an 8.11x slowdown, with the same final objectives as the
+  fixed-budget row.
+
+  **Caveats and deliverable.** These numbers compare the complete
+  GlobalSearch-rs adapters, not bare solver kernels. In particular, the Basin
+  adapter projects objective and user-constraint callbacks into the box and
+  represents the box as `2*n` nonlinear inequalities, whereas the old adapter
+  passed bounds through `cobyla`'s native bounds argument. The Basin adapter
+  also adds a hard objective-budget guard and executor termination criteria.
+  Reproduce the three cases directly against both solver crates in
+  `competitor-bench`, and separately benchmark the two GlobalSearch adapters.
+  Profile allocations, state cloning, constraint evaluation, and executor
+  overhead. Determine which layer owns the gap, retain a benchmark that guards
+  the affected layer, and improve it without weakening numerical behavior,
+  bounds, error propagation, or strict callback-budget handling.
+
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional
   linear inequalities and equalities, and optional box bounds into one
