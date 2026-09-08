@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.0](https://github.com/jolars/basin/compare/v1.8.0...v1.9.0) (2026-09-08)
+
+### Features
+- add globalized bounded Nelder-Mead ([`14065ca`](https://github.com/jolars/basin/commit/14065cac79707056b40ab6c3ad992c83c37d72e0))
+
+### Performance Improvements
+- reuse L-BFGS line search evaluations ([`da4f681`](https://github.com/jolars/basin/commit/da4f6814af8068f68f03bc521dca17488d0752bf))
+
 ## [1.8.0](https://github.com/jolars/basin/compare/v1.7.0...v1.8.0) (2026-09-07)
 
 ### Features
