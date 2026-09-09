@@ -23,11 +23,21 @@ before changes to architecture, public APIs, dependencies, or platform support.
 
 Keep the user's solver, variant, workload, and reference. If none is specified,
 choose a representative existing case and state the choice. For a regression,
-compare against a known earlier revision. For an implementation comparison,
-prefer author-maintained reference code or an established library implementing
-the same variant. Record its version or commit and material differences; a
-different algorithm is a practical competitor, not an implementation oracle. Use
-primary documentation or source to resolve ambiguous reference semantics.
+compare against a known earlier revision.
+
+Before choosing kernel optimizations for an implementation comparison, establish
+whether the competitor uses the same algorithm variant. If it differs, retain
+the user's competitor as the practical performance target and identify a
+matching reference for implementation-cost comparisons. Prefer author-maintained
+reference code or an established library implementing the same variant. Record
+versions or commits and material differences; use primary documentation or
+source to resolve ambiguous reference semantics.
+
+When whole-solver trajectories differ, start the implementation comparison with
+kernels on identical inputs. If no matching reference is available, document
+that limitation and use matched before/after work to support implementation
+speedups without attributing the whole competitor gap to implementation
+overhead.
 
 Before timing, run each contestant once and record:
 
