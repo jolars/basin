@@ -21,6 +21,7 @@
     cargo-audit
     cargo-deny
     cargo-msrv
+    valgrind
     gnuplot
     samply
     pprof
