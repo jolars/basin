@@ -14,12 +14,14 @@
 use crate::core::math::Scalar;
 
 use super::filter::{moderatef, savefilt, selectx};
-use super::geometry::{assess_geo, geostep, setdrop_geo, setdrop_tr};
+use super::geometry::{
+    GeometryWork, assess_geo, geostep, setdrop_geo, setdrop_tr,
+};
 use super::init::initxfc;
 use super::linalg::dot;
-use super::model::{build_a, build_g};
-use super::trstlp::{trrad, trstlp};
-use super::update::{NO_DROP, updatepole, updatexfc};
+use super::model::ModelWork;
+use super::trstlp::{TrstlpWork, trrad};
+use super::update::{NO_DROP, UpdateWork, updatepole, updatexfc};
 
 /// A point evaluator: maps `x` to its (raw) objective value and constraint
 /// vector, propagating the problem's error type `E`.
@@ -37,6 +39,50 @@ pub(crate) enum Transition {
     Converged,
     /// Damaging rounding broke the simplex bookkeeping; abort.
     Failed,
+}
+
+/// The penalty search may repole several times. Keep its trial simplex separate
+/// from the live one so intermediate roundoff cannot alter the driver path.
+struct PenaltyWork<F> {
+    conmat: Vec<F>,
+    cval: Vec<F>,
+    fval: Vec<F>,
+    sim: Vec<F>,
+    simi: Vec<F>,
+    model: ModelWork<F>,
+    d: Vec<F>,
+    valid: bool,
+}
+
+impl<F: Scalar> PenaltyWork<F> {
+    fn new(n: usize, m: usize) -> Self {
+        Self {
+            conmat: vec![F::zero(); m * (n + 1)],
+            cval: vec![F::zero(); n + 1],
+            fval: vec![F::zero(); n + 1],
+            sim: vec![F::zero(); n * (n + 1)],
+            simi: vec![F::zero(); n * n],
+            model: ModelWork::new(n, m),
+            d: vec![F::zero(); n],
+            valid: false,
+        }
+    }
+
+    fn matches(&self, fval: &[F], conmat: &[F], simi: &[F]) -> bool {
+        self.valid
+            && [
+                (&self.fval[..], fval),
+                (&self.conmat[..], conmat),
+                (&self.simi[..], simi),
+            ]
+            .into_iter()
+            .all(|(a, b)| {
+                a.iter().zip(b).all(|(&x, &y)| {
+                    // Equality alone conflates signed zeros. NaNs invalidate reuse.
+                    x == y && x.is_sign_negative() == y.is_sign_negative()
+                })
+            })
+    }
 }
 
 /// Resumable COBYLA working state.
@@ -62,13 +108,16 @@ pub(crate) struct CobylaWork<F = f64> {
     factor_gamma: F,
     ctol: F,
     cweight: F,
+    lp: TrstlpWork<F>,
+    update: UpdateWork<F>,
+    penalty: PenaltyWork<F>,
+    geometry: GeometryWork<F>,
     // Return filter.
     maxfilt: usize,
     nfilt: usize,
     xfilt: Vec<F>,
     ffilt: Vec<F>,
     cfilt: Vec<F>,
-    confilt: Vec<F>,
 }
 
 impl<F: Scalar> CobylaWork<F> {
@@ -135,12 +184,15 @@ impl<F: Scalar> CobylaWork<F> {
             factor_gamma: F::from_f64(0.5).unwrap(),
             ctol,
             cweight,
+            lp: TrstlpWork::new(n, m),
+            update: UpdateWork::new(n),
+            penalty: PenaltyWork::new(n, m),
+            geometry: GeometryWork::new(n),
             maxfilt,
             nfilt: 0,
-            xfilt: vec![zero; n * maxfilt],
-            ffilt: vec![zero; maxfilt],
-            cfilt: vec![zero; maxfilt],
-            confilt: vec![zero; m * maxfilt],
+            xfilt: Vec::new(),
+            ffilt: Vec::new(),
+            cfilt: Vec::new(),
         };
 
         // Seed the filter from the initial simplex vertices.
@@ -153,9 +205,7 @@ impl<F: Scalar> CobylaWork<F> {
                     work.sim[r + n * n]
                 };
             }
-            let constr: Vec<F> =
-                (0..m).map(|i| work.conmat[i + j * m]).collect();
-            work.save_to_filter(&x, work.fval[j], work.cval[j], &constr);
+            work.save_to_filter(&x, work.fval[j], work.cval[j]);
         }
 
         let (bx, bf) = work.best();
@@ -167,18 +217,16 @@ impl<F: Scalar> CobylaWork<F> {
         self.rho
     }
 
-    fn pole(&self) -> Vec<F> {
-        (0..self.n).map(|r| self.sim[r + self.n * self.n]).collect()
+    fn pole(&self) -> &[F] {
+        &self.sim[self.n * self.n..]
     }
 
-    fn save_to_filter(&mut self, x: &[F], f: F, cstrv: F, constr: &[F]) {
+    fn save_to_filter(&mut self, x: &[F], f: F, cstrv: F) {
         savefilt(
             x,
             f,
             cstrv,
-            constr,
             self.n,
-            self.m,
             self.ctol,
             self.cweight,
             self.maxfilt,
@@ -186,7 +234,6 @@ impl<F: Scalar> CobylaWork<F> {
             &mut self.xfilt,
             &mut self.ffilt,
             &mut self.cfilt,
-            &mut self.confilt,
         );
     }
 
@@ -207,9 +254,11 @@ impl<F: Scalar> CobylaWork<F> {
         eval: &mut EvalFn<F, E>,
         x: &[F],
     ) -> Result<(F, Vec<F>, F), E> {
-        let (f_raw, c_raw) = eval(x)?;
+        let (f_raw, mut constr) = eval(x)?;
         let f = moderatef(f_raw);
-        let constr: Vec<F> = c_raw.iter().map(|&v| moderatef(v)).collect();
+        for v in &mut constr {
+            *v = moderatef(*v);
+        }
         let cstrv = constr
             .iter()
             .cloned()
@@ -239,6 +288,7 @@ impl<F: Scalar> CobylaWork<F> {
             &mut self.simi,
             n,
             m,
+            &mut self.update,
         ) {
             return Ok(Transition::Failed);
         }
@@ -253,14 +303,24 @@ impl<F: Scalar> CobylaWork<F> {
         );
 
         // (2) Linear models and the trust-region step.
-        let g = build_g(&self.fval, &self.simi, n);
-        let a = build_a(&self.conmat, &self.simi, n, m);
-        let b: Vec<F> = (0..m).map(|i| -self.conmat[i + n * m]).collect();
-        let d = trstlp(&a, n, m, &b, self.delta, &g);
+        // Reuse the penalty search's LP only when its model inputs survived
+        // repoling exactly. Multiple pole changes or inverse repair can differ.
+        if !self.penalty.matches(&self.fval, &self.conmat, &self.simi) {
+            self.penalty
+                .model
+                .build(&self.fval, &self.conmat, &self.simi);
+            let model = &self.penalty.model;
+            self.penalty.d.copy_from_slice(
+                self.lp.solve(&model.a, &model.b, self.delta, &model.g),
+            );
+        }
+        let g = &self.penalty.model.g;
+        let a = &self.penalty.model.a;
+        let d = self.penalty.d.clone();
         let dnorm = self.delta.min(dot(&d, &d).sqrt());
         let shortd = dnorm < F::from_f64(0.1).unwrap() * self.rho;
 
-        let preref = -dot(&d, &g);
+        let preref = -dot(&d, g);
         // prerec = cval[pole] − max(0, maxᵢ(conmat[i,pole] + (Aᵀd)[i])).
         let mut lin_cv = zero;
         for i in 0..m {
@@ -288,7 +348,7 @@ impl<F: Scalar> CobylaWork<F> {
             let pole = self.pole();
             let x: Vec<F> = (0..n).map(|r| pole[r] + d[r]).collect();
             let (f, constr, cstrv) = Self::eval_moderated(eval, &x)?;
-            self.save_to_filter(&x, f, cstrv, &constr);
+            self.save_to_filter(&x, f, cstrv);
 
             let actrem = (self.fval[n] + self.cpen * self.cval[n])
                 - (f + self.cpen * cstrv);
@@ -307,7 +367,14 @@ impl<F: Scalar> CobylaWork<F> {
             }
             let ximproved = actrem > zero;
             jdrop_tr = setdrop_tr(
-                ximproved, &d, self.delta, self.rho, &self.sim, &self.simi, n,
+                ximproved,
+                &d,
+                self.delta,
+                self.rho,
+                &self.sim,
+                &self.simi,
+                n,
+                &mut self.geometry,
             );
             if !updatexfc(
                 jdrop_tr,
@@ -323,6 +390,7 @@ impl<F: Scalar> CobylaWork<F> {
                 &mut self.simi,
                 n,
                 m,
+                &mut self.update,
             ) {
                 return Ok(Transition::Failed);
             }
@@ -366,11 +434,12 @@ impl<F: Scalar> CobylaWork<F> {
                 &self.simi,
                 n,
                 m,
+                &mut self.penalty.model,
             );
             let pole = self.pole();
             let x: Vec<F> = (0..n).map(|r| pole[r] + d[r]).collect();
             let (f, constr, cstrv) = Self::eval_moderated(eval, &x)?;
-            self.save_to_filter(&x, f, cstrv, &constr);
+            self.save_to_filter(&x, f, cstrv);
             if !updatexfc(
                 jdrop_geo,
                 &constr,
@@ -385,6 +454,7 @@ impl<F: Scalar> CobylaWork<F> {
                 &mut self.simi,
                 n,
                 m,
+                &mut self.update,
             ) {
                 return Ok(Transition::Failed);
             }
@@ -397,8 +467,8 @@ impl<F: Scalar> CobylaWork<F> {
                 if shortd {
                     let pole = self.pole();
                     let x: Vec<F> = (0..n).map(|r| pole[r] + d[r]).collect();
-                    let (f, constr, cstrv) = Self::eval_moderated(eval, &x)?;
-                    self.save_to_filter(&x, f, cstrv, &constr);
+                    let (f, _, cstrv) = Self::eval_moderated(eval, &x)?;
+                    self.save_to_filter(&x, f, cstrv);
                 }
                 return Ok(Transition::Converged);
             }
@@ -420,6 +490,7 @@ impl<F: Scalar> CobylaWork<F> {
                 &mut self.simi,
                 n,
                 m,
+                &mut self.update,
             ) {
                 return Ok(Transition::Failed);
             }
@@ -431,7 +502,7 @@ impl<F: Scalar> CobylaWork<F> {
 
     /// Increase `cpen` so the predicted merit reduction is positive (PRIMA
     /// `getcpen`). Works on local copies of the simplex bookkeeping.
-    fn get_cpen(&self) -> F {
+    fn get_cpen(&mut self) -> F {
         let n = self.n;
         let m = self.m;
         let zero = F::zero();
@@ -439,30 +510,42 @@ impl<F: Scalar> CobylaWork<F> {
         let two = F::from_f64(2.0).unwrap();
 
         let mut cpen = self.cpen;
-        let mut conmat = self.conmat.clone();
-        let mut cval = self.cval.clone();
-        let mut fval = self.fval.clone();
-        let mut sim = self.sim.clone();
-        let mut simi = self.simi.clone();
+        let PenaltyWork {
+            conmat,
+            cval,
+            fval,
+            sim,
+            simi,
+            model,
+            d,
+            valid,
+        } = &mut self.penalty;
+        conmat.copy_from_slice(&self.conmat);
+        cval.copy_from_slice(&self.cval);
+        fval.copy_from_slice(&self.fval);
+        sim.copy_from_slice(&self.sim);
+        simi.copy_from_slice(&self.simi);
+        *valid = false;
 
         for _ in 0..(n + 1) {
             if !updatepole(
                 cpen,
-                &mut conmat,
-                &mut cval,
-                &mut fval,
-                &mut sim,
-                &mut simi,
+                conmat,
+                cval,
+                fval,
+                sim,
+                simi,
                 n,
                 m,
+                &mut self.update,
             ) {
                 break;
             }
-            let g = build_g(&fval, &simi, n);
-            let a = build_a(&conmat, &simi, n, m);
-            let b: Vec<F> = (0..m).map(|i| -conmat[i + n * m]).collect();
-            let d = trstlp(&a, n, m, &b, self.delta, &g);
-            let preref = -dot(&d, &g);
+            model.build(fval, conmat, simi);
+            let a = &model.a;
+            d.copy_from_slice(self.lp.solve(a, &model.b, self.delta, &model.g));
+            *valid = true;
+            let preref = -dot(d, &model.g);
             let mut lin_cv = zero;
             for i in 0..m {
                 let adi: F = (0..n).map(|l| d[l] * a[l + i * n]).sum();
@@ -474,7 +557,7 @@ impl<F: Scalar> CobylaWork<F> {
                 break;
             }
             cpen = cpen.max((-two * (preref / prerec)).min(realmax));
-            if super::update::findpole(cpen, &cval, &fval, n) == n {
+            if super::update::findpole(cpen, cval, fval, n) == n {
                 break;
             }
         }

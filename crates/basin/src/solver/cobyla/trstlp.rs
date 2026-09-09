@@ -16,14 +16,110 @@
 
 use crate::core::math::Scalar;
 
-use super::linalg::{
-    col, dot, eye, hypotenuse, isminor, planerot, row_times_mat,
-};
+use super::linalg::{col, dot, dot_abs, hypotenuse, isminor, planerot};
 
-/// Solve the COBYLA trust-region LP. `a` is the `n × m` column-major matrix of
-/// constraint gradients, `b` the length-`m` right-hand side, `g` the length-`n`
-/// objective gradient, `delta` the trust-region radius. Returns the step `d`.
-pub(crate) fn trstlp<F: Scalar>(
+/// Scratch reused by both LP stages and successive driver iterations.
+pub(crate) struct TrstlpWork<F> {
+    a_aug: Vec<F>,
+    b_aug: Vec<F>,
+    iact: Vec<usize>,
+    vmultc: Vec<F>,
+    z: Vec<F>,
+    d: Vec<F>,
+    scratch: TrstlpScratch<F>,
+}
+
+struct TrstlpScratch<F> {
+    sdirn: Vec<F>,
+    zdota: Vec<F>,
+    zdasav: Vec<F>,
+    cq: Vec<F>,
+    cqa: Vec<F>,
+    y: Vec<F>,
+    dnew: Vec<F>,
+    vmultd: Vec<F>,
+    dold: Vec<F>,
+}
+
+impl<F: Scalar> TrstlpWork<F> {
+    pub(crate) fn new(n: usize, m: usize) -> Self {
+        let zero = F::zero();
+        Self {
+            a_aug: vec![zero; n * (m + 1)],
+            b_aug: vec![zero; m + 1],
+            iact: vec![0; m + 1],
+            vmultc: vec![zero; m + 1],
+            z: vec![zero; n * n],
+            d: vec![zero; n],
+            scratch: TrstlpScratch {
+                sdirn: vec![zero; n],
+                zdota: vec![zero; n],
+                zdasav: vec![zero; n],
+                cq: vec![zero; n],
+                cqa: vec![zero; n],
+                y: vec![zero; n],
+                dnew: vec![zero; n],
+                vmultd: vec![zero; m + 1],
+                dold: vec![zero; n],
+            },
+        }
+    }
+
+    /// Solve `min gᵀd` with linearized constraints `Aᵀd ≤ b` and `‖d‖ ≤ Δ`.
+    /// The returned step is valid until the next solve on this workspace.
+    pub(crate) fn solve(
+        &mut self,
+        a: &[F],
+        b: &[F],
+        delta: F,
+        g: &[F],
+    ) -> &[F] {
+        let n = self.d.len();
+        let m = self.b_aug.len() - 1;
+        let mcon = m + 1;
+        let Self {
+            a_aug,
+            b_aug,
+            iact,
+            vmultc,
+            z,
+            d,
+            scratch,
+        } = self;
+        a_aug[..n * m].copy_from_slice(a);
+        a_aug[n * m..].copy_from_slice(g);
+        b_aug[..m].copy_from_slice(b);
+        b_aug[m] = F::zero();
+
+        // Huge columns are scaled to avoid floating-point exceptions.
+        let big = F::from_f64(1.0e12).unwrap();
+        let realmin = F::min_positive_value();
+        for i in 0..mcon {
+            let mx = col(a_aug, n, i)
+                .iter()
+                .map(|v| v.abs())
+                .fold(F::zero(), F::max);
+            if mx > big {
+                let scal = ((F::one() + F::one()) * realmin).max(F::one() / mx);
+                for r in 0..n {
+                    a_aug[r + i * n] = a_aug[r + i * n] * scal;
+                }
+                b_aug[i] = b_aug[i] * scal;
+            }
+        }
+        let mut nact = 0;
+        for (stage, columns) in [(1, m), (2, mcon)] {
+            trstlp_sub(
+                stage, a_aug, n, columns, b_aug, delta, d, iact, vmultc, z,
+                &mut nact, scratch,
+            );
+        }
+        d
+    }
+}
+
+#[cfg(test)]
+fn trstlp<F: Scalar>(
     a: &[F],
     n: usize,
     m: usize,
@@ -31,92 +127,7 @@ pub(crate) fn trstlp<F: Scalar>(
     delta: F,
     g: &[F],
 ) -> Vec<F> {
-    let mcon = m + 1;
-    // A_aug = [A, g] (n × (m+1)); b_aug = [b, 0].
-    let mut a_aug = vec![F::zero(); n * mcon];
-    a_aug[..n * m].copy_from_slice(&a[..n * m]);
-    a_aug[n * m..n * mcon].copy_from_slice(&g[..n]);
-    let mut b_aug = vec![F::zero(); mcon];
-    b_aug[..m].copy_from_slice(&b[..m]);
-
-    // Scale any column with huge entries to avoid floating-point exceptions; the
-    // trust-region step is scale invariant.
-    let big = F::from_f64(1.0e12).unwrap();
-    let realmin = F::min_positive_value();
-    for i in 0..mcon {
-        let mx = (0..n)
-            .map(|r| a_aug[r + i * n].abs())
-            .fold(F::zero(), F::max);
-        if mx > big {
-            let scal = ((F::one() + F::one()) * realmin).max(F::one() / mx);
-            for r in 0..n {
-                a_aug[r + i * n] = a_aug[r + i * n] * scal;
-            }
-            b_aug[i] = b_aug[i] * scal;
-        }
-    }
-
-    let mut iact = vec![0usize; mcon];
-    let mut vmultc = vec![F::zero(); mcon];
-    let mut z = eye::<F>(n);
-    let mut d = vec![F::zero(); n];
-    let mut nact = 0usize;
-
-    // Stage 1: first m columns. Stage 2: full mcon columns.
-    trstlp_sub(
-        1,
-        &a_aug,
-        n,
-        m,
-        &b_aug,
-        delta,
-        &mut d,
-        &mut iact,
-        &mut vmultc,
-        &mut z,
-        &mut nact,
-    );
-    trstlp_sub(
-        2,
-        &a_aug,
-        n,
-        mcon,
-        &b_aug,
-        delta,
-        &mut d,
-        &mut iact,
-        &mut vmultc,
-        &mut z,
-        &mut nact,
-    );
-    d
-}
-
-/// `zdota(0..nact)` recomputed from `z` and the active columns of `a`.
-fn zdota_active<F: Scalar>(
-    a: &[F],
-    n: usize,
-    iact: &[usize],
-    nact: usize,
-    z: &[F],
-) -> Vec<F> {
-    (0..nact)
-        .map(|k| dot(col(z, n, k), col(a, n, iact[k])))
-        .collect()
-}
-
-/// The active-column matrix `A(:, iact(0..nact))` (n × nact, column-major).
-fn active_cols<F: Scalar>(
-    a: &[F],
-    n: usize,
-    iact: &[usize],
-    nact: usize,
-) -> Vec<F> {
-    let mut out = vec![F::zero(); n * nact];
-    for k in 0..nact {
-        out[k * n..(k + 1) * n].copy_from_slice(col(a, n, iact[k]));
-    }
-    out
+    TrstlpWork::new(n, m).solve(a, b, delta, g).to_vec()
 }
 
 /// QR rank-one add (PRIMA `qradd_Rdiag`): attempt to append column `c` to the
@@ -127,12 +138,12 @@ fn qradd<F: Scalar>(
     zdota: &mut [F],
     nact: &mut usize,
     n: usize,
+    cq: &mut [F],
+    cqa: &mut [F],
 ) {
-    let mut cq = row_times_mat(c, z, n, n);
-    let cabs: Vec<F> = c.iter().map(|&x| x.abs()).collect();
-    let zabs: Vec<F> = z.iter().map(|&x| x.abs()).collect();
-    let cqa = row_times_mat(&cabs, &zabs, n, n);
     for k in 0..n {
+        cq[k] = dot(c, col(z, n, k));
+        cqa[k] = dot_abs(c, col(z, n, k));
         if isminor(cq[k], cqa[k]) {
             cq[k] = F::zero();
         }
@@ -164,9 +175,10 @@ fn qradd<F: Scalar>(
 
 /// QR column-exchange (PRIMA `qrexc_Rdiag`): rearrange active columns
 /// `[i, i+1, …, nact-1]` to `[i+1, …, nact-1, i]` (0-based `i`), updating `z`
-/// and `zdota`. `aact` is the active-column matrix (n × nact).
+/// and `zdota`. Active columns are read through `iact` without packing them.
 fn qrexc<F: Scalar>(
-    aact: &[F],
+    a: &[F],
+    iact: &[usize],
     z: &mut [F],
     zdota: &mut [F],
     n: usize,
@@ -178,7 +190,7 @@ fn qrexc<F: Scalar>(
     }
     for k in i..(nact - 1) {
         let (cc, ss) =
-            planerot(zdota[k + 1], dot(col(z, n, k), col(aact, n, k + 1)));
+            planerot(zdota[k + 1], dot(col(z, n, k), col(a, n, iact[k + 1])));
         // Q(:, [k, k+1]) = [Q(:, k+1), Q(:, k)] * G^T.
         for r in 0..n {
             let p1 = z[r + (k + 1) * n]; // Q(:, k+1)
@@ -189,41 +201,41 @@ fn qrexc<F: Scalar>(
     }
     // Recompute the affected diagonal of R from scratch.
     for k in i..(nact - 1) {
-        zdota[k] = dot(col(z, n, k), col(aact, n, k + 1));
+        zdota[k] = dot(col(z, n, k), col(a, n, iact[k + 1]));
     }
-    zdota[nact - 1] = dot(col(z, n, nact - 1), col(aact, n, i));
+    zdota[nact - 1] = dot(col(z, n, nact - 1), col(a, n, iact[i]));
 }
 
 /// Least-squares multipliers against the stored QR (PRIMA `lsqr_Rdiag`, the
-/// `Q`+`Rdiag`-present branch). `aact` is the active-column matrix (n × nact),
-/// `target` the length-`n` right-hand side. Returns length-`nact`.
+/// `Q`+`Rdiag`-present branch). Active columns are indexed by `iact`;
+/// `target` is the length-`n` right-hand side. Writes `nact` multipliers.
+#[allow(clippy::too_many_arguments)]
 fn lsqr<F: Scalar>(
-    aact: &[F],
+    a: &[F],
+    iact: &[usize],
     target: &[F],
     z: &[F],
     zdota: &[F],
     n: usize,
     nact: usize,
-) -> Vec<F> {
-    let mut x = vec![F::zero(); nact];
-    let mut y = target.to_vec();
+    x: &mut [F],
+    y: &mut [F],
+) {
+    y.copy_from_slice(target);
     for i in (0..nact).rev() {
         let zi = col(z, n, i);
-        let yq = dot(&y, zi);
-        let ya: Vec<F> = y.iter().map(|&v| v.abs()).collect();
-        let za: Vec<F> = zi.iter().map(|&v| v.abs()).collect();
-        let yqa = dot(&ya, &za);
+        let yq = dot(y, zi);
+        let yqa = dot_abs(y, zi);
         if isminor(yq, yqa) {
             x[i] = F::zero();
         } else {
             x[i] = yq / zdota[i];
-            let aci = col(aact, n, i);
+            let aci = col(a, n, iact[i]);
             for r in 0..n {
                 y[r] = y[r] - x[i] * aci[r];
             }
         }
     }
-    x
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -239,7 +251,19 @@ fn trstlp_sub<F: Scalar>(
     vmultc: &mut [F],
     z: &mut [F],
     nact: &mut usize,
+    scratch: &mut TrstlpScratch<F>,
 ) {
+    let TrstlpScratch {
+        sdirn,
+        zdota,
+        zdasav,
+        cq,
+        cqa,
+        y,
+        dnew,
+        vmultd,
+        dold,
+    } = scratch;
     let zero = F::zero();
     let one = F::one();
     let eps = F::epsilon();
@@ -249,7 +273,7 @@ fn trstlp_sub<F: Scalar>(
     let m_real = if stage == 1 { mcon } else { mcon - 1 };
 
     let mut icon: usize;
-    let mut sdirn = vec![zero; n];
+    sdirn.fill(zero);
 
     if stage == 1 {
         for k in 0..mcon {
@@ -266,7 +290,10 @@ fn trstlp_sub<F: Scalar>(
         for k in 0..mcon {
             vmultc[k] = cviol + b[k];
         }
-        z.copy_from_slice(&eye::<F>(n));
+        z.fill(zero);
+        for k in 0..n {
+            z[k + k * n] = one;
+        }
         if mcon == 0 || cviol <= zero {
             return;
         }
@@ -306,10 +333,9 @@ fn trstlp_sub<F: Scalar>(
         c
     };
 
-    let mut zdota = vec![zero; n];
-    {
-        let zd = zdota_active(a, n, iact, *nact, z);
-        zdota[..*nact].copy_from_slice(&zd);
+    zdota.fill(zero);
+    for k in 0..*nact {
+        zdota[k] = dot(col(z, n, k), col(a, n, iact[k]));
     }
 
     let mut optold = realmax;
@@ -337,10 +363,9 @@ fn trstlp_sub<F: Scalar>(
 
         if icon >= *nact {
             // --- Add constraint iact[icon] to the active set. ---
-            let zdasav: Vec<F> = zdota[..*nact].to_vec();
+            zdasav[..*nact].copy_from_slice(&zdota[..*nact]);
             let nactsav = *nact;
-            let ccol = col(a, n, iact[icon]).to_vec();
-            qradd(&ccol, z, &mut zdota, nact, n);
+            qradd(col(a, n, iact[icon]), z, zdota, nact, n, cq, cqa);
 
             if *nact == nactsav + 1 {
                 if *nact != icon + 1 {
@@ -355,13 +380,18 @@ fn trstlp_sub<F: Scalar>(
             } else {
                 // C was in range(active): revise multipliers via lsqr against the
                 // UN-updated active set (use zdasav), then drop a constraint.
-                let aact = active_cols(a, n, iact, *nact);
-                let target = col(a, n, iact[icon]).to_vec();
-                let mut vmultd = vec![zero; mcon];
-                {
-                    let vd = lsqr(&aact, &target, z, &zdasav, n, *nact);
-                    vmultd[..*nact].copy_from_slice(&vd);
-                }
+                vmultd.fill(zero);
+                lsqr(
+                    a,
+                    iact,
+                    col(a, n, iact[icon]),
+                    z,
+                    zdasav,
+                    n,
+                    *nact,
+                    vmultd,
+                    y,
+                );
                 let any_pos =
                     (0..*nact).any(|k| vmultd[k] > zero && iact[k] < m_real);
                 if !any_pos {
@@ -392,8 +422,7 @@ fn trstlp_sub<F: Scalar>(
                 if *nact <= 1 {
                     break;
                 }
-                let aact = active_cols(a, n, iact, *nact);
-                qrexc(&aact, z, &mut zdota, n, *nact, *nact - 2);
+                qrexc(a, iact, z, zdota, n, *nact, *nact - 2);
                 iact.swap(*nact - 2, *nact - 1);
                 vmultc.swap(*nact - 2, *nact - 1);
             }
@@ -405,7 +434,7 @@ fn trstlp_sub<F: Scalar>(
 
             // Set SDIRN.
             if stage == 1 {
-                let sa = dot(&sdirn, col(a, n, iact[*nact - 1]));
+                let sa = dot(sdirn, col(a, n, iact[*nact - 1]));
                 let zc = col(z, n, *nact - 1);
                 let coef = (sa + one) / zdota[*nact - 1];
                 for r in 0..n {
@@ -420,8 +449,7 @@ fn trstlp_sub<F: Scalar>(
             }
         } else {
             // --- Delete constraint iact[icon] from the active set. ---
-            let aact = active_cols(a, n, iact, *nact);
-            qrexc(&aact, z, &mut zdota, n, *nact, icon);
+            qrexc(a, iact, z, zdota, n, *nact, icon);
             // iact(icon:nact) <- [iact(icon+1:nact), iact(icon)]
             let saved = iact[icon];
             for k in icon..(*nact - 1) {
@@ -446,8 +474,8 @@ fn trstlp_sub<F: Scalar>(
             }
 
             if stage == 1 {
-                let zc = col(z, n, *nact).to_vec(); // Z(:, nact+1) in 1-based = index nact
-                let coef = dot(&sdirn, &zc);
+                let zc = col(z, n, *nact);
+                let coef = dot(sdirn, zc);
                 for r in 0..n {
                     sdirn[r] = sdirn[r] - coef * zc[r];
                 }
@@ -462,8 +490,8 @@ fn trstlp_sub<F: Scalar>(
 
         // --- Step to the trust-region boundary / to zero out CVIOL. ---
         let dd = delta * delta - dot(&d[..n], &d[..n]);
-        let ss = dot(&sdirn, &sdirn);
-        let sd = dot(&sdirn, &d[..n]);
+        let ss = dot(sdirn, sdirn);
+        let sd = dot(sdirn, &d[..n]);
         if dd <= zero || ss <= eps * delta * delta || sd.is_nan() {
             break;
         }
@@ -487,26 +515,22 @@ fn trstlp_sub<F: Scalar>(
         }
 
         // DNEW = D + step·SDIRN; reduce CVIOL in stage 1.
-        let mut dnew = vec![zero; n];
         for r in 0..n {
             dnew[r] = d[r] + step * sdirn[r];
         }
         if stage == 1 {
             let mut c = zero;
             for k in 0..*nact {
-                c = c.max(dot(col(a, n, iact[k]), &dnew) - b[iact[k]]);
+                c = c.max(dot(col(a, n, iact[k]), dnew) - b[iact[k]]);
             }
             cviol = c;
         }
 
         // VMULTD: multipliers for DNEW (active), residuals (inactive).
-        let mut vmultd = vec![zero; mcon];
-        {
-            let aact = active_cols(a, n, iact, *nact);
-            let vd = lsqr(&aact, &dnew, z, &zdota, n, *nact);
-            for k in 0..*nact {
-                vmultd[k] = -vd[k];
-            }
+        vmultd.fill(zero);
+        lsqr(a, iact, dnew, z, zdota, n, *nact, vmultd, y);
+        for v in &mut vmultd[..*nact] {
+            *v = -*v;
         }
         if stage == 2 && *nact >= 1 {
             vmultd[*nact - 1] = zero.max(vmultd[*nact - 1]);
@@ -514,11 +538,9 @@ fn trstlp_sub<F: Scalar>(
         // Inactive residuals: cvshift = cviol − (A(:,iact)·dnew − b(iact)).
         for k in *nact..mcon {
             let j = iact[k];
-            let adn = dot(col(a, n, j), &dnew);
+            let adn = dot(col(a, n, j), dnew);
             let cvshift = cviol - (adn - b[j]);
-            let dabs: Vec<F> = dnew.iter().map(|&v| v.abs()).collect();
-            let aabs: Vec<F> = col(a, n, j).iter().map(|&v| v.abs()).collect();
-            let cvsabs = dot(&dabs, &aabs) + b[j].abs() + cviol;
+            let cvsabs = dot_abs(dnew, col(a, n, j)) + b[j].abs() + cviol;
             vmultd[k] = if isminor(cvshift, cvsabs) {
                 zero
             } else {
@@ -545,12 +567,12 @@ fn trstlp_sub<F: Scalar>(
         }
 
         // Update D, VMULTC, CVIOL.
-        let dold = d[..n].to_vec();
+        dold.copy_from_slice(&d[..n]);
         for r in 0..n {
             d[r] = (one - frac) * d[r] + frac * dnew[r];
         }
         if !d[..n].iter().map(|v| v.abs()).sum::<F>().is_finite() {
-            d[..n].copy_from_slice(&dold);
+            d[..n].copy_from_slice(dold);
             break;
         }
         for k in 0..mcon {

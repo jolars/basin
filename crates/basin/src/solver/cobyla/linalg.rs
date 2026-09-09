@@ -17,20 +17,14 @@ pub(crate) fn dot<F: Scalar>(a: &[F], b: &[F]) -> F {
     a.iter().zip(b).map(|(&x, &y)| x * y).sum()
 }
 
+/// `Σᵢ |a[i]|·|b[i]|`, preserving the signed dot product's summation order.
+pub(crate) fn dot_abs<F: Scalar>(a: &[F], b: &[F]) -> F {
+    a.iter().zip(b).map(|(&x, &y)| x.abs() * y.abs()).sum()
+}
+
 /// Column `j` of an `r × c` column-major matrix.
 pub(crate) fn col<F>(a: &[F], r: usize, j: usize) -> &[F] {
     &a[j * r..(j + 1) * r]
-}
-
-/// `xᵀ A = Aᵀ x` for an `r × c` column-major `A` and length-`r` `x`; result
-/// length `c` (PRIMA's `matprod(x, A)` with `x` a row vector).
-pub(crate) fn row_times_mat<F: Scalar>(
-    x: &[F],
-    a: &[F],
-    r: usize,
-    c: usize,
-) -> Vec<F> {
-    (0..c).map(|j| dot(x, col(a, r, j))).collect()
 }
 
 /// Column-major `n × n` identity.
@@ -152,15 +146,4 @@ pub(crate) fn inv<F: Scalar>(a: &[F], n: usize) -> Option<Vec<F>> {
         }
     }
     Some(out)
-}
-
-/// Max absolute entry of a slice; `NaN` if any entry is `NaN`.
-pub(crate) fn maxabs<F: Scalar>(a: &[F]) -> F {
-    a.iter().fold(F::zero(), |acc, &x| {
-        if x.is_nan() {
-            F::nan()
-        } else {
-            acc.max(x.abs())
-        }
-    })
 }

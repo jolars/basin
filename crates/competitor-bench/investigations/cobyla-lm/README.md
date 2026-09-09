@@ -6,8 +6,9 @@ Investigated on September 8, 2026, against Basin
 COBYLA's performance gap is reproducible and belongs primarily to the
 numerical driver. LM's QR proposal addresses a real accuracy limitation,
 but changing the factorization alone does not reproduce MINPACK's
-convergence behavior. The probes below separate these questions. The TODO
-implementation items remain open.
+convergence behavior. The probes below separate these questions. The
+[COBYLA optimization](cobyla-optimization.md) is now implemented and verified;
+the LM implementation item remains open.
 
 ## Reproduce
 
@@ -144,7 +145,7 @@ self-time shares, not inclusive call-tree percentages:
 - Sphere: `inv_error` about 24%, `build_a` about 22%, and `trstlp_sub`
   about 16%.
 
-The code explains these measurements:
+The baseline code explains these measurements:
 
 - `get_cpen` copies five simplex arrays and constructs models and a
   trust-region LP; `step` constructs models and solves another LP afterward.
@@ -158,19 +159,16 @@ The code explains these measurements:
   128,000, 512,000, and 144,000 bytes in these cases. `confilt` is written
   and compacted but is never consumed by return-point selection.
 
-Start optimization with reusable scratch buffers, removal of unnecessary
-temporary vectors, and bounded lazy filter storage. Preserve accumulation
-order, NaN handling, feasibility selection, and error propagation. Sharing
-the penalty-update model/LP work is a second, more delicate change because
-it depends on whether repoling invalidates that work. Keep inverse validation
-and recovery; profile and optimize their implementation before considering
-changes to when they run.
+The [implemented optimization](cobyla-optimization.md) reuses scratch buffers,
+removes unnecessary temporary vectors, and grows the filter lazily. It shares
+the penalty search's model and LP work only when the model inputs match the
+live simplex after repoling. Inverse validation and recovery still run at the
+same points in the algorithm.
 
-These probes provide a retained baseline, not completed regression coverage
-for a future optimization. Before merging such a change, compare evaluation
-traces and stopping outcomes, exercise filter saturation and non-finite
-inputs, and retain callback-error and strict-budget cases. Run Basin's
-backend, `f32`, PRIMA-parity, and WASM checks as appropriate.
+The follow-up records timing and allocation improvements, adds evaluation and
+iteration traces, and covers filter saturation, non-finite inputs, callback
+errors, and strict callback guards. It also retains a private-driver benchmark
+and deterministic allocation ceilings.
 
 ## LM: accuracy and convergence are separate questions
 
@@ -312,6 +310,6 @@ Clippy with all targets and features and warnings denied. The Rust probe files
 and Python script pass their formatter and lint checks.
 
 The investigation does not establish sparse QR coverage, a production rank
-policy, or real-market calibration behavior. It also does not supply the
-numerical regression suite needed to merge a COBYLA optimization. Those are
-implementation follow-ups, and both TODO entries remain unchecked.
+policy, or real-market calibration behavior. Those remain LM implementation
+follow-ups. The [COBYLA follow-up](cobyla-optimization.md) supplies the numerical
+regression suite and performance guards for the implemented optimization.

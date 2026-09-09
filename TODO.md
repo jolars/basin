@@ -4,14 +4,18 @@ Ordered by recommended sequence.
 
 ## General design
 
-- [ ] **Investigate the COBYLA performance gap observed during the
+- [x] **Investigate the COBYLA performance gap observed during the
   GlobalSearch-rs migration.** This item records the complete initial
   observation; no external discussion is needed to interpret or reproduce it.
 
   **Investigation:** the [reproducer and findings](crates/competitor-bench/investigations/cobyla-lm/README.md)
   locate the main overhead in COBYLA's numerical driver, including scratch
-  allocations, inverse checks, and repeated model construction. Optimization
-  and its numerical regression coverage remain to be implemented.
+  allocations, inverse checks, and repeated model construction. The
+  [implemented optimization and results](crates/competitor-bench/investigations/cobyla-lm/cobyla-optimization.md)
+  retain numerical traces, callback-error and budget coverage, a driver
+  benchmark, and allocation ceilings. The driver is 1.9–2.8 times faster on
+  these cases, with 94–97% fewer allocation requests. A smaller performance
+  gap to `cobyla` 1.0.2 remains.
 
   **Implementations.** The comparison used GlobalSearch-rs commit
   `4bf3eaa6b3677e0a2cc18f61f81603612db66b13`, whose COBYLA adapter uses Basin

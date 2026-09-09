@@ -84,6 +84,10 @@ harness = false
 name = "gd_nm"
 harness = false
 
+[[bench]]
+name = "cobyla"
+harness = false
+
 # Serial-vs-parallel scaling of basin's population solvers (axis 4:
 # basin-internal, but co-located here for the criterion + heavy-dep setup).
 # Requires the `parallel` feature; skipped by a plain `cargo bench`.

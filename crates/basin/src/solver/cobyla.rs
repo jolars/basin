@@ -29,6 +29,9 @@ mod parity;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod regression;
+
 use crate::core::constraint::NonlinearInequalityConstraints;
 use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};

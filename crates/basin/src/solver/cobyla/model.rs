@@ -9,38 +9,66 @@
 
 use crate::core::math::Scalar;
 
+/// Reusable interpolation-model storage.
+pub(crate) struct ModelWork<F> {
+    pub(crate) g: Vec<F>,
+    pub(crate) a: Vec<F>,
+    pub(crate) b: Vec<F>,
+    difference: Vec<F>,
+}
+
+impl<F: Scalar> ModelWork<F> {
+    pub(crate) fn new(n: usize, m: usize) -> Self {
+        Self {
+            g: vec![F::zero(); n],
+            a: vec![F::zero(); n * m],
+            b: vec![F::zero(); m],
+            difference: vec![F::zero(); n],
+        }
+    }
+
+    pub(crate) fn build(&mut self, fval: &[F], conmat: &[F], simi: &[F]) {
+        let n = self.g.len();
+        let m = self.b.len();
+        build_g_into(fval, simi, n, &mut self.g);
+        build_a_into(conmat, simi, n, m, &mut self.a, &mut self.difference);
+        for i in 0..m {
+            self.b[i] = -conmat[i + n * m];
+        }
+    }
+}
+
 /// Objective-model gradient `g` (length `n`):
 /// `g[l] = Σ_i (fval[i] − fval[n]) · simi[i, l]`.
-pub(crate) fn build_g<F: Scalar>(fval: &[F], simi: &[F], n: usize) -> Vec<F> {
+fn build_g_into<F: Scalar>(fval: &[F], simi: &[F], n: usize, g: &mut [F]) {
     let fn_pole = fval[n];
-    (0..n)
-        .map(|l| {
-            (0..n)
-                .map(|i| (fval[i] - fn_pole) * simi[i + l * n])
-                .sum::<F>()
-        })
-        .collect()
+    for l in 0..n {
+        g[l] = (0..n).map(|i| (fval[i] - fn_pole) * simi[i + l * n]).sum();
+    }
 }
 
 /// Constraint-model gradients `A` (n × m, column-major; column `i` is the
 /// gradient of constraint `i`):
 /// `A[l, i] = Σ_j (conmat[i, j] − conmat[i, n]) · simi[j, l]`.
-pub(crate) fn build_a<F: Scalar>(
+fn build_a_into<F: Scalar>(
     conmat: &[F],
     simi: &[F],
     n: usize,
     m: usize,
-) -> Vec<F> {
-    let mut a = vec![F::zero(); n * m];
+    a: &mut [F],
+    difference: &mut [F],
+) {
     for i in 0..m {
         let pole = conmat[i + n * m];
+        for j in 0..n {
+            difference[j] = conmat[i + j * m] - pole;
+        }
         for l in 0..n {
             let mut s = F::zero();
             for j in 0..n {
-                s = s + (conmat[i + j * m] - pole) * simi[j + l * n];
+                s = s + difference[j] * simi[j + l * n];
             }
             a[l + i * n] = s;
         }
     }
-    a
 }
