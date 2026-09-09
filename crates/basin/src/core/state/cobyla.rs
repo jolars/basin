@@ -142,7 +142,11 @@ impl<V: Clone, F: Scalar> State for CobylaState<V, F> {
     /// point the solver just reported rather than the cost-minimal one.
     fn update_best(&mut self) {
         if let Some(cost) = self.cost {
-            self.best_param = Some(self.param.clone());
+            if let Some(best) = &mut self.best_param {
+                best.clone_from(&self.param);
+            } else {
+                self.best_param = Some(self.param.clone());
+            }
             self.best_cost = cost;
             self.best_iter = self.iter;
             self.best_cost_evals = self.cost_evals;

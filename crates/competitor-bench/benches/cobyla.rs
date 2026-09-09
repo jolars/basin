@@ -11,7 +11,7 @@ mod cobyla;
 
 fn benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("cobyla_driver");
-    for (case, name) in cobyla::CASES {
+    for (case, name) in cobyla::CASES.into_iter().chain(cobyla::SCALING_CASES) {
         group.bench_function(name, |b| b.iter(|| black_box(case).solve()));
     }
     group.finish();

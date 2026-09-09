@@ -27,6 +27,9 @@ pub(crate) struct UpdateWork<F> {
     product: Vec<F>,
     row: Vec<F>,
     md: Vec<F>,
+    checked_sim: Vec<F>,
+    checked_simi: Vec<F>,
+    checked_error: Option<F>,
 }
 
 impl<F: Scalar> UpdateWork<F> {
@@ -37,12 +40,57 @@ impl<F: Scalar> UpdateWork<F> {
             product: vec![F::zero(); n],
             row: vec![F::zero(); n],
             md: vec![F::zero(); n],
+            checked_sim: vec![F::zero(); if n > 4 { n * n } else { 0 }],
+            checked_simi: vec![F::zero(); if n > 4 { n * n } else { 0 }],
+            checked_error: None,
         }
+    }
+
+    fn inverse_error(&mut self, simi: &[F], sim: &[F], n: usize) -> F {
+        // Comparing two n-by-n inputs is cheaper than repeating their cubic
+        // product, except for the tiny kernels. The pole column is not an input
+        // to the residual. Signed zeros must match, and NaNs prevent reuse.
+        if n <= 4 {
+            return inv_error(simi, sim, n, &mut self.product);
+        }
+        let sim = &sim[..n * n];
+        let same = |a: &[F], b: &[F]| {
+            a.iter().zip(b).all(|(&x, &y)| {
+                x == y && x.is_sign_negative() == y.is_sign_negative()
+            })
+        };
+        if let Some(error) = self.checked_error {
+            if same(sim, &self.checked_sim) && same(simi, &self.checked_simi) {
+                return error;
+            }
+        }
+        let error = inv_error(simi, sim, n, &mut self.product);
+        self.checked_sim.copy_from_slice(sim);
+        self.checked_simi.copy_from_slice(simi);
+        self.checked_error = Some(error);
+        error
     }
 }
 
 /// Maximum entrywise inverse residual, reduced in column-major order.
 fn inv_error<F: Scalar>(
+    simi: &[F],
+    sim: &[F],
+    n: usize,
+    product: &mut [F],
+) -> F {
+    // Fixed-size scratch lets the compiler keep tiny products in registers.
+    match n {
+        1 => inv_error_impl(simi, sim, 1, &mut [F::zero(); 1]),
+        2 => inv_error_impl(simi, sim, 2, &mut [F::zero(); 2]),
+        3 => inv_error_impl(simi, sim, 3, &mut [F::zero(); 3]),
+        4 => inv_error_impl(simi, sim, 4, &mut [F::zero(); 4]),
+        _ => inv_error_impl(simi, sim, n, product),
+    }
+}
+
+#[inline(always)]
+fn inv_error_impl<F: Scalar>(
     simi: &[F],
     sim: &[F],
     n: usize,
@@ -117,11 +165,33 @@ pub(crate) fn updatepole<F: Scalar>(
     m: usize,
     work: &mut UpdateWork<F>,
 ) -> bool {
+    updatepole_with_residual(
+        cpen, conmat, cval, fval, sim, simi, n, m, None, work,
+    )
+}
+
+/// A vertex update has already checked this exact inverse. Reuse its residual
+/// if repoling leaves the matrices unchanged; recovery still uses the same
+/// thresholds and runs again when the residual warrants it.
+#[allow(clippy::too_many_arguments)]
+fn updatepole_with_residual<F: Scalar>(
+    cpen: F,
+    conmat: &mut [F],
+    cval: &mut [F],
+    fval: &mut [F],
+    sim: &mut [F],
+    simi: &mut [F],
+    n: usize,
+    m: usize,
+    mut residual: Option<F>,
+    work: &mut UpdateWork<F>,
+) -> bool {
     let zero = F::zero();
     let itol = F::one();
     let jopt = findpole(cpen, cval, fval, n);
 
     if jopt < n {
+        residual = None;
         work.sim_old.copy_from_slice(sim);
         work.simi_old.copy_from_slice(simi);
         // sim(:, n) += sim(:, jopt); save sim(:, jopt); zero it; sim(:, 0..n) -= sim_jopt.
@@ -146,10 +216,10 @@ pub(crate) fn updatepole<F: Scalar>(
         }
     }
 
-    let mut erri = inv_error(simi, sim, n, &mut work.product);
+    let mut erri = residual.unwrap_or_else(|| work.inverse_error(simi, sim, n));
     if erri > F::from_f64(0.1).unwrap() * itol || erri.is_nan() {
         if let Some(fresh) = inv(&sim[..n * n], n) {
-            let erri_test = inv_error(&fresh, sim, n, &mut work.product);
+            let erri_test = work.inverse_error(&fresh, sim, n);
             if erri_test < erri || (erri.is_nan() && !erri_test.is_nan()) {
                 if erri_test <= itol {
                     simi.copy_from_slice(&fresh);
@@ -264,10 +334,10 @@ pub(crate) fn updatexfc<F: Scalar>(
         }
     }
 
-    let mut erri = inv_error(simi, sim, n, &mut work.product);
+    let mut erri = work.inverse_error(simi, sim, n);
     if erri > F::from_f64(0.1).unwrap() * itol || erri.is_nan() {
         if let Some(fresh) = inv(&sim[..n * n], n) {
-            let erri_test = inv_error(&fresh, sim, n, &mut work.product);
+            let erri_test = work.inverse_error(&fresh, sim, n);
             if erri_test < erri || (erri.is_nan() && !erri_test.is_nan()) {
                 if erri_test <= itol {
                     simi.copy_from_slice(&fresh);
@@ -283,7 +353,18 @@ pub(crate) fn updatexfc<F: Scalar>(
             conmat[r + jdrop * m] = constr[r];
         }
         cval[jdrop] = cstrv;
-        updatepole(cpen, conmat, cval, fval, sim, simi, n, m, work)
+        updatepole_with_residual(
+            cpen,
+            conmat,
+            cval,
+            fval,
+            sim,
+            simi,
+            n,
+            m,
+            Some(erri),
+            work,
+        )
     } else {
         sim.copy_from_slice(&work.sim_old);
         simi.copy_from_slice(&work.simi_old);
@@ -294,6 +375,49 @@ pub(crate) fn updatexfc<F: Scalar>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inverse_residual_preserves_zero_skipping_and_nonfinite_reduction() {
+        for n in 1..=17 {
+            let sim: Vec<f64> = (0..n * n)
+                .map(|k| ((k * 13 + 7) % 19) as f64 - 9.0)
+                .collect();
+            let inverse: Vec<f64> = (0..n * n)
+                .map(|k| ((k * 7 + 3) % 17) as f64 / 8.0 - 1.0)
+                .collect();
+            for exceptional in [None, Some(f64::NAN), Some(f64::INFINITY)] {
+                let mut inverse = inverse.clone();
+                if let Some(value) = exceptional {
+                    inverse[n - 1] = value;
+                }
+                let mut expected = 0.0_f64;
+                for j in 0..n {
+                    for i in 0..n {
+                        let mut entry = 0.0;
+                        for k in 0..n {
+                            if sim[k + j * n] != 0.0 {
+                                entry += inverse[i + k * n] * sim[k + j * n];
+                            }
+                        }
+                        let diff = entry - f64::from(i == j);
+                        expected = if diff.is_nan() {
+                            f64::NAN
+                        } else {
+                            expected.max(diff.abs())
+                        };
+                    }
+                }
+                let actual = inv_error(&inverse, &sim, n, &mut vec![0.0; n]);
+                assert!(
+                    actual.to_bits() == expected.to_bits()
+                        || (actual.is_nan() && expected.is_nan()),
+                    "n={n}: {actual} != {expected}"
+                );
+            }
+        }
+        // Zero coefficients must suppress even infinite entries in the inverse.
+        assert_eq!(inv_error(&[f64::INFINITY], &[-0.0], 1, &mut [0.0]), 1.0);
+    }
 
     #[test]
     fn inverse_check_matches_a_dense_residual() {
@@ -379,6 +503,38 @@ mod tests {
             assert_eq!(sim, original);
             assert_eq!(simi, [1.0, 0.0, 0.0, 1.0]);
             assert_eq!(fval, [2.0, 1.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn cached_inverse_residual_tracks_both_matrices() {
+        let n = 5;
+        let mut sim = super::super::linalg::eye::<f64>(n);
+        let mut simi = sim.clone();
+        let mut work = UpdateWork::new(n);
+        for (matrix, index, value) in [
+            (false, 0, 1.0),
+            (false, 24, 2.0),
+            (true, 24, 0.5),
+            (true, 24, f64::NAN),
+            (false, 24, -0.0),
+            (true, 24, f64::INFINITY),
+            (false, 24, 1.0),
+            (true, 24, 1.0),
+        ] {
+            if matrix {
+                simi[index] = value;
+            } else {
+                sim[index] = value;
+            }
+            let expected = inv_error(&simi, &sim, n, &mut vec![0.0; n]);
+            for _ in 0..2 {
+                let actual = work.inverse_error(&simi, &sim, n);
+                assert!(
+                    actual.to_bits() == expected.to_bits()
+                        || (actual.is_nan() && expected.is_nan())
+                );
+            }
         }
     }
 }

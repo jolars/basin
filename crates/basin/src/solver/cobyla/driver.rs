@@ -239,13 +239,19 @@ impl<F: Scalar> CobylaWork<F> {
 
     /// The filter-selected incumbent `(x, f)` COBYLA would return now.
     pub(crate) fn best(&self) -> (Vec<F>, F) {
+        let (x, f) = self.best_ref();
+        (x.to_vec(), f)
+    }
+
+    /// Borrow the incumbent so the public solver can reuse its parameter buffer.
+    pub(crate) fn best_ref(&self) -> (&[F], F) {
         let kopt = selectx(
             &self.ffilt[..self.nfilt],
             &self.cfilt[..self.nfilt],
             self.cpen.max(self.cweight),
             self.ctol,
         );
-        let x = (0..self.n).map(|r| self.xfilt[r + kopt * self.n]).collect();
+        let x = &self.xfilt[kopt * self.n..(kopt + 1) * self.n];
         (x, self.ffilt[kopt])
     }
 

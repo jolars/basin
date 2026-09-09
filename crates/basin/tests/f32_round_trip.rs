@@ -14,8 +14,9 @@ use basin::core::termination::{
 use basin::line_search::{Backtracking, HagerZhang, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{
-    BoxConstraints, Gbnm, GbnmState, GradientDescent, MatrixFree, MoreSorensen,
-    Steihaug, TrustRegion,
+    BoxConstraints, Cobyla, CobylaState, Gbnm, GbnmState, GradientDescent,
+    MatrixFree, MoreSorensen, NonlinearInequalityConstraints, Steihaug,
+    TerminationReason, TrustRegion,
 };
 
 /// `f(x) = ‖x − c‖²` with `c = (1, 2, 3)`. Minimum at `c`, cost 0.
@@ -61,6 +62,43 @@ impl BoxConstraints for BoundedSphereF32 {
 
     fn upper(&self) -> &Self::Param {
         &self.upper
+    }
+}
+
+impl NonlinearInequalityConstraints for BoundedSphereF32 {
+    fn num_constraints(&self) -> usize {
+        2 * self.lower.len()
+    }
+
+    fn constraints(&self, x: &Vec<f32>) -> Result<Vec<f32>, Self::Error> {
+        Ok(x.iter()
+            .zip(&self.lower)
+            .zip(&self.upper)
+            .flat_map(|((&v, &l), &u)| [l - v, v - u])
+            .collect())
+    }
+}
+
+#[test]
+fn cobyla_f32_round_trips_small_and_cached_inverse_paths() {
+    for n in [2, 3, 5] {
+        let problem = BoundedSphereF32 {
+            lower: vec![1.0; n],
+            upper: vec![5.0; n],
+        };
+        let result = Executor::new(
+            problem,
+            Cobyla::<f32>::new().with_rho_beg(0.5).with_rho_end(1e-4),
+            CobylaState::<Vec<f32>, f32>::new(vec![3.0; n]),
+        )
+        .terminate_on(MaxIter(1000))
+        .run()
+        .unwrap();
+        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        let x = result.best_param();
+        assert!(x.iter().all(|v| v.is_finite() && (*v - 1.0).abs() < 5e-4));
+        assert!((result.best_cost() - n as f32).abs() < 5e-3);
+        assert_eq!(result.best_cost(), x.iter().map(|v| v * v).sum::<f32>());
     }
 }
 

@@ -14,11 +14,19 @@ use crate::core::math::Scalar;
 
 /// `Σᵢ a[i]·b[i]`.
 pub(crate) fn dot<F: Scalar>(a: &[F], b: &[F]) -> F {
+    // Two-dimensional LPs benefit from unrolled reductions. Keep Scalar::sum
+    // so its identity and accumulation order also apply to signed zeros.
+    if let ([a0, a1], [b0, b1]) = (a, b) {
+        return [*a0 * *b0, *a1 * *b1].into_iter().sum();
+    }
     a.iter().zip(b).map(|(&x, &y)| x * y).sum()
 }
 
 /// `Σᵢ |a[i]|·|b[i]|`, preserving the signed dot product's summation order.
 pub(crate) fn dot_abs<F: Scalar>(a: &[F], b: &[F]) -> F {
+    if let ([a0, a1], [b0, b1]) = (a, b) {
+        return [a0.abs() * b0.abs(), a1.abs() * b1.abs()].into_iter().sum();
+    }
     a.iter().zip(b).map(|(&x, &y)| x.abs() * y.abs()).sum()
 }
 

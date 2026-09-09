@@ -63,12 +63,13 @@ fn build_a_into<F: Scalar>(
         for j in 0..n {
             difference[j] = conmat[i + j * m] - pole;
         }
-        for l in 0..n {
-            let mut s = F::zero();
-            for j in 0..n {
-                s = s + difference[j] * simi[j + l * n];
-            }
-            a[l + i * n] = s;
+        for (value, column) in
+            a[i * n..(i + 1) * n].iter_mut().zip(simi.chunks_exact(n))
+        {
+            *value = difference
+                .iter()
+                .zip(column)
+                .fold(F::zero(), |s, (&d, &v)| s + d * v);
         }
     }
 }

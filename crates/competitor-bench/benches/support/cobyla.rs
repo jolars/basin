@@ -27,6 +27,7 @@ use driver::{CobylaWork, Transition};
 pub enum Case {
     Camel,
     Sphere,
+    SphereN(usize),
     Quadratic,
 }
 
@@ -34,6 +35,14 @@ pub const CASES: [(Case, &str); 3] = [
     (Case::Camel, "camel"),
     (Case::Sphere, "sphere_10d"),
     (Case::Quadratic, "quadratic"),
+];
+
+pub const SCALING_CASES: [(Case, &str); 5] = [
+    (Case::SphereN(1), "sphere_1d"),
+    (Case::SphereN(3), "sphere_3d"),
+    (Case::SphereN(5), "sphere_5d"),
+    (Case::SphereN(20), "sphere_20d"),
+    (Case::SphereN(40), "sphere_40d"),
 ];
 
 pub struct Outcome {
@@ -53,6 +62,11 @@ impl Case {
                 vec![(-5.0, 5.0); 10],
                 200,
             ),
+            Self::SphereN(n) => (
+                (0..n).map(|i| ((i * 7) % 17) as f64 / 4.0 - 2.0).collect(),
+                vec![(-5.0, 5.0); n],
+                20 * n,
+            ),
             Self::Quadratic => (vec![0.5, 0.5], vec![(0.0, 2.0); 2], 100),
         };
         let m = 2 * start.len() + usize::from(matches!(self, Self::Quadratic));
@@ -70,7 +84,9 @@ impl Case {
                             + x[0] * x[1]
                             + (-4.0 + 4.0 * x[1].powi(2)) * x[1].powi(2)
                     }
-                    Self::Sphere => x.iter().map(|v| v * v).sum(),
+                    Self::Sphere | Self::SphereN(_) => {
+                        x.iter().map(|v| v * v).sum()
+                    }
                     Self::Quadratic => {
                         (x[0] - 1.0).powi(2) + (x[1] - 1.0).powi(2)
                     }

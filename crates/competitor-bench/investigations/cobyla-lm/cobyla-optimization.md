@@ -1,5 +1,9 @@
 # COBYLA driver optimization
 
+The [kernel and parameter-buffer follow-up](cobyla-kernels.md) improves public
+executor runtime by a further 17–23% and records the remaining gap to `cobyla`.
+The measurements below describe the first optimization pass.
+
 The optimized driver runs 1.9–2.8 times faster on the three migration cases and
 makes 94–97% fewer allocation requests. The GlobalSearch adapter runs 2.2–2.5
 times faster. All eight probe modes retain their baseline objective values,

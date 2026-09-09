@@ -159,17 +159,15 @@ impl<F: Scalar> Default for Cobyla<F> {
     }
 }
 
-/// Build a `V` from a flat `&[F]`, reusing `template` for type and length.
-fn fill_from<V, F>(template: &V, slice: &[F]) -> V
+/// Reuse the backend parameter buffer across callbacks and incumbent updates.
+fn fill_into<V, F>(v: &mut V, slice: &[F])
 where
-    V: Clone + std::ops::IndexMut<usize, Output = F>,
+    V: std::ops::IndexMut<usize, Output = F>,
     F: Copy,
 {
-    let mut v = template.clone();
     for (i, &x) in slice.iter().enumerate() {
         v[i] = x;
     }
-    v
 }
 
 impl<V, F> InitialState<V> for Cobyla<F>
@@ -204,13 +202,12 @@ where
         let m = problem.inner().num_constraints();
 
         let x0: Vec<F> = (0..n).map(|i| state.param[i]).collect();
-        let template = state.param.clone();
 
         let (work, best_x, best_f) = {
             let mut eval = |slice: &[F]| -> Result<(F, Vec<F>), P::Error> {
-                let xv = fill_from(&template, slice);
-                let f = problem.cost(&xv)?;
-                let cv = problem.inner().constraints(&xv)?;
+                fill_into(&mut state.param, slice);
+                let f = problem.cost(&state.param)?;
+                let cv = problem.inner().constraints(&state.param)?;
                 debug_assert_eq!(
                     cv.vec_len(),
                     m,
@@ -223,7 +220,7 @@ where
             CobylaWork::try_init(x0, m, self.rho_beg, self.rho_end, &mut eval)?
         };
 
-        state.param = fill_from(&template, &best_x);
+        fill_into(&mut state.param, &best_x);
         state.cost = Some(best_f);
         state.rho = work.rho();
         self.work = Some(work);
@@ -236,7 +233,6 @@ where
         mut state: CobylaState<V, F>,
     ) -> Result<(CobylaState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let template = state.param.clone();
         let m = problem.inner().num_constraints();
         let work = self
             .work
@@ -245,9 +241,9 @@ where
 
         let transition = {
             let mut eval = |slice: &[F]| -> Result<(F, Vec<F>), P::Error> {
-                let xv = fill_from(&template, slice);
-                let f = problem.cost(&xv)?;
-                let cv = problem.inner().constraints(&xv)?;
+                fill_into(&mut state.param, slice);
+                let f = problem.cost(&state.param)?;
+                let cv = problem.inner().constraints(&state.param)?;
                 debug_assert_eq!(
                     cv.vec_len(),
                     m,
@@ -261,8 +257,8 @@ where
         };
         state.rho = work.rho();
 
-        let (best_x, best_f) = work.best();
-        state.param = fill_from(&template, &best_x);
+        let (best_x, best_f) = work.best_ref();
+        fill_into(&mut state.param, best_x);
         state.cost = Some(best_f);
 
         let reason = match transition {
