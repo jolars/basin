@@ -74,6 +74,22 @@ The dev environment is provided by `devenv.nix` (loaded automatically via
 `allFeatures = true`) and `rustfmt`. Basin's package MSRV remains Rust 1.87.0;
 the dedicated CI job checks every feature compatible with that toolchain.
 
+Performance tooling includes `hyperfine` for repeated executable timings,
+`taskset` for CPU affinity, `perf`, `cargo-flamegraph`, and `samply` for CPU
+sampling, and `valgrind` for allocation and instruction analysis. Criterion and
+native competitor libraries are already declared in the benchmark crates.
+
+Use ordinary `cargo bench` builds for timing. Cargo's `bench` profile inherits
+the release optimizations. For profiling, use `--profile profiling`, which
+retains those optimizations and adds full debug information without stripping
+symbols. Its artifacts live under `target/profiling`. For frame-pointer stack
+sampling, also pass
+`RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C force-frame-pointers=yes"` and record
+with `--call-graph fp`; the Cargo profile does not itself enable frame pointers.
+The project-local [performance
+skill](.codex/skills/basin-perf-investigation/SKILL.md) provides the focused
+benchmark and profiler commands.
+
 ## Architecture
 
 A generic driver loop (`Executor`) iterates a `Solver` over a `State`, calling

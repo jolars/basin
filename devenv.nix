@@ -21,13 +21,14 @@
     cargo-audit
     cargo-deny
     cargo-msrv
+    hyperfine
+    util-linux # taskset keeps benchmark CPU affinity reproducible.
     valgrind
     gnuplot
     samply
     pprof
     wasm-pack
     perf
-    go-task
     quartoMinimal
     shfmt
     resvg # SVG → PNG rasteriser for the `task logo` asset pipeline

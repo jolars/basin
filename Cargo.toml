@@ -34,3 +34,11 @@ readme = "README.md"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# Keep release optimizations while retaining symbols and source locations for
+# perf, flamegraphs, and allocation profiles. Frame pointers are enabled with
+# RUSTFLAGS when recording; ordinary benchmark builds keep their usual flags.
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = "none"

@@ -53,6 +53,7 @@ devenv.local.yaml
 tools/.venv/
 # References dir (papers, reference impls — see tools/README once added)
 references/
+!/.codex/skills/basin-perf-investigation/references/
 
 .task/
 /paper/jats

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Basin Perf Investigation"
+  short_description: "Benchmark and profile Basin performance"
