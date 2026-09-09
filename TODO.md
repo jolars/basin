@@ -80,37 +80,22 @@ Ordered by recommended sequence.
   the affected layer, and improve it without weakening numerical behavior,
   bounds, error propagation, or strict callback-budget handling.
 
-- [ ] **Add a pivoted-QR solve path for Levenberg-Marquardt.** Basin 1.9 forms
-  `JᵀJ` explicitly and solves the damped normal equations
-  `(JᵀJ + μD)h = -Jᵀr` by Cholesky. The `levenberg-marquardt` crate used
-  by stochastic-rs instead follows MINPACK's `lmder` approach: it factorizes
-  the Jacobian with column-pivoted QR and applies the diagonal regularization
-  without materializing the Gram matrix. The steps are algebraically
-  equivalent, but forming `JᵀJ` can amplify roundoff as μ decreases because
-  its condition number is approximately the square of `J`'s. This difference
-  may matter for correlated or poorly scaled SVI-family calibration
-  parameters; see the migration discussion in
-  [rust-dd/stochastic-rs#32](https://github.com/rust-dd/stochastic-rs/pull/32#issuecomment-5586695436).
+- [x] **Add a pivoted-QR solve path for Levenberg-Marquardt.** Implemented
+  `.with_pivoted_qr()` and `LevenbergMarquardtQr` with reusable column-pivoted
+  QR, explicit rank-loss handling, and all four dense backends. Cholesky
+  remains the default. See the [implementation and production comparisons](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md)
+  for conditioning, raw SVI, SSVI, backend coverage, and sparse limitations.
 
-  **Investigation:** the [conditioning and calibration probes](crates/competitor-bench/investigations/cobyla-lm/README.md)
-  confirm the linear-solve accuracy benefit, but substituting QR into the
-  existing damping loop does not close the observed SVI convergence gap.
-  Investigate damping selection and relative stopping tests independently.
-  Validate calibration Jacobians against their actual residual formulas before
-  attributing migration differences to factorization.
-
-  Design a capability-based QR route for the regularized least-squares system
-  `[J; √(μD)]h ≈ [-r; 0]`, including column pivoting and explicit
-  rank-deficiency behavior. Preserve the existing backend guarantees where an
-  honest pure-Rust implementation is available, and document any realistic
-  sparse-backend gap rather than falling back silently to normal equations.
-  Compare both paths against MINPACK-style pivoted QR on ill-conditioned,
-  rank-deficient, and poorly scaled problems, including representative raw
-  SVI and SSVI calibrations with multiple starting points. Record convergence,
-  termination reason, final residual, parameter recovery, and evaluation
-  counts. Decide from those results whether QR should replace Cholesky or be
-  an explicit solver configuration. Update the stale rustdoc claim that QR was
-  deferred until TRF; TRF has shipped and still uses normal equations.
+- [ ] **Investigate LM damping selection and relative stopping tests.**
+  Production QR improves small-damping step accuracy but preserves the
+  observed narrow-SVI convergence gap and premature stopping on nearly
+  collinear linear problems. Investigate Nielsen damping versus MINPACK's
+  trust-radius parameter selection independently of factorization. Validate
+  calibration Jacobians against their actual residual formulas, and account
+  for parameter nonidentifiability before drawing migration conclusions.
+  Retain the [production probes](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md)
+  and compare convergence, termination, parameter recovery, and callbacks
+  from all retained starts.
 
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional

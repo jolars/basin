@@ -8,7 +8,8 @@ numerical driver. LM's QR proposal addresses a real accuracy limitation,
 but changing the factorization alone does not reproduce MINPACK's
 convergence behavior. The probes below separate these questions. The
 [COBYLA optimization](cobyla-optimization.md) is now implemented and verified;
-the LM implementation item remains open.
+the [LM QR route](lm-qr.md) is implemented as an explicit option. Damping
+and stopping follow-ups remain open.
 
 ## Reproduce
 
@@ -309,7 +310,10 @@ cases. All LM analytic-Jacobian checks passed. The generated workspace passes
 Clippy with all targets and features and warnings denied. The Rust probe files
 and Python script pass their formatter and lint checks.
 
-The investigation does not establish sparse QR coverage, a production rank
-policy, or real-market calibration behavior. Those remain LM implementation
-follow-ups. The [COBYLA follow-up](cobyla-optimization.md) supplies the numerical
-regression suite and performance guards for the implemented optimization.
+The original investigation did not establish sparse QR coverage, a production
+rank policy, or real-market calibration behavior. The [QR implementation](lm-qr.md)
+now defines and tests the rank policy and records the sparse capability gap.
+Real-market calibration and the remaining damping/stopping differences are
+still outside these synthetic probes. The [COBYLA follow-up](cobyla-optimization.md)
+supplies the numerical regression suite and performance guards for that
+optimization.

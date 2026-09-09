@@ -24,7 +24,9 @@
 //!   so Gauss-Newton, Levenberg-Marquardt, and TRF run on the default backend.
 //!   [`AddDiagonalVectorInPlace`] and [`MaxDiagonal`] are public so downstream
 //!   Jacobian types can implement TRF's damping path. The QR least-squares
-//!   solve [`LinearSolveLstsq`] remains backend-specific.
+//!   solve [`LinearSolveLstsq`] remains backend-specific. The separate dense
+//!   [`FactorizePivotedQr`] capability supports regularized LM on all four
+//!   dense backends, with numerical pivoting and explicit rank-loss handling.
 
 /// Scalar element type for vectors and matrices in the math layer.
 ///
@@ -95,7 +97,22 @@ pub trait NormSquared<F = f64> {
 /// `F` defaults to `f64`; see [`NormSquared`] for the rationale.
 pub trait NormInfinity<F = f64> {
     /// Compute `maxᵢ |xᵢ|` as `F`.
+    ///
+    /// Returns NaN if any component is NaN, and zero for an empty input.
     fn norm_infinity(&self) -> F;
+}
+
+fn norm_infinity<F: Scalar>(mut values: impl Iterator<Item = F>) -> F {
+    // Float::max alone discards NaNs, masking invalid gradients in solver checks.
+    values
+        .try_fold(F::zero(), |norm, value| {
+            if value.is_nan() {
+                None
+            } else {
+                Some(norm.max(value.abs()))
+            }
+        })
+        .unwrap_or_else(F::nan)
 }
 
 /// Inner product of two same-shaped values. Used by line searches that take
@@ -228,6 +245,7 @@ mod clamp;
 mod dense;
 mod dense_chol;
 mod dense_eig;
+mod dense_qr;
 mod linalg;
 mod sample;
 mod scalar;
@@ -250,11 +268,12 @@ mod faer_sparse_backend;
 
 pub use clamp::ClampInPlace;
 pub use dense::DenseMatrix;
+pub use dense_qr::QrFactorization;
 pub use linalg::{
-    AddDiagonalVectorInPlace, DenseMatrixFromFn, GramMatrix, LinearSolveError,
-    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, SymmetricEigen,
-    SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseMatrixFromFn, FactorizePivotedQr,
+    GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
+    MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, MaxDiagonal,
+    QrSolveError, RegularizedQrSolve, SymmetricEigen, SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 

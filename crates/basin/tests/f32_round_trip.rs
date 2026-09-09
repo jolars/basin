@@ -312,3 +312,34 @@ fn more_sorensen_f32_round_trips_state_solver_termination() {
     assert!((final_x[1] - 2.0).abs() < 1e-3);
     assert!((final_x[2] - 3.0).abs() < 1e-3);
 }
+
+#[test]
+fn levenberg_marquardt_qr_f32_round_trip() {
+    struct Fit;
+    impl basin::Residual for Fit {
+        type Param = Vec<f32>;
+        type Output = Vec<f32>;
+        type Error = std::convert::Infallible;
+        fn residual(&self, x: &Vec<f32>) -> Result<Vec<f32>, Self::Error> {
+            Ok(vec![x[0] - 1., 2. * (x[1] - 2.)])
+        }
+    }
+    impl basin::Jacobian for Fit {
+        type Jacobian = DenseMatrix<f32>;
+        fn jacobian(
+            &self,
+            _: &Vec<f32>,
+        ) -> Result<Self::Jacobian, Self::Error> {
+            Ok(DenseMatrix::from_row_slice(2, 2, &[1., 0., 0., 2.]))
+        }
+    }
+    let solver =
+        basin::LevenbergMarquardtQr::<_, _, f32>::new().with_tol_grad(1e-5);
+    let result = Executor::from_start(Fit, solver, vec![0., 0.])
+        .max_iter(50)
+        .run()
+        .unwrap();
+    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert!((result.param()[0] - 1.).abs() < 1e-5);
+    assert!((result.param()[1] - 2.).abs() < 1e-5);
+}

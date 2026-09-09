@@ -32,7 +32,7 @@ impl<F: Scalar> NormSquared<F> for Vec<F> {
 
 impl<F: Scalar> NormInfinity<F> for Vec<F> {
     fn norm_infinity(&self) -> F {
-        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
+        super::norm_infinity(self.iter().copied())
     }
 }
 

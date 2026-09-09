@@ -1,16 +1,9 @@
 //! Dense linear-algebra ops for LA-heavy solvers (Gauss-Newton,
 //! Levenberg-Marquardt, TRF). This is the second math tier per
 //! `CONTRIBUTING.md` tenet 5: most of these operations are carried only by
-//! backends that can implement them honestly (currently nalgebra and
-//! faer). The two matvec ops ([`MatVec`], [`MatTransposeVec`]) are the
-//! exception: they are cheap and honest on every backend, so `Vec<f64>`
-//! (via [`DenseMatrix`](super::DenseMatrix)) and `ndarray::Array2<f64>`
-//! implement them too; that is what lets the linear-constraint solvers
-//! run on every backend. The *factorization* ops do not generalize:
-//! `Vec<f64>` and `ndarray` deliberately omit [`LinearSolveSpd`]/
-//! [`GramMatrix`]/eigen: there's no honest dense-factorization story
-//! for either (`ndarray-linalg` requires system BLAS/LAPACK and breaks
-//! the wasm-default tenet).
+//! backends that can implement them honestly. All four dense backends provide
+//! pure-Rust Gram, Cholesky, symmetric eigenvalue, and pivoted-QR operations.
+//! Sparse capabilities are narrower and are documented on each trait.
 //!
 //! The op set covers what Gauss-Newton needs at minimum, plus a
 //! least-squares solve for sparse backends that ship QR:
@@ -20,6 +13,8 @@
 //!   product, used to form `Jᵀ r` without materializing `Jᵀ`).
 //! - [`GramMatrix`]: `G = Aᵀ A` (the SPD normal-equations matrix).
 //! - [`LinearSolveSpd`]: `A x = b` for SPD `A` (Cholesky inside).
+//! - [`FactorizePivotedQr`] and [`RegularizedQrSolve`]: reusable dense
+//!   column-pivoted QR with diagonal regularization and numerical rank checks.
 //! - [`LinearSolveLstsq`]: `min_x ‖A x − b‖₂` (QR inside). Implemented
 //!   per-backend wherever a sparse QR exists; not all backends do.
 //!
@@ -134,6 +129,101 @@ pub trait LinearSolveSpd<V> {
     fn solve_spd(&self, b: &V) -> Result<V, LinearSolveError>;
 }
 
+/// Column-pivoted QR of a matrix and a fixed least-squares right-hand side.
+///
+/// Columns are equilibrated to unit norm before numerical pivoting; the
+/// returned factors retain the original matrix scaling.
+/// The factor retains `R`, the column permutation, and `Qᵀb` for repeated
+/// diagonal-regularized solves without forming `AᵀA`. Rank-deficient matrices
+/// are valid inputs: rank is checked by [`RegularizedQrSolve`] after damping.
+///
+/// # Contract
+///
+/// Matrices must have positive row and column counts and `b` must have one
+/// entry per row; implementations panic on shape mismatch. Square, tall, and
+/// wide matrices are supported. Non-finite inputs or factorization arithmetic
+/// return [`QrSolveError::NonFinite`]. No implementation may fall back to
+/// normal equations or substitute fill-reducing ordering for numerical pivoting.
+///
+/// # Backends
+///
+/// `DenseMatrix<F>`/`Vec<F>`, nalgebra `DMatrix<F>`/`DVector<F>`, ndarray
+/// `Array2<F>`/`Array1<F>`, and faer `Mat<F>`/`Col<F>`, including `f32` and
+/// `f64`. All implementations are pure Rust. Neither sparse backend implements
+/// this capability: nalgebra-sparse has no QR, and faer's sparse QR uses a
+/// fill-reducing permutation rather than numerical column pivoting.
+pub trait FactorizePivotedQr<V, F: super::Scalar = f64> {
+    /// Reusable factorization for this backend's vector type.
+    type Factorization: RegularizedQrSolve<V, F>;
+
+    /// Factor `self · P = Q · R` and retain the transformed right-hand side.
+    fn factorize_pivoted_qr(
+        &self,
+        b: &V,
+    ) -> Result<Self::Factorization, QrSolveError>;
+}
+
+/// Repeated solves of `min_x ‖A x − b‖² + μ ∑ⱼ dⱼ xⱼ²` from pivoted QR.
+///
+/// The right-hand side is fixed at factorization time. Solves must preserve
+/// the retained factorization, restore the original column order, and never
+/// form normal equations. [`QrFactorization`](super::QrFactorization) implements
+/// this contract for all supported dense vector types.
+pub trait RegularizedQrSolve<V, F: super::Scalar = f64> {
+    /// Squared column norms of the original matrix, in original column order.
+    fn column_norms_squared(&self) -> V;
+
+    /// Solve using nonnegative finite `mu` and diagonal entries.
+    ///
+    /// `diagonal` must have one entry per column (otherwise this panics).
+    /// `rank_tolerance` is dimensionless, finite, and in `[0, 1)`; `None`
+    /// selects `F::epsilon() * (m + n)` for the original `m × n` matrix.
+    /// After equilibrating augmented-system columns to unit norm, any
+    /// triangular pivot of magnitude at most the tolerance means rank loss.
+    /// Zero tolerance still detects exactly zero pivots. This is a numerical
+    /// rank safeguard, not a singular-value estimate of the original matrix.
+    ///
+    /// Rank loss returns [`QrSolveError::RankDeficient`], including at zero
+    /// damping. No truncated or minimum-norm solution is returned. Non-finite
+    /// inputs or results return [`QrSolveError::NonFinite`]; negative damping
+    /// or diagonal entries and invalid tolerances return
+    /// [`QrSolveError::InvalidRegularization`].
+    fn solve_regularized(
+        &self,
+        mu: F,
+        diagonal: &V,
+        rank_tolerance: Option<F>,
+    ) -> Result<V, QrSolveError>;
+}
+
+/// Failure of a pivoted-QR factorization or regularized solve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum QrSolveError {
+    /// The equilibrated augmented system lost numerical column rank.
+    RankDeficient,
+    /// An input or intermediate arithmetic result is non-finite.
+    NonFinite,
+    /// Negative damping or diagonal entries, or a tolerance outside `[0, 1)`.
+    InvalidRegularization,
+}
+
+impl core::fmt::Display for QrSolveError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::RankDeficient => {
+                "regularized QR system is numerically rank-deficient"
+            }
+            Self::NonFinite => "non-finite input or arithmetic in QR solve",
+            Self::InvalidRegularization => {
+                "invalid QR regularization or rank tolerance"
+            }
+        })
+    }
+}
+
+impl std::error::Error for QrSolveError {}
+
 /// Least-squares solve `min_x ‖A x − b‖₂` via QR factorization. `A`
 /// is `self`; `b` is the right-hand side. Unlike [`LinearSolveSpd`],
 /// `A` need not be square or full-rank.
@@ -156,9 +246,9 @@ pub trait LinearSolveSpd<V> {
 ///   *not* guaranteed to surface as [`LinearSolveError::Singular`]:
 ///   sparse QR backends (faer) succeed on rank-deficient systems and
 ///   produce a solution whose components in the null space are
-///   numerically meaningless. Callers that need rank-deficiency
-///   detection should check `‖A x − b‖₂` against expected residuals
-///   themselves.
+///   numerically meaningless. A small residual does not establish full rank,
+///   even for a consistent system. Use [`FactorizePivotedQr`] when numerical
+///   pivoting and explicit rank-loss handling are required.
 ///
 /// # Backends
 ///
@@ -170,8 +260,8 @@ pub trait LinearSolveSpd<V> {
 /// compile-time error rather than a runtime surprise.
 pub trait LinearSolveLstsq<V> {
     /// Solve the least-squares problem `min_x ‖self · x − b‖₂` via QR.
-    /// Returns [`LinearSolveError::Singular`] on numerical rank
-    /// deficiency.
+    /// Returns [`LinearSolveError::Singular`] on factorization failure;
+    /// numerical rank deficiency is not necessarily reported.
     fn solve_lstsq(&self, b: &V) -> Result<V, LinearSolveError>;
 }
 
@@ -497,8 +587,8 @@ pub enum LinearSolveError {
     /// Reported by [`LinearSolveSpd`].
     NotPositiveDefinite,
     /// The matrix is numerically rank-deficient (zero on the diagonal
-    /// of an `R` or `U` factor). Reported by [`LinearSolveLstsq`] for
-    /// rank-deficient QR.
+    /// of an `R` or `U` factor), or a backend factorization failed.
+    /// [`LinearSolveLstsq`] does not guarantee detection of rank deficiency.
     Singular,
 }
 

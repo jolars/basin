@@ -88,7 +88,7 @@
 //! | `Bfgs` | `QuasiNewtonState` | ✓ (`Vec`/nalgebra/ndarray/faer) |
 //! | `Lbfgs`, `Lbfgsb` | `LbfgsState` | ✓ |
 //! | `TrustRegion` | `BasicState` | ✓ |
-//! | `GaussNewton`, `LevenbergMarquardt`, `Trf` | `NllsState` | ✓ |
+//! | `GaussNewton`, `LevenbergMarquardt`, `LevenbergMarquardtQr`, `Trf` | `NllsState` | ✓ |
 //! | `NelderMead` | `BasicSimplexState` | ✓ |
 //! | `Gbnm` | `GbnmState` | ✓ |
 //! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
@@ -356,9 +356,10 @@ pub use crate::core::inner::{
 };
 pub use crate::core::math::{
     AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseMatrix,
-    DenseMatrixFromFn, Dot, GramMatrix, LinearSolveError, LinearSolveLstsq,
-    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity, NormSquared,
+    DenseMatrixFromFn, Dot, FactorizePivotedQr, GramMatrix, LinearSolveError,
+    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity,
+    NormSquared, QrFactorization, QrSolveError, RegularizedQrSolve,
     SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd,
     SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
 };
@@ -418,10 +419,11 @@ pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
     Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative,
     ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton, Gbnm,
-    GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt, Lincoa,
-    MaLsCh, MaLsChCma, MaLsChGenericState, MaLsChState, MaLsChSw,
-    MaLsChSwState, Mads, MemeticInner, Metropolis, Neighbor, NelderMead,
-    Newuoa, ProjectedGradientDescent, PsoBoundaryHandling, PsoVelocityLimit,
-    RandomDisplacement, RandomSearch, Reannealing, Sgd, SimulatedAnnealing,
-    SolisWets, Ssga, StepTaker, TemperatureSchedule, Trf,
+    GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt,
+    LevenbergMarquardtQr, Lincoa, MaLsCh, MaLsChCma, MaLsChGenericState,
+    MaLsChState, MaLsChSw, MaLsChSwState, Mads, MemeticInner, Metropolis,
+    Neighbor, NelderMead, Newuoa, ProjectedGradientDescent,
+    PsoBoundaryHandling, PsoVelocityLimit, RandomDisplacement, RandomSearch,
+    Reannealing, Sgd, SimulatedAnnealing, SolisWets, Ssga, StepTaker,
+    TemperatureSchedule, Trf,
 };

@@ -45,7 +45,7 @@ impl<F: Scalar> NormSquared<F> for Col<F> {
 
 impl<F: Scalar> NormInfinity<F> for Col<F> {
     fn norm_infinity(&self) -> F {
-        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
+        super::norm_infinity(self.iter().copied())
     }
 }
 
@@ -571,6 +571,87 @@ where
         let mut x = b.clone();
         llt.solve_in_place(&mut x);
         Ok(x)
+    }
+}
+
+impl<F: Scalar + faer_traits::ComplexField> super::FactorizePivotedQr<Col<F>, F>
+    for Mat<F>
+{
+    type Factorization = super::QrFactorization<F>;
+    fn factorize_pivoted_qr(
+        &self,
+        b: &Col<F>,
+    ) -> Result<Self::Factorization, super::QrSolveError> {
+        use faer::dyn_stack::{MemBuffer, MemStack};
+        use faer::linalg::householder::{
+            apply_block_householder_sequence_transpose_on_the_left_in_place_scratch,
+            apply_block_householder_sequence_transpose_on_the_left_in_place_with_conj,
+        };
+        let (m, n) = self.shape();
+        assert_eq!(b.nrows(), m, "pivoted QR right-hand side length mismatch");
+        let norms = super::dense_qr::column_norms(m, n, |i, j| self[(i, j)])?;
+        if b.iter().any(|x| !x.is_finite()) {
+            return Err(super::QrSolveError::NonFinite);
+        }
+        // A zero Jacobian has Q = I. Faer's reflector coefficients are
+        // undefined for this case, so retain the exact identity transform.
+        if norms.iter().all(|&x| x == F::zero()) {
+            let mut rhs: Vec<_> = b.iter().copied().collect();
+            rhs.resize(n, F::zero());
+            return super::QrFactorization::from_parts(
+                m,
+                vec![F::zero(); n * n],
+                rhs,
+                (0..n).collect(),
+                norms,
+            );
+        }
+        let scaled = Mat::from_fn(m, n, |i, j| {
+            if norms[j] > F::zero() {
+                self[(i, j)] / norms[j]
+            } else {
+                F::zero()
+            }
+        });
+        let qr = scaled.col_piv_qr();
+        let mut rhs = b.clone();
+        let mut memory = MemBuffer::new(apply_block_householder_sequence_transpose_on_the_left_in_place_scratch::<F>(m, qr.Q_coeff().nrows(), 1));
+        apply_block_householder_sequence_transpose_on_the_left_in_place_with_conj(
+            qr.Q_basis(), qr.Q_coeff(), faer::Conj::No, rhs.as_mat_mut(), Par::Seq, MemStack::new(&mut memory),
+        );
+        let mut r = vec![F::zero(); n * n];
+        for i in 0..m.min(n) {
+            for j in i..n {
+                r[i * n + j] = qr.R()[(i, j)] * norms[qr.P().arrays().0[j]];
+            }
+        }
+        let mut qtb: Vec<_> = rhs.iter().copied().collect();
+        qtb.resize(n, F::zero());
+        super::QrFactorization::from_parts(
+            m,
+            r,
+            qtb,
+            qr.P().arrays().0.to_vec(),
+            norms,
+        )
+    }
+}
+impl<F: Scalar> super::RegularizedQrSolve<Col<F>, F>
+    for super::QrFactorization<F>
+{
+    fn column_norms_squared(&self) -> Col<F> {
+        let d = self.norms_squared();
+        Col::from_fn(d.len(), |i| d[i])
+    }
+    fn solve_regularized(
+        &self,
+        mu: F,
+        diagonal: &Col<F>,
+        tolerance: Option<F>,
+    ) -> Result<Col<F>, super::QrSolveError> {
+        let d: Vec<_> = diagonal.iter().copied().collect();
+        self.solve(mu, &d, tolerance)
+            .map(|x| Col::from_fn(x.len(), |i| x[i]))
     }
 }
 

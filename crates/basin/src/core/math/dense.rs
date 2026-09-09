@@ -23,14 +23,11 @@
 //! a pure-Rust Cholesky (`dense_chol`), so the normal-equations least-squares
 //! solvers all run on `Vec<f64>`: Gauss-Newton, Levenberg-Marquardt, and
 //! (with the diagonal-scaling op [`MaxDiagonal`](super::MaxDiagonal)) the
-//! trust-region-reflective TRF. The whole family is normal-equations
-//! (`JᵀJ` + Cholesky), so none of them touch the QR least-squares solve
-//! [`LinearSolveLstsq`](super::LinearSolveLstsq); that op stays *not yet*
-//! implemented for `DenseMatrix`, but that is a separate, currently-unmotivated
-//! "not yet" (tenet 5), not what gated TRF. No solver has motivated a pure-Rust
-//! `DenseMatrix` QR yet, but (like the Cholesky and Jacobi solvers above)
-//! one would be welcome if it can be done honestly (pure-Rust, wasm-clean, no
-//! BLAS/LAPACK).
+//! trust-region-reflective TRF. [`FactorizePivotedQr`](super::FactorizePivotedQr)
+//! additionally supplies Householder QR with numerical column pivoting and
+//! reusable diagonal regularization, used by
+//! [`LevenbergMarquardtQr`](crate::LevenbergMarquardtQr). It is shared with
+//! ndarray and requires neither BLAS/LAPACK nor an optional feature.
 //!
 //! The scalar `F` defaults to `f64` so existing `DenseMatrix` references keep
 //! resolving to `DenseMatrix<f64>` unchanged.
@@ -59,8 +56,9 @@ use super::{
 /// [`SymmetricEigen`] for CMA-ES, and the SPD-solve quartet [`GramMatrix`],
 /// `AddDiagonalVectorInPlace`, `MaxDiagonal`, and a Cholesky
 /// [`LinearSolveSpd`] for the normal-equations least-squares family
-/// (Gauss-Newton, Levenberg-Marquardt, TRF); see the module docs for why the
-/// QR least-squares ops are deliberately absent.
+/// (Gauss-Newton, Levenberg-Marquardt, TRF).
+/// [`FactorizePivotedQr`](super::FactorizePivotedQr) supports the opt-in QR
+/// route with explicit numerical rank checks after regularization.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DenseMatrix<F = f64> {
@@ -384,6 +382,16 @@ impl<F: Scalar> LinearSolveSpd<Vec<F>> for DenseMatrix<F> {
         );
         super::dense_chol::cholesky_solve_spd(&self.data, self.rows, b)
             .ok_or(LinearSolveError::NotPositiveDefinite)
+    }
+}
+
+impl<F: Scalar> super::FactorizePivotedQr<Vec<F>, F> for DenseMatrix<F> {
+    type Factorization = super::QrFactorization<F>;
+    fn factorize_pivoted_qr(
+        &self,
+        b: &Vec<F>,
+    ) -> Result<Self::Factorization, super::QrSolveError> {
+        super::dense_qr::factorize(self.rows, self.cols, self.data.clone(), b)
     }
 }
 

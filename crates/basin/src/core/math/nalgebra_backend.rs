@@ -131,7 +131,7 @@ where
     S: Storage<F, R, C>,
 {
     fn norm_infinity(&self) -> F {
-        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
+        super::norm_infinity(self.iter().copied())
     }
 }
 
@@ -790,6 +790,67 @@ where
         chol.solve(b).ok_or(LinearSolveError::NotPositiveDefinite)
     }
 }
+}
+
+impl<F: Scalar + nalgebra::RealField> super::FactorizePivotedQr<DVector<F>, F>
+    for DMatrix<F>
+{
+    type Factorization = super::QrFactorization<F>;
+    fn factorize_pivoted_qr(
+        &self,
+        b: &DVector<F>,
+    ) -> Result<Self::Factorization, super::QrSolveError> {
+        let (m, n) = self.shape();
+        assert_eq!(b.len(), m, "pivoted QR right-hand side length mismatch");
+        let norms = super::dense_qr::column_norms(m, n, |i, j| self[(i, j)])?;
+        if b.iter().any(|x| !num_traits::Float::is_finite(*x)) {
+            return Err(super::QrSolveError::NonFinite);
+        }
+        let scaled = DMatrix::from_fn(m, n, |i, j| {
+            if norms[j] > F::zero() {
+                self[(i, j)] / norms[j]
+            } else {
+                F::zero()
+            }
+        });
+        let qr = scaled.col_piv_qr();
+        let mut rhs = b.clone();
+        qr.q_tr_mul(&mut rhs);
+        let mut permutation = DVector::from_iterator(n, 0..n);
+        qr.p().permute_rows(&mut permutation);
+        let upper = qr.r();
+        let mut r = vec![F::zero(); n * n];
+        for i in 0..m.min(n) {
+            for j in i..n {
+                r[i * n + j] = upper[(i, j)] * norms[permutation[j]];
+            }
+        }
+        let mut qtb = rhs.as_slice().to_vec();
+        qtb.resize(n, F::zero());
+        super::QrFactorization::from_parts(
+            m,
+            r,
+            qtb,
+            permutation.as_slice().to_vec(),
+            norms,
+        )
+    }
+}
+impl<F: Scalar> super::RegularizedQrSolve<DVector<F>, F>
+    for super::QrFactorization<F>
+{
+    fn column_norms_squared(&self) -> DVector<F> {
+        DVector::from_vec(self.norms_squared())
+    }
+    fn solve_regularized(
+        &self,
+        mu: F,
+        diagonal: &DVector<F>,
+        tolerance: Option<F>,
+    ) -> Result<DVector<F>, super::QrSolveError> {
+        self.solve(mu, diagonal.as_slice(), tolerance)
+            .map(DVector::from_vec)
+    }
 }
 
 #[cfg(test)]

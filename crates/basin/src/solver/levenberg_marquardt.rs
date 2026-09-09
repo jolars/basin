@@ -1,8 +1,9 @@
 use crate::core::math::{
     AddDiagonalVectorInPlace, ComponentDivAssign, ComponentMaxAssign,
-    ComponentMulAssign, Dot, FloorZerosInPlace, GramMatrix, LinearSolveSpd,
-    MatDiagonal, MatTransposeVec, NegInPlace, NormInfinity, NormSquared,
-    Scalar, ScaleInPlace, ScaledAdd,
+    ComponentMulAssign, Dot, FactorizePivotedQr, FloorZerosInPlace, GramMatrix,
+    LinearSolveSpd, MatDiagonal, MatTransposeVec, NegInPlace, NormInfinity,
+    NormSquared, QrSolveError, RegularizedQrSolve, Scalar, ScaleInPlace,
+    ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
@@ -54,29 +55,21 @@ use crate::core::termination::TerminationReason;
 /// close to the optimum, larger (e.g. `1.0`) when far. Default
 /// `τ = 10⁻³` matches Nielsen's "moderate trust" recommendation.
 ///
-/// **Cholesky-on-(JᵀJ + μ·D) vs QR-on-stacked-system.** The damping
-/// makes the SPD path strictly better-conditioned than pure
-/// Gauss-Newton's `JᵀJ`: `μ·D` regularizes the rank deficiency that
-/// makes GN fail. We stay on the SPD path because that's the only one
-/// the [`linalg`](crate::core::math) tier exposes today, and the
-/// regularization is sufficient for unconstrained LM.
-/// QR-on-stacked-system (`[J; √(μD)]`) is more robust to ill-conditioned
-/// `J` near rank deficiency but adds a second factorization route to
-/// the linalg surface; deferred until S6 (TRF), where rank-deficient
-/// Jacobians and box constraints make QR materially better.
+/// **Linear solve.** Cholesky is the default and retains dense and sparse
+/// backend coverage. [`Self::with_pivoted_qr`] selects
+/// [`LevenbergMarquardtQr`], which solves the stacked least-squares system
+/// `[J; √(μD)]` without forming `JᵀJ`. QR avoids normal-equation roundoff
+/// near rank deficiency, but damping and stopping remain independent choices.
+/// TRF also uses normal equations; its availability does not imply QR support.
 ///
 /// # Failure modes
 ///
-/// - **Cholesky failure under bumped μ.** When the initial damping is
-///   too small to make `JᵀJ + μ·D` SPD (effectively never, for any
-///   sensible `JᵀJ` and finite μ), the inner damping loop bumps μ via
-///   `μ := μ·ν, ν := 2ν` and retries. Default
-///   [`with_max_inner_attempts`](Self::with_max_inner_attempts) is 50, far more
-///   than enough; in practice the first attempt succeeds. If the cap
-///   is exhausted (μ overflowing to `inf`), the solver returns
-///   [`TerminationReason::SolverFailed`]. Note that bumping μ cannot
-///   rescue a coordinate whose `D` entry is zero (`μ·0 = 0`); the
-///   `init` zero-column floor exists precisely to keep `D > 0`.
+/// - **Cholesky failure under bumped μ.** Roundoff can defeat positive
+///   definiteness when damping is small relative to the Jacobian's
+///   conditioning. The inner loop increases μ and retries, returning
+///   [`TerminationReason::SolverFailed`] if the attempt cap is reached or
+///   damping overflows. Positive damping does not guarantee accurate steps
+///   from normal equations. Initially zero columns have a unit scaling floor.
 /// - **Divergence on highly nonlinear or poorly initialized problems.**
 ///   The damping itself prevents divergent steps (failed steps are
 ///   rejected via the gain-ratio test), so divergence manifests as
@@ -216,9 +209,9 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     diag: Option<V>,
 
     // Rejected steps leave these quantities valid. Accepted steps retain
-    // the trial residual but invalidate the Gram matrix and gradient.
+    // the trial residual but invalidate the linear model and gradient.
     r_cache: Option<V>,
-    gram_cache: Option<M>,
+    model_cache: Option<Result<M, QrSolveError>>,
     jtr_cache: Option<V>,
 }
 
@@ -233,24 +226,28 @@ impl<V, M> LevenbergMarquardt<V, M> {
     /// `tol_grad_rel = 0.0` (disabled), `tol_cost_rel = 0.0` (disabled),
     /// `tol_step_rel = 0.0` (disabled), `tau = 1e-3`, `max_inner_attempts = 50`.
     pub fn new() -> Self {
-        Self {
-            tol_grad: 1e-8,
-            tol_grad_rel: 0.0,
-            tol_cost_rel: 0.0,
-            tol_step_rel: 0.0,
-            tau: 1e-3,
-            max_inner_attempts: 50,
-            mu: None,
-            nu: 2.0,
-            diag: None,
-            r_cache: None,
-            gram_cache: None,
-            jtr_cache: None,
-        }
+        Self::defaults()
     }
 }
 
 impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
+    fn defaults() -> Self {
+        Self {
+            tol_grad: F::from_f64(1e-8).unwrap(),
+            tol_grad_rel: F::zero(),
+            tol_cost_rel: F::zero(),
+            tol_step_rel: F::zero(),
+            tau: F::from_f64(1e-3).unwrap(),
+            max_inner_attempts: 50,
+            mu: None,
+            nu: F::from_f64(2.0).unwrap(),
+            diag: None,
+            r_cache: None,
+            model_cache: None,
+            jtr_cache: None,
+        }
+    }
+
     /// Absolute first-order optimality tolerance: emit
     /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`
     /// (Madsen et al. eq. 3.3a). Set to `0.0` to disable the check and
@@ -302,8 +299,9 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// actual gain can be small while the model still predicts substantial
     /// progress; gating on `prered` keeps LM iterating through such points
     /// to the true minimum, where a plain achieved-reduction test would
-    /// stop short. This is exactly MINPACK's behavior and the reason
-    /// `ftol` belongs on the solver rather than in the termination layer.
+    /// stop short. This model-dependent check belongs on the solver rather
+    /// than in the termination layer. Basin uses Nielsen damping and a step
+    /// norm test; its complete stopping behavior is not identical to MINPACK.
     ///
     /// Set to `0.0` to disable. Default `0.0` (disabled); use e.g. `1e-8`
     /// for MINPACK `ftol` parity. Converges when *any* enabled test fires
@@ -345,8 +343,8 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Maximum number of damping bumps inside a single outer iteration
     /// before giving up with [`TerminationReason::SolverFailed`]. Each
     /// bump multiplies μ by ν (initially 2) and doubles ν. With the
-    /// default 50, μ grows by a factor of `2^50 ≈ 10¹⁵` before bailing,
-    /// effectively unreachable in practice. Default `50`.
+    /// default 50, repeated doubling of ν makes μ grow rapidly; arithmetic
+    /// overflow can end retries before the attempt cap. Default `50`.
     pub fn with_max_inner_attempts(mut self, n: u32) -> Self {
         assert!(n > 0, "max_inner_attempts must be > 0");
         self.max_inner_attempts = n;
@@ -377,48 +375,117 @@ where
         + Clone,
 {
     type Error = <P as Residual>::Error;
-
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: NllsState<V, F>,
+        state: NllsState<V, F>,
     ) -> Result<NllsState<V, F>, Self::Error> {
+        self.init_model::<P, M, NormalEquations>(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_iter_model::<P, M, NormalEquations>(problem, state, None)
+    }
+}
+
+impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
+    fn init_model<P, M, Model>(
+        &mut self,
+        problem: &mut Problem<P>,
+        mut state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, <P as Residual>::Error>
+    where
+        P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+        M: MatTransposeVec<V>,
+        Model: LinearModel<M, V, F, Cache = C>,
+        V: ScaledAdd<F>
+            + NormSquared<F>
+            + NormInfinity<F>
+            + NegInPlace
+            + Dot<F>
+            + ScaleInPlace<F>
+            + ComponentMulAssign
+            + ComponentDivAssign
+            + ComponentMaxAssign
+            + FloorZerosInPlace<F>
+            + Clone,
+    {
         // Seed both the state and the cross-iteration caches from one
         // residual/Jacobian evaluation.
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
         state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
 
-        let a = j.gram();
-        let mut d = a.diagonal();
-        d.floor_zeros_in_place(F::one());
-        self.diag = Some(d);
+        let a = Model::prepare(&j, &r);
+        self.diag = a.as_ref().ok().map(|a| {
+            let mut d = Model::diagonal(a);
+            d.floor_zeros_in_place(F::one());
+            d
+        });
 
         self.mu = Some(self.tau);
         self.nu = F::from_f64(2.0).unwrap();
         self.jtr_cache = Some(j.mat_transpose_vec(&r));
-        self.gram_cache = Some(a);
+        self.model_cache = Some(a);
         self.r_cache = Some(r);
         Ok(state)
     }
 
-    fn next_iter(
+    fn next_iter_model<P, M, Model>(
         &mut self,
         problem: &mut Problem<P>,
         mut state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        rank_tolerance: Option<F>,
+    ) -> LmStep<V, F, <P as Residual>::Error>
+    where
+        P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+        M: MatTransposeVec<V>,
+        Model: LinearModel<M, V, F, Cache = C>,
+        V: ScaledAdd<F>
+            + NormSquared<F>
+            + NormInfinity<F>
+            + NegInPlace
+            + Dot<F>
+            + ScaleInPlace<F>
+            + ComponentMulAssign
+            + ComponentDivAssign
+            + ComponentMaxAssign
+            + FloorZerosInPlace<F>
+            + Clone,
+    {
         let r = match self.r_cache.take() {
             Some(r) => r,
             None => problem.residual(&state.param)?,
         };
 
-        let (a, g) = match (self.gram_cache.take(), self.jtr_cache.take()) {
+        let (a, g) = match (self.model_cache.take(), self.jtr_cache.take()) {
             (Some(a), Some(g)) => (a, g),
             _ => {
                 let j = problem.jacobian(&state.param)?;
-                (j.gram(), j.mat_transpose_vec(&r))
+                (Model::prepare(&j, &r), j.mat_transpose_vec(&r))
             }
         };
-        let diag_cur = a.diagonal();
+        let a = match a {
+            Ok(a) => a,
+            Err(error) => {
+                self.model_cache = Some(Err(error));
+                self.r_cache = Some(r);
+                self.jtr_cache = Some(g);
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
+        };
+        // Squaring a finite gradient can overflow even when the QR step is valid.
+        if Model::CHECK_FINITE
+            && (!r.norm_squared().is_finite() || !g.norm_infinity().is_finite())
+        {
+            self.model_cache = Some(Ok(a));
+            self.r_cache = Some(r);
+            self.jtr_cache = Some(g);
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
+        let diag_cur = Model::diagonal(&a);
 
         // MINPACK's absolute and relative first-order tests:
         //   * absolute   ‖Jᵀr‖_∞ ≤ tol_grad           (Madsen et al. 3.3a)
@@ -443,13 +510,10 @@ where
         if abs_converged || rel_converged {
             // Termination does not move the iterate, so the caches remain valid.
             self.r_cache = Some(r);
-            self.gram_cache = Some(a);
+            self.model_cache = Some(Ok(a));
             self.jtr_cache = Some(g);
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
-
-        let mut neg_g = g.clone();
-        neg_g.neg_in_place();
 
         // Moré's monotone scaling keeps the damped Gram positive definite.
         let mut d = self
@@ -463,30 +527,29 @@ where
             .expect("mu not set: Solver::init must run before next_iter");
         let mut nu = self.nu;
 
-        // Increase damping if roundoff defeats the Cholesky factorization.
+        // Increase damping when the model solve reports recoverable rank loss.
         let two = F::from_f64(2.0).unwrap();
         let half = F::from_f64(0.5).unwrap();
         let one_third = F::from_f64(1.0 / 3.0).unwrap();
         let h;
         let mut attempts: u32 = 0;
         loop {
-            let mut a_damped = a.clone();
-            let mut damping = d.clone();
-            damping.scale_in_place(mu);
-            a_damped.add_diagonal_vector_in_place(&damping);
-            match a_damped.solve_spd(&neg_g) {
+            match Model::solve(&a, &g, &d, mu, rank_tolerance) {
                 Ok(step) => {
                     h = step;
                     break;
                 }
-                Err(_) => {
+                Err(failure) => {
                     attempts += 1;
-                    if attempts >= self.max_inner_attempts || !mu.is_finite() {
+                    if failure == ModelSolveError::Failed
+                        || attempts >= self.max_inner_attempts
+                        || !mu.is_finite()
+                    {
                         self.mu = Some(mu);
                         self.nu = nu;
                         self.diag = Some(d);
                         self.r_cache = Some(r);
-                        self.gram_cache = Some(a);
+                        self.model_cache = Some(Ok(a));
                         self.jtr_cache = Some(g);
                         return Ok((
                             state,
@@ -529,14 +592,14 @@ where
             mu = mu * factor.max(one_third);
             nu = two;
             self.r_cache = Some(r_trial);
-            self.gram_cache = None;
+            self.model_cache = None;
             self.jtr_cache = None;
         } else {
             // Preserve iterate-dependent caches and increase damping.
             mu = mu * nu;
             nu = nu * two;
             self.r_cache = Some(r);
-            self.gram_cache = Some(a);
+            self.model_cache = Some(Ok(a));
             self.jtr_cache = Some(g);
         }
 
@@ -564,5 +627,355 @@ where
         }
 
         Ok((state, None))
+    }
+}
+
+type LmStep<V, F, E> = Result<(NllsState<V, F>, Option<TerminationReason>), E>;
+
+#[derive(PartialEq)]
+enum ModelSolveError {
+    Retry,
+    Failed,
+}
+
+trait LinearModel<M, V, F: Scalar> {
+    type Cache;
+    const CHECK_FINITE: bool;
+    fn prepare(j: &M, r: &V) -> Result<Self::Cache, QrSolveError>;
+    fn diagonal(cache: &Self::Cache) -> V;
+    // Only rank loss can be repaired by increasing damping on the QR route.
+    fn solve(
+        cache: &Self::Cache,
+        g: &V,
+        d: &V,
+        mu: F,
+        tolerance: Option<F>,
+    ) -> Result<V, ModelSolveError>;
+}
+struct NormalEquations;
+impl<M, V, F: Scalar> LinearModel<M, V, F> for NormalEquations
+where
+    M: GramMatrix
+        + MatDiagonal<V>
+        + LinearSolveSpd<V>
+        + AddDiagonalVectorInPlace<V>
+        + Clone,
+    V: Clone + NegInPlace + ScaleInPlace<F>,
+{
+    type Cache = M;
+    const CHECK_FINITE: bool = false;
+    fn prepare(j: &M, _: &V) -> Result<M, QrSolveError> {
+        Ok(j.gram())
+    }
+    fn diagonal(cache: &M) -> V {
+        cache.diagonal()
+    }
+    fn solve(
+        cache: &M,
+        g: &V,
+        d: &V,
+        mu: F,
+        _: Option<F>,
+    ) -> Result<V, ModelSolveError> {
+        let mut a = cache.clone();
+        let mut diagonal = d.clone();
+        diagonal.scale_in_place(mu);
+        a.add_diagonal_vector_in_place(&diagonal);
+        let mut rhs = g.clone();
+        rhs.neg_in_place();
+        a.solve_spd(&rhs).map_err(|_| ModelSolveError::Retry)
+    }
+}
+struct PivotedQr;
+impl<M, V, F: Scalar> LinearModel<M, V, F> for PivotedQr
+where
+    M: FactorizePivotedQr<V, F>,
+    V: Clone + NegInPlace,
+{
+    type Cache = M::Factorization;
+    const CHECK_FINITE: bool = true;
+    fn prepare(j: &M, r: &V) -> Result<Self::Cache, QrSolveError> {
+        let mut rhs = r.clone();
+        rhs.neg_in_place();
+        j.factorize_pivoted_qr(&rhs)
+    }
+    fn diagonal(cache: &Self::Cache) -> V {
+        cache.column_norms_squared()
+    }
+    fn solve(
+        cache: &Self::Cache,
+        _: &V,
+        d: &V,
+        mu: F,
+        tolerance: Option<F>,
+    ) -> Result<V, ModelSolveError> {
+        cache.solve_regularized(mu, d, tolerance).map_err(|e| {
+            if e == QrSolveError::RankDeficient {
+                ModelSolveError::Retry
+            } else {
+                ModelSolveError::Failed
+            }
+        })
+    }
+}
+
+/// Levenberg-Marquardt with column-pivoted QR and Nielsen damping.
+///
+/// Construct with [`LevenbergMarquardt::with_pivoted_qr`] or [`Self::new`].
+/// This uses the same scaling, gain ratio, damping update, and stopping tests
+/// as [`LevenbergMarquardt`], solving `[J; sqrt(μD)] h ≈ [-r; 0]` without
+/// forming `JᵀJ`. It is not MINPACK's trust-radius-based damping algorithm.
+/// QR improves step accuracy near rank deficiency; it does not guarantee
+/// MINPACK's nonlinear convergence trajectory or evaluation counts.
+///
+/// # Rank and failures
+///
+/// Rank is checked after diagonal regularization and column equilibration.
+/// The default threshold is `epsilon(F) * (m+n)`; see
+/// [`Self::with_rank_tolerance`]. Rank loss increases damping, reusing the
+/// factorization, until the existing attempt limit yields `SolverFailed`.
+/// Non-finite factorization or solve arithmetic yields `SolverFailed`
+/// immediately. Problem callback errors propagate unchanged. No truncated
+/// solution or normal-equation fallback is used.
+///
+/// # Backends
+///
+/// `Vec<F>` with [`DenseMatrix`](crate::DenseMatrix), nalgebra
+/// `DVector<F>`/`DMatrix<F>`, ndarray `Array1<F>`/`Array2<F>`, and faer
+/// `Col<F>`/`Mat<F>`, for `f32` and `f64`, in pure Rust. Sparse matrices
+/// deliberately lack [`FactorizePivotedQr`]: nalgebra-sparse has no QR, and
+/// faer's sparse QR does not provide numerical column pivoting.
+///
+/// # References
+///
+/// Madsen, Nielsen & Tingleff (2004), *Methods for Non-Linear Least Squares
+/// Problems*, §3.2; MINPACK's [`qrfac`](https://netlib.org/minpack/qrfac.f)
+/// and [`qrsolv`](https://netlib.org/minpack/qrsolv.f) (Garbow, Hillstrom &
+/// Moré, 1980). The rank policy differs from MINPACK's truncated solve.
+///
+/// # Example
+///
+/// ```
+/// use basin::{DenseMatrix, LevenbergMarquardt, LevenbergMarquardtQr};
+/// let solver: LevenbergMarquardtQr<Vec<f64>, DenseMatrix> =
+///     LevenbergMarquardt::new().with_tol_grad(1e-10).with_pivoted_qr();
+/// ```
+pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64>
+where
+    M: FactorizePivotedQr<V, F>,
+{
+    inner: LevenbergMarquardt<V, M::Factorization, F>,
+    rank_tolerance: Option<F>,
+}
+
+impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
+    /// Select pivoted QR while preserving configuration and resetting caches.
+    ///
+    /// This additive route requires [`FactorizePivotedQr`] only on the
+    /// returned solver. Existing Cholesky-only matrix implementations retain
+    /// their original solver bounds. Configure this before starting a solve.
+    pub fn with_pivoted_qr(self) -> LevenbergMarquardtQr<V, M, F>
+    where
+        M: FactorizePivotedQr<V, F>,
+    {
+        LevenbergMarquardtQr {
+            inner: LevenbergMarquardt {
+                tol_grad: self.tol_grad,
+                tol_grad_rel: self.tol_grad_rel,
+                tol_cost_rel: self.tol_cost_rel,
+                tol_step_rel: self.tol_step_rel,
+                tau: self.tau,
+                max_inner_attempts: self.max_inner_attempts,
+                ..LevenbergMarquardt::defaults()
+            },
+            rank_tolerance: None,
+        }
+    }
+}
+
+impl<V, M, F: Scalar> Default for LevenbergMarquardtQr<V, M, F>
+where
+    M: FactorizePivotedQr<V, F>,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl<V, M, F: Scalar> LevenbergMarquardtQr<V, M, F>
+where
+    M: FactorizePivotedQr<V, F>,
+{
+    /// QR with the same defaults as [`LevenbergMarquardt::new`].
+    pub fn new() -> Self {
+        Self {
+            inner: LevenbergMarquardt::defaults(),
+            rank_tolerance: None,
+        }
+    }
+    /// Override the dimensionless augmented-system rank threshold.
+    ///
+    /// Default: `epsilon(F) * (m+n)`. Finite values in `[0,1)` are valid;
+    /// other values panic. Zero detects only exactly zero triangular pivots.
+    /// See [`RegularizedQrSolve::solve_regularized`] for the rank contract.
+    pub fn with_rank_tolerance(mut self, tol: F) -> Self {
+        assert!(
+            tol.is_finite() && tol >= F::zero() && tol < F::one(),
+            "rank tolerance must be finite and in [0,1)"
+        );
+        self.rank_tolerance = Some(tol);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_tol_grad`] for the QR route.
+    pub fn with_tol_grad(mut self, value: F) -> Self {
+        self.inner = self.inner.with_tol_grad(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_tol_grad_rel`] for the QR route.
+    pub fn with_tol_grad_rel(mut self, value: F) -> Self {
+        self.inner = self.inner.with_tol_grad_rel(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_tol_cost_rel`] for the QR route.
+    pub fn with_tol_cost_rel(mut self, value: F) -> Self {
+        self.inner = self.inner.with_tol_cost_rel(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_tol_step_rel`] for the QR route.
+    pub fn with_tol_step_rel(mut self, value: F) -> Self {
+        self.inner = self.inner.with_tol_step_rel(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_tau`] for the QR route.
+    pub fn with_tau(mut self, value: F) -> Self {
+        self.inner = self.inner.with_tau(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_max_inner_attempts`] for the QR route.
+    pub fn with_max_inner_attempts(mut self, value: u32) -> Self {
+        self.inner = self.inner.with_max_inner_attempts(value);
+        self
+    }
+}
+impl<P, V, M, F> Solver<P, NllsState<V, F>> for LevenbergMarquardtQr<V, M, F>
+where
+    F: Scalar,
+    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    V: ScaledAdd<F>
+        + NormSquared<F>
+        + NormInfinity<F>
+        + NegInPlace
+        + Dot<F>
+        + ScaleInPlace<F>
+        + ComponentMulAssign
+        + ComponentDivAssign
+        + ComponentMaxAssign
+        + FloorZerosInPlace<F>
+        + Clone,
+    M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
+{
+    type Error = <P as Residual>::Error;
+    fn init(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
+        self.inner.init_model::<P, M, PivotedQr>(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.inner.next_iter_model::<P, M, PivotedQr>(
+            problem,
+            state,
+            self.rank_tolerance,
+        )
+    }
+}
+
+impl<V: Clone, M, F: Scalar> crate::core::inner::InitialState<V>
+    for LevenbergMarquardtQr<V, M, F>
+where
+    M: FactorizePivotedQr<V, F>,
+{
+    type State = NllsState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        NllsState::new(x.clone())
+    }
+}
+impl<V: Clone, M, F: Scalar> crate::core::inner::WarmStart<V>
+    for LevenbergMarquardtQr<V, M, F>
+where
+    M: FactorizePivotedQr<V, F>,
+{
+}
+impl<V: Clone, M, F: Scalar> super::cma_inject::MemeticInner<V, F>
+    for LevenbergMarquardtQr<V, M, F>
+where
+    M: FactorizePivotedQr<V, F>,
+{
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DenseMatrix, Executor};
+
+    #[derive(Clone)]
+    struct CholeskyOnly(DenseMatrix);
+    impl GramMatrix for CholeskyOnly {
+        fn gram(&self) -> Self {
+            Self(self.0.gram())
+        }
+    }
+    impl MatDiagonal<Vec<f64>> for CholeskyOnly {
+        fn diagonal(&self) -> Vec<f64> {
+            self.0.diagonal()
+        }
+    }
+    impl MatTransposeVec<Vec<f64>> for CholeskyOnly {
+        fn mat_transpose_vec(&self, v: &Vec<f64>) -> Vec<f64> {
+            self.0.mat_transpose_vec(v)
+        }
+    }
+    impl AddDiagonalVectorInPlace<Vec<f64>> for CholeskyOnly {
+        fn add_diagonal_vector_in_place(&mut self, d: &Vec<f64>) {
+            self.0.add_diagonal_vector_in_place(d);
+        }
+    }
+    impl LinearSolveSpd<Vec<f64>> for CholeskyOnly {
+        fn solve_spd(
+            &self,
+            b: &Vec<f64>,
+        ) -> Result<Vec<f64>, crate::LinearSolveError> {
+            self.0.solve_spd(b)
+        }
+    }
+    struct Fit;
+    impl Residual for Fit {
+        type Param = Vec<f64>;
+        type Output = Vec<f64>;
+        type Error = std::convert::Infallible;
+        fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            Ok(vec![x[0] - 1.])
+        }
+    }
+    impl Jacobian for Fit {
+        type Jacobian = CholeskyOnly;
+        fn jacobian(&self, _: &Vec<f64>) -> Result<CholeskyOnly, Self::Error> {
+            Ok(CholeskyOnly(DenseMatrix::from_row_slice(1, 1, &[1.])))
+        }
+    }
+    #[test]
+    fn legacy_annotations_and_cholesky_only_capabilities_still_work() {
+        let solver: LevenbergMarquardt<Vec<f64>, CholeskyOnly> =
+            LevenbergMarquardt::new();
+        let result = Executor::from_start(Fit, solver, vec![0.])
+            .max_iter(50)
+            .run()
+            .unwrap();
+        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert!((result.param()[0] - 1.).abs() < 1e-8);
     }
 }

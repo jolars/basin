@@ -50,7 +50,7 @@ where
     D: Dimension,
 {
     fn norm_infinity(&self) -> F {
-        self.iter().map(|x| x.abs()).fold(F::zero(), F::max)
+        super::norm_infinity(self.iter().copied())
     }
 }
 
@@ -616,5 +616,33 @@ where
             .for_each(|x, &l, &u| {
                 *x = project_strictly_inside_component::<F>(*x, l, u, rstep);
             });
+    }
+}
+
+impl<F: Scalar> super::FactorizePivotedQr<Array1<F>, F> for Array2<F> {
+    type Factorization = super::QrFactorization<F>;
+    fn factorize_pivoted_qr(
+        &self,
+        b: &Array1<F>,
+    ) -> Result<Self::Factorization, super::QrSolveError> {
+        let a = self.as_standard_layout().iter().copied().collect();
+        let rhs: Vec<_> = b.iter().copied().collect();
+        super::dense_qr::factorize(self.nrows(), self.ncols(), a, &rhs)
+    }
+}
+impl<F: Scalar> super::RegularizedQrSolve<Array1<F>, F>
+    for super::QrFactorization<F>
+{
+    fn column_norms_squared(&self) -> Array1<F> {
+        Array1::from_vec(self.norms_squared())
+    }
+    fn solve_regularized(
+        &self,
+        mu: F,
+        diagonal: &Array1<F>,
+        tolerance: Option<F>,
+    ) -> Result<Array1<F>, super::QrSolveError> {
+        let d: Vec<_> = diagonal.iter().copied().collect();
+        self.solve(mu, &d, tolerance).map(Array1::from_vec)
     }
 }

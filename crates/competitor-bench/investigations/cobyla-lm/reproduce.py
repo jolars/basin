@@ -91,6 +91,8 @@ debug = 1
     bins.mkdir(parents=True)
     for source, name in [("cobyla.rs", "cobyla_probe.rs"), ("lm.rs", "lm_probe.rs")]:
         shutil.copyfile(HERE / source, bins / name)
+    (bins / "support").mkdir()
+    shutil.copyfile(HERE / "support/lm_models.rs", bins / "support/lm_models.rs")
 
     modules = "\n".join(
         f"#[path = {json.dumps(str(BASIN / 'crates/basin/src/solver/cobyla' / (name + '.rs')))}]\n"

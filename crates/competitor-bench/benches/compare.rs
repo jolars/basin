@@ -7,11 +7,11 @@
 //!     lm crate, so this isolates *solver-loop* overhead).
 //!   * `basin/faer`:    basin on faer 0.24 (adds the backend variable).
 //!
-//! All three use MINPACK gtol/ftol/xtol at `30·ε` (the lm crate's
-//! default; basin configured to match) so they stop at comparable
-//! points, confirmed by `src/bin/verify.rs`.
+//! QR variants use the same Basin damping and stopping rules. Equal named
+//! tolerances do not imply the same MINPACK convergence trajectory; use
+//! `verify_lm_qr` to compare convergence and callback counts separately.
 //!
-//! Run: `cargo bench -p lm-bench`.
+//! Run: `cargo bench -p competitor-bench --bench compare`.
 
 use std::hint::black_box;
 
@@ -74,6 +74,31 @@ fn bench_exp_fit(c: &mut Criterion) {
         )
     });
 
+    g.bench_function(BenchmarkId::from_parameter("basin/nalgebra-qr"), |b| {
+        b.iter_batched(
+            || {
+                (
+                    ExponentialFit::<BasinDVector<f64>>::sampled(
+                        1.0e5, -1.0, 10, 0.4,
+                    ),
+                    BasinDVector::from_vec(vec![5.0e4, -0.3]),
+                )
+            },
+            |(p, x0)| {
+                black_box(
+                    Executor::new(
+                        p,
+                        basin_lm().with_pivoted_qr(),
+                        NllsState::new(x0),
+                    )
+                    .max_iter(200)
+                    .run(),
+                )
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
     g.bench_function(BenchmarkId::from_parameter("basin/faer"), |b| {
         b.iter_batched(
             || {
@@ -87,6 +112,29 @@ fn bench_exp_fit(c: &mut Criterion) {
                     Executor::new(p, basin_lm(), NllsState::new(x0))
                         .max_iter(200)
                         .run(),
+                )
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    g.bench_function(BenchmarkId::from_parameter("basin/faer-qr"), |b| {
+        b.iter_batched(
+            || {
+                (
+                    ExponentialFit::<Col<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
+                    Col::from_fn(2, |i| if i == 0 { 5.0e4 } else { -0.3 }),
+                )
+            },
+            |(p, x0)| {
+                black_box(
+                    Executor::new(
+                        p,
+                        basin_lm().with_pivoted_qr(),
+                        NllsState::new(x0),
+                    )
+                    .max_iter(200)
+                    .run(),
                 )
             },
             BatchSize::SmallInput,
@@ -130,6 +178,29 @@ fn bench_powell(c: &mut Criterion) {
         )
     });
 
+    g.bench_function(BenchmarkId::from_parameter("basin/nalgebra-qr"), |b| {
+        b.iter_batched(
+            || {
+                (
+                    PowellSingular::<BasinDVector<f64>>::new(),
+                    BasinDVector::from_vec(vec![3.0, -1.0, 0.0, 1.0]),
+                )
+            },
+            |(p, x0)| {
+                black_box(
+                    Executor::new(
+                        p,
+                        basin_lm().with_pivoted_qr(),
+                        NllsState::new(x0),
+                    )
+                    .max_iter(200)
+                    .run(),
+                )
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
     g.bench_function(BenchmarkId::from_parameter("basin/faer"), |b| {
         b.iter_batched(
             || {
@@ -143,6 +214,29 @@ fn bench_powell(c: &mut Criterion) {
                     Executor::new(p, basin_lm(), NllsState::new(x0))
                         .max_iter(200)
                         .run(),
+                )
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    g.bench_function(BenchmarkId::from_parameter("basin/faer-qr"), |b| {
+        b.iter_batched(
+            || {
+                (
+                    PowellSingular::<Col<f64>>::new(),
+                    Col::from_fn(4, |i| [3.0, -1.0, 0.0, 1.0][i]),
+                )
+            },
+            |(p, x0)| {
+                black_box(
+                    Executor::new(
+                        p,
+                        basin_lm().with_pivoted_qr(),
+                        NllsState::new(x0),
+                    )
+                    .max_iter(200)
+                    .run(),
                 )
             },
             BatchSize::SmallInput,
@@ -193,6 +287,32 @@ fn bench_vardim(c: &mut Criterion) {
             )
         });
 
+        g.bench_function(
+            BenchmarkId::from_parameter("basin/nalgebra-qr"),
+            |b| {
+                b.iter_batched(
+                    || {
+                        (
+                            VarDim::<BasinDVector<f64>>::new(n),
+                            BasinDVector::from_vec(vardim_start(n)),
+                        )
+                    },
+                    |(p, x0)| {
+                        black_box(
+                            Executor::new(
+                                p,
+                                basin_lm().with_pivoted_qr(),
+                                NllsState::new(x0),
+                            )
+                            .max_iter(500)
+                            .run(),
+                        )
+                    },
+                    BatchSize::SmallInput,
+                )
+            },
+        );
+
         g.bench_function(BenchmarkId::from_parameter("basin/faer"), |b| {
             let start = vardim_start(n);
             b.iter_batched(
@@ -202,6 +322,25 @@ fn bench_vardim(c: &mut Criterion) {
                         Executor::new(p, basin_lm(), NllsState::new(x0))
                             .max_iter(500)
                             .run(),
+                    )
+                },
+                BatchSize::SmallInput,
+            )
+        });
+
+        g.bench_function(BenchmarkId::from_parameter("basin/faer-qr"), |b| {
+            let start = vardim_start(n);
+            b.iter_batched(
+                || (VarDim::<Col<f64>>::new(n), Col::from_fn(n, |i| start[i])),
+                |(p, x0)| {
+                    black_box(
+                        Executor::new(
+                            p,
+                            basin_lm().with_pivoted_qr(),
+                            NllsState::new(x0),
+                        )
+                        .max_iter(500)
+                        .run(),
                     )
                 },
                 BatchSize::SmallInput,
@@ -253,6 +392,31 @@ fn bench_underdet(c: &mut Criterion) {
             )
         });
 
+        g.bench_function(
+            BenchmarkId::from_parameter("basin/nalgebra-qr"),
+            |b| {
+                b.iter_batched(
+                    || {
+                        let p = UnderDet::<BasinDVector<f64>>::new(m, n);
+                        let x0 = BasinDVector::from_vec(p.start());
+                        (p, x0)
+                    },
+                    |(p, x0)| {
+                        black_box(
+                            Executor::new(
+                                p,
+                                basin_lm().with_pivoted_qr(),
+                                NllsState::new(x0),
+                            )
+                            .max_iter(500)
+                            .run(),
+                        )
+                    },
+                    BatchSize::SmallInput,
+                )
+            },
+        );
+
         g.bench_function(BenchmarkId::from_parameter("basin/faer"), |b| {
             b.iter_batched(
                 || {
@@ -272,8 +436,64 @@ fn bench_underdet(c: &mut Criterion) {
             )
         });
 
+        g.bench_function(BenchmarkId::from_parameter("basin/faer-qr"), |b| {
+            b.iter_batched(
+                || {
+                    let p = UnderDet::<Col<f64>>::new(m, n);
+                    let start = p.start();
+                    let x0 = Col::from_fn(n, |i| start[i]);
+                    (p, x0)
+                },
+                |(p, x0)| {
+                    black_box(
+                        Executor::new(
+                            p,
+                            basin_lm().with_pivoted_qr(),
+                            NllsState::new(x0),
+                        )
+                        .max_iter(500)
+                        .run(),
+                    )
+                },
+                BatchSize::SmallInput,
+            )
+        });
+
         g.finish();
     }
+}
+
+fn bench_qr_regularization(c: &mut Criterion) {
+    use basin::{
+        AddDiagonalVectorInPlace, DenseMatrix, FactorizePivotedQr, GramMatrix,
+        LinearSolveSpd, MatTransposeVec, RegularizedQrSolve,
+    };
+    let a = DenseMatrix::from_fn(128, 8, |i, j| {
+        ((i * 13 + j * 7) as f64).sin() + if i == j { 1. } else { 0. }
+    });
+    let b: Vec<f64> = (0..128).map(|i| (i as f64).cos()).collect();
+    let qr = a.factorize_pivoted_qr(&b).unwrap();
+    let d: Vec<f64> = qr.column_norms_squared();
+    let gram = a.gram();
+    let atb = a.mat_transpose_vec(&b);
+    let mut group = c.benchmark_group("qr_regularization_128x8");
+    group.bench_function("factorize", |bench| {
+        bench.iter(|| black_box(a.factorize_pivoted_qr(black_box(&b)).unwrap()))
+    });
+    group.bench_function("qr_retry", |bench| {
+        bench.iter(|| {
+            black_box(qr.solve_regularized(black_box(1e-3), &d, None).unwrap())
+        })
+    });
+    group.bench_function("cholesky_retry", |bench| {
+        bench.iter(|| {
+            let mut damped = gram.clone();
+            let damping: Vec<_> = d.iter().map(|x| x * 1e-3).collect();
+            damped.add_diagonal_vector_in_place(&damping);
+            black_box(damped.solve_spd(black_box(&atb)).unwrap())
+        })
+    });
+    group.finish();
 }
 
 criterion_group!(
@@ -281,6 +501,7 @@ criterion_group!(
     bench_exp_fit,
     bench_powell,
     bench_vardim,
-    bench_underdet
+    bench_underdet,
+    bench_qr_regularization
 );
 criterion_main!(benches);
