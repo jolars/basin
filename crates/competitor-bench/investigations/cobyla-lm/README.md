@@ -11,6 +11,9 @@ convergence behavior. The probes below separate these questions. The
 the [LM QR route](lm-qr.md) is implemented as an explicit option. Damping
 and stopping follow-ups remain open.
 
+The [COBYLA PRIMA follow-up](cobyla-prima.md) uses the matching modern Fortran
+reference and provides a standalone reproducer without the historical adapters.
+
 ## Reproduce
 
 From the Basin repository root:

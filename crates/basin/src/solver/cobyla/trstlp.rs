@@ -75,6 +75,25 @@ impl<F: Scalar> TrstlpWork<F> {
         g: &[F],
     ) -> &[F] {
         let n = self.d.len();
+        // Keep small vector lengths visible through both LP stages so
+        // the compiler can remove dynamic loop and slice bounds machinery.
+        match n {
+            1 => self.solve_with_dimension::<1>(a, b, delta, g),
+            2 => self.solve_with_dimension::<2>(a, b, delta, g),
+            3 => self.solve_with_dimension::<3>(a, b, delta, g),
+            _ => self.solve_with_dimension::<0>(a, b, delta, g),
+        }
+    }
+
+    fn solve_with_dimension<const N: usize>(
+        &mut self,
+        a: &[F],
+        b: &[F],
+        delta: F,
+        g: &[F],
+    ) -> &[F] {
+        // Zero selects the dynamic dimension for the general path.
+        let n = if N == 0 { self.d.len() } else { N };
         let m = self.b_aug.len() - 1;
         let mcon = m + 1;
         let Self {
@@ -109,7 +128,7 @@ impl<F: Scalar> TrstlpWork<F> {
         }
         let mut nact = 0;
         for (stage, columns) in [(1, m), (2, mcon)] {
-            trstlp_sub(
+            trstlp_sub::<F, N>(
                 stage, a_aug, n, columns, b_aug, delta, d, iact, vmultc, z,
                 &mut nact, scratch,
             );
@@ -239,7 +258,7 @@ fn lsqr<F: Scalar>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn trstlp_sub<F: Scalar>(
+fn trstlp_sub<F: Scalar, const N: usize>(
     stage: u8,
     a: &[F],
     n: usize,
@@ -253,6 +272,7 @@ fn trstlp_sub<F: Scalar>(
     nact: &mut usize,
     scratch: &mut TrstlpScratch<F>,
 ) {
+    let n = if N == 0 { n } else { N };
     let TrstlpScratch {
         sdirn,
         zdota,
@@ -672,5 +692,77 @@ mod tests {
         let g = vec![0.0_f64, 0.0];
         let d = trstlp::<f64>(&a, n, 1, &b, 1.0, &g);
         assert!(d[0] <= -0.5 + 1e-9, "d = {:?}", d);
+    }
+
+    #[test]
+    fn reused_lp_handles_scaled_dependent_constraints() {
+        fn check<F: Scalar>() {
+            let f = |x| F::from_f64(x).unwrap();
+            let mut work = TrstlpWork::new(2, 3);
+            for scale in [1.0, 1e14, 1e-8, 1.0] {
+                // Duplicate rows exercise rank rejection. The zero row leaves
+                // the same feasible cap, including after a huge-column solve.
+                let a =
+                    [f(scale), f(0.0), f(2.0 * scale), f(0.0), f(0.0), f(0.0)];
+                let b = [f(-0.25 * scale), f(-0.5 * scale), f(1.0)];
+                let g = [f(0.0), f(scale)];
+                let d = work.solve(&a, &b, f(1.0), &g);
+                assert!((d[0].to_f64().unwrap() + 0.25).abs() < 2e-6);
+                assert!(
+                    (d[1].to_f64().unwrap() + 0.9375_f64.sqrt()).abs() < 2e-6
+                );
+            }
+        }
+        check::<f64>();
+        check::<f32>();
+    }
+
+    #[test]
+    fn reused_lp_recovers_after_nonfinite_models() {
+        let mut work = TrstlpWork::new(2, 1);
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 1.0] {
+            let d = work.solve(&[value, 0.0], &[0.3], 1.0, &[-1.0, 0.0]);
+            assert!(d.iter().all(|x| x.is_finite()));
+            assert!(norm(d) <= 1.0 + 1e-12);
+            // A valid solve must not inherit an active set or scaled model
+            // from a failed or non-finite predecessor.
+            let d = work.solve(&[1.0, 0.0], &[0.3], 1.0, &[-1.0, 0.0]);
+            assert!((d[0] - 0.3).abs() < 1e-12);
+            assert!(d[1].abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn small_dimensional_specializations_match_dynamic_path() {
+        fn check<F: Scalar>() {
+            let f = |x| F::from_f64(x).unwrap();
+            for (n, m) in (1..=3).flat_map(|n| [0, 1, 4, 9].map(|m| (n, m))) {
+                let mut specialized = TrstlpWork::new(n, m);
+                let mut dynamic = TrstlpWork::new(n, m);
+                for sample in 0..48 {
+                    let scale = [1e-8, 1.0, 1e14][sample % 3];
+                    let value = |i: usize| {
+                        scale * (((i * 11 + sample * 7) % 23) as f64 - 11.0)
+                            / 8.0
+                    };
+                    let a: Vec<_> = (0..n * m).map(|i| f(value(i))).collect();
+                    let b: Vec<_> = (0..m).map(|i| f(value(i + 3))).collect();
+                    let g: Vec<_> =
+                        (0..n).map(|i| f(value(5 + 4 * i))).collect();
+                    let delta = f([1e-9, 0.5, 2.0][sample % 3]);
+                    let expected =
+                        dynamic.solve_with_dimension::<0>(&a, &b, delta, &g);
+                    let actual = specialized.solve(&a, &b, delta, &g);
+                    for (x, y) in actual.iter().zip(expected) {
+                        assert_eq!(
+                            x.to_f64().unwrap().to_bits(),
+                            y.to_f64().unwrap().to_bits()
+                        );
+                    }
+                }
+            }
+        }
+        check::<f64>();
+        check::<f32>();
     }
 }

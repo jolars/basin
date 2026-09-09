@@ -1,5 +1,9 @@
 # COBYLA kernel and parameter-buffer follow-up
 
+The [PRIMA follow-up](cobyla-prima.md) establishes the matching reference and
+compares the trust-region LP on recorded identical inputs. The measurements
+below describe the earlier comparison with `cobyla` 1.0.2.
+
 The public executor runs 17–23% faster than the first optimized implementation
 on the three migration cases. Results, feasibility, evaluation counts, and
 termination behavior are unchanged. This gets the sphere and quadratic closer to

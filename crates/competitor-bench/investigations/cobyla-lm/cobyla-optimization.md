@@ -1,5 +1,9 @@
 # COBYLA driver optimization
 
+The [PRIMA comparison](cobyla-prima.md) continues this work using the pinned
+modern Fortran reference. The `cobyla` 1.0.2 comparisons below retain their
+original NLopt-derived reference and measurement context.
+
 The [kernel and parameter-buffer follow-up](cobyla-kernels.md) improves public
 executor runtime by a further 17–23% and records the remaining gap to `cobyla`.
 The measurements below describe the first optimization pass.
