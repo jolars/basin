@@ -14,6 +14,10 @@ and stopping follow-ups remain open.
 The [COBYLA PRIMA follow-up](cobyla-prima.md) uses the matching modern Fortran
 reference and provides a standalone reproducer without the historical adapters.
 
+The [remaining-gap investigation](cobyla-variant-gap.md) compares the optimized
+driver directly with `cobyla` 1.0.2 to measure how much the algorithm variant,
+public integration, and kernel implementation contribute.
+
 ## Reproduce
 
 From the Basin repository root:

@@ -1,5 +1,9 @@
 # COBYLA driver optimization
 
+The [remaining-gap investigation](cobyla-variant-gap.md) compares the current
+implementation directly with `cobyla` 1.0.2, separating PRIMA-related work,
+public integration, and identical-input kernel costs.
+
 The [PRIMA comparison](cobyla-prima.md) continues this work using the pinned
 modern Fortran reference. The `cobyla` 1.0.2 comparisons below retain their
 original NLopt-derived reference and measurement context.
