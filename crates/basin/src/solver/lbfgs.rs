@@ -48,7 +48,10 @@ use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::lbfgs::{LbfgsState, LbfgsbWork};
 use crate::core::termination::TerminationReason;
-use crate::line_search::{LineSearch, LineSearchOutcome, MoreThuente};
+use crate::line_search::{
+    LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
+    MoreThuente,
+};
 
 use self::backend::{AsFloatSlice, AsFloatSliceMut};
 use self::cauchy::{cauchy, iwhere as iwh};
@@ -249,6 +252,8 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
     /// parity with the Fortran reference. The curvature-skip threshold
     /// defaults to `F::epsilon()` (matching `f64::EPSILON` when
     /// `F = f64`); `tol_pg` defaults to `1e-10`.
+    /// Custom strategies must implement [`LineSearch::next_with_bounds`];
+    /// its default reports failure without evaluating an unbounded trial.
     pub fn with_line_search(line_search: S) -> Self {
         Self {
             line_search,
@@ -621,14 +626,20 @@ where
                 F::from_f64(1.0e10).unwrap()
             };
 
+            let mut d_v = state.param.clone();
+            d_v.as_float_slice_mut().copy_from_slice(&work.d);
+            let stpmx = safeguard_step_cap(
+                &state.param,
+                problem.inner().lower().as_float_slice(),
+                problem.inner().upper().as_float_slice(),
+                &d_v,
+                stpmx,
+            );
             let alpha_init = if state.iter == 0 && !boxed {
                 (F::one() / dnorm).min(stpmx)
             } else {
-                F::one()
+                F::one().min(stpmx)
             };
-
-            let mut d_v = state.param.clone();
-            d_v.as_float_slice_mut().copy_from_slice(&work.d);
 
             // Preserve the previous iterate and gradient for the update.
             work.t_buf.copy_from_slice(state.param.as_float_slice());
@@ -639,22 +650,50 @@ where
                 .zip(g_v.as_float_slice())
                 .fold(F::zero(), |acc, (a, b)| acc + (*a) * (*b));
 
-            // `LineSearch` has no generic hooks for the initial step or the
-            // feasibility cap used by Fortran's `lnsrlb`.
-            let _ = (alpha_init, stpmx);
-            let line_search_result = self.line_search.next_with_evaluation(
-                problem,
-                &state.param,
-                f_old,
-                &g_v,
-                &d_v,
-            )?;
+            let line_search_result = if alpha_init.is_finite()
+                && alpha_init > F::zero()
+                && stpmx.is_finite()
+            {
+                self.line_search.next_with_bounds(
+                    problem,
+                    &state.param,
+                    f_old,
+                    &g_v,
+                    &d_v,
+                    LineSearchBounds::new(alpha_init, stpmx),
+                )?
+            } else {
+                LineSearchResult::new(LineSearchOutcome::Failed)
+            };
             let stp = match line_search_result.outcome {
                 LineSearchOutcome::Step(stp) => stp,
                 LineSearchOutcome::Failed => F::zero(),
             };
 
-            if !(stp.is_finite() && stp > F::zero()) {
+            let accepted = if stp.is_finite() && stp > F::zero() && stp <= stpmx
+            {
+                let (param, evaluation) =
+                    if let Some(evaluation) = line_search_result.evaluation {
+                        (
+                            evaluation.param,
+                            Some((evaluation.cost, evaluation.gradient)),
+                        )
+                    } else {
+                        let mut param = state.param.clone();
+                        param.scaled_add(stp, &d_v);
+                        (param, None)
+                    };
+                inside_box(
+                    param.as_float_slice(),
+                    problem.inner().lower().as_float_slice(),
+                    problem.inner().upper().as_float_slice(),
+                )
+                .then_some((param, evaluation))
+            } else {
+                None
+            };
+
+            let Some((param_new, evaluation)) = accepted else {
                 // Restart with cleared history when compact-form state exists.
                 state.gradient = Some(g_v.clone());
                 state.cost = Some(f_old);
@@ -666,16 +705,14 @@ where
                 } else {
                     return Ok((state, Some(TerminationReason::SolverFailed)));
                 }
-            }
+            };
 
-            let (f_new, g_new) =
-                if let Some(evaluation) = line_search_result.evaluation {
-                    state.param = evaluation.param;
-                    (evaluation.cost, evaluation.gradient)
-                } else {
-                    state.param.scaled_add(stp, &d_v);
-                    problem.cost_and_gradient(&state.param)?
-                };
+            let (f_new, g_new) = if let Some(evaluation) = evaluation {
+                evaluation
+            } else {
+                problem.cost_and_gradient(&param_new)?
+            };
+            state.param = param_new;
 
             // Limited-memory update with the Fortran curvature check.
             // s = stp · d  (in slice form, d holds the unscaled
@@ -1031,6 +1068,35 @@ fn feasible_step_cap<F: Scalar>(x: &[F], l: &[F], u: &[F], d: &[F]) -> F {
         }
     }
     stpmx
+}
+
+/// Account for rounding in the backend's actual trial-point arithmetic.
+fn safeguard_step_cap<V, F>(x: &V, l: &[F], u: &[F], d: &V, mut cap: F) -> F
+where
+    F: Scalar,
+    V: AsFloatSlice<F> + ScaledAdd<F> + Clone,
+{
+    let mut trial = x.clone();
+    // A rounded bound ratio or cancellation in x + (z - x) can put the
+    // endpoint just outside the box. Shrink the interval before any probe,
+    // preserving the line search's parameter/cost/gradient correspondence.
+    for _ in 0..8 {
+        trial.clone_from(x);
+        trial.scaled_add(cap, d);
+        if inside_box(trial.as_float_slice(), l, u) {
+            return cap;
+        }
+        cap = cap * (F::one() - F::epsilon());
+    }
+    F::zero()
+}
+
+fn inside_box<F: Scalar>(x: &[F], l: &[F], u: &[F]) -> bool {
+    x.len() == l.len()
+        && x.len() == u.len()
+        && x.iter()
+            .enumerate()
+            .all(|(i, &xi)| xi.is_finite() && l[i] <= xi && xi <= u[i])
 }
 
 /// Count entering and leaving variables and rebuild the free + active

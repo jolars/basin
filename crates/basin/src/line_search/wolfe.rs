@@ -1,6 +1,8 @@
 use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
-use crate::line_search::LineSearch;
+use crate::line_search::{
+    LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
+};
 
 /// Strong Wolfe line search via bracketing + bisection-based zoom.
 ///
@@ -169,6 +171,27 @@ where
         // other α: the curvature condition guard will detect the failure
         // and skip the H update if needed.
         Ok(alpha)
+    }
+
+    fn next_with_bounds(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+        bounds: LineSearchBounds<F>,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        let max = self.alpha_max.min(bounds.max);
+        if !(max.is_finite() && max > F::zero()) {
+            return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
+        }
+        let mut search = Self {
+            alpha_init: bounds.initial.min(max),
+            alpha_max: max,
+            ..*self
+        };
+        search.next_with_evaluation(problem, param, cost, gradient, direction)
     }
 }
 

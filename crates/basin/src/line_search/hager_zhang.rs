@@ -1,6 +1,8 @@
 use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
-use crate::line_search::{LineSearch, LineSearchOutcome};
+use crate::line_search::{
+    LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
+};
 
 /// Hager–Zhang line search with approximate-Wolfe safeguards.
 ///
@@ -26,6 +28,9 @@ use crate::line_search::{LineSearch, LineSearchOutcome};
 /// Wolfe step from being found, [`LineSearch::next_with_outcome`] reports
 /// [`LineSearchOutcome::Failed`]. The legacy [`LineSearch::next`] method maps
 /// that outcome to `0`.
+/// When invoked through [`LineSearch::next_with_bounds`], the search also
+/// accepts an Armijo-decreasing upper endpoint with a negative slope, since
+/// the constrained interval may contain no Wolfe step.
 ///
 /// The `η` parameter sometimes exposed alongside this line search belongs to
 /// the Hager–Zhang conjugate-gradient update, not to the line-search algorithm,
@@ -543,6 +548,7 @@ impl<F: Scalar> HagerZhang<F> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn search<P, V>(
         &self,
         problem: &mut Problem<P>,
@@ -550,6 +556,7 @@ impl<F: Scalar> HagerZhang<F> {
         cost: F,
         gradient: &V,
         direction: &V,
+        accept_boundary: bool,
     ) -> Result<LineSearchOutcome<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -594,7 +601,13 @@ impl<F: Scalar> HagerZhang<F> {
             else {
                 return Ok(LineSearchOutcome::Failed);
             };
-            if self.acceptable(trial, cost, dphi0, epsilon_k) {
+            if self.acceptable(trial, cost, dphi0, epsilon_k)
+                || (accept_boundary
+                    && alpha == self.step_max
+                    && trial.is_finite()
+                    && trial.phi <= cost + self.delta * alpha * dphi0
+                    && trial.dphi < zero)
+            {
                 return Ok(LineSearchOutcome::Step(alpha));
             }
 
@@ -662,7 +675,7 @@ where
         gradient: &V,
         direction: &V,
     ) -> Result<F, Self::Error> {
-        match self.search(problem, param, cost, gradient, direction)? {
+        match self.search(problem, param, cost, gradient, direction, false)? {
             LineSearchOutcome::Step(alpha) => Ok(alpha),
             LineSearchOutcome::Failed => Ok(F::zero()),
         }
@@ -676,7 +689,26 @@ where
         gradient: &V,
         direction: &V,
     ) -> Result<LineSearchOutcome<F>, Self::Error> {
-        self.search(problem, param, cost, gradient, direction)
+        self.search(problem, param, cost, gradient, direction, false)
+    }
+
+    fn next_with_bounds(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+        bounds: LineSearchBounds<F>,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        let search = Self {
+            alpha_init: bounds.initial,
+            step_max: self.step_max.min(bounds.max),
+            ..*self
+        };
+        search
+            .search(problem, param, cost, gradient, direction, true)
+            .map(LineSearchResult::new)
     }
 }
 

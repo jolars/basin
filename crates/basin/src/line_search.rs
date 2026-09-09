@@ -83,6 +83,45 @@ impl<V, F> LineSearchResult<V, F> {
     }
 }
 
+/// Per-call initial step and inclusive upper limit for a line search.
+///
+/// Every trial and selected step must lie in `[0, max]`. A search may impose
+/// a tighter configured limit and clamp `initial` to that limit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct LineSearchBounds<F: Scalar = f64> {
+    initial: F,
+    max: F,
+}
+
+impl<F: Scalar> LineSearchBounds<F> {
+    /// Construct bounds for one search.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless both values are finite and `0 < initial <= max`.
+    pub fn new(initial: F, max: F) -> Self {
+        assert!(
+            initial.is_finite()
+                && max.is_finite()
+                && F::zero() < initial
+                && initial <= max,
+            "step bounds must satisfy 0 < initial <= max and be finite"
+        );
+        Self { initial, max }
+    }
+
+    /// Caller-selected initial trial step.
+    pub fn initial(&self) -> F {
+        self.initial
+    }
+
+    /// Largest feasible step along the supplied direction.
+    pub fn max(&self) -> F {
+        self.max
+    }
+}
+
 /// Compute a step size `α` along a caller-supplied descent direction `d`.
 ///
 /// Convention: `direction` is a *descent* direction (`gᵀd < 0`); the caller
@@ -167,10 +206,41 @@ pub trait LineSearch<P, V, F = f64> {
         self.next_with_outcome(problem, param, cost, gradient, direction)
             .map(LineSearchResult::new)
     }
+
+    /// Search within a caller-supplied feasible step interval.
+    ///
+    /// Implementations must constrain **every evaluation**, including the
+    /// initial trial, and the selected step to `[0, bounds.max()]`. Use
+    /// `bounds.initial()` as the initial trial, clamped to any tighter configured
+    /// limits. Retained evaluations follow [`next_with_evaluation`](Self::next_with_evaluation)'s
+    /// consistency contract. Searches may accept sufficient decrease at the
+    /// upper limit when the curvature condition cannot hold inside the box.
+    ///
+    /// The default fails without evaluating the problem, so existing custom
+    /// searches remain source-compatible and cannot accidentally probe outside
+    /// a constrained solver's domain. Override this method to use a custom
+    /// search with [`Lbfgsb`](crate::Lbfgsb). Unconstrained callers continue to
+    /// use [`next_with_evaluation`](Self::next_with_evaluation).
+    fn next_with_bounds(
+        &mut self,
+        _problem: &mut Problem<P>,
+        _param: &V,
+        _cost: F,
+        _gradient: &V,
+        _direction: &V,
+        _bounds: LineSearchBounds<F>,
+    ) -> Result<LineSearchResult<V, F>, Self::Error>
+    where
+        F: Scalar,
+    {
+        Ok(LineSearchResult::new(LineSearchOutcome::Failed))
+    }
 }
 
 /// Constant step size: returns the wrapped `α` regardless of input.
-/// Useful when the caller already knows a good fixed step.
+/// Useful when the caller already knows a good fixed step. With
+/// [`LineSearch::next_with_bounds`], the fixed step is capped at the supplied
+/// maximum; the supplied initial step is unused.
 pub struct Constant<F = f64>(pub F);
 
 impl<F: Scalar> Constant<F> {
@@ -199,5 +269,22 @@ where
         _direction: &V,
     ) -> Result<F, Self::Error> {
         Ok(self.0)
+    }
+
+    fn next_with_bounds(
+        &mut self,
+        _problem: &mut Problem<P>,
+        _param: &V,
+        _cost: F,
+        _gradient: &V,
+        _direction: &V,
+        bounds: LineSearchBounds<F>,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        let outcome = if self.0.is_finite() && self.0 > F::zero() {
+            LineSearchOutcome::Step(self.0.min(bounds.max))
+        } else {
+            LineSearchOutcome::Failed
+        };
+        Ok(LineSearchResult::new(outcome))
     }
 }

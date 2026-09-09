@@ -1,6 +1,8 @@
 use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Problem};
-use crate::line_search::LineSearch;
+use crate::line_search::{
+    LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
+};
 
 /// Backtracking line search satisfying the Armijo condition only
 /// (Nocedal & Wright §3.1). Halves the trial step until
@@ -89,6 +91,25 @@ where
             alpha = alpha * self.rho;
         }
         Ok(alpha)
+    }
+
+    fn next_with_bounds(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+        bounds: LineSearchBounds<F>,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        if !(F::zero() < self.rho && self.rho < F::one()) {
+            return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
+        }
+        let mut search = Self {
+            alpha_init: bounds.initial,
+            ..*self
+        };
+        search.next_with_evaluation(problem, param, cost, gradient, direction)
     }
 }
 

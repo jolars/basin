@@ -1,6 +1,8 @@
 use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
-use crate::line_search::{LineSearch, LineSearchOutcome, LineSearchResult};
+use crate::line_search::{
+    LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
+};
 
 /// Moré–Thuente line search: port of MINPACK-2's `dcsrch` + `dcstep`.
 ///
@@ -55,8 +57,8 @@ pub struct MoreThuente<F = f64> {
     /// Hard lower bound on the step. Default `0.0`.
     pub stpmin: F,
     /// Hard upper bound on the step. Default `1e10` (Fortran `big`).
-    /// L-BFGS-B overrides this per-iteration via direct field
-    /// mutation, with `stpmax = max α s.t. x + α·d ∈ [l, u]`.
+    /// [`LineSearch::next_with_bounds`] intersects this with the caller's
+    /// feasible step limit for each invocation.
     pub stpmax: F,
     /// Safety cap on function evaluations. Default `20`. The Moré–
     /// Thuente warning conditions normally terminate well before
@@ -355,6 +357,27 @@ where
         direction: &V,
     ) -> Result<LineSearchResult<V, F>, Self::Error> {
         self.search(problem, param, cost, gradient, direction)
+    }
+
+    fn next_with_bounds(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+        bounds: LineSearchBounds<F>,
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+        let max = self.stpmax.min(bounds.max);
+        if !(max.is_finite() && max > F::zero() && self.stpmin <= max) {
+            return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
+        }
+        let mut search = Self {
+            alpha_init: bounds.initial.max(self.stpmin).min(max),
+            stpmax: max,
+            ..*self
+        };
+        search.search(problem, param, cost, gradient, direction)
     }
 }
 
