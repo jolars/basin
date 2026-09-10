@@ -37,7 +37,7 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.87.0
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.87.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - uses: Swatinem/rust-cache@v2
         with:
           key: msrv
