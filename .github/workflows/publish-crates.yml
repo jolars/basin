@@ -25,7 +25,10 @@ jobs:
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
 
       - run: cargo publish -p basin --locked
         env:
