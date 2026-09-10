@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.10.0](https://github.com/jolars/basin/compare/v1.9.0...v1.10.0) (2026-09-10)
+
+### Features
+- **lm:** add opt-in pivoted QR solves ([`bddb3f3`](https://github.com/jolars/basin/commit/bddb3f3a9a7c38dd589ef29c63deedf73d1eefda))
+- **skills:** add perf investigation skill ([`d11d7e9`](https://github.com/jolars/basin/commit/d11d7e9122d06b403fd5b075cee8c2c73528554a))
+
+### Bug Fixes
+- **lbfgsb:** enforce line-search box constraints ([`47d4c52`](https://github.com/jolars/basin/commit/47d4c5203a9fd3dd625926f9dc79f33874344ae9)), fixes [#90](https://github.com/jolars/basin/issues/90)
+
+### Performance Improvements
+- **cobyla:** specialize small LPs against PRIMA ([`525e1f4`](https://github.com/jolars/basin/commit/525e1f46478a1a91872e196d8b821deb6760dfc8))
+- **cobyla:** optimize kernels and parameter reuse ([`30ad464`](https://github.com/jolars/basin/commit/30ad464a5bf7626eaf9be6e31461ceb01d066a18))
+- **cobyla:** reuse driver workspaces ([`01e09eb`](https://github.com/jolars/basin/commit/01e09ebc2b545c6d2648f4946dc6438d27b4d152))
+
 ## [1.9.0](https://github.com/jolars/basin/compare/v1.8.0...v1.9.0) (2026-09-08)
 
 ### Features
