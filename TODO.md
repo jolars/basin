@@ -4,6 +4,68 @@ Ordered by recommended sequence.
 
 ## General design
 
+- [ ] **Investigate the Nelder-Mead performance gap in lme-rs.** The optional
+  Basin backend gives essentially the same numerical results as Argmin on
+  eleven of twelve existing benchmark cases, but the September 10, 2026 rerun
+  shows slower fits on the larger vector-search cases. First reproduce the
+  comparison with Basin 1.9.0, then check whether current Basin closes the gap.
+
+  **Evidence.** The sibling `../lme-rs` checkout has the implementation and
+  results on `feat/basin-optimizer`, at commit `076a4d6`. See the
+  [full report](../lme-rs/benchmarks/basin-optimizer-2026-09-10.md),
+  [raw samples, CPU records, and source hashes](../lme-rs/benchmarks/basin-optimizer-2026-09-10.json),
+  and [adapter](../lme-rs/src/optimizer/basin_backend.rs). These are local
+  checkout links. The integration was requested in
+  [lme-rs issue #23](https://github.com/x4g4p3x/lme-rs/issues/23).
+
+  **Comparison.** Basin 1.9.0 with `default-features = false` and
+  `ndarray_v0_16`, versus Argmin 0.11.0. The adapter uses
+  `NelderMead::new().projected()` with `BasicSimplexState<Array1<f64>>`,
+  coordinate steps of `0.2`, and a custom stopping criterion matching Argmin:
+  sample standard deviation of simplex costs strictly below the requested
+  tolerance (default `1e-6`). Iteration budgets and the specialized scalar and
+  grid searches are preserved. This comparison does not use Basin's default
+  simplex tolerance.
+
+  | Case | Argmin cold / prepared (ms) | Basin cold / prepared (ms) | Basin/Argmin cold / prepared | Deviance evaluations per backend |
+  | --- | ---: | ---: | ---: | ---: |
+  | `crossed_20k` | 26.165 / 24.045 | 29.732 / 27.115 | 1.136 / 1.128 | 103 |
+  | `large_random_slopes_100k` | 55.899 / 45.573 | 60.522 / 46.951 | 1.083 / 1.030 | 162 |
+  | `sleepstudy_reml` | 0.520 / 0.524 | 0.470 / 0.479 | 0.903 / 0.915 | 124 |
+
+  Cold fits include preparation; prepared fits reuse the model matrices.
+  Deviance counts come from separate instrumented fits and include post-fit
+  evaluations. For crossed 20k, all four paired process medians were slower
+  with Basin: cold ratios ranged from 1.047 to 1.160, and prepared ratios from
+  1.057 to 1.139. Smaller cases have mixed results, including the faster
+  Sleepstudy result above. Matching evaluation counts do not by themselves
+  identify solver overhead as the cause.
+
+  **Method and caveats.** Intel Core Ultra 7 155U, NixOS, rustc 1.98.1;
+  release builds, identical fixtures, one BLAS thread, and two Rayon threads.
+  Both backends were pinned to CPUs `0,2`, one logical CPU from each physical
+  performance core. Two A--B--B--A blocks used three warmups and eleven fits
+  per process, giving 44 samples per backend and case. CPU use averaged 2.4%
+  before and 2.5% after the run. Unchanged scalar controls still differed by
+  up to 10%, so retain them when separating optimizer cost from timing noise.
+  Exclude `nested_10k` from accuracy-matched comparisons until the shared
+  lme-rs deviance discrepancy in
+  [issue #25](https://github.com/x4g4p3x/lme-rs/issues/25) is fixed. It reproduces
+  without either optimizer and is not evidence of a Basin regression.
+
+  **Investigation.** Use the [lme-rs harness commands](../lme-rs/docs/BASIN.md#validation-and-comparison)
+  with `MKL_NUM_THREADS=1`, `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, and
+  `RAYON_NUM_THREADS=2`; apply `taskset --cpu-list 0,2` on this machine. Build
+  both backends before timing and preserve the balanced order. Keep
+  `LME_PERF_DIAG` unset for timing; collect profiles and evaluation counts
+  separately. Focus first on crossed 20k and large random slopes. Compare
+  the complete adapters, then isolate projection, stopping checks, executor
+  work, simplex updates, allocations, and state copies in `competitor-bench`.
+  Determine which layer owns the gap and retain a focused benchmark for it.
+  Any improvement must preserve numerical tolerances, boundary and singular
+  fits, callback errors, iteration budgets, and unsuccessful-convergence
+  reporting.
+
 - [x] **Investigate the COBYLA performance gap observed during the
   GlobalSearch-rs migration.** This item records the complete initial
   observation; no external discussion is needed to interpret or reproduce it.
@@ -105,7 +167,14 @@ Ordered by recommended sequence.
   must not silently discard constraint blocks. Preserve the existing
   `NonlinearInequalityConstraints` API, all four backends, and wasm support.
 
-## Deferred design
+## Basin 2.0
+
+- [ ] **Make the `problems` feature opt-in.** Set `default = []` while retaining
+  `problems = []` for benchmarks, examples, and other corpus consumers. Keep
+  the existing default through Basin 1.x: removing it breaks downstream imports
+  that rely on implicit activation. Update documentation and ensure tests,
+  examples, benchmarks, and the WASM visualizer explicitly enable `problems`
+  wherever they use the corpus.
 
 - [ ] **Reconsider exact evaluation budgets for Basin 2.0.** In Basin 1.x,
   `MaxCostEvals` remains a boundary-checked stopping criterion: `Solver::init`
@@ -116,6 +185,8 @@ Ordered by recommended sequence.
   and defines the outcome when the budget cannot complete initialization. Cover
   COBYLA's `n + 1`-point initialization and zero-to-two-evaluation steps in any
   resulting contract and tests.
+
+## Deferred design
 
 - [ ] **Revisit a shared constraint-violation capability (tenet 3).** COBYLA and
   constrained MADS now provide multiple consumers, but they use different
