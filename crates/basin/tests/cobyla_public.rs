@@ -383,3 +383,47 @@ fn backend_generic_faer() {
 
 #[path = "support/backend_aliases.rs"]
 mod backend_aliases;
+
+#[test]
+fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
+    use basin::{Problem, Solver, State};
+    use std::convert::Infallible;
+
+    struct Sphere(usize);
+    impl CostFunction for Sphere {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = Infallible;
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
+            Ok(x.iter().map(|v| v * v).sum())
+        }
+    }
+    impl NonlinearInequalityConstraints for Sphere {
+        fn num_constraints(&self) -> usize {
+            self.0
+        }
+        fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+            Ok((0..self.0).map(|i| x[i % x.len()] - 4.0).collect())
+        }
+    }
+
+    let mut solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6);
+    for (n, m) in [(2, 3), (5, 0), (1, 2), (3, 1)] {
+        let mut problem = Problem::new(Sphere(m));
+        let mut state = solver
+            .init(&mut problem, CobylaState::new(vec![1.0; n]))
+            .unwrap();
+        state.update_best();
+        let snapshot = state.best_param().clone();
+        let snapshot_cost = state.best_cost();
+        // Solver callbacks reuse the current parameter buffer before the
+        // executor mirrors the newly selected incumbent into the best snapshot.
+        let (mut state, _) = solver.next_iter(&mut problem, state).unwrap();
+        assert_eq!(state.best_param(), &snapshot);
+        assert_eq!(state.best_cost(), snapshot_cost);
+        assert_eq!(state.param().len(), n);
+        state.update_best();
+        assert_eq!(state.best_param(), state.param());
+        assert_eq!(state.best_cost(), state.cost());
+    }
+}

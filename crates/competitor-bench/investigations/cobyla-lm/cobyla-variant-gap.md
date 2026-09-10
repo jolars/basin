@@ -1,5 +1,8 @@
 # Does following PRIMA explain the remaining COBYLA gap?
 
+Follow-up: [reusing trial buffers](cobyla-trial-buffers.md) measures an allocation
+reduction on a new Intel machine while preserving the numerical traces below.
+
 PRIMA-related work explains part of the remaining gap, but these measurements
 **do not establish an unavoidable runtime penalty of following PRIMA**. Basin
 performs more inverse validations and, on the spheres, more LP solves. It also

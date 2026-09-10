@@ -160,14 +160,17 @@ pub(crate) fn geostep<F: Scalar>(
     n: usize,
     m: usize,
     model: &mut ModelWork<F>,
-) -> Vec<F> {
+    d: &mut [F],
+) {
     let zero = F::zero();
     let row_norm: F = (0..n)
         .map(|l| simi[jdrop + l * n] * simi[jdrop + l * n])
         .sum();
     let vsigj = F::one() / row_norm.sqrt();
     let scale = factor_gamma * delta * vsigj;
-    let mut d: Vec<F> = (0..n).map(|l| scale * simi[jdrop + l * n]).collect();
+    for l in 0..n {
+        d[l] = scale * simi[jdrop + l * n];
+    }
 
     // Choose the sign by the linear merit model.
     model.build(fval, conmat, simi);
@@ -189,7 +192,6 @@ pub(crate) fn geostep<F: Scalar>(
             *v = -*v;
         }
     }
-    d
 }
 
 fn argmax_nonnan<F: Scalar>(v: impl IntoIterator<Item = F>) -> Option<usize> {

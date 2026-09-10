@@ -118,6 +118,9 @@ pub(crate) struct CobylaWork<F = f64> {
     xfilt: Vec<F>,
     ffilt: Vec<F>,
     cfilt: Vec<F>,
+    trial_x: Vec<F>,
+    trial_d: Vec<F>,
+    geometry_d: Vec<F>,
 }
 
 impl<F: Scalar> CobylaWork<F> {
@@ -193,6 +196,9 @@ impl<F: Scalar> CobylaWork<F> {
             xfilt: Vec::new(),
             ffilt: Vec::new(),
             cfilt: Vec::new(),
+            trial_x: vec![zero; n],
+            trial_d: vec![zero; n],
+            geometry_d: vec![zero; n],
         };
 
         // Seed the filter from the initial simplex vertices.
@@ -217,13 +223,25 @@ impl<F: Scalar> CobylaWork<F> {
         self.rho
     }
 
-    fn pole(&self) -> &[F] {
-        &self.sim[self.n * self.n..]
-    }
-
     fn save_to_filter(&mut self, x: &[F], f: F, cstrv: F) {
         savefilt(
             x,
+            f,
+            cstrv,
+            self.n,
+            self.ctol,
+            self.cweight,
+            self.maxfilt,
+            &mut self.nfilt,
+            &mut self.xfilt,
+            &mut self.ffilt,
+            &mut self.cfilt,
+        );
+    }
+
+    fn save_trial_to_filter(&mut self, f: F, cstrv: F) {
+        savefilt(
+            &self.trial_x,
             f,
             cstrv,
             self.n,
@@ -322,15 +340,17 @@ impl<F: Scalar> CobylaWork<F> {
         }
         let g = &self.penalty.model.g;
         let a = &self.penalty.model.a;
-        let d = self.penalty.d.clone();
-        let dnorm = self.delta.min(dot(&d, &d).sqrt());
+        // Preserve the pending trust-region step while geometry work uses its
+        // own direction, including the final short-step evaluation.
+        self.trial_d.copy_from_slice(&self.penalty.d);
+        let dnorm = self.delta.min(dot(&self.trial_d, &self.trial_d).sqrt());
         let shortd = dnorm < F::from_f64(0.1).unwrap() * self.rho;
 
-        let preref = -dot(&d, g);
+        let preref = -dot(&self.trial_d, g);
         // prerec = cval[pole] − max(0, maxᵢ(conmat[i,pole] + (Aᵀd)[i])).
         let mut lin_cv = zero;
         for i in 0..m {
-            let adi: F = (0..n).map(|l| d[l] * a[l + i * n]).sum();
+            let adi: F = (0..n).map(|l| self.trial_d[l] * a[l + i * n]).sum();
             lin_cv = lin_cv.max(self.conmat[i + n * m] + adi);
         }
         lin_cv = lin_cv.max(zero);
@@ -351,10 +371,11 @@ impl<F: Scalar> CobylaWork<F> {
                 self.delta = self.rho;
             }
         } else {
-            let pole = self.pole();
-            let x: Vec<F> = (0..n).map(|r| pole[r] + d[r]).collect();
-            let (f, constr, cstrv) = Self::eval_moderated(eval, &x)?;
-            self.save_to_filter(&x, f, cstrv);
+            for r in 0..n {
+                self.trial_x[r] = self.sim[r + n * n] + self.trial_d[r];
+            }
+            let (f, constr, cstrv) = Self::eval_moderated(eval, &self.trial_x)?;
+            self.save_trial_to_filter(f, cstrv);
 
             let actrem = (self.fval[n] + self.cpen * self.cval[n])
                 - (f + self.cpen * cstrv);
@@ -374,7 +395,7 @@ impl<F: Scalar> CobylaWork<F> {
             let ximproved = actrem > zero;
             jdrop_tr = setdrop_tr(
                 ximproved,
-                &d,
+                &self.trial_d,
                 self.delta,
                 self.rho,
                 &self.sim,
@@ -387,7 +408,7 @@ impl<F: Scalar> CobylaWork<F> {
                 &constr,
                 self.cpen,
                 cstrv,
-                &d,
+                &self.trial_d,
                 f,
                 &mut self.conmat,
                 &mut self.cval,
@@ -430,7 +451,7 @@ impl<F: Scalar> CobylaWork<F> {
             if jdrop_geo == NO_DROP {
                 return Ok(Transition::Failed);
             }
-            let d = geostep(
+            geostep(
                 jdrop_geo,
                 &self.conmat,
                 self.cpen,
@@ -441,17 +462,19 @@ impl<F: Scalar> CobylaWork<F> {
                 n,
                 m,
                 &mut self.penalty.model,
+                &mut self.geometry_d,
             );
-            let pole = self.pole();
-            let x: Vec<F> = (0..n).map(|r| pole[r] + d[r]).collect();
-            let (f, constr, cstrv) = Self::eval_moderated(eval, &x)?;
-            self.save_to_filter(&x, f, cstrv);
+            for r in 0..n {
+                self.trial_x[r] = self.sim[r + n * n] + self.geometry_d[r];
+            }
+            let (f, constr, cstrv) = Self::eval_moderated(eval, &self.trial_x)?;
+            self.save_trial_to_filter(f, cstrv);
             if !updatexfc(
                 jdrop_geo,
                 &constr,
                 self.cpen,
                 cstrv,
-                &d,
+                &self.geometry_d,
                 f,
                 &mut self.conmat,
                 &mut self.cval,
@@ -471,10 +494,12 @@ impl<F: Scalar> CobylaWork<F> {
                 // Converged. Refine with the pending short step if it was never
                 // evaluated (PRIMA's end-of-run trust-region tail).
                 if shortd {
-                    let pole = self.pole();
-                    let x: Vec<F> = (0..n).map(|r| pole[r] + d[r]).collect();
-                    let (f, _, cstrv) = Self::eval_moderated(eval, &x)?;
-                    self.save_to_filter(&x, f, cstrv);
+                    for r in 0..n {
+                        self.trial_x[r] = self.sim[r + n * n] + self.trial_d[r];
+                    }
+                    let (f, _, cstrv) =
+                        Self::eval_moderated(eval, &self.trial_x)?;
+                    self.save_trial_to_filter(f, cstrv);
                 }
                 return Ok(Transition::Converged);
             }
