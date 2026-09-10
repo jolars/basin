@@ -4,98 +4,57 @@ Ordered by recommended sequence.
 
 ## General design
 
-- [ ] **Investigate the Nelder-Mead performance gap in lme-rs.** The optional
+- [x] **Investigate the Nelder-Mead performance gap in lme-rs.** The optional
   Basin backend gives essentially the same numerical results as Argmin on
-  eleven of twelve existing benchmark cases, but the September 10, 2026 rerun
-  shows slower fits on the larger vector-search cases. First reproduce the
-  comparison with Basin 1.9.0, then check whether current Basin closes the gap.
+  eleven of twelve existing benchmark cases, but the September 10, 2026
+  rerun shows slower fits on the larger vector-search cases. First reproduce
+  the comparison with Basin 1.9.0, then check whether current Basin closes
+  the gap.
 
-  **Evidence.** The sibling `../lme-rs` checkout has the implementation and
-  results on `feat/basin-optimizer`, at commit `076a4d6`. See the
-  [full report](../lme-rs/benchmarks/basin-optimizer-2026-09-10.md),
-  [raw samples, CPU records, and source hashes](../lme-rs/benchmarks/basin-optimizer-2026-09-10.json),
-  and [adapter](../lme-rs/src/optimizer/basin_backend.rs). These are local
-  checkout links. The integration was requested in
-  [lme-rs issue #23](https://github.com/x4g4p3x/lme-rs/issues/23).
-
-  **Comparison.** Basin 1.9.0 with `default-features = false` and
-  `ndarray_v0_16`, versus Argmin 0.11.0. The adapter uses
-  `NelderMead::new().projected()` with `BasicSimplexState<Array1<f64>>`,
-  coordinate steps of `0.2`, and a custom stopping criterion matching Argmin:
-  sample standard deviation of simplex costs strictly below the requested
-  tolerance (default `1e-6`). Iteration budgets and the specialized scalar and
-  grid searches are preserved. This comparison does not use Basin's default
-  simplex tolerance.
-
-  | Case | Argmin cold / prepared (ms) | Basin cold / prepared (ms) | Basin/Argmin cold / prepared | Deviance evaluations per backend |
-  | --- | ---: | ---: | ---: | ---: |
-  | `crossed_20k` | 26.165 / 24.045 | 29.732 / 27.115 | 1.136 / 1.128 | 103 |
-  | `large_random_slopes_100k` | 55.899 / 45.573 | 60.522 / 46.951 | 1.083 / 1.030 | 162 |
-  | `sleepstudy_reml` | 0.520 / 0.524 | 0.470 / 0.479 | 0.903 / 0.915 | 124 |
-
-  Cold fits include preparation; prepared fits reuse the model matrices.
-  Deviance counts come from separate instrumented fits and include post-fit
-  evaluations. For crossed 20k, all four paired process medians were slower
-  with Basin: cold ratios ranged from 1.047 to 1.160, and prepared ratios from
-  1.057 to 1.139. Smaller cases have mixed results, including the faster
-  Sleepstudy result above. Matching evaluation counts do not by themselves
-  identify solver overhead as the cause.
-
-  **Method and caveats.** Intel Core Ultra 7 155U, NixOS, rustc 1.98.1;
-  release builds, identical fixtures, one BLAS thread, and two Rayon threads.
-  Both backends were pinned to CPUs `0,2`, one logical CPU from each physical
-  performance core. Two A--B--B--A blocks used three warmups and eleven fits
-  per process, giving 44 samples per backend and case. CPU use averaged 2.4%
-  before and 2.5% after the run. Unchanged scalar controls still differed by
-  up to 10%, so retain them when separating optimizer cost from timing noise.
-  Exclude `nested_10k` from accuracy-matched comparisons until the shared
-  lme-rs deviance discrepancy in
-  [issue #25](https://github.com/x4g4p3x/lme-rs/issues/25) is fixed. It reproduces
-  without either optimizer and is not evidence of a Basin regression.
-
-  **Investigation.** Use the [lme-rs harness commands](../lme-rs/docs/BASIN.md#validation-and-comparison)
-  with `MKL_NUM_THREADS=1`, `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, and
-  `RAYON_NUM_THREADS=2`; apply `taskset --cpu-list 0,2` on this machine. Build
-  both backends before timing and preserve the balanced order. Keep
-  `LME_PERF_DIAG` unset for timing; collect profiles and evaluation counts
-  separately. Focus first on crossed 20k and large random slopes. Compare
-  the complete adapters, then isolate projection, stopping checks, executor
-  work, simplex updates, allocations, and state copies in `competitor-bench`.
-  Determine which layer owns the gap and retain a focused benchmark for it.
-  Any improvement must preserve numerical tolerances, boundary and singular
-  fits, callback errors, iteration budgets, and unsuccessful-convergence
-  reporting.
+  **Investigation result.** The [reproducer and
+  findings](crates/competitor-bench/investigations/lme-nelder-mead/README.md)
+  compare the original binaries, fresh Basin 1.9.0 and current builds, recorded
+  callback replays, allocations, and profiles. Current Basin does not materially
+  change the fit comparison. Its adapter is 2.6–2.8 times faster than Argmin in
+  the replay, while over 99.8% of optimization time on the large cases is inside
+  the shared lme-rs deviance callback. The fresh crossed prepared-fit gap is
+  about 6%, with substantial variation across reruns. The next targets are
+  lme-rs's packed Cholesky and repeated sparse covariance construction; the
+  residual build/layout and timing effects remain unresolved. No production
+  solver change was justified.
 
 - [x] **Investigate the COBYLA performance gap observed during the
   GlobalSearch-rs migration.** This item records the complete initial
-  observation; no external discussion is needed to interpret or reproduce it.
+  observation; no external discussion is needed to interpret or reproduce
+  it.
 
-  **Investigation:** the [reproducer and findings](crates/competitor-bench/investigations/cobyla-lm/README.md)
-  locate the main overhead in COBYLA's numerical driver, including scratch
-  allocations, inverse checks, and repeated model construction. The
-  [implemented optimization and results](crates/competitor-bench/investigations/cobyla-lm/cobyla-optimization.md)
+  **Investigation:** the [reproducer and
+  findings](crates/competitor-bench/investigations/cobyla-lm/README.md) locate
+  the main overhead in COBYLA's numerical driver, including scratch allocations,
+  inverse checks, and repeated model construction. The [implemented optimization
+  and
+  results](crates/competitor-bench/investigations/cobyla-lm/cobyla-optimization.md)
   retain numerical traces, callback-error and budget coverage, a driver
   benchmark, and allocation ceilings. The driver is 1.9–2.8 times faster on
-  these cases, with 94–97% fewer allocation requests. A smaller performance
-  gap to `cobyla` 1.0.2 remains.
+  these cases, with 94–97% fewer allocation requests. A smaller performance gap
+  to `cobyla` 1.0.2 remains.
 
   **Implementations.** The comparison used GlobalSearch-rs commit
   `4bf3eaa6b3677e0a2cc18f61f81603612db66b13`, whose COBYLA adapter uses Basin
-  1.8.0, and its direct parent
-  `1f44818e396567d22cb7137c267c66da2e19f334`, whose otherwise equivalent
-  adapter uses `cobyla` 1.0.2. Both revisions were compiled with Rust 1.88.0
-  using `cargo build --release --no-default-features`. Measurements ran on an
-  Intel Core Ultra 7 155U under NixOS. Hyperfine 1.20.0 performed three
-  process-level warmups followed by 15 timed runs. Each process also performed
-  16 untimed solves before its measured loop. Objective-evaluation tracking
-  was enabled for every solve.
+  1.8.0, and its direct parent `1f44818e396567d22cb7137c267c66da2e19f334`, whose
+  otherwise equivalent adapter uses `cobyla` 1.0.2. Both revisions were compiled
+  with Rust 1.88.0 using `cargo build --release --no-default-features`.
+  Measurements ran on an Intel Core Ultra 7 155U under NixOS. Hyperfine 1.20.0
+  performed three process-level warmups followed by 15 timed runs. Each process
+  also performed 16 untimed solves before its measured loop.
+  Objective-evaluation tracking was enabled for every solve.
 
   **Problems and solver settings.** The descriptions below use GlobalSearch's
-  nonnegative-is-feasible convention. Its Basin adapter negates user
-  constraints into Basin's nonpositive-is-feasible convention. At the recorded
-  migration commit, the adapter also floors the final radius at
-  `sqrt(f64::EPSILON) * initial_step_size`, even with zero parameter
-  tolerances. For these cases, that floor is approximately `7.45e-9`.
+  nonnegative-is-feasible convention. Its Basin adapter negates user constraints
+  into Basin's nonpositive-is-feasible convention. At the recorded migration
+  commit, the adapter also floors the final radius at
+  `sqrt(f64::EPSILON) * initial_step_size`, even with zero parameter tolerances.
+  For these cases, that floor is approximately `7.45e-9`.
 
   1. Six-hump camel used
      `f(x,y) = (4 - 2.1*x^2 + x^4/3)*x^2 + x*y + (-4 + 4*y^2)*y^2`, bounds
@@ -103,29 +62,28 @@ Ordered by recommended sequence.
      objective budget of 50, and zero function and parameter tolerances. Each
      timed process performed 5,000 solves.
   2. The 10-dimensional sphere used `f(x) = sum(x_i^2)`, bounds `[-5,5]` for
-     every coordinate, start
-     `(2.5,-2,1.5,-1,0.5,2.25,-1.75,1.25,-0.75,0.25)`, initial radius `0.5`,
-     an objective budget of 200, and zero function and parameter tolerances.
-     Each timed process performed 400 solves.
-  3. The constrained quadratic used
-     `f(x,y) = (x - 1)^2 + (y - 1)^2`, bounds `[0,2]` for both coordinates,
-     start `(0.5,0.5)`, constraint `1.5 - x - y >= 0`, initial radius `0.5`, an
-     objective budget of 100, and zero function and parameter tolerances. Each
-     timed process performed 3,000 solves.
+     every coordinate, start `(2.5,-2,1.5,-1,0.5,2.25,-1.75,1.25,-0.75,0.25)`,
+     initial radius `0.5`, an objective budget of 200, and zero function and
+     parameter tolerances. Each timed process performed 400 solves.
+  3. The constrained quadratic used `f(x,y) = (x - 1)^2 + (y - 1)^2`, bounds
+     `[0,2]` for both coordinates, start `(0.5,0.5)`, constraint
+     `1.5 - x - y >= 0`, initial radius `0.5`, an objective budget of 100, and
+     zero function and parameter tolerances. Each timed process performed 3,000
+     solves.
 
   **Results.** Times are the mean wall time per local solve; the parenthesized
   number is the mean objective-evaluation count per solve.
 
-  | Problem | `cobyla` 1.0.2 | Basin 1.8.0 | Slowdown | Final objective: old / Basin |
-  |---|---:|---:|---:|---:|
-  | Six-hump camel | 10.3 us (50) | 84.7 us (50) | 8.23x | -1.0316284534 / -1.0316284527 |
-  | 10D sphere | 620 us (200) | 1.97 ms (200) | 3.18x | 9.65e-7 / 5.73e-9 |
-  | Constrained quadratic | 35.9 us (100) | 157 us (61) | 4.39x | 0.1250000000 / 0.1249999974 |
+  | Problem               | `cobyla` 1.0.2 | Basin 1.8.0   | Slowdown | Final objective: old / Basin  |
+  | --------------------- | -------------: | ------------: | -------: | ----------------------------: |
+  | Six-hump camel        |   10.3 us (50) |  84.7 us (50) |    8.23x | -1.0316284534 / -1.0316284527 |
+  | 10D sphere            |   620 us (200) | 1.97 ms (200) |    3.18x |             9.65e-7 / 5.73e-9 |
+  | Constrained quadratic |  35.9 us (100) |   157 us (61) |    4.39x |   0.1250000000 / 0.1249999974 |
 
   A second six-hump measurement used the public default settings: budget 300,
   initial radius `0.5`, relative and absolute function tolerances `1e-6` and
-  `1e-8`, respectively, and zero parameter tolerances. The old adapter took
-  10.9 us and 52 evaluations per solve; the Basin adapter took 88.3 us and 50
+  `1e-8`, respectively, and zero parameter tolerances. The old adapter took 10.9
+  us and 52 evaluations per solve; the Basin adapter took 88.3 us and 50
   evaluations, an 8.11x slowdown, with the same final objectives as the
   fixed-budget row.
 
@@ -143,9 +101,11 @@ Ordered by recommended sequence.
   bounds, error propagation, or strict callback-budget handling.
 
 - [x] **Add a pivoted-QR solve path for Levenberg-Marquardt.** Implemented
-  `.with_pivoted_qr()` and `LevenbergMarquardtQr` with reusable column-pivoted
-  QR, explicit rank-loss handling, and all four dense backends. Cholesky
-  remains the default. See the [implementation and production comparisons](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md)
+  `.with_pivoted_qr()` and `LevenbergMarquardtQr` with reusable
+  column-pivoted QR, explicit rank-loss handling, and all four dense
+  backends. Cholesky remains the default. See the [implementation and
+  production
+  comparisons](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md)
   for conditioning, raw SVI, SSVI, backend coverage, and sparse limitations.
 
 - [ ] **Investigate LM damping selection and relative stopping tests.**
@@ -155,9 +115,10 @@ Ordered by recommended sequence.
   trust-radius parameter selection independently of factorization. Validate
   calibration Jacobians against their actual residual formulas, and account
   for parameter nonidentifiability before drawing migration conclusions.
-  Retain the [production probes](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md)
-  and compare convergence, termination, parameter recovery, and callbacks
-  from all retained starts.
+  Retain the [production
+  probes](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md) and
+  compare convergence, termination, parameter recovery, and callbacks from
+  all retained starts.
 
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional
@@ -171,20 +132,21 @@ Ordered by recommended sequence.
 
 - [ ] **Make the `problems` feature opt-in.** Set `default = []` while retaining
   `problems = []` for benchmarks, examples, and other corpus consumers. Keep
-  the existing default through Basin 1.x: removing it breaks downstream imports
-  that rely on implicit activation. Update documentation and ensure tests,
-  examples, benchmarks, and the WASM visualizer explicitly enable `problems`
-  wherever they use the corpus.
+  the existing default through Basin 1.x: removing it breaks downstream
+  imports that rely on implicit activation. Update documentation and ensure
+  tests, examples, benchmarks, and the WASM visualizer explicitly enable
+  `problems` wherever they use the corpus.
 
 - [ ] **Reconsider exact evaluation budgets for Basin 2.0.** In Basin 1.x,
-  `MaxCostEvals` remains a boundary-checked stopping criterion: `Solver::init`
-  and an active `Solver::next_iter` finish before the executor checks it, so
-  initialization and batched iterations may exceed the threshold. A future
-  hard-cap API would need executor/problem-level control flow that prevents
-  callbacks after exhaustion, handles batch reservation and composed problems,
-  and defines the outcome when the budget cannot complete initialization. Cover
-  COBYLA's `n + 1`-point initialization and zero-to-two-evaluation steps in any
-  resulting contract and tests.
+  `MaxCostEvals` remains a boundary-checked stopping criterion:
+  `Solver::init` and an active `Solver::next_iter` finish before the
+  executor checks it, so initialization and batched iterations may exceed
+  the threshold. A future hard-cap API would need executor/problem-level
+  control flow that prevents callbacks after exhaustion, handles batch
+  reservation and composed problems, and defines the outcome when the budget
+  cannot complete initialization. Cover COBYLA's `n + 1`-point
+  initialization and zero-to-two-evaluation steps in any resulting contract
+  and tests.
 
 ## Deferred design
 
@@ -228,8 +190,8 @@ The audit identified four principal compatibility gaps; all are now closed:
 1. **Reliable checkpoint/resume for stochastic and population solvers.** Exact
    solver-aware continuation is tested for simulated annealing, DE, SSGA,
    CMA-ES, basin-hopping, and PSO; PSO also supports state-only exact resume.
-2. **Particle swarm optimization.** `GlobalBestPso` supplies the bounded,
-   seeded global-best route needed by the audited PSO consumers.
+2. **Particle swarm optimization.** `GlobalBestPso` supplies the bounded, seeded
+   global-best route needed by the audited PSO consumers.
 3. **Brent root finding.** `BrentRoot` directly solves a bracketed scalar
    equation while preserving the signed value, bracket, and typed callback
    errors outside the optimization `Executor` model.
@@ -237,8 +199,8 @@ The audit identified four principal compatibility gaps; all are now closed:
    GlobalSearch-rs, including its Ackley example with unbounded L-BFGS.
 
 The backend matrix and cancellation API are also complete. The remaining
-pre-outreach work is migration polish: finish the checkpoint documentation,
-land a proof-of-concept migration, and publish reproducible benchmark methods.
+pre-outreach work is migration polish: finish the checkpoint documentation, land
+a proof-of-concept migration, and publish reproducible benchmark methods.
 
 ### Backend compatibility
 
@@ -436,18 +398,16 @@ they are not represented as modes of the global-best update.
 `BrentRoot<F>` combines bisection, secant steps, and inverse quadratic
 interpolation behind a direct fallible-closure API. It deliberately remains
 outside the optimization `Solver`/`State`/`Executor` path, where the signed
-function value and sign-changing bracket would otherwise be misrepresented as
-an objective cost and box constraint. `RootResult` reports the signed value,
-final bracket, iterations, evaluations, and clean termination status;
-`BrentRootError` distinguishes invalid or non-bracketing intervals, non-finite
-values, and typed callback failures. Endpoint roots return successfully without
-iterating. Public tests cover analytic roots, `f32`, evaluation counts, clean
-iteration limits, structural and callback error paths, and overflow-safe
-bracket validation.
+function value and sign-changing bracket would otherwise be misrepresented as an
+objective cost and box constraint. `RootResult` reports the signed value, final
+bracket, iterations, evaluations, and clean termination status; `BrentRootError`
+distinguishes invalid or non-bracketing intervals, non-finite values, and typed
+callback failures. Endpoint roots return successfully without iterating. Public
+tests cover analytic roots, `f32`, evaluation counts, clean iteration limits,
+structural and callback error paths, and overflow-safe bracket validation.
 
-This enables focused migrations for
-[finql](https://github.com/xemwebe/finql) and
-[kde_diffusion](https://crates.io/crates/kde_diffusion).
+This enables focused migrations for [finql](https://github.com/xemwebe/finql)
+and [kde_diffusion](https://crates.io/crates/kde_diffusion).
 
 ##### 4. Hager–Zhang line search (complete)
 
@@ -534,8 +494,8 @@ metadata.
   |    9 | [argtuner](https://github.com/jzombie/rust-argtuner)                                                                                                      | Argmin PSO over `Vec`; population and completed-trial checkpointing                                              | `GlobalBestPso` covers the central algorithm and preserves particles, velocities, personal/global bests, and the live RNG for bit-identical continuation.                                               | Completed-trial records and persistence orchestration remain application-owned; validate their mapping to Basin's checkpoint format.               | Port the PSO sampler and compare uninterrupted and resumed expensive-trial runs.                                   |
   |   10 | [EnzymeML](https://github.com/enzymeml/enzymeml-rs)                                                                                                       | Argmin BFGS, L-BFGS, PSO, and SR1 trust-region; an `egobox-ego` integration                                      | Basin now covers BFGS, L-BFGS, and PSO, including deterministic PSO resume.                                                                                                                             | A full switch still requires SR1 trust-region and a separate plan for the EGO runner, which is built on Argmin.                                    | Offer a Basin backend for the native quasi-Newton and PSO paths; scope EGO as a separate integration.              |
   |   11 | [scattr](https://crates.io/crates/scattr), [saltine-gromark](https://crates.io/crates/saltine-gromark), [aminograph](https://crates.io/crates/aminograph) | Argmin simulated annealing over custom transitions or discrete states                                            | Basin's generic `Neighbor`, explicit cooling/reannealing configuration, arbitrary cloneable parameters, and exact resume now cover these use cases.                                                     | Basin uses classical Metropolis acceptance rather than Argmin's logistic variant, so behavior and tuning will not match mechanically.              | Offer separate small migrations that preserve each project's transition rule and validate its acceptance behavior. |
-  |   12 | [finql](https://github.com/xemwebe/finql)                                                                                                                 | Argmin `BrentRoot` for fixed-income yield calculations                                                           | `BrentRoot` directly replaces the bracketed scalar solve without routing it through optimization state.                                                                                                | Confirm tolerance semantics and error mapping against the current yield routines.                                                                 | Offer a focused replacement and compare roots, iteration counts, and failure behavior.                             |
-  |   13 | [kde_diffusion](https://crates.io/crates/kde_diffusion)                                                                                                   | Argmin `BrentRoot` in a scalar bandwidth calculation                                                             | Its concentrated Argmin dependency can move to Basin's direct `BrentRoot` API.                                                                                                                         | Confirm the current crate release still has no other Argmin-dependent paths.                                                                      | Offer a minimal dependency replacement with numerical regression tests.                                            |
+  |   12 | [finql](https://github.com/xemwebe/finql)                                                                                                                 | Argmin `BrentRoot` for fixed-income yield calculations                                                           | `BrentRoot` directly replaces the bracketed scalar solve without routing it through optimization state.                                                                                                 | Confirm tolerance semantics and error mapping against the current yield routines.                                                                  | Offer a focused replacement and compare roots, iteration counts, and failure behavior.                             |
+  |   13 | [kde_diffusion](https://crates.io/crates/kde_diffusion)                                                                                                   | Argmin `BrentRoot` in a scalar bandwidth calculation                                                             | Its concentrated Argmin dependency can move to Basin's direct `BrentRoot` API.                                                                                                                          | Confirm the current crate release still has no other Argmin-dependent paths.                                                                       | Offer a minimal dependency replacement with numerical regression tests.                                            |
 
 #### Deprioritize
 
