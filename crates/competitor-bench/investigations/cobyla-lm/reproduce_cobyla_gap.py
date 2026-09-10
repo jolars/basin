@@ -5,10 +5,12 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import random
 import shutil
 import statistics
+import time
 from itertools import pairwise
 from pathlib import Path
 
@@ -71,6 +73,8 @@ def summarize_results(directory):
     ]
     for kernel in kernels:
         kernel.pop("ns")
+        kernel.pop("basin_step_bits")
+        kernel.pop("reference_step_bits")
     write_csv(directory / "gap-kernels.csv", kernels)
 
 
@@ -469,8 +473,8 @@ def allocations(args):
     write_csv(original / "allocations.csv", rows)
 
 
-def compare(args):
-    """Pair baseline/candidate public solves with the original runtime target."""
+def comparison_builds(args):
+    """Require matching reference sources, compilers, and timing configurations."""
     builds = {
         "before": args.before.resolve(),
         **{f"stage{i}": path.resolve() for i, path in enumerate(args.stages, 1)},
@@ -488,11 +492,120 @@ def compare(args):
         "rustflags",
         "lock_sha256",
         "cobyla_source_sha256",
+        "probe_sha256",
+        "bridge_sha256",
+        "gap_extra_sha256",
+        "thread_environment",
+        "settings",
     ]:
         if any(meta[key] != metadata["before"][key] for meta in metadata.values()):
             raise ValueError(f"Builds differ in {key}")
     if any(meta["profile"] != "release" for meta in metadata.values()):
         raise ValueError("Timing requires uninstrumented release builds")
+    return builds, metadata
+
+
+def check_lp_result(result, baseline):
+    """Reference agreement is approximate; before/after Basin steps must match."""
+    for key, limit in [
+        ("max_relative_step_error", 1e-6),
+        ("max_scaled_metric_error", 1e-7),
+    ]:
+        if not math.isfinite(result[key]) or not 0 <= result[key] <= limit:
+            raise ValueError(f"LP reference verification failed: {key}")
+    if result["mismatches"] != 0 or result["inputs"] != baseline["inputs"]:
+        raise ValueError("LP reference verification failed: inputs or mismatches")
+    for key in ["basin_step_bits", "reference_step_bits"]:
+        if not result[key] or len(result[key]) != result["inputs"]:
+            raise ValueError(f"Missing LP steps: {key}")
+    if result["basin_step_bits"] != baseline["basin_step_bits"]:
+        raise ValueError("Basin LP steps changed")
+
+
+def compare_lp(args):
+    """Replay baseline inputs through adjacent, randomized prebuilt contestants."""
+    builds, metadata = comparison_builds(args)
+    jobs = [(revision, "lp-basin") for revision in builds]
+    jobs += [("reference", mode) for mode in ["lp-cobyla", "lp-prima"]]
+    traces = {
+        case: builds["before"] / "traces" / f"{case}.jsonl" for case in args.cases
+    }
+    verified = []
+    for case, trace in traces.items():
+        baseline = prima.probe(
+            builds["before"] / "probe", "lp-basin", trace, cpu=args.cpu
+        )
+        for revision, mode in jobs:
+            directory = builds.get(revision, builds["before"])
+            result = prima.probe(directory / "probe", mode, trace, cpu=args.cpu)
+            check_lp_result(result, baseline)
+            verified.append(dict(result, revision=revision, case=case))
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    prima.write_json(args.output.with_suffix(".verification.json"), verified)
+    rows = []
+    rng = random.Random(42)
+    repeats = {case: max(10, 5 * prima.CASES[case]) for case in args.cases}
+    with args.output.open("w", newline="") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=[
+                "round",
+                "revision",
+                "mode",
+                "case",
+                "ns",
+                "started_monotonic_ns",
+                "finished_monotonic_ns",
+            ],
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for sample in range(args.rounds):
+            cases = list(args.cases)
+            rng.shuffle(cases)
+            for case in cases:
+                groups = [jobs[: len(builds)], jobs[len(builds) :]]
+                rng.shuffle(groups)
+                paired_jobs = []
+                for group in groups:
+                    rng.shuffle(group)
+                    paired_jobs.extend(group)
+                for revision, mode in paired_jobs:
+                    directory = builds.get(revision, builds["before"])
+                    started = time.monotonic_ns()
+                    result = prima.probe(
+                        directory / "probe", mode, traces[case], repeats[case], args.cpu
+                    )
+                    row = {
+                        "round": sample,
+                        "revision": revision,
+                        "mode": mode,
+                        "case": case,
+                        "ns": result["ns"],
+                        "started_monotonic_ns": started,
+                        "finished_monotonic_ns": time.monotonic_ns(),
+                    }
+                    rows.append(row)
+                    writer.writerow(row)
+            stream.flush()
+            print(f"LP round {sample + 1}/{args.rounds}", flush=True)
+    summarize_comparison(args, builds, metadata, rows)
+    path = args.output.with_suffix(".metadata.json")
+    meta = json.loads(path.read_text())
+    meta.update(
+        repeats=repeats,
+        trace_sha256={
+            case: hashlib.sha256(trace.read_bytes()).hexdigest()
+            for case, trace in traces.items()
+        },
+        timing_unit="nanoseconds per LP",
+    )
+    prima.write_json(path, meta)
+
+
+def compare(args):
+    """Pair baseline/candidate public solves with the original runtime target."""
+    builds, metadata = comparison_builds(args)
     diagnostics = {
         revision: {
             (r["mode"], r["case"]): r["diagnostics"]
@@ -542,7 +655,15 @@ def compare(args):
     with args.output.open("w", newline="") as stream:
         writer = csv.DictWriter(
             stream,
-            fieldnames=["round", "revision", "mode", "case", "ns"],
+            fieldnames=[
+                "round",
+                "revision",
+                "mode",
+                "case",
+                "ns",
+                "started_monotonic_ns",
+                "finished_monotonic_ns",
+            ],
             lineterminator="\n",
         )
         writer.writeheader()
@@ -567,6 +688,7 @@ def compare(args):
                     paired_jobs.extend(group)
             for revision, mode, case in paired_jobs:
                 directory = builds.get(revision, builds["before"])
+                started = time.monotonic_ns()
                 result = prima.probe(
                     directory / "probe", mode, case, prima.CASES[case], args.cpu
                 )
@@ -576,6 +698,8 @@ def compare(args):
                     "mode": mode,
                     "case": case,
                     "ns": result["ns"],
+                    "started_monotonic_ns": started,
+                    "finished_monotonic_ns": time.monotonic_ns(),
                 }
                 rows.append(row)
                 writer.writerow(row)
@@ -624,9 +748,15 @@ def summarize_comparison(args, builds, metadata, rows):
                 )
     prima.summarize_ratios(stage_pairs, args.output.with_suffix(".stages.csv"))
     competitor_pairs = []
+    modes = ["lp-basin"] if args.command == "compare-lp" else ["raw", "executor"]
+    references = (
+        ["lp-cobyla", "lp-prima"]
+        if args.command == "compare-lp"
+        else ["cobyla-native", "cobyla-rows"]
+    )
     for revision in builds:
-        for mode in ["raw", "executor"]:
-            for reference in ["cobyla-native", "cobyla-rows"]:
+        for mode in modes:
+            for reference in references:
                 for row in rows:
                     if (row["revision"], row["mode"]) in [
                         (revision, mode),
@@ -678,14 +808,17 @@ def main():
     )
     a = commands.add_parser("allocations")
     a.add_argument("--build", type=Path, required=True)
-    c = commands.add_parser("compare")
-    c.add_argument("--before", type=Path, required=True)
-    c.add_argument("--after", type=Path, required=True)
-    c.add_argument("--stages", type=Path, nargs="*", default=[])
-    c.add_argument("--output", type=Path, required=True)
-    c.add_argument("--rounds", type=int, default=15)
-    c.add_argument("--cpu", type=int, default=2)
-    c.add_argument("--cases", nargs="+", choices=prima.CASES, default=list(prima.CASES))
+    for name in ["compare", "compare-lp"]:
+        c = commands.add_parser(name)
+        c.add_argument("--before", type=Path, required=True)
+        c.add_argument("--after", type=Path, required=True)
+        c.add_argument("--stages", type=Path, nargs="*", default=[])
+        c.add_argument("--output", type=Path, required=True)
+        c.add_argument("--rounds", type=int, default=15)
+        c.add_argument("--cpu", type=int, default=2)
+        c.add_argument(
+            "--cases", nargs="+", choices=prima.CASES, default=list(prima.CASES)
+        )
     args = parser.parse_args()
     if args.command == "build":
         build(args)
@@ -695,6 +828,8 @@ def main():
         parser.error("--rounds must be at least 2")
     elif args.command == "compare":
         compare(args)
+    elif args.command == "compare-lp":
+        compare_lp(args)
     else:
         measure(args)
 

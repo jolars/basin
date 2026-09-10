@@ -30,6 +30,22 @@ pub(crate) fn dot_abs<F: Scalar>(a: &[F], b: &[F]) -> F {
     a.iter().zip(b).map(|(&x, &y)| x.abs() * y.abs()).sum()
 }
 
+/// Signed and absolute dot products with the same reduction order.
+pub(crate) fn dot_pair<F: Scalar>(a: &[F], b: &[F]) -> (F, F) {
+    if a.len() == 2 && b.len() == 2 {
+        return (dot(a, b), dot_abs(a, b));
+    }
+    // Scalar::sum starts floating-point reductions at negative zero. Reusing
+    // its identity preserves the signs of empty and all-negative-zero sums.
+    let identity: F = std::iter::empty().sum();
+    a.iter().zip(b).fold(
+        (identity, identity),
+        |(signed, absolute), (&x, &y)| {
+            (signed + x * y, absolute + x.abs() * y.abs())
+        },
+    )
+}
+
 /// Column `j` of an `r × c` column-major matrix.
 pub(crate) fn col<F>(a: &[F], r: usize, j: usize) -> &[F] {
     &a[j * r..(j + 1) * r]
@@ -154,4 +170,94 @@ pub(crate) fn inv<F: Scalar>(a: &[F], n: usize) -> Option<Vec<F>> {
         }
     }
     Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paired_dots_preserve_separate_reductions() {
+        fn check<F: Scalar>() {
+            let f = |x| F::from_f64(x).unwrap();
+            let values = [
+                F::zero(),
+                -F::zero(),
+                f(1.0),
+                f(-1.0),
+                F::epsilon(),
+                -F::epsilon(),
+                F::min_positive_value(),
+                F::max_value(),
+                -F::max_value(),
+                F::infinity(),
+                F::neg_infinity(),
+                F::nan(),
+            ];
+            for n in [0, 1, 2, 3, 5, 10, 20, 40] {
+                for sample in 0..96 {
+                    let a: Vec<_> = (0..n)
+                        .map(|i| values[(i * 7 + sample) % values.len()])
+                        .collect();
+                    let b: Vec<_> = (0..n)
+                        .map(|i| values[(i * 5 + sample / 8) % values.len()])
+                        .collect();
+                    for (a, b) in [(&a[..], &b[..]), (&a[..n / 2], &b[..])] {
+                        let (signed, absolute) = dot_pair(a, b);
+                        for (actual, expected) in
+                            [(signed, dot(a, b)), (absolute, dot_abs(a, b))]
+                        {
+                            if expected.is_nan() {
+                                assert!(actual.is_nan());
+                            } else {
+                                assert_eq!(
+                                    actual.to_f64().unwrap().to_bits(),
+                                    expected.to_f64().unwrap().to_bits(),
+                                    "dimension {n}, sample {sample}"
+                                );
+                            }
+                        }
+                    }
+                }
+                for value in [F::zero(), -F::zero(), f(1e-30), f(1e30)] {
+                    let a = vec![value; n];
+                    let b = vec![f(-1.0); n];
+                    let (signed, absolute) = dot_pair(&a, &b);
+                    assert_eq!(
+                        signed.to_f64().unwrap().to_bits(),
+                        dot(&a, &b).to_f64().unwrap().to_bits()
+                    );
+                    assert_eq!(
+                        absolute.to_f64().unwrap().to_bits(),
+                        dot_abs(&a, &b).to_f64().unwrap().to_bits()
+                    );
+                }
+                // Keep long-vector cancellation checks finite: the exceptional
+                // palette above necessarily includes NaNs at these lengths.
+                let large = F::one() / (F::epsilon() * F::epsilon());
+                let finite = [large, F::one(), -large, -F::one()];
+                for sample in 0..32 {
+                    let a: Vec<_> = (0..n)
+                        .map(|i| finite[(i + sample) % finite.len()])
+                        .collect();
+                    let b: Vec<_> = (0..n)
+                        .map(|i| f(((i * 13 + sample) % 11) as f64 - 5.0))
+                        .collect();
+                    let (signed, absolute) = dot_pair(&a, &b);
+                    for (actual, expected) in
+                        [(signed, dot(&a, &b)), (absolute, dot_abs(&a, &b))]
+                    {
+                        assert!(actual.is_finite() && expected.is_finite());
+                        assert_eq!(
+                            actual.to_f64().unwrap().to_bits(),
+                            expected.to_f64().unwrap().to_bits(),
+                            "finite dimension {n}, sample {sample}"
+                        );
+                    }
+                }
+            }
+        }
+        check::<f32>();
+        check::<f64>();
+    }
 }

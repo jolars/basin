@@ -18,6 +18,10 @@ The [remaining-gap investigation](cobyla-variant-gap.md) compares the optimized
 driver directly with `cobyla` 1.0.2 to measure how much the algorithm variant,
 public integration, and kernel implementation contribute.
 
+The [LP follow-up](cobyla-lp-followup.md) measures shared signed/absolute dot
+reductions after trial-buffer reuse. It records small public-solver gains,
+raw-driver regressions, and the limited return from further LP tuning.
+
 ## Reproduce
 
 From the Basin repository root:

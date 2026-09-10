@@ -412,6 +412,8 @@ fn kernels(mode: &str, path: &str, repeats: usize) {
     let mut max_step_error = 0.0_f64;
     let mut max_metric_error = 0.0_f64;
     let mut mismatches = 0;
+    let mut basin_step_bits = Vec::with_capacity(inputs.len());
+    let mut reference_step_bits = Vec::with_capacity(inputs.len());
     for lp in &inputs {
         let basin = work.solve(&lp.a, &lp.b, lp.delta, &lp.g);
         reference_lp(lp, &mut d);
@@ -439,7 +441,15 @@ fn kernels(mode: &str, path: &str, repeats: usize) {
         }
         max_step_error = max_step_error.max(step_error);
         max_metric_error = max_metric_error.max(metric_error);
+        basin_step_bits
+            .push(basin.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
+        reference_step_bits
+            .push(d.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
     }
+    assert_eq!(
+        mismatches, 0,
+        "LP reference verification failed before timing"
+    );
     let mut run = || {
         for lp in &inputs {
             let lp = black_box(lp);
@@ -471,7 +481,8 @@ fn kernels(mode: &str, path: &str, repeats: usize) {
         "{}",
         serde_json::json!({"mode":mode,"ns":ns,"inputs":inputs.len(),
         "mismatches":mismatches,"max_relative_step_error":max_step_error,
-        "max_scaled_metric_error":max_metric_error})
+        "max_scaled_metric_error":max_metric_error,
+        "basin_step_bits":basin_step_bits,"reference_step_bits":reference_step_bits})
     );
 }
 

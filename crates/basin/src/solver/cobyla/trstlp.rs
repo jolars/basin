@@ -16,7 +16,7 @@
 
 use crate::core::math::Scalar;
 
-use super::linalg::{col, dot, dot_abs, hypotenuse, isminor, planerot};
+use super::linalg::{col, dot, dot_pair, hypotenuse, isminor, planerot};
 
 /// Scratch reused by both LP stages and successive driver iterations.
 pub(crate) struct TrstlpWork<F> {
@@ -161,8 +161,7 @@ fn qradd<F: Scalar>(
     cqa: &mut [F],
 ) {
     for k in 0..n {
-        cq[k] = dot(c, col(z, n, k));
-        cqa[k] = dot_abs(c, col(z, n, k));
+        (cq[k], cqa[k]) = dot_pair(c, col(z, n, k));
         if isminor(cq[k], cqa[k]) {
             cq[k] = F::zero();
         }
@@ -243,8 +242,7 @@ fn lsqr<F: Scalar>(
     y.copy_from_slice(target);
     for i in (0..nact).rev() {
         let zi = col(z, n, i);
-        let yq = dot(y, zi);
-        let yqa = dot_abs(y, zi);
+        let (yq, yqa) = dot_pair(y, zi);
         if isminor(yq, yqa) {
             x[i] = F::zero();
         } else {
@@ -558,9 +556,9 @@ fn trstlp_sub<F: Scalar, const N: usize>(
         // Inactive residuals: cvshift = cviol − (A(:,iact)·dnew − b(iact)).
         for k in *nact..mcon {
             let j = iact[k];
-            let adn = dot(col(a, n, j), dnew);
+            let (adn, adn_abs) = dot_pair(col(a, n, j), dnew);
             let cvshift = cviol - (adn - b[j]);
-            let cvsabs = dot_abs(dnew, col(a, n, j)) + b[j].abs() + cviol;
+            let cvsabs = adn_abs + b[j].abs() + cviol;
             vmultd[k] = if isminor(cvshift, cvsabs) {
                 zero
             } else {
