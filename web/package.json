@@ -19,14 +19,14 @@
         "collect:solvers": "tsx scripts/collect-solvers.ts"
     },
     "devDependencies": {
-        "@iconify-json/lucide": "^1.2.127",
+        "@iconify-json/lucide": "^1.2.129",
         "@iconify-json/simple-icons": "^1.2.94",
         "@sveltejs/adapter-static": "^3.0.0",
         "@sveltejs/kit": "^2.70.3",
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
         "@tailwindcss/typography": "^0.5.20",
         "@tailwindcss/vite": "^4.3.3",
-        "@types/node": "^26.4.0",
+        "@types/node": "^26.4.1",
         "@types/prismjs": "^1.26.6",
         "mdsvex": "^0.12.8",
         "prettier": "^3.9.6",
