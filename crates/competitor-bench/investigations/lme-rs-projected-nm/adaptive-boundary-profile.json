@@ -1,0 +1,87 @@
+{
+  "optimizer_backend": "basin",
+  "case": "production_boundary_80k",
+  "formula": "y ~ x + (x | group)",
+  "reml": false,
+  "n_obs": 80000,
+  "optimizer_iterations": 123,
+  "converged": true,
+  "objective": 226983.8038151384,
+  "evaluated_objective": 226983.8038151384,
+  "theta": [
+    0.01467312282190306,
+    -0.02350098960559975,
+    9.541456381989532e-8
+  ],
+  "coefficients": [
+    0.9974350425807912,
+    1.2467150398861155
+  ],
+  "fit_wall_seconds": 0.1245165,
+  "prepare_wall_seconds": 0.0166237,
+  "prepare_perf": {
+    "kernel": null,
+    "deviance_eval_count": 0,
+    "phases": [
+      {
+        "phase": "lmer_setup",
+        "count": 1,
+        "total_seconds": 0.0166211,
+        "mean_seconds": 0.0166211
+      },
+      {
+        "phase": "setup_lmm_data",
+        "count": 1,
+        "total_seconds": 0.0109846,
+        "mean_seconds": 0.0109846
+      },
+      {
+        "phase": "setup_design_matrix",
+        "count": 1,
+        "total_seconds": 0.0056204,
+        "mean_seconds": 0.0056204
+      },
+      {
+        "phase": "setup_formula",
+        "count": 1,
+        "total_seconds": 5.2e-6,
+        "mean_seconds": 5.2e-6
+      }
+    ],
+    "fit_wall_seconds": 0.0166237,
+    "optimize_fraction_of_fit": 0.0,
+    "deviance_fraction_of_fit": 0.0
+  },
+  "fit_prepared_wall_seconds": 0.1055171,
+  "blocked_kernel": false,
+  "blocked_kernel_detail": "blocked_unavailable_not_intercept_only",
+  "kernel": null,
+  "deviance_eval_count": 252,
+  "mean_deviance_eval_seconds": 0.00040820833333333334,
+  "phases": [
+    {
+      "phase": "lmer_optimize",
+      "count": 1,
+      "total_seconds": 0.102987,
+      "mean_seconds": 0.102987,
+      "fraction_of_deviance": 1.0011519561381763
+    },
+    {
+      "phase": "deviance_eval",
+      "count": 252,
+      "total_seconds": 0.1028685,
+      "mean_seconds": 0.00040820833333333334,
+      "fraction_of_deviance": 1.0
+    },
+    {
+      "phase": "lmer_post_fit",
+      "count": 1,
+      "total_seconds": 0.0011792,
+      "mean_seconds": 0.0011792,
+      "fraction_of_deviance": 0.011463178718460948
+    }
+  ],
+  "fit_wall_seconds": 0.1055171,
+  "optimize_fraction_of_fit": 0.9760218959770501,
+  "deviance_fraction_of_fit": 0.9748988552566361
+}

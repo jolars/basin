@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Performance Improvements
+- **nelder-mead:** borrow box bounds during projected simplex steps instead of
+  cloning both vectors on every iteration. Preserve objective evaluations and
+  simplex arithmetic; add a clone regression and matched-work ndarray evidence.
+
 ## [1.10.0](https://github.com/jolars/basin/compare/v1.9.0...v1.10.0) (2026-09-10)
 
 ### Features

@@ -1,0 +1,16 @@
+[package]
+name = "basin-projected-probe"
+version = "0.0.0"
+edition = "2021"
+[workspace]
+[dependencies]
+basin = { path = "../../../basin", default-features = false, features = ["ndarray_v0_16"] }
+ndarray = "0.16"
+serde_json = "1"
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[[bin]]
+name = "basin-projected-probe"
+path = "probe.rs"
