@@ -1,8 +1,8 @@
-//! Stopping decisions must not depend on whether an intermediate square fits.
+//! LM stopping distinguishes convergence, numerical no-progress, and budgets.
 
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    LmDamping, Residual, TerminationReason,
+    LmDamping, Residual, State, TerminationReason,
 };
 use std::convert::Infallible;
 
@@ -137,7 +137,9 @@ macro_rules! stopping_checks {
                 for coordinate in [0., tiny * tiny, 1. / tiny / tiny] {
                     for check in 0..4 {
                         for tolerance in [None, Some(0.)] {
-                            let mut solver = ($solver).with_absolute_gradient_tolerance(None);
+                            let mut solver = ($solver)
+                                .with_no_progress_check(false)
+                                .with_absolute_gradient_tolerance(None);
                             solver = match check {
                                 0 => solver.with_absolute_gradient_tolerance(tolerance),
                                 1 => solver.with_gradient_orthogonality_tolerance(tolerance),
@@ -158,6 +160,163 @@ macro_rules! stopping_checks {
                                 TerminationReason::MaxIter
                             }, "coordinate={coordinate}, check={check}, tolerance={tolerance:?}");
                         }
+                    }
+                }
+            }
+
+            #[test]
+            fn numerical_no_progress_is_enabled_by_default_and_can_be_disabled() {
+                for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+                    for enabled in [true, false] {
+                        let mut solver = ($solver)
+                            .with_damping(damping)
+                            .with_absolute_gradient_tolerance(None);
+                        if !enabled {
+                            solver = solver.with_no_progress_check(false);
+                        }
+                        let result = Executor::from_start(
+                            Affine { scale: [1., 1.], target: [1., 2.] },
+                            solver,
+                            ($vector_new)(&[1., 2.]),
+                        )
+                        .max_iter(4)
+                        .run()
+                        .unwrap();
+                        assert_eq!(result.reason, if enabled {
+                            TerminationReason::NumericalNoProgress
+                        } else {
+                            TerminationReason::MaxIter
+                        });
+                        assert_eq!(result.cost_evals(), if enabled { 2 } else { 5 });
+                        assert_eq!(result.state.jacobian_evals(), 1);
+                        assert_eq!(result.state.iter(), if enabled { 0 } else { 4 });
+                        assert_eq!(result.cost(), 0.);
+                        assert_eq!(result.param()[0], 1.);
+                        assert_eq!(result.param()[1], 2.);
+                    }
+                }
+            }
+
+            #[test]
+            fn unchanged_damped_trial_does_not_claim_parameter_recovery() {
+                for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+                    let result = Executor::from_start(
+                        Affine { scale: [1., 1.], target: [2., 3.] },
+                        ($solver)
+                            .with_damping(damping)
+                            .with_tau(1e20)
+                            .with_initial_step_bound(1e-20)
+                            .with_absolute_gradient_tolerance(0.)
+                            .with_gradient_orthogonality_tolerance(0.)
+                            .with_relative_model_reduction_tolerance(0.)
+                            .with_relative_step_tolerance(0.),
+                        ($vector_new)(&[1., 2.]),
+                    )
+                    .max_iter(5)
+                    .run()
+                    .unwrap();
+                    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+                    assert!(!result.reason.is_failure());
+                    assert_eq!(result.cost(), 1.);
+                    assert_eq!(result.param()[0], 1.);
+                    assert_eq!(result.param()[1], 2.);
+                    assert_eq!(result.cost_evals(), 2);
+                }
+            }
+
+            struct Quadratic;
+
+            impl Residual for Quadratic {
+                type Param = $vector;
+                type Output = $vector;
+                type Error = Infallible;
+
+                fn residual(&self, x: &$vector) -> Result<$vector, Infallible> {
+                    Ok(($vector_new)(&[x[0] * x[0] - 2., x[1] * x[1] - 2.]))
+                }
+            }
+
+            impl Jacobian for Quadratic {
+                type Jacobian = $matrix;
+
+                fn jacobian(&self, x: &$vector) -> Result<$matrix, Infallible> {
+                    Ok(($matrix_new)(&[2. * x[0], 0., 0., 2. * x[1]]))
+                }
+            }
+
+            #[test]
+            fn rounded_fit_stops_without_claiming_convergence() {
+                for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+                    let root = (2. as $scalar).sqrt();
+                    let result = Executor::from_start(
+                        Quadratic,
+                        ($solver)
+                            .with_damping(damping)
+                            .with_absolute_gradient_tolerance(0.)
+                            .with_gradient_orthogonality_tolerance(0.),
+                        ($vector_new)(&[root, root]),
+                    )
+                    .max_iter(20)
+                    .run()
+                    .unwrap();
+                    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+                    assert!(result.cost() > 0.);
+                    assert!(result.cost() <= 4. * <$scalar>::EPSILON.powi(2));
+                    assert!((result.param()[0] - root).abs() <= <$scalar>::EPSILON);
+                    assert!(result.cost_evals() < 20);
+                }
+            }
+
+            #[test]
+            fn rejected_distinct_trial_can_retry_and_fresh_run_resets() {
+                use basin::{NllsState, Problem, Solver};
+
+                for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+                    let mut solver = ($solver)
+                        .with_damping(damping)
+                        .with_absolute_gradient_tolerance(None);
+                    let mut problem = Problem::new(Quadratic);
+                    for _ in 0..2 {
+                        let initial = solver.init(
+                            &mut problem,
+                            NllsState::new(($vector_new)(&[0.1, 0.1])),
+                        ).unwrap();
+                        let (mut state, reason) = solver.next_iter(&mut problem, initial).unwrap();
+                        assert!(reason.is_none());
+                        assert_eq!(state.param()[0], 0.1);
+                        for _ in 0..20 {
+                            let reason;
+                            (state, reason) = solver.next_iter(&mut problem, state).unwrap();
+                            assert!(reason.is_none());
+                            if state.param()[0] != 0.1 {
+                                break;
+                            }
+                        }
+                        assert_ne!(state.param()[0], 0.1);
+                    }
+                }
+            }
+
+            #[test]
+            fn exact_native_convergence_precedes_numerical_no_progress() {
+                for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+                    for check in 0..4 {
+                        let mut solver = ($solver)
+                            .with_damping(damping)
+                            .with_absolute_gradient_tolerance(None);
+                        solver = match check {
+                            0 => solver.with_absolute_gradient_tolerance(0.),
+                            1 => solver.with_gradient_orthogonality_tolerance(0.),
+                            2 => solver.with_relative_model_reduction_tolerance(0.),
+                            _ => solver.with_relative_step_tolerance(0.),
+                        };
+                        let result = Executor::from_start(
+                            Affine { scale: [1., 1.], target: [1., 2.] },
+                            solver,
+                            ($vector_new)(&[1., 2.]),
+                        ).max_iter(4).run().unwrap();
+                        assert_eq!(result.reason, TerminationReason::SolverConverged);
+                        assert_eq!(result.cost_evals(), if check < 2 { 1 } else { 2 });
                     }
                 }
             }

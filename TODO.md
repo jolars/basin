@@ -114,14 +114,17 @@ Ordered by recommended sequence.
   probe](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#arithmetic-correction)
   reaches the exact solution instead of stopping at initialization.
 
-- [ ] **Design explicit LM numerical no-progress handling.** Follow the
-  [stopping
-  findings](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#recommended-implementation-boundaries):
-  distinguish precision-limited output from convergence, preserve `None`
-  versus exact-zero semantics, and define inner-solver failure routing.
-  Consider an opt-in scaled trust-radius criterion separately from the
-  documented unscaled attempted-step test. Do not infer parameter recovery
-  from a small damped step.
+- [x] **Add explicit LM numerical no-progress handling.** Rejected finite
+  trials with unchanged coordinates report `NumericalNoProgress`, which outer
+  solvers may consume without a convergence or recovery claim. Enabled by
+  default; `with_no_progress_check(false)` restores the previous policy while
+  preserving `None` versus exact-zero tolerances. The [retained
+  comparison](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#numerical-no-progress-safeguard)
+  saves 41,187 residual calls with identical parameters and assessment outcomes.
+
+- [ ] **Consider opt-in scaled trust-radius convergence for LM.** Restrict it
+  to trust-region damping and preserve the documented unscaled attempted-step
+  test. Do not infer parameter recovery from a small radius or damped step.
 
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional

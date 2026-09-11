@@ -13,7 +13,10 @@ use crate::core::termination::TerminationReason;
 mod damping;
 mod stopping;
 use damping::{scaled_norm, trust_region_step, update_radius};
-use stopping::{orthogonality_converged, relative_step_converged};
+use stopping::{
+    all_finite, finite_unchanged_trial, orthogonality_converged,
+    relative_step_converged,
+};
 
 /// Damping-parameter selection for both Levenberg-Marquardt factorizations.
 ///
@@ -126,6 +129,12 @@ pub enum LmDamping {
 ///   rejected via the gain-ratio test), so divergence manifests as
 ///   μ growing without bound. Catch this with
 ///   [`max_iter`](crate::Executor::max_iter) on the executor.
+/// - **Unchanged finite trial.** By default, a rejected trial whose computed
+///   step leaves every parameter unchanged reports
+///   [`TerminationReason::NumericalNoProgress`]. This can occur at an accurate
+///   rounded solution or an inaccurate, heavily damped point. An outer solver
+///   may consume the result and continue. Configure this independently with
+///   [`Self::with_no_progress_check`].
 ///
 /// # Convergence
 ///
@@ -151,6 +160,10 @@ pub enum LmDamping {
 /// with native checks using OR. Execution budgets belong on the executor.
 /// The least-squares gradient `Jᵀr` is computed internally; [`NllsState`] does
 /// not expose a [`GradientState`](crate::GradientState).
+/// The numerical no-progress safeguard runs after native convergence tests.
+/// Disabling convergence tests does not disable this safeguard; set
+/// [`with_no_progress_check(false)`](Self::with_no_progress_check)
+/// to retain the previous budget-stop behavior at an unchanged trial.
 ///
 /// # Backends
 ///
@@ -221,6 +234,7 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     tol_grad_rel: Option<F>,
     tol_cost_rel: Option<F>,
     tol_step_rel: Option<F>,
+    numerical_no_progress: bool,
     tau: F,
     damping: LmDamping,
     initial_step_bound: F,
@@ -249,9 +263,10 @@ impl<V, M> Default for LevenbergMarquardt<V, M> {
 }
 
 impl<V, M> LevenbergMarquardt<V, M> {
-    /// Levenberg-Marquardt with Nielsen's defaults: `tol_grad = 1e-8`,
+    /// Levenberg-Marquardt with Nielsen damping: `tol_grad = 1e-8`,
     /// `tol_grad_rel = 0.0` (disabled), `tol_cost_rel = 0.0` (disabled),
-    /// `tol_step_rel = 0.0` (disabled), `tau = 1e-3`, `max_inner_attempts = 50`.
+    /// `tol_step_rel = 0.0` (disabled), `tau = 1e-3`, `max_inner_attempts = 50`,
+    /// and numerical no-progress handling enabled.
     pub fn new() -> Self {
         Self::defaults()
     }
@@ -264,6 +279,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             tol_grad_rel: None,
             tol_cost_rel: None,
             tol_step_rel: None,
+            numerical_no_progress: true,
             tau: F::from_f64(1e-3).unwrap(),
             damping: LmDamping::Nielsen,
             initial_step_bound: F::from_f64(100.0).unwrap(),
@@ -362,11 +378,10 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// The `prered` clause is the load-bearing difference from the
     /// framework's [`RelativeCostTolerance`], which sees only the
     /// achieved reduction between consecutive costs and has no access to
-    /// the LM model. At a *temporary settling point* a single step's
-    /// actual gain can be small while the model still predicts substantial
-    /// progress; gating on `prered` keeps LM iterating through such points
-    /// to the true minimum, where a plain achieved-reduction test would
-    /// stop short. This model-dependent check belongs on the solver rather
+    /// the LM model. Predicted reduction is evaluated at the damped step;
+    /// excessive damping can make both reductions small even when a weak
+    /// direction remains unresolved. This check does not establish parameter
+    /// recovery. This model-dependent check belongs on the solver rather
     /// than in the termination layer. Basin uses Nielsen damping and a step
     /// norm test; its complete stopping behavior is not identical to MINPACK.
     ///
@@ -429,6 +444,32 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         value: impl Into<Option<F>>,
     ) -> Self {
         self.tol_step_rel = crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
+    /// Stop after one rejected finite trial whose computed `x + h` equals
+    /// the base `x` componentwise. Enabled by default.
+    ///
+    /// Reports [`TerminationReason::NumericalNoProgress`], which permits an
+    /// outer solver to consume the result but makes no convergence, fit, or
+    /// parameter-recovery claim. Excessive damping can trigger this safeguard
+    /// at an inaccurate point. A rejected trial with different coordinates
+    /// does not qualify, even though the stored iterate remains unchanged.
+    ///
+    /// The usual trial residual callback and damping updates still run. The
+    /// parameters, step, residuals, gradient, costs, and reduction diagnostics
+    /// must be finite. Native convergence tests take precedence; callback
+    /// errors and model-solve failures retain their existing routing.
+    /// As a mid-iteration stop, it precedes observed-step and cost-change
+    /// checks that would run at the next iteration boundary.
+    ///
+    /// This safeguard is independent of convergence tolerances: `None` still
+    /// disables its particular test, and zero still requests exact zero.
+    /// Set this to `false` to recover the previous behavior when all
+    /// convergence tests are disabled, including budget stops at zero residual.
+    /// Repeated calls replace the setting. Configure before starting a solve.
+    pub fn with_no_progress_check(mut self, enabled: bool) -> Self {
+        self.numerical_no_progress = enabled;
         self
     }
 
@@ -740,6 +781,17 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             F::zero()
         };
 
+        // Compare trial coordinates before acceptance can replace the base.
+        // Rejection alone leaves the iterate unchanged without proving that
+        // the computed step was lost to rounding.
+        let numerical_no_progress = self.numerical_no_progress
+            && rho <= F::zero()
+            && finite_unchanged_trial(&state.param, &x_trial)
+            && [prev_cost, f_trial, actual_diff, l_diff, rho]
+                .iter()
+                .all(|value| value.is_finite())
+            && [&h, &r, &r_trial, &g].into_iter().all(all_finite);
+
         if self.damping == LmDamping::TrustRegion {
             let pnorm = h.dot(&dh).sqrt();
             let radius =
@@ -794,6 +846,10 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             .is_some_and(|tol| relative_step_converged(&h, &state.param, tol));
         if cost_rel_converged || step_rel_converged {
             return Ok((state, Some(TerminationReason::SolverConverged)));
+        }
+
+        if numerical_no_progress {
+            return Ok((state, Some(TerminationReason::NumericalNoProgress)));
         }
 
         Ok((state, None))
@@ -910,6 +966,8 @@ where
 /// Non-finite factorization or solve arithmetic yields `SolverFailed`
 /// immediately. Problem callback errors propagate unchanged. No truncated
 /// solution or normal-equation fallback is used.
+/// The default numerical no-progress safeguard and its opt-out are shared
+/// with Cholesky; see [`Self::with_no_progress_check`].
 ///
 /// # Backends
 ///
@@ -962,6 +1020,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
                 tol_grad_rel: self.tol_grad_rel,
                 tol_cost_rel: self.tol_cost_rel,
                 tol_step_rel: self.tol_step_rel,
+                numerical_no_progress: self.numerical_no_progress,
                 tau: self.tau,
                 damping: self.damping,
                 initial_step_bound: self.initial_step_bound,
@@ -1105,6 +1164,11 @@ where
         value: impl Into<Option<F>>,
     ) -> Self {
         self.inner = self.inner.with_relative_step_tolerance(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_no_progress_check`] for the QR route.
+    pub fn with_no_progress_check(mut self, enabled: bool) -> Self {
+        self.inner = self.inner.with_no_progress_check(enabled);
         self
     }
     /// Configure [`LevenbergMarquardt::with_damping`] for the QR route.

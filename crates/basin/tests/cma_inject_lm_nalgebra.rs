@@ -1,10 +1,11 @@
 //! Integration tests for [`CmaInject`] with [`LevenbergMarquardt`]
 //! inner on the nalgebra backend (S13a).
 //!
-//! Two tests: convergence on `RosenbrockResiduals` 2-D (CMA's global
+//! Covers convergence on `RosenbrockResiduals` 2-D (CMA's global
 //! stage hands a near-basin start to LM, which polishes to high
 //! precision) and work-unit aggregation (LM `cost_evals` +
-//! `gradient_evals` roll into the outer's `cost_evals`).
+//! `gradient_evals` roll into the outer's `cost_evals`), and continuation
+//! after inner numerical no-progress stops.
 
 #![cfg(feature = "nalgebra_all")]
 
@@ -107,3 +108,87 @@ fn aggregates_lm_work_into_outer() {
 
 #[path = "support/backend_aliases.rs"]
 mod backend_aliases;
+
+#[test]
+fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
+    use basin::{CostFunction, Jacobian, Residual, State, TerminationReason};
+    use std::{
+        convert::Infallible,
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicU64, Ordering},
+        },
+    };
+
+    #[derive(Clone, Default)]
+    struct Affine {
+        costs: Arc<AtomicU64>,
+        trials: Arc<Mutex<Vec<DVector<f64>>>>,
+        jacobians: Arc<AtomicU64>,
+    }
+    impl CostFunction for Affine {
+        type Param = DVector<f64>;
+        type Output = f64;
+        type Error = Infallible;
+        fn cost(&self, x: &DVector<f64>) -> Result<f64, Infallible> {
+            self.costs.fetch_add(1, Ordering::Relaxed);
+            Ok(0.5 * ((x[0] - 2.).powi(2) + (x[1] - 3.).powi(2)))
+        }
+    }
+    impl Residual for Affine {
+        type Param = DVector<f64>;
+        type Output = DVector<f64>;
+        type Error = Infallible;
+        fn residual(
+            &self,
+            x: &DVector<f64>,
+        ) -> Result<DVector<f64>, Infallible> {
+            self.trials.lock().unwrap().push(x.clone());
+            Ok(DVector::from_vec(vec![x[0] - 2., x[1] - 3.]))
+        }
+    }
+    impl Jacobian for Affine {
+        type Jacobian = DMatrix<f64>;
+        fn jacobian(
+            &self,
+            _: &DVector<f64>,
+        ) -> Result<DMatrix<f64>, Infallible> {
+            self.jacobians.fetch_add(1, Ordering::Relaxed);
+            Ok(DMatrix::identity(2, 2))
+        }
+    }
+
+    let counts = Affine::default();
+    let solver = CmaInject::with_inner_solver(
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(11),
+        LevenbergMarquardt::new()
+            .with_tau(1e20)
+            .with_absolute_gradient_tolerance(0.),
+    )
+    .with_k(1)
+    .with_inner_max_iter(50);
+    let result = Executor::new(
+        counts.clone(),
+        solver,
+        CmaEsState::new(DVector::from_vec(vec![1., 1.]), 0.1),
+    )
+    .max_iter(4)
+    .run()
+    .unwrap();
+    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.state.iter(), 4);
+    assert!(result.param().iter().all(|value| value.is_finite()));
+    assert!(result.cost().is_finite());
+    // Each of the four inner runs exits after its first unchanged trial,
+    // despite having a budget of fifty iterations.
+    let trials = counts.trials.lock().unwrap();
+    assert_eq!(trials.len(), 8);
+    assert_eq!(counts.jacobians.load(Ordering::Relaxed), 4);
+    for pair in trials.chunks_exact(2) {
+        assert_eq!(pair[0], pair[1]);
+    }
+    assert_eq!(
+        result.cost_evals(),
+        counts.costs.load(Ordering::Relaxed) + 8 + 4
+    );
+}

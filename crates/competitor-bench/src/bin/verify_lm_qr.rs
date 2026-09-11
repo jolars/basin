@@ -2,6 +2,7 @@
 //! Run `cargo run -p competitor-bench --release --bin verify_lm_qr`.
 //! Add `--damping` to compare damping policies and stopping profiles.
 //! Add `--stopping` to isolate model-reduction and relative-step stops.
+//! Add `--disable-numerical-no-progress` to reproduce the previous LM policy.
 
 use basin::{
     Executor, FactorizePivotedQr, Jacobian, LevenbergMarquardt, LmDamping,
@@ -87,6 +88,7 @@ fn compare(
     starts: Vec<Vec<f64>>,
     damping: bool,
     stopping: bool,
+    numerical_no_progress: bool,
 ) {
     let detailed = damping || stopping;
     let truth = DVector::from_vec(truth);
@@ -155,6 +157,7 @@ fn compare(
                     )
                 } else {
                     let mut solver = LevenbergMarquardt::new()
+                        .with_no_progress_check(numerical_no_progress)
                         .with_absolute_gradient_tolerance(0.)
                         .with_gradient_orthogonality_tolerance(1e-12)
                         .with_relative_model_reduction_tolerance(1e-12)
@@ -303,6 +306,8 @@ fn main() {
     }
     let damping = std::env::args().any(|x| x == "--damping");
     let stopping = std::env::args().any(|x| x == "--stopping");
+    let numerical_no_progress =
+        !std::env::args().any(|x| x == "--disable-numerical-no-progress");
     if damping || stopping {
         println!(
             "case,start,solver,stopping,condition,converged,residual_calls,jacobian_calls,residual_norm,relative_residual,gradient_infinity,gradient_orthogonality,parameter_error,equivalent_parameter_error,fit_target,recovery_target,termination,parameters"
@@ -313,6 +318,14 @@ fn main() {
         );
     }
     models::for_each_case(|name, model, truth, starts| {
-        compare(name, model, truth, starts, damping, stopping)
+        compare(
+            name,
+            model,
+            truth,
+            starts,
+            damping,
+            stopping,
+            numerical_no_progress,
+        )
     });
 }

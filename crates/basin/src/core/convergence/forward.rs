@@ -402,6 +402,7 @@ impl<CG, CX, CC, CT, V, M, F: Scalar>
     forward_setting!(LevenbergMarquardt, with_relative_step_tolerance, value: impl Into<Option<F>>);
     forward_setting!(LevenbergMarquardt, with_tau, tau: F);
     forward_setting!(LevenbergMarquardt, with_max_inner_attempts, n: u32);
+    forward_setting!(LevenbergMarquardt, with_no_progress_check, enabled: bool);
 }
 
 impl<CG, CX, CC, CT, V, M, F: Scalar>
@@ -430,6 +431,7 @@ where
     forward_setting!(LevenbergMarquardtQr, with_relative_step_tolerance, value: impl Into<Option<F>>);
     forward_setting!(LevenbergMarquardtQr, with_tau, value: F);
     forward_setting!(LevenbergMarquardtQr, with_max_inner_attempts, value: u32);
+    forward_setting!(LevenbergMarquardtQr, with_no_progress_check, enabled: bool);
 }
 
 impl<CG, CX, CC, CT, V, M, F: Scalar>

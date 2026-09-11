@@ -836,6 +836,7 @@ fn reason_str(r: TerminationReason) -> &'static str {
         TerminationReason::MaxTime => "max_time",
         TerminationReason::SolverConverged => "solver_converged",
         TerminationReason::SolverFailed => "solver_failed",
+        TerminationReason::NumericalNoProgress => "numerical_no_progress",
         _ => "unknown",
     }
 }
@@ -843,6 +844,14 @@ fn reason_str(r: TerminationReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn numerical_no_progress_has_a_distinct_reason_tag() {
+        assert_eq!(
+            reason_str(TerminationReason::NumericalNoProgress),
+            "numerical_no_progress"
+        );
+    }
 
     #[test]
     fn eval_grid_returns_expected_shape_and_values() {

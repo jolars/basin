@@ -203,6 +203,7 @@ macro_rules! backend_checks {
                     Affine,
                     ($solver)
                         .with_damping(LmDamping::TrustRegion)
+                        .with_no_progress_check(false)
                         .with_absolute_gradient_tolerance(None),
                     ($vector_new)(&[1., 2.]),
                 )

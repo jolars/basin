@@ -1,5 +1,6 @@
 //! Diagnose LM stopping without changing the production iteration or callbacks.
 //! Run `cargo run -p competitor-bench --release --bin verify_lm_stopping`.
+//! Add `--disable-numerical-no-progress` to reproduce the previous LM policy.
 //!
 //! Trial steps are reconstructed from callback coordinates, so rounding can make
 //! them differ from LM's internal step. Model/SVD diagnostics are offline work,
@@ -427,7 +428,10 @@ where
 }
 
 fn compare(case: &Case, route: &str, profile: &str) {
+    let numerical_no_progress =
+        !std::env::args().any(|x| x == "--disable-numerical-no-progress");
     let mut solver = LevenbergMarquardt::new()
+        .with_no_progress_check(numerical_no_progress)
         .with_absolute_gradient_tolerance(0.)
         .with_gradient_orthogonality_tolerance(1e-12)
         .with_relative_model_reduction_tolerance(1e-12)

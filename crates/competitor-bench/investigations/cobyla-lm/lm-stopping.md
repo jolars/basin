@@ -5,6 +5,9 @@ Investigated September 11, 2026, from Basin revision
 comparison](lm-damping.md). Production solver behavior was unchanged during
 that investigation. The later [arithmetic correction](#arithmetic-correction)
 fixes the reproduced false orthogonality stop.
+The subsequent [numerical no-progress safeguard](#numerical-no-progress-safeguard)
+changes the default stopping policy; the original findings below describe the
+historical baseline with that safeguard disabled.
 
 The current relative tests can mistake a heavily damped step for convergence.
 Disabling them exposes a separate problem: an accurate rounded solution can
@@ -22,10 +25,13 @@ tests is not established by these workloads.
 
 ```sh
 cargo run -p competitor-bench --release --bin verify_lm_qr -- --damping \
+  --disable-numerical-no-progress \
   > target/lm-stopping-baseline.csv
 cargo run -p competitor-bench --release --bin verify_lm_qr -- --stopping \
+  --disable-numerical-no-progress \
   > target/lm-stopping-profiles.csv
-cargo run -p competitor-bench --release --bin verify_lm_stopping \
+cargo run -p competitor-bench --release --bin verify_lm_stopping -- \
+  --disable-numerical-no-progress \
   > target/lm-stopping-diagnostics.csv
 ```
 
@@ -303,5 +309,85 @@ Cholesky backends. They exercise gradient and step square underflow and
 overflow, tiny tolerances beside large coordinates, and disabled versus
 exact-zero settings. Unit tests cover subnormal projections, norms beyond
 the scalar range, zero columns, and non-finite inputs. This correction retains
-the unscaled internal attempted-step criterion and its evaluation stage;
-numerical no-progress handling remains a separate design task.
+the unscaled internal attempted-step criterion and its evaluation stage.
+Numerical no-progress handling was implemented separately, as described below.
+
+## Numerical no-progress safeguard
+
+Collected September 11, 2026, using Rust 1.89.0 and the default
+competitor-bench features, from Basin base revision
+`25d1b04fc2386bd3a08b75fb8667c1d3d30c88fa` plus this safeguard.
+
+Both LM factorizations now report `NumericalNoProgress` after one rejected
+finite trial for which the computed `x + h` equals the base `x` componentwise.
+The comparison uses the actual trial coordinates: rejection alone always leaves
+the stored iterate unchanged and is insufficient. Parameters, step, residuals,
+gradient, costs, and reduction diagnostics must be finite. The regular residual
+callback and damping/cache updates still run, and native convergence tests take
+precedence. Callback errors and model-solve failures retain their existing paths.
+The stop occurs mid-iteration, before observed-step or cost-change checks at
+the next boundary; those checks can be isolated by disabling the safeguard.
+
+This safeguard is enabled by default. `with_no_progress_check(false)` on
+either solver restores the previous behavior. It is independent of convergence
+tolerances: `None` still disables a particular test, and zero still requests an
+exact-zero threshold. With all convergence tests disabled, zero residual now
+produces a numerical no-progress stop unless the safeguard is also disabled.
+No tolerance is floored at epsilon. Scaled-radius convergence and
+damping-independent model checks remain separate work.
+
+`NumericalNoProgress` is neither convergence nor budget exhaustion, and
+`is_failure()` returns false so an outer solver can consume the finite result
+and continue. It does not establish mathematical stagnation, fit accuracy, or
+parameter recovery. In particular, excessive damping can trigger it while a
+weak direction remains unresolved. It also need not detect stagnation involving
+distinct trial coordinates.
+
+The [enabled](lm-no-progress-enabled.csv) and
+[disabled](lm-no-progress-disabled.csv) profile results each retain all 500
+combinations, with the same models, starts, callback budgets, and independent
+assessment targets. They compare the safeguard on and off on the same
+implementation, including the earlier arithmetic correction. Historical CSVs
+are unchanged. Across the 400 Basin runs, all reported parameter vectors and
+fit/recovery target outcomes are identical between settings. The 100 reference
+runs are unchanged in every field.
+
+| Basin route | Residual calls, disabled | Residual calls, enabled | Numerical stops | Fit targets | Recovery targets |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Nielsen Cholesky | 26,407 | 19,512 | 20 | 75 | 68 |
+| Nielsen QR | 19,936 | 19,414 | 17 | 78 | 68 |
+| Trust-region Cholesky | 31,939 | 13,748 | 26 | 85 | 85 |
+| Trust-region QR | 28,830 | 13,251 | 20 | 90 | 80 |
+
+Totals fall from 107,112 to 65,925 residual calls, saving 41,187. The 83 new
+numerical stops replace 44 budget stops, seven `SolverFailed` stops, and 32
+later `SolverConverged` stops. The last group confirms that solver-declared
+convergence and independently assessed accuracy remain separate outcomes.
+This is evaluation accounting, not a timing comparison or a general guarantee
+that stopping earlier preserves accuracy.
+
+The [updated diagnostic trace](lm-no-progress-diagnostics.csv) includes the
+accurate narrow-SVI trust-region QR fit: gradient-only stopping now exits at
+residual call 54 instead of 1,200, retaining relative residual `3.13e-17` and
+equivalent parameter error `1.01e-10`. From the inaccurate nonzero collinear
+start, Nielsen Cholesky and QR both stop at call 12 with relative residual and
+parameter error about `0.5`. The two difficult narrow-SVI starts still exhaust
+their budgets under every profile and route, missing both targets.
+
+Reproduce the new comparison with the default competitor-bench features:
+
+```sh
+cargo run -p competitor-bench --release --bin verify_lm_qr -- --stopping \
+  > target/lm-no-progress-enabled.csv
+cargo run -p competitor-bench --release --bin verify_lm_qr -- --stopping \
+  --disable-numerical-no-progress > target/lm-no-progress-disabled.csv
+cargo run -p competitor-bench --release --bin verify_lm_stopping \
+  > target/lm-no-progress-diagnostics.csv
+```
+
+Regression coverage includes rounded quadratic roots with nonzero residuals,
+inaccurate heavily damped affine fits, zero steps, rejected distinct trials,
+and native-convergence precedence across the supported dense and sparse
+backends. Additional tests preserve callback errors and non-finite trial
+rejections, verify opt-out forwarding and QR conversion, and check that
+`CmaInject` continues after fresh LM inner runs with exact evaluation accounting.

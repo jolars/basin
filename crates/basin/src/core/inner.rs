@@ -234,8 +234,9 @@ where
 ///    [`TerminationReason::is_failure`](crate::core::termination::TerminationReason::is_failure)
 ///    to decide whether to bubble: `SolverFailed` should bubble via the
 ///    outer's mid-iter `Option<TerminationReason>` return; everything
-///    else (`MaxIter`, `*Tolerance`, `SolverConverged`) is a "clean stop"
-///    the outer can consume and continue past.
+///    else (`MaxIter`, `*Tolerance`, `SolverConverged`, `NumericalNoProgress`)
+///    is a "clean stop" the outer can consume and continue past. A clean stop
+///    does not itself establish convergence or solution accuracy.
 pub struct InnerExecutor<S, So> {
     solver: So,
     control: crate::RunControl<S>,

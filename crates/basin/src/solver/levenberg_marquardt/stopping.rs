@@ -2,6 +2,23 @@ use crate::core::math::{
     ComponentZip, NormInfinity, NormSquared, Scalar, ScaleInPlace,
 };
 
+pub(super) fn finite_unchanged_trial<V, F>(x: &V, trial: &V) -> bool
+where
+    F: Scalar,
+    V: ComponentZip<F>,
+{
+    x.all_zip(trial, |base, proposed| base.is_finite() && base == proposed)
+}
+
+pub(super) fn all_finite<V, F>(v: &V) -> bool
+where
+    F: Scalar,
+    V: ComponentZip<F>,
+{
+    // An infinity norm can hide NaNs on backends that reduce with scalar max.
+    v.all_zip(v, |value, _| value.is_finite())
+}
+
 pub(super) fn orthogonality_converged<V, F>(
     g: &V,
     diagonal: &V,

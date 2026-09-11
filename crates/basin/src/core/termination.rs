@@ -79,6 +79,14 @@ pub enum TerminationReason {
     SolverConverged,
     /// Solver cannot make further progress (e.g. line search failure).
     SolverFailed,
+    /// A numerical safeguard stopped the solver without establishing convergence.
+    ///
+    /// Levenberg-Marquardt reports this after a rejected finite trial whose
+    /// computed step leaves every parameter unchanged in floating-point
+    /// arithmetic. The returned point may be inaccurate or heavily damped;
+    /// this reason does not establish stationarity or parameter recovery.
+    /// Outer solvers may consume the finite result and continue.
+    NumericalNoProgress,
 }
 
 impl TerminationReason {
@@ -86,6 +94,8 @@ impl TerminationReason {
     /// outer solver should bubble (rather than consume and continue).
     ///
     /// Currently only [`SolverFailed`](Self::SolverFailed) qualifies.
+    /// [`NumericalNoProgress`](Self::NumericalNoProgress) is a clean inner
+    /// stop, although it does not establish convergence or solution accuracy.
     /// [`Cancelled`](Self::Cancelled) is also a clean result rather than a
     /// failure; executor-attached tokens are checked only at top-level
     /// iteration boundaries and do not enter composed inner runs. See

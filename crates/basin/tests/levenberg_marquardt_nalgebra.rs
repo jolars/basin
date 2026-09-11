@@ -163,13 +163,16 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
     // The scale-invariant termination side of issue #6: a relative cost
     // tolerance is portable across problem scales where the absolute
     // CostTolerance is not. Disable the solver's own ‖Jᵀr‖∞ check so the
-    // framework criterion is what stops the run.
+    // framework criterion is what stops the run. Disable numerical no-progress
+    // handling as well so the observed change reaches the next boundary.
     let problem = ExponentialFit::<DVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
     let initial = DVector::from_vec(vec![5.0e4, -0.3]);
 
     let result = Executor::new(
         problem,
-        (LevenbergMarquardt::new().with_absolute_gradient_tolerance(None))
+        LevenbergMarquardt::new()
+            .with_absolute_gradient_tolerance(None)
+            .with_no_progress_check(false)
             .with_relative_cost_change_tolerance(1e-10),
         NllsState::new(initial),
     )
