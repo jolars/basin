@@ -17,7 +17,6 @@ use std::rc::Rc;
 
 use basin::{
     BasicState, CostFunction, Executor, FiniteDiff, Gradient, GradientDescent,
-    GradientTolerance, MaxIter,
 };
 
 // ---------------------------------------------------------------------
@@ -58,11 +57,14 @@ fn gradient_descent_runs_with_no_opt_in() {
     // is what the solver hits. No extra trait impl required.
     let solver = GradientDescent::new(0.1);
     let state = BasicState::new(vec![1.0, 1.0]);
-    let result = Executor::new(Sphere, solver, state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(GradientTolerance(1e-10))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        Sphere,
+        (solver).with_absolute_gradient_tolerance(1e-10),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
     assert!(result.cost() < 1e-8, "got cost {}", result.cost());
 }
 
@@ -110,11 +112,14 @@ fn solver_calls_fused_override() {
     };
     let solver = GradientDescent::new(0.1);
     let state = BasicState::new(vec![1.0, 1.0]);
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(GradientTolerance(1e-10))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (solver).with_absolute_gradient_tolerance(1e-10),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     // GD's init + each next_iter goes through the fused call.
     let expected_min = result.iter() as usize + 1;
@@ -307,7 +312,7 @@ mod lsq {
         let solver: LevenbergMarquardt<DVector<f64>, DMatrix<f64>> =
             LevenbergMarquardt::new();
         let result = Executor::new(problem, solver, state)
-            .terminate_on(MaxIter(10))
+            .max_iter(10)
             .run()
             .unwrap();
 
@@ -339,11 +344,14 @@ fn finite_diff_runs_through_solver() {
     let problem = FiniteDiff::new(CostOnly);
     let solver = GradientDescent::new(0.1);
     let state = BasicState::new(vec![0.0, 0.0]);
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(GradientTolerance(1e-8))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (solver).with_absolute_gradient_tolerance(1e-8),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     let x = result.param();
     assert!((x[0] - 1.0).abs() < 1e-3);

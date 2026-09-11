@@ -1,5 +1,5 @@
 //! Framework: traits, state shapes, the iteration driver, and the
-//! termination layer. The slot taxonomy is:
+//! convergence and execution controls. The slot taxonomy is:
 //!
 //! - [`problem`]: what the *user* implements about their objective:
 //!   [`CostFunction`](problem::CostFunction),
@@ -28,26 +28,25 @@
 //!   [`State`](state::State) for the minimum,
 //!   [`GradientState`](state::GradientState)/
 //!   [`SimplexState`](state::SimplexState) when a solver carries
-//!   richer info that termination criteria can read.
+//!   richer info that convergence checks can read.
 //! - [`solver`]: the [`Solver`](solver::Solver) trait every concrete
 //!   solver implements. Lifecycle is `init` once, then repeated
 //!   `next_iter`, with an optional `terminate` hook.
-//! - [`termination`]: the framework-level
-//!   [`TerminationCriterion`](termination::TerminationCriterion)
-//!   trait plus shipped criteria. Each criterion bounds on the minimum
-//!   state shape it needs (tenet 3), so mismatches are compile errors
-//!   rather than runtime no-ops.
+//! - [`convergence`]: shared fixed slots for solver-owned optional checks.
+//!   Enabled checks require only their minimum state and backend capabilities.
+//! - [`run_control`]: execution budgets, targets, stalls, and application hooks.
+//! - [`termination`]: stopping reasons and the deprecated Basin 1.x criterion
+//!   facility, scheduled for removal in Basin 2.0.
 //! - [`observer`]: read-only side-effect hooks fired around the loop
 //!   ([`Observe`](observer::Observe) + [`ObserverMode`](observer::ObserverMode)).
-//!   Sibling to [`termination`]: observers watch, criteria decide.
 //! - [`checkpoint`]: solver-aware snapshots for exact continuation. State-only
 //!   warm-start files remain an observer concern.
 //! - [`executor`]: the driver: [`Executor`](executor::Executor)/
-//!   [`Stepper`](executor::Stepper)/[`run_loop`](executor::run_loop), plus the
+//!   [`Stepper`](executor::Stepper)/[`run_loop_with_control`](executor::run_loop_with_control), plus the
 //!   cooperative [`CancellationToken`](executor::CancellationToken). The
 //!   canonical iteration ordering is documented on the [`executor`] module.
 //! - [`inner`]: the composition adapter:
-//!   [`InnerExecutor`](inner::InnerExecutor) wraps `run_loop` for outer
+//!   [`InnerExecutor`](inner::InnerExecutor) wraps `run_loop_with_control` for outer
 //!   solvers that drive an inner solver per outer iteration. See
 //!   `CONTRIBUTING.md` "Solver composition" for the contracts.
 //! - [`math`]: the small shared math layer
@@ -60,6 +59,7 @@ pub mod augmented_lagrangian;
 pub mod barrier;
 pub mod checkpoint;
 pub mod constraint;
+pub mod convergence;
 pub mod executor;
 pub mod inner;
 pub mod math;
@@ -69,6 +69,7 @@ pub mod observer;
 pub mod parallel;
 pub mod problem;
 pub mod rng;
+pub mod run_control;
 pub mod solver;
 pub mod state;
 pub mod termination;

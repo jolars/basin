@@ -9,10 +9,7 @@
 //! coverage here only if a backend-specific bug surfaces.
 
 use basin::problems::{BoothBoxed, RastriginBoxed};
-use basin::{
-    BasicSimplexState, Executor, NelderMead, SimplexTolerance,
-    TerminationReason,
-};
+use basin::{BasicSimplexState, Executor, NelderMead, TerminationReason};
 
 /// Slack bounds: the unconstrained Booth minimum `(1, 3)` lies inside
 /// `[-5, 5]²`, so the projection step should be a no-op for any vertex
@@ -25,11 +22,12 @@ fn slack_bounds_recover_unconstrained_minimum() {
 
     let result = Executor::new(
         problem,
-        NelderMead::new().projected(),
+        (NelderMead::new().projected())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-8),
         BasicSimplexState::new(initial),
     )
     .max_iter(2_000)
-    .terminate_on(SimplexTolerance::new(1e-8, 1e-8))
     .run()
     .unwrap();
 
@@ -59,11 +57,12 @@ fn tight_bounds_converge_to_box_corner() {
 
     let result = Executor::new(
         problem,
-        NelderMead::new().projected(),
+        (NelderMead::new().projected())
+            .with_absolute_simplex_size_tolerance(1e-10)
+            .with_absolute_simplex_cost_tolerance(1e-10),
         BasicSimplexState::new(initial),
     )
     .max_iter(2_000)
-    .terminate_on(SimplexTolerance::new(1e-10, 1e-10))
     .run()
     .unwrap();
 
@@ -139,11 +138,12 @@ fn adaptive_projected_on_rastrigin_3d() {
 
     let result = Executor::new(
         problem,
-        NelderMead::adaptive().projected(),
+        (NelderMead::adaptive().projected())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-8),
         BasicSimplexState::new(initial),
     )
     .max_iter(2_000)
-    .terminate_on(SimplexTolerance::new(1e-8, 1e-8))
     .run()
     .unwrap();
 

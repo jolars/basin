@@ -11,6 +11,7 @@ use crate::core::state::{
     BasicSimplexState, CmaEsState, CountsMirror, IntoInitialSimplex,
     LbfgsState, NllsState, State,
 };
+#[allow(deprecated)]
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
 use crate::solver::lbfgs::{Bounded, Lbfgs};
@@ -395,8 +396,12 @@ where
     /// Register a termination criterion on the inner loop.
     /// Criteria are reused across every outer iteration's inner run, but
     /// each is reset at the start of every run, so stateful criteria,
-    /// including [`MaxTime`](crate::core::termination::MaxTime), are safe.
+    /// including [`max_time`](crate::Executor::max_time), are safe.
     /// See CONTRIBUTING.md "Solver composition" rule 2.
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
+    )]
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where
         C: TerminationCriterion<I::State> + 'static,
@@ -410,6 +415,35 @@ where
         Self {
             cma,
             inner: inner.terminate_on(criterion),
+            k,
+            c_y_override,
+        }
+    }
+
+    /// Configure the outer CMA distribution-size tolerance; `None` disables it.
+    pub fn with_absolute_distribution_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.cma = self.cma.with_absolute_distribution_size_tolerance(value);
+        self
+    }
+
+    /// Add a factory creating fresh application-stop history for each inner run.
+    pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
+    where
+        Mk: FnMut() -> CheckFn + 'static,
+        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+    {
+        let Self {
+            cma,
+            inner,
+            k,
+            c_y_override,
+        } = self;
+        Self {
+            cma,
+            inner: inner.stop_when_factory(make),
             k,
             c_y_override,
         }
@@ -549,5 +583,11 @@ where
         }
 
         Ok((state, None))
+    }
+    fn terminate(
+        &self,
+        state: &CmaEsState<V, M, F>,
+    ) -> Option<TerminationReason> {
+        <_ as Solver<P, CmaEsState<V, M, F>>>::terminate(&self.cma, state)
     }
 }

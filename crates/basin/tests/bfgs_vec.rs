@@ -7,7 +7,7 @@
 use basin::problems::Rosenbrock;
 use basin::{
     Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient,
-    GradientTolerance, TerminationReason,
+    TerminationReason,
 };
 
 #[test]
@@ -48,11 +48,10 @@ fn bfgs_terminates_on_gradient_tolerance() {
 
     let result = Executor::new(
         problem,
-        Bfgs::new(),
+        (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
         DenseQuasiNewtonState::new(initial),
     )
     .max_iter(200)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 
@@ -106,11 +105,10 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
 
     let result = Executor::new(
         problem,
-        Bfgs::new(),
+        (Bfgs::new()).with_absolute_gradient_tolerance(1e-8),
         DenseQuasiNewtonState::new(initial),
     )
     .max_iter(50)
-    .terminate_on(GradientTolerance(1e-8))
     .run()
     .unwrap();
 

@@ -5,8 +5,8 @@
 //! [`LinearInequalityConstraints`], [`LinearEqualityConstraints`],
 //! [`LinearConstraints`], [`NonlinearInequalityConstraints`]), state shapes
 //! solvers iterate over ([`State`], [`GradientState`], [`SimplexState`]),
-//! the [`Solver`] trait, a pluggable termination layer
-//! ([`TerminationCriterion`]), and a read-only observer layer
+//! the [`Solver`] trait, solver-owned convergence, execution controls
+//! ([`RunControl`]), and a read-only observer layer
 //! ([`Observe`]). Concrete optimization solvers are in [`solver`]; line
 //! searches in [`line_search`]; and direct scalar root finders in [`root`].
 //!
@@ -14,7 +14,7 @@
 //! or [`core`] for the trait taxonomy and the iteration-loop contract.
 //!
 //! See `CONTRIBUTING.md` at the repo root for the design tenets that shape
-//! these APIs (notably tenet 3 on framework-level termination, tenet 4
+//! these APIs (notably tenet 3 on solver-owned convergence, tenet 4
 //! on first-class constraints, and tenet 5 on backend tiering).
 //!
 //! # Example
@@ -24,7 +24,9 @@
 //! the [`Executor`]:
 //!
 //! ```
-//! use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent, GradientTolerance};
+//! use basin::{
+//!     BasicState, CostFunction, Executor, Gradient, GradientDescent,
+//! };
 //!
 //! struct Sphere;
 //! impl CostFunction for Sphere {
@@ -37,16 +39,22 @@
 //! }
 //! impl Gradient for Sphere {
 //!     type Gradient = Vec<f64>;
-//!     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+//!     fn gradient(
+//!         &self,
+//!         x: &Vec<f64>,
+//!     ) -> Result<Vec<f64>, std::convert::Infallible> {
 //!         Ok(x.iter().map(|xi| 2.0 * xi).collect())
 //!     }
 //! }
 //!
-//! let result = Executor::new(Sphere, GradientDescent::new(0.1), BasicState::new(vec![1.0, 1.0]))
-//!     .max_iter(1_000)
-//!     .terminate_on(GradientTolerance(1e-8))
-//!     .run()
-//!     .unwrap();
+//! let result = Executor::new(
+//!     Sphere,
+//!     (GradientDescent::new(0.1)).with_absolute_gradient_tolerance(1e-8),
+//!     BasicState::new(vec![1.0, 1.0]),
+//! )
+//! .max_iter(1_000)
+//! .run()
+//! .unwrap();
 //! assert!(result.cost() < 1e-12);
 //! ```
 //!
@@ -60,7 +68,7 @@
 //! [`InitialState::seed`], so you never name the concrete state type:
 //!
 //! ```
-//! use basin::{Executor, MaxIter, NelderMead};
+//! use basin::{Executor, NelderMead};
 //! # struct Sphere;
 //! # impl basin::CostFunction for Sphere {
 //! #     type Param = Vec<f64>;
@@ -71,7 +79,7 @@
 //! #     }
 //! # }
 //! let result = Executor::from_start(Sphere, NelderMead::new(), vec![1.0, 1.0])
-//!     .terminate_on(MaxIter(500))
+//!     .max_iter(500)
 //!     .run()
 //!     .unwrap();
 //! ```
@@ -113,7 +121,7 @@
 //!   should continue."
 //! - **Clean stop**: the run ends *normally* with a
 //!   [`TerminationReason`], either
-//!   because a [`TerminationCriterion`] fired, an attached
+//!   because convergence or an execution limit was reached, an attached
 //!   [`CancellationToken`] was cancelled, or the [`Solver`] reported a
 //!   mid-iteration stop. [`Executor::run`] returns
 //!   `Ok(`[`OptimizationResult`]`)` carrying that reason. This is **not** an
@@ -347,9 +355,11 @@ pub use crate::core::constraint::{
     BoxConstraints, LinearConstraints, LinearEqualityConstraints,
     LinearInequalityConstraints, NonlinearInequalityConstraints,
 };
+pub use crate::core::convergence::ConfiguredSolver;
+#[allow(deprecated)]
 pub use crate::core::executor::{
     CancellationToken, Executor, OptimizationResult, StepOutcome, Stepper,
-    run_loop,
+    run_loop, run_loop_with_control,
 };
 pub use crate::core::inner::{
     InitialState, InnerExecutor, ResumableInner, WarmStart,
@@ -377,6 +387,7 @@ pub use crate::core::problem::{
     CostFunction, EvalCounts, Gradient, Hessian, HessianProduct, Jacobian,
     MiniBatchGradient, Problem, Residual,
 };
+pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::Solver;
 #[cfg(feature = "faer_all")]
 pub use crate::core::state::FaerQuasiNewtonState;
@@ -393,6 +404,7 @@ pub use crate::core::state::{
     ScalarState, SimplexState, SimulatedAnnealingState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
+#[allow(deprecated)]
 pub use crate::core::termination::{
     CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals,
     MaxGradientEvals, MaxIter, MaxTime, MeshTolerance, NoAcceptance,

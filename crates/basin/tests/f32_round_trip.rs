@@ -7,10 +7,6 @@ use basin::core::executor::Executor;
 use basin::core::math::DenseMatrix;
 use basin::core::problem::{CostFunction, Gradient, Hessian, HessianProduct};
 use basin::core::state::{BasicState, LbfgsState, State};
-use basin::core::termination::{
-    CostTolerance, GradientTolerance, MaxIter, RelativeCostTolerance,
-    TargetCost,
-};
 use basin::line_search::{Backtracking, HagerZhang, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{
@@ -88,10 +84,12 @@ fn cobyla_f32_round_trips_small_and_cached_inverse_paths() {
         };
         let result = Executor::new(
             problem,
-            Cobyla::<f32>::new().with_rho_beg(0.5).with_rho_end(1e-4),
+            Cobyla::<f32>::new()
+                .with_initial_radius(0.5)
+                .with_final_radius(1e-4),
             CobylaState::<Vec<f32>, f32>::new(vec![3.0; n]),
         )
-        .terminate_on(MaxIter(1000))
+        .max_iter(1000)
         .run()
         .unwrap();
         assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -112,7 +110,7 @@ fn gbnm_f32_round_trips_solver_state_and_bounds() {
     let state = GbnmState::<Vec<f32>, f32>::new(vec![3.0, 3.0]);
 
     let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(300))
+        .max_iter(300)
         .run()
         .unwrap();
 
@@ -136,11 +134,14 @@ fn gradient_descent_f32_with_f32_termination_converges() {
     let solver: GradientDescent<Backtracking<f32>, Vec<f32>, f32> =
         GradientDescent::with_line_search(Backtracking::new());
 
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(500))
-        .terminate_on(GradientTolerance::<f32>(1e-3))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (solver).with_absolute_gradient_tolerance(1e-3),
+        state,
+    )
+    .max_iter(500)
+    .run()
+    .unwrap();
 
     let final_x = result.state.param();
     assert!((final_x[0] - 1.0).abs() < 1e-2);
@@ -159,14 +160,17 @@ fn unbounded_lbfgs_f32_round_trips_state_solver_termination() {
             MoreThuente::new(),
         );
 
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(100))
-        .terminate_on(GradientTolerance::<f32>(1e-3))
-        .terminate_on(CostTolerance::<f32>::new(1e-6))
-        .terminate_on(RelativeCostTolerance::<f32>::new(1e-6))
-        .terminate_on(TargetCost::<f32>(1e-6))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (((solver).with_relative_cost_change_tolerance(1e-6))
+            .with_absolute_gradient_tolerance(1e-3))
+        .with_absolute_cost_change_tolerance(1e-6),
+        state,
+    )
+    .max_iter(100)
+    .target_cost(1e-6)
+    .run()
+    .unwrap();
 
     let final_x = result.state.param();
     assert!((final_x[0] - 1.0).abs() < 1e-3);
@@ -185,11 +189,14 @@ fn hager_zhang_f32_round_trips_line_search_and_lbfgs() {
             HagerZhang::new(),
         );
 
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(100))
-        .terminate_on(GradientTolerance::<f32>(1e-3))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (solver).with_absolute_gradient_tolerance(1e-3),
+        state,
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     let final_x = result.state.param();
     assert!((final_x[0] - 1.0).abs() < 1e-3);
@@ -232,11 +239,14 @@ fn matrix_free_trust_region_f32_round_trips_state_solver_termination() {
     let solver: TrustRegion<Steihaug, f32, MatrixFree> =
         TrustRegion::matrix_free_with(Steihaug::new());
 
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(100))
-        .terminate_on(GradientTolerance::<f32>(1e-4))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (solver).with_absolute_gradient_tolerance(1e-4),
+        state,
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     let final_x = result.state.param();
     assert!((final_x[0] - 1.0).abs() < 1e-3);
@@ -250,18 +260,20 @@ fn solis_wets_f32_round_trips_state_solver_termination() {
     // SolisWetsState, RhoTolerance via RhoState) runs end-to-end at
     // F = f32 over Vec<f32>.
     use basin::SolisWets;
-    use basin::core::termination::RhoTolerance;
 
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
     let solver = SolisWets::<f32>::new(42);
 
-    let result = Executor::from_start(problem, solver, vec![0.0_f32; 3])
-        .terminate_on(MaxIter(20_000))
-        .terminate_on(RhoTolerance::<f32>::new(1e-5))
-        .run()
-        .unwrap();
+    let result = Executor::from_start(
+        problem,
+        (solver).with_absolute_step_size_tolerance(1e-5),
+        vec![0.0_f32; 3],
+    )
+    .max_iter(20_000)
+    .run()
+    .unwrap();
 
     let final_x = result.state.best_param();
     assert!((final_x[0] - 1.0).abs() < 1e-1);
@@ -280,11 +292,14 @@ fn trust_region_f32_round_trips_state_solver_termination() {
     let solver: TrustRegion<Steihaug, f32> =
         TrustRegion::with_subproblem(Steihaug::new());
 
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(100))
-        .terminate_on(GradientTolerance::<f32>(1e-4))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (solver).with_absolute_gradient_tolerance(1e-4),
+        state,
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     let final_x = result.state.param();
     assert!((final_x[0] - 1.0).abs() < 1e-3);
@@ -301,11 +316,14 @@ fn more_sorensen_f32_round_trips_state_solver_termination() {
     let solver: TrustRegion<MoreSorensen, f32> =
         TrustRegion::with_subproblem(MoreSorensen::new());
 
-    let result = Executor::new(problem, solver, state)
-        .terminate_on(MaxIter(100))
-        .terminate_on(GradientTolerance::<f32>(1e-4))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (solver).with_absolute_gradient_tolerance(1e-4),
+        state,
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     let final_x = result.state.param();
     assert!((final_x[0] - 1.0).abs() < 1e-3);
@@ -333,8 +351,8 @@ fn levenberg_marquardt_qr_f32_round_trip() {
             Ok(DenseMatrix::from_row_slice(2, 2, &[1., 0., 0., 2.]))
         }
     }
-    let solver =
-        basin::LevenbergMarquardtQr::<_, _, f32>::new().with_tol_grad(1e-5);
+    let solver = basin::LevenbergMarquardtQr::<_, _, f32>::new()
+        .with_absolute_gradient_tolerance(1e-5);
     let result = Executor::from_start(Fit, solver, vec![0., 0.])
         .max_iter(50)
         .run()

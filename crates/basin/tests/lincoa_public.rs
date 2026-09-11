@@ -11,8 +11,7 @@
 
 use basin::core::constraint::LinearConstraints;
 use basin::{
-    CostFunction, DenseMatrix, Executor, Lincoa, LincoaState, MaxCostEvals,
-    RhoTolerance, TerminationReason,
+    CostFunction, DenseMatrix, Executor, Lincoa, LincoaState, TerminationReason,
 };
 
 /// `min ‖x − c‖²` subject to `A x ≤ b`, on `Vec<f64>` with the pure-Rust
@@ -50,10 +49,12 @@ fn converges_to_projection() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.5).with_rho_end(1e-7),
+        Lincoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-7),
         LincoaState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 
@@ -88,10 +89,12 @@ fn converges_with_two_active_constraints() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.3).with_rho_end(1e-7),
+        Lincoa::new()
+            .with_initial_radius(0.3)
+            .with_final_radius(1e-7),
         LincoaState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 
@@ -142,10 +145,12 @@ fn box_bounds_fold_and_converge_to_corner() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.3).with_rho_end(1e-7),
+        Lincoa::new()
+            .with_initial_radius(0.3)
+            .with_final_radius(1e-7),
         LincoaState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 
@@ -193,10 +198,12 @@ fn equality_folds_and_converges_to_projection() {
     // Start on the constraint line x0 + x1 = 2.
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.3).with_rho_end(1e-8),
+        Lincoa::new()
+            .with_initial_radius(0.3)
+            .with_final_radius(1e-8),
         LincoaState::new(vec![0.0, 2.0]),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 
@@ -218,10 +225,12 @@ fn respects_cost_eval_budget() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.5).with_rho_end(1e-12),
+        Lincoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-12),
         LincoaState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(MaxCostEvals(15))
+    .max_cost_evals(15)
     .run()
     .unwrap();
 
@@ -242,11 +251,13 @@ fn rho_tolerance_stops_early() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.5).with_rho_end(1e-12),
+        (Lincoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-12))
+        .with_absolute_radius_tolerance(1e-3),
         LincoaState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(RhoTolerance::new(1e-3))
-    .terminate_on(MaxCostEvals(5000))
+    .max_cost_evals(5000)
     .run()
     .unwrap();
 
@@ -288,10 +299,12 @@ fn backend_generic_nalgebra() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.5).with_rho_end(1e-7),
+        Lincoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-7),
         LincoaState::new(DVector::from_vec(vec![0.0, 0.0])),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 
@@ -339,10 +352,12 @@ fn backend_generic_ndarray() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.5).with_rho_end(1e-7),
+        Lincoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-7),
         LincoaState::new(Array1::from_vec(vec![0.0, 0.0])),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 
@@ -386,10 +401,12 @@ fn backend_generic_faer() {
     };
     let result = Executor::new(
         problem,
-        Lincoa::new().with_rho_beg(0.5).with_rho_end(1e-7),
+        Lincoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-7),
         LincoaState::new(Col::from_fn(2, |_| 0.0)),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 

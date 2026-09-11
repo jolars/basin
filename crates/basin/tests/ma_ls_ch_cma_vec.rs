@@ -5,7 +5,7 @@
 //! test (`tests/ma_ls_ch_cma_nalgebra.rs`).
 
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{DenseMatrix, Executor, MaLsChCma, MaLsChState, MaxCostEvals};
+use basin::{DenseMatrix, Executor, MaLsChCma, MaLsChState};
 
 #[test]
 fn converges_on_sphere_d10() {
@@ -13,7 +13,7 @@ fn converges_on_sphere_d10() {
     let solver = MaLsChCma::<Vec<f64>, DenseMatrix>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(20_000))
+        .max_cost_evals(20_000)
         .run()
         .unwrap();
 
@@ -30,7 +30,7 @@ fn converges_on_rastrigin_d10() {
     let solver = MaLsChCma::<Vec<f64>, DenseMatrix>::new(42).with_pop_size(30);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(50_000))
+        .max_cost_evals(50_000)
         .run()
         .unwrap();
 

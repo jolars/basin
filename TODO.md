@@ -130,6 +130,19 @@ Ordered by recommended sequence.
 
 ## Basin 2.0
 
+- [ ] Remove the deprecated `TerminationCriterion` facility, all shipped
+  criterion types and re-exports, `Executor::terminate_on`,
+  `InnerExecutor::terminate_on`, composed `inner_terminate_on` methods,
+  `run_loop`, and `ResumableInner::segment_criteria`. Retain stopping reasons,
+  solver convergence setters, direct execution controls, and closure hooks.
+- [ ] Remove deprecated tolerance and algorithm-setting aliases listed in
+  [MIGRATING.md](MIGRATING.md), including scalar/root and line-search aliases.
+- [ ] Remove `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and
+  `with_inner_grad_tol`, along with their implicit inner-gradient checks.
+  Use `with_inner_solver` and the supplied solver's convergence settings.
+- [ ] Move remaining shared numerical calculations out of the compatibility
+  criterion types and remove the compatibility-only tests and bridges.
+
 - [ ] **Make the `problems` feature opt-in.** Set `default = []` while retaining
   `problems = []` for benchmarks, examples, and other corpus consumers. Keep
   the existing default through Basin 1.x: removing it breaks downstream
@@ -138,7 +151,7 @@ Ordered by recommended sequence.
   `problems` wherever they use the corpus.
 
 - [ ] **Reconsider exact evaluation budgets for Basin 2.0.** In Basin 1.x,
-  `MaxCostEvals` remains a boundary-checked stopping criterion:
+  `max_cost_evals` remains a boundary-checked execution limit:
   `Solver::init` and an active `Solver::next_iter` finish before the
   executor checks it, so initialization and batched iterations may exceed
   the threshold. A future hard-cap API would need executor/problem-level

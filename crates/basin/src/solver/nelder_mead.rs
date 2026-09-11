@@ -43,7 +43,7 @@ use crate::core::termination::TerminationReason;
 /// single point (the initial simplex is built automatically):
 ///
 /// ```
-/// use basin::{BasicSimplexState, CostFunction, Executor, NelderMead, SimplexTolerance};
+/// use basin::{BasicSimplexState, CostFunction, Executor, NelderMead};
 ///
 /// struct Rosenbrock;
 /// impl CostFunction for Rosenbrock {
@@ -57,11 +57,12 @@ use crate::core::termination::TerminationReason;
 ///
 /// let result = Executor::new(
 ///     Rosenbrock,
-///     NelderMead::new(),
+///     NelderMead::new()
+///         .with_absolute_simplex_size_tolerance(1e-10)
+///         .with_absolute_simplex_cost_tolerance(1e-10),
 ///     BasicSimplexState::new(vec![-1.2, 1.0]),
 /// )
 /// .max_iter(1_000)
-/// .terminate_on(SimplexTolerance::new(1e-10, 1e-10))
 /// .run()
 /// .unwrap();
 /// assert!(result.cost() < 1e-6);

@@ -8,9 +8,38 @@
 //! barrier eval closure, which is backend-agnostic).
 
 use basin::problems::BoothBoxed;
-use basin::{
-    Executor, Mads, MadsState, MaxCostEvals, State, TerminationReason,
-};
+use basin::{Executor, Mads, MadsState, State, TerminationReason};
+
+#[test]
+fn poll_tolerance_can_be_set_after_bounding() {
+    for (tolerance, expected) in [
+        (Some(1.0), TerminationReason::MeshTolerance),
+        (Some(0.0), TerminationReason::MaxIter),
+        (None, TerminationReason::MaxIter),
+    ] {
+        let solver = Mads::new()
+            .bounded()
+            .with_absolute_poll_size_tolerance(1.0)
+            .with_absolute_poll_size_tolerance(tolerance);
+        let configured = Mads::new()
+            .with_absolute_poll_size_tolerance(1.0)
+            .with_absolute_cost_change_tolerance(None)
+            .bounded()
+            .with_absolute_poll_size_tolerance(tolerance);
+        let problem =
+            || BoothBoxed::<Vec<f64>>::new(vec![-5.0; 2], vec![5.0; 2]);
+        let direct = Executor::from_start(problem(), solver, vec![0.0; 2])
+            .max_iter(1)
+            .run()
+            .unwrap();
+        let wrapped = Executor::from_start(problem(), configured, vec![0.0; 2])
+            .max_iter(1)
+            .run()
+            .unwrap();
+        assert_eq!(direct.reason, expected);
+        assert_eq!(wrapped.reason, expected);
+    }
+}
 
 /// Slack bounds: the unconstrained Booth minimum `(1, 3)` lies inside `[-5, 5]²`,
 /// so the barrier never fires and MADS recovers the unconstrained optimum.
@@ -23,11 +52,11 @@ fn slack_bounds_recover_unconstrained_minimum() {
         Mads::new()
             .bounded()
             .with_initial_poll_size(1.0)
-            .with_min_poll_size(1e-6),
+            .with_minimum_poll_size(1e-6),
         MadsState::new(vec![0.0, 0.0]),
     )
     .max_iter(50_000)
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 
@@ -58,11 +87,11 @@ fn tight_bounds_converge_to_box_corner() {
         Mads::new()
             .bounded()
             .with_initial_poll_size(1.0)
-            .with_min_poll_size(1e-8),
+            .with_minimum_poll_size(1e-8),
         MadsState::new(vec![0.0, 0.0]),
     )
     .max_iter(50_000)
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 

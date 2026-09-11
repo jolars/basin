@@ -5,7 +5,7 @@
 [![docs.rs](https://img.shields.io/docsrs/basin)](https://docs.rs/basin)
 
 A numerical optimization library for Rust, inspired by [argmin]. It pairs a
-generic core, problem traits you implement, a pluggable termination layer, and a
+generic core, problem traits you implement, solver-owned convergence settings, and a
 driver loop (`Executor`), with a set of solvers spanning first-order,
 derivative-free, nonlinear least-squares, and evolutionary methods. Solvers are
 generic over the linear-algebra backend, constraints are first-class, and the
@@ -45,7 +45,6 @@ then hand the problem, a solver, and an initial state to the `Executor`:
 ```rust
 use basin::{
     BasicState, CostFunction, Executor, Gradient, GradientDescent,
-    GradientTolerance,
 };
 use std::convert::Infallible;
 
@@ -75,11 +74,10 @@ fn main() {
 
     let result = Executor::new(
         Rosenbrock,
-        GradientDescent::new(1e-3),
+        (GradientDescent::new(1e-3)).with_absolute_gradient_tolerance(1e-6),
         BasicState::new(vec![-1.2, 1.0]),
     )
     .max_iter(50_000)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 
@@ -92,10 +90,10 @@ fn main() {
 }
 ```
 
-Termination criteria are framework-level: the same ones compose across solvers,
-and they are bound to the state a solver actually exposes, so asking for a
-gradient tolerance on a derivative-free solver is a compile error, not a runtime
-surprise.
+Configure convergence on the solver and execution budgets on the executor.
+Optional tolerance setters accept a scalar or `None`; enabled tests usually
+combine with OR. The old criterion API is deprecated until Basin 2.0. See the
+[migration guide](MIGRATING.md) for replacements and numerical conventions.
 
 ## Solvers
 

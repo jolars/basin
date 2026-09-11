@@ -48,7 +48,9 @@ use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 /// matrix type needn't be spelled:
 ///
 /// ```
-/// use basin::{Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient};
+/// use basin::{
+///     Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient,
+/// };
 ///
 /// struct Rosenbrock;
 /// impl CostFunction for Rosenbrock {
@@ -113,7 +115,16 @@ impl<S, F: Scalar> Bfgs<S, F> {
     /// Relative threshold for the curvature condition `yᵀs > ε · |y| · |s|`.
     /// Iterations where this fails skip the H update (rare with strong
     /// Wolfe). Default `1e-10`.
-    pub fn with_epsilon(mut self, epsilon: F) -> Self {
+    #[deprecated(
+        note = "use `with_relative_curvature_tolerance`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_epsilon(self, epsilon: F) -> Self {
+        self.with_relative_curvature_tolerance(epsilon)
+    }
+
+    /// Set the relative threshold for accepting a curvature update.
+    /// This is an algorithm safeguard, not an optimization stopping test.
+    pub fn with_relative_curvature_tolerance(mut self, epsilon: F) -> Self {
         assert!(epsilon >= F::zero(), "epsilon must be ≥ 0");
         self.epsilon = epsilon;
         self

@@ -69,8 +69,8 @@ struct BoxGeometry<'a, V> {
 /// # Termination
 ///
 /// GBNM is a budget-driven global algorithm. Use
-/// [`MaxCostEvals`](crate::MaxCostEvals), [`MaxIter`](crate::MaxIter),
-/// [`MaxTime`](crate::MaxTime), or [`TargetCost`](crate::TargetCost). One
+/// [`max_cost_evals`](crate::Executor::max_cost_evals), [`max_iter`](crate::Executor::max_iter),
+/// [`max_time`](crate::Executor::max_time), or [`target_cost`](crate::Executor::target_cost). One
 /// simplex operation is atomic. A local step may evaluate up to `n + 2` points
 /// and a restart evaluates `n + 1`, where `n` is the number of free
 /// coordinates, so an evaluation budget may be exceeded by at most `n + 1`
@@ -106,7 +106,7 @@ struct BoxGeometry<'a, V> {
 /// # Example
 ///
 /// ```
-/// use basin::{BoxConstraints, CostFunction, Executor, Gbnm, GbnmState, MaxCostEvals};
+/// use basin::{BoxConstraints, CostFunction, Executor, Gbnm, GbnmState};
 ///
 /// struct BoundedSphere {
 ///     lower: Vec<f64>,
@@ -121,22 +121,23 @@ struct BoxGeometry<'a, V> {
 ///     }
 /// }
 /// impl BoxConstraints for BoundedSphere {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
+///     fn lower(&self) -> &Vec<f64> {
+///         &self.lower
+///     }
+///     fn upper(&self) -> &Vec<f64> {
+///         &self.upper
+///     }
 /// }
 ///
 /// let problem = BoundedSphere {
 ///     lower: vec![-5.0, -5.0],
 ///     upper: vec![5.0, 5.0],
 /// };
-/// let result = Executor::new(
-///     problem,
-///     Gbnm::new(42),
-///     GbnmState::new(vec![4.0, 4.0]),
-/// )
-/// .terminate_on(MaxCostEvals(2_000))
-/// .run()
-/// .unwrap();
+/// let result =
+///     Executor::new(problem, Gbnm::new(42), GbnmState::new(vec![4.0, 4.0]))
+///         .max_cost_evals(2_000)
+///         .run()
+///         .unwrap();
 /// assert!(result.best_cost() < 1e-4);
 /// ```
 ///
@@ -261,7 +262,19 @@ impl<F: Scalar> Gbnm<F> {
     /// Set the normalized simplex-size tolerance `epsilon_s1` from equation
     /// (7). It also defines when convergence points count as identical for the
     /// restart and local-optimum memory tests. The default is `1e-6`.
-    pub fn with_small_tolerance(mut self, tolerance: F) -> Self {
+    #[deprecated(
+        note = "use `with_normalized_simplex_size_tolerance`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_small_tolerance(self, tolerance: F) -> Self {
+        self.with_normalized_simplex_size_tolerance(tolerance)
+    }
+
+    /// Configure the normalized simplex size tolerance.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_normalized_simplex_size_tolerance(
+        mut self,
+        tolerance: F,
+    ) -> Self {
         assert_positive_finite(tolerance, "small-simplex tolerance");
         self.small_tolerance = tolerance;
         self
@@ -269,7 +282,19 @@ impl<F: Scalar> Gbnm<F> {
 
     /// Set the absolute cost-spread tolerance `epsilon_s2` from equation (8).
     /// The default is `1e-20`.
-    pub fn with_flat_tolerance(mut self, tolerance: F) -> Self {
+    #[deprecated(
+        note = "use `with_absolute_simplex_cost_tolerance`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_flat_tolerance(self, tolerance: F) -> Self {
+        self.with_absolute_simplex_cost_tolerance(tolerance)
+    }
+
+    /// Configure the absolute simplex cost tolerance.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_absolute_simplex_cost_tolerance(
+        mut self,
+        tolerance: F,
+    ) -> Self {
         assert_positive_finite(tolerance, "flat-simplex tolerance");
         self.flat_tolerance = tolerance;
         self
@@ -278,6 +303,24 @@ impl<F: Scalar> Gbnm<F> {
     /// Set the edge-ratio and normalized-determinant degeneracy tolerances
     /// `epsilon_s3` and `epsilon_s4` from equation (9). Both default to
     /// `1e-7`.
+    /// Set the dimensionless edge-ratio threshold in `(0, 1)`.
+    pub fn with_edge_ratio_tolerance(mut self, value: F) -> Self {
+        assert_unit_tolerance(value, "degeneracy edge-ratio tolerance");
+        self.degeneracy_edge_ratio = value;
+        self
+    }
+
+    /// Set the normalized simplex-determinant threshold in `(0, 1)`.
+    pub fn with_normalized_determinant_tolerance(mut self, value: F) -> Self {
+        assert_unit_tolerance(value, "degeneracy shape tolerance");
+        self.degeneracy_shape = value;
+        self
+    }
+
+    /// Set both legacy degeneracy thresholds.
+    #[deprecated(
+        note = "use `with_edge_ratio_tolerance` and `with_normalized_determinant_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_degeneracy_tolerances(
         mut self,
         edge_ratio: F,

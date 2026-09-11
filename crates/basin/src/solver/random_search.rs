@@ -35,8 +35,8 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// The elite carry-over keeps `state.cost()` non-increasing across
 /// generations, so the framework's
-/// [`CostTolerance`](crate::core::termination::CostTolerance) and
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance) work
+/// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance) and
+/// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance) work
 /// honestly without redesign. (CMA-ES is genuinely non-monotone, and
 /// the "no monotone cost" termination story will be designed alongside
 /// it in S8 / S9.)
@@ -70,11 +70,11 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// No solver-internal optimality test; random search has no canonical
 /// fixed-point criterion. Use the framework's
-/// [`MaxIter`](crate::core::termination::MaxIter),
-/// [`MaxCostEvals`](crate::core::termination::MaxCostEvals),
-/// [`MaxTime`](crate::core::termination::MaxTime),
-/// [`CostTolerance`](crate::core::termination::CostTolerance), or
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance). The
+/// [`max_iter`](crate::Executor::max_iter),
+/// [`max_cost_evals`](crate::Executor::max_cost_evals),
+/// [`max_time`](crate::Executor::max_time),
+/// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
+/// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance). The
 /// elite-carryover makes cost monotonicity honest, so cost-based budgets
 /// behave as expected.
 ///

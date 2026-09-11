@@ -100,7 +100,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
 
     let result = Executor::new(
         problem,
-        GaussNewton::new().with_tol_grad(0.0),
+        GaussNewton::new().with_absolute_gradient_tolerance(None),
         NllsState::new(initial),
     )
     .max_iter(3)

@@ -48,18 +48,14 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// fixed step ([`Constant`]) or wait on a constraint-aware (SPG-style)
 /// line search.
 ///
-/// # Termination
+/// # Convergence
 ///
-/// No solver-internal optimality test; the canonical first-order
-/// metric is provided as a framework-level criterion,
-/// [`ProjectedGradientTolerance`](crate::core::termination::ProjectedGradientTolerance),
-/// which captures the bounds at construction so it does not need
-/// problem access in `check`. The framework's
-/// [`MaxIter`](crate::core::termination::MaxIter),
-/// [`CostTolerance`](crate::core::termination::CostTolerance),
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance), and
-/// [`MaxTime`](crate::core::termination::MaxTime) work on
-/// [`BasicState`] for free.
+/// Configure [`with_absolute_projected_gradient_tolerance`](Self::with_absolute_projected_gradient_tolerance)
+/// for the infinity norm of `x - projection(x - gradient)`, using the current
+/// problem's bounds. This optional test is disabled by default; `None`
+/// disables it, and zero tests exact stationarity. Observed step and cost
+/// checks are also opt-in and combine using OR. Execution budgets belong on
+/// the executor.
 ///
 /// # Backends
 ///

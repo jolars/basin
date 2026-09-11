@@ -46,7 +46,7 @@ pub struct Bounded;
 /// that implements [`CostFunction`] + [`BoxConstraints`]:
 ///
 /// ```
-/// use basin::{BoxConstraints, CostFunction, Executor, Bobyqa, BobyqaState, MaxCostEvals};
+/// use basin::{Bobyqa, BobyqaState, BoxConstraints, CostFunction, Executor};
 ///
 /// struct Booth {
 ///     lower: Vec<f64>,
@@ -57,19 +57,29 @@ pub struct Bounded;
 ///     type Output = f64;
 ///     type Error = std::convert::Infallible;
 ///     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
-///         Ok((x[0] + 2.0 * x[1] - 7.0).powi(2) + (2.0 * x[0] + x[1] - 5.0).powi(2))
+///         Ok((x[0] + 2.0 * x[1] - 7.0).powi(2)
+///             + (2.0 * x[0] + x[1] - 5.0).powi(2))
 ///     }
 /// }
 /// impl BoxConstraints for Booth {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
+///     fn lower(&self) -> &Vec<f64> {
+///         &self.lower
+///     }
+///     fn upper(&self) -> &Vec<f64> {
+///         &self.upper
+///     }
 /// }
 ///
-/// let problem = Booth { lower: vec![-5.0, -5.0], upper: vec![5.0, 5.0] };
-/// let solver = Bobyqa::new().with_rho_beg(0.5).with_rho_end(1e-8);
+/// let problem = Booth {
+///     lower: vec![-5.0, -5.0],
+///     upper: vec![5.0, 5.0],
+/// };
+/// let solver = Bobyqa::new()
+///     .with_initial_radius(0.5)
+///     .with_final_radius(1e-8);
 /// let state = BobyqaState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(problem, solver, state)
-///     .terminate_on(MaxCostEvals(500))
+///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
 /// assert!(result.best_param()[0].is_finite());
@@ -117,6 +127,7 @@ pub struct Bounded;
 /// the authoritative source for the exact formulas. PRIMA is BSD 3-Clause
 /// licensed; its required notice is retained in the crate's `COPYRIGHT` file.
 pub struct Bobyqa<Mode = Bounded, F = f64> {
+    radius_tolerance: Option<F>,
     rho_beg: F,
     rho_end: F,
     npt: Option<usize>,
@@ -127,11 +138,27 @@ pub struct Bobyqa<Mode = Bounded, F = f64> {
 }
 
 impl<F: Scalar> Bobyqa<Bounded, F> {
+    /// Stop when the observed radius or step size is <= the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_radius_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.radius_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// A BOBYQA solver with the default schedule (`ρ_beg = 1`, `ρ_end = 1e-6`,
     /// `npt = 2n+1`). Tune with the `with_*` builders.
     pub fn new() -> Self {
         Self {
             rho_beg: F::from_f64(1.0).expect("1.0 representable"),
+            radius_tolerance: None,
             rho_end: F::from_f64(1e-6).expect("1e-6 representable"),
             npt: None,
             work: None,
@@ -140,13 +167,31 @@ impl<F: Scalar> Bobyqa<Bounded, F> {
     }
 
     /// Set the initial trust-region radius `ρ_beg` (also the initial `Δ`).
-    pub fn with_rho_beg(mut self, rho_beg: F) -> Self {
+    #[deprecated(
+        note = "use `with_initial_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_beg(self, rho_beg: F) -> Self {
+        self.with_initial_radius(rho_beg)
+    }
+
+    /// Configure the initial radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_initial_radius(mut self, rho_beg: F) -> Self {
         self.rho_beg = rho_beg;
         self
     }
 
     /// Set the final trust-region radius `ρ_end`. Must satisfy `ρ_beg > ρ_end > 0`.
-    pub fn with_rho_end(mut self, rho_end: F) -> Self {
+    #[deprecated(
+        note = "use `with_final_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_end(self, rho_end: F) -> Self {
+        self.with_final_radius(rho_end)
+    }
+
+    /// Configure the final radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_final_radius(mut self, rho_end: F) -> Self {
         self.rho_end = rho_end;
         self
     }
@@ -282,13 +327,23 @@ where
         };
         Ok((state, reason))
     }
+
+    fn terminate(
+        &self,
+        state: &BobyqaState<V, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.radius_tolerance?;
+        let metric = crate::RhoState::rho(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::RhoTolerance)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::core::constraint::BoxConstraints;
     use crate::core::problem::CostFunction;
-    use crate::{Bobyqa, BobyqaState, Executor, MaxCostEvals};
+    use crate::{Bobyqa, BobyqaState, Executor};
 
     struct Quad {
         lower: Vec<f64>,
@@ -320,10 +375,12 @@ mod tests {
         };
         let result = Executor::new(
             problem,
-            Bobyqa::new().with_rho_beg(0.5).with_rho_end(1e-8),
+            Bobyqa::new()
+                .with_initial_radius(0.5)
+                .with_final_radius(1e-8),
             BobyqaState::new(vec![0.0, 0.0]),
         )
-        .terminate_on(MaxCostEvals(500))
+        .max_cost_evals(500)
         .run()
         .unwrap();
         let x = result.best_param();
@@ -347,7 +404,7 @@ mod tests {
             Bobyqa::new(),
             BobyqaState::new(vec![1.0, -2.0]),
         )
-        .terminate_on(MaxCostEvals(500))
+        .max_cost_evals(500)
         .run()
         .unwrap();
         let x = result.best_param();
@@ -364,10 +421,12 @@ mod tests {
         };
         let result = Executor::new(
             problem,
-            Bobyqa::new().with_rho_beg(0.5).with_rho_end(1e-8),
+            Bobyqa::new()
+                .with_initial_radius(0.5)
+                .with_final_radius(1e-8),
             BobyqaState::new(vec![100.0, -100.0]),
         )
-        .terminate_on(MaxCostEvals(500))
+        .max_cost_evals(500)
         .run()
         .unwrap();
         let x = result.best_param();
@@ -408,10 +467,12 @@ mod tests {
         };
         let result = Executor::new(
             problem,
-            Bobyqa::new().with_rho_beg(0.5).with_rho_end(1e-8),
+            Bobyqa::new()
+                .with_initial_radius(0.5)
+                .with_final_radius(1e-8),
             BobyqaState::new(vec![0.0, 0.0]),
         )
-        .terminate_on(MaxCostEvals(500))
+        .max_cost_evals(500)
         .run()
         .unwrap();
         let x = result.best_param();
@@ -451,10 +512,12 @@ mod tests {
         };
         let result = Executor::new(
             problem,
-            Bobyqa::new().with_rho_beg(0.5).with_rho_end(1e-6),
+            Bobyqa::new()
+                .with_initial_radius(0.5)
+                .with_final_radius(1e-6),
             BobyqaState::new(vec![-1.2, 1.0]),
         )
-        .terminate_on(MaxCostEvals(2000))
+        .max_cost_evals(2000)
         .run()
         .unwrap();
         let x = result.best_param();

@@ -9,10 +9,7 @@
 
 use crate::backend_aliases::ndarray::array;
 use basin::problems::Rosenbrock;
-use basin::{
-    Bfgs, Executor, GradientTolerance, NdarrayQuasiNewtonState,
-    TerminationReason,
-};
+use basin::{Bfgs, Executor, NdarrayQuasiNewtonState, TerminationReason};
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
@@ -54,11 +51,10 @@ fn bfgs_terminates_on_gradient_tolerance() {
 
     let result = Executor::new(
         problem,
-        Bfgs::new(),
+        (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
         NdarrayQuasiNewtonState::new(initial),
     )
     .max_iter(200)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 

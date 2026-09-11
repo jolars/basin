@@ -1,0 +1,22 @@
+# Migrating Convergence Settings
+
+Basin now configures numerical convergence on solvers and execution limits on
+executors. The former criterion facility and abbreviated setters remain
+available during Basin 1.x and are scheduled for removal in Basin 2.0.
+
+```rust
+let solver =
+    GradientDescent::new(1e-3).with_absolute_gradient_tolerance(1e-6);
+let result = Executor::from_start(problem, solver, x0)
+    .max_iter(50_000)
+    .max_cost_evals(100_000)
+    .run()?;
+```
+
+The [migration guide in the repository](https://github.com/jolars/basin/blob/main/MIGRATING.md)
+lists every replacement, optional tolerance semantics, algorithm-specific
+formulas, and changes for composed solves and checkpoints.
+
+For a working introduction, see [Getting Started](../getting-started/).
+The authoritative signatures and defaults live in the
+[API reference](https://docs.rs/basin/latest/basin/).

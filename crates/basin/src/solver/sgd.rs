@@ -70,9 +70,9 @@ use crate::core::termination::TerminationReason;
 /// - Within an epoch, `state.cost` is *stale*: it still reflects the
 ///   cost at the most recent boundary, not the current iterate.
 ///   Cost-based termination
-///   ([`TargetCost`](crate::TargetCost),
-///   [`NoImprovement`](crate::NoImprovement),
-///   [`CostTolerance`](crate::CostTolerance)) therefore fires at
+///   ([`target_cost`](crate::Executor::target_cost),
+///   [`no_improvement`](crate::Executor::no_improvement),
+///   [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance)) therefore fires at
 ///   epoch granularity, with a worst-case overshoot of one epoch's
 ///   worth of work.
 /// - The final `result.cost()` reads the most recent epoch-boundary
@@ -88,6 +88,33 @@ use crate::core::termination::TerminationReason;
 /// The mini-batch gradient is not cached on the state
 /// (`state.gradient` stays `None`), so gradient-based termination
 /// criteria do not fire, by design, since the batch estimate is noisy.
+/// Gradient-tolerance setters are therefore unavailable:
+///
+/// ```compile_fail,E0599
+/// use basin::Sgd;
+/// let solver = Sgd::<Vec<f64>>::new(0.1, 1, 42)
+///     .with_absolute_gradient_tolerance(0.0);
+/// ```
+///
+/// ```compile_fail,E0599
+/// use basin::Sgd;
+/// let solver = Sgd::<Vec<f64>>::new(0.1, 1, 42)
+///     .with_relative_gradient_tolerance(0.0);
+/// ```
+///
+/// ```compile_fail,E0599
+/// use basin::Sgd;
+/// let solver = Sgd::<Vec<f64>>::new(0.1, 1, 42)
+///     .with_absolute_cost_change_tolerance(0.0)
+///     .with_absolute_gradient_tolerance(0.0);
+/// ```
+///
+/// ```compile_fail,E0599
+/// use basin::Sgd;
+/// let solver = Sgd::<Vec<f64>>::new(0.1, 1, 42)
+///     .with_absolute_cost_change_tolerance(0.0)
+///     .with_relative_gradient_tolerance(0.0);
+/// ```
 ///
 /// # Backends
 ///
@@ -120,7 +147,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// ```
 /// use basin::{
-///     BasicState, CostFunction, Executor, MaxIter, MiniBatchGradient,
+///     BasicState, CostFunction, Executor, MiniBatchGradient,
 ///     Sgd,
 /// };
 ///
@@ -171,7 +198,7 @@ use crate::core::termination::TerminationReason;
 /// };
 /// let sgd = Sgd::new(0.02, 2, 0xC0FFEE).with_momentum(0.9);
 /// let result = Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
-///     .terminate_on(MaxIter(2_000))
+///     .max_iter(2_000)
 ///     .run()
 ///     .unwrap();
 /// assert!(result.cost() < 1e-6);
@@ -395,7 +422,7 @@ where
 mod tests {
     use super::*;
     use crate::core::state::State;
-    use crate::{BasicState, Executor, MaxIter};
+    use crate::{BasicState, Executor};
 
     /// Finite-sum quadratic `f(x) = (1/n) Σᵢ ‖x − cᵢ‖²` with per-sample
     /// gradient `2·(x − cᵢ)`. The (unique) minimizer is the centroid of
@@ -489,7 +516,7 @@ mod tests {
         let sgd = Sgd::new(0.01, 2, 0xABCDEF);
         let result =
             Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
-                .terminate_on(MaxIter(3_000))
+                .max_iter(3_000)
                 .run()
                 .unwrap();
         let x = result.param();
@@ -512,7 +539,7 @@ mod tests {
         let sgd = Sgd::new(0.1, problem.n_samples(), 0);
         let result =
             Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
-                .terminate_on(MaxIter(500))
+                .max_iter(500)
                 .run()
                 .unwrap();
         let x = result.param();
@@ -528,7 +555,7 @@ mod tests {
         let run = |p: FiniteSumQuadratic| {
             let sgd = Sgd::new(0.05, 2, 12345);
             Executor::new(p, sgd, BasicState::new(vec![0.5, -0.5]))
-                .terminate_on(MaxIter(50))
+                .max_iter(50)
                 .run()
                 .unwrap()
                 .param()
@@ -550,7 +577,7 @@ mod tests {
                 sgd,
                 BasicState::new(vec![0.5, -0.5]),
             )
-            .terminate_on(MaxIter(20))
+            .max_iter(20)
             .run()
             .unwrap()
             .param()
@@ -632,7 +659,7 @@ mod tests {
         let centroid = problem.centroid();
         let sgd = Sgd::new(0.05, 10, 13);
         let result = Executor::new(problem, sgd, BasicState::new(vec![0.0]))
-            .terminate_on(MaxIter(500))
+            .max_iter(500)
             .run()
             .unwrap();
         assert!((result.param()[0] - centroid[0]).abs() < 1e-3);

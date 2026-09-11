@@ -61,7 +61,7 @@ use crate::solver::powell::{QuadraticModel, TrustRegionSubproblem};
 ///
 /// The public [`Newuoa`](crate::solver::Newuoa) solver does not use this: it
 /// configures `ρ_beg`/`ρ_end`/`npt` on the solver and delegates the budget
-/// to framework termination ([`MaxCostEvals`](crate::MaxCostEvals)).
+/// to framework termination ([`max_cost_evals`](crate::Executor::max_cost_evals)).
 pub(crate) struct NewuoaConfig<F = f64> {
     /// Initial trust-region radius `ρ_beg` (also the initial `Δ`).
     pub(crate) rho_beg: F,

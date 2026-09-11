@@ -16,7 +16,7 @@
 //! backend-independent, so every backend traces the identical run.
 
 use basin::{
-    ConstrainedMadsState, CostFunction, Executor, Mads, MaxCostEvals,
+    ConstrainedMadsState, CostFunction, Executor, Mads,
     NonlinearInequalityConstraints, TerminationReason,
 };
 
@@ -46,16 +46,45 @@ impl NonlinearInequalityConstraints for Disk {
 }
 
 #[test]
+fn poll_tolerance_can_be_set_after_constraining() {
+    for (tolerance, expected) in [
+        (Some(1.0), TerminationReason::MeshTolerance),
+        (Some(0.0), TerminationReason::MaxIter),
+        (None, TerminationReason::MaxIter),
+    ] {
+        let solver = Mads::new()
+            .constrained()
+            .with_absolute_poll_size_tolerance(1.0)
+            .with_absolute_poll_size_tolerance(tolerance);
+        let configured = Mads::new()
+            .with_absolute_poll_size_tolerance(1.0)
+            .with_absolute_cost_change_tolerance(None)
+            .constrained()
+            .with_absolute_poll_size_tolerance(tolerance);
+        let direct = Executor::from_start(Disk, solver, vec![0.0; 2])
+            .max_iter(1)
+            .run()
+            .unwrap();
+        let wrapped = Executor::from_start(Disk, configured, vec![0.0; 2])
+            .max_iter(1)
+            .run()
+            .unwrap();
+        assert_eq!(direct.reason, expected);
+        assert_eq!(wrapped.reason, expected);
+    }
+}
+
+#[test]
 fn converges_to_disk_optimum() {
     let result = Executor::new(
         Disk,
         Mads::new()
             .with_initial_poll_size(1.0)
-            .with_min_poll_size(1e-7)
+            .with_minimum_poll_size(1e-7)
             .constrained(),
         ConstrainedMadsState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 
@@ -85,11 +114,11 @@ fn infeasible_start_reaches_feasible_optimum() {
         Disk,
         Mads::new()
             .with_initial_poll_size(1.0)
-            .with_min_poll_size(1e-7)
+            .with_minimum_poll_size(1e-7)
             .constrained(),
         ConstrainedMadsState::new(start),
     )
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 
@@ -115,7 +144,7 @@ fn respects_eval_budget() {
         Mads::new().constrained(),
         ConstrainedMadsState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(MaxCostEvals(50))
+    .max_cost_evals(50)
     .run()
     .unwrap();
 
@@ -156,10 +185,10 @@ fn backend_generic_nalgebra() {
 
     let result = Executor::new(
         Disk,
-        Mads::new().with_min_poll_size(1e-7).constrained(),
+        Mads::new().with_minimum_poll_size(1e-7).constrained(),
         ConstrainedMadsState::new(DVector::from_vec(vec![0.0, 0.0])),
     )
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 
@@ -205,10 +234,10 @@ fn backend_generic_ndarray() {
 
     let result = Executor::new(
         Disk,
-        Mads::new().with_min_poll_size(1e-7).constrained(),
+        Mads::new().with_minimum_poll_size(1e-7).constrained(),
         ConstrainedMadsState::new(Array1::from_vec(vec![0.0, 0.0])),
     )
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 
@@ -251,10 +280,10 @@ fn backend_generic_faer() {
 
     let result = Executor::new(
         Disk,
-        Mads::new().with_min_poll_size(1e-7).constrained(),
+        Mads::new().with_minimum_poll_size(1e-7).constrained(),
         ConstrainedMadsState::new(Col::from_fn(2, |_| 0.0)),
     )
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 

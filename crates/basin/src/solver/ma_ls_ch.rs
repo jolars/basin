@@ -14,16 +14,13 @@
 use std::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::executor::run_loop;
 use crate::core::inner::ResumableInner;
 use crate::core::math::{NormSquared, SampleUniformBox, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, EvalCounts, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PopulationState, State};
-use crate::core::termination::{
-    MaxCostEvals, TerminationCriterion, TerminationReason,
-};
+use crate::core::termination::TerminationReason;
 // Cycle-following in-place permutation: after the call,
 // `slice[i] = original[idx[i]]`.
 use crate::solver::cma_es::{apply_permutation, nan_last_cmp};
@@ -276,7 +273,7 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 /// # Termination
 ///
 /// No solver-internal optimality test. Pair with framework criteria,
-/// typically [`MaxCostEvals`] for budget control. Chain segments
+/// typically [`max_cost_evals`](crate::Executor::max_cost_evals) for budget control. Chain segments
 /// overshoot `I_str` slightly when the operator evaluates in batches
 /// (CMA-ES runs whole generations, overshooting by up to `λ_inner − 1`
 /// evaluations; Solis-Wets by at most one reversal evaluation); the
@@ -691,15 +688,18 @@ where
         // a different operator instance per individual). Allocation
         // cost is a few boxes per chain segment, negligible against
         // I_str evals. Budget first, then the operator's per-segment
-        // convergence criteria (`ResumableInner::segment_criteria`,
-        // built from the segment's starting state), preserving the
-        // check order.
-        let mut criteria: Vec<
-            Box<dyn TerminationCriterion<<LS as ResumableInner<V>>::State>>,
-        > = vec![Box::new(MaxCostEvals(self.ls_intensity))];
-        criteria.extend(ls.segment_criteria(&inner_state));
-        let inner_result =
-            run_loop(problem, inner_state, &mut ls, &mut criteria, u64::MAX)?;
+        // convergence settings built from the segment's starting state.
+        // The execution budget is observed before convergence.
+        let mut control = crate::RunControl::new()
+            .max_iter(u64::MAX)
+            .max_cost_evals(self.ls_intensity);
+        ls.configure_segment(&inner_state, &mut control);
+        let inner_result = crate::run_loop_with_control(
+            problem,
+            inner_state,
+            &mut ls,
+            &mut control,
+        )?;
 
         // -- Phase 5: route failures, write back. --
         // Same-problem composition: inner evals already flowed through the

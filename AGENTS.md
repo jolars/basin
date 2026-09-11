@@ -58,10 +58,12 @@ pre-commit.
   `crates/basin/src/core/numdiff.rs` provides finite differences.
 - `crates/basin/src/core/state.rs` and `crates/basin/src/core/state/` define
   `State`, concrete states, and the minimum-shape extension traits used by
-  termination criteria.
+  convergence checks and run controls.
 - `crates/basin/src/core/solver.rs` defines `Solver`;
   `crates/basin/src/core/executor.rs` owns the driver loop; and
-  `crates/basin/src/core/termination.rs` owns shared criteria.
+  `crates/basin/src/core/convergence.rs` shares solver convergence checks;
+  `crates/basin/src/core/run_control.rs` owns execution limits and hooks; and
+  `crates/basin/src/core/termination.rs` retains the deprecated 1.x facility.
 - Problem-side constraints and adapters live under `crates/basin/src/core/` in
   `constraint.rs`, `barrier.rs`, and `augmented_lagrangian.rs`; composition
   contracts live in `inner.rs`.
@@ -87,9 +89,14 @@ belong in the core crate.
    unversioned features retain their Basin 1.x meanings. If dependency feature
    unification enables several releases of one backend, implement the newest
    enabled release.
-3. Generic stopping criteria belong to the executor/shared termination layer;
-   solver-specific controls stay on the solver. Bind each criterion to the
-   minimum state shape it needs.
+3. Numerical convergence settings belong on the solver, with one owner per
+   test and shared internal calculations. Execution budgets, targets, stalls,
+   cancellation, and application stops belong to the executor. Bind optional
+   checks to the minimum state shape and backend capabilities they need. Use
+   explicit `with_absolute_*_tolerance` / `with_relative_*_tolerance` names
+   where applicable; `None` disables optional checks and zero means exact-zero.
+   Keep algorithm controls distinct and preserve deprecated 1.x behavior until
+   its scheduled removal in Basin 2.0.
 4. Constraints describe problems: keep them problem-side, never on state or as
    executor configuration. Solvers declare supported constraint traits;
    projection, barrier, and penalty adapters are explicit opt-ins.

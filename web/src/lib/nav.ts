@@ -38,6 +38,11 @@ export const DOCS_LINKS: NavLink[] = [
         href: "/docs/migrating-from-argmin/",
         section: "docs",
     },
+    {
+        label: "Migrating convergence settings",
+        href: "/docs/migrating-convergence/",
+        section: "docs",
+    },
     { label: "Solvers", href: "/docs/solvers/", section: "docs" },
 ];
 

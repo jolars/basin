@@ -1,7 +1,11 @@
-//! Termination layer: the [`TerminationCriterion`] trait and the
-//! framework-level criteria solvers can be terminated by. Each criterion
-//! bounds on the minimum state shape it needs (tenet 3 in `CONTRIBUTING.md`),
-//! so mismatches are compile errors rather than runtime no-ops.
+//! Stopping reasons and the deprecated Basin 1.x criterion facility.
+//!
+//! Configure numerical tolerances on solvers and execution limits or closure
+//! hooks on [`Executor`](crate::Executor) and [`RunControl`](crate::RunControl).
+//! Criterion types and registrations are scheduled for removal in Basin 2.0.
+
+// Compatibility implementations also supply the shared numerical checks.
+#![allow(deprecated)]
 
 use web_time::{Duration, Instant};
 
@@ -18,6 +22,7 @@ use crate::core::state::{
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
 /// and the various step/run hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum TerminationReason {
     /// `state.iter() >= max_iter`.
@@ -68,6 +73,8 @@ pub enum TerminationReason {
     MaxTime,
     /// Cancellation was requested through the executor's cancellation token.
     Cancelled,
+    /// An application-specific stopping hook requested termination.
+    UserRequested,
     /// Solver determined it has converged (e.g. fixed point reached).
     SolverConverged,
     /// Solver cannot make further progress (e.g. line search failure).
@@ -113,6 +120,9 @@ impl TerminationReason {
 ///   an already-optimal initial point exits immediately. See the
 ///   [`executor`](crate::core::executor) module docs for the full
 ///   per-iteration ordering.
+#[deprecated(
+    note = "configure solver convergence and executor budgets, or use `stop_when`; removal scheduled for Basin 2.0"
+)]
 pub trait TerminationCriterion<S> {
     /// Inspect the current state and return `Some(reason)` to halt the
     /// run, or `None` to continue. Called once per iteration before the
@@ -134,6 +144,9 @@ pub trait TerminationCriterion<S> {
 }
 
 /// Stop after `state.iter() >= n` iterations.
+#[deprecated(
+    note = "use `max_iter` on the executor; removal scheduled for Basin 2.0"
+)]
 pub struct MaxIter(pub u64);
 
 impl<S: State> TerminationCriterion<S> for MaxIter {
@@ -150,6 +163,9 @@ impl<S: State> TerminationCriterion<S> for MaxIter {
 /// Lagarias et al. (1998) (T3): the budget users actually care about
 /// when one iteration can spend many evals (line search, Nelder-Mead
 /// shrink).
+#[deprecated(
+    note = "use `max_cost_evals` on the executor; removal scheduled for Basin 2.0"
+)]
 pub struct MaxCostEvals(pub u64);
 
 impl<S: State> TerminationCriterion<S> for MaxCostEvals {
@@ -165,6 +181,9 @@ impl<S: State> TerminationCriterion<S> for MaxCostEvals {
 /// Stop after `state.gradient_evals() >= n` gradient evaluations. Bound
 /// on `S: GradientState` so it can't be paired with derivative-free
 /// solvers: a compile error rather than a silently no-op criterion.
+#[deprecated(
+    note = "use `max_gradient_evals` on the executor; removal scheduled for Basin 2.0"
+)]
 pub struct MaxGradientEvals(pub u64);
 
 impl<S: GradientState> TerminationCriterion<S> for MaxGradientEvals {
@@ -182,6 +201,11 @@ impl<S: GradientState> TerminationCriterion<S> for MaxGradientEvals {
 ///
 /// Requires `S: GradientState`; pairing with a derivative-free solver
 /// is a compile error.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_gradient_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct GradientTolerance<F = f64>(pub F);
 
 impl<S, F> TerminationCriterion<S> for GradientTolerance<F>
@@ -219,6 +243,11 @@ where
 /// populated. Requires `S: GradientState`; pairing with a
 /// derivative-free solver is a compile error. Skipped silently while
 /// the state has no gradient populated yet.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_relative_gradient_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct RelativeGradientTolerance<F = f64> {
     tol: F,
     initial_norm_squared: Option<F>,
@@ -280,6 +309,11 @@ where
 /// [`ScaledAdd<f64>`], [`ClampInPlace`], [`NormInfinity`], and `Clone`.
 /// Skipped silently when the state has no gradient populated yet
 /// (e.g. iter 0 before `init` has run).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_projected_gradient_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct ProjectedGradientTolerance<P, F = f64> {
     lower: P,
     upper: P,
@@ -329,6 +363,11 @@ where
 
 /// Stop when `‖x_k − x_{k−1}‖ ≤ tol`. Holds its own copy of the previous
 /// iterate so it doesn't depend on state-side history.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_step_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct ParamTolerance<P, F = f64> {
     tol_squared: F,
     last: Option<P>,
@@ -378,6 +417,11 @@ where
 /// `x = 0` the relative bound collapses (the right-hand side → 0), so
 /// pair it with an absolute [`ParamTolerance`] when the optimum may sit
 /// at the origin.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_relative_step_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct RelativeParamTolerance<P, F = f64> {
     tol: F,
     last: Option<P>,
@@ -417,6 +461,11 @@ where
 
 /// Stop when `|f_k − f_{k−1}| ≤ tol`. Holds its own copy of the previous
 /// cost.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_cost_change_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct CostTolerance<F = f64> {
     tol: F,
     last: Option<F>,
@@ -458,6 +507,11 @@ where
 /// magnitude (e.g. least-squares residuals carrying different
 /// normalizations). Near `f = 0` the relative bound collapses, so pair
 /// it with an absolute [`CostTolerance`] when the optimum cost is zero.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_relative_cost_change_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct RelativeCostTolerance<F = f64> {
     tol: F,
     last: Option<F>,
@@ -504,6 +558,9 @@ where
 /// CMA-ES sampling) this fires once any iterate dropped to the
 /// target, never on a transient uphill step away from a previously
 /// reached target.
+#[deprecated(
+    note = "use `target_cost` on the executor; removal scheduled for Basin 2.0"
+)]
 pub struct TargetCost<F = f64>(pub F);
 
 impl<S, F> TerminationCriterion<S> for TargetCost<F>
@@ -539,6 +596,9 @@ where
 /// instead expose a non-monotone objective for their solver-selected incumbent;
 /// the running anchor still recognizes only strict objective decreases as
 /// improvements.
+#[deprecated(
+    note = "use `no_improvement` on the executor; removal scheduled for Basin 2.0"
+)]
 pub struct NoImprovement<F = f64> {
     patience: u64,
     tol: F,
@@ -602,6 +662,9 @@ where
 /// The criterion is stateless: it compares the state's absolute iteration
 /// and last-acceptance counters. It therefore remains exact when attached to
 /// an [`Executor::resume`](crate::Executor::resume) run.
+#[deprecated(
+    note = "use `no_acceptance` on the executor; removal scheduled for Basin 2.0"
+)]
 pub struct NoAcceptance {
     patience: u64,
 }
@@ -638,6 +701,11 @@ where
 ///
 /// Requires `S: SimplexState`; single-iterate solvers (gradient
 /// descent, BFGS) cannot be paired with it (compile error).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_simplex_size_tolerance and with_absolute_simplex_cost_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct SimplexTolerance<F = f64> {
     tol_x: F,
     tol_f: F,
@@ -689,6 +757,11 @@ where
 /// state. The Hansen-recommended default is `1e−12 · initial_sigma`
 /// (scaled by `maxᵢ stdsᵢ` when an anisotropic initial covariance is
 /// used, to stay relative to the initial spread).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_distribution_size_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct CmaEsTolerance<F = f64> {
     tol_x: F,
 }
@@ -728,6 +801,11 @@ where
 /// [`SolisWets`](crate::solver::SolisWets), whose `ρ` is the adaptive mutation
 /// standard deviation and which never self-terminates, this criterion *is* the
 /// primary convergence test.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_radius_tolerance or with_absolute_step_size_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct RhoTolerance<F = f64> {
     rho_end: F,
 }
@@ -757,6 +835,11 @@ where
 /// so this criterion is mainly useful to stop **early** at a coarser poll size
 /// than the configured floor (e.g. a quick low-accuracy solve). The threshold
 /// should satisfy `poll_size_min ≥` the solver's configured floor to fire first.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[deprecated(
+    note = "use `with_absolute_poll_size_tolerance` on the solver; removal scheduled for Basin 2.0"
+)]
 pub struct MeshTolerance<F = f64> {
     poll_size_min: F,
 }
@@ -783,6 +866,9 @@ where
 ///
 /// Uses `web-time::Instant` so it works on both native and
 /// `wasm32-unknown-unknown` without feature gating.
+#[deprecated(
+    note = "use `max_time` on the executor; removal scheduled for Basin 2.0"
+)]
 pub struct MaxTime {
     limit: Duration,
     start: Option<Instant>,

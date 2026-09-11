@@ -43,10 +43,12 @@ fn problem_b_disk_min_product() {
         c: |x| vec![x[0] * x[0] + x[1] * x[1] - 1.0],
         m: 1,
     };
-    let solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-4);
+    let solver = Cobyla::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-4);
     let state = CobylaState::new(vec![1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .terminate_on(crate::MaxCostEvals(2000))
+        .max_cost_evals(2000)
         .run()
         .unwrap();
     assert!(
@@ -65,10 +67,12 @@ fn problem_c_ellipsoid_min_product3() {
         c: |x| vec![x[0] * x[0] + 2.0 * x[1] * x[1] + 3.0 * x[2] * x[2] - 1.0],
         m: 1,
     };
-    let solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-5);
+    let solver = Cobyla::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-5);
     let state = CobylaState::new(vec![1.0, 1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .terminate_on(crate::MaxCostEvals(3000))
+        .max_cost_evals(3000)
         .run()
         .unwrap();
     assert!(
@@ -86,10 +90,12 @@ fn problem_f_fletcher() {
         c: |x| vec![x[0] * x[0] - x[1], x[0] * x[0] + x[1] * x[1] - 1.0],
         m: 2,
     };
-    let solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-5);
+    let solver = Cobyla::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-5);
     let state = CobylaState::new(vec![1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .terminate_on(crate::MaxCostEvals(3000))
+        .max_cost_evals(3000)
         .run()
         .unwrap();
     assert!(
@@ -120,10 +126,12 @@ fn problem_g_fletcher() {
         },
         m: 3,
     };
-    let solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-5);
+    let solver = Cobyla::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-5);
     let state = CobylaState::new(vec![1.0, 1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .terminate_on(crate::MaxCostEvals(3000))
+        .max_cost_evals(3000)
         .run()
         .unwrap();
     assert!(
@@ -141,10 +149,12 @@ fn unconstrained_rosenbrock_like() {
         c: |_x| vec![],
         m: 0,
     };
-    let solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6);
+    let solver = Cobyla::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-6);
     let state = CobylaState::new(vec![-1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
-        .terminate_on(crate::MaxCostEvals(5000))
+        .max_cost_evals(5000)
         .run()
         .unwrap();
     assert!(result.best_cost() < 1e-3, "F = {}", result.best_cost());

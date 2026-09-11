@@ -100,30 +100,17 @@ use crate::core::termination::TerminationReason;
 ///   `BoxAffineScaling::project_strictly_inside`, so feasible-but-
 ///   on-boundary starts are silently corrected.
 ///
-/// # Termination
+/// # Convergence
 ///
-/// Beyond the framework criteria
-/// ([`MaxIter`](crate::core::termination::MaxIter),
-/// [`CostTolerance`](crate::core::termination::CostTolerance),
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance), …),
-/// the solver emits [`TerminationReason::SolverConverged`] when
-/// `‖v ⊙ Jᵀr‖_∞ ≤ tol_grad` (equivalently `max_i |g_i| · |v_i|`,
-/// where `v_i` is BCL's signed distance-to-bound). The metric goes to
-/// zero at any KKT point (interior *or* face-active), so it works
-/// uniformly across the corner/edge/interior cases. Collapses to
-/// LM's `‖Jᵀr‖_∞` when no constraint is active. Default
-/// `tol_grad = 1e-8`; set to `0.0` to disable the check.
-///
-/// TRF runs on [`NllsState`], which does
-/// **not** impl [`GradientState`](crate::core::state::GradientState), so the
-/// framework gradient criteria are a **compile error** rather than a silent
-/// no-op; use [`with_tol_grad`](Self::with_tol_grad) above. This is the same
-/// choice as [`LevenbergMarquardt`](super::LevenbergMarquardt): the L2-squared
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is the
-/// wrong metric for NLLS, and
-/// [`ProjectedGradientTolerance`](crate::core::termination::ProjectedGradientTolerance)
-/// uses the unscaled projected-gradient measure rather than the scaled one
-/// TRF's KKT test uses.
+/// [`with_absolute_scaled_gradient_tolerance`](Self::with_absolute_scaled_gradient_tolerance)
+/// configures the native first-order test `max_i |g_i| · |v_i| ≤ tolerance`,
+/// where `g = Jᵀr` and `v` is BCL's distance-to-bound scaling. It reports
+/// [`TerminationReason::SolverConverged`] and defaults to `1e-8`.
+/// `None` disables the test; zero tests exact stationarity. The scaled metric
+/// vanishes at a KKT point and differs from the unscaled projected gradient.
+/// Observed cost and step checks are opt-in and combine with it using OR.
+/// Execution budgets belong on the executor. The gradient is computed inside
+/// TRF; [`NllsState`] does not expose a [`GradientState`](crate::GradientState).
 ///
 /// # Backends
 ///
@@ -159,7 +146,7 @@ use crate::core::termination::TerminationReason;
 /// requires the problem to implement `BoxConstraints` and is constructed
 /// with `Trf::new()`.
 pub struct Trf<V, M, F = f64> {
-    tol_grad: F,
+    tol_grad: Option<F>,
     tau: F,
     rstep: F,
     theta: F,
@@ -191,7 +178,7 @@ impl<V, M> Trf<V, M> {
     /// `max_inner_attempts = 50`.
     pub fn new() -> Self {
         Self {
-            tol_grad: 1e-8,
+            tol_grad: Some(1e-8),
             tau: 1e-3,
             rstep: 1e-10,
             theta: 0.99995,
@@ -208,9 +195,26 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     /// First-order optimality tolerance: emit
     /// [`TerminationReason::SolverConverged`] when
     /// `‖D · Jᵀr‖_∞ ≤ tol`. Set to `0.0` to disable. Default `1e-8`.
+    #[deprecated(
+        note = "use `with_absolute_scaled_gradient_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_grad(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
-        self.tol_grad = tol;
+        self.tol_grad = (tol > F::zero()).then_some(tol);
+        self
+    }
+
+    /// Configure the Coleman-Li scaled gradient infinity norm.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_absolute_scaled_gradient_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_grad = crate::core::convergence::optional_tolerance(value);
         self
     }
 
@@ -368,8 +372,9 @@ where
         // `d_sq[i] = 1/|v_i|`). Goes to zero at any KKT point, interior
         // *or* face-active. Collapses to LM's `‖Jᵀr‖_∞` when bounds are
         // infinite (then `|v_i| = 1`, `d_sq = 1`, division is identity).
-        if self.tol_grad > F::zero()
-            && g.cl_kkt_inf_norm(&d_sq) <= self.tol_grad
+        if self
+            .tol_grad
+            .is_some_and(|tol| g.cl_kkt_inf_norm(&d_sq) <= tol)
         {
             // Restore caches; init resets them on each reuse, but
             // mirroring LM's pattern keeps the contract uniform.

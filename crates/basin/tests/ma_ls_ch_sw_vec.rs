@@ -7,7 +7,7 @@
 //! nalgebra mirror test (`tests/ma_ls_ch_sw_nalgebra.rs`).
 
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{Executor, MaLsChSw, MaLsChSwState, MaxCostEvals};
+use basin::{Executor, MaLsChSw, MaLsChSwState};
 
 #[test]
 fn converges_on_sphere_d10() {
@@ -15,7 +15,7 @@ fn converges_on_sphere_d10() {
     let solver = MaLsChSw::<Vec<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChSwState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(20_000))
+        .max_cost_evals(20_000)
         .run()
         .unwrap();
 
@@ -32,7 +32,7 @@ fn makes_progress_on_rastrigin_d10() {
     let solver = MaLsChSw::<Vec<f64>>::new(42).with_pop_size(30);
     let result = Executor::new(problem, solver, MaLsChSwState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(50_000))
+        .max_cost_evals(50_000)
         .run()
         .unwrap();
 

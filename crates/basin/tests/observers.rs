@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent, MaxIter,
-    Observe, ObserverMode, State, StepOutcome, TerminationReason,
+    BasicState, CostFunction, Executor, Gradient, GradientDescent, Observe,
+    ObserverMode, State, StepOutcome, TerminationReason,
 };
 
 /// f(x) = ½ ‖x‖²: convex quadratic, gradient = x.
@@ -265,7 +265,6 @@ fn observer_fires_via_stepper_step_loop() {
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(3)
-    .terminate_on(MaxIter(3))
     .observe_with(recorder, ObserverMode::Always)
     .into_stepper()
     .unwrap();

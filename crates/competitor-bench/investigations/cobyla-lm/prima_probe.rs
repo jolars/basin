@@ -299,12 +299,12 @@ fn solve(mode: &str, case: Case) -> Outcome {
             let r = Executor::from_start(
                 &p,
                 Cobyla::new()
-                    .with_rho_beg(0.5)
-                    .with_rho_end(f64::EPSILON.sqrt() * 0.5),
+                    .with_initial_radius(0.5)
+                    .with_final_radius(f64::EPSILON.sqrt() * 0.5),
                 x,
             )
             .max_iter(10000)
-            .terminate_on(MaxCostEvals(case.budget() as u64))
+            .max_cost_evals(case.budget() as u64)
             .run()
             .unwrap();
             Outcome {

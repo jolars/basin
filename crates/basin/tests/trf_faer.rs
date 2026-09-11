@@ -2,7 +2,7 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxedResiduals;
-use basin::{Executor, MaxIter, NllsState, TerminationReason, Trf};
+use basin::{Executor, NllsState, TerminationReason, Trf};
 
 #[test]
 fn trf_with_slack_bounds_reaches_unconstrained_min() {
@@ -66,7 +66,7 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
 
     let mut executor =
         Executor::new(problem, Trf::new(), NllsState::new(initial));
-    executor = executor.terminate_on(MaxIter(0));
+    executor = executor.max_iter(0);
     let result = executor.run().unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxIter);

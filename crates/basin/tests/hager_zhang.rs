@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{
     CostFunction, Executor, Gradient, HagerZhang, LbfgsState, LineSearch,
-    LineSearchOutcome, MaxIter, Problem, TerminationReason,
+    LineSearchOutcome, Problem, TerminationReason,
 };
 
 struct ShiftedQuadratic {
@@ -81,7 +81,7 @@ impl Gradient for ShiftedQuartic {
 #[test]
 fn expansion_and_secant_refinement_handle_a_nonlinear_profile() {
     let mut problem = Problem::new(ShiftedQuartic);
-    let mut search = HagerZhang::new().delta_sigma(0.1, 0.1);
+    let mut search = HagerZhang::new().with_wolfe_coefficients(0.1, 0.1);
     let alpha = search
         .next(
             &mut problem,
@@ -260,8 +260,8 @@ fn zero_evaluation_budget_does_not_probe_the_problem() {
 #[test]
 fn defaults_and_builders_expose_the_reference_parameters() {
     let search = HagerZhang::new()
-        .delta_sigma(0.2, 0.8)
-        .epsilon(1e-8)
+        .with_wolfe_coefficients(0.2, 0.8)
+        .with_relative_cost_relaxation_tolerance(1e-8)
         .theta(0.4)
         .gamma(0.7)
         .alpha_init(0.75)
@@ -296,7 +296,7 @@ fn defaults_and_builders_expose_the_reference_parameters() {
 #[test]
 #[should_panic(expected = "delta and sigma must satisfy")]
 fn rejects_invalid_wolfe_parameters() {
-    let _ = HagerZhang::new().delta_sigma(0.5, 0.9);
+    let _ = HagerZhang::new().with_wolfe_coefficients(0.5, 0.9);
 }
 
 struct BoundedQuadratic;
@@ -525,7 +525,7 @@ fn unbounded_lbfgs_with_hager_zhang_progresses_on_ackley() {
         solver,
         LbfgsState::new(initial, 5),
     )
-    .terminate_on(MaxIter(5))
+    .max_iter(5)
     .run()
     .unwrap();
 

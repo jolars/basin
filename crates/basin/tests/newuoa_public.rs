@@ -7,10 +7,7 @@
 //! init/next_iter, the V↔Vec bridge, count mirroring, and the convergence/
 //! budget/early-stop termination paths.
 
-use basin::{
-    CostFunction, Executor, MaxCostEvals, Newuoa, NewuoaState, RhoTolerance,
-    TerminationReason,
-};
+use basin::{CostFunction, Executor, Newuoa, NewuoaState, TerminationReason};
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
@@ -32,10 +29,12 @@ impl CostFunction for Rosenbrock {
 fn converges_on_rosenbrock_2d() {
     let result = Executor::new(
         Rosenbrock,
-        Newuoa::new().with_rho_beg(0.5).with_rho_end(1e-8),
+        Newuoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-8),
         NewuoaState::new(vec![-1.2, 1.0]),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 
@@ -65,10 +64,12 @@ fn respects_cost_eval_budget() {
     let result = Executor::new(
         Rosenbrock,
         // A tiny ρ_end so the solver would keep going far past the budget.
-        Newuoa::new().with_rho_beg(0.5).with_rho_end(1e-12),
+        Newuoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-12),
         NewuoaState::new(vec![-1.2, 1.0]),
     )
-    .terminate_on(MaxCostEvals(20))
+    .max_cost_evals(20)
     .run()
     .unwrap();
 
@@ -84,13 +85,17 @@ fn respects_cost_eval_budget() {
 fn rho_tolerance_stops_early() {
     let result = Executor::new(
         Rosenbrock,
-        // Configured to drive ρ down to 1e-12, but RhoTolerance cuts it off at
-        // a coarse ρ first.
-        Newuoa::new().with_rho_beg(0.5).with_rho_end(1e-12),
+        (
+            // Configured to drive ρ down to 1e-12, but RhoTolerance cuts it off at
+            // a coarse ρ first.
+            Newuoa::new()
+                .with_initial_radius(0.5)
+                .with_final_radius(1e-12)
+        )
+        .with_absolute_radius_tolerance(1e-3),
         NewuoaState::new(vec![-1.2, 1.0]),
     )
-    .terminate_on(RhoTolerance::new(1e-3))
-    .terminate_on(MaxCostEvals(5000))
+    .max_cost_evals(5000)
     .run()
     .unwrap();
 
@@ -125,10 +130,12 @@ fn backend_generic_nalgebra() {
 
     let result = Executor::new(
         RosenbrockN,
-        Newuoa::new().with_rho_beg(0.5).with_rho_end(1e-8),
+        Newuoa::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-8),
         NewuoaState::new(DVector::from_vec(vec![-1.2, 1.0])),
     )
-    .terminate_on(MaxCostEvals(500))
+    .max_cost_evals(500)
     .run()
     .unwrap();
 

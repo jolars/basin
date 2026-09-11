@@ -6,7 +6,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Sphere;
-use basin::{Executor, RhoTolerance, SolisWets, TerminationReason};
+use basin::{Executor, SolisWets, TerminationReason};
 
 #[test]
 fn same_seed_yields_identical_trajectory() {
@@ -30,10 +30,9 @@ fn same_seed_yields_identical_trajectory() {
 fn converges_on_sphere_5d_via_rho_tolerance() {
     let result = Executor::from_start(
         Sphere::<DVector<f64>>::new(),
-        SolisWets::new(7),
+        (SolisWets::new(7)).with_absolute_step_size_tolerance(1e-8),
         DVector::from_vec(vec![2.0, -1.0, 1.5, 0.5, -2.0]),
     )
-    .terminate_on(RhoTolerance::new(1e-8))
     .max_iter(100_000)
     .run()
     .unwrap();

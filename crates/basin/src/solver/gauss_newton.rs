@@ -38,28 +38,20 @@ use crate::core::termination::TerminationReason;
 ///   when this fires.
 /// - **Divergence on highly nonlinear or poorly initialized problems.**
 ///   No safeguard here either; pure GN trusts the linear model. Catch
-///   this with a finite [`MaxIter`](crate::core::termination::MaxIter)
-///   or [`CostTolerance`](crate::core::termination::CostTolerance) on
-///   the executor.
+///   this with a finite [`max_iter`](crate::Executor::max_iter)
+///   on the executor and inspect the returned state and stopping reason.
 ///
-/// # Termination
+/// # Convergence
 ///
-/// Beyond the framework criteria
-/// ([`MaxIter`](crate::core::termination::MaxIter),
-/// [`CostTolerance`](crate::core::termination::CostTolerance),
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance), …),
-/// the solver emits [`TerminationReason::SolverConverged`] when the
-/// first-order optimality measure
-/// `‖Jᵀr‖_∞ ≤ tol_grad` (Madsen et al. eq. 3.3a) is satisfied.
-/// Default `tol_grad = 1e-8`; set to `0.0` to disable the check.
+/// The native first-order test is `‖Jᵀr‖_∞ ≤ tolerance`, configured by
+/// [`with_absolute_gradient_tolerance`](Self::with_absolute_gradient_tolerance).
+/// Its default is `1e-8`; `None` disables it, and zero tests exact stationarity.
+/// It reports [`TerminationReason::SolverConverged`] before computing a step.
+/// Optional observed cost and step checks are disabled by default and combine
+/// with this test using OR. Execution budgets belong on the executor.
 ///
-/// Gauss-Newton runs on [`NllsState`], which
-/// does **not** impl [`GradientState`](crate::core::state::GradientState):
-/// the framework's L2-squared
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is the
-/// wrong metric for NLLS, so attaching it is a **compile error** rather than a
-/// criterion that silently never fires. Use
-/// [`with_tol_grad`](Self::with_tol_grad) above for the first-order test.
+/// The least-squares gradient is `Jᵀr`. It is computed inside the solver;
+/// [`NllsState`] does not expose a [`GradientState`](crate::GradientState).
 ///
 /// # Backends
 ///
@@ -87,7 +79,7 @@ use crate::core::termination::TerminationReason;
 /// the `Executor`, swapping `LevenbergMarquardt::new()` for
 /// `GaussNewton::new()`.
 pub struct GaussNewton<V, M, F = f64> {
-    tol_grad: F,
+    tol_grad: Option<F>,
 
     // Residual and Jacobian caches across iterations. `r_cache` is set
     // to `r(x_new)` after the full GN step and reused at the top of the
@@ -109,7 +101,7 @@ impl<V, M> GaussNewton<V, M> {
     /// tolerance (`tol_grad = 1e-8`).
     pub fn new() -> Self {
         Self {
-            tol_grad: 1e-8,
+            tol_grad: Some(1e-8),
             r_cache: None,
             j_cache: None,
         }
@@ -121,9 +113,26 @@ impl<V, M, F: Scalar> GaussNewton<V, M, F> {
     /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`.
     /// Set to `0.0` to disable the check and rely solely on framework
     /// termination criteria. Default `1e-8`.
+    #[deprecated(
+        note = "use `with_absolute_gradient_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_grad(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
-        self.tol_grad = tol;
+        self.tol_grad = (tol > F::zero()).then_some(tol);
+        self
+    }
+
+    /// Configure the infinity norm of J-transpose times residual.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_absolute_gradient_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_grad = crate::core::convergence::optional_tolerance(value);
         self
     }
 }
@@ -181,7 +190,7 @@ where
         // (Madsen/Nielsen/Tingleff eq. 3.3a) is the canonical NLLS
         // convergence test.
         let g = j.mat_transpose_vec(&r);
-        if self.tol_grad > F::zero() && g.norm_infinity() <= self.tol_grad {
+        if self.tol_grad.is_some_and(|tol| g.norm_infinity() <= tol) {
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             return Ok((state, Some(TerminationReason::SolverConverged)));

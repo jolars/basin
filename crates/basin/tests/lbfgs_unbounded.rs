@@ -7,8 +7,7 @@
 
 use basin::solver::lbfgs::{Bounded, Unbounded};
 use basin::{
-    CostFunction, Executor, Gradient, GradientTolerance, Lbfgs, LbfgsState,
-    Lbfgsb, MaxIter, MoreThuente,
+    CostFunction, Executor, Gradient, Lbfgs, LbfgsState, Lbfgsb, MoreThuente,
 };
 
 /// 2-D Rosenbrock: `f(x) = (1 − x₀)² + 100 (x₁ − x₀²)²`. Used by all
@@ -49,11 +48,14 @@ fn rosenbrock_vec() {
     }
 
     let state = LbfgsState::new(vec![-1.2, 1.0], 5);
-    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(GradientTolerance(1e-8))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        Rosen,
+        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
@@ -95,11 +97,14 @@ fn rosenbrock_nalgebra() {
     }
 
     let state = LbfgsState::new(DVector::from_vec(vec![-1.2, 1.0]), 5);
-    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(GradientTolerance(1e-8))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        Rosen,
+        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
@@ -139,11 +144,14 @@ fn rosenbrock_faer() {
 
     let x0 = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
     let state = LbfgsState::new(x0, 5);
-    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(GradientTolerance(1e-8))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        Rosen,
+        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
@@ -185,11 +193,14 @@ fn rosenbrock_ndarray() {
     }
 
     let state = LbfgsState::new(array![-1.2, 1.0], 5);
-    let result = Executor::new(Rosen, Lbfgs::<Unbounded>::new(), state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(GradientTolerance(1e-8))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        Rosen,
+        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(

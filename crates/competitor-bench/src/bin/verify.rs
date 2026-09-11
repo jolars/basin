@@ -23,10 +23,10 @@ use nalgebra_latest::DVector as BasinDVector;
 /// MINPACK gtol/ftol/xtol all at `30·ε`, absolute gradient test off.
 fn basin_lm<V, M>() -> LevenbergMarquardt<V, M> {
     LevenbergMarquardt::new()
-        .with_tol_grad(0.0)
-        .with_tol_grad_rel(LM_DEFAULT_TOL)
-        .with_tol_cost_rel(LM_DEFAULT_TOL)
-        .with_tol_step_rel(LM_DEFAULT_TOL)
+        .with_absolute_gradient_tolerance(None)
+        .with_gradient_orthogonality_tolerance(LM_DEFAULT_TOL)
+        .with_relative_model_reduction_tolerance(LM_DEFAULT_TOL)
+        .with_relative_step_tolerance(LM_DEFAULT_TOL)
 }
 
 fn main() {

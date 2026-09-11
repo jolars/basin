@@ -116,21 +116,18 @@ use self::subsm::subsm;
 /// `LbfgsState::new(x0, m)`. Fortran recommends `m ∈ [3, 20]`;
 /// `m = 10` is a reasonable default.
 ///
-/// # Termination
+/// # Convergence
 ///
-/// No solver-internal optimality test on the unbounded path; pair with
-/// the framework-level
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance).
-/// On the bounded path, a built-in projected-gradient check fires
-/// when `‖projgr(x, g, l, u)‖_∞ ≤ tol_pg` (Fortran-`pgtol` parity);
-/// the framework-level
-/// [`ProjectedGradientTolerance`](crate::core::termination::ProjectedGradientTolerance)
-/// is the canonical companion when external bookkeeping wants the same
-/// metric. Pair either mode with
-/// [`MaxIter`](crate::core::termination::MaxIter),
-/// [`MaxCostEvals`](crate::core::termination::MaxCostEvals), and
-/// [`CostTolerance`](crate::core::termination::CostTolerance) as
-/// desired.
+/// The unbounded path has no default optimality check. Configure
+/// `with_absolute_gradient_tolerance` or `with_relative_gradient_tolerance`
+/// on the unbounded solver to use the Euclidean gradient norm.
+/// The bounded path owns one projected-gradient test,
+/// `‖x - projection(x - g)‖_∞ ≤ tolerance`, configured with
+/// [`with_absolute_projected_gradient_tolerance`](Self::with_absolute_projected_gradient_tolerance).
+/// It uses the current problem's bounds and defaults to `1e-10`.
+/// `None` disables a configurable check; zero tests exact stationarity.
+/// Optional observed step and cost checks combine with it using OR.
+/// Keep iteration and evaluation budgets on the executor.
 ///
 /// # Backends
 ///
@@ -165,7 +162,8 @@ pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     /// the framework-level
     /// [`GradientTolerance`](crate::core::termination::GradientTolerance)
     /// instead.
-    tol_pg: F,
+    tol_pg: Option<F>,
+    tol_pg_reason: TerminationReason,
     /// Default limited-memory history capacity (Fortran `m`,
     /// `references/lbfgsb-v3.0/`). Default `10`. Only consulted when
     /// the solver constructs the state itself, e.g. as a
@@ -222,7 +220,8 @@ impl Lbfgs<Bounded, MoreThuente> {
         Self {
             line_search: MoreThuente::new(),
             epsilon: f64::EPSILON,
-            tol_pg: 1e-10,
+            tol_pg: Some(1e-10),
+            tol_pg_reason: TerminationReason::SolverConverged,
             m_capacity: 10,
             _mode: PhantomData,
         }
@@ -239,7 +238,8 @@ impl Lbfgs<Unbounded, MoreThuente> {
         Self {
             line_search: MoreThuente::new(),
             epsilon: f64::EPSILON,
-            tol_pg: 1e-10,
+            tol_pg: Some(1e-10),
+            tol_pg_reason: TerminationReason::SolverConverged,
             m_capacity: 10,
             _mode: PhantomData,
         }
@@ -258,7 +258,8 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
         Self {
             line_search,
             epsilon: F::epsilon(),
-            tol_pg: F::from_f64(1e-10).unwrap(),
+            tol_pg: Some(F::from_f64(1e-10).unwrap()),
+            tol_pg_reason: TerminationReason::SolverConverged,
             m_capacity: 10,
             _mode: PhantomData,
         }
@@ -269,9 +270,28 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
     /// semantics, used by the iteration-wise parity test). Bounded
     /// mode only; the unbounded path doesn't compute a projected
     /// gradient.
+    #[deprecated(
+        note = "use `with_absolute_projected_gradient_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_pg(mut self, tol_pg: F) -> Self {
         assert!(tol_pg >= F::zero(), "tol_pg must be ≥ 0");
-        self.tol_pg = tol_pg;
+        self.tol_pg = Some(tol_pg);
+        self.tol_pg_reason = TerminationReason::SolverConverged;
+        self
+    }
+
+    /// Configure the projected-gradient infinity norm computed using the current problem bounds.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_absolute_projected_gradient_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_pg = crate::core::convergence::optional_tolerance(value);
+        self.tol_pg_reason = TerminationReason::ProjectedGradientTolerance;
         self
     }
 
@@ -284,6 +304,7 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
+            tol_pg_reason: self.tol_pg_reason,
             m_capacity: self.m_capacity,
             _mode: PhantomData,
         }
@@ -298,7 +319,8 @@ impl<S, F: Scalar> Lbfgs<Unbounded, S, F> {
         Self {
             line_search,
             epsilon: F::epsilon(),
-            tol_pg: F::from_f64(1e-10).unwrap(),
+            tol_pg: Some(F::from_f64(1e-10).unwrap()),
+            tol_pg_reason: TerminationReason::SolverConverged,
             m_capacity: 10,
             _mode: PhantomData,
         }
@@ -313,6 +335,7 @@ impl<S, F: Scalar> Lbfgs<Unbounded, S, F> {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
+            tol_pg_reason: self.tol_pg_reason,
             m_capacity: self.m_capacity,
             _mode: PhantomData,
         }
@@ -323,7 +346,16 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
     /// Override the curvature-skip threshold. Default `F::epsilon()`
     /// (= `f64::EPSILON` when `F = f64`), matching Fortran's
     /// `dr ≤ epsmch · ddum` test.
-    pub fn with_epsilon(mut self, epsilon: F) -> Self {
+    #[deprecated(
+        note = "use `with_relative_curvature_tolerance`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_epsilon(self, epsilon: F) -> Self {
+        self.with_relative_curvature_tolerance(epsilon)
+    }
+
+    /// Set the relative threshold for accepting a curvature update.
+    /// This is an algorithm safeguard, not an optimization stopping test.
+    pub fn with_relative_curvature_tolerance(mut self, epsilon: F) -> Self {
         assert!(epsilon >= F::zero(), "epsilon must be ≥ 0");
         self.epsilon = epsilon;
         self
@@ -419,10 +451,10 @@ where
             );
 
             // Restore values taken from the state before returning.
-            if sbgnrm <= self.tol_pg {
+            if self.tol_pg.is_some_and(|tol| sbgnrm <= tol) {
                 state.gradient = Some(g_v);
                 state.cost = Some(f_old);
-                return Ok((state, Some(TerminationReason::SolverConverged)));
+                return Ok((state, Some(self.tol_pg_reason)));
             }
 
             let col = state.ws.len();
@@ -1266,7 +1298,6 @@ fn try_restart_after_lnsrch<V, F: Scalar>(
 mod tests {
     use super::*;
     use crate::core::executor::Executor;
-    use crate::core::termination::{MaxIter, ProjectedGradientTolerance};
 
     /// Smoke test on a small box-constrained quadratic. The problem
     /// `f(x) = (x − c)ᵀ(x − c)` with bounds `[l, u]` has minimizer
@@ -1314,13 +1345,14 @@ mod tests {
 
         let state = LbfgsState::new(vec![1.0, 1.0], 5);
         let solver = Lbfgsb::new();
-        let lower = problem.lower().clone();
-        let upper = problem.upper().clone();
-        let result = Executor::new(problem, solver, state)
-            .terminate_on(MaxIter(50))
-            .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
-            .run()
-            .unwrap();
+        let result = Executor::new(
+            problem,
+            (solver).with_absolute_projected_gradient_tolerance(1e-10),
+            state,
+        )
+        .max_iter(50)
+        .run()
+        .unwrap();
         let final_x = result.state.param.clone();
         // Optimum: clamp((3, -1), [0,0], [2, 2]) = (2, 0).
         assert!((final_x[0] - 2.0).abs() < 1e-6, "x0 = {}", final_x[0]);
@@ -1371,13 +1403,14 @@ mod tests {
         };
         let state = LbfgsState::new(vec![-1.2, 1.0], 5);
         let solver = Lbfgsb::new();
-        let lower = problem.lower().clone();
-        let upper = problem.upper().clone();
-        let result = Executor::new(problem, solver, state)
-            .terminate_on(MaxIter(200))
-            .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
-            .run()
-            .unwrap();
+        let result = Executor::new(
+            problem,
+            (solver).with_absolute_projected_gradient_tolerance(1e-8),
+            state,
+        )
+        .max_iter(200)
+        .run()
+        .unwrap();
         let final_x = result.state.param.clone();
         assert!(
             (final_x[0] - 1.0).abs() < 1e-3 && (final_x[1] - 1.0).abs() < 1e-3,

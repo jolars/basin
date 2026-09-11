@@ -112,10 +112,10 @@ fn compare(name: &str, model: Model, truth: Vec<f64>, starts: Vec<Vec<f64>>) {
                 )
             } else {
                 let solver = LevenbergMarquardt::new()
-                    .with_tol_grad(0.)
-                    .with_tol_grad_rel(1e-12)
-                    .with_tol_cost_rel(1e-12)
-                    .with_tol_step_rel(1e-12);
+                    .with_absolute_gradient_tolerance(0.)
+                    .with_gradient_orthogonality_tolerance(1e-12)
+                    .with_relative_model_reduction_tolerance(1e-12)
+                    .with_relative_step_tolerance(1e-12);
                 let state = NllsState::new(BasinVector::from_column_slice(
                     x.as_slice(),
                 ));

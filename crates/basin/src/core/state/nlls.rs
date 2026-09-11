@@ -29,7 +29,7 @@ use crate::core::state::{CountsMirror, State};
 ///
 /// [`cost_evals`](State::cost_evals) folds residual evaluations into the cost
 /// counter (a residual evaluation *is* the cost work for a least-squares
-/// objective), so [`MaxCostEvals`](crate::core::termination::MaxCostEvals) and
+/// objective), so [`max_cost_evals`](crate::Executor::max_cost_evals) and
 /// [`OptimizationResult::cost_evals`](crate::core::executor::OptimizationResult::cost_evals)
 /// behave exactly as they did on `BasicState`. The Jacobian work is surfaced
 /// separately through [`jacobian_evals`](Self::jacobian_evals): the MINPACK

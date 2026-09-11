@@ -1,20 +1,16 @@
 //! Composition adapter: drive an inner solver from inside an outer
 //! solver's [`next_iter`](crate::core::solver::Solver::next_iter).
 //!
-//! [`InnerExecutor`] mirrors [`Executor`](crate::core::executor::Executor)'s
-//! builder ergonomics (`max_iter`, `terminate_on`) but does *not* own the
-//! problem: outer solvers store one as a field and call
-//! [`InnerExecutor::run`] against the borrowed `&P` they receive in
-//! `next_iter`. Internally [`InnerExecutor::run`] is exactly
-//! [`run_loop`]; the wrapper just owns the
-//! solver, the criteria vec, and the iteration budget so the same set of
-//! settings can be reused across outer iters without re-allocating.
-//!
-//! See `CONTRIBUTING.md` "Solver composition" for the three load-bearing rules
-//! (eval aggregation, criteria statelessness across calls, failure
-//! routing) every outer solver must follow.
+//! [`InnerExecutor`] stores a configured inner solver and reusable execution
+//! controls. It borrows the outer problem and uses [`run_loop_with_control`](crate::run_loop_with_control).
+//! Each run resets convergence, clocks, stall counters, and factory-created
+//! application hooks. Evaluation aggregation and failure routing follow the
+//! composition contracts below.
 
-use crate::core::executor::{OptimizationResult, run_loop};
+// Keep the Basin 1.x compatibility bridge and shared check implementations local.
+#![allow(deprecated)]
+
+use crate::core::executor::OptimizationResult;
 use crate::core::math::Scalar;
 use crate::core::problem::Problem;
 use crate::core::solver::Solver;
@@ -140,13 +136,30 @@ where
     /// point of the chain.
     fn prepare_resume(&self, state: &mut Self::State);
 
+    /// Configure execution stops or solver settings for a new chain segment.
+    ///
+    /// The default bridges existing `segment_criteria` implementations during
+    /// Basin 1.x. Built-in operators configure their own convergence directly.
+    fn configure_segment(
+        &mut self,
+        state: &Self::State,
+        control: &mut crate::RunControl<Self::State>,
+    ) {
+        for criterion in self.segment_criteria(state) {
+            control.push_legacy(criterion);
+        }
+    }
+
     /// Operator-specific per-segment convergence criteria, built from
     /// the segment's *starting* state (CMA-ES: TolX at `1e-12 ·` the
     /// segment's starting σ). Budget criteria
-    /// ([`MaxCostEvals`](crate::core::termination::MaxCostEvals)) are
+    /// ([`max_cost_evals`](crate::Executor::max_cost_evals)) are
     /// the outer's responsibility and are checked before these.
     /// Default: none (Solis-Wets, which the reference implementation
     /// runs purely budget-driven).
+    #[deprecated(
+        note = "use `configure_segment`; removal scheduled for Basin 2.0"
+    )]
     fn segment_criteria(
         &self,
         _state: &Self::State,
@@ -158,29 +171,27 @@ where
 /// Pre-configured inner solver an outer solver drives once per outer
 /// iteration.
 ///
-/// Owns the inner solver, its termination criteria, and its `max_iter`
+/// Owns the configured inner solver, execution controls, and its `max_iter`
 /// budget. The problem is supplied (borrowed) at [`run`](Self::run) time,
 /// so the outer solver can pass the `&P` it receives in
 /// [`next_iter`](crate::core::solver::Solver::next_iter) without taking
 /// ownership.
 ///
 /// Mirrors [`Executor`](crate::core::executor::Executor)'s builder API:
-/// [`max_iter`](Self::max_iter) and [`terminate_on`](Self::terminate_on)
+/// [`max_iter`](Self::max_iter) and [`stop_when_factory`](Self::stop_when_factory)
 /// are chainable. The differences are (a) the problem isn't owned, and
 /// (b) [`run`](Self::run) is reusable: the same `InnerExecutor` is
 /// expected to be invoked many times across the outer's lifetime.
 ///
-/// [`run_loop`] stays as the lower-level
-/// escape hatch for outer solvers that want to reconstruct criteria per
-/// call.
+/// [`run_loop_with_control`](crate::run_loop_with_control) provides the lower-level
+/// interface for custom outer solvers.
 ///
 /// # Serialization
 ///
-/// With the `serde` feature, an inner executor can be serialized when it has
-/// no boxed termination criteria. The inner solver and iteration budget are
-/// stored. Arbitrary criteria cannot be reconstructed from erased trait
-/// objects, so serialization returns an error when any are registered rather
-/// than producing a checkpoint with different execution policy.
+/// With `serde`, the solver and iteration/evaluation/time budgets serialize.
+/// Application hooks, deprecated criteria, and erased target/stall checks
+/// cannot be reconstructed and cause a serialization error. They are never
+/// silently dropped from an exact checkpoint.
 ///
 /// # Composition contracts
 ///
@@ -212,20 +223,11 @@ where
 ///    See the [`Solver::next_iter`]
 ///    contract for the canonical wording.
 ///
-/// 2. **Criteria are reset per run.** Criteria registered with
-///    [`terminate_on`](Self::terminate_on) live for the whole lifetime of
-///    the `InnerExecutor` and are reused on every [`run`](Self::run)
-///    call, but each is
-///    [`reset`](crate::core::termination::TerminationCriterion::reset) at
-///    the start of every run (via [`run_loop`]), so any per-run internal
-///    state is cleared first. Stateful criteria are therefore safe to
-///    reuse: [`MaxTime`](crate::core::termination::MaxTime) (start instant),
-///    [`RelativeGradientTolerance`](crate::core::termination::RelativeGradientTolerance)
-///    (anchored `‖∇f_0‖`), and
-///    [`NoImprovement`](crate::core::termination::NoImprovement) (stall
-///    counter) all behave as freshly constructed each call. A *custom*
-///    criterion holding cross-call state must override `reset` to clear it
-///    (the default is a no-op).
+/// 2. **History resets per run.** Each fresh run resets solver convergence,
+///    built-in clocks and stall checks, and deprecated criterion history.
+///    [`stop_when_factory`](Self::stop_when_factory) creates a fresh custom
+///    closure per run. A direct [`stop_when`](Self::stop_when) closure retains
+///    its captures across calls.
 ///
 /// 3. **Failure routing.** [`run`](Self::run) returns a full
 ///    [`OptimizationResult`]; classify the reason. Use
@@ -236,8 +238,7 @@ where
 ///    the outer can consume and continue past.
 pub struct InnerExecutor<S, So> {
     solver: So,
-    criteria: Vec<Box<dyn TerminationCriterion<S>>>,
-    max_iter: u64,
+    control: crate::RunControl<S>,
 }
 
 #[cfg(feature = "serde")]
@@ -251,16 +252,17 @@ where
     {
         use serde::ser::{Error, SerializeStruct};
 
-        if !self.criteria.is_empty() {
+        if self.control.has_unserializable_stops() {
             return Err(Error::custom(
                 "InnerExecutor cannot serialize boxed termination criteria; \
                  use an inner iteration budget for an exact checkpoint",
             ));
         }
 
-        let mut fields = serializer.serialize_struct("InnerExecutor", 2)?;
+        let mut fields = serializer.serialize_struct("InnerExecutor", 3)?;
         fields.serialize_field("solver", &self.solver)?;
-        fields.serialize_field("max_iter", &self.max_iter)?;
+        fields.serialize_field("max_iter", &self.control.max_iter)?;
+        fields.serialize_field("limits", &self.control.limits)?;
         fields.end()
     }
 }
@@ -278,6 +280,8 @@ where
         struct StoredInnerExecutor<So> {
             solver: So,
             max_iter: u64,
+            #[serde(default)]
+            limits: crate::core::run_control::Limits,
         }
 
         let stored =
@@ -286,8 +290,12 @@ where
             )?;
         Ok(Self {
             solver: stored.solver,
-            criteria: Vec::new(),
-            max_iter: stored.max_iter,
+            control: {
+                let mut control =
+                    crate::RunControl::new().max_iter(stored.max_iter);
+                control.limits = stored.limits;
+                control
+            },
         })
     }
 }
@@ -298,8 +306,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     pub fn new(solver: So) -> Self {
         Self {
             solver,
-            criteria: Vec::new(),
-            max_iter: 1000,
+            control: crate::RunControl::new(),
         }
     }
 
@@ -307,20 +314,35 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// [`run`](Self::run) drives the inner solver up to this many
     /// iterations.
     pub fn max_iter(mut self, n: u64) -> Self {
-        self.max_iter = n;
+        self.control.max_iter = n;
         self
     }
+
+    crate::core::run_control::control_methods!();
 
     /// Add a termination criterion to the inner loop. Criteria are
     /// checked in insertion order before each inner iteration. See the
     /// type-level "Composition contracts" for the statelessness
     /// requirement that applies because criteria are reused across
     /// [`run`](Self::run) calls.
+    #[deprecated(
+        note = "configure inner solver convergence or use `stop_when_factory`; removal scheduled for Basin 2.0"
+    )]
     pub fn terminate_on<C>(mut self, criterion: C) -> Self
     where
         C: TerminationCriterion<S> + 'static,
     {
-        self.criteria.push(Box::new(criterion));
+        self.control.push_legacy(Box::new(criterion));
+        self
+    }
+
+    /// Append an application stop whose captures persist across inner runs.
+    /// Use [`stop_when_factory`](Self::stop_when_factory) for fresh per-run history.
+    pub fn stop_when<C>(mut self, check: C) -> Self
+    where
+        C: FnMut(&S) -> Option<crate::TerminationReason> + 'static,
+    {
+        self.control = std::mem::take(&mut self.control).stop_when(check);
         self
     }
 
@@ -348,7 +370,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// [`Problem::counts_mut`] after `run` returns.
     ///
     /// Internally exactly
-    /// [`run_loop`]: `init` is called
+    /// [`run_loop_with_control`](crate::run_loop_with_control): `init` is called
     /// on every invocation, so the inner solver sees a fresh setup pass
     /// each time (e.g. seeding cost/gradient at the new starting point).
     pub fn run<P>(
@@ -359,12 +381,11 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     where
         So: Solver<P, S>,
     {
-        run_loop(
+        crate::run_loop_with_control(
             problem,
             state,
             &mut self.solver,
-            &mut self.criteria,
-            self.max_iter,
+            &mut self.control,
         )
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::core::augmented_lagrangian::AugmentedLagrangian;
 use crate::core::constraint::LinearEqualityConstraints;
-use crate::core::executor::run_loop;
+use crate::core::executor::run_loop_with_control;
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
     Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
@@ -10,9 +10,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicState, CountsMirror, GradientState, State};
-use crate::core::termination::{
-    GradientTolerance, MaxIter, TerminationCriterion, TerminationReason,
-};
+use crate::core::termination::TerminationReason;
 
 /// Augmented-Lagrangian method for `min f(x) s.t. A x = b`, the
 /// equality-constrained analogue of the log-barrier
@@ -74,13 +72,12 @@ use crate::core::termination::{
 /// [`SolverConverged`](TerminationReason::SolverConverged). Optimality is the
 /// inner solve's job (it drives `‖∇_x L_ρ‖` down), so once the iterate is
 /// feasible and the inner solve has converged, the KKT conditions hold. Pair
-/// with the executor's [`MaxIter`] as a safety net.
+/// with the executor's [`max_iter`](crate::Executor::max_iter) as a safety net.
 ///
 /// **Do not attach a gradient-norm criterion to the outer executor.** As with
 /// the barrier, at a constrained optimum the *true* objective gradient `∇f`
 /// does not vanish (it is balanced by `Aᵀλ*`), so a framework
-/// [`GradientTolerance`] on the
-/// outer loop would fire on the wrong point or never. (The outer state's
+/// gradient-norm check on the outer loop would fire on the wrong point or never. (The outer state's
 /// gradient is the true `∇f`, seeded only so the state is well-formed; it is
 /// not a convergence signal.)
 ///
@@ -95,21 +92,13 @@ use crate::core::termination::{
 ///
 /// # Composition
 ///
-/// Internally drives the inner solver via
-/// [`run_loop`] against a **fresh** inner
-/// `Problem` wrapper each outer iteration
-/// (the inner is an *adapter-problem* composition: the augmented Lagrangian
-/// is a distinct type from the outer problem) with a fresh criteria vector
-/// (`MaxIter` + `GradientTolerance` on the augmented Lagrangian). The fresh
-/// wrapper is intrinsic here, since each outer iter minimizes a *different*
-/// surrogate (updated λ, ρ), not a reuse-avoidance dodge: criteria
-/// [reset](crate::core::termination::TerminationCriterion::reset) per run, so
-/// even a stored [`InnerExecutor`](crate::core::inner::InnerExecutor) would
-/// reuse stateful criteria safely. After each inner solve, the inner wrapper's
-/// [`EvalCounts`](crate::core::problem::EvalCounts) is folded into the
-/// outer's wrapper via
-/// [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
-/// [`Problem::counts_mut`](crate::core::problem::Problem::counts_mut).
+/// Use [`with_inner_solver`](Self::with_inner_solver) to supply a solver with
+/// its own convergence settings. Each outer iteration starts a fresh inner
+/// solve through [`run_loop_with_control`],
+/// against the current surrogate problem. Convergence history resets and
+/// inner evaluation counts are folded into the outer wrapper.
+/// The deprecated `new` constructor additionally applies an inner gradient
+/// threshold, default `1e-8`, for Basin 1.x compatibility.
 ///
 /// # Examples
 ///
@@ -120,12 +109,12 @@ use crate::core::termination::{
 pub struct AugmentedLagrangianMethod<So, V, F = f64> {
     inner_solver: So,
     inner_max_iter: u64,
-    inner_grad_tol: F,
+    inner_grad_tol: Option<F>,
     rho0: F,
     rho: F,
     rho_increase: F,
     feasibility_decrease: F,
-    tol: F,
+    tol: Option<F>,
     /// Multiplier estimate `λ ∈ ℝᵐ`; populated in [`init`](Solver::init) with
     /// a zero vector shaped like `b`, then carried across outer iterations.
     lambda: Option<V>,
@@ -143,16 +132,32 @@ impl<So, V> AugmentedLagrangianMethod<So, V> {
     /// Defaults: `rho0 = 10.0`, `rho_increase = 10.0`,
     /// `feasibility_decrease = 0.25`, `tol = 1e-8`, `inner_max_iter = 50`,
     /// `inner_grad_tol = 1e-8`.
+    #[deprecated(
+        note = "use `with_inner_solver` with convergence configured on the inner solver; removal scheduled for Basin 2.0"
+    )]
     pub fn new(inner_solver: So) -> Self {
+        Self::legacy_defaults(inner_solver)
+    }
+
+    /// Build around an inner solver that owns its convergence settings.
+    /// No additional inner gradient test is installed. The inner iteration
+    /// budget remains 50; configure the supplied algorithm's tolerances first.
+    pub fn with_inner_solver(inner_solver: So) -> Self {
+        let mut solver = Self::legacy_defaults(inner_solver);
+        solver.inner_grad_tol = None;
+        solver
+    }
+
+    fn legacy_defaults(inner_solver: So) -> Self {
         Self {
             inner_solver,
             inner_max_iter: 50,
-            inner_grad_tol: 1e-8,
+            inner_grad_tol: Some(1e-8),
             rho0: 10.0,
             rho: 10.0,
             rho_increase: 10.0,
             feasibility_decrease: 0.25,
-            tol: 1e-8,
+            tol: Some(1e-8),
             lambda: None,
             c_norm: f64::INFINITY,
             c_norm_prev: f64::INFINITY,
@@ -211,9 +216,22 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// # Panics
     ///
     /// Panics unless `tol > 0`.
+    #[deprecated(
+        note = "use `with_absolute_feasibility_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol(mut self, tol: F) -> Self {
         assert!(tol > F::zero(), "tol must be > 0");
-        self.tol = tol;
+        self.tol = Some(tol);
+        self
+    }
+
+    /// Configure the absolute feasibility tolerance.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_absolute_feasibility_tolerance(
+        mut self,
+        tol: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol = crate::core::convergence::optional_tolerance(tol);
         self
     }
 
@@ -241,9 +259,12 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// # Panics
     ///
     /// Panics unless `inner_grad_tol ≥ 0`.
+    #[deprecated(
+        note = "configure the supplied inner solver and use `with_inner_solver`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
         assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
-        self.inner_grad_tol = inner_grad_tol;
+        self.inner_grad_tol = Some(inner_grad_tol);
         self
     }
 }
@@ -319,17 +340,16 @@ where
             lambda,
             self.rho,
         ));
-        let mut criteria: Vec<Box<dyn TerminationCriterion<So::State>>> = vec![
-            Box::new(MaxIter(self.inner_max_iter)),
-            Box::new(GradientTolerance(self.inner_grad_tol)),
-        ];
+        let mut control = crate::core::run_control::legacy_inner_control::<
+            So::State,
+            F,
+        >(self.inner_max_iter, self.inner_grad_tol);
         let inner_state = self.inner_solver.seed(state.param());
-        let result = run_loop(
+        let result = run_loop_with_control(
             &mut al_wrapper,
             inner_state,
             &mut self.inner_solver,
-            &mut criteria,
-            self.inner_max_iter,
+            &mut control,
         )?;
 
         // Eval aggregation (adapter-problem composition): fold the inner
@@ -378,7 +398,7 @@ where
     ) -> Option<TerminationReason> {
         // Feasibility bound ‖A x − b‖ from the most recent solve. Optimality
         // is handled by the inner solve driving ‖∇L_ρ‖ down.
-        if self.c_norm <= self.tol {
+        if self.tol.is_some_and(|tol| self.c_norm <= tol) {
             Some(TerminationReason::SolverConverged)
         } else {
             None
@@ -388,6 +408,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    // Retain validation coverage for the deprecated constructors and aliases.
+    #![allow(deprecated)]
     use super::*;
 
     // The builder validation is backend-independent, so a unit inner stand-in

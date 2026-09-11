@@ -87,7 +87,16 @@ impl<F: Scalar> MoreThuente<F> {
     }
 
     /// Override the Armijo coefficient. Panics if not in `(0, 1)`.
-    pub fn ftol(mut self, ftol: F) -> Self {
+    #[deprecated(
+        note = "use `with_sufficient_decrease_coefficient`; removal scheduled for Basin 2.0"
+    )]
+    pub fn ftol(self, ftol: F) -> Self {
+        self.with_sufficient_decrease_coefficient(ftol)
+    }
+
+    /// Configure the sufficient decrease coefficient.
+    /// Uses the same mathematical condition and validation as the original setting.
+    pub fn with_sufficient_decrease_coefficient(mut self, ftol: F) -> Self {
         assert!(
             F::zero() < ftol && ftol < F::one(),
             "ftol must be in (0, 1)"
@@ -97,7 +106,16 @@ impl<F: Scalar> MoreThuente<F> {
     }
 
     /// Override the curvature coefficient. Panics if not in `(0, 1)`.
-    pub fn gtol(mut self, gtol: F) -> Self {
+    #[deprecated(
+        note = "use `with_curvature_coefficient`; removal scheduled for Basin 2.0"
+    )]
+    pub fn gtol(self, gtol: F) -> Self {
+        self.with_curvature_coefficient(gtol)
+    }
+
+    /// Configure the curvature coefficient.
+    /// Uses the same mathematical condition and validation as the original setting.
+    pub fn with_curvature_coefficient(mut self, gtol: F) -> Self {
         assert!(
             F::zero() < gtol && gtol < F::one(),
             "gtol must be in (0, 1)"
@@ -107,7 +125,16 @@ impl<F: Scalar> MoreThuente<F> {
     }
 
     /// Override the bracket-width relative tolerance. Panics if `< 0`.
-    pub fn xtol(mut self, xtol: F) -> Self {
+    #[deprecated(
+        note = "use `with_relative_bracket_tolerance`; removal scheduled for Basin 2.0"
+    )]
+    pub fn xtol(self, xtol: F) -> Self {
+        self.with_relative_bracket_tolerance(xtol)
+    }
+
+    /// Configure the relative bracket tolerance.
+    /// Uses the same mathematical condition and validation as the original setting.
+    pub fn with_relative_bracket_tolerance(mut self, xtol: F) -> Self {
         assert!(xtol >= F::zero(), "xtol must be ≥ 0");
         self.xtol = xtol;
         self
@@ -756,7 +783,9 @@ mod tests {
         let f0 = p.cost(&x).unwrap();
         let g = p.gradient(&x).unwrap();
         let baseline = p.counts().cost_evals;
-        let mut ls = MoreThuente::new().xtol(0.0).maxfev(20);
+        let mut ls = MoreThuente::new()
+            .with_relative_bracket_tolerance(0.0)
+            .maxfev(20);
         let direction = vec![1.0];
 
         let alpha = LineSearch::<QuantizedPlateau, Vec<f64>>::next(

@@ -57,7 +57,10 @@ use driver::{CobylaWork, Transition};
 /// problem implementing [`CostFunction`] and [`NonlinearInequalityConstraints`]:
 ///
 /// ```
-/// use basin::{CostFunction, Cobyla, CobylaState, Executor, MaxCostEvals, NonlinearInequalityConstraints};
+/// use basin::{
+///     Cobyla, CobylaState, CostFunction, Executor,
+///     NonlinearInequalityConstraints,
+/// };
 ///
 /// // min x0·x1  s.t.  x0² + x1² ≤ 1   (optimum F* = −1/2 on the unit circle).
 /// struct Disk;
@@ -70,16 +73,23 @@ use driver::{CobylaWork, Transition};
 ///     }
 /// }
 /// impl NonlinearInequalityConstraints for Disk {
-///     fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+///     fn constraints(
+///         &self,
+///         x: &Vec<f64>,
+///     ) -> Result<Vec<f64>, std::convert::Infallible> {
 ///         Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
 ///     }
-///     fn num_constraints(&self) -> usize { 1 }
+///     fn num_constraints(&self) -> usize {
+///         1
+///     }
 /// }
 ///
-/// let solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6);
+/// let solver = Cobyla::new()
+///     .with_initial_radius(0.5)
+///     .with_final_radius(1e-6);
 /// let state = CobylaState::new(vec![1.0, 1.0]);
 /// let result = Executor::new(Disk, solver, state)
-///     .terminate_on(MaxCostEvals(500))
+///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
 /// assert!((result.best_cost() - (-0.5)).abs() < 1e-3);
@@ -103,7 +113,7 @@ use driver::{CobylaWork, Transition};
 ///
 /// Natural convergence is `ρ` reaching `ρ_end`, signalled as
 /// [`TerminationReason::SolverConverged`]. Add
-/// [`MaxCostEvals`](crate::MaxCostEvals) to cap the budget (each evaluated point
+/// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget (each evaluated point
 /// counts once) or [`RhoTolerance`](crate::RhoTolerance) to stop at a coarser
 /// `ρ`.
 ///
@@ -124,6 +134,7 @@ use driver::{CobylaWork, Transition};
 /// [`CostFunction`]: crate::core::problem::CostFunction
 /// [`TerminationReason::SolverConverged`]: crate::TerminationReason::SolverConverged
 pub struct Cobyla<F = f64> {
+    radius_tolerance: Option<F>,
     rho_beg: F,
     rho_end: F,
     /// Built in [`Solver::init`]; the resumable simplex + schedule + filter.
@@ -131,23 +142,57 @@ pub struct Cobyla<F = f64> {
 }
 
 impl<F: Scalar> Cobyla<F> {
+    /// Stop when the observed radius or step size is <= the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_radius_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.radius_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// A COBYLA solver with the default schedule (`ρ_beg = 1`, `ρ_end = 1e-6`).
     pub fn new() -> Self {
         Self {
             rho_beg: F::from_f64(1.0).expect("1.0 representable"),
+            radius_tolerance: None,
             rho_end: F::from_f64(1e-6).expect("1e-6 representable"),
             work: None,
         }
     }
 
     /// Set the initial trust-region radius `ρ_beg` (also the initial `Δ`).
-    pub fn with_rho_beg(mut self, rho_beg: F) -> Self {
+    #[deprecated(
+        note = "use `with_initial_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_beg(self, rho_beg: F) -> Self {
+        self.with_initial_radius(rho_beg)
+    }
+
+    /// Configure the initial radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_initial_radius(mut self, rho_beg: F) -> Self {
         self.rho_beg = rho_beg;
         self
     }
 
     /// Set the final trust-region radius `ρ_end`. Must satisfy `ρ_beg > ρ_end > 0`.
-    pub fn with_rho_end(mut self, rho_end: F) -> Self {
+    #[deprecated(
+        note = "use `with_final_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_end(self, rho_end: F) -> Self {
+        self.with_final_radius(rho_end)
+    }
+
+    /// Configure the final radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_final_radius(mut self, rho_end: F) -> Self {
         self.rho_end = rho_end;
         self
     }
@@ -267,5 +312,15 @@ where
             Transition::Continue | Transition::RhoReduced => None,
         };
         Ok((state, reason))
+    }
+
+    fn terminate(
+        &self,
+        state: &CobylaState<V, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.radius_tolerance?;
+        let metric = crate::RhoState::rho(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::RhoTolerance)
     }
 }

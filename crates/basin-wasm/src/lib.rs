@@ -815,6 +815,7 @@ where
 /// per variant; the UI can branch on it.
 fn reason_str(r: TerminationReason) -> &'static str {
     match r {
+        TerminationReason::UserRequested => "user_requested",
         TerminationReason::MaxIter => "max_iter",
         TerminationReason::MaxCostEvals => "max_cost_evals",
         TerminationReason::MaxGradientEvals => "max_gradient_evals",

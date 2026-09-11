@@ -274,11 +274,10 @@ where
 ///
 /// The subproblem strategy defaults to [`Steihaug`] (truncated CG); choose
 /// another with [`with_subproblem`](Self::with_subproblem). The radius `Δ`
-/// is solver-internal working state; there are no framework termination
-/// knobs for it; pair the solver with
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) /
-/// [`MaxIter`](crate::core::termination::MaxIter) like any first-order
-/// solver.
+/// is solver-internal working state. Configure convergence with
+/// `with_absolute_gradient_tolerance`, `with_relative_gradient_tolerance`,
+/// or the observed step/cost-change setters, all disabled by default. Keep
+/// iteration and evaluation budgets on the executor.
 ///
 /// # Matrix-free mode
 ///
@@ -349,7 +348,7 @@ where
 ///
 /// ```
 /// # #[cfg(feature = "nalgebra_v0_35")] {
-/// use basin::{CostFunction, Executor, Gradient, GradientTolerance, Hessian, TrustRegion};
+/// use basin::{CostFunction, Executor, Gradient, Hessian, TrustRegion};
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Rosenbrock;
@@ -381,9 +380,9 @@ where
 ///     }
 /// }
 ///
-/// let result = Executor::new(Rosenbrock, TrustRegion::new(), basin::BasicState::new(DVector::from_vec(vec![-1.2, 1.0])))
+/// let result = Executor::new(Rosenbrock, (TrustRegion::new()).with_absolute_gradient_tolerance(1e-8), basin::BasicState::new(DVector::from_vec(vec![-1.2, 1.0])))
 ///     .max_iter(100)
-///     .terminate_on(GradientTolerance(1e-8))
+///
 ///     .run()
 ///     .unwrap();
 /// assert!(result.cost() < 1e-10);
@@ -397,7 +396,7 @@ where
 ///
 /// ```
 /// use basin::{
-///     BasicState, CostFunction, Executor, Gradient, GradientTolerance, HessianProduct,
+///     BasicState, CostFunction, Executor, Gradient, HessianProduct,
 ///     TrustRegion,
 /// };
 ///
@@ -417,18 +416,21 @@ where
 ///     }
 /// }
 /// impl HessianProduct for IllQuadratic {
-///     fn hessian_product(&self, _x: &Vec<f64>, v: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+///     fn hessian_product(
+///         &self,
+///         _x: &Vec<f64>,
+///         v: &Vec<f64>,
+///     ) -> Result<Vec<f64>, Self::Error> {
 ///         Ok(vec![v[0], 100.0 * v[1]])
 ///     }
 /// }
 ///
 /// let result = Executor::new(
 ///     IllQuadratic,
-///     TrustRegion::matrix_free(),
+///     TrustRegion::matrix_free().with_absolute_gradient_tolerance(1e-10),
 ///     BasicState::new(vec![5.0, 1.0]),
 /// )
 /// .max_iter(100)
-/// .terminate_on(GradientTolerance(1e-10))
 /// .run()
 /// .unwrap();
 /// assert!(result.cost() < 1e-16);
@@ -794,7 +796,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BasicState, Executor, GradientTolerance};
+    use crate::{BasicState, Executor};
 
     /// Ill-conditioned quadratic `f(x) = ½ xᵀ A x` with `A = diag(1, 100)`,
     /// gradient `A x`, constant Hessian `A`. A single Newton step solves it
@@ -867,11 +869,11 @@ mod tests {
     fn cauchy_point_minimizes_quadratic() {
         let result = Executor::new(
             Quadratic,
-            TrustRegion::with_subproblem(CauchyPoint),
+            (TrustRegion::with_subproblem(CauchyPoint))
+                .with_absolute_gradient_tolerance(1e-8),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(500)
-        .terminate_on(GradientTolerance(1e-8))
         .run()
         .unwrap();
         // Cauchy point is only linearly convergent on this conditioning, so
@@ -885,11 +887,11 @@ mod tests {
         // quadratic to machine precision in a handful of iterations.
         let result = Executor::new(
             Quadratic,
-            TrustRegion::with_subproblem(Steihaug::new()),
+            (TrustRegion::with_subproblem(Steihaug::new()))
+                .with_absolute_gradient_tolerance(1e-10),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
-        .terminate_on(GradientTolerance(1e-10))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-16, "cost = {}", result.cost());
@@ -899,11 +901,11 @@ mod tests {
     fn dogleg_minimizes_quadratic() {
         let result = Executor::new(
             Quadratic,
-            TrustRegion::with_subproblem(Dogleg),
+            (TrustRegion::with_subproblem(Dogleg))
+                .with_absolute_gradient_tolerance(1e-10),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
-        .terminate_on(GradientTolerance(1e-10))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-16, "cost = {}", result.cost());
@@ -957,11 +959,11 @@ mod tests {
     fn more_sorensen_minimizes_quadratic() {
         let result = Executor::new(
             Quadratic,
-            TrustRegion::with_subproblem(MoreSorensen::new()),
+            (TrustRegion::with_subproblem(MoreSorensen::new()))
+                .with_absolute_gradient_tolerance(1e-10),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
-        .terminate_on(GradientTolerance(1e-10))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-16, "cost = {}", result.cost());
@@ -974,11 +976,10 @@ mod tests {
         // handled by the negative-curvature-to-boundary rule.
         let result = Executor::new(
             Rosenbrock,
-            TrustRegion::new(),
+            (TrustRegion::new()).with_absolute_gradient_tolerance(1e-8),
             BasicState::new(vec![-1.2, 1.0]),
         )
         .max_iter(200)
-        .terminate_on(GradientTolerance(1e-8))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-10, "cost = {}", result.cost());
@@ -990,11 +991,11 @@ mod tests {
         // indefinite, so it still drives Rosenbrock to the minimum.
         let result = Executor::new(
             Rosenbrock,
-            TrustRegion::with_subproblem(Dogleg),
+            (TrustRegion::with_subproblem(Dogleg))
+                .with_absolute_gradient_tolerance(1e-8),
             BasicState::new(vec![-1.2, 1.0]),
         )
         .max_iter(500)
-        .terminate_on(GradientTolerance(1e-8))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-10, "cost = {}", result.cost());
@@ -1004,11 +1005,11 @@ mod tests {
     fn more_sorensen_minimizes_rosenbrock() {
         let result = Executor::new(
             Rosenbrock,
-            TrustRegion::with_subproblem(MoreSorensen::new()),
+            (TrustRegion::with_subproblem(MoreSorensen::new()))
+                .with_absolute_gradient_tolerance(1e-8),
             BasicState::new(vec![-1.2, 1.0]),
         )
         .max_iter(200)
-        .terminate_on(GradientTolerance(1e-8))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-10, "cost = {}", result.cost());
@@ -1077,11 +1078,11 @@ mod tests {
     fn matrix_free_steihaug_minimizes_quadratic() {
         let result = Executor::new(
             QuadraticHvOnly,
-            TrustRegion::matrix_free(),
+            (TrustRegion::matrix_free())
+                .with_absolute_gradient_tolerance(1e-10),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
-        .terminate_on(GradientTolerance(1e-10))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-16, "cost = {}", result.cost());
@@ -1091,11 +1092,10 @@ mod tests {
     fn matrix_free_steihaug_minimizes_rosenbrock() {
         let result = Executor::new(
             RosenbrockHvOnly,
-            TrustRegion::matrix_free(),
+            (TrustRegion::matrix_free()).with_absolute_gradient_tolerance(1e-8),
             BasicState::new(vec![-1.2, 1.0]),
         )
         .max_iter(200)
-        .terminate_on(GradientTolerance(1e-8))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-10, "cost = {}", result.cost());
@@ -1105,11 +1105,11 @@ mod tests {
     fn matrix_free_cauchy_point_minimizes_quadratic() {
         let result = Executor::new(
             QuadraticHvOnly,
-            TrustRegion::matrix_free_with(CauchyPoint),
+            (TrustRegion::matrix_free_with(CauchyPoint))
+                .with_absolute_gradient_tolerance(1e-8),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(500)
-        .terminate_on(GradientTolerance(1e-8))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-8, "cost = {}", result.cost());
@@ -1123,20 +1123,19 @@ mod tests {
         // iterations, up to product-vs-matvec rounding.
         let exact = Executor::new(
             Quadratic,
-            TrustRegion::new(),
+            (TrustRegion::new()).with_absolute_gradient_tolerance(1e-10),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
-        .terminate_on(GradientTolerance(1e-10))
         .run()
         .unwrap();
         let free = Executor::new(
             QuadraticHvOnly,
-            TrustRegion::matrix_free(),
+            (TrustRegion::matrix_free())
+                .with_absolute_gradient_tolerance(1e-10),
             BasicState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
-        .terminate_on(GradientTolerance(1e-10))
         .run()
         .unwrap();
         assert_eq!(exact.state.iter, free.state.iter);

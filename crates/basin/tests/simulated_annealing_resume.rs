@@ -3,9 +3,8 @@
 use basin::core::rng::ChaCha8Rng;
 use basin::{
     CostFunction, ExactCheckpoint, ExactCheckpointWriter, Executor, Neighbor,
-    NoAcceptance, NoImprovement, ObserverMode, SimulatedAnnealing,
-    SimulatedAnnealingState, State, TemperatureSchedule, TerminationReason,
-    read_exact_checkpoint,
+    ObserverMode, SimulatedAnnealing, SimulatedAnnealingState, State,
+    TemperatureSchedule, TerminationReason, read_exact_checkpoint,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
@@ -224,7 +223,7 @@ fn rejection_checkpoint(
 fn zero_tolerance_best_stall_retains_absolute_history_on_resume() {
     let checkpoint = rejection_checkpoint("best-stall");
     let result = Executor::resume_from_checkpoint(RuggedCost, checkpoint)
-        .terminate_on(NoImprovement::new(7, 0.0))
+        .no_improvement(7, 0.0)
         .run()
         .unwrap();
 
@@ -236,7 +235,7 @@ fn zero_tolerance_best_stall_retains_absolute_history_on_resume() {
 fn acceptance_stall_criterion_retains_absolute_history_on_resume() {
     let checkpoint = rejection_checkpoint("acceptance-stall");
     let result = Executor::resume_from_checkpoint(RuggedCost, checkpoint)
-        .terminate_on(NoAcceptance::new(7))
+        .no_acceptance(7)
         .run()
         .unwrap();
 

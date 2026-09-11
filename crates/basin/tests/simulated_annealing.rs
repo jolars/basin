@@ -1,7 +1,7 @@
 use basin::core::rng::ChaCha8Rng;
 use basin::{
-    CostFunction, Executor, Neighbor, NoAcceptance, Reannealing,
-    SimulatedAnnealing, StepOutcome, TemperatureSchedule, TerminationReason,
+    CostFunction, Executor, Neighbor, Reannealing, SimulatedAnnealing,
+    StepOutcome, TemperatureSchedule, TerminationReason,
 };
 use rand::TryRng;
 use std::convert::Infallible;
@@ -254,7 +254,7 @@ fn no_acceptance_is_a_shared_resume_safe_criterion() {
         ConstantRng(u64::MAX),
     );
     let result = Executor::from_start(IdentityCost, solver, 0)
-        .terminate_on(NoAcceptance::new(3))
+        .no_acceptance(3)
         .run()
         .unwrap();
 

@@ -67,7 +67,7 @@ use std::rc::Rc;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::problem::CostFunction;
-use crate::{Bobyqa, BobyqaState, Executor, MaxCostEvals, TerminationReason};
+use crate::{Bobyqa, BobyqaState, Executor, TerminationReason};
 
 /// One PRIMA reference run, parsed from a `bobyqa_*.tsv` fixture.
 struct Fixture {
@@ -284,12 +284,12 @@ fn check_parity(text: &str) {
     let result = Executor::new(
         problem,
         Bobyqa::new()
-            .with_rho_beg(fx.rho_beg)
-            .with_rho_end(fx.rho_end)
+            .with_initial_radius(fx.rho_beg)
+            .with_final_radius(fx.rho_end)
             .with_npt(fx.npt),
         BobyqaState::new(fx.x0.clone()),
     )
-    .terminate_on(MaxCostEvals(fx.max_fun as u64))
+    .max_cost_evals(fx.max_fun as u64)
     .run()
     .unwrap();
     let trace = trace.borrow();

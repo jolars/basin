@@ -1,30 +1,28 @@
 //! Iteration driver. The high-level entry point is [`Executor`];
-//! [`Stepper`] exposes one-iteration-at-a-time control, and [`run_loop`]
+//! [`Stepper`] exposes one-iteration-at-a-time control, and [`run_loop_with_control`]
 //! is the borrowed-problem variant used by composed solvers.
 //!
 //! # Canonical iteration ordering
 //!
-//! [`Executor::run`] (and the equivalent [`Stepper`]/[`run_loop`]
+//! [`Executor::run`] (and the equivalent [`Stepper`]/[`run_loop_with_control`]
 //! paths) drive the solver through this exact sequence, and every
 //! contract elsewhere in the framework cross-links here:
 //!
-//! 1. [`Solver::init`] is called **once**, on the initial state. The
+//! 1. Convergence history resets, then [`Solver::init`] is called **once**. The
 //!    returned state is what iter-0 sees.
 //! 2. Then, repeatedly, before each [`Solver::next_iter`] call
 //!    (including the first):
 //!    1. An executor-attached [`CancellationToken`] is checked, when
 //!       configured. Cancellation stops the run with
-//!       [`TerminationReason::Cancelled`]. The borrowed [`run_loop`] path
+//!       [`TerminationReason::Cancelled`]. The borrowed [`run_loop_with_control`] path
 //!       has no attached token and skips this step.
-//!    2. The built-in [`MaxIter`](crate::core::termination::MaxIter)
-//!       limit is checked against [`State::iter`]. If
-//!       `state.iter() >= max_iter`, the run stops with
-//!       [`TerminationReason::MaxIter`].
-//!    3. Each registered [`TerminationCriterion`] is checked **in
-//!       insertion order**. The **first to return `Some(reason)` halts
-//!       the run**, and later criteria do not run that iteration.
-//!    4. The solver's own [`Solver::terminate`] hook is checked.
-//!       `Some(_)` halts the run.
+//!    2. Execution controls check iteration, cost and gradient evaluations,
+//!       elapsed time, target cost, improvement stall, and acceptance stall,
+//!       followed by application hooks. See [`RunControl`]. Deprecated
+//!       criteria retain insertion order within the hook list.
+//!    3. [`Solver::check_convergence`] evaluates solver-owned convergence.
+//!       Its default delegates to the legacy [`Solver::terminate`] hook.
+//!       The first stop ends the run.
 //! 3. If nothing fired, [`Solver::next_iter`] is called. It may itself
 //!    report a mid-iter termination via its return tuple; in that case
 //!    the iteration counter is **not** incremented, so the final
@@ -40,9 +38,13 @@
 //! counters, while [`Executor::resume_from_checkpoint`] restores the solver,
 //! state, and counters from an [`ExactCheckpoint`] and skips `init`.
 
+// Keep the Basin 1.x compatibility bridge and shared check implementations local.
+#![allow(deprecated)]
+
 use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
 use crate::core::observer::{Observe, ObserverMode};
 use crate::core::problem::{EvalCounts, Problem};
+use crate::core::run_control::RunControl;
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, ExactResumeState, State};
 use crate::core::termination::{TerminationCriterion, TerminationReason};
@@ -195,13 +197,13 @@ pub enum StepOutcome {
 /// # Example
 ///
 /// ```ignore
+/// let solver = solver.with_absolute_gradient_tolerance(1e-6);
 /// let mut stepper = Executor::new(problem, solver, state)
 ///     .max_iter(100)
-///     .terminate_on(GradientTolerance(1e-6))
-///     .into_stepper();
+///     .into_stepper()?;
 ///
 /// let reason = loop {
-///     match stepper.step() {
+///     match stepper.step()? {
 ///         StepOutcome::Continue => { /* observe `stepper.state()` */ }
 ///         StepOutcome::Stopped(reason) => break reason,
 ///     }
@@ -216,10 +218,9 @@ pub struct Stepper<P, S, So> {
     // `into_state` can unwrap without checks.
     state: Option<S>,
     solver: So,
-    criteria: Vec<Box<dyn TerminationCriterion<S>>>,
+    control: RunControl<S>,
     observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
     checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
-    max_iter: u64,
     cancellation_token: Option<CancellationToken>,
     finished: Option<TerminationReason>,
 }
@@ -295,8 +296,8 @@ where
                 &EvalCounts::default(),
                 &mut self.state,
                 &mut self.solver,
-                &mut self.criteria,
-                self.max_iter,
+                &mut self.control,
+                &mut [],
             )?
         };
         match outcome {
@@ -385,8 +386,8 @@ fn step_once<P, S, So>(
     baseline: &EvalCounts,
     state_slot: &mut Option<S>,
     solver: &mut So,
+    control: &mut RunControl<S>,
     criteria: &mut [Box<dyn TerminationCriterion<S>>],
-    max_iter: u64,
 ) -> Result<StepOutcome, So::Error>
 where
     S: State + CountsMirror,
@@ -396,15 +397,17 @@ where
         let state = state_slot
             .as_ref()
             .expect("step_once called with empty state slot");
-        if state.iter() >= max_iter {
-            return Ok(StepOutcome::Stopped(TerminationReason::MaxIter));
+        if let Some(reason) =
+            control.check(state, &problem.counts().delta_since(baseline))
+        {
+            return Ok(StepOutcome::Stopped(reason));
         }
         for criterion in criteria.iter_mut() {
             if let Some(reason) = criterion.check(state) {
                 return Ok(StepOutcome::Stopped(reason));
             }
         }
-        if let Some(reason) = solver.terminate(state) {
+        if let Some(reason) = solver.check_convergence(problem, state) {
             return Ok(StepOutcome::Stopped(reason));
         }
     }
@@ -472,9 +475,12 @@ where
 /// `next_iter` may also report a mid-iter termination via its return tuple;
 /// in that case the iteration counter is left untouched so the final
 /// `state.iter()` still reflects the last fully completed iteration.
+#[deprecated(
+    note = "use `run_loop_with_control`; removal scheduled for Basin 2.0"
+)]
 pub fn run_loop<P, S, So>(
     problem: &mut Problem<P>,
-    mut state: S,
+    state: S,
     solver: &mut So,
     criteria: &mut [Box<dyn TerminationCriterion<S>>],
     max_iter: u64,
@@ -483,6 +489,41 @@ where
     S: State + CountsMirror,
     So: Solver<P, S>,
 {
+    let mut control = RunControl::new().max_iter(max_iter);
+    run_loop_impl(problem, state, solver, &mut control, criteria)
+}
+
+/// Drive a borrowed solver using execution budgets and application stops.
+///
+/// Convergence is configured on `solver`. Controls and convergence history
+/// reset before initialization; evaluation counts are relative to run entry.
+/// See [`RunControl`] for check ordering and clock semantics.
+pub fn run_loop_with_control<P, S, So>(
+    problem: &mut Problem<P>,
+    state: S,
+    solver: &mut So,
+    control: &mut RunControl<S>,
+) -> Result<OptimizationResult<S>, So::Error>
+where
+    S: State + CountsMirror,
+    So: Solver<P, S>,
+{
+    run_loop_impl(problem, state, solver, control, &mut [])
+}
+
+fn run_loop_impl<P, S, So>(
+    problem: &mut Problem<P>,
+    mut state: S,
+    solver: &mut So,
+    control: &mut RunControl<S>,
+    criteria: &mut [Box<dyn TerminationCriterion<S>>],
+) -> Result<OptimizationResult<S>, So::Error>
+where
+    S: State + CountsMirror,
+    So: Solver<P, S>,
+{
+    control.reset();
+    solver.reset_convergence();
     let baseline = *problem.counts();
     // Reset each criterion's internal per-run state before the run, so a
     // criteria vector reused across `run_loop` calls (e.g. an
@@ -506,7 +547,7 @@ where
     let mut slot = Some(state);
     let reason = loop {
         match step_once(
-            problem, &baseline, &mut slot, solver, criteria, max_iter,
+            problem, &baseline, &mut slot, solver, control, criteria,
         )? {
             StepOutcome::Continue => continue,
             StepOutcome::Stopped(reason) => break reason,
@@ -519,7 +560,7 @@ where
 }
 
 /// User-facing driver. Owns the problem, solver, initial state, and the
-/// list of termination criteria; [`run`](Self::run) drives the iteration
+/// execution controls; [`run`](Self::run) drives the iteration
 /// loop to completion. See the [module docs](self) for the canonical
 /// ordering and [`into_stepper`](Self::into_stepper) for one-step-at-a-
 /// time control.
@@ -530,7 +571,9 @@ where
 /// [`OptimizationResult`]:
 ///
 /// ```
-/// use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent, GradientTolerance};
+/// use basin::{
+///     BasicState, CostFunction, Executor, Gradient, GradientDescent,
+/// };
 ///
 /// struct Sphere;
 /// impl CostFunction for Sphere {
@@ -543,16 +586,22 @@ where
 /// }
 /// impl Gradient for Sphere {
 ///     type Gradient = Vec<f64>;
-///     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+///     fn gradient(
+///         &self,
+///         x: &Vec<f64>,
+///     ) -> Result<Vec<f64>, std::convert::Infallible> {
 ///         Ok(x.iter().map(|xi| 2.0 * xi).collect())
 ///     }
 /// }
 ///
-/// let result = Executor::new(Sphere, GradientDescent::new(0.1), BasicState::new(vec![3.0, -4.0]))
-///     .max_iter(1_000)
-///     .terminate_on(GradientTolerance(1e-9))
-///     .run()
-///     .unwrap();
+/// let result = Executor::new(
+///     Sphere,
+///     (GradientDescent::new(0.1)).with_absolute_gradient_tolerance(1e-9),
+///     BasicState::new(vec![3.0, -4.0]),
+/// )
+/// .max_iter(1_000)
+/// .run()
+/// .unwrap();
 ///
 /// assert!(result.cost() < 1e-12);
 /// ```
@@ -560,8 +609,7 @@ pub struct Executor<P, S, So> {
     problem: P,
     state: S,
     solver: So,
-    max_iter: u64,
-    criteria: Vec<Box<dyn TerminationCriterion<S>>>,
+    control: RunControl<S>,
     observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
     checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
@@ -582,8 +630,7 @@ where
             problem,
             state,
             solver,
-            max_iter: 1000,
-            criteria: Vec::new(),
+            control: RunControl::new(),
             observers: Vec::new(),
             checkpoints: Vec::new(),
             cancellation_token: None,
@@ -630,7 +677,7 @@ where
     /// iteration 40 with `.max_iter(100)` performs at most 60 more iterations.
     /// Exact continuation also requires the same deterministic problem,
     /// scalar type, backend behavior, and code. The checkpoint does not contain
-    /// the problem, maximum iteration limit, termination criteria, observers,
+    /// the problem, execution limits, application hooks, observers,
     /// cancellation token, or checkpoint sinks; configure that execution
     /// policy anew. State-derived criteria such as
     /// [`NoAcceptance`](crate::NoAcceptance) and zero-tolerance
@@ -679,7 +726,19 @@ where
     /// effect to `terminate_on(MaxIter(n))` but mutates a dedicated field
     /// so subsequent calls replace rather than stack.
     pub fn max_iter(mut self, n: u64) -> Self {
-        self.max_iter = n;
+        self.control.max_iter = n;
+        self
+    }
+
+    crate::core::run_control::control_methods!();
+
+    /// Append an application stop evaluated before solver convergence.
+    /// The closure sees an initialized state, including iteration zero.
+    pub fn stop_when<C>(mut self, check: C) -> Self
+    where
+        C: FnMut(&S) -> Option<TerminationReason> + 'static,
+    {
+        self.control = std::mem::take(&mut self.control).stop_when(check);
         self
     }
 
@@ -687,11 +746,14 @@ where
     /// order before each iteration (and before iter 0); the first to
     /// return `Some(_)` stops the run. See the [module docs](self) for
     /// the full per-iteration ordering.
+    #[deprecated(
+        note = "configure solver convergence or use executor budgets and `stop_when`; removal scheduled for Basin 2.0"
+    )]
     pub fn terminate_on<C>(mut self, criterion: C) -> Self
     where
         C: TerminationCriterion<S> + 'static,
     {
-        self.criteria.push(Box::new(criterion));
+        self.control.push_legacy(Box::new(criterion));
         self
     }
 
@@ -758,7 +820,7 @@ where
     /// lifecycle.
     ///
     /// Observers cannot fail the run. Use
-    /// [`terminate_on`](Self::terminate_on) for state-based stopping, or let
+    /// [`stop_when`](Self::stop_when) for application stopping, or let
     /// an observer cancel a cloned [`CancellationToken`] for a clean
     /// user-requested stop.
     pub fn observe_with<O>(mut self, observer: O, mode: ObserverMode) -> Self
@@ -807,8 +869,7 @@ where
             problem,
             mut state,
             mut solver,
-            max_iter,
-            criteria,
+            control,
             mut observers,
             checkpoints,
             cancellation_token,
@@ -827,6 +888,7 @@ where
         let state = if skip_init {
             state
         } else {
+            solver.reset_convergence();
             let mut state = solver.init(&mut problem, state)?;
             // Mirror init's work onto the state before any termination
             // check. Baseline is zero: this is a fresh top-level wrapper.
@@ -841,10 +903,9 @@ where
             problem,
             state: Some(state),
             solver,
-            criteria,
+            control,
             observers,
             checkpoints,
-            max_iter,
             cancellation_token,
             finished: None,
         })

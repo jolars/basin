@@ -1,7 +1,7 @@
 use basin::problems::BoothBoxed;
 use basin::{
-    BasicPopulationState, Executor, MaxIter, PopulationState, RandomSearch,
-    State, StepOutcome,
+    BasicPopulationState, Executor, PopulationState, RandomSearch, State,
+    StepOutcome,
 };
 
 /// Same seed → same trajectory. Load-bearing reproducibility check
@@ -180,7 +180,6 @@ fn max_iter_zero_returns_initial_population_best() {
         BasicPopulationState::<Vec<f64>>::with_size(4),
     )
     .max_iter(0)
-    .terminate_on(MaxIter(0))
     .run()
     .unwrap();
 

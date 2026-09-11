@@ -40,7 +40,7 @@
 //!
 //! MADS's natural convergence is the poll size `Δᵖ` reaching the configured floor
 //! `poll_size_min`; the solver signals it via
-//! [`TerminationReason::SolverConverged`]. Add [`MaxCostEvals`](crate::MaxCostEvals)
+//! [`TerminationReason::SolverConverged`]. Add [`max_cost_evals`](crate::Executor::max_cost_evals)
 //! to cap the evaluation budget, or [`MeshTolerance`](crate::MeshTolerance) to
 //! stop early at a coarser poll size.
 //!
@@ -97,7 +97,7 @@ pub struct Constrained;
 /// [`Executor`](crate::Executor) over a [`MadsState`]:
 ///
 /// ```
-/// use basin::{CostFunction, Executor, Mads, MadsState, MaxCostEvals};
+/// use basin::{CostFunction, Executor, Mads, MadsState};
 ///
 /// // A nonsmooth objective (an L1 "valley") with minimizer (1, 2).
 /// struct AbsValley;
@@ -110,10 +110,12 @@ pub struct Constrained;
 ///     }
 /// }
 ///
-/// let solver = Mads::new().with_initial_poll_size(1.0).with_min_poll_size(1e-9);
+/// let solver = Mads::new()
+///     .with_initial_poll_size(1.0)
+///     .with_minimum_poll_size(1e-9);
 /// let state = MadsState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(AbsValley, solver, state)
-///     .terminate_on(MaxCostEvals(5_000))
+///     .max_cost_evals(5_000)
 ///     .run()
 ///     .unwrap();
 /// assert!(result.best_cost() < 1e-6);
@@ -160,6 +162,7 @@ pub struct Constrained;
 /// progressive barrier for derivative-free nonlinear programming*, SIAM J.
 /// Optim. 20 (2009), pp. 445–472 (the constrained mode).
 pub struct Mads<Mode = Unbounded, F = f64> {
+    poll_tolerance: Option<F>,
     poll_size_init: F,
     poll_size_min: F,
     /// Built in [`Solver::init`]; the resumable poll loop + mesh schedule
@@ -171,12 +174,30 @@ pub struct Mads<Mode = Unbounded, F = f64> {
     _mode: PhantomData<fn() -> Mode>,
 }
 
+impl<Mode, F: Scalar> Mads<Mode, F> {
+    /// Stop when the observed radius or step size is <= the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_poll_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.poll_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+}
+
 impl<F: Scalar> Mads<Unbounded, F> {
     /// A MADS solver with the default schedule (`Δ₀ = 1`, `poll_size_min =
     /// 1e-6`). Tune with the `with_*` builders.
     pub fn new() -> Self {
         Self {
             poll_size_init: F::from_f64(1.0).expect("1.0 representable"),
+            poll_tolerance: None,
             poll_size_min: F::from_f64(1e-6).expect("1e-6 representable"),
             work: None,
             pb_work: None,
@@ -194,7 +215,16 @@ impl<Mode, F: Scalar> Mads<Mode, F> {
     }
 
     /// Set the convergence floor on the poll size. Must satisfy `0 < floor < Δ₀`.
-    pub fn with_min_poll_size(mut self, poll_size_min: F) -> Self {
+    #[deprecated(
+        note = "use `with_minimum_poll_size`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_min_poll_size(self, poll_size_min: F) -> Self {
+        self.with_minimum_poll_size(poll_size_min)
+    }
+
+    /// Configure the minimum poll size.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_minimum_poll_size(mut self, poll_size_min: F) -> Self {
         self.poll_size_min = poll_size_min;
         self
     }
@@ -209,6 +239,7 @@ impl<F: Scalar> Mads<Unbounded, F> {
     pub fn bounded(self) -> Mads<Bounded, F> {
         Mads {
             poll_size_init: self.poll_size_init,
+            poll_tolerance: self.poll_tolerance,
             poll_size_min: self.poll_size_min,
             work: None,
             pb_work: None,
@@ -224,6 +255,7 @@ impl<F: Scalar> Mads<Unbounded, F> {
     pub fn constrained(self) -> Mads<Constrained, F> {
         Mads {
             poll_size_init: self.poll_size_init,
+            poll_tolerance: self.poll_tolerance,
             poll_size_min: self.poll_size_min,
             work: None,
             pb_work: None,
@@ -382,6 +414,13 @@ where
         };
         Ok((state, reason))
     }
+
+    fn terminate(&self, state: &MadsState<V, F>) -> Option<TerminationReason> {
+        let tolerance = self.poll_tolerance?;
+        let metric = crate::MeshState::poll_size(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::MeshTolerance)
+    }
 }
 
 /// Aggregate constraint violation `h(x) = Σⱼ max(cⱼ(x), 0)²` from the constraint
@@ -488,6 +527,16 @@ where
         };
         Ok((state, reason))
     }
+
+    fn terminate(
+        &self,
+        state: &ConstrainedMadsState<V, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.poll_tolerance?;
+        let metric = crate::MeshState::poll_size(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::MeshTolerance)
+    }
 }
 
 impl<P, V, F> Solver<P, MadsState<V, F>> for Mads<Bounded, F>
@@ -592,5 +641,12 @@ where
             Transition::Continue => None,
         };
         Ok((state, reason))
+    }
+
+    fn terminate(&self, state: &MadsState<V, F>) -> Option<TerminationReason> {
+        let tolerance = self.poll_tolerance?;
+        let metric = crate::MeshState::poll_size(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::MeshTolerance)
     }
 }

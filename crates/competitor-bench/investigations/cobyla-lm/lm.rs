@@ -188,10 +188,10 @@ fn compare(name: &str, model: Model, truth: Vec<f64>, starts: Vec<Vec<f64>>) {
             };
             let (solution, reason) = if kind == "basin" {
                 let solver = LevenbergMarquardt::new()
-                    .with_tol_grad(0.0)
-                    .with_tol_grad_rel(1e-12)
-                    .with_tol_cost_rel(1e-12)
-                    .with_tol_step_rel(1e-12);
+                    .with_absolute_gradient_tolerance(None)
+                    .with_gradient_orthogonality_tolerance(1e-12)
+                    .with_relative_model_reduction_tolerance(1e-12)
+                    .with_relative_step_tolerance(1e-12);
                 let out = Executor::new(p, solver, NllsState::new(x.clone()))
                     .max_iter((200 * (x.len() + 1) - 1) as u64)
                     .run()

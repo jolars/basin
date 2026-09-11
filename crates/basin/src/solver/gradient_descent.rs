@@ -57,7 +57,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// Minimize the 2-D sphere `f(x) = x₀² + x₁²` from `(1, 1)`:
 ///
 /// ```
-/// use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent, GradientTolerance};
+/// use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
 ///
 /// struct Sphere;
 /// impl CostFunction for Sphere {
@@ -75,9 +75,9 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 ///     }
 /// }
 ///
-/// let result = Executor::new(Sphere, GradientDescent::new(0.1), BasicState::new(vec![1.0, 1.0]))
+/// let result = Executor::new(Sphere, (GradientDescent::new(0.1)).with_absolute_gradient_tolerance(1e-8), BasicState::new(vec![1.0, 1.0]))
 ///     .max_iter(1_000)
-///     .terminate_on(GradientTolerance(1e-8))
+///
 ///     .run()
 ///     .unwrap();
 /// assert!(result.cost() < 1e-12);

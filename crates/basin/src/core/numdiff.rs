@@ -118,7 +118,9 @@ pub enum Method {
 /// [`Gradient`] by central differences.
 ///
 /// ```
-/// use basin::{BasicState, CostFunction, Executor, FiniteDiff, GradientDescent, GradientTolerance};
+/// use basin::{
+///     BasicState, CostFunction, Executor, FiniteDiff, GradientDescent,
+/// };
 ///
 /// struct Sphere;
 /// impl CostFunction for Sphere {
@@ -132,11 +134,10 @@ pub enum Method {
 ///
 /// let result = Executor::new(
 ///     FiniteDiff::new(Sphere),
-///     GradientDescent::new(0.1),
+///     GradientDescent::new(0.1).with_absolute_gradient_tolerance(1e-8),
 ///     BasicState::new(vec![1.0, 1.0]),
 /// )
 /// .max_iter(1_000)
-/// .terminate_on(GradientTolerance(1e-8))
 /// .run()
 /// .unwrap();
 /// assert!(result.cost() < 1e-10);
@@ -1007,17 +1008,16 @@ mod tests {
         // HessianProduct into the matrix-free trust region, on the
         // dependency-free Vec<f64> backend (which has no Hessian impl at all).
         use crate::solver::TrustRegion;
-        use crate::{BasicState, Executor, GradientTolerance};
+        use crate::{BasicState, Executor};
 
         let result = Executor::new(
             FiniteDiff::new(DiagQuadratic {
                 a: vec![1.0, 50.0, 2.5],
             }),
-            TrustRegion::matrix_free(),
+            (TrustRegion::matrix_free()).with_absolute_gradient_tolerance(1e-6),
             BasicState::new(vec![5.0, 1.0, -3.0]),
         )
         .max_iter(100)
-        .terminate_on(GradientTolerance(1e-6))
         .run()
         .unwrap();
         assert!(result.cost() < 1e-10, "cost = {}", result.cost());

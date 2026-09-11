@@ -75,12 +75,15 @@ use init::fold_constraints;
 /// [`LinearConstraints`] (here only the inequality block is present):
 ///
 /// ```
-/// use basin::{CostFunction, DenseMatrix, Executor, Lincoa, LincoaState, MaxCostEvals};
 /// use basin::core::constraint::LinearConstraints;
+/// use basin::{CostFunction, DenseMatrix, Executor, Lincoa, LincoaState};
 ///
 /// // min ‖x − (2, 2)‖²  s.t.  x0 + x1 ≤ 2   (optimum: the projection (1, 1)).
 /// // The pure-Rust `DenseMatrix`/`Vec<f64>` carriers need no backend feature.
-/// struct Proj { a: DenseMatrix<f64>, b: Vec<f64> }
+/// struct Proj {
+///     a: DenseMatrix<f64>,
+///     b: Vec<f64>,
+/// }
 /// impl CostFunction for Proj {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -96,11 +99,16 @@ use init::fold_constraints;
 ///     }
 /// }
 ///
-/// let problem = Proj { a: DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]), b: vec![2.0] };
-/// let solver = Lincoa::new().with_rho_beg(0.5).with_rho_end(1e-7);
+/// let problem = Proj {
+///     a: DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]),
+///     b: vec![2.0],
+/// };
+/// let solver = Lincoa::new()
+///     .with_initial_radius(0.5)
+///     .with_final_radius(1e-7);
 /// let state = LincoaState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(problem, solver, state)
-///     .terminate_on(MaxCostEvals(500))
+///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
 /// assert!((result.best_param()[0] - 1.0).abs() < 1e-3);
@@ -131,7 +139,7 @@ use init::fold_constraints;
 ///
 /// Natural convergence is `ρ` reaching `ρ_end`, signalled as
 /// [`TerminationReason::SolverConverged`]. Add
-/// [`MaxCostEvals`](crate::MaxCostEvals) to cap the budget or
+/// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget or
 /// [`RhoTolerance`](crate::RhoTolerance) to stop at a coarser `ρ`.
 ///
 /// # Backends
@@ -153,6 +161,7 @@ use init::fold_constraints;
 /// [`CostFunction`]: crate::core::problem::CostFunction
 /// [`TerminationReason::SolverConverged`]: crate::TerminationReason::SolverConverged
 pub struct Lincoa<F = f64> {
+    radius_tolerance: Option<F>,
     rho_beg: F,
     rho_end: F,
     npt: Option<usize>,
@@ -161,11 +170,27 @@ pub struct Lincoa<F = f64> {
 }
 
 impl<F: Scalar> Lincoa<F> {
+    /// Stop when the observed radius or step size is <= the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_radius_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.radius_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// A LINCOA solver with the default schedule (`ρ_beg = 1`, `ρ_end = 1e-6`,
     /// `npt = 2n+1`). Tune with the `with_*` builders.
     pub fn new() -> Self {
         Self {
             rho_beg: F::from_f64(1.0).expect("1.0 representable"),
+            radius_tolerance: None,
             rho_end: F::from_f64(1e-6).expect("1e-6 representable"),
             npt: None,
             work: None,
@@ -173,13 +198,31 @@ impl<F: Scalar> Lincoa<F> {
     }
 
     /// Set the initial trust-region radius `ρ_beg` (also the initial `Δ`).
-    pub fn with_rho_beg(mut self, rho_beg: F) -> Self {
+    #[deprecated(
+        note = "use `with_initial_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_beg(self, rho_beg: F) -> Self {
+        self.with_initial_radius(rho_beg)
+    }
+
+    /// Configure the initial radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_initial_radius(mut self, rho_beg: F) -> Self {
         self.rho_beg = rho_beg;
         self
     }
 
     /// Set the final trust-region radius `ρ_end`. Must satisfy `ρ_beg > ρ_end > 0`.
-    pub fn with_rho_end(mut self, rho_end: F) -> Self {
+    #[deprecated(
+        note = "use `with_final_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_end(self, rho_end: F) -> Self {
+        self.with_final_radius(rho_end)
+    }
+
+    /// Configure the final radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_final_radius(mut self, rho_end: F) -> Self {
         self.rho_end = rho_end;
         self
     }
@@ -342,5 +385,15 @@ where
             Transition::Continue | Transition::RhoReduced => None,
         };
         Ok((state, reason))
+    }
+
+    fn terminate(
+        &self,
+        state: &LincoaState<V, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.radius_tolerance?;
+        let metric = crate::RhoState::rho(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::RhoTolerance)
     }
 }

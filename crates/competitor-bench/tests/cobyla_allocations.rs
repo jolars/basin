@@ -135,8 +135,8 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
     let result = Executor::from_start(
         Quadratic(counts.clone()),
         Cobyla::new()
-            .with_rho_beg(0.5)
-            .with_rho_end(f64::EPSILON.sqrt() * 0.5),
+            .with_initial_radius(0.5)
+            .with_final_radius(f64::EPSILON.sqrt() * 0.5),
         vec![0.5, 0.5],
     )
     .max_iter(1000)

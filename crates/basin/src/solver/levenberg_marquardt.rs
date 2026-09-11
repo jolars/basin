@@ -74,60 +74,32 @@ use crate::core::termination::TerminationReason;
 ///   The damping itself prevents divergent steps (failed steps are
 ///   rejected via the gain-ratio test), so divergence manifests as
 ///   μ growing without bound. Catch this with
-///   [`MaxIter`](crate::core::termination::MaxIter) on the executor.
+///   [`max_iter`](crate::Executor::max_iter) on the executor.
 ///
-/// # Termination
+/// # Convergence
 ///
-/// Beyond the framework criteria
-/// ([`MaxIter`](crate::core::termination::MaxIter),
-/// [`CostTolerance`](crate::core::termination::CostTolerance),
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance), …),
-/// the solver emits [`TerminationReason::SolverConverged`] when any of
-/// four MINPACK-style tests is satisfied: the same independent
-/// `info`-code structure MINPACK uses, so converging on whichever fires
-/// first:
+/// Four native tests combine with OR and report
+/// [`TerminationReason::SolverConverged`]:
 ///
-/// - **`tol_grad`**: absolute first-order optimality (Madsen et al.
-///   eq. 3.3a): `‖Jᵀr‖_∞ ≤ tol_grad`. Default `1e-8`; `0.0` disables.
-/// - **`tol_grad_rel`**: relative first-order optimality, MINPACK
-///   `gtol` (Moré 1978): the cosine of the angle between the residual
-///   `r` and every column of `J`,
-///   `max_j |gⱼ| / (‖J·,ⱼ‖ · ‖r‖) ≤ tol_grad_rel`. This measure is
-///   dimensionless (invariant to scaling the residuals), so a single
-///   tolerance is portable across problems whose residuals carry
-///   different normalizations (where the absolute `‖Jᵀr‖_∞` is too
-///   tight for some and too loose for others). Default `0.0`
-///   (disabled); set e.g. `1e-8` for parity. The per-column norms
-///   `‖J·,ⱼ‖ = √diag(JᵀJ)ⱼ` reuse the Marquardt scaling diagonal the
-///   solver already forms.
-/// - **`tol_cost_rel`**: relative cost reduction, MINPACK `ftol` (Moré 1978):
-///   `|actred| ≤ tol·F  ∧  prered ≤ tol·F  ∧  ρ ≤ 2`, with the actual
-///   and *predicted* per-iteration reductions in `F = ½‖r‖²`. The
-///   `prered` clause is what the framework's
-///   [`RelativeCostTolerance`](crate::core::termination::RelativeCostTolerance)
-///   cannot express: it gates on the LM model, so the solver iterates
-///   through temporary settling points (small actual gain, large
-///   predicted gain) instead of stopping short. Default `0.0`
-///   (disabled). See [`with_tol_cost_rel`](Self::with_tol_cost_rel).
-/// - **`tol_step_rel`**: relative step, MINPACK `xtol` (Moré 1978):
-///   `‖h‖ ≤ tol·‖x‖`. Default `0.0` (disabled). See
-///   [`with_tol_step_rel`](Self::with_tol_step_rel).
+/// - [`with_absolute_gradient_tolerance`](Self::with_absolute_gradient_tolerance):
+///   `‖Jᵀr‖_∞ ≤ tolerance`, default `1e-8`.
+/// - [`with_gradient_orthogonality_tolerance`](Self::with_gradient_orthogonality_tolerance):
+///   `max_j |(Jᵀr)_j| / (‖J[:,j]‖ · ‖r‖) ≤ tolerance`, disabled by default.
+///   This dimensionless cosine test is invariant to residual scaling.
+/// - [`with_relative_model_reduction_tolerance`](Self::with_relative_model_reduction_tolerance):
+///   `|actred| ≤ tolerance · f`, `prered ≤ tolerance · f`, and `gain_ratio ≤ 2`,
+///   disabled by default. Predicted reduction comes from the LM model, so this
+///   differs from an observed cost-change test.
+/// - [`with_relative_step_tolerance`](Self::with_relative_step_tolerance):
+///   `‖h‖ ≤ tolerance · ‖x‖` for the internal trial step, disabled by default.
 ///
-/// The two gradient tests run before the step is computed (a step at a
-/// stationary point is wasted); `tol_cost_rel`/`tol_step_rel` run after, since they need
-/// the attempted step and its predicted and actual reduction.
-///
-/// LM runs on [`NllsState`], which does
-/// **not** impl [`GradientState`](crate::core::state::GradientState): the
-/// framework's L2-squared
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is the
-/// wrong metric for NLLS (the canonical first-order test is the ∞-norm of
-/// `Jᵀr`), so attaching it (or any other gradient criterion) is a **compile
-/// error** rather than a criterion that silently never fires. Use the solver's
-/// own [`with_tol_grad`](Self::with_tol_grad) /
-/// [`with_tol_grad_rel`](Self::with_tol_grad_rel) for the first-order tests.
-/// Same choice as [`GaussNewton`](super::GaussNewton) and
-/// [`Trf`](super::Trf).
+/// Each accepts a finite nonnegative scalar or `None`. Zero requests an
+/// exact-zero threshold. Gradient tests run before computing a step; model
+/// reduction and relative step tests run where the trial diagnostics are valid.
+/// Observed absolute-step and cost-change checks are also opt-in and combine
+/// with native checks using OR. Execution budgets belong on the executor.
+/// The least-squares gradient `Jᵀr` is computed internally; [`NllsState`] does
+/// not expose a [`GradientState`](crate::GradientState).
 ///
 /// # Backends
 ///
@@ -194,10 +166,10 @@ use crate::core::termination::TerminationReason;
 /// # }
 /// ```
 pub struct LevenbergMarquardt<V, M, F = f64> {
-    tol_grad: F,
-    tol_grad_rel: F,
-    tol_cost_rel: F,
-    tol_step_rel: F,
+    tol_grad: Option<F>,
+    tol_grad_rel: Option<F>,
+    tol_cost_rel: Option<F>,
+    tol_step_rel: Option<F>,
     tau: F,
     max_inner_attempts: u32,
 
@@ -233,10 +205,10 @@ impl<V, M> LevenbergMarquardt<V, M> {
 impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     fn defaults() -> Self {
         Self {
-            tol_grad: F::from_f64(1e-8).unwrap(),
-            tol_grad_rel: F::zero(),
-            tol_cost_rel: F::zero(),
-            tol_step_rel: F::zero(),
+            tol_grad: Some(F::from_f64(1e-8).unwrap()),
+            tol_grad_rel: None,
+            tol_cost_rel: None,
+            tol_step_rel: None,
             tau: F::from_f64(1e-3).unwrap(),
             max_inner_attempts: 50,
             mu: None,
@@ -253,9 +225,27 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// (Madsen et al. eq. 3.3a). Set to `0.0` to disable the check and
     /// rely solely on [`with_tol_grad_rel`](Self::with_tol_grad_rel) and/or
     /// framework termination criteria. Default `1e-8`.
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_absolute_gradient_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_grad(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
-        self.tol_grad = tol;
+        self.tol_grad = (tol > F::zero()).then_some(tol);
+        self
+    }
+
+    /// Configure the infinity norm of J-transpose times residual.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_absolute_gradient_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_grad = crate::core::convergence::optional_tolerance(value);
         self
     }
 
@@ -273,9 +263,27 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Both gradient tests can be active at once; the solver converges
     /// when *either* fires (matching MINPACK, which checks `ftol`,
     /// `xtol`, and `gtol` independently).
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_gradient_orthogonality_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_grad_rel(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_grad_rel must be ≥ 0");
-        self.tol_grad_rel = tol;
+        self.tol_grad_rel = (tol > F::zero()).then_some(tol);
+        self
+    }
+
+    /// Configure the maximum residual/Jacobian-column absolute cosine.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_gradient_orthogonality_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_grad_rel = crate::core::convergence::optional_tolerance(value);
         self
     }
 
@@ -308,9 +316,27 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// (see [`with_tol_grad`](Self::with_tol_grad)).
     ///
     /// [`RelativeCostTolerance`]: crate::core::termination::RelativeCostTolerance
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_relative_model_reduction_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_cost_rel(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_cost_rel must be ≥ 0");
-        self.tol_cost_rel = tol;
+        self.tol_cost_rel = (tol > F::zero()).then_some(tol);
+        self
+    }
+
+    /// Configure both actual and predicted reduction relative to the current cost, with gain ratio at most two.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_relative_model_reduction_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_cost_rel = crate::core::convergence::optional_tolerance(value);
         self
     }
 
@@ -323,9 +349,27 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// `0.0` (disabled); use e.g. `1e-8` for MINPACK `xtol` parity.
     /// Converges when *any* enabled test fires (see
     /// [`with_tol_grad`](Self::with_tol_grad)).
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_relative_step_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_step_rel(mut self, tol: F) -> Self {
         assert!(tol >= F::zero(), "tol_step_rel must be ≥ 0");
-        self.tol_step_rel = tol;
+        self.tol_step_rel = (tol > F::zero()).then_some(tol);
+        self
+    }
+
+    /// Configure the attempted step norm relative to the current iterate norm.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_relative_step_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_step_rel = crate::core::convergence::optional_tolerance(value);
         self
     }
 
@@ -497,16 +541,15 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         // makes that term `0/1 = 0` rather than `0/0 = NaN`, which is
         // MINPACK's "skip zero columns" behavior.
         let abs_converged =
-            self.tol_grad > F::zero() && g.norm_infinity() <= self.tol_grad;
-        let rel_converged = self.tol_grad_rel > F::zero() && {
+            self.tol_grad.is_some_and(|tol| g.norm_infinity() <= tol);
+        let rel_converged = self.tol_grad_rel.is_some_and(|tol| {
             let mut cos_sq = g.clone();
             cos_sq.component_mul_assign(&g);
             let mut denom = diag_cur.clone();
             denom.floor_zeros_in_place(F::one());
             cos_sq.component_div_assign(&denom);
-            cos_sq.norm_infinity()
-                <= self.tol_grad_rel * self.tol_grad_rel * r.norm_squared()
-        };
+            cos_sq.norm_infinity() <= tol * tol * r.norm_squared()
+        });
         if abs_converged || rel_converged {
             // Termination does not move the iterate, so the caches remain valid.
             self.r_cache = Some(r);
@@ -613,15 +656,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         //     `|actred|` mirrors MINPACK's `dabs(actred)`.
         //   * tol_step_rel  ‖h‖ ≤ tol_step_rel·‖x‖, the step is negligible
         //     relative to the iterate. Squared on both sides to avoid a sqrt.
-        let cost_rel_converged = self.tol_cost_rel > F::zero()
-            && actual_diff.abs() <= self.tol_cost_rel * prev_cost
-            && l_diff <= self.tol_cost_rel * prev_cost
-            && rho <= two;
-        let step_rel_converged = self.tol_step_rel > F::zero()
-            && h.norm_squared()
-                <= self.tol_step_rel
-                    * self.tol_step_rel
-                    * state.param.norm_squared();
+        let cost_rel_converged = self.tol_cost_rel.is_some_and(|tol| {
+            actual_diff.abs() <= tol * prev_cost
+                && l_diff <= tol * prev_cost
+                && rho <= two
+        });
+        let step_rel_converged = self.tol_step_rel.is_some_and(|tol| {
+            h.norm_squared() <= tol * tol * state.param.norm_squared()
+        });
         if cost_rel_converged || step_rel_converged {
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
@@ -758,7 +800,9 @@ where
 /// ```
 /// use basin::{DenseMatrix, LevenbergMarquardt, LevenbergMarquardtQr};
 /// let solver: LevenbergMarquardtQr<Vec<f64>, DenseMatrix> =
-///     LevenbergMarquardt::new().with_tol_grad(1e-10).with_pivoted_qr();
+///     LevenbergMarquardt::new()
+///         .with_absolute_gradient_tolerance(1e-10)
+///         .with_pivoted_qr();
 /// ```
 pub struct LevenbergMarquardtQr<V, M, F: Scalar = f64>
 where
@@ -817,7 +861,17 @@ where
     /// Default: `epsilon(F) * (m+n)`. Finite values in `[0,1)` are valid;
     /// other values panic. Zero detects only exactly zero triangular pivots.
     /// See [`RegularizedQrSolve::solve_regularized`] for the rank contract.
-    pub fn with_rank_tolerance(mut self, tol: F) -> Self {
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_relative_rank_tolerance`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rank_tolerance(self, tol: F) -> Self {
+        self.with_relative_rank_tolerance(tol)
+    }
+
+    /// Configure the relative rank tolerance.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_relative_rank_tolerance(mut self, tol: F) -> Self {
         assert!(
             tol.is_finite() && tol >= F::zero() && tol < F::one(),
             "rank tolerance must be finite and in [0,1)"
@@ -826,23 +880,95 @@ where
         self
     }
     /// Configure [`LevenbergMarquardt::with_tol_grad`] for the QR route.
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_absolute_gradient_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_grad(mut self, value: F) -> Self {
         self.inner = self.inner.with_tol_grad(value);
         self
     }
+
+    /// Configure the infinity norm of J-transpose times residual.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_absolute_gradient_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.inner = self.inner.with_absolute_gradient_tolerance(value);
+        self
+    }
     /// Configure [`LevenbergMarquardt::with_tol_grad_rel`] for the QR route.
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_gradient_orthogonality_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_grad_rel(mut self, value: F) -> Self {
         self.inner = self.inner.with_tol_grad_rel(value);
         self
     }
+
+    /// Configure the maximum residual/Jacobian-column absolute cosine.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_gradient_orthogonality_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.inner = self.inner.with_gradient_orthogonality_tolerance(value);
+        self
+    }
     /// Configure [`LevenbergMarquardt::with_tol_cost_rel`] for the QR route.
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_relative_model_reduction_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_cost_rel(mut self, value: F) -> Self {
         self.inner = self.inner.with_tol_cost_rel(value);
         self
     }
+
+    /// Configure both actual and predicted reduction relative to the current cost, with gain ratio at most two.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_relative_model_reduction_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.inner = self.inner.with_relative_model_reduction_tolerance(value);
+        self
+    }
     /// Configure [`LevenbergMarquardt::with_tol_step_rel`] for the QR route.
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "use `with_relative_step_tolerance`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol_step_rel(mut self, value: F) -> Self {
         self.inner = self.inner.with_tol_step_rel(value);
+        self
+    }
+
+    /// Configure the attempted step norm relative to the current iterate norm.
+    ///
+    /// `None` disables the test; zero requests an exact-zero threshold.
+    /// Values must be finite and nonnegative. Enabled tests combine with OR;
+    /// each model-based test retains its internal conjunction and observation stage.
+    /// Repeated calls replace this setting. Existing solver defaults are retained.
+    pub fn with_relative_step_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.inner = self.inner.with_relative_step_tolerance(value);
         self
     }
     /// Configure [`LevenbergMarquardt::with_tau`] for the QR route.

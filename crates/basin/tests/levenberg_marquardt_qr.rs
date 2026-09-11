@@ -121,7 +121,7 @@ fn rejections_and_damping_retries_reuse_factorization() {
     let mut problem = Problem::new(counts.clone());
     let mut solver = LevenbergMarquardt::new()
         .with_pivoted_qr()
-        .with_tol_grad(0.);
+        .with_absolute_gradient_tolerance(0.);
     let state = solver
         .init(&mut problem, NllsState::new(vec![0.1]))
         .unwrap();
@@ -216,7 +216,7 @@ fn actual_augmented_rank_loss_recovers_with_more_damping() {
             .with_tau(1e-30)
             .with_max_inner_attempts(attempts)
             .with_pivoted_qr()
-            .with_rank_tolerance(1e-6);
+            .with_relative_rank_tolerance(1e-6);
         let result = Executor::from_start(Redundant, solver, vec![0., 0.])
             .max_iter(50)
             .run()
@@ -275,9 +275,9 @@ impl Jacobian for Linear {
 fn builder_and_direct_constructor_agree() {
     for solver in [
         LevenbergMarquardt::new()
-            .with_tol_grad(1e-12)
+            .with_absolute_gradient_tolerance(1e-12)
             .with_pivoted_qr(),
-        LevenbergMarquardtQr::new().with_tol_grad(1e-12),
+        LevenbergMarquardtQr::new().with_absolute_gradient_tolerance(1e-12),
     ] {
         let result =
             Executor::new(Linear, solver, NllsState::new(vec![0., 0.]))
@@ -452,8 +452,8 @@ macro_rules! backend_solve {
                 }
             }
             let tol = <$scalar>::EPSILON.sqrt();
-            let solver =
-                LevenbergMarquardtQr::<_, _, $scalar>::new().with_tol_grad(tol);
+            let solver = LevenbergMarquardtQr::<_, _, $scalar>::new()
+                .with_absolute_gradient_tolerance(tol);
             let out =
                 Executor::from_start(Fit, solver, ($make_vector)(&[0., 0.]))
                     .max_iter(50)

@@ -45,7 +45,7 @@
 //! NEWUOA's natural convergence is `ρ` reaching `ρ_end` (configured on the
 //! solver, where it also drives the eq-7.6 schedule); the solver signals it via
 //! [`TerminationReason::SolverConverged`]. Add
-//! [`MaxCostEvals`](crate::MaxCostEvals) to cap the evaluation budget, or
+//! [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the evaluation budget, or
 //! [`RhoTolerance`](crate::RhoTolerance) to stop early at a coarser `ρ`.
 //!
 //! # Backends
@@ -82,7 +82,7 @@ use driver::{NewuoaWork, Transition};
 /// with an [`Executor`](crate::Executor) over a [`NewuoaState`]:
 ///
 /// ```
-/// use basin::{CostFunction, Executor, Newuoa, NewuoaState, MaxCostEvals};
+/// use basin::{CostFunction, Executor, Newuoa, NewuoaState};
 ///
 /// struct Quadratic;
 /// impl CostFunction for Quadratic {
@@ -94,10 +94,12 @@ use driver::{NewuoaWork, Transition};
 ///     }
 /// }
 ///
-/// let solver = Newuoa::new().with_rho_beg(0.5).with_rho_end(1e-8);
+/// let solver = Newuoa::new()
+///     .with_initial_radius(0.5)
+///     .with_final_radius(1e-8);
 /// let state = NewuoaState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(Quadratic, solver, state)
-///     .terminate_on(MaxCostEvals(500))
+///     .max_cost_evals(500)
 ///     .run()
 ///     .unwrap();
 /// assert!(result.best_cost() < 1e-10);
@@ -131,6 +133,7 @@ use driver::{NewuoaWork, Transition};
 /// the authoritative source for the exact formulas. PRIMA is BSD 3-Clause
 /// licensed; its required notice is retained in the crate's `COPYRIGHT` file.
 pub struct Newuoa<F = f64> {
+    radius_tolerance: Option<F>,
     rho_beg: F,
     rho_end: F,
     npt: Option<usize>,
@@ -139,11 +142,27 @@ pub struct Newuoa<F = f64> {
 }
 
 impl<F: Scalar> Newuoa<F> {
+    /// Stop when the observed radius or step size is <= the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_radius_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.radius_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// A NEWUOA solver with the default schedule (`ρ_beg = 1`, `ρ_end = 1e-6`,
     /// `npt = 2n+1`). Tune with the `with_*` builders.
     pub fn new() -> Self {
         Self {
             rho_beg: F::from_f64(1.0).expect("1.0 representable"),
+            radius_tolerance: None,
             rho_end: F::from_f64(1e-6).expect("1e-6 representable"),
             npt: None,
             work: None,
@@ -152,14 +171,32 @@ impl<F: Scalar> Newuoa<F> {
 
     /// Set the initial trust-region radius `ρ_beg` (also the initial `Δ`): a
     /// reasonable initial change to the variables.
-    pub fn with_rho_beg(mut self, rho_beg: F) -> Self {
+    #[deprecated(
+        note = "use `with_initial_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_beg(self, rho_beg: F) -> Self {
+        self.with_initial_radius(rho_beg)
+    }
+
+    /// Configure the initial radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_initial_radius(mut self, rho_beg: F) -> Self {
         self.rho_beg = rho_beg;
         self
     }
 
     /// Set the final trust-region radius `ρ_end`: the required accuracy in the
     /// variables. Must satisfy `ρ_beg > ρ_end > 0`.
-    pub fn with_rho_end(mut self, rho_end: F) -> Self {
+    #[deprecated(
+        note = "use `with_final_radius`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_end(self, rho_end: F) -> Self {
+        self.with_final_radius(rho_end)
+    }
+
+    /// Configure the final radius.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_final_radius(mut self, rho_end: F) -> Self {
         self.rho_end = rho_end;
         self
     }
@@ -284,5 +321,15 @@ where
             Transition::Continue | Transition::RhoReduced => None,
         };
         Ok((state, reason))
+    }
+
+    fn terminate(
+        &self,
+        state: &NewuoaState<V, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.radius_tolerance?;
+        let metric = crate::RhoState::rho(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::RhoTolerance)
     }
 }

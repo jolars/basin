@@ -336,7 +336,9 @@ pub(crate) struct ReannealingProgress {
 ///
 /// ```
 /// use basin::core::rng::{ChaCha8Rng, RngExt};
-/// use basin::{CostFunction, Executor, SimulatedAnnealing, TemperatureSchedule};
+/// use basin::{
+///     CostFunction, Executor, SimulatedAnnealing, TemperatureSchedule,
+/// };
 /// use std::convert::Infallible;
 ///
 /// struct Sphere;

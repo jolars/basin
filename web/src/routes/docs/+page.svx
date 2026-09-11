@@ -48,7 +48,7 @@ impl CostFunction for Sphere {
 fn main() {
     let result =
         Executor::from_start(Sphere, NelderMead::new(), vec![1.0, 1.0])
-            .terminate_on(MaxIter(500))
+            .max_iter(500)
             .run()
             .unwrap();
 
@@ -73,12 +73,11 @@ that full path on the Rosenbrock function.
   simplex (`BasicSimplexState`), a population, and so on.
 - **Executor**: the driver that runs a solver to termination and hands back an
   `OptimizationResult`.
-- **Termination**: pluggable stopping criteria (gradient, parameter, and cost
-  tolerances, iteration and time budgets) configured uniformly across solvers.
+- **Convergence and run control**: configure numerical tolerances on the solver;
+  configure budgets, targets, stagnation stops, and custom hooks on the executor.
 - **Observers**: read-only hooks fired around the loop
   (`observe_init`/`observe_iter`/`observe_final`) for logging, progress
-  reporting, or recording a trajectory. Sibling to termination: observers watch,
-  criteria decide.
+  reporting, or recording a trajectory. Observers run alongside the execution controls.
 
 ## Choosing a Solver
 
@@ -117,6 +116,8 @@ the same reference in machine-readable form.
 ## Where to Go Next
 
 - [Getting Started](getting-started/): install Basin and run your first solve.
+- [Migrating Convergence Settings](migrating-convergence/): replace deprecated
+  criteria and setter names before Basin 2.0.
 - [Migrating from Argmin](migrating-from-argmin/): translate problem traits,
   solver configuration, errors, bounds, and observers from Argmin 0.11.
 - [Solvers](solvers/): the catalog of optimization solvers, scalar root finding,

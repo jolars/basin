@@ -7,7 +7,7 @@ use basin::{
     BasicPopulationState, BasicSimplexState, BasicState, BasinHopping,
     BoxConstraints, CmaEs, CmaEsState, CostFunction, De, DenseMatrix,
     ExactCheckpoint, ExactCheckpointWriter, Executor, NelderMead, NllsState,
-    ObserverMode, SimplexTolerance, Ssga, State, read_exact_checkpoint,
+    ObserverMode, Ssga, State, read_exact_checkpoint,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -364,7 +364,9 @@ fn basin_hopping_resume_is_bit_identical() {
 }
 
 #[test]
+#[allow(deprecated)] // Verify that legacy criteria cannot disappear from a checkpoint.
 fn basin_hopping_checkpoint_rejects_erased_inner_criteria() {
+    use basin::SimplexTolerance;
     let path = checkpoint_path("basin-hopping", "inner-criterion");
     remove_checkpoint(&path);
     let writer = ExactCheckpointWriter::new(&path);

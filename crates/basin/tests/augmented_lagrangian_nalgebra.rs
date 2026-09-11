@@ -30,9 +30,10 @@ fn converges_to_affine_projection() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        AugmentedLagrangianMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -62,9 +63,10 @@ fn fully_determined_system() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        AugmentedLagrangianMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -87,9 +89,10 @@ fn eval_counts_are_recorded() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        AugmentedLagrangianMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -116,7 +119,9 @@ fn bfgs_inner_converges_to_affine_projection() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(Bfgs::new()),
+        AugmentedLagrangianMethod::with_inner_solver(
+            Bfgs::new().with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -141,7 +146,11 @@ fn lbfgs_inner_converges_to_affine_projection() {
 
     let result = Executor::new(
         problem,
-        AugmentedLagrangianMethod::new(Lbfgsb::new().unbounded()),
+        AugmentedLagrangianMethod::with_inner_solver(
+            Lbfgsb::new()
+                .unbounded()
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)

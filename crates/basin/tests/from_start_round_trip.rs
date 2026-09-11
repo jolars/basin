@@ -22,7 +22,7 @@ use basin::solver::lbfgs::Unbounded;
 use basin::{
     BasicSimplexState, BasicState, Bfgs, CostFunction, Executor, Gradient,
     GradientDescent, Hessian, Jacobian, Lbfgs, LbfgsState, LevenbergMarquardt,
-    Mads, MadsState, MaxIter, NelderMead, Newuoa, NewuoaState, NllsState,
+    Mads, MadsState, NelderMead, Newuoa, NewuoaState, NllsState,
     QuasiNewtonState, Residual, Steihaug, TrustRegion,
 };
 
@@ -106,7 +106,7 @@ fn x0() -> Vec<f64> {
 #[test]
 fn gradient_descent_basic_state() {
     let a = Executor::from_start(problem(), GradientDescent::new(0.01), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(
@@ -114,7 +114,7 @@ fn gradient_descent_basic_state() {
         GradientDescent::new(0.01),
         BasicState::new(x0()),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
@@ -128,7 +128,7 @@ fn trust_region_basic_state_second_order() {
         TrustRegion::with_subproblem(Steihaug::new()),
         x0(),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     let b = Executor::new(
@@ -136,7 +136,7 @@ fn trust_region_basic_state_second_order() {
         TrustRegion::with_subproblem(Steihaug::new()),
         BasicState::new(x0()),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
@@ -148,7 +148,7 @@ fn trust_region_basic_state_second_order() {
 #[test]
 fn nelder_mead_simplex_state() {
     let a = Executor::from_start(problem(), NelderMead::new(), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(
@@ -156,7 +156,7 @@ fn nelder_mead_simplex_state() {
         NelderMead::new(),
         BasicSimplexState::new(x0()),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
@@ -170,7 +170,7 @@ fn lbfgs_unbounded_history_state() {
         Lbfgs::<Unbounded, MoreThuente>::new(),
         x0(),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     let b = Executor::new(
@@ -178,7 +178,7 @@ fn lbfgs_unbounded_history_state() {
         Lbfgs::<Unbounded, MoreThuente>::new(),
         LbfgsState::new(x0(), 10),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
@@ -190,7 +190,7 @@ fn bfgs_quasi_newton_state_vec_backend() {
     // Also covers the `Vec<f64>` BFGS seed impl added with `from_start`
     // (previously `WarmStart` existed only for nalgebra).
     let a = Executor::from_start(problem(), Bfgs::new(), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(
@@ -198,7 +198,7 @@ fn bfgs_quasi_newton_state_vec_backend() {
         Bfgs::new(),
         QuasiNewtonState::<Vec<f64>, DenseMatrix<f64>, f64>::new(x0()),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
@@ -211,12 +211,12 @@ fn levenberg_marquardt_nlls_state() {
         c: vec![1.0, 2.0, 3.0],
     };
     let a = Executor::from_start(prob(), LevenbergMarquardt::new(), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b =
         Executor::new(prob(), LevenbergMarquardt::new(), NllsState::new(x0()))
-            .terminate_on(MaxIter(50))
+            .max_iter(50)
             .run()
             .unwrap();
     assert_eq!(a.param(), b.param());
@@ -226,11 +226,11 @@ fn levenberg_marquardt_nlls_state() {
 #[test]
 fn newuoa_state() {
     let a = Executor::from_start(problem(), Newuoa::new(), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(problem(), Newuoa::new(), NewuoaState::new(x0()))
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     assert_eq!(a.param(), b.param());
@@ -240,11 +240,11 @@ fn newuoa_state() {
 #[test]
 fn mads_state() {
     let a = Executor::from_start(problem(), Mads::new(), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(problem(), Mads::new(), MadsState::new(x0()))
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     assert_eq!(a.param(), b.param());
@@ -286,7 +286,7 @@ fn bfgs_from_start_nalgebra_backend() {
 
     let x0 = || DVector::from_vec(vec![0.0, 0.0, 0.0]);
     let a = Executor::from_start(QuadN, Bfgs::new(), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(
@@ -294,7 +294,7 @@ fn bfgs_from_start_nalgebra_backend() {
         Bfgs::new(),
         basin::NalgebraQuasiNewtonState::new(x0()),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
@@ -327,7 +327,7 @@ fn bfgs_from_start_faer_backend() {
 
     let x0 = || Col::from_fn(3, |_| 0.0);
     let a = Executor::from_start(QuadF, Bfgs::new(), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(
@@ -335,7 +335,7 @@ fn bfgs_from_start_faer_backend() {
         Bfgs::new(),
         basin::FaerQuasiNewtonState::new(x0()),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());
@@ -377,7 +377,7 @@ fn from_start_round_trips_at_f32() {
     let x0 = || vec![0.0_f32, 0.0, 0.0];
 
     let a = Executor::from_start(prob(), GradientDescent::new(0.01_f32), x0())
-        .terminate_on(MaxIter(50))
+        .max_iter(50)
         .run()
         .unwrap();
     let b = Executor::new(
@@ -385,7 +385,7 @@ fn from_start_round_trips_at_f32() {
         GradientDescent::new(0.01_f32),
         BasicState::<Vec<f32>, f32>::new(x0()),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
     assert_eq!(a.param(), b.param());

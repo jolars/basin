@@ -14,6 +14,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicState, CountsMirror, State};
+#[allow(deprecated)]
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use core::ops::{Index, IndexMut};
 
@@ -194,14 +195,12 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// Iteration count is framework-level (tenet 3): cap the number of hops with
 /// [`Executor::max_iter`](crate::core::executor::Executor::max_iter) (SciPy's
 /// `niter`) and stop on stalls with
-/// [`NoImprovement`](crate::core::termination::NoImprovement) (SciPy's
-/// `niter_success`) or [`TargetCost`](crate::core::termination::TargetCost).
-/// The inner local solver gets its own budget via
-/// [`with_inner_max_iter`](Self::with_inner_max_iter) and
-/// [`inner_terminate_on`](Self::inner_terminate_on)—as Wales & Doye note,
-/// the inner tolerance "need not be very tight," so a loose
-/// [`SimplexTolerance`](crate::core::termination::SimplexTolerance) (for a
-/// Nelder-Mead inner) keeps each hop cheap.
+/// [`no_improvement`](crate::Executor::no_improvement) (SciPy's
+/// `niter_success`) or [`target_cost`](crate::Executor::target_cost).
+/// Set the inner budget with [`with_inner_max_iter`](Self::with_inner_max_iter)
+/// and configure convergence on the supplied inner solver. A loose simplex
+/// tolerance can keep Nelder–Mead refinements inexpensive. Application stops
+/// use [`inner_stop_when_factory`](Self::inner_stop_when_factory).
 ///
 /// # Defaults
 ///
@@ -264,21 +263,30 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// # Examples
 ///
 /// ```
-/// use basin::{BasicState, BasinHopping, Executor, MaxIter, NelderMead, SimplexTolerance};
 /// use basin::problems::Ackley;
+/// use basin::{BasicState, BasinHopping, Executor, NelderMead};
 ///
-/// let solver = BasinHopping::new(NelderMead::adaptive(), 42)
-///     .with_stepsize(1.0)
-///     .inner_terminate_on(SimplexTolerance::new(1e-8, 1e-8));
+/// let inner = NelderMead::adaptive()
+///     .with_absolute_simplex_size_tolerance(1e-8)
+///     .with_absolute_simplex_cost_tolerance(1e-8);
+/// let solver = BasinHopping::new(inner, 42).with_stepsize(1.0);
 ///
-/// let result = Executor::new(Ackley::<Vec<f64>>::new(), solver, BasicState::new(vec![2.0, 2.0]))
-///     .max_iter(200)
-///     .run()
-///     .unwrap();
+/// let result = Executor::new(
+///     Ackley::<Vec<f64>>::new(),
+///     solver,
+///     BasicState::new(vec![2.0, 2.0]),
+/// )
+/// .max_iter(200)
+/// .run()
+/// .unwrap();
 ///
 /// // `best_cost()` is the global best the walk ever saw; the *current*
 /// // iterate may be a transiently accepted uphill hop.
-/// assert!(result.best_cost() < 1e-6, "Ackley best cost {}", result.best_cost());
+/// assert!(
+///     result.best_cost() < 1e-6,
+///     "Ackley best cost {}",
+///     result.best_cost()
+/// );
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasinHopping<
@@ -462,11 +470,11 @@ where
 
     /// Inner local-solver iteration budget per hop (default
     /// [`InnerExecutor`]'s `1000`). Pair with
-    /// [`inner_terminate_on`](Self::inner_terminate_on) so the inner stops on
+    /// convergence settings on the inner solver so it stops on
     /// convergence rather than always exhausting this cap.
     ///
     /// Note that an inner solve that stops on this cap terminates with
-    /// [`MaxIter`](crate::core::termination::MaxIter), which counts as a
+    /// [`max_iter`](crate::Executor::max_iter), which counts as a
     /// *successful* solve for the acceptance guard (unlike SciPy, whose
     /// `minimize` reports `success = False` on max-iter). Only a soft
     /// [`SolverFailed`](crate::core::termination::TerminationReason::SolverFailed)
@@ -480,11 +488,26 @@ where
     /// across every hop and reset at the start of each inner run, so
     /// stateful criteria are safe (CONTRIBUTING.md "Solver composition"
     /// rule 2).
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
+    )]
     pub fn inner_terminate_on<C>(mut self, criterion: C) -> Self
     where
         C: TerminationCriterion<<I as InitialState<V>>::State> + 'static,
     {
         self.inner = self.inner.terminate_on(criterion);
+        self
+    }
+
+    /// Add a factory creating fresh application-stop history for each inner run.
+    pub fn inner_stop_when_factory<Mk, CheckFn>(mut self, make: Mk) -> Self
+    where
+        Mk: FnMut() -> CheckFn + 'static,
+        CheckFn: FnMut(&<I as InitialState<V>>::State) -> Option<TerminationReason>
+            + 'static,
+    {
+        self.inner = self.inner.stop_when_factory(make);
         self
     }
 }

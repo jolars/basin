@@ -7,8 +7,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, CmaEsTolerance, DenseMatrix, Executor,
-    PopulationState, StepOutcome, TerminationReason,
+    BoundedCmaEs, CmaEsState, DenseMatrix, Executor, PopulationState,
+    StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory on the bounded `Vec<f64>` path.
@@ -161,10 +161,10 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11),
+        (BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11))
+            .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
         CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
     )
-    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();

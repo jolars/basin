@@ -3,8 +3,8 @@
 use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaEsTolerance, CostFunction, Executor, PopulationState,
-    StepOutcome, TerminationReason,
+    CmaEs, CmaEsState, CostFunction, Executor, PopulationState, StepOutcome,
+    TerminationReason,
 };
 
 /// Same seed → same trajectory, on the ndarray backend. Reproducibility
@@ -122,10 +122,10 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         Sphere::<Array1<f64>>::new(),
-        CmaEs::<Array1<f64>, Array2<f64>>::new(11),
+        (CmaEs::<Array1<f64>, Array2<f64>>::new(11))
+            .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
         CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.3),
     )
-    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();

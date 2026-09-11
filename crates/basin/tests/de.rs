@@ -1,7 +1,6 @@
 use basin::problems::RastriginBoxed;
 use basin::{
-    BasicPopulationState, De, Executor, MaxCostEvals, PopulationState, State,
-    StepOutcome,
+    BasicPopulationState, De, Executor, PopulationState, State, StepOutcome,
 };
 
 /// Convergence on Rastrigin(D=5) within the [-5.12, 5.12] standard box.
@@ -23,7 +22,7 @@ fn converges_on_low_dim_rastrigin() {
         BasicPopulationState::<Vec<f64>>::with_size(1),
     )
     .max_iter(u64::MAX)
-    .terminate_on(MaxCostEvals(12_000))
+    .max_cost_evals(12_000)
     .run()
     .unwrap();
 

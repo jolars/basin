@@ -114,21 +114,17 @@ use crate::core::termination::TerminationReason;
 ///   sorted-by-cost invariant on `state.candidates`/`state.costs`
 ///   at the start and end of every iteration.
 ///
-/// # Termination
+/// # Convergence
 ///
-/// The canonical TolX test (`σ · max d_i < tol_x`, Hansen 2016 Appendix
-/// B.3) is the framework criterion
-/// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance), which
-/// binds on [`CmaEsState`] and fires
-/// [`TerminationReason::CmaEsTolerance`]. Register it on the
-/// [`Executor`](crate::core::executor::Executor); Hansen's recommended
-/// value is `1e−12 · initial_sigma` (scale by `maxᵢ stdsᵢ` when an
-/// anisotropic initial covariance is used). Pair with the framework's
-/// [`MaxIter`](crate::core::termination::MaxIter) /
-/// [`MaxCostEvals`](crate::core::termination::MaxCostEvals) for budget
-/// control. Other CMA-ES termination heuristics (NoEffectAxis,
-/// NoEffectCoord, ConditionCov, EqualFunValues, Stagnation, TolXUp,
-/// TolFun) are out of scope for now.
+/// Configure [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance)
+/// for the TolX test `σ · max d_i < tolerance` (Hansen 2016 Appendix B.3).
+/// It is disabled by default and reports [`TerminationReason::CmaEsTolerance`].
+/// The recommended value is `1e-12 · initial_sigma`, scaled by the largest
+/// initial axis standard deviation for anisotropic covariance. `None` disables
+/// TolX. Its strict inequality means zero never triggers it.
+/// Use executor iteration/evaluation budgets alongside convergence.
+/// Other CMA-ES heuristics (NoEffectAxis, NoEffectCoord, ConditionCov,
+/// EqualFunValues, Stagnation, TolXUp, TolFun) are not implemented.
 ///
 /// # Backends
 ///
@@ -150,6 +146,8 @@ use crate::core::termination::TerminationReason;
 /// the initial distribution with `CmaEsState::new(mean, sigma)`.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CmaEs<V, M, F = f64> {
+    distribution_tolerance: Option<F>,
+    distribution_tolerance_configured: bool,
     lambda_override: Option<usize>,
     /// Derived CMA constants, computed once at [`Solver::init`] from the
     /// state's dimension. Cached on the solver (config-only) rather than
@@ -193,15 +191,32 @@ pub(crate) struct CmaConstants<F = f64> {
 }
 
 impl<V, M, F: Scalar> CmaEs<V, M, F> {
+    /// Stop when the largest distribution axis standard deviation is < the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_distribution_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.distribution_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self.distribution_tolerance_configured = true;
+        self
+    }
+
     /// Build a CMA-ES with the default population size
     /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48) and a seeded RNG. The
     /// initial mean, step-size, and (optional) per-coordinate stds are
-    /// supplied via [`CmaEsState`]; TolX is the
-    /// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance)
-    /// criterion.
+    /// supplied via [`CmaEsState`]. Configure TolX with
+    /// [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance).
     pub fn new(seed: u64) -> Self {
         Self {
             lambda_override: None,
+            distribution_tolerance: None,
+            distribution_tolerance_configured: false,
             constants: None,
             rng: ChaCha8Rng::seed_from_u64(seed),
             _marker: PhantomData,
@@ -669,6 +684,16 @@ where
 
         Ok((state, None))
     }
+
+    fn terminate(
+        &self,
+        state: &CmaEsState<V, M, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.distribution_tolerance?;
+        let metric = state.sigma() * state.max_axis_std();
+        (metric.is_finite() && metric < tolerance)
+            .then_some(TerminationReason::CmaEsTolerance)
+    }
 }
 
 impl<V, M, F> crate::core::inner::ResumableInner<V, F> for CmaEs<V, M, F>
@@ -702,6 +727,9 @@ where
         // dimension.
         let cma = Self {
             lambda_override: self.lambda_override,
+            distribution_tolerance: self.distribution_tolerance,
+            distribution_tolerance_configured: self
+                .distribution_tolerance_configured,
             constants: None,
             rng: ChaCha8Rng::seed_from_u64(seed),
             _marker: PhantomData,
@@ -716,8 +744,20 @@ where
         state.iter = 0;
     }
 
+    fn configure_segment(
+        &mut self,
+        state: &Self::State,
+        _control: &mut crate::RunControl<Self::State>,
+    ) {
+        if !self.distribution_tolerance_configured {
+            self.distribution_tolerance =
+                Some(F::from_f64(1e-12).unwrap() * state.sigma());
+        }
+    }
+
     /// The TolX test at `1e-12 ·` the segment's starting σ (Hansen's
     /// default, made per-segment-relative so it is resume-safe).
+    #[allow(deprecated)]
     fn segment_criteria(
         &self,
         state: &Self::State,

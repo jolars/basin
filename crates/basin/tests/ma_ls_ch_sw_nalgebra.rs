@@ -6,10 +6,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{
-    Executor, MaLsChSw, MaLsChSwState, MaxCostEvals, PopulationState,
-    StepOutcome,
-};
+use basin::{Executor, MaLsChSw, MaLsChSwState, PopulationState, StepOutcome};
 
 fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {
     SphereBoxed::new(
@@ -24,7 +21,7 @@ fn converges_on_sphere_d10() {
     let solver = MaLsChSw::<DVector<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChSwState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(20_000))
+        .max_cost_evals(20_000)
         .run()
         .unwrap();
 

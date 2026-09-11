@@ -3,7 +3,7 @@
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState, StepOutcome,
+    CmaEs, CmaEsState, Executor, PopulationState, StepOutcome,
     TerminationReason,
 };
 
@@ -95,10 +95,10 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(11),
+        (CmaEs::<Col<f64>, Mat<f64>>::new(11))
+            .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
         CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
-    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();

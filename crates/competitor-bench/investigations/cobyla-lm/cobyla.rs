@@ -164,8 +164,8 @@ fn basin_solve(case: Case, projected: bool, manual: bool) -> Outcome {
         projected,
     };
     let mut solver = Cobyla::new()
-        .with_rho_beg(0.5)
-        .with_rho_end(f64::EPSILON.sqrt() * 0.5);
+        .with_initial_radius(0.5)
+        .with_final_radius(f64::EPSILON.sqrt() * 0.5);
     if manual {
         let mut p = Problem::new(p);
         let mut state =
@@ -189,7 +189,7 @@ fn basin_solve(case: Case, projected: bool, manual: bool) -> Outcome {
     } else {
         let result = Executor::from_start(p, solver, case.start())
             .max_iter(10000)
-            .terminate_on(MaxCostEvals(case.budget()))
+            .max_cost_evals(case.budget())
             .run()
             .unwrap();
         Outcome {

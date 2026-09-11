@@ -87,12 +87,12 @@ use crate::solver::cma_es::sort_population_ascending;
 /// # Termination
 ///
 /// No solver-internal optimality test; SSGA has no canonical
-/// fixed-point criterion. Pair with framework criteria
-/// [`MaxIter`](crate::core::termination::MaxIter),
-/// [`MaxCostEvals`](crate::core::termination::MaxCostEvals),
-/// [`MaxTime`](crate::core::termination::MaxTime),
-/// [`CostTolerance`](crate::core::termination::CostTolerance), or
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance).
+/// fixed-point criterion. Configure convergence on the solver and use execution controls
+/// [`max_iter`](crate::Executor::max_iter),
+/// [`max_cost_evals`](crate::Executor::max_cost_evals),
+/// [`max_time`](crate::Executor::max_time),
+/// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
+/// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance).
 /// Replace-worst ensures `state.cost()` is non-increasing, so the
 /// cost and param tolerances behave honestly under stochastic dynamics.
 ///

@@ -5,7 +5,8 @@ use basin::{BrentRoot, BrentRootError, RootTerminationReason};
 #[test]
 fn finds_an_interior_root() {
     let result = BrentRoot::new(1.0_f64, 2.0)
-        .with_tol(4.0 * f64::EPSILON, 1e-14)
+        .with_relative_position_tolerance(4.0 * f64::EPSILON)
+        .with_absolute_position_tolerance(1e-14)
         .solve(|x| Ok::<_, Infallible>(x * x * x - x - 2.0))
         .unwrap();
 
@@ -159,5 +160,7 @@ fn supports_f32() {
 #[test]
 #[should_panic(expected = "at least four times machine epsilon")]
 fn rejects_an_unrepresentable_relative_tolerance() {
-    let _ = BrentRoot::new(0.0_f64, 2.0).with_tol(f64::EPSILON, 1e-12);
+    let _ = BrentRoot::new(0.0_f64, 2.0)
+        .with_relative_position_tolerance(f64::EPSILON)
+        .with_absolute_position_tolerance(1e-12);
 }

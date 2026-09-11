@@ -3,8 +3,8 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaEsTolerance, CostFunction, Executor, PopulationState,
-    StepOutcome, TerminationReason,
+    CmaEs, CmaEsState, CostFunction, Executor, PopulationState, StepOutcome,
+    TerminationReason,
 };
 
 /// Same seed → same trajectory, on the nalgebra backend. Reproducibility
@@ -122,10 +122,10 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(11),
+        (CmaEs::<DVector<f64>, DMatrix<f64>>::new(11))
+            .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
         CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
     )
-    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();

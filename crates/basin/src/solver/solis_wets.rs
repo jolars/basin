@@ -83,20 +83,14 @@ use crate::solver::cma_inject::MemeticInner;
 ///   progress and `RhoTolerance` never fires, so budgets (`MaxIter`,
 ///   `MaxCostEvals`) remain the caller's job.
 ///
-/// # Termination
+/// # Convergence
 ///
-/// No solver-internal stop (the reference implementation is purely
-/// budget-driven). The natural convergence criterion is
-/// [`RhoTolerance`](crate::core::termination::RhoTolerance), which binds
-/// on [`SolisWetsState`] through
-/// [`RhoState`](crate::core::state::RhoState) and fires once `ρ`
-/// contracts to the configured floor; combine with
-/// [`MaxCostEvals`](crate::core::termination::MaxCostEvals) or
-/// [`MaxIter`](crate::core::termination::MaxIter) as a budget. Note an
-/// iteration spends one *or two* cost evaluations (the reversal is only
-/// evaluated when the forward candidate fails), and criteria run between
-/// iterations, so a `MaxCostEvals` budget can be overshot by one
-/// evaluation.
+/// The default is budget-driven. Configure
+/// [`with_absolute_step_size_tolerance`](Self::with_absolute_step_size_tolerance)
+/// to stop when the mutation standard deviation `ρ` reaches the threshold.
+/// `None` disables this optional check; zero tests exact collapse.
+/// The reason is [`TerminationReason::RhoTolerance`]. Each iteration spends
+/// one or two evaluations, so an executor cost budget can be exceeded by one.
 ///
 /// # Backends
 ///
@@ -121,11 +115,11 @@ use crate::solver::cma_inject::MemeticInner;
 /// # Examples
 ///
 /// Minimize a sphere from a fixed start;
-/// [`RhoTolerance`](crate::core::termination::RhoTolerance) supplies the
+/// [`with_absolute_step_size_tolerance`](Self::with_absolute_step_size_tolerance) supplies the
 /// convergence test:
 ///
 /// ```
-/// use basin::{CostFunction, Executor, RhoTolerance, SolisWets};
+/// use basin::{CostFunction, Executor, SolisWets};
 ///
 /// struct Sphere;
 /// impl CostFunction for Sphere {
@@ -137,8 +131,8 @@ use crate::solver::cma_inject::MemeticInner;
 ///     }
 /// }
 ///
-/// let result = Executor::from_start(Sphere, SolisWets::new(42), vec![2.0, -1.5])
-///     .terminate_on(RhoTolerance::new(1e-8))
+/// let result = Executor::from_start(Sphere, (SolisWets::new(42)).with_absolute_step_size_tolerance(1e-8), vec![2.0, -1.5])
+///
 ///     .max_iter(10_000)
 ///     .run()
 ///     .unwrap();
@@ -146,6 +140,7 @@ use crate::solver::cma_inject::MemeticInner;
 /// ```
 #[derive(Clone)]
 pub struct SolisWets<F = f64> {
+    step_tolerance: Option<F>,
     /// `ρ` used by [`InitialState::seed`] for fresh, unscaled starts.
     rho_init: F,
     /// Bias gain: on success, `b += bias_gain · (b + d)`.
@@ -166,12 +161,28 @@ pub struct SolisWets<F = f64> {
 }
 
 impl<F: Scalar> SolisWets<F> {
+    /// Stop when the observed radius or step size is <= the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_step_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.step_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// Build a Solis-Wets solver with the 1981 paper's defaults
     /// (`bias` constants 0.4/0.2/0.5, thresholds 5/3, factors 2/0.5,
     /// `rho_init` 1) and a [`ChaCha8Rng`] seeded from `seed`.
     pub fn new(seed: u64) -> Self {
         Self {
             rho_init: F::one(),
+            step_tolerance: None,
             bias_gain: F::from_f64(0.4).unwrap(),
             bias_memory: F::from_f64(0.2).unwrap(),
             bias_decay: F::from_f64(0.5).unwrap(),
@@ -191,7 +202,16 @@ impl<F: Scalar> SolisWets<F> {
     /// # Panics
     ///
     /// Panics if `rho_init ≤ 0`.
-    pub fn with_rho_init(mut self, rho_init: F) -> Self {
+    #[deprecated(
+        note = "use `with_initial_step_size`; removal scheduled for Basin 2.0"
+    )]
+    pub fn with_rho_init(self, rho_init: F) -> Self {
+        self.with_initial_step_size(rho_init)
+    }
+
+    /// Configure the initial step size.
+    /// Retains the algorithm's existing formula, validation, and default.
+    pub fn with_initial_step_size(mut self, rho_init: F) -> Self {
         assert!(
             rho_init > F::zero(),
             "rho_init must be > 0, got {:?}",
@@ -403,6 +423,16 @@ where
         }
 
         Ok((state, None))
+    }
+
+    fn terminate(
+        &self,
+        state: &SolisWetsState<V, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.step_tolerance?;
+        let metric = crate::RhoState::rho(state);
+        (metric.is_finite() && metric <= tolerance)
+            .then_some(TerminationReason::RhoTolerance)
     }
 }
 
@@ -704,7 +734,7 @@ mod tests {
 
     #[test]
     fn seed_and_seed_scaled_set_rho() {
-        let solver = SolisWets::<f64>::new(13).with_rho_init(0.25);
+        let solver = SolisWets::<f64>::new(13).with_initial_step_size(0.25);
         let s: SolisWetsState<Vec<f64>> = solver.seed(&vec![1.0, 2.0]);
         assert!((s.rho() - 0.25).abs() < 1e-15);
         assert_eq!(s.x, vec![1.0, 2.0]);

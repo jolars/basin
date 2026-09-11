@@ -1,3 +1,5 @@
+// Compatibility coverage for the Basin 1.x criterion API.
+#![allow(deprecated)]
 use basin::{
     Backtracking, BasicSimplexState, BasicState, CostFunction, CostTolerance,
     Executor, Gradient, GradientDescent, GradientState, GradientTolerance,

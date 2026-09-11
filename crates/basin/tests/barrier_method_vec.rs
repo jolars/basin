@@ -8,7 +8,7 @@ use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, BasicState, CostFunction, DenseMatrix,
     Executor, Gradient, GradientDescent, GradientState,
-    LinearInequalityConstraints, TargetCost, TerminationReason,
+    LinearInequalityConstraints, TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`. The unconstrained min (2,2) is
@@ -28,9 +28,10 @@ fn active_constraint_converges_to_projection() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -59,9 +60,10 @@ fn inactive_constraint_recovers_unconstrained_minimum() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -85,9 +87,10 @@ fn infeasible_start_runs_phase_one_then_converges() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -107,13 +110,14 @@ fn infeasible_start_runs_phase_one_then_converges() {
 fn target_cost_does_not_bypass_phase_one() {
     let result = Executor::new(
         active_problem(),
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(vec![2.0, 2.0]),
     )
     .max_iter(50)
-    .terminate_on(TargetCost(0.1))
+    .target_cost(0.1)
     .run()
     .unwrap();
 
@@ -160,9 +164,10 @@ impl LinearInequalityConstraints for LinearProbe {
 fn run_probe(problem: LinearProbe, initial: Vec<f64>) -> TerminationReason {
     Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -175,9 +180,10 @@ fn run_probe(problem: LinearProbe, initial: Vec<f64>) -> TerminationReason {
 fn boundary_start_runs_phase_one_then_phase_two() {
     let result = Executor::new(
         active_problem(),
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(50)
@@ -212,9 +218,10 @@ fn distant_feasible_system_is_not_reported_infeasible() {
     };
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(vec![1000.0]),
     )
     .max_iter(50)
@@ -238,9 +245,10 @@ fn empty_strict_interior_reports_failure() {
     };
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         // At the feasible singleton the Phase I gradient is exactly zero, so
         // each auxiliary subproblem is demonstrably centered.
         BasicState::new(vec![0.0]),
@@ -283,9 +291,10 @@ fn eval_counts_are_recorded() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -316,9 +325,10 @@ fn two_constraints_both_active() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)

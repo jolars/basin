@@ -14,8 +14,8 @@
 //! `lincoa_public.rs` does for the linear-constrained family.
 
 use basin::{
-    Cobyla, CobylaState, CostFunction, Executor, MaxCostEvals,
-    NonlinearInequalityConstraints, RhoTolerance, TerminationReason,
+    Cobyla, CobylaState, CostFunction, Executor,
+    NonlinearInequalityConstraints, TerminationReason,
 };
 
 /// `min x0·x1` s.t. `x0² + x1² ≤ 1` on `Vec<f64>` (default features). The
@@ -47,10 +47,12 @@ impl NonlinearInequalityConstraints for Disk {
 fn converges_to_disk_optimum() {
     let result = Executor::new(
         Disk,
-        Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6),
+        Cobyla::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-6),
         CobylaState::new(vec![1.0, 1.0]),
     )
-    .terminate_on(MaxCostEvals(2000))
+    .max_cost_evals(2000)
     .run()
     .unwrap();
 
@@ -74,10 +76,12 @@ fn converges_to_disk_optimum() {
 fn respects_cost_eval_budget() {
     let result = Executor::new(
         Disk,
-        Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-12),
+        Cobyla::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-12),
         CobylaState::new(vec![1.0, 1.0]),
     )
-    .terminate_on(MaxCostEvals(15))
+    .max_cost_evals(15)
     .run()
     .unwrap();
 
@@ -140,7 +144,9 @@ fn callback_errors_abort_immediately_during_initialization_and_steps() {
                     fail_constraint,
                     fail_at,
                 },
-                Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-12),
+                Cobyla::new()
+                    .with_initial_radius(0.5)
+                    .with_final_radius(1e-12),
                 vec![1.0, 1.0],
             )
             .max_iter(1000)
@@ -199,11 +205,13 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
                 projected: &projected,
                 budget,
             },
-            Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-12),
+            Cobyla::new()
+                .with_initial_radius(0.5)
+                .with_final_radius(1e-12),
             vec![1.0],
         )
         .max_iter(1000)
-        .terminate_on(MaxCostEvals(budget))
+        .max_cost_evals(budget)
         .run()
         .unwrap();
         assert_eq!(calls.get(), budget);
@@ -220,11 +228,13 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
 fn rho_tolerance_stops_early() {
     let result = Executor::new(
         Disk,
-        Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-12),
+        (Cobyla::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-12))
+        .with_absolute_radius_tolerance(1e-3),
         CobylaState::new(vec![1.0, 1.0]),
     )
-    .terminate_on(RhoTolerance::new(1e-3))
-    .terminate_on(MaxCostEvals(5000))
+    .max_cost_evals(5000)
     .run()
     .unwrap();
 
@@ -266,10 +276,12 @@ fn backend_generic_nalgebra() {
 
     let result = Executor::new(
         Disk,
-        Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6),
+        Cobyla::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-6),
         CobylaState::new(DVector::from_vec(vec![1.0, 1.0])),
     )
-    .terminate_on(MaxCostEvals(2000))
+    .max_cost_evals(2000)
     .run()
     .unwrap();
 
@@ -316,10 +328,12 @@ fn backend_generic_ndarray() {
 
     let result = Executor::new(
         Disk,
-        Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6),
+        Cobyla::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-6),
         CobylaState::new(Array1::from_vec(vec![1.0, 1.0])),
     )
-    .terminate_on(MaxCostEvals(2000))
+    .max_cost_evals(2000)
     .run()
     .unwrap();
 
@@ -364,10 +378,12 @@ fn backend_generic_faer() {
 
     let result = Executor::new(
         Disk,
-        Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6),
+        Cobyla::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-6),
         CobylaState::new(Col::from_fn(2, |_| 1.0)),
     )
-    .terminate_on(MaxCostEvals(2000))
+    .max_cost_evals(2000)
     .run()
     .unwrap();
 
@@ -407,7 +423,9 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
         }
     }
 
-    let mut solver = Cobyla::new().with_rho_beg(0.5).with_rho_end(1e-6);
+    let mut solver = Cobyla::new()
+        .with_initial_radius(0.5)
+        .with_final_radius(1e-6);
     for (n, m) in [(2, 3), (5, 0), (1, 2), (3, 1)] {
         let mut problem = Problem::new(Sphere(m));
         let mut state = solver

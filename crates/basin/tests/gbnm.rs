@@ -4,8 +4,8 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gbnm, GbnmState, MaxCostEvals,
-    State, TerminationReason,
+    BoxConstraints, CostFunction, Executor, Gbnm, GbnmState, State,
+    TerminationReason,
 };
 
 #[derive(Clone)]
@@ -138,7 +138,7 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
     let result =
         Executor::new(problem, Gbnm::new(5), GbnmState::new(vec![1.0, 0.0]))
             .max_iter(2_000)
-            .terminate_on(MaxCostEvals(500))
+            .max_cost_evals(500)
             .run()
             .unwrap();
 
@@ -259,7 +259,7 @@ fn paper_rosenbrock_start_reaches_the_global_minimum() {
     let result =
         Executor::new(problem, Gbnm::new(7), GbnmState::new(vec![10.0, 10.0]))
             .max_iter(20_000)
-            .terminate_on(MaxCostEvals(5_000))
+            .max_cost_evals(5_000)
             .run()
             .unwrap();
 
@@ -439,7 +439,7 @@ fn probabilistic_restarts_escape_the_initial_rastrigin_basin() {
     let result =
         Executor::new(problem, Gbnm::new(7), GbnmState::new(vec![3.0, 3.0]))
             .max_iter(20_000)
-            .terminate_on(MaxCostEvals(5_000))
+            .max_cost_evals(5_000)
             .run()
             .unwrap();
 

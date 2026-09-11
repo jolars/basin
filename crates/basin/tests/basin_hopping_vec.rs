@@ -16,9 +16,8 @@ use std::rc::Rc;
 use basin::core::rng::Rng;
 use basin::problems::{Ackley, Rastrigin};
 use basin::{
-    BasicState, BasinHopping, Executor, InitialState, MaxIter, NelderMead,
-    Problem, SimplexTolerance, Solver, State, StepTaker, TerminationReason,
-    WarmStart,
+    BasicState, BasinHopping, Executor, InitialState, NelderMead, Problem,
+    Solver, State, StepTaker, TerminationReason, WarmStart,
 };
 
 /// Same seed in, same trajectory out: the reproducibility contract every
@@ -28,8 +27,12 @@ fn same_seed_yields_identical_trajectory() {
     let run = |seed: u64| {
         Executor::new(
             Ackley::<Vec<f64>>::new(),
-            BasinHopping::new(NelderMead::adaptive(), seed)
-                .inner_terminate_on(SimplexTolerance::new(1e-8, 1e-8)),
+            BasinHopping::new(
+                NelderMead::adaptive()
+                    .with_absolute_simplex_size_tolerance(1e-8)
+                    .with_absolute_simplex_cost_tolerance(1e-8),
+                seed,
+            ),
             BasicState::new(vec![2.0, 2.0]),
         )
         .max_iter(40)
@@ -52,9 +55,13 @@ fn different_seeds_yield_different_trajectories() {
     let run = |seed: u64| {
         Executor::new(
             Ackley::<Vec<f64>>::new(),
-            BasinHopping::new(NelderMead::adaptive(), seed)
-                .with_stepsize(1.5)
-                .inner_terminate_on(SimplexTolerance::new(1e-8, 1e-8)),
+            BasinHopping::new(
+                NelderMead::adaptive()
+                    .with_absolute_simplex_size_tolerance(1e-8)
+                    .with_absolute_simplex_cost_tolerance(1e-8),
+                seed,
+            )
+            .with_stepsize(1.5),
             BasicState::new(vec![3.0, 3.0]),
         )
         .max_iter(20)
@@ -77,9 +84,13 @@ fn different_seeds_yield_different_trajectories() {
 fn converges_on_ackley_2d() {
     let result = Executor::new(
         Ackley::<Vec<f64>>::new(),
-        BasinHopping::new(NelderMead::adaptive(), 7)
-            .with_stepsize(1.0)
-            .inner_terminate_on(SimplexTolerance::new(1e-10, 1e-10)),
+        BasinHopping::new(
+            NelderMead::adaptive()
+                .with_absolute_simplex_size_tolerance(1e-10)
+                .with_absolute_simplex_cost_tolerance(1e-10),
+            7,
+        )
+        .with_stepsize(1.0),
         BasicState::new(vec![2.5, -2.5]),
     )
     .max_iter(200)
@@ -105,9 +116,13 @@ fn success_rate_over_seeds_on_rastrigin_2d() {
         .filter(|&seed| {
             let result = Executor::new(
                 Rastrigin::<Vec<f64>>::new(),
-                BasinHopping::new(NelderMead::adaptive(), seed)
-                    .with_stepsize(1.5)
-                    .inner_terminate_on(SimplexTolerance::new(1e-10, 1e-10)),
+                BasinHopping::new(
+                    NelderMead::adaptive()
+                        .with_absolute_simplex_size_tolerance(1e-10)
+                        .with_absolute_simplex_cost_tolerance(1e-10),
+                    seed,
+                )
+                .with_stepsize(1.5),
                 BasicState::new(vec![2.0, 3.0]),
             )
             .max_iter(150)
@@ -135,12 +150,15 @@ fn aggregates_inner_cost_evals() {
     let n = 2_u64;
     let result = Executor::new(
         Ackley::<Vec<f64>>::new(),
-        BasinHopping::new(NelderMead::adaptive(), 3)
-            .inner_terminate_on(SimplexTolerance::new(1e-8, 1e-8)),
+        BasinHopping::new(
+            NelderMead::adaptive()
+                .with_absolute_simplex_size_tolerance(1e-8)
+                .with_absolute_simplex_cost_tolerance(1e-8),
+            3,
+        ),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(hops)
-    .terminate_on(MaxIter(hops))
     .run()
     .unwrap();
 
@@ -195,14 +213,17 @@ fn adaptive_step_fires_on_cumulative_interval_schedule() {
     let hops = 35_u64;
     let _ = Executor::new(
         Ackley::<Vec<f64>>::new(),
-        BasinHopping::new(NelderMead::adaptive(), 1)
-            .with_step_taker(step)
-            .with_adaptive_interval(10)
-            .inner_terminate_on(SimplexTolerance::new(1e-8, 1e-8)),
+        BasinHopping::new(
+            NelderMead::adaptive()
+                .with_absolute_simplex_size_tolerance(1e-8)
+                .with_absolute_simplex_cost_tolerance(1e-8),
+            1,
+        )
+        .with_step_taker(step)
+        .with_adaptive_interval(10),
         BasicState::new(vec![0.5, 0.5]),
     )
     .max_iter(hops)
-    .terminate_on(MaxIter(hops))
     .run()
     .unwrap();
 
@@ -263,12 +284,17 @@ fn failed_inner_solve_does_not_terminate_the_walk() {
     let hops = 5_u64;
     let result = Executor::new(
         Ackley::<Vec<f64>>::new(),
-        BasinHopping::new(FailingInner(NelderMead::adaptive()), 3)
-            .inner_terminate_on(SimplexTolerance::new(1e-8, 1e-8)),
+        BasinHopping::new(
+            FailingInner(
+                NelderMead::adaptive()
+                    .with_absolute_simplex_size_tolerance(1e-8)
+                    .with_absolute_simplex_cost_tolerance(1e-8),
+            ),
+            3,
+        ),
         BasicState::new(vec![2.0, 2.0]),
     )
     .max_iter(hops)
-    .terminate_on(MaxIter(hops))
     .run()
     .unwrap();
 

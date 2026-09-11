@@ -135,6 +135,26 @@ pub trait Solver<P, S: State> {
         state: S,
     ) -> Result<(S, Option<TerminationReason>), Self::Error>;
 
+    /// Reset per-run convergence history without changing algorithm state.
+    ///
+    /// Called before initialization for fresh runs and state-only resumes.
+    /// Exact solver-aware checkpoint resumes retain this history.
+    fn reset_convergence(&mut self) {}
+
+    /// Check convergence at an initialized iteration boundary.
+    ///
+    /// Stateful checks must be idempotent at the same boundary. The default
+    /// preserves existing implementations by calling [`terminate`](Self::terminate).
+    /// Model-dependent checks may still run inside `next_iter` when their
+    /// diagnostics become available.
+    fn check_convergence(
+        &mut self,
+        _problem: &Problem<P>,
+        state: &S,
+    ) -> Option<TerminationReason> {
+        self.terminate(state)
+    }
+
     /// Optional pre-iteration solver-specific termination test.
     ///
     /// Called after framework

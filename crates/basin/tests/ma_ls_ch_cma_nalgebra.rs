@@ -11,10 +11,7 @@
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{
-    Executor, MaLsChCma, MaLsChState, MaxCostEvals, PopulationState,
-    StepOutcome,
-};
+use basin::{Executor, MaLsChCma, MaLsChState, PopulationState, StepOutcome};
 
 /// Sphere with a box for SSGA initial sampling: the easy canary that
 /// any working population solver should crush.
@@ -36,7 +33,7 @@ fn converges_on_sphere_d10() {
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(20_000))
+        .max_cost_evals(20_000)
         .run()
         .unwrap();
 
@@ -58,7 +55,7 @@ fn converges_on_rastrigin_d10() {
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(42).with_pop_size(30);
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(50_000))
+        .max_cost_evals(50_000)
         .run()
         .unwrap();
 
@@ -195,7 +192,7 @@ fn cost_evals_overshoot_is_bounded() {
 
     let result = Executor::new(problem, solver, MaLsChState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(budget))
+        .max_cost_evals(budget)
         .run()
         .unwrap();
 

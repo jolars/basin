@@ -10,6 +10,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CmaEsState, CountsMirror, State};
+#[allow(deprecated)]
 use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::bounded_cma_es::{BoundedCmaEs, evaluate_with_penalty};
 use crate::solver::cma_es::sort_population_ascending;
@@ -136,6 +137,10 @@ where
     /// Register a termination criterion on the inner loop.
     /// See [`CmaInject::inner_terminate_on`](super::CmaInject::inner_terminate_on)
     /// for the reset-per-run contract (stateful criteria are safe).
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
+    )]
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where
         C: TerminationCriterion<I::State> + 'static,
@@ -149,6 +154,35 @@ where
         Self {
             cma,
             inner: inner.terminate_on(criterion),
+            k,
+            c_y_override,
+        }
+    }
+
+    /// Configure the outer CMA distribution-size tolerance; `None` disables it.
+    pub fn with_absolute_distribution_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.cma = self.cma.with_absolute_distribution_size_tolerance(value);
+        self
+    }
+
+    /// Add a factory creating fresh application-stop history for each inner run.
+    pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
+    where
+        Mk: FnMut() -> CheckFn + 'static,
+        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+    {
+        let Self {
+            cma,
+            inner,
+            k,
+            c_y_override,
+        } = self;
+        Self {
+            cma,
+            inner: inner.stop_when_factory(make),
             k,
             c_y_override,
         }
@@ -290,5 +324,11 @@ where
         }
 
         Ok((state, None))
+    }
+    fn terminate(
+        &self,
+        state: &CmaEsState<V, M, F>,
+    ) -> Option<TerminationReason> {
+        <_ as Solver<P, CmaEsState<V, M, F>>>::terminate(&self.cma, state)
     }
 }

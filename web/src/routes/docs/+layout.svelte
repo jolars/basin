@@ -34,6 +34,11 @@
             description:
                 "Migrate an Argmin 0.11 application to Basin, including executors, solvers, typed errors, finite differences, bounds, observers, and backends.",
         },
+        "/docs/migrating-convergence": {
+            title: "Migrating Convergence Settings – Basin",
+            description:
+                "Move convergence settings onto solvers, configure execution limits, and prepare for Basin 2.0 deprecations.",
+        },
         "/docs/solvers": {
             title: "Solvers – Basin",
             description:

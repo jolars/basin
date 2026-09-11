@@ -49,7 +49,16 @@ impl<F: Scalar> Backtracking<F> {
     }
 
     /// Override the Armijo slope coefficient.
-    pub fn c(mut self, c: F) -> Self {
+    #[deprecated(
+        note = "use `with_sufficient_decrease_coefficient`; removal scheduled for Basin 2.0"
+    )]
+    pub fn c(self, c: F) -> Self {
+        self.with_sufficient_decrease_coefficient(c)
+    }
+
+    /// Configure the sufficient decrease coefficient.
+    /// Uses the same mathematical condition and validation as the original setting.
+    pub fn with_sufficient_decrease_coefficient(mut self, c: F) -> Self {
         self.c = c;
         self
     }

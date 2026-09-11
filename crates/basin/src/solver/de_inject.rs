@@ -11,9 +11,8 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicPopulationState, CountsMirror, State};
-use crate::core::termination::{
-    MaxCostEvals, TerminationCriterion, TerminationReason,
-};
+#[allow(deprecated)]
+use crate::core::termination::{TerminationCriterion, TerminationReason};
 use crate::solver::cma_es::sort_population_ascending;
 use crate::solver::cma_inject::MemeticInner;
 use crate::solver::de::De;
@@ -95,11 +94,11 @@ use crate::solver::de::De;
 ///
 /// No solver-internal optimality test; inherits [`De`]'s "pair with
 /// framework criteria" model
-/// ([`MaxIter`](crate::core::termination::MaxIter),
-/// [`MaxCostEvals`],
-/// [`MaxTime`](crate::core::termination::MaxTime),
-/// [`CostTolerance`](crate::core::termination::CostTolerance), or
-/// [`ParamTolerance`](crate::core::termination::ParamTolerance)). The
+/// ([`max_iter`](crate::Executor::max_iter),
+/// [`max_cost_evals`](crate::Executor::max_cost_evals),
+/// [`max_time`](crate::Executor::max_time),
+/// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
+/// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance)). The
 /// strict-less write-back preserves DE's non-increasing
 /// `state.cost()` contract.
 ///
@@ -231,8 +230,12 @@ where
     /// Register a termination criterion on the inner loop.
     /// Criteria are reused across every outer iteration's inner run, but
     /// each is reset at the start of every run, so stateful criteria,
-    /// including [`MaxTime`](crate::core::termination::MaxTime), are safe.
+    /// including [`max_time`](crate::Executor::max_time), are safe.
     /// See CONTRIBUTING.md "Solver composition" rule 2.
+    #[allow(deprecated)]
+    #[deprecated(
+        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
+    )]
     pub fn inner_terminate_on<C>(self, criterion: C) -> Self
     where
         C: TerminationCriterion<I::State> + 'static,
@@ -252,6 +255,28 @@ where
             _phantom,
         }
     }
+
+    /// Add a factory creating fresh application-stop history for each inner run.
+    pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
+    where
+        Mk: FnMut() -> CheckFn + 'static,
+        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+    {
+        let Self {
+            de,
+            inner,
+            k,
+            refine_every,
+            _phantom,
+        } = self;
+        Self {
+            de,
+            inner: inner.stop_when_factory(make),
+            k,
+            refine_every,
+            _phantom,
+        }
+    }
 }
 
 impl<I, V, F> DeInject<I, V, F>
@@ -259,18 +284,18 @@ where
     F: Scalar,
     I: MemeticInner<V, F>,
     I::State: CountsMirror,
-    MaxCostEvals: TerminationCriterion<I::State> + 'static,
 {
     /// Cap the inner refinement at `evals` cost-evaluations via
-    /// [`MaxCostEvals`], the local-search-intensity idiom
+    /// [`max_cost_evals`](crate::Executor::max_cost_evals), the local-search-intensity idiom
     /// [`MaLsChCma`](crate::solver::MaLsChCma) uses. Composes with
     /// [`with_inner_max_iter`](Self::with_inner_max_iter): whichever
     /// budget fires first stops the inner.
     ///
     /// Stateless across calls; safe to reuse for the lifetime of the
     /// outer solver (composition contract 2).
-    pub fn with_ls_intensity(self, evals: u64) -> Self {
-        self.inner_terminate_on(MaxCostEvals(evals))
+    pub fn with_ls_intensity(mut self, evals: u64) -> Self {
+        self.inner = self.inner.max_cost_evals(evals);
+        self
     }
 }
 

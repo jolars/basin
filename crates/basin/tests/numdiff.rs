@@ -1,3 +1,5 @@
+// Compatibility coverage for the Basin 1.x criterion API.
+#![allow(deprecated)]
 //! End-to-end: drive real solvers on problems whose derivatives are
 //! synthesized by `FiniteDiff` from function values only.
 

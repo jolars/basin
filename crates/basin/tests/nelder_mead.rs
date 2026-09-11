@@ -1,7 +1,7 @@
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     BasicSimplexState, CostFunction, Executor, NelderMead, SimplexState,
-    SimplexTolerance, TerminationReason,
+    TerminationReason,
 };
 
 #[test]
@@ -108,11 +108,12 @@ fn simplex_tolerance_fires_when_simplex_collapses() {
 
     let result = Executor::new(
         problem,
-        NelderMead::new(),
+        (NelderMead::new())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-8),
         BasicSimplexState::new(vec![-1.2, 1.0]),
     )
     .max_iter(2_000)
-    .terminate_on(SimplexTolerance::new(1e-8, 1e-8))
     .run()
     .unwrap();
 

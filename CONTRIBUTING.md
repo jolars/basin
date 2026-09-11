@@ -11,8 +11,8 @@ opt-in features arrive in minor releases.
 ## What this is
 
 Basin is a Rust library crate for numerical optimization, inspired by `argmin`.
-It pairs a generic core (problem traits you implement, a pluggable termination
-layer, and an `Executor` driver loop) with a set of solvers spanning first-order
+It pairs a generic core (problem traits you implement, solver-owned convergence
+settings, and an `Executor` driver loop) with a set of solvers spanning first-order
 and quasi-Newton (gradient descent, BFGS, L-BFGS and L-BFGS-B), derivative-free
 (Nelder-Mead, Brent, Solis-Wets, and Powell's model-based family
 NEWUOA/BOBYQA/LINCOA/COBYLA), nonlinear least squares (Gauss-Newton,
@@ -93,7 +93,7 @@ benchmark and profiler commands.
 ## Architecture
 
 A generic driver loop (`Executor`) iterates a `Solver` over a `State`, calling
-into user-provided `Problem` traits, until a `TerminationCriterion` fires.
+into user-provided `Problem` traits, until solver convergence, an execution limit, or an application stop ends the run.
 
 - `src/lib.rs`: public re-exports only.
 - `src/core.rs` + `src/core/`: the framework:
@@ -108,21 +108,23 @@ into user-provided `Problem` traits, until a `TerminationCriterion` fires.
     personal/global bests, and live RNG), and `SimulatedAnnealingState`
     (observable Markov-chain state). Extension traits
     `GradientState`/`SimplexState`/`PopulationState`/`AcceptanceState` expose
-    the richer shapes that termination criteria bind on. Fields are
+    the richer shapes that convergence checks and execution controls bind on. Fields are
     `pub(crate)`; access goes through trait methods.
   - `solver.rs`: the `Solver` trait: `init` (one-time setup, e.g. seeding
-    cost/gradient at iter 0), `next_iter`, plus a `terminate` hook.
+    cost/gradient at iter 0), `next_iter`, plus convergence reset/check hooks and the legacy `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
     `run()` returns an `OptimizationResult<S>` (final state +
-    `TerminationReason`). Also `run_loop`/`Stepper`, solver-and-state
+    `TerminationReason`). Also `run_loop_with_control`/`Stepper`, solver-and-state
     `Executor::resume`/`Executor::resume_from_checkpoint`, and the cooperative,
     top-level `CancellationToken`.
   - `checkpoint.rs`: solver-aware exact checkpoints. The executor captures the
     solver, state, and authoritative evaluation counts at coherent iteration
     boundaries; the state-only observer remains a warm-start facility.
-  - `termination.rs`: `TerminationCriterion<S>` plus shipped criteria
-    (`MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, the
-    `*Tolerance`/`Relative*Tolerance` family, `SimplexTolerance`, `MaxTime`).
+  - `convergence.rs`: fixed solver convergence slots and shared calculations.
+    Optional checks add only the backend capabilities they need.
+  - `run_control.rs`: budgets, targets, stagnation stops, and application hooks.
+  - `termination.rs`: stopping reasons and the deprecated Basin 1.x criterion
+    compatibility layer, scheduled for removal in Basin 2.0.
   - `constraint.rs`, `barrier.rs`, `augmented_lagrangian.rs`: constraint markers
     and the unconstrained-problem adapters (tenet 4).
   - `inner.rs`: `InnerExecutor`/`WarmStart`/`ResumableInner` for solver
@@ -157,16 +159,20 @@ These shape API decisions and are non-obvious from the code alone.
    unversioned aliases retain their Basin 1.x meanings. Cargo features are
    additive, so the implementation selects the newest enabled release when
    dependency feature unification enables several versions of one backend.
-3. **Framework-level termination.** Generic stopping conditions (`max_iter`, the
-   `*_tolerance` family, `max_time`, eval budgets) and cooperative cancellation
-   are configured uniformly on the `Executor`/shared termination layer, not per
-   solver; solver-specific knobs stay on the solver. Each criterion binds on the
-   *minimum state shape* it needs (e.g. `GradientTolerance` requires
-   `S: GradientState`), so a derivative-free solver can't be paired with a
-   gradient criterion by mistake. Because derivative-free solvers have no
-   gradient, termination is pluggable and opt-in based on what the state and
-   problem expose. Executor cancellation is checked between top-level
-   iterations; typed problem errors remain the finer-grained hard-abort path.
+3. **Solver-owned convergence.** Numerical convergence settings belong on the
+   solver, with one authoritative setting for each test and shared internal
+   calculations. The executor owns iteration, evaluation, and time budgets,
+   targets, stagnation stops, cooperative cancellation, and application hooks.
+   Bind each optional check to the minimum state and backend capabilities it
+   needs. Use explicit names such as `with_absolute_gradient_tolerance` and
+   document norms, scaling, defaults, and OR/AND composition. Optional checks
+   accept a finite nonnegative scalar or `None`; zero requests an exact-zero
+   threshold. Algorithm controls and safeguards remain distinct. Preserve old
+   behavior through deprecated aliases until Basin 2.0. Fresh solves reset
+   convergence history; exact solver-and-state checkpoints preserve it. Custom
+   inner-stop factories create fresh history per run. Executor cancellation is
+   checked between top-level iterations; typed problem errors remain the
+   finer-grained hard-abort path. See [the migration guide](MIGRATING.md).
 4. **First-class constraints.** Constraints describe the *problem*, so they live
    problem-side, not as executor config, never on state. Solvers declare support
    via traits; a constrained problem handed to an unconstrained solver is a

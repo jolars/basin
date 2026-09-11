@@ -9,10 +9,7 @@
 
 use crate::backend_aliases::ndarray::Array1;
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
-use basin::{
-    Executor, LevenbergMarquardt, NllsState, RelativeCostTolerance,
-    TerminationReason,
-};
+use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -179,11 +176,11 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
 
     let result = Executor::new(
         problem,
-        LevenbergMarquardt::new().with_tol_grad(0.0),
+        (LevenbergMarquardt::new().with_absolute_gradient_tolerance(None))
+            .with_relative_cost_change_tolerance(1e-10),
         NllsState::new(initial),
     )
     .max_iter(200)
-    .terminate_on(RelativeCostTolerance::new(1e-10))
     .run()
     .unwrap();
 
@@ -209,8 +206,8 @@ fn levenberg_marquardt_converges_via_relative_gradient_tolerance() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .with_tol_grad(0.0)
-            .with_tol_grad_rel(1e-10),
+            .with_absolute_gradient_tolerance(None)
+            .with_gradient_orthogonality_tolerance(1e-10),
         NllsState::new(initial),
     )
     .max_iter(200)
@@ -245,9 +242,9 @@ fn levenberg_marquardt_converges_via_ftol() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .with_tol_grad(0.0)
-            .with_tol_grad_rel(0.0)
-            .with_tol_cost_rel(1e-10),
+            .with_absolute_gradient_tolerance(None)
+            .with_gradient_orthogonality_tolerance(None)
+            .with_relative_model_reduction_tolerance(1e-10),
         NllsState::new(initial),
     )
     .max_iter(200)
@@ -279,9 +276,9 @@ fn levenberg_marquardt_converges_via_xtol() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .with_tol_grad(0.0)
-            .with_tol_grad_rel(0.0)
-            .with_tol_step_rel(1e-10),
+            .with_absolute_gradient_tolerance(None)
+            .with_gradient_orthogonality_tolerance(None)
+            .with_relative_step_tolerance(1e-10),
         NllsState::new(initial),
     )
     .max_iter(200)
@@ -321,8 +318,8 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
         Executor::new(
             problem,
             LevenbergMarquardt::new()
-                .with_tol_grad(0.0)
-                .with_tol_grad_rel(1e-8),
+                .with_absolute_gradient_tolerance(None)
+                .with_gradient_orthogonality_tolerance(1e-8),
             NllsState::new(initial),
         )
         .max_iter(200)
@@ -368,7 +365,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
 
     let result = Executor::new(
         problem,
-        LevenbergMarquardt::new().with_tol_grad(0.0),
+        LevenbergMarquardt::new().with_absolute_gradient_tolerance(None),
         NllsState::new(initial),
     )
     .max_iter(3)

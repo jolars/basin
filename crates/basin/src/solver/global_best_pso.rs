@@ -101,8 +101,8 @@ pub enum PsoVelocityLimit<F = f64> {
 /// # Termination
 ///
 /// PSO has no single canonical convergence test. Pair it with framework
-/// criteria such as [`MaxIter`](crate::MaxIter), [`MaxCostEvals`](crate::MaxCostEvals),
-/// [`TargetCost`](crate::TargetCost), or [`NoImprovement`](crate::NoImprovement).
+/// criteria such as [`max_iter`](crate::Executor::max_iter), [`max_cost_evals`](crate::Executor::max_cost_evals),
+/// [`target_cost`](crate::Executor::target_cost), or [`no_improvement`](crate::Executor::no_improvement).
 ///
 /// # Backends
 ///
@@ -133,12 +133,19 @@ pub enum PsoVelocityLimit<F = f64> {
 ///     }
 /// }
 /// impl BoxConstraints for Sphere {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
+///     fn lower(&self) -> &Vec<f64> {
+///         &self.lower
+///     }
+///     fn upper(&self) -> &Vec<f64> {
+///         &self.upper
+///     }
 /// }
 ///
 /// let result = Executor::new(
-///     Sphere { lower: vec![-5.0; 2], upper: vec![5.0; 2] },
+///     Sphere {
+///         lower: vec![-5.0; 2],
+///         upper: vec![5.0; 2],
+///     },
 ///     GlobalBestPso::new(42),
 ///     GlobalBestPsoState::<Vec<f64>>::new(),
 /// )

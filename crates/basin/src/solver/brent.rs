@@ -81,6 +81,9 @@ impl<F: Scalar> Brent<F> {
 
     /// Brent solver with explicit relative and absolute tolerances. Both
     /// must be strictly positive.
+    #[deprecated(
+        note = "use `new().with_relative_position_tolerance(...).with_absolute_position_tolerance(...)`; removal scheduled for Basin 2.0"
+    )]
     pub fn with_tol(tol_rel: F, tol_abs: F) -> Self {
         assert!(tol_rel > F::zero(), "tol_rel must be > 0");
         assert!(tol_abs > F::zero(), "tol_abs must be > 0");
@@ -89,6 +92,29 @@ impl<F: Scalar> Brent<F> {
             tol_abs,
             inner: None,
         }
+    }
+}
+
+impl<F: Scalar> Brent<F> {
+    /// Set the strictly positive absolute position tolerance in the bracket
+    /// test and minimum trial displacement. This algorithm control cannot be disabled.
+    pub fn with_absolute_position_tolerance(mut self, value: F) -> Self {
+        assert!(
+            value.is_finite() && value > F::zero(),
+            "position tolerance must be finite and positive"
+        );
+        self.tol_abs = value;
+        self
+    }
+    /// Set the strictly positive relative position tolerance. The effective
+    /// resolution is `relative * abs(x) + absolute`.
+    pub fn with_relative_position_tolerance(mut self, value: F) -> Self {
+        assert!(
+            value.is_finite() && value > F::zero(),
+            "position tolerance must be finite and positive"
+        );
+        self.tol_rel = value;
+        self
     }
 }
 
@@ -378,14 +404,13 @@ mod tests {
         // Brent posts the just-probed `(u, fu)`, so CostTolerance
         // sees the real Δf signal; the only legitimate trigger is
         // genuine convergence.
-        use crate::core::termination::CostTolerance;
+
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
-            Brent::new(),
+            (Brent::new()).with_absolute_cost_change_tolerance(1e-12),
             ScalarState::new(0.5),
         )
         .max_iter(200)
-        .terminate_on(CostTolerance::new(1e-12))
         .run()
         .unwrap();
         // Whatever stop fires (Brent's own bracket-collapse or

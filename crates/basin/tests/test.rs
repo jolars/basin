@@ -75,12 +75,14 @@ fn barrier_method_tour() {
 
     // 3. Wrap it in the barrier method. The builder calls below are all
     //    defaults, shown explicitly for the tour.
-    let solver = BarrierMethod::new(inner)
-        .mu0(1.0) // initial barrier weight μ
-        .with_reduction(10.0) // μ ← μ / 10 each outer iteration
-        .with_phase_one_tol(1e-8) // classify an empty strict interior
-        .with_tol(1e-8) // stop once the duality gap m·μ ≤ tol
-        .with_inner_max_iter(50); // budget per inner barrier solve (the cost lever)
+    let solver = BarrierMethod::with_inner_solver(
+        inner.with_absolute_gradient_tolerance(1e-8),
+    )
+    .mu0(1.0) // initial barrier weight μ
+    .with_reduction(10.0) // μ ← μ / 10 each outer iteration
+    .with_absolute_phase_one_gap_tolerance(1e-8) // classify an empty strict interior
+    .with_absolute_duality_gap_tolerance(1e-8) // stop once the duality gap m·μ ≤ tol
+    .with_inner_max_iter(50); // budget per inner barrier solve (the cost lever)
 
     // 4. The start may be infeasible. Here (2,2) violates x₀+x₁≤2; Phase I
     //    finds a strict point, and Phase II continues to the constrained optimum.

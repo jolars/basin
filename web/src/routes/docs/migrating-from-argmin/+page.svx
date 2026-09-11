@@ -82,12 +82,12 @@ fn main() -> Result<(), Error> {
 In Basin, `Executor::from_start` asks the solver to construct its natural state
 from a point. Nelder–Mead builds its default 5% simplex there; the Argmin
 simplex above uses the same coordinate perturbations. Generic stopping rules
-belong on the executor; `SimplexTolerance` checks both simplex diameter and cost
+belong on the solver; its simplex tolerances check both simplex diameter and cost
 spread, rather than Argmin's sample standard deviation of costs alone.
 
 <!-- compile: basin-nelder-mead -->
 ```rust
-use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use basin::{CostFunction, Executor, NelderMead};
 use std::convert::Infallible;
 
 struct Rosenbrock;
@@ -103,12 +103,16 @@ impl CostFunction for Rosenbrock {
 }
 
 fn main() {
-    let result =
-        Executor::from_start(Rosenbrock, NelderMead::new(), vec![-1.2, 1.0])
-            .max_iter(1_000)
-            .terminate_on(SimplexTolerance::new(1e-8, 1e-8))
-            .run()
-            .unwrap();
+    let result = Executor::from_start(
+        Rosenbrock,
+        (NelderMead::new())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-8),
+        vec![-1.2, 1.0],
+    )
+    .max_iter(1_000)
+    .run()
+    .unwrap();
 
     println!("x = {:?}, f = {}", result.param(), result.cost());
     assert!(result.cost() < 1e-8);
@@ -125,12 +129,12 @@ initialization needs more than one point, such as CMA-ES and population solvers.
 | Argmin 0.11 | Basin 1.7 |
 | --- | --- |
 | `Executor::new(problem, solver).configure(|state| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)` |
-| `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new()` with `SimplexTolerance::new(tol_x, tol_f)` on the executor |
+| `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new().with_absolute_simplex_size_tolerance(tol_x).with_absolute_simplex_cost_tolerance(tol_f)` |
 | `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::<Unbounded>::new().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
 | `HagerZhangLineSearch::new()` | `HagerZhang::new()` |
 | `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
 | `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `BoxConstraints` and `GlobalBestPsoState::new()` |
-| `BrentRoot::new(lower, upper, tol)` | `BrentRoot::new(lower, upper).with_tol(tol_rel, tol_abs).solve(function)`; no `Executor` is needed |
+| `BrentRoot::new(lower, upper, tol)` | `BrentRoot::new(lower, upper).with_relative_position_tolerance(tol_rel).with_absolute_position_tolerance(tol_abs).solve(function)`; no `Executor` is needed |
 | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
 | Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
 | Transforms, clamps, or penalties for box bounds | `BoxConstraints` plus a solver that consumes bounds |
@@ -181,7 +185,7 @@ search for both modes.
 <!-- compile: basin-lbfgs -->
 ```rust
 use basin::solver::lbfgs::Unbounded;
-use basin::{CostFunction, Executor, Gradient, GradientTolerance, Lbfgs};
+use basin::{CostFunction, Executor, Gradient, Lbfgs};
 use std::convert::Infallible;
 
 struct Sphere;
@@ -199,18 +203,24 @@ impl CostFunction for Sphere {
 impl Gradient for Sphere {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+    fn gradient(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Gradient, Self::Error> {
         Ok(x.iter().map(|xi| 2.0 * xi).collect())
     }
 }
 
 fn main() {
     let solver = Lbfgs::<Unbounded>::new().with_m_capacity(7);
-    let result = Executor::from_start(Sphere, solver, vec![3.0, -4.0])
-        .max_iter(200)
-        .terminate_on(GradientTolerance(1e-12))
-        .run()
-        .unwrap();
+    let result = Executor::from_start(
+        Sphere,
+        (solver).with_absolute_gradient_tolerance(1e-12),
+        vec![3.0, -4.0],
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert!(result.cost() < 1e-12);
 }
@@ -245,7 +255,10 @@ impl Residual for AffineResidual {
     type Output = Vec<f64>;
     type Error = Infallible;
 
-    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
+    fn residual(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Output, Self::Error> {
         Ok(vec![x[0] - 1.0, x[1] - 2.0])
     }
 }
@@ -263,18 +276,19 @@ impl Jacobian for AffineResidual {
 
 fn main() {
     let solver = GaussNewton::<Vec<f64>, DenseMatrix<f64>>::new();
-    let result = Executor::from_start(AffineResidual, solver, vec![0.0, 0.0])
-        .max_iter(20)
-        .run()
-        .unwrap();
+    let result =
+        Executor::from_start(AffineResidual, solver, vec![0.0, 0.0])
+            .max_iter(20)
+            .run()
+            .unwrap();
 
     assert!(result.cost() < 1e-20);
 }
 ```
 
 `LevenbergMarquardt::<Vec<f64>, DenseMatrix<f64>>::new()` is a drop-in solver
-change for the same problem and initial point. Its `with_tol_grad_rel`,
-`with_tol_cost_rel`, and `with_tol_step_rel` methods expose the corresponding
+change for the same problem and initial point. Its `with_gradient_orthogonality_tolerance`,
+`with_relative_model_reduction_tolerance`, and `with_relative_step_tolerance` methods expose the corresponding
 MINPACK-style stopping tests.
 
 ## Typed Errors
@@ -336,9 +350,7 @@ gradient, a central Hessian, and a forward Jacobian. `Method`,
 
 <!-- compile: basin-finite-diff -->
 ```rust
-use basin::{
-    CostFunction, Executor, FiniteDiff, GradientDescent, GradientTolerance,
-};
+use basin::{CostFunction, Executor, FiniteDiff, GradientDescent};
 use std::convert::Infallible;
 
 struct Sphere;
@@ -357,11 +369,11 @@ fn main() {
     let problem = FiniteDiff::new(Sphere);
     let result = Executor::from_start(
         problem,
-        GradientDescent::new(0.25),
+        (GradientDescent::new(0.25))
+            .with_absolute_gradient_tolerance(1e-12),
         vec![2.0, -1.0],
     )
     .max_iter(100)
-    .terminate_on(GradientTolerance(1e-12))
     .run()
     .unwrap();
 
@@ -402,7 +414,10 @@ impl CostFunction for BoundedQuadratic {
 impl Gradient for BoundedQuadratic {
     type Gradient = Vec<f64>;
 
-    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
+    fn gradient(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Gradient, Self::Error> {
         Ok(vec![2.0 * (x[0] - 2.0), 2.0 * (x[1] + 1.0)])
     }
 }
@@ -555,7 +570,7 @@ Basin version, and concrete types; pass the result to
 without rerunning solver initialization. Simulated annealing retains its
 stateful neighbor, RNG, and chain progress in `SimulatedAnnealingState`, while
 the exact checkpoint captures the solver and state together. Reattach
-termination criteria, observers, cancellation, and the checkpoint writer when
+execution controls, observers, cancellation, and the checkpoint writer when
 resuming.
 
 ## Observers and Cancellation
@@ -633,7 +648,7 @@ against 0.32, 0.33, 0.34, and 0.35; the ndarray program against 0.15, 0.16, and
 
 <!-- compile: basin-backend-vec -->
 ```rust
-use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use basin::{CostFunction, Executor, NelderMead};
 use std::convert::Infallible;
 
 struct Sphere;
@@ -649,12 +664,16 @@ impl CostFunction for Sphere {
 }
 
 fn main() {
-    let result =
-        Executor::from_start(Sphere, NelderMead::new(), vec![1.0, -1.0])
-            .max_iter(300)
-            .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
-            .run()
-            .unwrap();
+    let result = Executor::from_start(
+        Sphere,
+        (NelderMead::new())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-12),
+        vec![1.0, -1.0],
+    )
+    .max_iter(300)
+    .run()
+    .unwrap();
     assert!(result.cost() < 1e-10);
 }
 ```
@@ -663,7 +682,7 @@ fn main() {
 
 <!-- compile: basin-backend-nalgebra -->
 ```rust
-use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use basin::{CostFunction, Executor, NelderMead};
 use nalgebra::DVector;
 use std::convert::Infallible;
 
@@ -681,11 +700,16 @@ impl CostFunction for Sphere {
 
 fn main() {
     let x0 = DVector::from_vec(vec![1.0, -1.0]);
-    let result = Executor::from_start(Sphere, NelderMead::new(), x0)
-        .max_iter(300)
-        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
-        .run()
-        .unwrap();
+    let result = Executor::from_start(
+        Sphere,
+        (NelderMead::new())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-12),
+        x0,
+    )
+    .max_iter(300)
+    .run()
+    .unwrap();
     assert!(result.cost() < 1e-10);
 }
 ```
@@ -694,7 +718,7 @@ fn main() {
 
 <!-- compile: basin-backend-ndarray -->
 ```rust
-use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use basin::{CostFunction, Executor, NelderMead};
 use ndarray::Array1;
 use std::convert::Infallible;
 
@@ -712,11 +736,16 @@ impl CostFunction for Sphere {
 
 fn main() {
     let x0 = Array1::from_vec(vec![1.0, -1.0]);
-    let result = Executor::from_start(Sphere, NelderMead::new(), x0)
-        .max_iter(300)
-        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
-        .run()
-        .unwrap();
+    let result = Executor::from_start(
+        Sphere,
+        (NelderMead::new())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-12),
+        x0,
+    )
+    .max_iter(300)
+    .run()
+    .unwrap();
     assert!(result.cost() < 1e-10);
 }
 ```
@@ -725,7 +754,7 @@ fn main() {
 
 <!-- compile: basin-backend-faer -->
 ```rust
-use basin::{CostFunction, Executor, NelderMead, SimplexTolerance};
+use basin::{CostFunction, Executor, NelderMead};
 use faer::Col;
 use std::convert::Infallible;
 
@@ -743,11 +772,16 @@ impl CostFunction for Sphere {
 
 fn main() {
     let x0 = Col::from_fn(2, |i| [1.0, -1.0][i]);
-    let result = Executor::from_start(Sphere, NelderMead::new(), x0)
-        .max_iter(300)
-        .terminate_on(SimplexTolerance::new(1e-8, 1e-12))
-        .run()
-        .unwrap();
+    let result = Executor::from_start(
+        Sphere,
+        (NelderMead::new())
+            .with_absolute_simplex_size_tolerance(1e-8)
+            .with_absolute_simplex_cost_tolerance(1e-12),
+        x0,
+    )
+    .max_iter(300)
+    .run()
+    .unwrap();
     assert!(result.cost() < 1e-10);
 }
 ```
@@ -777,7 +811,7 @@ after the like-for-like path passes.
 ## Next
 
 - [Getting Started](../getting-started/): state construction and shared
-  termination criteria.
+  solver convergence settings.
 - [Solvers](../solvers/): supported algorithms and backend matrix.
 - [Full Basin API](https://docs.rs/basin): authoritative type and method
   documentation.

@@ -4,8 +4,7 @@ use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicState, Bfgs, CostFunction, Executor, Gradient,
-    GradientDescent, GradientTolerance, HagerZhang, NalgebraQuasiNewtonState,
-    TerminationReason,
+    GradientDescent, HagerZhang, NalgebraQuasiNewtonState, TerminationReason,
 };
 
 #[test]
@@ -49,11 +48,10 @@ fn bfgs_terminates_on_gradient_tolerance() {
 
     let result = Executor::new(
         problem,
-        Bfgs::new(),
+        (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
         NalgebraQuasiNewtonState::new(initial),
     )
     .max_iter(200)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 
@@ -85,21 +83,20 @@ fn bfgs_converges_faster_than_gd_with_backtracking() {
 
     let bfgs_result = Executor::new(
         Rosenbrock::<DVector<f64>>::default(),
-        Bfgs::new(),
+        (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
         NalgebraQuasiNewtonState::new(initial.clone()),
     )
     .max_iter(500)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 
     let gd_result = Executor::new(
         Rosenbrock::<DVector<f64>>::default(),
-        GradientDescent::with_line_search(Backtracking::new()),
+        (GradientDescent::with_line_search(Backtracking::new()))
+            .with_absolute_gradient_tolerance(1e-6),
         BasicState::new(initial),
     )
     .max_iter(500)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 
@@ -169,11 +166,10 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
 
     let result = Executor::new(
         problem,
-        Bfgs::new(),
+        (Bfgs::new()).with_absolute_gradient_tolerance(1e-8),
         NalgebraQuasiNewtonState::new(initial),
     )
     .max_iter(50)
-    .terminate_on(GradientTolerance(1e-8))
     .run()
     .unwrap();
 
@@ -209,11 +205,10 @@ fn bfgs_terminates_via_converged_when_at_machine_precision() {
 
     let result = Executor::new(
         problem,
-        Bfgs::new(),
+        (Bfgs::new()).with_absolute_gradient_tolerance(1e-30),
         NalgebraQuasiNewtonState::new(initial),
     )
     .max_iter(200)
-    .terminate_on(GradientTolerance(1e-30))
     .run()
     .unwrap();
 

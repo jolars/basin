@@ -22,9 +22,10 @@ fn active_constraint_converges_to_projection() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -47,9 +48,10 @@ fn infeasible_start_runs_phase_one_then_converges() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -72,9 +74,10 @@ fn eval_counts_are_recorded() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)
@@ -101,9 +104,10 @@ fn two_constraints_both_active() {
 
     let result = Executor::new(
         problem,
-        BarrierMethod::new(GradientDescent::with_line_search(
-            Backtracking::new(),
-        )),
+        BarrierMethod::with_inner_solver(
+            GradientDescent::with_line_search(Backtracking::new())
+                .with_absolute_gradient_tolerance(1e-8),
+        ),
         BasicState::new(initial),
     )
     .max_iter(50)

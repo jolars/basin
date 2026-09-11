@@ -2,8 +2,8 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicState, CostFunction, Executor, GradientDescent, GradientTolerance,
-    State, StepOutcome, TerminationReason,
+    BasicState, CostFunction, Executor, GradientDescent, State, StepOutcome,
+    TerminationReason,
 };
 
 #[test]
@@ -108,11 +108,10 @@ fn stepper_honors_gradient_tolerance() {
     let problem = Rosenbrock::<Vec<f64>>::default();
     let stepper = Executor::new(
         problem,
-        GradientDescent::new(0.001),
+        (GradientDescent::new(0.001)).with_absolute_gradient_tolerance(1e-6),
         BasicState::new(vec![1.0, 1.0]), // already at the optimum
     )
     .max_iter(100)
-    .terminate_on(GradientTolerance(1e-6))
     .into_stepper()
     .unwrap();
 

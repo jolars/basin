@@ -1,3 +1,5 @@
+// Compatibility coverage for the Basin 1.x criterion API.
+#![allow(deprecated)]
 //! POC integration test for the `InnerExecutor` composition adapter.
 //!
 //! Defines a private outer solver `PerVertexRefine<G>` that holds k

@@ -619,8 +619,8 @@ fn main() {
                     Executor::new(
                         StyblinskiTang::<Vec<f64>>::default(),
                         Newuoa::new()
-                            .with_rho_beg(ST_RHO_BEG)
-                            .with_rho_end(ST_RHO_END),
+                            .with_initial_radius(ST_RHO_BEG)
+                            .with_final_radius(ST_RHO_END),
                         NewuoaState::new(st_start()),
                     ),
                     ST_BUDGET,

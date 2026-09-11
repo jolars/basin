@@ -16,10 +16,7 @@
 //!   captures the exact Hessian within `m` iterations.
 
 use basin::problems::BoothBoxed;
-use basin::{
-    CostFunction, Executor, Gradient, LbfgsState, Lbfgsb, MaxIter,
-    ProjectedGradientTolerance,
-};
+use basin::{CostFunction, Executor, Gradient, LbfgsState, Lbfgsb};
 
 /// Unbounded Rosenbrock 2D from `(-1.2, 1.0)`. With infinite bounds
 /// L-Bfgs-B reduces to L-Bfgs (Fortran's `cnstnd == false` branch
@@ -65,15 +62,16 @@ fn unbounded_rosenbrock_2d_converges() {
         l: vec![f64::NEG_INFINITY; 2],
         u: vec![f64::INFINITY; 2],
     };
-    let lower = problem.l.clone();
-    let upper = problem.u.clone();
     let state = LbfgsState::new(vec![-1.2, 1.0], 5);
 
-    let result = Executor::new(problem, Lbfgsb::new(), state)
-        .terminate_on(MaxIter(200))
-        .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-8))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        state,
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
     assert!(
@@ -96,19 +94,16 @@ fn unbounded_rosenbrock_2d_converges() {
 #[test]
 fn booth_at_corner_converges() {
     let problem = BoothBoxed::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
-    let lower = vec![-1.0, -1.0];
-    let upper = vec![1.0, 1.0];
     let state = LbfgsState::new(vec![0.0, 0.0], 5);
 
-    let result = Executor::new(problem, Lbfgsb::new(), state)
-        .terminate_on(MaxIter(100))
-        .terminate_on(ProjectedGradientTolerance::new(
-            lower.clone(),
-            upper.clone(),
-            1e-8,
-        ))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        state,
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     // Booth: f(x, y) = (x + 2y − 7)² + (2x + y − 5)². At the upper
     // corner (1, 1): (1 + 2 − 7)² + (2 + 1 − 5)² = 16 + 4 = 20. Both
@@ -139,15 +134,16 @@ fn booth_at_corner_converges() {
 #[test]
 fn booth_slack_bounds_recover_unconstrained_minimum() {
     let problem = BoothBoxed::<Vec<f64>>::new(vec![-5.0, -5.0], vec![5.0, 5.0]);
-    let lower = vec![-5.0, -5.0];
-    let upper = vec![5.0, 5.0];
     let state = LbfgsState::new(vec![0.0, 0.0], 5);
 
-    let result = Executor::new(problem, Lbfgsb::new(), state)
-        .terminate_on(MaxIter(100))
-        .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-10),
+        state,
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
 
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4,
@@ -217,16 +213,17 @@ fn quadratic_5d_diagonal_converges_quickly() {
         l: vec![-2.0; 5],
         u: vec![2.0; 5],
     };
-    let lower = problem.l.clone();
-    let upper = problem.u.clone();
     let initial = vec![0.0; 5];
     let state = LbfgsState::new(initial, 5);
 
-    let result = Executor::new(problem, Lbfgsb::new(), state)
-        .terminate_on(MaxIter(50))
-        .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-10))
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-10),
+        state,
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     // Optimum: x[i] = 1/diag[i]; cost = -½ Σ 1/diag[i].
     let expected_cost = -0.5 * (1.0 + 0.5 + 1.0 / 3.0 + 0.25 + 0.2);

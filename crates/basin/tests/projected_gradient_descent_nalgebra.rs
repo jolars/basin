@@ -4,7 +4,7 @@ use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{
     Backtracking, BasicState, Executor, ProjectedGradientDescent,
-    ProjectedGradientTolerance, TerminationReason,
+    TerminationReason,
 };
 
 /// Slack bounds: the unconstrained Booth minimum (1, 3) is interior to
@@ -96,11 +96,11 @@ fn projected_gradient_tolerance_triggers_at_corner_minimum() {
 
     let result = Executor::new(
         problem,
-        ProjectedGradientDescent::with_line_search(Backtracking::new()),
+        (ProjectedGradientDescent::with_line_search(Backtracking::new()))
+            .with_absolute_projected_gradient_tolerance(1e-7),
         BasicState::new(initial),
     )
     .max_iter(2000)
-    .terminate_on(ProjectedGradientTolerance::new(lower, upper, 1e-7))
     .run()
     .unwrap();
 

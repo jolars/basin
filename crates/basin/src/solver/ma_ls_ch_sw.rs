@@ -53,7 +53,7 @@ use crate::solver::solis_wets::SolisWets;
 ///
 /// ```
 /// use basin::{
-///     BoxConstraints, CostFunction, Executor, MaLsChSw, MaLsChSwState, MaxCostEvals,
+///     BoxConstraints, CostFunction, Executor, MaLsChSw, MaLsChSwState,
 /// };
 ///
 /// struct BoundedSphere {
@@ -69,18 +69,25 @@ use crate::solver::solis_wets::SolisWets;
 ///     }
 /// }
 /// impl BoxConstraints for BoundedSphere {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
+///     fn lower(&self) -> &Vec<f64> {
+///         &self.lower
+///     }
+///     fn upper(&self) -> &Vec<f64> {
+///         &self.upper
+///     }
 /// }
 ///
-/// let problem = BoundedSphere { lower: vec![-5.0; 5], upper: vec![5.0; 5] };
+/// let problem = BoundedSphere {
+///     lower: vec![-5.0; 5],
+///     upper: vec![5.0; 5],
+/// };
 /// let result = Executor::new(
 ///     problem,
 ///     MaLsChSw::<Vec<f64>>::new(42).with_pop_size(20),
 ///     MaLsChSwState::new(),
 /// )
 /// .max_iter(u64::MAX)
-/// .terminate_on(MaxCostEvals(10_000))
+/// .max_cost_evals(10_000)
 /// .run()
 /// .unwrap();
 /// assert!(result.cost() < 1e-6);

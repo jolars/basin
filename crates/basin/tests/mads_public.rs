@@ -7,10 +7,7 @@
 //! the V↔Vec bridge, count mirroring, convergence/budget/early-stop paths)
 //! and convergence on smooth problems across backends.
 
-use basin::{
-    CostFunction, Executor, Mads, MadsState, MaxCostEvals, MeshTolerance,
-    TerminationReason,
-};
+use basin::{CostFunction, Executor, Mads, MadsState, TerminationReason};
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
@@ -46,10 +43,10 @@ fn converges_on_sphere() {
         Sphere,
         Mads::new()
             .with_initial_poll_size(1.0)
-            .with_min_poll_size(1e-8),
+            .with_minimum_poll_size(1e-8),
         MadsState::new(vec![2.0, -3.0, 1.5]),
     )
-    .terminate_on(MaxCostEvals(10_000))
+    .max_cost_evals(10_000)
     .run()
     .unwrap();
 
@@ -69,13 +66,13 @@ fn converges_on_rosenbrock_2d() {
         Rosenbrock,
         Mads::new()
             .with_initial_poll_size(0.5)
-            .with_min_poll_size(1e-7),
+            .with_minimum_poll_size(1e-7),
         MadsState::new(vec![-1.2, 1.0]),
     )
     // MADS is a poll-only direct search, so it needs many iterations on the
     // Rosenbrock valley; let convergence or the eval budget govern, not max_iter.
     .max_iter(100_000)
-    .terminate_on(MaxCostEvals(20_000))
+    .max_cost_evals(20_000)
     .run()
     .unwrap();
 
@@ -96,15 +93,17 @@ fn converges_on_rosenbrock_2d() {
 fn mesh_tolerance_stops_early() {
     let result = Executor::new(
         Rosenbrock,
-        // Configured to drive the poll size to 1e-12, but MeshTolerance cuts it
-        // off at a coarse poll size first.
-        Mads::new()
-            .with_initial_poll_size(0.5)
-            .with_min_poll_size(1e-12),
+        (
+            // Configured to drive the poll size to 1e-12, but MeshTolerance cuts it
+            // off at a coarse poll size first.
+            Mads::new()
+                .with_initial_poll_size(0.5)
+                .with_minimum_poll_size(1e-12)
+        )
+        .with_absolute_poll_size_tolerance(1e-3),
         MadsState::new(vec![-1.2, 1.0]),
     )
-    .terminate_on(MeshTolerance::new(1e-3))
-    .terminate_on(MaxCostEvals(50_000))
+    .max_cost_evals(50_000)
     .run()
     .unwrap();
 
@@ -122,10 +121,10 @@ fn respects_cost_eval_budget() {
         Rosenbrock,
         Mads::new()
             .with_initial_poll_size(0.5)
-            .with_min_poll_size(1e-12),
+            .with_minimum_poll_size(1e-12),
         MadsState::new(vec![-1.2, 1.0]),
     )
-    .terminate_on(MaxCostEvals(50))
+    .max_cost_evals(50)
     .run()
     .unwrap();
 
@@ -146,7 +145,7 @@ fn respects_cost_eval_budget() {
 #[test]
 fn outperforms_nelder_mead_on_discontinuous_step() {
     use basin::problems::Step;
-    use basin::{BasicSimplexState, NelderMead, SimplexTolerance};
+    use basin::{BasicSimplexState, NelderMead};
 
     let start = vec![4.2, -3.2];
     let budget = 5_000;
@@ -155,22 +154,23 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
         Step::<Vec<f64>>::default(),
         Mads::new()
             .with_initial_poll_size(1.0)
-            .with_min_poll_size(1e-6),
+            .with_minimum_poll_size(1e-6),
         MadsState::new(start.clone()),
     )
     .max_iter(100_000)
-    .terminate_on(MaxCostEvals(budget))
+    .max_cost_evals(budget)
     .run()
     .unwrap();
 
     let nm = Executor::new(
         Step::<Vec<f64>>::default(),
-        NelderMead::new(),
+        (NelderMead::new())
+            .with_absolute_simplex_size_tolerance(1e-12)
+            .with_absolute_simplex_cost_tolerance(1e-12),
         BasicSimplexState::new(start.clone()),
     )
     .max_iter(100_000)
-    .terminate_on(MaxCostEvals(budget))
-    .terminate_on(SimplexTolerance::new(1e-12, 1e-12))
+    .max_cost_evals(budget)
     .run()
     .unwrap();
 
@@ -212,10 +212,10 @@ fn backend_generic_nalgebra() {
 
     let result = Executor::new(
         SphereN,
-        Mads::new().with_min_poll_size(1e-8),
+        Mads::new().with_minimum_poll_size(1e-8),
         MadsState::new(DVector::from_vec(vec![2.0, -3.0, 1.5])),
     )
-    .terminate_on(MaxCostEvals(10_000))
+    .max_cost_evals(10_000)
     .run()
     .unwrap();
 
@@ -248,10 +248,10 @@ fn backend_generic_ndarray() {
 
     let result = Executor::new(
         SphereA,
-        Mads::new().with_min_poll_size(1e-8),
+        Mads::new().with_minimum_poll_size(1e-8),
         MadsState::new(Array1::from_vec(vec![2.0, -3.0, 1.5])),
     )
-    .terminate_on(MaxCostEvals(10_000))
+    .max_cost_evals(10_000)
     .run()
     .unwrap();
 
@@ -281,10 +281,10 @@ fn backend_generic_faer() {
 
     let result = Executor::new(
         SphereF,
-        Mads::new().with_min_poll_size(1e-8),
+        Mads::new().with_minimum_poll_size(1e-8),
         MadsState::new(Col::<f64>::from_fn(3, |i| [2.0, -3.0, 1.5][i])),
     )
-    .terminate_on(MaxCostEvals(10_000))
+    .max_cost_evals(10_000)
     .run()
     .unwrap();
 

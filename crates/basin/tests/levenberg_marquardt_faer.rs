@@ -82,8 +82,8 @@ fn levenberg_marquardt_converges_via_relative_gradient_tolerance() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .with_tol_grad(0.0)
-            .with_tol_grad_rel(1e-10),
+            .with_absolute_gradient_tolerance(None)
+            .with_gradient_orthogonality_tolerance(1e-10),
         NllsState::new(initial),
     )
     .max_iter(200)
@@ -110,9 +110,9 @@ fn levenberg_marquardt_converges_via_ftol() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .with_tol_grad(0.0)
-            .with_tol_grad_rel(0.0)
-            .with_tol_cost_rel(1e-10),
+            .with_absolute_gradient_tolerance(None)
+            .with_gradient_orthogonality_tolerance(None)
+            .with_relative_model_reduction_tolerance(1e-10),
         NllsState::new(initial),
     )
     .max_iter(200)
@@ -138,9 +138,9 @@ fn levenberg_marquardt_converges_via_xtol() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
-            .with_tol_grad(0.0)
-            .with_tol_grad_rel(0.0)
-            .with_tol_step_rel(1e-10),
+            .with_absolute_gradient_tolerance(None)
+            .with_gradient_orthogonality_tolerance(None)
+            .with_relative_step_tolerance(1e-10),
         NllsState::new(initial),
     )
     .max_iter(200)

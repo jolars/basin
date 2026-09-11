@@ -5,7 +5,7 @@
 
 use crate::backend_aliases::ndarray::Array1;
 use basin::problems::SphereBoxed;
-use basin::{Executor, MaLsChSw, MaLsChSwState, MaxCostEvals};
+use basin::{Executor, MaLsChSw, MaLsChSwState};
 
 #[test]
 fn converges_on_sphere_d10() {
@@ -16,7 +16,7 @@ fn converges_on_sphere_d10() {
     let solver = MaLsChSw::<Array1<f64>>::new(7).with_pop_size(20);
     let result = Executor::new(problem, solver, MaLsChSwState::new())
         .max_iter(u64::MAX)
-        .terminate_on(MaxCostEvals(20_000))
+        .max_cost_evals(20_000)
         .run()
         .unwrap();
 

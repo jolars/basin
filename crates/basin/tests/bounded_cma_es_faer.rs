@@ -3,8 +3,8 @@
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, CmaEsTolerance, Executor, PopulationState,
-    StepOutcome, TerminationReason,
+    BoundedCmaEs, CmaEsState, Executor, PopulationState, StepOutcome,
+    TerminationReason,
 };
 
 /// Same seed → same trajectory on the faer backend's bounded variant.
@@ -130,10 +130,10 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11),
+        (BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11))
+            .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
         CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
     )
-    .terminate_on(CmaEsTolerance::new(1e-12 * 0.3))
     .max_iter(2000)
     .run()
     .unwrap();

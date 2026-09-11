@@ -33,7 +33,9 @@ solver needs derivatives (gradient descent does; Nelder–Mead does not). Then
 hand the problem, a solver, and an initial state to the `Executor`.
 
 ```rust
-use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
+use basin::{
+    BasicState, CostFunction, Executor, Gradient, GradientDescent,
+};
 use std::convert::Infallible;
 
 struct Rosenbrock;
@@ -82,10 +84,12 @@ For the common case (start at a point with the solver's natural defaults),
 you, so you never name the concrete state type:
 
 ```rust
-use basin::{Executor, GradientDescent, GradientTolerance};
+use basin::{Executor, GradientDescent};
 
-let result = Executor::from_start(Rosenbrock, GradientDescent::new(1e-3), vec![-1.2, 1.0])
-    .terminate_on(GradientTolerance(1e-6))
+let solver =
+    GradientDescent::new(1e-3).with_absolute_gradient_tolerance(1e-6);
+let result = Executor::from_start(Rosenbrock, solver, vec![-1.2, 1.0])
+    .max_iter(50_000)
     .run()
     .unwrap();
 ```
@@ -96,25 +100,38 @@ GA, DE, and random search (they sample a box), and the bracketing scalar solvers
 (Brent, golden-section). For those, calling `from_start` is a compile error;
 build the state explicitly and use `Executor::new` instead.
 
-## Termination Criteria
+## Convergence and Run Limits
 
-`max_iter` is one stopping condition; the others are pluggable and composed via
-`terminate_on`. They are framework-level, so the same criteria work across
-solvers, and they are bound to the state a solver actually exposes (asking for a
-gradient tolerance on a derivative-free solver is a compile error):
+Configure numerical convergence on the solver. Configure iteration, evaluation,
+and time limits on the executor, along with targets, stagnation stops, and
+application conditions:
 
 ```rust
-use basin::{Executor, GradientDescent, GradientTolerance, BasicState};
+use basin::{Executor, GradientDescent};
 
-let result = Executor::new(problem, GradientDescent::new(1e-3), BasicState::new(x0))
+let solver = GradientDescent::new(1e-3)
+    .with_absolute_gradient_tolerance(1e-6)
+    .with_relative_cost_change_tolerance(None);
+let result = Executor::from_start(problem, solver, x0)
     .max_iter(50_000)
-    .terminate_on(GradientTolerance(1e-6))
+    .max_cost_evals(100_000)
     .run()
     .unwrap();
 ```
 
-The solver stops at whichever criterion fires first, and `result.reason` reports
-which one.
+Optional tolerances accept a finite nonnegative scalar or `None`. Repeated
+setters replace the same test; distinct enabled tests usually combine with OR.
+Nelder–Mead's enabled simplex size and cost-spread tests combine with AND.
+Algorithm-specific defaults and safeguards still apply. Read each solver's
+rustdoc for the norm and scaling used by a test.
+
+Budgets are checked after initialization and between iterations, so evaluation
+limits can be exceeded within an iteration. `result.reason` reports why the run
+ended. For an application condition, use `stop_when(|state| ...)`, returning
+`Some(TerminationReason::UserRequested)` to stop or `None` to continue.
+
+The former `terminate_on` facility and abbreviated tolerance setters are
+deprecated for removal in Basin 2.0. See [Migrating Convergence Settings](../migrating-convergence/).
 
 ## Next
 

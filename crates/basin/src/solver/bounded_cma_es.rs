@@ -100,15 +100,11 @@ use super::cma_es::{
 /// [`State::param`](crate::State::param) returns the mean (penalized
 /// `f(m)` for [`State::cost`](crate::State::cost)),
 /// [`State::best_param`](crate::State::best_param) the best evaluated
-/// point. TolX is the
-/// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance)
-/// criterion (`σ · max_i d_i < tol_x`). Bounded-CMA-ES adds no new
-/// termination criteria of its own; feasibility is enforced sample-wise
-/// by construction (every evaluated point is inside the box because we
-/// evaluate at `clamp(x_k, lower, upper)`), and the framework's
-/// [`MaxIter`](crate::core::termination::MaxIter) /
-/// [`MaxCostEvals`](crate::core::termination::MaxCostEvals) work
-/// against [`CmaEsState`] without modification.
+/// point. Configure [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance)
+/// for the optional TolX test `σ · max_i d_i < tolerance`, disabled by
+/// default. `None` disables it; zero never satisfies its strict inequality.
+/// All evaluated points are clamped into the box. Execution budgets belong
+/// on the executor and use the normal evaluation counters.
 ///
 /// # Reproducibility
 ///
@@ -136,6 +132,7 @@ use super::cma_es::{
 /// for the population `Executor` pattern); `BoundedCmaEs` additionally
 /// requires `BoxConstraints` on the problem.
 pub struct BoundedCmaEs<V, M, F = f64> {
+    distribution_tolerance: Option<F>,
     lambda_override: Option<usize>,
     /// Derived constants (CMA + BoundPenalty), computed once at
     /// [`Solver::init`]. Config-only, cached on the solver.
@@ -162,6 +159,21 @@ pub(crate) struct BoundedCmaConstants<F = f64> {
 }
 
 impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
+    /// Stop when the largest distribution axis standard deviation is < the tolerance.
+    ///
+    /// Disabled by default. `None` disables the test and zero requests an
+    /// exact-zero threshold. The tolerance must be finite and nonnegative.
+    /// Checked at initialized iteration boundaries. This observation does not
+    /// change the algorithm's radius or step-size update schedule.
+    pub fn with_absolute_distribution_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.distribution_tolerance =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// Build a bounded CMA-ES with the default population size
     /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48) and a seeded RNG. The
     /// initial mean, step-size, and stds are supplied via [`CmaEsState`];
@@ -171,6 +183,7 @@ impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
     pub fn new(seed: u64) -> Self {
         Self {
             lambda_override: None,
+            distribution_tolerance: None,
             constants: None,
             rng: ChaCha8Rng::seed_from_u64(seed),
             _marker: PhantomData,
@@ -690,5 +703,15 @@ where
         state.m_cost = Some(pen_m);
 
         Ok((state, None))
+    }
+
+    fn terminate(
+        &self,
+        state: &CmaEsState<V, M, F>,
+    ) -> Option<TerminationReason> {
+        let tolerance = self.distribution_tolerance?;
+        let metric = state.sigma() * state.max_axis_std();
+        (metric.is_finite() && metric < tolerance)
+            .then_some(TerminationReason::CmaEsTolerance)
     }
 }

@@ -54,14 +54,32 @@ impl<F: Scalar> Wolfe<F> {
     }
 
     /// Override the Armijo slope coefficient. Panics if not in `(0, 1)`.
-    pub fn c1(mut self, c1: F) -> Self {
+    #[deprecated(
+        note = "use `with_sufficient_decrease_coefficient`; removal scheduled for Basin 2.0"
+    )]
+    pub fn c1(self, c1: F) -> Self {
+        self.with_sufficient_decrease_coefficient(c1)
+    }
+
+    /// Configure the sufficient decrease coefficient.
+    /// Uses the same mathematical condition and validation as the original setting.
+    pub fn with_sufficient_decrease_coefficient(mut self, c1: F) -> Self {
         assert!(F::zero() < c1 && c1 < F::one(), "c1 must be in (0, 1)");
         self.c1 = c1;
         self
     }
 
     /// Override the strong-curvature coefficient. Panics if not in `(0, 1)`.
-    pub fn c2(mut self, c2: F) -> Self {
+    #[deprecated(
+        note = "use `with_curvature_coefficient`; removal scheduled for Basin 2.0"
+    )]
+    pub fn c2(self, c2: F) -> Self {
+        self.with_curvature_coefficient(c2)
+    }
+
+    /// Configure the curvature coefficient.
+    /// Uses the same mathematical condition and validation as the original setting.
+    pub fn with_curvature_coefficient(mut self, c2: F) -> Self {
         assert!(F::zero() < c2 && c2 < F::one(), "c2 must be in (0, 1)");
         self.c2 = c2;
         self

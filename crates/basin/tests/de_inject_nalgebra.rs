@@ -13,9 +13,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{AckleyBoxed, RastriginBoxed};
-use basin::{
-    BasicPopulationState, De, DeInject, Executor, MaxCostEvals, NelderMead,
-};
+use basin::{BasicPopulationState, De, DeInject, Executor, NelderMead};
 
 /// Ackley D=3 within the standard `[-32.768, 32.768]³` box. Ackley's
 /// exponential-decay global basin is friendly to Nelder-Mead polish:
@@ -43,7 +41,7 @@ fn converges_on_ackley_d3_with_nm_inner() {
         BasicPopulationState::<DVector<f64>>::with_size(1),
     )
     .max_iter(u64::MAX)
-    .terminate_on(MaxCostEvals(12_000))
+    .max_cost_evals(12_000)
     .run()
     .unwrap();
 
