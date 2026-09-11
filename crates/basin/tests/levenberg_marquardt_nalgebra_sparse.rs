@@ -3,7 +3,9 @@
 use crate::backend_aliases::nalgebra::DVector;
 use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquares;
-use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
+use basin::{
+    Executor, LevenbergMarquardt, LmDamping, NllsState, TerminationReason,
+};
 
 /// Mirror of the GN sparse fixture: 6×3 design with `b = A·[1,2,3]` so
 /// the closed-form least-squares minimum has zero residual at
@@ -81,6 +83,38 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.cost() < 1e-20, "cost = {}", result.cost());
+}
+
+#[test]
+fn trust_region_limits_sparse_steps_and_converges() {
+    for max_iter in [1, 100] {
+        let (problem, initial) = fixture();
+        let result = Executor::new(
+            problem,
+            LevenbergMarquardt::new()
+                .with_damping(LmDamping::TrustRegion)
+                .with_initial_step_bound(0.1)
+                .with_absolute_gradient_tolerance(1e-12),
+            NllsState::new(initial),
+        )
+        .max_iter(max_iter)
+        .run()
+        .unwrap();
+
+        if max_iter == 1 {
+            // D = 3I and x0 = 0 make the initial scaled radius exactly 0.1.
+            let scaled_step_norm = (3.0 * result.param().norm_squared()).sqrt();
+            assert!((0.089..=0.111).contains(&scaled_step_norm));
+            assert_eq!(result.cost_evals(), 2);
+            assert_eq!(result.state.jacobian_evals(), 1);
+        } else {
+            assert_eq!(result.reason, TerminationReason::SolverConverged);
+            assert!(result.cost() < 1e-20, "cost = {}", result.cost());
+            for i in 0..3 {
+                assert!((result.param()[i] - (i + 1) as f64).abs() < 1e-9);
+            }
+        }
+    }
 }
 
 #[test]

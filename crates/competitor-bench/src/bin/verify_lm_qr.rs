@@ -1,9 +1,10 @@
 //! Reproduce conditioning and calibration comparisons without GlobalSearch.
 //! Run `cargo run -p competitor-bench --release --bin verify_lm_qr`.
+//! Add `--damping` to compare damping policies and stopping profiles.
 
 use basin::{
-    Executor, FactorizePivotedQr, Jacobian, LevenbergMarquardt, NllsState,
-    RegularizedQrSolve, Residual, TerminationReason,
+    Executor, FactorizePivotedQr, Jacobian, LevenbergMarquardt, LmDamping,
+    NllsState, RegularizedQrSolve, Residual, TerminationReason,
 };
 use levenberg_marquardt::LeastSquaresProblem;
 use nalgebra::{DMatrix, DVector, Dyn, Owned};
@@ -78,7 +79,13 @@ impl LeastSquaresProblem<f64, Dyn, Dyn> for Probe<'_> {
     }
 }
 
-fn compare(name: &str, model: Model, truth: Vec<f64>, starts: Vec<Vec<f64>>) {
+fn compare(
+    name: &str,
+    model: Model,
+    truth: Vec<f64>,
+    starts: Vec<Vec<f64>>,
+    damping: bool,
+) {
     let truth = DVector::from_vec(truth);
     let (y, j) = model.evaluate(&truth);
     let sv = j.svd(false, false).singular_values;
@@ -87,70 +94,124 @@ fn compare(name: &str, model: Model, truth: Vec<f64>, starts: Vec<Vec<f64>>) {
     for (start, x) in starts.into_iter().enumerate() {
         let x = DVector::from_vec(x);
         check_jacobian(&model, &x);
-        for kind in ["cholesky", "qr", "minpack"] {
-            let nr = Cell::new(0);
-            let nj = Cell::new(0);
-            let budget = 200 * (x.len() + 1);
-            let p = Probe {
-                model: &model,
-                y: &y,
-                nr: &nr,
-                nj: &nj,
-                budget,
-                x: x.clone(),
-            };
-            let (solution, reason, converged) = if kind == "minpack" {
-                let (p, report) =
-                    levenberg_marquardt::LevenbergMarquardt::new()
-                        .with_tol(1e-12)
-                        .with_patience(200)
-                        .minimize(p);
-                (
-                    p.x,
-                    format!("{:?}", report.termination),
-                    report.termination.was_successful(),
-                )
-            } else {
-                let solver = LevenbergMarquardt::new()
-                    .with_absolute_gradient_tolerance(0.)
-                    .with_gradient_orthogonality_tolerance(1e-12)
-                    .with_relative_model_reduction_tolerance(1e-12)
-                    .with_relative_step_tolerance(1e-12);
-                let state = NllsState::new(BasinVector::from_column_slice(
-                    x.as_slice(),
-                ));
-                let out = if kind == "qr" {
-                    Executor::new(p, solver.with_pivoted_qr(), state)
-                        .max_iter((budget - 1) as u64)
-                        .run()
-                        .unwrap()
-                } else {
-                    Executor::new(p, solver, state)
-                        .max_iter((budget - 1) as u64)
-                        .run()
-                        .unwrap()
+        let kinds: &[&str] = if damping {
+            &["cholesky", "qr", "trust-cholesky", "trust-qr", "minpack"]
+        } else {
+            &["cholesky", "qr", "minpack"]
+        };
+        let profiles: &[&str] = if damping {
+            &["relative", "gradient-only"]
+        } else {
+            &["legacy"]
+        };
+        for &profile in profiles {
+            for &kind in kinds {
+                let nr = Cell::new(0);
+                let nj = Cell::new(0);
+                let budget = 200 * (x.len() + 1);
+                let p = Probe {
+                    model: &model,
+                    y: &y,
+                    nr: &nr,
+                    nj: &nj,
+                    budget,
+                    x: x.clone(),
                 };
-                assert_eq!(out.cost_evals() as usize, nr.get());
-                (
-                    DVector::from_column_slice(out.param().as_slice()),
-                    format!("{:?}", out.reason),
-                    out.reason == TerminationReason::SolverConverged,
-                )
-            };
-            assert!(solution.iter().all(|x| x.is_finite()));
-            let residual = (model.evaluate(&solution).0 - &y).norm();
-            let error = (&solution - &truth).amax();
-            let mut equivalent = solution.clone();
-            if matches!(model, Model::Svi(_)) {
-                equivalent[4] = equivalent[4].abs();
+                let (solution, reason, converged) = if kind == "minpack" {
+                    let mut solver =
+                        levenberg_marquardt::LevenbergMarquardt::new()
+                            .with_tol(1e-12)
+                            .with_patience(200);
+                    if damping {
+                        solver = solver.with_gtol(1e-12);
+                    }
+                    if profile == "gradient-only" {
+                        solver = solver.with_ftol(0.).with_xtol(0.);
+                    }
+                    let (p, report) = solver.minimize(p);
+                    assert_eq!(report.number_of_evaluations, nr.get());
+                    (
+                        p.x,
+                        format!("{:?}", report.termination),
+                        report.termination.was_successful(),
+                    )
+                } else {
+                    let mut solver = LevenbergMarquardt::new()
+                        .with_absolute_gradient_tolerance(0.)
+                        .with_gradient_orthogonality_tolerance(1e-12)
+                        .with_relative_model_reduction_tolerance(1e-12)
+                        .with_relative_step_tolerance(1e-12);
+                    if kind.starts_with("trust-") {
+                        solver = solver.with_damping(LmDamping::TrustRegion);
+                    }
+                    if profile == "gradient-only" {
+                        solver = solver
+                            .with_relative_model_reduction_tolerance(None)
+                            .with_relative_step_tolerance(None);
+                    }
+                    let state = NllsState::new(BasinVector::from_column_slice(
+                        x.as_slice(),
+                    ));
+                    let out = if kind.ends_with("qr") {
+                        Executor::new(p, solver.with_pivoted_qr(), state)
+                            .max_iter((budget - 1) as u64)
+                            .run()
+                            .unwrap()
+                    } else {
+                        Executor::new(p, solver, state)
+                            .max_iter((budget - 1) as u64)
+                            .run()
+                            .unwrap()
+                    };
+                    assert_eq!(out.cost_evals() as usize, nr.get());
+                    (
+                        DVector::from_column_slice(out.param().as_slice()),
+                        format!("{:?}", out.reason),
+                        out.reason == TerminationReason::SolverConverged,
+                    )
+                };
+                let reason = reason.replace('"', "\"\"");
+                assert!(solution.iter().all(|x| x.is_finite()));
+                let (prediction, jacobian) = model.evaluate(&solution);
+                let residual_vector = prediction - &y;
+                let residual = residual_vector.norm();
+                let error = (&solution - &truth).amax();
+                let mut equivalent = solution.clone();
+                if matches!(model, Model::Svi(_)) {
+                    equivalent[4] = equivalent[4].abs();
+                }
+                let equivalent_error = (&equivalent - &truth).amax();
+                if damping {
+                    let gradient = jacobian.transpose() * &residual_vector;
+                    let cosine = jacobian
+                        .column_iter()
+                        .zip(gradient.iter())
+                        .filter_map(|(column, &g)| {
+                            let denominator = column.norm() * residual;
+                            (denominator > 0.).then_some(g.abs() / denominator)
+                        })
+                        .fold(0_f64, f64::max);
+                    let relative_residual =
+                        residual / y.norm().max(f64::MIN_POSITIVE);
+                    // A shared fit target is separate from each solver's own stop.
+                    let fit_target = relative_residual <= 1e-10;
+                    let recovery_target = equivalent_error <= 1e-6;
+                    println!(
+                        "{name},{start},{kind},{profile},{condition:.8e},{converged},{},{},{residual:.8e},{relative_residual:.8e},{:.8e},{cosine:.8e},{error:.8e},{equivalent_error:.8e},{fit_target},{recovery_target},\"{reason}\",\"{:?}\"",
+                        nr.get(),
+                        nj.get(),
+                        gradient.amax(),
+                        solution.as_slice()
+                    );
+                } else {
+                    println!(
+                        "{name},{start},{kind},{condition:.8e},{converged},{},{},{residual:.8e},{error:.8e},{equivalent_error:.8e},\"{reason}\",\"{:?}\"",
+                        nr.get(),
+                        nj.get(),
+                        solution.as_slice()
+                    );
+                }
             }
-            let equivalent_error = (&equivalent - &truth).amax();
-            println!(
-                "{name},{start},{kind},{condition:.8e},{converged},{},{},{residual:.8e},{error:.8e},{equivalent_error:.8e},\"{reason}\",\"{:?}\"",
-                nr.get(),
-                nj.get(),
-                solution.as_slice()
-            );
         }
     }
 }
@@ -213,8 +274,17 @@ fn main() {
         steps();
         return;
     }
-    println!(
-        "case,start,solver,condition,converged,residual_calls,jacobian_calls,residual_norm,parameter_error,equivalent_parameter_error,termination,parameters"
-    );
-    models::for_each_case(compare);
+    let damping = std::env::args().any(|x| x == "--damping");
+    if damping {
+        println!(
+            "case,start,solver,stopping,condition,converged,residual_calls,jacobian_calls,residual_norm,relative_residual,gradient_infinity,gradient_orthogonality,parameter_error,equivalent_parameter_error,fit_target,recovery_target,termination,parameters"
+        );
+    } else {
+        println!(
+            "case,start,solver,condition,converged,residual_calls,jacobian_calls,residual_norm,parameter_error,equivalent_parameter_error,termination,parameters"
+        );
+    }
+    models::for_each_case(|name, model, truth, starts| {
+        compare(name, model, truth, starts, damping)
+    });
 }

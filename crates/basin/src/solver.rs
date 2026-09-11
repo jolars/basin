@@ -134,7 +134,9 @@ pub use global_best_pso::{
 };
 pub use golden_section::GoldenSection;
 pub use gradient_descent::GradientDescent;
-pub use levenberg_marquardt::{LevenbergMarquardt, LevenbergMarquardtQr};
+pub use levenberg_marquardt::{
+    LevenbergMarquardt, LevenbergMarquardtQr, LmDamping,
+};
 pub use lincoa::Lincoa;
 pub use ma_ls_ch::{MaLsCh, MaLsChGenericState};
 pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};

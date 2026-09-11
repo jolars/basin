@@ -131,15 +131,21 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
 - **[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)**:
   damped least squares; the workhorse for curve fitting. Marquardt (1963) with
   Nielsen's (1999) smooth damping update and Moré (1978)/MINPACK column scaling
-  (Madsen, Nielsen & Tingleff, 2004, §3.2).
+  (Madsen, Nielsen & Tingleff, 2004, §3.2). Optional `LmDamping::TrustRegion`
+  selects damping against a scaled radius, following MINPACK's
+  [`lmder`](https://netlib.org/minpack/lmder.f) radius updates with a bracketed
+  parameter search. Both damping strategies retain Basin's stopping tests.
 - **[`LevenbergMarquardtQr`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardtQr.html)**:
-  opt-in pivoted QR with the same Nielsen damping and stopping rules as
+  opt-in pivoted QR with the same configurable damping and stopping rules as
   `LevenbergMarquardt`. Avoids forming the Gram matrix; supports all four dense
   backends, with numerical rank checks after regularization. Sparse QR is not
   supported. Madsen, Nielsen & Tingleff (2004), _Methods for Non-Linear Least
   Squares Problems_, §3.2; MINPACK's
   [`qrfac`](https://netlib.org/minpack/qrfac.f) and
   [`qrsolv`](https://netlib.org/minpack/qrsolv.f) (Garbow, Hillstrom & Moré, 1980).
+  Optional trust-region damping follows MINPACK's
+  [`lmder`](https://netlib.org/minpack/lmder.f) radius updates, using bracketed
+  parameter selection instead of [`lmpar`](https://netlib.org/minpack/lmpar.f).
 - **[`Trf`](https://docs.rs/basin/latest/basin/solver/trf/struct.Trf.html)**:
   trust-region reflective: Levenberg–Marquardt with box bounds (Branch, Coleman
   & Li, 1999, affine scaling).

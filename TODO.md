@@ -89,17 +89,22 @@ Ordered by recommended sequence.
   comparisons](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md)
   for conditioning, raw SVI, SSVI, backend coverage, and sparse limitations.
 
-- [ ] **Investigate LM damping selection and relative stopping tests.**
-  Production QR improves small-damping step accuracy but preserves the
-  observed narrow-SVI convergence gap and premature stopping on nearly
-  collinear linear problems. Investigate Nielsen damping versus MINPACK's
-  trust-radius parameter selection independently of factorization. Validate
-  calibration Jacobians against their actual residual formulas, and account
-  for parameter nonidentifiability before drawing migration conclusions.
-  Retain the [production
-  probes](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md) and
-  compare convergence, termination, parameter recovery, and callbacks from
-  all retained starts.
+- [x] **Investigate configurable LM damping.** Added opt-in
+  `LmDamping::TrustRegion` and `.with_initial_step_bound()` to both Cholesky
+  and QR; Nielsen remains the default. The [damping
+  investigation](crates/competitor-bench/investigations/cobyla-lm/lm-damping.md)
+  retains all starts, validates calibration Jacobians, and separates damping,
+  factorization, stopping, and parameter recovery. Trust-region damping closes
+  the favorable narrow-SVI gap, with an initial-radius tradeoff on scaled fits.
+
+- [ ] **Investigate more robust LM relative stopping tests.** The damping
+  option preserves current stopping contracts. Nielsen can still stop early
+  on nearly collinear linear problems, while disabling relative progress tests
+  can exhaust budgets at accurate rounded solutions. The [damping
+  probes](crates/competitor-bench/investigations/cobyla-lm/lm-damping.md)
+  compare both stopping profiles against MINPACK and retain the two difficult
+  narrow-SVI starts that exhaust every solver's budget. Account for parameter
+  nonidentifiability before drawing migration conclusions.
 
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional

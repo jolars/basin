@@ -10,11 +10,45 @@ use crate::core::solver::Solver;
 use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
 
-/// Levenberg-Marquardt solver for nonlinear least-squares problems
-/// `min ½‖r(x)‖²`, with Marquardt diagonal scaling and the Nielsen
-/// 1999 smooth μ-update.
+mod damping;
+use damping::{scaled_norm, trust_region_step, update_radius};
+
+/// Damping-parameter selection for both Levenberg-Marquardt factorizations.
 ///
-/// Each iteration solves the damped normal equations
+/// Both strategies use the same monotone Marquardt scaling matrix `D`, gain
+/// ratio, and convergence tests. Configure with
+/// [`LevenbergMarquardt::with_damping`] or
+/// [`LevenbergMarquardtQr::with_damping`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LmDamping {
+    /// Nielsen's smooth gain-ratio update, starting at
+    /// [`LevenbergMarquardt::with_tau`]. This is the default.
+    #[default]
+    Nielsen,
+    /// Select damping to fit a scaled trust radius: `sqrt(hᵀDh) ≈ δ`.
+    ///
+    /// An undamped Gauss-Newton step is used when it fits. Otherwise, a
+    /// safeguarded scalar search selects positive damping, reusing the linear
+    /// model without extra residual or Jacobian callbacks. Radius initialization
+    /// and updates follow MINPACK's [`lmder`](https://netlib.org/minpack/lmder.f).
+    /// Configure the initial radius with
+    /// [`LevenbergMarquardt::with_initial_step_bound`].
+    ///
+    /// This is not an exact MINPACK port: parameter selection uses bracketed
+    /// solves instead of `lmpar`'s Newton corrections, rank-deficient undamped
+    /// systems are regularized rather than truncated, and Basin's acceptance
+    /// and stopping tests retain their documented meanings.
+    TrustRegion,
+}
+
+/// Levenberg-Marquardt solver for nonlinear least-squares problems
+/// `min ½‖r(x)‖²`, with Marquardt diagonal scaling and configurable damping.
+/// The default is Nielsen's 1999 smooth μ-update; select
+/// [`LmDamping::TrustRegion`] with [`Self::with_damping`] for radius-based
+/// parameter selection.
+///
+/// With the default strategy, each iteration solves the damped normal equations
 /// `(JᵀJ + μ·D) h = −Jᵀr` via Cholesky, then adapts the damping
 /// parameter μ from the gain ratio
 /// `ρ = (F(x) − F(x+h)) / (L(0) − L(h))` (Nielsen eq. 2.2). On a
@@ -48,12 +82,27 @@ use crate::core::termination::TerminationReason;
 /// scale is floored to `1` at `init` (see `FloorZerosInPlace`), so a
 /// fully-insensitive parameter stays put rather than failing Cholesky.
 ///
-/// Initial damping is `μ₀ = τ`, dimensionless, because the
+/// With Nielsen damping, `μ₀ = τ` is dimensionless because the
 /// per-parameter magnitude now lives in `D` (the initial per-column
 /// damping is `τ·diag(J(x₀)ᵀJ(x₀))`). τ is the *relative* trust
 /// parameter; use a smaller value (e.g. `1e-6`) when `x₀` is believed
 /// close to the optimum, larger (e.g. `1.0`) when far. Default
 /// `τ = 10⁻³` matches Nielsen's "moderate trust" recommendation.
+///
+/// **Trust-region damping.** [`Self::with_damping`] can instead select
+/// [`LmDamping::TrustRegion`]. It tries the undamped Gauss-Newton step first,
+/// then searches for damping with `sqrt(hᵀDh)` within 10% of the current
+/// radius. Rank safeguards or the inner attempt limit may yield a shorter
+/// feasible regularized step. [`Self::with_initial_step_bound`] sets the initial
+/// radius factor (default `100`); `tau` has no effect on this strategy.
+/// Initialization and radius updates follow MINPACK's
+/// [`lmder`](https://netlib.org/minpack/lmder.f), while a bracketed scalar
+/// search replaces [`lmpar`](https://netlib.org/minpack/lmpar.f)'s Newton
+/// corrections. Inner solves reuse the current model and require no additional
+/// residual or Jacobian callbacks. Acceptance remains `ρ > 0`, and all
+/// convergence settings below keep the same meaning, including the unscaled
+/// relative step test. This option therefore does not reproduce MINPACK's
+/// complete algorithm or stopping behavior.
 ///
 /// **Linear solve.** Cholesky is the default and retains dense and sparse
 /// backend coverage. [`Self::with_pivoted_qr`] selects
@@ -66,10 +115,10 @@ use crate::core::termination::TerminationReason;
 ///
 /// - **Cholesky failure under bumped μ.** Roundoff can defeat positive
 ///   definiteness when damping is small relative to the Jacobian's
-///   conditioning. The inner loop increases μ and retries, returning
-///   [`TerminationReason::SolverFailed`] if the attempt cap is reached or
-///   damping overflows. Positive damping does not guarantee accurate steps
-///   from normal equations. Initially zero columns have a unit scaling floor.
+///   conditioning. If no usable step is available, the inner loop increases
+///   μ and retries, returning [`TerminationReason::SolverFailed`] if the attempt
+///   cap is reached or damping overflows. Positive damping does not guarantee
+///   accurate steps from normal equations. Initially zero columns have a unit scaling floor.
 /// - **Divergence on highly nonlinear or poorly initialized problems.**
 ///   The damping itself prevents divergent steps (failed steps are
 ///   rejected via the gain-ratio test), so divergence manifests as
@@ -171,6 +220,10 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     tol_cost_rel: Option<F>,
     tol_step_rel: Option<F>,
     tau: F,
+    damping: LmDamping,
+    initial_step_bound: F,
+    radius: Option<F>,
+    first_trust_step: bool,
     max_inner_attempts: u32,
 
     mu: Option<F>,
@@ -210,6 +263,10 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             tol_cost_rel: None,
             tol_step_rel: None,
             tau: F::from_f64(1e-3).unwrap(),
+            damping: LmDamping::Nielsen,
+            initial_step_bound: F::from_f64(100.0).unwrap(),
+            radius: None,
+            first_trust_step: true,
             max_inner_attempts: 50,
             mu: None,
             nu: F::from_f64(2.0).unwrap(),
@@ -373,11 +430,41 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         self
     }
 
+    /// Select how damping is adapted, independently of the factorization.
+    ///
+    /// Default: [`LmDamping::Nielsen`]. Both strategies preserve the same
+    /// scaling, acceptance (`gain_ratio > 0`), and stopping tests. Configure
+    /// this before starting a solve.
+    pub fn with_damping(mut self, damping: LmDamping) -> Self {
+        self.damping = damping;
+        self
+    }
+
+    /// Initial scaled trust-radius factor, used by [`LmDamping::TrustRegion`].
+    ///
+    /// Sets `δ₀ = factor * sqrt(x₀ᵀ D₀ x₀)`, or `factor` when the scaled
+    /// starting point is zero. `D₀` is the Marquardt diagonal, including its
+    /// unit floor for zero columns. Default: `100`, as in MINPACK. Smaller
+    /// values restrict the first step. Has no effect on Nielsen damping.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `factor` is finite and strictly positive.
+    pub fn with_initial_step_bound(mut self, factor: F) -> Self {
+        assert!(
+            factor.is_finite() && factor > F::zero(),
+            "initial step bound must be finite and > 0"
+        );
+        self.initial_step_bound = factor;
+        self
+    }
+
     /// Relative initial damping `τ`: `μ₀ = τ`, giving an initial
     /// per-column damping of `τ·diag(J(x₀)ᵀJ(x₀))` under Marquardt
     /// scaling. Use a smaller value (e.g. `1e-6`) when `x₀` is believed
     /// close to the optimum; a larger value (e.g. `1.0`) when far from
-    /// it. Default `1e-3` (Nielsen's "moderate trust").
+    /// it. Default `1e-3` (Nielsen's "moderate trust"). Has no effect on
+    /// [`LmDamping::TrustRegion`].
     pub fn with_tau(mut self, tau: F) -> Self {
         assert!(tau > F::zero(), "tau must be > 0");
         self.tau = tau;
@@ -385,10 +472,14 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 
     /// Maximum number of damping bumps inside a single outer iteration
-    /// before giving up with [`TerminationReason::SolverFailed`]. Each
-    /// bump multiplies μ by ν (initially 2) and doubles ν. With the
-    /// default 50, repeated doubling of ν makes μ grow rapidly; arithmetic
-    /// overflow can end retries before the attempt cap. Default `50`.
+    /// before giving up with [`TerminationReason::SolverFailed`]. With Nielsen
+    /// damping, each bump multiplies μ by ν (initially 2) and doubles ν;
+    /// overflow can end retries before the cap. Default `50`.
+    ///
+    /// With trust-region damping, this caps all model solves per iteration,
+    /// including the undamped attempt and the radius search. At the limit,
+    /// the smallest-damping feasible step found is used; if none was found,
+    /// the solver reports `SolverFailed` without a trial residual callback.
     pub fn with_max_inner_attempts(mut self, n: u32) -> Self {
         assert!(n > 0, "max_inner_attempts must be > 0");
         self.max_inner_attempts = n;
@@ -469,7 +560,21 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             d
         });
 
-        self.mu = Some(self.tau);
+        self.radius = if self.damping == LmDamping::TrustRegion {
+            self.diag.as_ref().map(|d| {
+                let xnorm = scaled_norm(&state.param, d);
+                self.initial_step_bound
+                    * if xnorm == F::zero() { F::one() } else { xnorm }
+            })
+        } else {
+            None
+        };
+        self.first_trust_step = true;
+        self.mu = Some(if self.damping == LmDamping::Nielsen {
+            self.tau
+        } else {
+            F::zero()
+        });
         self.nu = F::from_f64(2.0).unwrap();
         self.jtr_cache = Some(j.mat_transpose_vec(&r));
         self.model_cache = Some(a);
@@ -521,7 +626,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             }
         };
         // Squaring a finite gradient can overflow even when the QR step is valid.
-        if Model::CHECK_FINITE
+        if (Model::CHECK_FINITE || self.damping == LmDamping::TrustRegion)
             && (!r.norm_squared().is_finite() || !g.norm_infinity().is_finite())
         {
             self.model_cache = Some(Ok(a));
@@ -574,36 +679,50 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let two = F::from_f64(2.0).unwrap();
         let half = F::from_f64(0.5).unwrap();
         let one_third = F::from_f64(1.0 / 3.0).unwrap();
-        let h;
-        let mut attempts: u32 = 0;
-        loop {
-            match Model::solve(&a, &g, &d, mu, rank_tolerance) {
-                Ok(step) => {
-                    h = step;
-                    break;
-                }
-                Err(failure) => {
-                    attempts += 1;
-                    if failure == ModelSolveError::Failed
-                        || attempts >= self.max_inner_attempts
-                        || !mu.is_finite()
-                    {
-                        self.mu = Some(mu);
-                        self.nu = nu;
-                        self.diag = Some(d);
-                        self.r_cache = Some(r);
-                        self.model_cache = Some(Ok(a));
-                        self.jtr_cache = Some(g);
-                        return Ok((
-                            state,
-                            Some(TerminationReason::SolverFailed),
-                        ));
+        let step = if self.damping == LmDamping::TrustRegion {
+            let radius = self.radius.expect("trust radius not initialized");
+            let mut scaled_gradient = g.clone();
+            scaled_gradient.component_div_assign(&d);
+            let gradient_norm = g.dot(&scaled_gradient).sqrt();
+            trust_region_step(
+                radius,
+                &mut mu,
+                self.max_inner_attempts,
+                gradient_norm,
+                |mu| Model::solve(&a, &g, &d, mu, rank_tolerance),
+                |h| scaled_norm(h, &d),
+            )
+        } else {
+            let mut attempts = 0;
+            loop {
+                match Model::solve(&a, &g, &d, mu, rank_tolerance) {
+                    Ok(step) => break Ok(step),
+                    Err(failure) => {
+                        attempts += 1;
+                        if failure == ModelSolveError::Failed
+                            || attempts >= self.max_inner_attempts
+                            || !mu.is_finite()
+                        {
+                            break Err(failure);
+                        }
+                        mu = mu * nu;
+                        nu = nu * two;
                     }
-                    mu = mu * nu;
-                    nu = nu * two;
                 }
             }
-        }
+        };
+        let h = match step {
+            Ok(h) => h,
+            Err(_) => {
+                self.mu = Some(mu);
+                self.nu = nu;
+                self.diag = Some(d);
+                self.r_cache = Some(r);
+                self.model_cache = Some(Ok(a));
+                self.jtr_cache = Some(g);
+                return Ok((state, Some(TerminationReason::SolverFailed)));
+            }
+        };
 
         // Predicted reduction, Nielsen eq. 2.3, with diagonal scaling.
         // Form hᵀDh as h·(D ⊙ h) without materializing μDh − g.
@@ -627,20 +746,35 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             F::zero()
         };
 
+        if self.damping == LmDamping::TrustRegion {
+            let pnorm = h.dot(&dh).sqrt();
+            let radius =
+                self.radius.as_mut().expect("trust radius not initialized");
+            if self.first_trust_step && pnorm > F::zero() {
+                *radius = radius.min(pnorm);
+            }
+            update_radius(radius, &mut mu, pnorm, rho, actual_diff, h.dot(&g));
+        }
+
         if rho > F::zero() {
             // Nielsen eq. 2.5 with β=2, γ=3, p=3.
             state.param = x_trial;
             state.cost = Some(f_trial);
-            let factor = F::one() - (two * rho - F::one()).powi(3);
-            mu = mu * factor.max(one_third);
-            nu = two;
+            if self.damping == LmDamping::Nielsen {
+                let factor = F::one() - (two * rho - F::one()).powi(3);
+                mu = mu * factor.max(one_third);
+                nu = two;
+            }
+            self.first_trust_step = false;
             self.r_cache = Some(r_trial);
             self.model_cache = None;
             self.jtr_cache = None;
         } else {
             // Preserve iterate-dependent caches and increase damping.
-            mu = mu * nu;
-            nu = nu * two;
+            if self.damping == LmDamping::Nielsen {
+                mu = mu * nu;
+                nu = nu * two;
+            }
             self.r_cache = Some(r);
             self.model_cache = Some(Ok(a));
             self.jtr_cache = Some(g);
@@ -761,21 +895,24 @@ where
     }
 }
 
-/// Levenberg-Marquardt with column-pivoted QR and Nielsen damping.
+/// Levenberg-Marquardt with column-pivoted QR and configurable damping.
 ///
 /// Construct with [`LevenbergMarquardt::with_pivoted_qr`] or [`Self::new`].
 /// This uses the same scaling, gain ratio, damping update, and stopping tests
 /// as [`LevenbergMarquardt`], solving `[J; sqrt(μD)] h ≈ [-r; 0]` without
-/// forming `JᵀJ`. It is not MINPACK's trust-radius-based damping algorithm.
-/// QR improves step accuracy near rank deficiency; it does not guarantee
-/// MINPACK's nonlinear convergence trajectory or evaluation counts.
+/// forming `JᵀJ`. Nielsen damping is the default; [`Self::with_damping`]
+/// selects the optional scaled trust-radius strategy. QR improves step accuracy
+/// near rank deficiency; neither strategy guarantees MINPACK's nonlinear
+/// convergence trajectory or evaluation counts.
 ///
 /// # Rank and failures
 ///
 /// Rank is checked after diagonal regularization and column equilibration.
 /// The default threshold is `epsilon(F) * (m+n)`; see
-/// [`Self::with_rank_tolerance`]. Rank loss increases damping, reusing the
-/// factorization, until the existing attempt limit yields `SolverFailed`.
+/// [`Self::with_rank_tolerance`]. Nielsen damping increases after rank loss,
+/// reusing the factorization, until the attempt limit yields `SolverFailed`.
+/// Trust-region damping uses rank loss to bound the parameter search, retaining
+/// a feasible regularized step if available and otherwise yielding `SolverFailed`.
 /// Non-finite factorization or solve arithmetic yields `SolverFailed`
 /// immediately. Problem callback errors propagate unchanged. No truncated
 /// solution or normal-equation fallback is used.
@@ -793,7 +930,10 @@ where
 /// Madsen, Nielsen & Tingleff (2004), *Methods for Non-Linear Least Squares
 /// Problems*, §3.2; MINPACK's [`qrfac`](https://netlib.org/minpack/qrfac.f)
 /// and [`qrsolv`](https://netlib.org/minpack/qrsolv.f) (Garbow, Hillstrom &
-/// Moré, 1980). The rank policy differs from MINPACK's truncated solve.
+/// Moré, 1980). Optional trust-region damping follows MINPACK's
+/// [`lmder`](https://netlib.org/minpack/lmder.f) radius updates, using bracketed
+/// parameter selection instead of [`lmpar`](https://netlib.org/minpack/lmpar.f).
+/// The rank policy differs from MINPACK's truncated solve.
 ///
 /// # Example
 ///
@@ -829,6 +969,8 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
                 tol_cost_rel: self.tol_cost_rel,
                 tol_step_rel: self.tol_step_rel,
                 tau: self.tau,
+                damping: self.damping,
+                initial_step_bound: self.initial_step_bound,
                 max_inner_attempts: self.max_inner_attempts,
                 ..LevenbergMarquardt::defaults()
             },
@@ -969,6 +1111,16 @@ where
         value: impl Into<Option<F>>,
     ) -> Self {
         self.inner = self.inner.with_relative_step_tolerance(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_damping`] for the QR route.
+    pub fn with_damping(mut self, damping: LmDamping) -> Self {
+        self.inner = self.inner.with_damping(damping);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_initial_step_bound`] for the QR route.
+    pub fn with_initial_step_bound(mut self, factor: F) -> Self {
+        self.inner = self.inner.with_initial_step_bound(factor);
         self
     }
     /// Configure [`LevenbergMarquardt::with_tau`] for the QR route.
