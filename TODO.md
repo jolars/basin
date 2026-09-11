@@ -129,15 +129,26 @@ Ordered by recommended sequence.
   comparison](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#scaled-trust-radius-convergence)
   separates stopping reasons, callback counts, fit accuracy, and recovery.
 
-- [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
-  PRIMA's full COBYLA input by folding nonlinear inequalities, optional
-  linear inequalities and equalities, and optional box bounds into one
-  `c(x) ≤ 0` vector. Keep the trait standalone like `LinearConstraints`: it
-  must not be a parent of the sibling constraint traits, and blanket bridges
-  must not silently discard constraint blocks. Preserve the existing
-  `NonlinearInequalityConstraints` API, all four backends, and wasm support.
+- [x] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).**
+  `FoldedConstraints` combines nonlinear inequalities, optional linear
+  inequalities and equalities, and optional box bounds into one `c(x) ≤ 0`
+  vector for COBYLA. The trait stays standalone, with no blanket bridges that
+  could discard blocks. Preserves `NonlinearInequalityConstraints`, all four
+  backends, `f32`, and wasm support; retains Basin's interpolation algorithm.
 
 ## Basin 2.0
+
+- [ ] **Simplify and strengthen the full-form constraint API (tenet 4).**
+  Consider having COBYLA consume `NonlinearConstraints` directly, removing
+  the need for the `FoldedConstraints` compatibility adapter. Separate the
+  constraint-value representation from `Param`, and avoid requiring an
+  unused matrix type when linear blocks are absent. Define strict validation
+  for NaN bounds, wrong-sign infinities, inverted bounds, and malformed
+  shapes, with typed configuration errors that preserve user callback errors.
+  Revisit problem typing if unconstrained solvers must reject constrained
+  problems: a `CostFunction` bound alone cannot enforce that guarantee. Keep
+  constraints problem-side, preserve distinct blocks, and require only the
+  math capabilities each solver needs. Define migration from the 1.x API.
 
 - [ ] Remove the deprecated `TerminationCriterion` facility, all shipped
   criterion types and re-exports, `Executor::terminate_on`,

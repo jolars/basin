@@ -3,7 +3,8 @@
 //! The framework lives in [`core`]: problem traits the user implements
 //! ([`CostFunction`], [`Gradient`], [`BoxConstraints`],
 //! [`LinearInequalityConstraints`], [`LinearEqualityConstraints`],
-//! [`LinearConstraints`], [`NonlinearInequalityConstraints`]), state shapes
+//! [`LinearConstraints`], [`NonlinearInequalityConstraints`],
+//! [`NonlinearConstraints`]), state shapes
 //! solvers iterate over ([`State`], [`GradientState`], [`SimplexState`]),
 //! the [`Solver`] trait, solver-owned convergence, execution controls
 //! ([`RunControl`]), and a read-only observer layer
@@ -352,8 +353,9 @@ pub use crate::core::checkpoint::{
     read_exact_checkpoint,
 };
 pub use crate::core::constraint::{
-    BoxConstraints, LinearConstraints, LinearEqualityConstraints,
-    LinearInequalityConstraints, NonlinearInequalityConstraints,
+    BoxConstraints, FoldedConstraints, LinearConstraints,
+    LinearEqualityConstraints, LinearInequalityConstraints,
+    NonlinearConstraints, NonlinearInequalityConstraints,
 };
 pub use crate::core::convergence::ConfiguredSolver;
 #[allow(deprecated)]

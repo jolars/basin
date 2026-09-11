@@ -10,9 +10,9 @@ use basin::core::state::{BasicState, LbfgsState, State};
 use basin::line_search::{Backtracking, HagerZhang, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{
-    BoxConstraints, Cobyla, CobylaState, Gbnm, GbnmState, GradientDescent,
-    MatrixFree, MoreSorensen, NonlinearInequalityConstraints, Steihaug,
-    TerminationReason, TrustRegion,
+    BoxConstraints, Cobyla, CobylaState, FoldedConstraints, Gbnm, GbnmState,
+    GradientDescent, MatrixFree, MoreSorensen, NonlinearConstraints,
+    NonlinearInequalityConstraints, Steihaug, TerminationReason, TrustRegion,
 };
 
 /// `f(x) = ‖x − c‖²` with `c = (1, 2, 3)`. Minimum at `c`, cost 0.
@@ -98,6 +98,111 @@ fn cobyla_f32_round_trips_small_and_cached_inverse_paths() {
         assert!((result.best_cost() - n as f32).abs() < 5e-3);
         assert_eq!(result.best_cost(), x.iter().map(|v| v * v).sum::<f32>());
     }
+}
+
+#[test]
+fn cobyla_f32_round_trips_full_form_constraints() {
+    struct MixedF32 {
+        inequality: DenseMatrix<f32>,
+        inequality_rhs: Vec<f32>,
+        equality: DenseMatrix<f32>,
+        equality_rhs: Vec<f32>,
+        lower: Vec<f32>,
+        upper: Vec<f32>,
+    }
+
+    impl CostFunction for MixedF32 {
+        type Param = Vec<f32>;
+        type Output = f32;
+        type Error = std::convert::Infallible;
+
+        fn cost(&self, x: &Vec<f32>) -> Result<f32, Self::Error> {
+            Ok(x.iter().map(|v| (v - 2.0).powi(2)).sum())
+        }
+    }
+
+    impl NonlinearConstraints for MixedF32 {
+        type Matrix = DenseMatrix<f32>;
+
+        fn nonlinear_constraints(
+            &self,
+            x: &Vec<f32>,
+        ) -> Result<Vec<f32>, Self::Error> {
+            Ok(vec![x[0] * x[0] - 1.0])
+        }
+
+        fn num_nonlinear_constraints(&self) -> usize {
+            1
+        }
+
+        fn inequalities(&self) -> Option<(&Self::Matrix, &Vec<f32>)> {
+            Some((&self.inequality, &self.inequality_rhs))
+        }
+
+        fn equalities(&self) -> Option<(&Self::Matrix, &Vec<f32>)> {
+            Some((&self.equality, &self.equality_rhs))
+        }
+
+        fn lower(&self) -> Option<&Vec<f32>> {
+            Some(&self.lower)
+        }
+
+        fn upper(&self) -> Option<&Vec<f32>> {
+            Some(&self.upper)
+        }
+    }
+
+    let problem = MixedF32 {
+        inequality: DenseMatrix::from_row_slice(
+            1,
+            5,
+            &[0.0, 1.0, 0.0, 0.0, 0.0],
+        ),
+        inequality_rhs: vec![0.5],
+        equality: DenseMatrix::from_row_slice(1, 5, &[0.0, 0.0, 1.0, 0.0, 0.0]),
+        equality_rhs: vec![0.25],
+        lower: vec![
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+            3.0,
+        ],
+        upper: vec![
+            f32::INFINITY,
+            f32::INFINITY,
+            f32::INFINITY,
+            0.75,
+            f32::INFINITY,
+        ],
+    };
+    let result = Executor::from_start(
+        FoldedConstraints::new(problem),
+        Cobyla::<f32>::new()
+            .with_initial_radius(0.5)
+            .with_final_radius(1e-4),
+        vec![0.0_f32; 5],
+    )
+    .max_cost_evals(3000)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    let x = result.best_param();
+    let expected = [1.0, 0.5, 0.25, 0.75, 3.0];
+    for (value, target) in x.iter().zip(expected) {
+        assert!((value - target).abs() < 2e-3, "x = {x:?}");
+    }
+    assert!(x[0] * x[0] <= 1.0 + 1e-3);
+    assert!(x[1] <= 0.5 + 1e-3);
+    assert!((x[2] - 0.25).abs() < 1e-3);
+    assert!(x[3] <= 0.75 + 1e-3);
+    assert!(x[4] >= 3.0 - 1e-3);
+    assert!((result.best_cost() - 8.875).abs() < 1e-2);
+    assert_eq!(
+        result.best_cost(),
+        x.iter().map(|value| (value - 2.0).powi(2)).sum::<f32>()
+    );
 }
 
 #[test]

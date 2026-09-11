@@ -17,15 +17,19 @@
 //! resp. `a()`/`b()` resp. `constraints()`, so a one-member hierarchy would
 //! still be pure overhead.
 //!
-//! [`LinearConstraints`] is a different beast: a standalone *aggregator* of
-//! the general linearly-constrained problem (box bounds, linear equalities,
-//! and linear inequalities at once), consumed by [`Lincoa`](crate::Lincoa),
-//! which folds all three kinds into one `A x ≤ b` system handled by one
-//! active-set feasibility mechanism. It is *not* a parent of the three
-//! siblings above (it neither extends them nor is extended by them), so the
-//! "no `Constraint` parent" decision still stands.
+//! [`LinearConstraints`] describes box bounds, linear equalities, and linear
+//! inequalities together for [`Lincoa`](crate::Lincoa). [`NonlinearConstraints`]
+//! adds nonlinear inequalities to that general form. Wrap it in
+//! [`FoldedConstraints`] to pass all four kinds to [`Cobyla`](crate::Cobyla).
+//! Both aggregator traits are standalone, with no hierarchy or blanket bridges
+//! to the single-kind traits.
 
 use crate::core::problem::CostFunction;
+
+/// Full-form constraint adapter for COBYLA.
+pub mod folded;
+
+pub use folded::FoldedConstraints;
 
 /// Box (interval) bounds on the parameter.
 ///
@@ -198,21 +202,16 @@ pub trait LinearEqualityConstraints: CostFunction {
 /// constraint, length [`num_constraints`](Self::num_constraints)) but shares
 /// the parameter's vector *type*. `m` and `n` need not match.
 ///
-/// # Future direction: a `NonlinearConstraints` aggregator (deferred)
+/// # Problems with several constraint kinds
 ///
 /// This trait is the *single-kind* surface (nonlinear inequalities only),
-/// matching Powell's 1994 paper. PRIMA's modern COBYLA additionally folds
-/// linear inequalities, linear equalities, and box bounds into the same
-/// `constr(x) ≤ 0` vector. A planned `NonlinearConstraints` *aggregator*
-/// (analogous to [`LinearConstraints`], which does this for the linear kinds)
-/// will expose the nonlinear block plus optional linear and box blocks and fold
-/// them together, letting a problem hand COBYLA all four constraint kinds at
-/// once. That is **deliberately deferred**, not foreclosed: like
-/// [`LinearConstraints`] it will be *standalone* (not a parent of this trait,
-/// no blanket bridge: a blanket impl could only forward the nonlinear block
-/// and would silently drop the linear and box data), so adding it later is purely
-/// additive and breaks nothing here. This single-kind trait remains the right
-/// surface for the inequality-only consumer.
+/// matching Powell's 1994 paper. For nonlinear inequalities together with
+/// linear inequalities, linear equalities, or box bounds, implement the
+/// standalone [`NonlinearConstraints`] trait and wrap the problem in
+/// [`FoldedConstraints`]. The adapter folds every supplied block into COBYLA's
+/// `c(x) ≤ 0` vector. There is no blanket bridge between the two traits: such
+/// a bridge could silently drop linear or box data and prevent a problem from
+/// implementing the full form itself.
 ///
 /// # Examples
 ///
@@ -254,6 +253,89 @@ pub trait NonlinearInequalityConstraints: CostFunction {
     /// [`constraints`](Self::constraints) vector). Lets a solver size its
     /// per-constraint model storage before the first evaluation.
     fn num_constraints(&self) -> usize;
+}
+
+/// The general nonlinearly constrained problem: nonlinear inequalities with
+/// optional box bounds, linear equalities, and linear inequalities.
+///
+/// The feasible set is
+///
+/// ```text
+/// { x ∈ ℝⁿ : c(x) ≤ 0, lower ≤ x ≤ upper, A_eq x = b_eq, A_ineq x ≤ b_ineq }
+/// ```
+///
+/// Implement this trait and wrap the problem in [`FoldedConstraints`] to use
+/// [`Cobyla`](crate::Cobyla). Optional accessors default to `None`; the nonlinear
+/// block may also be empty, with [`num_nonlinear_constraints`](Self::num_nonlinear_constraints)
+/// returning zero and [`nonlinear_constraints`](Self::nonlinear_constraints)
+/// returning an empty vector. The nonlinear callback is evaluated even when
+/// its declared count is zero.
+///
+/// This trait is standalone, like [`LinearConstraints`]. It does not extend
+/// [`NonlinearInequalityConstraints`] or the single-kind linear and box traits,
+/// and no blanket implementations bridge between them. This keeps every
+/// supplied constraint block explicit.
+///
+/// # Shapes and contract
+///
+/// The iterate has length `n`. Bounds share its vector type and length;
+/// every non-finite bound entry leaves that coordinate unbounded on that side.
+/// Each matrix has `n` columns and as many rows as its paired right-hand side.
+/// Linear right-hand sides and the nonlinear output share the iterate's vector
+/// type, but their lengths are independent of `n` and of one another.
+///
+/// Constraint values must be pure functions of the iterate, as for
+/// [`CostFunction::cost`]. Keep block presence, shapes, finite-bound positions,
+/// and the nonlinear count fixed throughout a solve. Malformed output lengths,
+/// bound lengths, and matrix-product/right-hand-side lengths panic in
+/// [`FoldedConstraints`]; matrix column mismatches follow
+/// [`MatVec`](crate::core::math::MatVec)'s panic contract.
+///
+/// # Matrix type and consumers
+///
+/// [`Matrix`](Self::Matrix) has no math bounds here. COBYLA's folded-constraint
+/// path requires only [`MatVec<Param>`](crate::core::math::MatVec), available
+/// on all four dense backends. Choose the backend's matrix type even if both
+/// linear blocks are absent.
+pub trait NonlinearConstraints: CostFunction {
+    /// The matrix type for the optional linear constraint blocks.
+    type Matrix;
+
+    /// Evaluate the nonlinear inequalities `c(x) ≤ 0`. The returned vector
+    /// has length [`num_nonlinear_constraints`](Self::num_nonlinear_constraints).
+    fn nonlinear_constraints(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Param, Self::Error>;
+
+    /// The number of nonlinear inequalities, excluding bounds and linear
+    /// constraints. Zero is valid.
+    fn num_nonlinear_constraints(&self) -> usize;
+
+    /// Linear inequalities `A_ineq x ≤ b_ineq` as `(A_ineq, b_ineq)`, or
+    /// `None` (the default) when absent.
+    fn inequalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
+        None
+    }
+
+    /// Linear equalities `A_eq x = b_eq` as `(A_eq, b_eq)`, or `None` (the
+    /// default) when absent. Folding represents each equality by both signs
+    /// of its residual, without relaxing the equality at the start point.
+    fn equalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
+        None
+    }
+
+    /// Element-wise lower bounds of length `n`, or `None` (the default).
+    /// Non-finite entries leave that coordinate unbounded below.
+    fn lower(&self) -> Option<&Self::Param> {
+        None
+    }
+
+    /// Element-wise upper bounds of length `n`, or `None` (the default).
+    /// Non-finite entries leave that coordinate unbounded above.
+    fn upper(&self) -> Option<&Self::Param> {
+        None
+    }
 }
 
 /// The general linearly-constrained problem: box bounds, linear equalities,

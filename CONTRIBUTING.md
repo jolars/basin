@@ -20,10 +20,11 @@ Levenberg-Marquardt, trust-region-reflective), global and stochastic (random
 search, simulated annealing, CMA-ES, a steady-state GA, memetic combinations
 incl. the MA-LSCh chain family), and constrained methods (projected gradient,
 bounded Nelder-Mead, L-BFGS-B, and CMA-ES, log-barrier, augmented Lagrangian,
-and COBYLA for nonlinear inequality constraints). Solvers are generic over the
-linear-algebra backend (`Vec<f64>`, nalgebra, ndarray, faer). Scalar root
-finding lives beside this framework as a direct API because its signed
-function values and bracketing semantics do not fit optimization state.
+and COBYLA for nonlinear inequalities with optional linear constraints and box
+bounds). Solvers are generic over the linear-algebra backend (`Vec<f64>`,
+nalgebra, ndarray, faer). Scalar root finding lives beside this framework as a
+direct API because its signed function values and bracketing semantics do not
+fit optimization state.
 
 ## Commands
 
@@ -125,8 +126,9 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `run_control.rs`: budgets, targets, stagnation stops, and application hooks.
   - `termination.rs`: stopping reasons and the deprecated Basin 1.x criterion
     compatibility layer, scheduled for removal in Basin 2.0.
-  - `constraint.rs`, `barrier.rs`, `augmented_lagrangian.rs`: constraint markers
-    and the unconstrained-problem adapters (tenet 4).
+  - `constraint.rs` (+ `constraint/`), `barrier.rs`, `augmented_lagrangian.rs`:
+    problem-side constraint traits and explicit adapters, including
+    `FoldedConstraints` for COBYLA's full constraint form (tenet 4).
   - `inner.rs`: `InnerExecutor`/`WarmStart`/`ResumableInner` for solver
     composition (fresh-seed tiers plus the seed + snapshot + resume tier the
     MA-LSCh chain family drives).
@@ -178,7 +180,14 @@ These shape API decisions and are non-obvious from the code alone.
    via traits; a constrained problem handed to an unconstrained solver is a
    compile error, with opt-in adapters (projection, barrier, or penalty) to wrap
    unconstrained solvers. Box bounds, linear (in)equalities, and nonlinear
-   inequalities ship today.
+   inequalities ship today. `NonlinearConstraints` is a standalone full-form
+   trait combining nonlinear inequalities with optional linear inequalities,
+   equalities, and box bounds. Use `FoldedConstraints::new(problem)` with
+   `Cobyla::new()` to fold these into inequality residuals. The adapter is an
+   explicit problem-side opt-in, with no blanket bridge to
+   `NonlinearInequalityConstraints`; existing callers keep using that trait
+   directly. The full-form solver path additionally requires matrix-vector
+   multiplication, supported by all four dense backends.
 5. **Tiered, broadening backends.** A small universal *vector tier* (ops every
    backend implements well) keeps first-order and derivative-free solvers
    backend-generic; a richer *`linalg`tier* holds matrix ops that LA-heavy

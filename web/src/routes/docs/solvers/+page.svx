@@ -73,12 +73,18 @@ the trailing note cites the paper it implements (or the source it ports).
   equalities, and inequalities, all folded into `A x ≤ b`). Implements Powell
   (2015), ported from PRIMA v0.7.2.
 - **[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**:
-  the nonlinearly-constrained Powell solver, and the odd one out: instead of a
-  quadratic model it builds **linear** models by interpolation at the `n+1`
-  vertices of a simplex and steers by an L-infinity exact-penalty merit
-  function, so it is the only one handling general nonlinear inequality
-  constraints `c(x) ≤ 0`. Needs a `CostFunction` and
-  `NonlinearInequalityConstraints`. Implements Powell (1994), ported from PRIMA.
+  Powell's nonlinearly-constrained solver: it builds **linear** models by
+  interpolation at the `n+1` vertices of a simplex and steers by an L-infinity
+  exact-penalty merit function. For nonlinear inequalities `c(x) ≤ 0`, supply a
+  `CostFunction` and `NonlinearInequalityConstraints`. For nonlinear inequalities
+  with optional linear inequalities, equalities, and box bounds, implement
+  [`NonlinearConstraints`](https://docs.rs/basin/latest/basin/core/constraint/trait.NonlinearConstraints.html)
+  and pass
+  [`FoldedConstraints::new(problem)`](https://docs.rs/basin/latest/basin/core/constraint/folded/struct.FoldedConstraints.html)
+  to the executor with `Cobyla::new()`. The adapter folds the full feasible set
+  into inequalities while retaining Basin's interpolation algorithm. Bound
+  constraints do not guarantee feasible callbacks, and radius convergence does
+  not certify feasibility. Implements Powell (1994), ported from PRIMA.
 - **[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
   adaptive random local search: a randomized hill-climber testing `x + b + d`
   and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a step

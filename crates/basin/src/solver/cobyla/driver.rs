@@ -124,6 +124,10 @@ pub(crate) struct CobylaWork<F = f64> {
 }
 
 impl<F: Scalar> CobylaWork<F> {
+    pub(crate) fn num_constraints(&self) -> usize {
+        self.m
+    }
+
     /// Build and seed the simplex from the start point `x0`, returning the work
     /// plus the initial reported `(x, f)`. `eval(x) -> (f, constr)` evaluates
     /// the (raw) objective and constraint vector.

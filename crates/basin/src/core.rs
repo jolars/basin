@@ -18,8 +18,11 @@
 //!   in `CONTRIBUTING.md`): [`BoxConstraints`](constraint::BoxConstraints),
 //!   [`LinearInequalityConstraints`](constraint::LinearInequalityConstraints),
 //!   [`LinearEqualityConstraints`](constraint::LinearEqualityConstraints), and
-//!   the general-form [`LinearConstraints`](constraint::LinearConstraints)
-//!   aggregator consumed by LINCOA.
+//!   [`NonlinearInequalityConstraints`](constraint::NonlinearInequalityConstraints).
+//!   The standalone aggregators [`LinearConstraints`](constraint::LinearConstraints)
+//!   and [`NonlinearConstraints`](constraint::NonlinearConstraints) supply the
+//!   full forms for LINCOA and COBYLA, respectively; COBYLA consumes the latter
+//!   through [`FoldedConstraints`](constraint::FoldedConstraints).
 //! - [`barrier`]: the [`LogBarrier`](barrier::LogBarrier) adapter that
 //!   rewrites a linearly-constrained problem as the unconstrained
 //!   log-barrier objective consumed by the

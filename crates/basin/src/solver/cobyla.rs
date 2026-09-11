@@ -32,9 +32,11 @@ mod tests;
 #[cfg(test)]
 mod regression;
 
-use crate::core::constraint::NonlinearInequalityConstraints;
+use crate::core::constraint::{
+    FoldedConstraints, NonlinearConstraints, NonlinearInequalityConstraints,
+};
 use crate::core::inner::InitialState;
-use crate::core::math::{Scalar, VectorLen};
+use crate::core::math::{MatVec, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::CobylaState;
@@ -104,15 +106,24 @@ use driver::{CobylaWork, Transition};
 ///
 /// # Constraints
 ///
-/// COBYLA binds [`NonlinearInequalityConstraints`]: the problem returns the
-/// constraint vector `c(x)` (feasible iff every `cᵢ(x) ≤ 0`). Express box bounds
-/// or linear constraints as nonlinear ones, and an equality `g(x) = 0` as the
-/// pair `g ≤ 0`, `−g ≤ 0`. The start point need not be feasible.
+/// For inequality-only input, implement [`NonlinearInequalityConstraints`]:
+/// the problem returns `c(x)` (feasible iff every `cᵢ(x) ≤ 0`). For the full
+/// form, implement [`NonlinearConstraints`] and pass
+/// `FoldedConstraints::new(problem)` to the executor. The adapter folds
+/// nonlinear inequalities, optional linear inequalities and equalities, and
+/// optional box bounds into one constraint vector. Equalities become paired
+/// residuals of opposite signs; rows are neither normalized nor relaxed.
+///
+/// The start point need not be feasible, and callbacks may be evaluated outside
+/// every supplied constraint, including box bounds. Folding retains COBYLA's
+/// interpolation of all constraint models; it does not select PRIMA's separate
+/// exact-linear-model path.
 ///
 /// # Termination
 ///
 /// Natural convergence is `ρ` reaching `ρ_end`, signalled as
-/// [`TerminationReason::SolverConverged`]. Add
+/// [`TerminationReason::SolverConverged`]; this does not certify feasibility.
+/// Add
 /// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget (each evaluated point
 /// counts once) or [`RhoTolerance`](crate::RhoTolerance) to stop at a coarser
 /// `ρ`.
@@ -120,9 +131,13 @@ use driver::{CobylaWork, Transition};
 /// # Backends
 ///
 /// Backend-generic: the parameter vector needs only [`Clone`], [`VectorLen`],
-/// and indexing; COBYLA's models are pure-Rust `Vec<f64>` scratch (no backend
+/// and indexing; COBYLA's models are pure-Rust `Vec<F>` scratch (no backend
 /// matrix, no linear solve), so `Vec<f64>`, nalgebra, ndarray, and faer all
 /// work, and it is wasm-clean.
+/// The [`FoldedConstraints`] path additionally requires [`MatVec`] on the
+/// constraint matrix: `DenseMatrix`/`Vec`, `DMatrix`/`DVector`, `Array2`/`Array1`,
+/// and `Mat`/`Col` all provide it in pure Rust. Both paths support `f32` and
+/// `f64`.
 ///
 /// # References
 ///
@@ -226,40 +241,38 @@ where
     }
 }
 
-impl<P, V, F> Solver<P, CobylaState<V, F>> for Cobyla<F>
-where
-    F: Scalar,
-    P: CostFunction<Param = V, Output = F> + NonlinearInequalityConstraints,
-    V: Clone
-        + VectorLen
-        + std::ops::Index<usize, Output = F>
-        + std::ops::IndexMut<usize, Output = F>,
-{
-    type Error = P::Error;
+type CobylaStep<V, F, E> =
+    Result<(CobylaState<V, F>, Option<TerminationReason>), E>;
 
-    fn init(
+impl<F: Scalar> Cobyla<F> {
+    fn init_with<P, V>(
         &mut self,
         problem: &mut Problem<P>,
         mut state: CobylaState<V, F>,
-    ) -> Result<CobylaState<V, F>, Self::Error> {
+        m: usize,
+        mut constraints: impl FnMut(&P, &V) -> Result<Vec<F>, P::Error>,
+    ) -> Result<CobylaState<V, F>, P::Error>
+    where
+        P: CostFunction<Param = V, Output = F>,
+        V: Clone
+            + VectorLen
+            + std::ops::Index<usize, Output = F>
+            + std::ops::IndexMut<usize, Output = F>,
+    {
         let n = state.param.vec_len();
         assert!(n >= 1, "Cobyla requires a non-empty start point");
-        let m = problem.inner().num_constraints();
-
         let x0: Vec<F> = (0..n).map(|i| state.param[i]).collect();
 
         let (work, best_x, best_f) = {
             let mut eval = |slice: &[F]| -> Result<(F, Vec<F>), P::Error> {
                 fill_into(&mut state.param, slice);
                 let f = problem.cost(&state.param)?;
-                let cv = problem.inner().constraints(&state.param)?;
-                debug_assert_eq!(
-                    cv.vec_len(),
+                let c = constraints(problem.inner(), &state.param)?;
+                assert_eq!(
+                    c.len(),
                     m,
-                    "constraints() returned {} values but num_constraints() = {m}",
-                    cv.vec_len(),
+                    "Cobyla constraint count must remain fixed during a solve",
                 );
-                let c: Vec<F> = (0..m).map(|i| cv[i]).collect();
                 Ok((f, c))
             };
             CobylaWork::try_init(x0, m, self.rho_beg, self.rho_end, &mut eval)?
@@ -272,30 +285,35 @@ where
         Ok(state)
     }
 
-    fn next_iter(
+    fn next_iter_with<P, V>(
         &mut self,
         problem: &mut Problem<P>,
         mut state: CobylaState<V, F>,
-    ) -> Result<(CobylaState<V, F>, Option<TerminationReason>), Self::Error>
+        mut constraints: impl FnMut(&P, &V) -> Result<Vec<F>, P::Error>,
+    ) -> CobylaStep<V, F, P::Error>
+    where
+        P: CostFunction<Param = V, Output = F>,
+        V: Clone
+            + VectorLen
+            + std::ops::Index<usize, Output = F>
+            + std::ops::IndexMut<usize, Output = F>,
     {
-        let m = problem.inner().num_constraints();
         let work = self
             .work
             .as_mut()
             .expect("Cobyla::init must run before next_iter");
+        let m = work.num_constraints();
 
         let transition = {
             let mut eval = |slice: &[F]| -> Result<(F, Vec<F>), P::Error> {
                 fill_into(&mut state.param, slice);
                 let f = problem.cost(&state.param)?;
-                let cv = problem.inner().constraints(&state.param)?;
-                debug_assert_eq!(
-                    cv.vec_len(),
+                let c = constraints(problem.inner(), &state.param)?;
+                assert_eq!(
+                    c.len(),
                     m,
-                    "constraints() returned {} values but num_constraints() = {m}",
-                    cv.vec_len(),
+                    "Cobyla constraint count must remain fixed during a solve",
                 );
-                let c: Vec<F> = (0..m).map(|i| cv[i]).collect();
                 Ok((f, c))
             };
             work.step(&mut eval)?
@@ -314,7 +332,7 @@ where
         Ok((state, reason))
     }
 
-    fn terminate(
+    fn radius_termination<V: Clone>(
         &self,
         state: &CobylaState<V, F>,
     ) -> Option<TerminationReason> {
@@ -322,5 +340,110 @@ where
         let metric = crate::RhoState::rho(state);
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::RhoTolerance)
+    }
+}
+
+fn inequality_values<P, V, F>(
+    problem: &P,
+    x: &V,
+    m: usize,
+) -> Result<Vec<F>, P::Error>
+where
+    P: NonlinearInequalityConstraints<Param = V, Output = F>,
+    V: VectorLen + std::ops::Index<usize, Output = F>,
+    F: Scalar,
+{
+    let cv = problem.constraints(x)?;
+    debug_assert_eq!(
+        cv.vec_len(),
+        m,
+        "constraints() returned {} values but num_constraints() = {m}",
+        cv.vec_len(),
+    );
+    Ok((0..m).map(|i| cv[i]).collect())
+}
+
+impl<P, V, F> Solver<P, CobylaState<V, F>> for Cobyla<F>
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + NonlinearInequalityConstraints,
+    V: Clone
+        + VectorLen
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
+{
+    type Error = P::Error;
+
+    fn init(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: CobylaState<V, F>,
+    ) -> Result<CobylaState<V, F>, Self::Error> {
+        let m = problem.inner().num_constraints();
+        self.init_with(problem, state, m, |p, x| inequality_values(p, x, m))
+    }
+
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: CobylaState<V, F>,
+    ) -> Result<(CobylaState<V, F>, Option<TerminationReason>), Self::Error>
+    {
+        let m = problem.inner().num_constraints();
+        self.next_iter_with(problem, state, |p, x| inequality_values(p, x, m))
+    }
+
+    fn terminate(
+        &self,
+        state: &CobylaState<V, F>,
+    ) -> Option<TerminationReason> {
+        self.radius_termination(state)
+    }
+}
+
+impl<P, V, F> Solver<FoldedConstraints<P>, CobylaState<V, F>> for Cobyla<F>
+where
+    F: Scalar,
+    P: NonlinearConstraints<Param = V, Output = F>,
+    P::Matrix: MatVec<V>,
+    V: Clone
+        + VectorLen
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
+{
+    type Error = P::Error;
+
+    fn init(
+        &mut self,
+        problem: &mut Problem<FoldedConstraints<P>>,
+        state: CobylaState<V, F>,
+    ) -> Result<CobylaState<V, F>, Self::Error> {
+        let m = problem.inner().constraint_count(state.param.vec_len());
+        self.init_with(
+            problem,
+            state,
+            m,
+            FoldedConstraints::evaluate_constraints,
+        )
+    }
+
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<FoldedConstraints<P>>,
+        state: CobylaState<V, F>,
+    ) -> Result<(CobylaState<V, F>, Option<TerminationReason>), Self::Error>
+    {
+        self.next_iter_with(
+            problem,
+            state,
+            FoldedConstraints::evaluate_constraints,
+        )
+    }
+
+    fn terminate(
+        &self,
+        state: &CobylaState<V, F>,
+    ) -> Option<TerminationReason> {
+        self.radius_termination(state)
     }
 }
