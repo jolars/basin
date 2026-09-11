@@ -4,102 +4,25 @@ Ordered by recommended sequence.
 
 ## General design
 
-- [x] **Investigate the COBYLA performance gap observed during the
-  GlobalSearch-rs migration.** This item records the complete initial
-  observation; no external discussion is needed to interpret or reproduce
-  it.
-
-  **Investigation:** the [reproducer and
-  findings](crates/competitor-bench/investigations/cobyla-lm/README.md) locate
-  the main overhead in COBYLA's numerical driver, including scratch allocations,
-  inverse checks, and repeated model construction. The [implemented optimization
-  and
-  results](crates/competitor-bench/investigations/cobyla-lm/cobyla-optimization.md)
-  retain numerical traces, callback-error and budget coverage, a driver
-  benchmark, and allocation ceilings. The driver is 1.9–2.8 times faster on
-  these cases, with 94–97% fewer allocation requests. A smaller performance gap
-  to `cobyla` 1.0.2 remains.
-
-  **Implementations.** The comparison used GlobalSearch-rs commit
-  `4bf3eaa6b3677e0a2cc18f61f81603612db66b13`, whose COBYLA adapter uses Basin
-  1.8.0, and its direct parent `1f44818e396567d22cb7137c267c66da2e19f334`, whose
-  otherwise equivalent adapter uses `cobyla` 1.0.2. Both revisions were compiled
-  with Rust 1.88.0 using `cargo build --release --no-default-features`.
-  Measurements ran on an Intel Core Ultra 7 155U under NixOS. Hyperfine 1.20.0
-  performed three process-level warmups followed by 15 timed runs. Each process
-  also performed 16 untimed solves before its measured loop.
-  Objective-evaluation tracking was enabled for every solve.
-
-  **Problems and solver settings.** The descriptions below use GlobalSearch's
-  nonnegative-is-feasible convention. Its Basin adapter negates user constraints
-  into Basin's nonpositive-is-feasible convention. At the recorded migration
-  commit, the adapter also floors the final radius at
-  `sqrt(f64::EPSILON) * initial_step_size`, even with zero parameter tolerances.
-  For these cases, that floor is approximately `7.45e-9`.
-
-  1. Six-hump camel used
-     `f(x,y) = (4 - 2.1*x^2 + x^4/3)*x^2 + x*y + (-4 + 4*y^2)*y^2`, bounds
-     `x in [-3,3]` and `y in [-2,2]`, start `(0,0)`, initial radius `0.5`, an
-     objective budget of 50, and zero function and parameter tolerances. Each
-     timed process performed 5,000 solves.
-  2. The 10-dimensional sphere used `f(x) = sum(x_i^2)`, bounds `[-5,5]` for
-     every coordinate, start `(2.5,-2,1.5,-1,0.5,2.25,-1.75,1.25,-0.75,0.25)`,
-     initial radius `0.5`, an objective budget of 200, and zero function and
-     parameter tolerances. Each timed process performed 400 solves.
-  3. The constrained quadratic used `f(x,y) = (x - 1)^2 + (y - 1)^2`, bounds
-     `[0,2]` for both coordinates, start `(0.5,0.5)`, constraint
-     `1.5 - x - y >= 0`, initial radius `0.5`, an objective budget of 100, and
-     zero function and parameter tolerances. Each timed process performed 3,000
-     solves.
-
-  **Results.** Times are the mean wall time per local solve; the parenthesized
-  number is the mean objective-evaluation count per solve.
-
-  | Problem               | `cobyla` 1.0.2 | Basin 1.8.0   | Slowdown | Final objective: old / Basin  |
-  | --------------------- | -------------: | ------------: | -------: | ----------------------------: |
-  | Six-hump camel        |   10.3 us (50) |  84.7 us (50) |    8.23x | -1.0316284534 / -1.0316284527 |
-  | 10D sphere            |   620 us (200) | 1.97 ms (200) |    3.18x |             9.65e-7 / 5.73e-9 |
-  | Constrained quadratic |  35.9 us (100) |   157 us (61) |    4.39x |   0.1250000000 / 0.1249999974 |
-
-  A second six-hump measurement used the public default settings: budget 300,
-  initial radius `0.5`, relative and absolute function tolerances `1e-6` and
-  `1e-8`, respectively, and zero parameter tolerances. The old adapter took 10.9
-  us and 52 evaluations per solve; the Basin adapter took 88.3 us and 50
-  evaluations, an 8.11x slowdown, with the same final objectives as the
-  fixed-budget row.
-
-  **Caveats and deliverable.** These numbers compare the complete
-  GlobalSearch-rs adapters, not bare solver kernels. In particular, the Basin
-  adapter projects objective and user-constraint callbacks into the box and
-  represents the box as `2*n` nonlinear inequalities, whereas the old adapter
-  passed bounds through `cobyla`'s native bounds argument. The Basin adapter
-  also adds a hard objective-budget guard and executor termination criteria.
-  Reproduce the three cases directly against both solver crates in
-  `competitor-bench`, and separately benchmark the two GlobalSearch adapters.
-  Profile allocations, state cloning, constraint evaluation, and executor
-  overhead. Determine which layer owns the gap, retain a benchmark that guards
-  the affected layer, and improve it without weakening numerical behavior,
-  bounds, error propagation, or strict callback-budget handling.
-
 - [x] **Add a pivoted-QR solve path for Levenberg-Marquardt.** Implemented
   `.with_pivoted_qr()` and `LevenbergMarquardtQr` with reusable
   column-pivoted QR, explicit rank-loss handling, and all four dense
   backends. Cholesky remains the default. See the [implementation and
   production
-  comparisons](crates/competitor-bench/investigations/cobyla-lm/lm-qr.md)
+  comparisons](crates/competitor-bench/investigations/lm/lm-qr.md)
   for conditioning, raw SVI, SSVI, backend coverage, and sparse limitations.
 
 - [x] **Investigate configurable LM damping.** Added opt-in
   `LmDamping::TrustRegion` and `.with_initial_step_bound()` to both Cholesky
   and QR; Nielsen remains the default. The [damping
-  investigation](crates/competitor-bench/investigations/cobyla-lm/lm-damping.md)
+  investigation](crates/competitor-bench/investigations/lm/lm-damping.md)
   retains all starts, validates calibration Jacobians, and separates
   damping, factorization, stopping, and parameter recovery. Trust-region
   damping closes the favorable narrow-SVI gap, with an initial-radius
   tradeoff on scaled fits.
 
 - [x] **Investigate more robust LM relative stopping tests.** The [stopping
-  investigation](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md)
+  investigation](crates/competitor-bench/investigations/lm/lm-stopping.md)
   isolates model and step stopping across 500 runs. Both can stop Nielsen
   before a weak direction is resolved; disabling them or requiring
   exact-zero progress can exhaust budgets at accurate rounded fits. Retains
@@ -111,7 +34,7 @@ Ordered by recommended sequence.
   safely factored orthogonality and unscaled attempted-step comparisons,
   preserving `None` and exact-zero tolerances. Added `f32`/`f64` dense-backend
   and sparse Cholesky regressions. The [corrected diagnostic
-  probe](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#arithmetic-correction)
+  probe](crates/competitor-bench/investigations/lm/lm-stopping.md#arithmetic-correction)
   reaches the exact solution instead of stopping at initialization.
 
 - [x] **Add explicit LM numerical no-progress handling.** Rejected finite
@@ -119,14 +42,14 @@ Ordered by recommended sequence.
   solvers may consume without a convergence or recovery claim. Enabled by
   default; `with_no_progress_check(false)` restores the previous policy while
   preserving `None` versus exact-zero tolerances. The [retained
-  comparison](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#numerical-no-progress-safeguard)
+  comparison](crates/competitor-bench/investigations/lm/lm-stopping.md#numerical-no-progress-safeguard)
   saves 41,187 residual calls with identical parameters and assessment outcomes.
 
 - [x] **Add opt-in scaled trust-radius convergence for LM.** Both factorizations
   expose `with_relative_trust_radius_tolerance`, disabled by default and
   inactive under Nielsen damping. Preserves the unscaled attempted-step test
   and makes no parameter-recovery claim. The [retained
-  comparison](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#scaled-trust-radius-convergence)
+  comparison](crates/competitor-bench/investigations/lm/lm-stopping.md#scaled-trust-radius-convergence)
   separates stopping reasons, callback counts, fit accuracy, and recovery.
 
 - [x] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).**

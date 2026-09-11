@@ -15,6 +15,7 @@ older comments still call `competitor-bench` by its former name, `lm-bench`.
   | LM versus `levenberg-marquardt`               | `crates/competitor-bench/benches/compare.rs` and `src/bin/verify.rs` in that crate |
   | GD or Nelder-Mead versus argmin               | `crates/competitor-bench/benches/gd_nm.rs` and `src/bin/verify_gd_nm.rs`           |
   | Private COBYLA driver and allocation guards   | `crates/competitor-bench/benches/cobyla.rs` and `tests/cobyla_allocations.rs`      |
+  | Public COBYLA versus the `cobyla` crate       | `crates/competitor-bench/benches/gd_nm.rs` and `src/bin/verify_gd_nm.rs`           |
   | Convergence across libraries or Basin solvers | `crates/competitor-bench/src/bin/trace.rs` or `solver_compare.rs`                  |
   | Population solver thread scaling              | `crates/competitor-bench/benches/population_scaling.rs`                            |
 
@@ -40,12 +41,13 @@ The LM competitor harness normally matches nalgebra 0.34 on both sides;
 timings that silently change backends or enable parallelism. Record resolved
 backend versions and features; moving `*_latest` aliases are not lasting pins.
 
-For COBYLA or LM layer comparisons, read
-`crates/competitor-bench/investigations/cobyla-lm/README.md` and the relevant
-probe. It demonstrates raw driver, manual loop, executor, and adapter isolation.
-Its reproduction script requires a separate GlobalSearch checkout and specific
-historical commits; do not assume those are available or run it for unrelated
-solvers. Historical measurements are leads to remeasure, not current facts.
+For COBYLA, read `crates/competitor-bench/investigations/cobyla.md` for the
+completed investigation, comparison asymmetries, retained regression guards, and
+archived experiment provenance. The public comparison is part of `gd_nm`; the
+private driver retains its own benchmark. For LM, read
+`crates/competitor-bench/investigations/lm/README.md` and its production
+verification commands. Neither maintained comparison needs GlobalSearch.
+Historical measurements are leads to remeasure, not current facts.
 
 Extend a nearby harness when needed. Keep native competitors and instrumentation
 in `competitor-bench` or an isolated investigation workspace. Profile the actual

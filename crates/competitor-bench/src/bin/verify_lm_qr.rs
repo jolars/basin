@@ -18,7 +18,7 @@ use nalgebra::{DMatrix as BasinMatrix, DVector as BasinVector};
 #[cfg(feature = "basin-latest")]
 use nalgebra_latest::{DMatrix as BasinMatrix, DVector as BasinVector};
 
-#[path = "../../investigations/cobyla-lm/support/lm_models.rs"]
+#[path = "support/lm_models.rs"]
 mod models;
 use models::{Model, check_jacobian};
 

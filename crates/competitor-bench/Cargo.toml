@@ -56,6 +56,8 @@ gomez = "0.5"
 # note). LGPL-2.1, but `publish = false` keeps it from ever propagating
 # to basin proper or the wasm build.
 nlopt = "0.8"
+# The NLopt-derived reference used in the GlobalSearch migration comparison.
+cobyla = "1.0.2"
 # Pulled in only by the `parallel` feature: lets the population-scaling
 # bench query the active rayon pool size (`current_num_threads`) so each
 # run self-reports whether it is in the serial (`RAYON_NUM_THREADS=1`) or

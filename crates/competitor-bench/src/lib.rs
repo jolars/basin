@@ -30,6 +30,8 @@
 //! comparisons to confirm the solvers reach the same optimum in
 //! comparable work before the timings are trusted.
 
+pub mod cobyla;
+
 use std::marker::PhantomData;
 
 use argmin::core::{CostFunction, Error, Gradient};

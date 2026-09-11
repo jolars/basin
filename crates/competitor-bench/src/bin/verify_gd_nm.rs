@@ -5,6 +5,10 @@
 //! confirming the two reach comparable quality before the timings in
 //! `benches/gd_nm.rs` are trusted.
 //!
+//! Also verifies the COBYLA migration cases against `cobyla` with matched
+//! objective budgets and final radii. Their trajectories differ; reported
+//! constraint counts distinguish vector callbacks from scalar callbacks.
+//!
 //! Run: `cargo run -p competitor-bench --bin verify_gd_nm --release`.
 
 use argmin::core::Executor as ArgminExecutor;
@@ -87,4 +91,25 @@ fn main() {
         res.state().get_iter(),
         res.state().get_best_cost()
     );
+
+    println!("\n== COBYLA (matched objective budgets and final radii) ==");
+    for (case, name) in competitor_bench::cobyla::CASES {
+        for (library, unit, result) in [
+            ("basin", "vector", case.solve_basin()),
+            ("cobyla", "scalar nonlinear", case.solve_reference()),
+        ] {
+            case.verify(&result);
+            println!(
+                "  {name} {library}: cost={:.12e} violation={:.3e} \
+                 objective_calls={} constraint_calls={} ({unit}) \
+                 iterations={:?} stop={:?} quality=pass",
+                result.cost,
+                case.violation(&result.point),
+                result.objective_calls,
+                result.constraint_calls,
+                result.iterations,
+                result.stop,
+            );
+        }
+    }
 }

@@ -1,5 +1,5 @@
-//! Timing comparison: basin vs `argmin` for gradient descent and
-//! Nelder-Mead on the `Vec<f64>` backend (axis 3 of the bench plan).
+//! Timing comparisons for gradient descent, Nelder-Mead, and COBYLA on
+//! `Vec<f64>` (axis 3 of the bench plan).
 //!
 //! Both frameworks solve the *same* problem (basin's raw Rosenbrock
 //! functions, wrapped for argmin via `ArgminProblem`) from the *same*
@@ -9,10 +9,16 @@
 //!     and a bit-identical initial simplex (basin's `IntoInitialSimplex`,
 //!     relative step 0.05).
 //!
-//! A *fixed* iteration budget with no early stop on either side
+//! GD/NM use a *fixed* iteration budget with no early stop on either side
 //! (`src/bin/verify_gd_nm.rs` confirms both run the full budget and reach
 //! comparable cost), so the timing is a clean per-iteration
 //! implementation-cost comparison.
+//!
+//! COBYLA compares Basin's PRIMA port with the `cobyla` crate on the original
+//! migration workloads. It uses matched objective budgets and final radii,
+//! with independent result checks before timing. The variants take different
+//! trajectories, so these are whole-solve comparisons at a common quality
+//! target. Timing includes setup, initialization, extraction, and teardown.
 //!
 //! Run: `cargo bench -p competitor-bench --bench gd_nm`.
 
@@ -142,5 +148,20 @@ fn bench_nm(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, bench_gd, bench_nm);
+fn bench_cobyla(c: &mut Criterion) {
+    for (case, name) in competitor_bench::cobyla::CASES {
+        case.verify(&case.solve_basin());
+        case.verify(&case.solve_reference());
+        let mut group = c.benchmark_group(format!("cobyla_{name}"));
+        group.bench_function("basin", |b| {
+            b.iter(|| black_box(black_box(case).solve_basin()))
+        });
+        group.bench_function("cobyla", |b| {
+            b.iter(|| black_box(black_box(case).solve_reference()))
+        });
+        group.finish();
+    }
+}
+
+criterion_group!(benches, bench_gd, bench_nm, bench_cobyla);
 criterion_main!(benches);

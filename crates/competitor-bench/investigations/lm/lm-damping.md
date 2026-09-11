@@ -68,7 +68,7 @@ All 20 original starts remain:
 - Three starts each for SSVI observations at separated and closely spaced
   maturities.
 
-The shared [models](support/lm_models.rs) check every analytic Jacobian column
+The shared [models](../../src/bin/support/lm_models.rs) check every analytic Jacobian column
 against centered finite differences at the generating parameters and every start
 before solving. In particular, SSVI differentiates its actual
 `eta / (theta^gamma * (1+theta)^(1-gamma))` formula, including the `ln(1+theta)`

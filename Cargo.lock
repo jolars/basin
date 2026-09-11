@@ -313,12 +313,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cobyla"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d7c3233e5d400a8fd61b50b79797d28a0657e4c0abeb41469b69d2d9d60ef3e"
+
+[[package]]
 name = "competitor-bench"
 version = "1.10.0"
 dependencies = [
  "argmin",
  "argmin-math",
  "basin",
+ "cobyla",
  "criterion",
  "faer 0.24.4",
  "gomez",
