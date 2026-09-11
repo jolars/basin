@@ -93,18 +93,35 @@ Ordered by recommended sequence.
   `LmDamping::TrustRegion` and `.with_initial_step_bound()` to both Cholesky
   and QR; Nielsen remains the default. The [damping
   investigation](crates/competitor-bench/investigations/cobyla-lm/lm-damping.md)
-  retains all starts, validates calibration Jacobians, and separates damping,
-  factorization, stopping, and parameter recovery. Trust-region damping closes
-  the favorable narrow-SVI gap, with an initial-radius tradeoff on scaled fits.
+  retains all starts, validates calibration Jacobians, and separates
+  damping, factorization, stopping, and parameter recovery. Trust-region
+  damping closes the favorable narrow-SVI gap, with an initial-radius
+  tradeoff on scaled fits.
 
-- [ ] **Investigate more robust LM relative stopping tests.** The damping
-  option preserves current stopping contracts. Nielsen can still stop early
-  on nearly collinear linear problems, while disabling relative progress tests
-  can exhaust budgets at accurate rounded solutions. The [damping
-  probes](crates/competitor-bench/investigations/cobyla-lm/lm-damping.md)
-  compare both stopping profiles against MINPACK and retain the two difficult
-  narrow-SVI starts that exhaust every solver's budget. Account for parameter
-  nonidentifiability before drawing migration conclusions.
+- [x] **Investigate more robust LM relative stopping tests.** The [stopping
+  investigation](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md)
+  isolates model and step stopping across 500 runs. Both can stop Nielsen
+  before a weak direction is resolved; disabling them or requiring
+  exact-zero progress can exhaust budgets at accurate rounded fits. Retains
+  both difficult narrow-SVI starts, distinguishes fit from identifiable
+  parameter recovery, and records MINPACK's unsuccessful machine-precision
+  stops. No production stopping contracts or defaults changed.
+
+- [ ] **Harden LM stopping arithmetic.** The [diagnostic
+  probe](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#coordinate-sensitivity-and-an-arithmetic-bug)
+  reproduces false orthogonality convergence when squaring a tiny nonzero
+  gradient underflows. Normalize safely, audit squared step comparisons, and
+  add `f32`/`f64` backend regressions while preserving `None` and exact-zero
+  tolerance semantics.
+
+- [ ] **Design explicit LM numerical no-progress handling.** Follow the
+  [stopping
+  findings](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#recommended-implementation-boundaries):
+  distinguish precision-limited output from convergence, preserve `None`
+  versus exact-zero semantics, and define inner-solver failure routing.
+  Consider an opt-in scaled trust-radius criterion separately from the
+  documented unscaled attempted-step test. Do not infer parameter recovery
+  from a small damped step.
 
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional

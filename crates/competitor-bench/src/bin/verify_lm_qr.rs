@@ -1,6 +1,7 @@
 //! Reproduce conditioning and calibration comparisons without GlobalSearch.
 //! Run `cargo run -p competitor-bench --release --bin verify_lm_qr`.
 //! Add `--damping` to compare damping policies and stopping profiles.
+//! Add `--stopping` to isolate model-reduction and relative-step stops.
 
 use basin::{
     Executor, FactorizePivotedQr, Jacobian, LevenbergMarquardt, LmDamping,
@@ -85,7 +86,9 @@ fn compare(
     truth: Vec<f64>,
     starts: Vec<Vec<f64>>,
     damping: bool,
+    stopping: bool,
 ) {
+    let detailed = damping || stopping;
     let truth = DVector::from_vec(truth);
     let (y, j) = model.evaluate(&truth);
     let sv = j.svd(false, false).singular_values;
@@ -94,12 +97,20 @@ fn compare(
     for (start, x) in starts.into_iter().enumerate() {
         let x = DVector::from_vec(x);
         check_jacobian(&model, &x);
-        let kinds: &[&str] = if damping {
+        let kinds: &[&str] = if detailed {
             &["cholesky", "qr", "trust-cholesky", "trust-qr", "minpack"]
         } else {
             &["cholesky", "qr", "minpack"]
         };
-        let profiles: &[&str] = if damping {
+        let profiles: &[&str] = if stopping {
+            &[
+                "relative",
+                "gradient-only",
+                "model-only",
+                "step-only",
+                "exact-progress",
+            ]
+        } else if damping {
             &["relative", "gradient-only"]
         } else {
             &["legacy"]
@@ -122,11 +133,18 @@ fn compare(
                         levenberg_marquardt::LevenbergMarquardt::new()
                             .with_tol(1e-12)
                             .with_patience(200);
-                    if damping {
+                    if detailed {
                         solver = solver.with_gtol(1e-12);
                     }
-                    if profile == "gradient-only" {
+                    // The reference has no disabled setting. Zero retains its
+                    // exact-progress and machine-precision checks, so these
+                    // two profiles intentionally use the same configuration.
+                    if matches!(profile, "gradient-only" | "exact-progress") {
                         solver = solver.with_ftol(0.).with_xtol(0.);
+                    } else if profile == "model-only" {
+                        solver = solver.with_xtol(0.);
+                    } else if profile == "step-only" {
+                        solver = solver.with_ftol(0.);
                     }
                     let (p, report) = solver.minimize(p);
                     assert_eq!(report.number_of_evaluations, nr.get());
@@ -148,6 +166,15 @@ fn compare(
                         solver = solver
                             .with_relative_model_reduction_tolerance(None)
                             .with_relative_step_tolerance(None);
+                    } else if profile == "model-only" {
+                        solver = solver.with_relative_step_tolerance(None);
+                    } else if profile == "step-only" {
+                        solver = solver
+                            .with_relative_model_reduction_tolerance(None);
+                    } else if profile == "exact-progress" {
+                        solver = solver
+                            .with_relative_model_reduction_tolerance(0.)
+                            .with_relative_step_tolerance(0.);
                     }
                     let state = NllsState::new(BasinVector::from_column_slice(
                         x.as_slice(),
@@ -181,7 +208,7 @@ fn compare(
                     equivalent[4] = equivalent[4].abs();
                 }
                 let equivalent_error = (&equivalent - &truth).amax();
-                if damping {
+                if detailed {
                     let gradient = jacobian.transpose() * &residual_vector;
                     let cosine = jacobian
                         .column_iter()
@@ -275,7 +302,8 @@ fn main() {
         return;
     }
     let damping = std::env::args().any(|x| x == "--damping");
-    if damping {
+    let stopping = std::env::args().any(|x| x == "--stopping");
+    if damping || stopping {
         println!(
             "case,start,solver,stopping,condition,converged,residual_calls,jacobian_calls,residual_norm,relative_residual,gradient_infinity,gradient_orthogonality,parameter_error,equivalent_parameter_error,fit_target,recovery_target,termination,parameters"
         );
@@ -285,6 +313,6 @@ fn main() {
         );
     }
     models::for_each_case(|name, model, truth, starts| {
-        compare(name, model, truth, starts, damping)
+        compare(name, model, truth, starts, damping, stopping)
     });
 }
