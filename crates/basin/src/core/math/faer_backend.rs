@@ -20,8 +20,8 @@ use super::sample::{
 };
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
-    Dot, FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared,
-    ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
+    ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
+    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
 
 // The vector-tier ops used here (`Col::iter`, `Col::from_fn`, indexing, the
@@ -154,6 +154,17 @@ impl<F: Scalar> ComponentDivAssign for Col<F> {
         );
         faer::zip!(self.as_mut(), other.as_ref())
             .for_each(|faer::unzip!(x, y)| *x = *x / *y);
+    }
+}
+
+impl<F: Scalar> ComponentZip<F> for Col<F> {
+    fn all_zip(
+        &self,
+        other: &Self,
+        mut predicate: impl FnMut(F, F) -> bool,
+    ) -> bool {
+        assert_eq!(self.nrows(), other.nrows(), "all_zip: shape mismatch");
+        (0..self.nrows()).all(|i| predicate(self[i], other[i]))
     }
 }
 

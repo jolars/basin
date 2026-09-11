@@ -2,7 +2,9 @@
 
 Investigated September 11, 2026, from Basin revision
 `5ae54633ba7e89a131c670ff3d6a2cb0c445f432`, following the [damping
-comparison](lm-damping.md). Production solver behavior is unchanged.
+comparison](lm-damping.md). Production solver behavior was unchanged during
+that investigation. The later [arithmetic correction](#arithmetic-correction)
+fixes the reproduced false orthogonality stop.
 
 The current relative tests can mistake a heavily damped step for convergence.
 Disabling them exposes a separate problem: an accurate rounded solution can
@@ -277,3 +279,29 @@ for 21 additional solves, checks the original models' analytic Jacobians, and
 asserts the tiny-orthogonality reproduction. Its overlapping final results agree
 with the unwrapped profile runs. Rust formatting and workspace all-target,
 all-feature Clippy pass. No production library or web code changed.
+
+## Arithmetic correction
+
+The shared Cholesky/QR stopping implementation now compares the unsquared
+orthogonality and attempted-step inequalities using normalized binary
+significands and separate exponents. Norms remain factored by their infinity
+norm, so neither a large norm nor a tiny tolerance must be squared or
+materialized as an overflowing or underflowing product. Checking each gradient
+component against its column norm also avoids losing a subnormal projection
+during division. Exact-zero tests inspect the original gradient or step;
+`None` still disables each check.
+
+The current `verify_lm_stopping` probe asserts the corrected result: the
+`1e-100 * (x+1)` case takes seven residual calls and reaches `x=-1` with zero
+residual, instead of stopping at initialization. The other 20 final diagnostic
+rows match the retained investigation results exactly. The CSV linked above
+remains the historical baseline.
+
+Regressions in `crates/basin/tests/levenberg_marquardt_stopping.rs` cover
+`f32` QR and `f64` Cholesky/QR on all four dense backends, plus both sparse
+Cholesky backends. They exercise gradient and step square underflow and
+overflow, tiny tolerances beside large coordinates, and disabled versus
+exact-zero settings. Unit tests cover subnormal projections, norms beyond
+the scalar range, zero columns, and non-finite inputs. This correction retains
+the unscaled internal attempted-step criterion and its evaluation stage;
+numerical no-progress handling remains a separate design task.

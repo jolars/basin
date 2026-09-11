@@ -11,8 +11,8 @@ use super::sample::{
 };
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
-    Dot, FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared,
-    ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
+    ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
+    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
 
 impl<F: Scalar> ScaledAdd<F> for Vec<F> {
@@ -105,6 +105,19 @@ impl<F: Scalar> ComponentDivAssign for Vec<F> {
         for (x, y) in self.iter_mut().zip(other.iter()) {
             *x = *x / *y;
         }
+    }
+}
+
+impl<F: Scalar> ComponentZip<F> for Vec<F> {
+    fn all_zip(
+        &self,
+        other: &Self,
+        mut predicate: impl FnMut(F, F) -> bool,
+    ) -> bool {
+        assert_eq!(self.len(), other.len(), "all_zip: length mismatch");
+        self.iter()
+            .zip(other.iter())
+            .all(|(x, y)| predicate(*x, *y))
     }
 }
 

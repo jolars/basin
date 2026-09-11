@@ -405,9 +405,9 @@ where
         Diagnostics::at(case, &observations, &x, &diagonal.borrow());
     if case.name == "tiny-orthogonality" {
         assert_eq!(result.reason, TerminationReason::SolverConverged);
-        assert_eq!(calls.residual.get(), 1);
-        assert_eq!(x, case.initial);
-        assert!((diagnostics.cosine - 1.).abs() < 1e-14);
+        assert!(calls.residual.get() > 1);
+        assert!((&x - &case.truth).amax() < 1e-12);
+        assert!(diagnostics.relative_residual < 1e-12);
     }
     Row {
         boundary: rows.len(),

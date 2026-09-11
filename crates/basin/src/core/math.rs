@@ -181,9 +181,8 @@ pub(crate) trait ComponentMaxAssign {
 }
 
 /// In-place componentwise division `self[i] ← self[i] / other[i]`. The
-/// counterpart of [`ComponentMulAssign`]. Levenberg-Marquardt forms the
-/// MINPACK `gtol` measure (the per-column cosine `g_j² / (JᵀJ)ⱼⱼ`)
-/// with this.
+/// counterpart of [`ComponentMulAssign`]. Levenberg-Marquardt uses this
+/// for its diagonally scaled gradient in trust-region damping.
 ///
 /// # Contract
 ///
@@ -193,6 +192,16 @@ pub(crate) trait ComponentMaxAssign {
 pub(crate) trait ComponentDivAssign {
     /// Divide `self[i]` by `other[i]` for every `i`, in place.
     fn component_div_assign(&mut self, other: &Self);
+}
+
+/// Per-component predicates for internal solver checks. Keeping the predicate
+/// scalar-valued avoids materializing ratios that can underflow before testing.
+pub(crate) trait ComponentZip<F> {
+    fn all_zip(
+        &self,
+        other: &Self,
+        predicate: impl FnMut(F, F) -> bool,
+    ) -> bool;
 }
 
 /// In-place floor of non-positive entries to a positive `value`,

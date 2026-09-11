@@ -1,9 +1,9 @@
 use crate::core::math::{
     AddDiagonalVectorInPlace, ComponentDivAssign, ComponentMaxAssign,
-    ComponentMulAssign, Dot, FactorizePivotedQr, FloorZerosInPlace, GramMatrix,
-    LinearSolveSpd, MatDiagonal, MatTransposeVec, NegInPlace, NormInfinity,
-    NormSquared, QrSolveError, RegularizedQrSolve, Scalar, ScaleInPlace,
-    ScaledAdd,
+    ComponentMulAssign, ComponentZip, Dot, FactorizePivotedQr,
+    FloorZerosInPlace, GramMatrix, LinearSolveSpd, MatDiagonal,
+    MatTransposeVec, NegInPlace, NormInfinity, NormSquared, QrSolveError,
+    RegularizedQrSolve, Scalar, ScaleInPlace, ScaledAdd,
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
@@ -11,7 +11,9 @@ use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
 
 mod damping;
+mod stopping;
 use damping::{scaled_norm, trust_region_step, update_radius};
+use stopping::{orthogonality_converged, relative_step_converged};
 
 /// Damping-parameter selection for both Levenberg-Marquardt factorizations.
 ///
@@ -499,6 +501,7 @@ where
         + ScaleInPlace<F>
         + ComponentMulAssign
         + ComponentDivAssign
+        + ComponentZip<F>
         + ComponentMaxAssign
         + FloorZerosInPlace<F>
         + Clone,
@@ -544,6 +547,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             + ScaleInPlace<F>
             + ComponentMulAssign
             + ComponentDivAssign
+            + ComponentZip<F>
             + ComponentMaxAssign
             + FloorZerosInPlace<F>
             + Clone,
@@ -600,6 +604,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             + ScaleInPlace<F>
             + ComponentMulAssign
             + ComponentDivAssign
+            + ComponentZip<F>
             + ComponentMaxAssign
             + FloorZerosInPlace<F>
             + Clone,
@@ -639,22 +644,11 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         // MINPACK's absolute and relative first-order tests:
         //   * absolute   ‖Jᵀr‖_∞ ≤ tol_grad           (Madsen et al. 3.3a)
         //   * relative   max_j |gⱼ|/(‖J·,ⱼ‖·‖r‖) ≤ tol_grad_rel  (MINPACK gtol)
-        // The relative measure is the cosine between r and each Jacobian
-        // column. Squaring avoids a square root:
-        // `max_j gⱼ²/diag(JᵀJ)ⱼ ≤ tol_grad_rel²·‖r‖²`. A zero column has
-        // `diag(JᵀJ)ⱼ = 0` and `gⱼ = 0`; flooring the denominator to 1
-        // makes that term `0/1 = 0` rather than `0/0 = NaN`, which is
-        // MINPACK's "skip zero columns" behavior.
         let abs_converged =
             self.tol_grad.is_some_and(|tol| g.norm_infinity() <= tol);
-        let rel_converged = self.tol_grad_rel.is_some_and(|tol| {
-            let mut cos_sq = g.clone();
-            cos_sq.component_mul_assign(&g);
-            let mut denom = diag_cur.clone();
-            denom.floor_zeros_in_place(F::one());
-            cos_sq.component_div_assign(&denom);
-            cos_sq.norm_infinity() <= tol * tol * r.norm_squared()
-        });
+        let rel_converged = self
+            .tol_grad_rel
+            .is_some_and(|tol| orthogonality_converged(&g, &diag_cur, &r, tol));
         if abs_converged || rel_converged {
             // Termination does not move the iterate, so the caches remain valid.
             self.r_cache = Some(r);
@@ -789,15 +783,15 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         //   * tol_cost_rel  |actred| ≤ tol·F  AND  prered ≤ tol·F  AND  ρ ≤ 2.
         //     `|actred|` mirrors MINPACK's `dabs(actred)`.
         //   * tol_step_rel  ‖h‖ ≤ tol_step_rel·‖x‖, the step is negligible
-        //     relative to the iterate. Squared on both sides to avoid a sqrt.
+        //     relative to the iterate, including after a rejected trial.
         let cost_rel_converged = self.tol_cost_rel.is_some_and(|tol| {
             actual_diff.abs() <= tol * prev_cost
                 && l_diff <= tol * prev_cost
                 && rho <= two
         });
-        let step_rel_converged = self.tol_step_rel.is_some_and(|tol| {
-            h.norm_squared() <= tol * tol * state.param.norm_squared()
-        });
+        let step_rel_converged = self
+            .tol_step_rel
+            .is_some_and(|tol| relative_step_converged(&h, &state.param, tol));
         if cost_rel_converged || step_rel_converged {
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
@@ -1146,6 +1140,7 @@ where
         + ScaleInPlace<F>
         + ComponentMulAssign
         + ComponentDivAssign
+        + ComponentZip<F>
         + ComponentMaxAssign
         + FloorZerosInPlace<F>
         + Clone,

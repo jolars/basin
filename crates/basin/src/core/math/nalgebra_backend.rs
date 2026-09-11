@@ -33,8 +33,8 @@ use super::sample::{
 };
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
-    Dot, FloorZerosInPlace, NegInPlace, NormInfinity, NormSquared,
-    ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
+    ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
+    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
 
 macro_rules! if_selected_nalgebra_lapack {
@@ -280,6 +280,25 @@ where
             "component_div_assign: shape mismatch"
         );
         self.zip_apply(other, |x, y| *x = *x / y);
+    }
+}
+
+impl<F, R, C, S> ComponentZip<F> for Matrix<F, R, C, S>
+where
+    F: Scalar,
+    R: Dim,
+    C: Dim,
+    S: Storage<F, R, C>,
+{
+    fn all_zip(
+        &self,
+        other: &Self,
+        mut predicate: impl FnMut(F, F) -> bool,
+    ) -> bool {
+        assert_eq!(self.shape(), other.shape(), "all_zip: shape mismatch");
+        self.iter()
+            .zip(other.iter())
+            .all(|(x, y)| predicate(*x, *y))
     }
 }
 

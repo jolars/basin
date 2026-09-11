@@ -12,12 +12,12 @@ use super::sample::{
 };
 use super::{
     AddDiagonalVectorInPlace, ClampInPlace, ComponentDivAssign,
-    ComponentMaxAssign, ComponentMulAssign, Dot, FloorZerosInPlace,
-    GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveSpd,
-    MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity,
-    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, RankOneUpdate,
-    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex,
-    VectorLen,
+    ComponentMaxAssign, ComponentMulAssign, ComponentZip, Dot,
+    FloorZerosInPlace, GeneralRankOneUpdate, GramMatrix, LinearSolveError,
+    LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity, NormSquared,
+    RankOneUpdate, ScaleInPlace, ScaledAdd, SymmetricEigen,
+    SymmetricEigenError, VectorIndex, VectorLen,
 };
 
 impl<F, S, D> ScaledAdd<F> for ArrayBase<S, D>
@@ -454,6 +454,24 @@ where
             "component_div_assign: shape mismatch"
         );
         self.zip_mut_with(other, |x, y| *x = *x / *y);
+    }
+}
+
+impl<F, S, D> ComponentZip<F> for ArrayBase<S, D>
+where
+    F: Scalar,
+    S: Data<Elem = F>,
+    D: Dimension,
+{
+    fn all_zip(
+        &self,
+        other: &Self,
+        mut predicate: impl FnMut(F, F) -> bool,
+    ) -> bool {
+        assert_eq!(self.shape(), other.shape(), "all_zip: shape mismatch");
+        self.iter()
+            .zip(other.iter())
+            .all(|(x, y)| predicate(*x, *y))
     }
 }
 

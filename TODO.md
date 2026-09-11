@@ -107,12 +107,12 @@ Ordered by recommended sequence.
   parameter recovery, and records MINPACK's unsuccessful machine-precision
   stops. No production stopping contracts or defaults changed.
 
-- [ ] **Harden LM stopping arithmetic.** The [diagnostic
-  probe](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#coordinate-sensitivity-and-an-arithmetic-bug)
-  reproduces false orthogonality convergence when squaring a tiny nonzero
-  gradient underflows. Normalize safely, audit squared step comparisons, and
-  add `f32`/`f64` backend regressions while preserving `None` and exact-zero
-  tolerance semantics.
+- [x] **Harden LM stopping arithmetic.** Shared Cholesky/QR checks now use
+  safely factored orthogonality and unscaled attempted-step comparisons,
+  preserving `None` and exact-zero tolerances. Added `f32`/`f64` dense-backend
+  and sparse Cholesky regressions. The [corrected diagnostic
+  probe](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#arithmetic-correction)
+  reaches the exact solution instead of stopping at initialization.
 
 - [ ] **Design explicit LM numerical no-progress handling.** Follow the
   [stopping
