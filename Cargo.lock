@@ -96,7 +96,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "basin"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "bincode",
  "criterion",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "basin-wasm"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "basin",
  "console_error_panic_hook",
@@ -314,13 +314,13 @@ dependencies = [
 
 [[package]]
 name = "cobyla"
-version = "1.0.2"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d7c3233e5d400a8fd61b50b79797d28a0657e4c0abeb41469b69d2d9d60ef3e"
+checksum = "d0461872f7e4e7216e1a770fbccc1b45a400247538d6b72be1a030b2427c64c4"
 
 [[package]]
 name = "competitor-bench"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "argmin",
  "argmin-math",
@@ -2278,9 +2278,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.16.0"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
+checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
 
 [[package]]
 name = "spindle"
