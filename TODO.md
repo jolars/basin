@@ -4,25 +4,6 @@ Ordered by recommended sequence.
 
 ## General design
 
-- [x] **Investigate the Nelder-Mead performance gap in lme-rs.** The optional
-  Basin backend gives essentially the same numerical results as Argmin on
-  eleven of twelve existing benchmark cases, but the September 10, 2026
-  rerun shows slower fits on the larger vector-search cases. First reproduce
-  the comparison with Basin 1.9.0, then check whether current Basin closes
-  the gap.
-
-  **Investigation result.** The [reproducer and
-  findings](crates/competitor-bench/investigations/lme-nelder-mead/README.md)
-  compare the original binaries, fresh Basin 1.9.0 and current builds, recorded
-  callback replays, allocations, and profiles. Current Basin does not materially
-  change the fit comparison. Its adapter is 2.6–2.8 times faster than Argmin in
-  the replay, while over 99.8% of optimization time on the large cases is inside
-  the shared lme-rs deviance callback. The fresh crossed prepared-fit gap is
-  about 6%, with substantial variation across reruns. The next targets are
-  lme-rs's packed Cholesky and repeated sparse covariance construction; the
-  residual build/layout and timing effects remain unresolved. No production
-  solver change was justified.
-
 - [x] **Investigate the COBYLA performance gap observed during the
   GlobalSearch-rs migration.** This item records the complete initial
   observation; no external discussion is needed to interpret or reproduce
@@ -133,13 +114,18 @@ Ordered by recommended sequence.
 - [ ] Remove the deprecated `TerminationCriterion` facility, all shipped
   criterion types and re-exports, `Executor::terminate_on`,
   `InnerExecutor::terminate_on`, composed `inner_terminate_on` methods,
-  `run_loop`, and `ResumableInner::segment_criteria`. Retain stopping reasons,
-  solver convergence setters, direct execution controls, and closure hooks.
+  `run_loop`, and `ResumableInner::segment_criteria`. Retain stopping
+  reasons, solver convergence setters, direct execution controls, and
+  closure hooks.
+
 - [ ] Remove deprecated tolerance and algorithm-setting aliases listed in
-  [MIGRATING.md](MIGRATING.md), including scalar/root and line-search aliases.
+  [MIGRATING.md](MIGRATING.md), including scalar/root and line-search
+  aliases.
+
 - [ ] Remove `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and
   `with_inner_grad_tol`, along with their implicit inner-gradient checks.
   Use `with_inner_solver` and the supplied solver's convergence settings.
+
 - [ ] Move remaining shared numerical calculations out of the compatibility
   criterion types and remove the compatibility-only tests and bridges.
 
