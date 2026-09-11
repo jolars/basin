@@ -140,9 +140,8 @@ Ordered by recommended sequence.
   reasons, solver convergence setters, direct execution controls, and
   closure hooks.
 
-- [ ] Remove deprecated tolerance and algorithm-setting aliases listed in
-  [MIGRATING.md](MIGRATING.md), including scalar/root and line-search
-  aliases.
+- [ ] Remove deprecated tolerance and algorithm-setting aliases, including
+  scalar/root and line-search aliases.
 
 - [ ] Remove `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and
   `with_inner_grad_tol`, along with their implicit inner-gradient checks.
