@@ -337,7 +337,7 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
     V: ScaleInPlace<F> + ScaledAdd<F>,
-    Proj: Fn(&mut V),
+    Proj: Fn(&P, &mut V),
 {
     let m = state.vertices.len();
     let n = m - 1;
@@ -360,7 +360,7 @@ where
 
     // Reflection: x_r = x_bar + α(x_bar − x_{n+1}) = (1+α)·x_bar − α·x_{n+1}
     affine_into(x_r, x_bar, &state.vertices[worst], -p.alpha);
-    project(x_r);
+    project(problem.inner(), x_r);
     let fr = problem.cost(x_r)?;
 
     if f1 <= fr && fr < fn_ {
@@ -370,7 +370,7 @@ where
     } else if fr < f1 {
         // Try expansion: x_e = x_bar + β(x_r − x_bar).
         affine_into(x_alt, x_bar, x_r, p.beta);
-        project(x_alt);
+        project(problem.inner(), x_alt);
         let fe = problem.cost(x_alt)?;
         if fe < fr {
             std::mem::swap(&mut state.vertices[worst], x_alt);
@@ -383,7 +383,7 @@ where
         // fn ≤ fr < f_{n+1}: outside contraction.
         // x_oc = x_bar + γ(x_r − x_bar).
         affine_into(x_alt, x_bar, x_r, p.gamma);
-        project(x_alt);
+        project(problem.inner(), x_alt);
         let foc = problem.cost(x_alt)?;
         if foc <= fr {
             std::mem::swap(&mut state.vertices[worst], x_alt);
@@ -395,7 +395,7 @@ where
         // fr ≥ f_{n+1}: inside contraction.
         // x_ic = x_bar − γ(x_bar − x_{n+1}) = (1−γ)·x_bar + γ·x_{n+1}.
         affine_into(x_alt, x_bar, &state.vertices[worst], p.gamma);
-        project(x_alt);
+        project(problem.inner(), x_alt);
         let fic = problem.cost(x_alt)?;
         if fic < fnp1 {
             std::mem::swap(&mut state.vertices[worst], x_alt);
@@ -419,7 +419,7 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
     V: ScaleInPlace<F> + ScaledAdd<F>,
-    Proj: Fn(&mut V),
+    Proj: Fn(&P, &mut V),
 {
     // Best vertex is fixed at index 0; shrink every other vertex toward
     // it in place: v ← best + δ·(v − best) = (1 − δ)·best + δ·v.
@@ -433,7 +433,7 @@ where
         // Multiply v by δ in place, then add (1−δ)·best; finally project.
         v.scale_in_place(delta);
         v.scaled_add(one - delta, best);
-        project(v);
+        project(problem.inner(), v);
         *c = problem.cost(v)?;
     }
     Ok(())
@@ -468,7 +468,7 @@ where
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
-        next_iter_inner(problem, state, p, &|_: &mut V| {})
+        next_iter_inner(problem, state, p, &|_: &P, _: &mut V| {})
     }
 }
 
@@ -491,10 +491,8 @@ where
         // checks see a feasible simplex (mirrors
         // ProjectedGradientDescent::init's project-an-infeasible-start
         // pattern).
-        let lo = problem.inner().lower().clone();
-        let hi = problem.inner().upper().clone();
         for v in state.vertices.iter_mut() {
-            v.clamp_in_place(&lo, &hi);
+            v.clamp_in_place(problem.inner().lower(), problem.inner().upper());
         }
         ensure_scratch(&mut state);
         init_costs_and_sort(problem, &mut state)?;
@@ -510,10 +508,10 @@ where
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
-        let lo = problem.inner().lower().clone();
-        let hi = problem.inner().upper().clone();
-        next_iter_inner(problem, state, p, &|v: &mut V| {
-            v.clamp_in_place(&lo, &hi)
+        // Borrow the problem only for projection. The borrow ends before
+        // the counted cost call, so no bound-vector copies are needed.
+        next_iter_inner(problem, state, p, &|problem: &P, v: &mut V| {
+            v.clamp_in_place(problem.lower(), problem.upper())
         })
     }
 }
