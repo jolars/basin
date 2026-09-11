@@ -2,6 +2,7 @@
 //! Run `cargo run -p competitor-bench --release --bin verify_lm_qr`.
 //! Add `--damping` to compare damping policies and stopping profiles.
 //! Add `--stopping` to isolate model-reduction and relative-step stops.
+//! Add `--trust-radius` to compare gradient, step, and scaled-radius profiles.
 //! Add `--disable-numerical-no-progress` to reproduce the previous LM policy.
 
 use basin::{
@@ -81,16 +82,23 @@ impl LeastSquaresProblem<f64, Dyn, Dyn> for Probe<'_> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Comparison {
+    Legacy,
+    Damping,
+    Stopping,
+    TrustRadius,
+}
+
 fn compare(
     name: &str,
     model: Model,
     truth: Vec<f64>,
     starts: Vec<Vec<f64>>,
-    damping: bool,
-    stopping: bool,
+    comparison: Comparison,
     numerical_no_progress: bool,
 ) {
-    let detailed = damping || stopping;
+    let detailed = comparison != Comparison::Legacy;
     let truth = DVector::from_vec(truth);
     let (y, j) = model.evaluate(&truth);
     let sv = j.svd(false, false).singular_values;
@@ -99,12 +107,16 @@ fn compare(
     for (start, x) in starts.into_iter().enumerate() {
         let x = DVector::from_vec(x);
         check_jacobian(&model, &x);
-        let kinds: &[&str] = if detailed {
+        let kinds: &[&str] = if comparison == Comparison::TrustRadius {
+            &["trust-cholesky", "trust-qr", "minpack"]
+        } else if detailed {
             &["cholesky", "qr", "trust-cholesky", "trust-qr", "minpack"]
         } else {
             &["cholesky", "qr", "minpack"]
         };
-        let profiles: &[&str] = if stopping {
+        let profiles: &[&str] = if comparison == Comparison::TrustRadius {
+            &["gradient-only", "step-only", "radius-only"]
+        } else if comparison == Comparison::Stopping {
             &[
                 "relative",
                 "gradient-only",
@@ -112,7 +124,7 @@ fn compare(
                 "step-only",
                 "exact-progress",
             ]
-        } else if damping {
+        } else if comparison == Comparison::Damping {
             &["relative", "gradient-only"]
         } else {
             &["legacy"]
@@ -145,7 +157,9 @@ fn compare(
                         solver = solver.with_ftol(0.).with_xtol(0.);
                     } else if profile == "model-only" {
                         solver = solver.with_xtol(0.);
-                    } else if profile == "step-only" {
+                    } else if matches!(profile, "step-only" | "radius-only") {
+                        // MINPACK already uses its scaled radius for xtol, so
+                        // these two reference profiles are intentionally equal.
                         solver = solver.with_ftol(0.);
                     }
                     let (p, report) = solver.minimize(p);
@@ -169,6 +183,11 @@ fn compare(
                         solver = solver
                             .with_relative_model_reduction_tolerance(None)
                             .with_relative_step_tolerance(None);
+                    } else if profile == "radius-only" {
+                        solver = solver
+                            .with_relative_model_reduction_tolerance(None)
+                            .with_relative_step_tolerance(None)
+                            .with_relative_trust_radius_tolerance(1e-12);
                     } else if profile == "model-only" {
                         solver = solver.with_relative_step_tolerance(None);
                     } else if profile == "step-only" {
@@ -304,11 +323,18 @@ fn main() {
         steps();
         return;
     }
-    let damping = std::env::args().any(|x| x == "--damping");
-    let stopping = std::env::args().any(|x| x == "--stopping");
+    let comparison = if std::env::args().any(|x| x == "--trust-radius") {
+        Comparison::TrustRadius
+    } else if std::env::args().any(|x| x == "--stopping") {
+        Comparison::Stopping
+    } else if std::env::args().any(|x| x == "--damping") {
+        Comparison::Damping
+    } else {
+        Comparison::Legacy
+    };
     let numerical_no_progress =
         !std::env::args().any(|x| x == "--disable-numerical-no-progress");
-    if damping || stopping {
+    if comparison != Comparison::Legacy {
         println!(
             "case,start,solver,stopping,condition,converged,residual_calls,jacobian_calls,residual_norm,relative_residual,gradient_infinity,gradient_orthogonality,parameter_error,equivalent_parameter_error,fit_target,recovery_target,termination,parameters"
         );
@@ -323,8 +349,7 @@ fn main() {
             model,
             truth,
             starts,
-            damping,
-            stopping,
+            comparison,
             numerical_no_progress,
         )
     });

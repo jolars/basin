@@ -8,6 +8,8 @@ fixes the reproduced false orthogonality stop.
 The subsequent [numerical no-progress safeguard](#numerical-no-progress-safeguard)
 changes the default stopping policy; the original findings below describe the
 historical baseline with that safeguard disabled.
+The later [scaled trust-radius option](#scaled-trust-radius-convergence) adds
+an independent, disabled-by-default convergence test for trust-region damping.
 
 The current relative tests can mistake a heavily damped step for convergence.
 Disabling them exposes a separate problem: an accurate rounded solution can
@@ -391,3 +393,95 @@ and native-convergence precedence across the supported dense and sparse
 backends. Additional tests preserve callback errors and non-finite trial
 rejections, verify opt-out forwarding and QR conversion, and check that
 `CmaInject` continues after fresh LM inner runs with exact evaluation accounting.
+
+## Scaled trust-radius convergence
+
+Collected September 11, 2026, using Rust 1.89.0 on NixOS, from Basin base
+revision `16c12c6d698465bcde052ae1eb9e09845c1d4bf0` plus this change. The default
+competitor-bench features retain nalgebra 0.34.2 on both sides and
+`levenberg-marquardt` 0.15.0 as the reference. These are deterministic
+solver-effectiveness comparisons, with no timing claim.
+
+Both LM factorizations now offer
+`with_relative_trust_radius_tolerance(value)`. It checks
+`delta <= tolerance * ||sqrt(D) x||` after the radius update and acceptance
+decision, using the current monotone Marquardt diagonal and the accepted
+iterate, or the base after rejection. This follows the observation stage of
+[MINPACK's `lmder`](https://netlib.org/minpack/lmder.f), while retaining Basin's
+positive-gain acceptance rule and damping search. Basin recomputes the norm
+with the current diagonal even after rejection; MINPACK retains its previously
+stored `xnorm` until acceptance. This is not a claim of complete MINPACK parity.
+
+The setting defaults to `None` and remains inactive under Nielsen damping.
+Zero requests an exactly zero radius, not an exactly zero step; the existing
+positive radius safeguards remain. The check requires finite trial quantities
+and reports `SolverConverged` before numerical no-progress handling. The norm
+comparison factors weighted coordinates and binary exponents, avoiding
+overflow or underflow from materializing the norm or tolerance product.
+The unscaled attempted-step setter keeps its existing meaning. No solver
+default, damping arithmetic, or recovery guarantee changes.
+
+The [enabled](lm-trust-radius-enabled.csv) and
+[disabled](lm-trust-radius-disabled.csv) results each contain 180 rows:
+20 starts, three solver routes, and three profiles. The filenames refer to
+the numerical no-progress safeguard. All Basin profiles retain exact-zero
+absolute gradient detection and orthogonality tolerance `1e-12`, with model
+reduction disabled. `gradient-only` disables both progress checks;
+`step-only` enables unscaled attempted-step tolerance `1e-12`; `radius-only`
+instead enables scaled-radius tolerance `1e-12`. Budgets remain
+`200*(n+1)` residual callbacks, including initialization, with independent
+verification excluded. Reported residual counts match instrumented callbacks.
+
+With numerical no-progress enabled:
+
+| Basin route | Profile | Residual calls | Jacobian calls | Fit targets / 20 | Recovery targets / 18 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Trust-region Cholesky | Gradient only | 2,858 | 2,571 | 17 | 16 |
+| Trust-region Cholesky | Step only | 2,607 | 2,554 | 17 | 16 |
+| Trust-region Cholesky | Radius only | 2,605 | 2,554 | 17 | 16 |
+| Trust-region QR | Gradient only | 2,747 | 2,497 | 18 | 16 |
+| Trust-region QR | Step only | 2,524 | 2,478 | 18 | 16 |
+| Trust-region QR | Radius only | 2,524 | 2,478 | 18 | 16 |
+
+Fit means relative residual at most `1e-10`; recovery means equivalent
+parameter error at most `1e-6`, excluding both exactly dependent linear
+starts. The CSV retains the probe's raw parameter-target flags, which can be
+true by coincidence for a nonidentifiable generating vector; the table
+excludes those starts explicitly.
+
+Radius-only and step-only return identical reported parameters and assessment
+outcomes for every Basin case. Cholesky saves one residual call on the
+`collinear-1e-8` zero start and one on the accurate narrow-SVI start. QR uses
+two extra calls on the `collinear-1e-4` zero start and saves two on the accurate
+narrow-SVI start, stopping there at call 11 with relative residual `3.13e-17`
+and equivalent parameter error `1.01e-10`. Both difficult narrow-SVI starts
+still exhaust 1,200 calls and miss both targets. The analytic regression
+tests also demonstrate that a deliberately small radius can satisfy this
+criterion far from a solution. Radius convergence does not establish recovery.
+
+Disabling numerical no-progress changes only the Basin gradient-only rows:
+residual totals rise to 11,855 for Cholesky and 10,461 for QR. All step-only,
+radius-only, and reference rows remain identical. The reference's step-only
+and radius-only profiles intentionally use the same `xtol` setting because
+MINPACK already tests its scaled radius. Each uses 2,524 residual and 2,459
+Jacobian calls, meeting 18 fit and 16 identifiable recovery targets. Its
+gradient-only profile uses 2,548 residual and 2,472 Jacobian calls and retains
+machine-precision stops. Matching tolerances do not make the full stopping
+policies equivalent.
+
+Reproduce with the default competitor-bench features:
+
+```sh
+cargo run -p competitor-bench --release --bin verify_lm_qr -- --trust-radius \
+  > target/lm-trust-radius-enabled.csv
+cargo run -p competitor-bench --release --bin verify_lm_qr -- --trust-radius \
+  --disable-numerical-no-progress > target/lm-trust-radius-disabled.csv
+```
+
+The existing 500-row `--stopping` output is byte-identical before and after
+this change with the radius tolerance left disabled. Focused regressions
+cover acceptance and rejection, monotone scaling, coordinate rescaling,
+exact-zero semantics, non-finite trials, callback errors, model failure,
+native-stop precedence, and builder forwarding. They run across all four
+dense backends, `f32` QR, and sparse Cholesky; arithmetic unit tests cover
+extreme `f32` and `f64` weighted norms.

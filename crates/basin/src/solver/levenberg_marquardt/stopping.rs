@@ -79,6 +79,63 @@ where
     product_le(&[hscale, hnorm], &[tol, xscale, xnorm])
 }
 
+pub(super) fn relative_trust_radius_converged<V, F>(
+    radius: F,
+    x: &V,
+    diagonal: &V,
+    tol: F,
+) -> bool
+where
+    F: Scalar,
+    V: ComponentZip<F>,
+{
+    if !radius.is_finite()
+        || radius < F::zero()
+        || !tol.is_finite()
+        || tol < F::zero()
+    {
+        return false;
+    }
+    let two = F::from_f64(2.).unwrap();
+    let mut exponent = 0;
+    let mut sum = F::zero();
+    // Factor each weighted coordinate before summing. Separate normalizations
+    // of x and D can erase every term when their large entries do not coincide.
+    let finite = x.all_zip(diagonal, |value, square| {
+        if !value.is_finite() || !square.is_finite() || square < F::zero() {
+            return false;
+        }
+        if value == F::zero() || square == F::zero() {
+            return true;
+        }
+        let (power, fraction) = product_parts(&[value.abs(), square.sqrt()]);
+        if sum == F::zero() {
+            exponent = power;
+            sum = fraction * fraction;
+        } else if power > exponent {
+            let factor = two.powi(exponent - power);
+            sum = (sum * factor) * factor + fraction * fraction;
+            exponent = power;
+        } else {
+            let term = fraction * two.powi(power - exponent);
+            sum = sum + term * term;
+        }
+        true
+    });
+    if !finite {
+        return false;
+    }
+    if radius == F::zero() {
+        return true;
+    }
+    if tol == F::zero() || sum == F::zero() {
+        return false;
+    }
+    // Keep the norm's exponent separate even when the norm itself cannot fit.
+    let (power, fraction) = product_parts(&[tol, sum.sqrt()]);
+    product_parts(&[radius]) <= (power + exponent, fraction)
+}
+
 // Keep the norm factored: even an unsquared norm can exceed the scalar range.
 fn norm_parts<V, F>(v: &V) -> Option<(F, F)>
 where
@@ -114,29 +171,170 @@ fn product_le<F: Scalar>(left: &[F], right: &[F]) -> bool {
     if right.contains(&F::zero()) {
         return false;
     }
-    let parts = |factors: &[F]| {
-        let mut fraction = F::one();
-        let mut exponent = 0_i32;
-        for factor in factors {
-            let (mantissa, power, _) = factor.integer_decode();
-            let shift = 63 - mantissa.leading_zeros();
-            fraction = fraction
-                * (F::from_u64(mantissa).unwrap()
-                    / F::from_u64(1_u64 << shift).unwrap());
-            exponent += i32::from(power) + shift as i32;
-            if fraction >= F::from_f64(2.).unwrap() {
-                fraction = fraction * F::from_f64(0.5).unwrap();
-                exponent += 1;
-            }
+    product_parts(left) <= product_parts(right)
+}
+
+// Factors must be positive and finite; callers handle zero before decoding.
+fn product_parts<F: Scalar>(factors: &[F]) -> (i32, F) {
+    let mut fraction = F::one();
+    let mut exponent = 0_i32;
+    for factor in factors {
+        let (mantissa, power, _) = factor.integer_decode();
+        let shift = 63 - mantissa.leading_zeros();
+        fraction = fraction
+            * (F::from_u64(mantissa).unwrap()
+                / F::from_u64(1_u64 << shift).unwrap());
+        exponent += i32::from(power) + shift as i32;
+        if fraction >= F::from_f64(2.).unwrap() {
+            fraction = fraction * F::from_f64(0.5).unwrap();
+            exponent += 1;
         }
-        (exponent, fraction)
-    };
-    parts(left) <= parts(right)
+    }
+    (exponent, fraction)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    macro_rules! extreme_weighted_norms {
+        ($name:ident, $scalar:ty, $power:expr) => {
+            #[test]
+            fn $name() {
+                let two: $scalar = 2.;
+                let large = two.powi($power);
+                let small = two.powi(-$power);
+                assert!(relative_trust_radius_converged(
+                    5.,
+                    &vec![3., -4.],
+                    &vec![4., 4.],
+                    0.5
+                ));
+                assert!(!relative_trust_radius_converged(
+                    6.,
+                    &vec![3., -4.],
+                    &vec![4., 4.],
+                    0.5
+                ));
+                // The weighted norm itself overflows or underflows, but
+                // multiplying by the tolerance gives a representable bound.
+                for (x, d, tol, bound) in [
+                    (large, large, small, two.powi($power / 2)),
+                    (small, small, large, two.powi(-$power / 2)),
+                ] {
+                    assert!(relative_trust_radius_converged(
+                        bound,
+                        &vec![x],
+                        &vec![d],
+                        tol
+                    ));
+                    assert!(!relative_trust_radius_converged(
+                        two * bound,
+                        &vec![x],
+                        &vec![d],
+                        tol
+                    ));
+                }
+                // Independently normalizing x and D would lose both terms.
+                let x = vec![large, small];
+                let d = vec![small, large];
+                let bound = two.powi($power / 2);
+                assert!(relative_trust_radius_converged(
+                    bound / two,
+                    &x,
+                    &d,
+                    1.
+                ));
+                assert!(!relative_trust_radius_converged(
+                    two * bound,
+                    &x,
+                    &d,
+                    1.
+                ));
+                let tiny = <$scalar>::from_bits(1);
+                assert!(relative_trust_radius_converged(
+                    tiny,
+                    &vec![tiny],
+                    &vec![1.],
+                    1.
+                ));
+                assert!(!relative_trust_radius_converged(
+                    tiny,
+                    &vec![large],
+                    &vec![large],
+                    0.
+                ));
+                assert!(relative_trust_radius_converged(
+                    0.,
+                    &vec![0.],
+                    &vec![1.],
+                    0.
+                ));
+                assert!(!relative_trust_radius_converged(
+                    tiny,
+                    &vec![0.],
+                    &vec![1.],
+                    large
+                ));
+                assert!(!relative_trust_radius_converged(
+                    tiny,
+                    &vec![large],
+                    &vec![0.],
+                    large
+                ));
+                for bad in [
+                    <$scalar>::NAN,
+                    <$scalar>::INFINITY,
+                    <$scalar>::NEG_INFINITY,
+                ] {
+                    assert!(!relative_trust_radius_converged(
+                        bad,
+                        &vec![1.],
+                        &vec![1.],
+                        1.
+                    ));
+                    assert!(!relative_trust_radius_converged(
+                        0.,
+                        &vec![1., bad],
+                        &vec![1., 1.],
+                        0.
+                    ));
+                    assert!(!relative_trust_radius_converged(
+                        0.,
+                        &vec![1., 1.],
+                        &vec![1., bad],
+                        0.
+                    ));
+                    assert!(!relative_trust_radius_converged(
+                        0.,
+                        &vec![1.],
+                        &vec![1.],
+                        bad
+                    ));
+                }
+                assert!(!relative_trust_radius_converged(
+                    -1.,
+                    &vec![1.],
+                    &vec![1.],
+                    1.
+                ));
+                assert!(!relative_trust_radius_converged(
+                    0.,
+                    &vec![1.],
+                    &vec![-1.],
+                    1.
+                ));
+                assert!(!relative_trust_radius_converged(
+                    0.,
+                    &vec![1.],
+                    &vec![1.],
+                    -1.
+                ));
+            }
+        };
+    }
+    extreme_weighted_norms!(f32_extreme_weighted_norms, f32, 100);
+    extreme_weighted_norms!(f64_extreme_weighted_norms, f64, 800);
 
     macro_rules! extreme_norms {
         ($name:ident, $scalar:ty) => {

@@ -15,13 +15,14 @@ mod stopping;
 use damping::{scaled_norm, trust_region_step, update_radius};
 use stopping::{
     all_finite, finite_unchanged_trial, orthogonality_converged,
-    relative_step_converged,
+    relative_step_converged, relative_trust_radius_converged,
 };
 
 /// Damping-parameter selection for both Levenberg-Marquardt factorizations.
 ///
 /// Both strategies use the same monotone Marquardt scaling matrix `D`, gain
-/// ratio, and convergence tests. Configure with
+/// ratio, and shared convergence tests. The optional scaled-radius test applies
+/// only to trust-region damping. Configure with
 /// [`LevenbergMarquardt::with_damping`] or
 /// [`LevenbergMarquardtQr::with_damping`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -106,8 +107,9 @@ pub enum LmDamping {
 /// corrections. Inner solves reuse the current model and require no additional
 /// residual or Jacobian callbacks. Acceptance remains `ρ > 0`, and all
 /// convergence settings below keep the same meaning, including the unscaled
-/// relative step test. This option therefore does not reproduce MINPACK's
-/// complete algorithm or stopping behavior.
+/// relative step test. [`Self::with_relative_trust_radius_tolerance`] adds an
+/// optional scaled-radius check at the current iterate. This option does not
+/// reproduce MINPACK's complete algorithm or stopping behavior.
 ///
 /// **Linear solve.** Cholesky is the default and retains dense and sparse
 /// backend coverage. [`Self::with_pivoted_qr`] selects
@@ -138,7 +140,7 @@ pub enum LmDamping {
 ///
 /// # Convergence
 ///
-/// Four native tests combine with OR and report
+/// Five native tests combine with OR and report
 /// [`TerminationReason::SolverConverged`]:
 ///
 /// - [`with_absolute_gradient_tolerance`](Self::with_absolute_gradient_tolerance):
@@ -152,10 +154,15 @@ pub enum LmDamping {
 ///   differs from an observed cost-change test.
 /// - [`with_relative_step_tolerance`](Self::with_relative_step_tolerance):
 ///   `‖h‖ ≤ tolerance · ‖x‖` for the internal trial step, disabled by default.
+/// - [`with_relative_trust_radius_tolerance`](Self::with_relative_trust_radius_tolerance):
+///   `δ ≤ tolerance · sqrt(xᵀ D x)` for the updated trust radius, disabled by
+///   default and inactive under Nielsen damping. A small radius does not
+///   establish fit accuracy or parameter recovery.
 ///
 /// Each accepts a finite nonnegative scalar or `None`. Zero requests an
 /// exact-zero threshold. Gradient tests run before computing a step; model
-/// reduction and relative step tests run where the trial diagnostics are valid.
+/// reduction, relative step, and trust-radius tests run where the trial
+/// diagnostics are valid.
 /// Observed absolute-step and cost-change checks are also opt-in and combine
 /// with native checks using OR. Execution budgets belong on the executor.
 /// The least-squares gradient `Jᵀr` is computed internally; [`NllsState`] does
@@ -234,6 +241,7 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     tol_grad_rel: Option<F>,
     tol_cost_rel: Option<F>,
     tol_step_rel: Option<F>,
+    tol_radius_rel: Option<F>,
     numerical_no_progress: bool,
     tau: F,
     damping: LmDamping,
@@ -265,8 +273,9 @@ impl<V, M> Default for LevenbergMarquardt<V, M> {
 impl<V, M> LevenbergMarquardt<V, M> {
     /// Levenberg-Marquardt with Nielsen damping: `tol_grad = 1e-8`,
     /// `tol_grad_rel = 0.0` (disabled), `tol_cost_rel = 0.0` (disabled),
-    /// `tol_step_rel = 0.0` (disabled), `tau = 1e-3`, `max_inner_attempts = 50`,
-    /// and numerical no-progress handling enabled.
+    /// `tol_step_rel = 0.0` (disabled), trust-radius convergence disabled,
+    /// `tau = 1e-3`, `max_inner_attempts = 50`, and numerical no-progress
+    /// handling enabled.
     pub fn new() -> Self {
         Self::defaults()
     }
@@ -279,6 +288,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             tol_grad_rel: None,
             tol_cost_rel: None,
             tol_step_rel: None,
+            tol_radius_rel: None,
             numerical_no_progress: true,
             tau: F::from_f64(1e-3).unwrap(),
             damping: LmDamping::Nielsen,
@@ -414,13 +424,14 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         self
     }
 
-    /// Relative step tolerance, the MINPACK `xtol` test (Moré 1978):
+    /// Relative attempted-step tolerance, analogous to MINPACK's `xtol`:
     /// emit [`TerminationReason::SolverConverged`] when the accepted (or
     /// attempted) step is negligible relative to the iterate,
     /// `‖h‖ ≤ tol·‖x‖`. Nielsen's smooth μ-update carries no explicit
     /// trust radius `δ`, so the step norm is the natural analog of
     /// MINPACK's `delta ≤ xtol·xnorm`. Set to `0.0` to disable. Default
-    /// `0.0` (disabled); use e.g. `1e-8` for MINPACK `xtol` parity.
+    /// `0.0` (disabled). For a scaled-radius criterion with trust-region
+    /// damping, use [`Self::with_relative_trust_radius_tolerance`].
     /// Converges when *any* enabled test fires (see
     /// [`with_tol_grad`](Self::with_tol_grad)).
     #[allow(deprecated)]
@@ -435,6 +446,10 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
 
     /// Configure the attempted step norm relative to the current iterate norm.
     ///
+    /// This uses the unscaled internal step under either damping strategy.
+    /// [`Self::with_relative_trust_radius_tolerance`] configures the separate
+    /// scaled-radius test for trust-region damping.
+    ///
     /// `None` disables the test; zero requests an exact-zero threshold.
     /// Values must be finite and nonnegative. Enabled tests combine with OR;
     /// each model-based test retains its internal conjunction and observation stage.
@@ -444,6 +459,44 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         value: impl Into<Option<F>>,
     ) -> Self {
         self.tol_step_rel = crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
+    /// Configure the scaled trust radius relative to the scaled iterate norm.
+    ///
+    /// With [`LmDamping::TrustRegion`], reports
+    /// [`TerminationReason::SolverConverged`] when
+    /// `δ ≤ tolerance * sqrt(xᵀ D x)`, using the updated radius and the
+    /// current monotone Marquardt diagonal. The check runs after acceptance:
+    /// `x` is the accepted iterate, or the base iterate after rejection.
+    /// Parameters, step, residuals, gradient, costs, and reduction diagnostics
+    /// must be finite. It combines with other native tests using OR and takes
+    /// precedence over the numerical no-progress safeguard.
+    ///
+    /// Disabled by default. `None` disables the test; zero requires an exactly
+    /// zero radius, not just a zero step. The existing positive radius safeguards
+    /// remain in effect. Values must be finite and nonnegative. Repeated calls
+    /// replace this setting. Configure before starting a solve.
+    ///
+    /// This setting is retained but inactive with [`LmDamping::Nielsen`], so
+    /// damping and tolerance can be configured in either order. It does not
+    /// change [`Self::with_relative_step_tolerance`], which tests the unscaled
+    /// attempted step. A small radius can occur far from a solution and does
+    /// not establish fit accuracy or parameter recovery.
+    ///
+    /// ```
+    /// use basin::{DenseMatrix, LevenbergMarquardt, LmDamping};
+    /// let solver: LevenbergMarquardt<Vec<f64>, DenseMatrix> =
+    ///     LevenbergMarquardt::new()
+    ///         .with_damping(LmDamping::TrustRegion)
+    ///         .with_relative_trust_radius_tolerance(1e-12);
+    /// ```
+    pub fn with_relative_trust_radius_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_radius_rel =
+            crate::core::convergence::optional_tolerance(value);
         self
     }
 
@@ -476,8 +529,9 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Select how damping is adapted, independently of the factorization.
     ///
     /// Default: [`LmDamping::Nielsen`]. Both strategies preserve the same
-    /// scaling, acceptance (`gain_ratio > 0`), and stopping tests. Configure
-    /// this before starting a solve.
+    /// scaling, acceptance (`gain_ratio > 0`), and shared stopping tests.
+    /// [`Self::with_relative_trust_radius_tolerance`] is active only with
+    /// trust-region damping. Configure this before starting a solve.
     pub fn with_damping(mut self, damping: LmDamping) -> Self {
         self.damping = damping;
         self
@@ -792,6 +846,16 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 .all(|value| value.is_finite())
             && [&h, &r, &r_trial, &g].into_iter().all(all_finite);
 
+        let radius_tolerance = self.tol_radius_rel.filter(|_| {
+            self.damping == LmDamping::TrustRegion
+                && [prev_cost, f_trial, actual_diff, l_diff, rho]
+                    .into_iter()
+                    .all(|value| value.is_finite())
+                && [&state.param, &x_trial, &h, &r, &r_trial, &g]
+                    .into_iter()
+                    .all(all_finite)
+        });
+
         if self.damping == LmDamping::TrustRegion {
             let pnorm = h.dot(&dh).sqrt();
             let radius =
@@ -826,11 +890,19 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             self.jtr_cache = Some(g);
         }
 
+        let radius_rel_converged = radius_tolerance.is_some_and(|tol| {
+            relative_trust_radius_converged(
+                self.radius.expect("trust radius not initialized"),
+                &state.param,
+                &d,
+                tol,
+            )
+        });
         self.mu = Some(mu);
         self.nu = nu;
         self.diag = Some(d);
 
-        // Check MINPACK's ftol and xtol after committing an accepted step.
+        // Progress tests also run after rejection, when the base is retained.
         //
         //   * tol_cost_rel  |actred| ≤ tol·F  AND  prered ≤ tol·F  AND  ρ ≤ 2.
         //     `|actred|` mirrors MINPACK's `dabs(actred)`.
@@ -844,7 +916,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let step_rel_converged = self
             .tol_step_rel
             .is_some_and(|tol| relative_step_converged(&h, &state.param, tol));
-        if cost_rel_converged || step_rel_converged {
+        if cost_rel_converged || step_rel_converged || radius_rel_converged {
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
 
@@ -1020,6 +1092,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
                 tol_grad_rel: self.tol_grad_rel,
                 tol_cost_rel: self.tol_cost_rel,
                 tol_step_rel: self.tol_step_rel,
+                tol_radius_rel: self.tol_radius_rel,
                 numerical_no_progress: self.numerical_no_progress,
                 tau: self.tau,
                 damping: self.damping,
@@ -1164,6 +1237,15 @@ where
         value: impl Into<Option<F>>,
     ) -> Self {
         self.inner = self.inner.with_relative_step_tolerance(value);
+        self
+    }
+    /// Configure [`LevenbergMarquardt::with_relative_trust_radius_tolerance`]
+    /// for the QR route, with the same scaling, defaults, and stopping behavior.
+    pub fn with_relative_trust_radius_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.inner = self.inner.with_relative_trust_radius_tolerance(value);
         self
     }
     /// Configure [`LevenbergMarquardt::with_no_progress_check`] for the QR route.

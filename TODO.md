@@ -122,9 +122,12 @@ Ordered by recommended sequence.
   comparison](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#numerical-no-progress-safeguard)
   saves 41,187 residual calls with identical parameters and assessment outcomes.
 
-- [ ] **Consider opt-in scaled trust-radius convergence for LM.** Restrict it
-  to trust-region damping and preserve the documented unscaled attempted-step
-  test. Do not infer parameter recovery from a small radius or damped step.
+- [x] **Add opt-in scaled trust-radius convergence for LM.** Both factorizations
+  expose `with_relative_trust_radius_tolerance`, disabled by default and
+  inactive under Nielsen damping. Preserves the unscaled attempted-step test
+  and makes no parameter-recovery claim. The [retained
+  comparison](crates/competitor-bench/investigations/cobyla-lm/lm-stopping.md#scaled-trust-radius-convergence)
+  separates stopping reasons, callback counts, fit accuracy, and recovery.
 
 - [ ] **Add the full-form `NonlinearConstraints` aggregator (tenet 4).** Model
   PRIMA's full COBYLA input by folding nonlinear inequalities, optional

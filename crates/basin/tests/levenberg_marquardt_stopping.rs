@@ -41,6 +41,190 @@ macro_rules! stopping_checks {
             }
 
             #[test]
+            fn trust_radius_uses_updated_radius_and_accepted_iterate() {
+                for tolerance in [None, Some(0.), Some(1.), Some(1.5)] {
+                    let result = Executor::from_start(
+                        Affine { scale: [1., 1.], target: [3., 0.] },
+                        ($solver)
+                            .with_damping(LmDamping::TrustRegion)
+                            .with_absolute_gradient_tolerance(None)
+                            .with_relative_trust_radius_tolerance(tolerance),
+                        ($vector_new)(&[1., 0.]),
+                    )
+                    .max_iter(1)
+                    .run()
+                    .unwrap();
+                    // The accepted step is two, the updated radius is four,
+                    // and the accepted iterate norm is three.
+                    assert_eq!(result.reason, if tolerance == Some(1.5) {
+                        TerminationReason::SolverConverged
+                    } else {
+                        TerminationReason::MaxIter
+                    });
+                    assert!((result.param()[0] - 3.).abs() < 16. * <$scalar>::EPSILON);
+                    assert_eq!(result.cost_evals(), 2);
+                    assert_eq!(result.state.jacobian_evals(), 1);
+                }
+            }
+
+            #[test]
+            fn trust_radius_uses_shrunk_radius_and_base_after_rejection() {
+                struct Quadratic;
+                impl Residual for Quadratic {
+                    type Param = $vector;
+                    type Output = $vector;
+                    type Error = Infallible;
+                    fn residual(&self, x: &$vector) -> Result<$vector, Infallible> {
+                        Ok(($vector_new)(&[x[0] * x[0] - 1., x[1]]))
+                    }
+                }
+                impl Jacobian for Quadratic {
+                    type Jacobian = $matrix;
+                    fn jacobian(&self, x: &$vector) -> Result<$matrix, Infallible> {
+                        Ok(($matrix_new)(&[2. * x[0], 0., 0., 1.]))
+                    }
+                }
+                for (tolerance, converged) in [(0.5, false), (5., true)] {
+                    let result = Executor::from_start(
+                        Quadratic,
+                        ($solver)
+                            .with_damping(LmDamping::TrustRegion)
+                            .with_absolute_gradient_tolerance(None)
+                            .with_relative_trust_radius_tolerance(tolerance),
+                        ($vector_new)(&[0.1, 0.]),
+                    )
+                    .max_iter(1)
+                    .run()
+                    .unwrap();
+                    // The rejected GN trial is 5.05. The radius shrinks to
+                    // 0.099, while the base's scaled norm remains 0.02.
+                    assert_eq!(result.reason, if converged {
+                        TerminationReason::SolverConverged
+                    } else {
+                        TerminationReason::MaxIter
+                    });
+                    assert_eq!(result.param()[0], 0.1);
+                    assert_eq!(result.cost_evals(), 2);
+                    assert_eq!(result.state.jacobian_evals(), 1);
+                }
+            }
+
+            #[test]
+            fn trust_radius_uses_current_monotone_scaling() {
+                struct Quadratic;
+                impl Residual for Quadratic {
+                    type Param = $vector;
+                    type Output = $vector;
+                    type Error = Infallible;
+                    fn residual(&self, x: &$vector) -> Result<$vector, Infallible> {
+                        Ok(($vector_new)(&[x[0] * x[0] - 4., x[1]]))
+                    }
+                }
+                impl Jacobian for Quadratic {
+                    type Jacobian = $matrix;
+                    fn jacobian(&self, x: &$vector) -> Result<$matrix, Infallible> {
+                        Ok(($matrix_new)(&[2. * x[0], 0., 0., 1.]))
+                    }
+                }
+                for (tolerance, evaluations) in [(0.6, 3), (0.055, 4)] {
+                    let result = Executor::from_start(
+                        Quadratic,
+                        ($solver)
+                            .with_damping(LmDamping::TrustRegion)
+                            .with_absolute_gradient_tolerance(None)
+                            .with_relative_trust_radius_tolerance(tolerance),
+                        ($vector_new)(&[1., 0.]),
+                    ).max_iter(evaluations - 1).run().unwrap();
+                    // Newton iterates are 2.5, 2.05, and about 2.00061.
+                    // D grows from 4 to 25, then retains 25 as J shrinks.
+                    assert_eq!(result.reason, TerminationReason::SolverConverged);
+                    assert_eq!(result.cost_evals(), evaluations);
+                    assert_eq!(result.state.jacobian_evals(), evaluations - 1);
+                }
+            }
+
+            #[test]
+            fn trust_radius_is_scaled_but_does_not_establish_recovery() {
+                for scale in [1., (1. / <$scalar>::EPSILON).sqrt()] {
+                    for (tolerance, converged) in [(0.1, false), (0.25, true)] {
+                        let result = Executor::from_start(
+                            Affine { scale: [1., 1. / scale], target: [1., scale] },
+                            ($solver)
+                                .with_damping(LmDamping::TrustRegion)
+                                .with_initial_step_bound(0.1)
+                                .with_absolute_gradient_tolerance(None)
+                                .with_relative_trust_radius_tolerance(tolerance),
+                            ($vector_new)(&[0., scale]),
+                        )
+                        .max_iter(1)
+                        .run()
+                        .unwrap();
+                        assert_eq!(result.reason, if converged {
+                            TerminationReason::SolverConverged
+                        } else {
+                            TerminationReason::MaxIter
+                        });
+                        assert!((result.param()[0] - 0.1).abs() < 0.02);
+                        assert_eq!(result.param()[1], scale);
+                    }
+                }
+            }
+
+            #[test]
+            fn trust_radius_is_inactive_with_nielsen_and_setters_replace() {
+                for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+                    for tolerance in [None, Some(1.5)] {
+                        let result = Executor::from_start(
+                            Affine { scale: [1., 1.], target: [3., 0.] },
+                            ($solver)
+                                .with_relative_trust_radius_tolerance(10.)
+                                .with_damping(damping)
+                                .with_relative_trust_radius_tolerance(tolerance)
+                                .with_absolute_gradient_tolerance(None),
+                            ($vector_new)(&[1., 0.]),
+                        )
+                        .max_iter(1)
+                        .run()
+                        .unwrap();
+                        assert_eq!(result.reason, if damping == LmDamping::TrustRegion && tolerance.is_some() {
+                            TerminationReason::SolverConverged
+                        } else {
+                            TerminationReason::MaxIter
+                        });
+                        assert_eq!(result.cost_evals(), 2);
+                    }
+                }
+            }
+
+            #[test]
+            fn zero_step_does_not_imply_zero_radius() {
+                for safeguard in [false, true] {
+                    for tolerance in [None, Some(0.), Some(101.)] {
+                        let result = Executor::from_start(
+                            Affine { scale: [1., 1.], target: [1., 0.] },
+                            ($solver)
+                                .with_damping(LmDamping::TrustRegion)
+                                .with_no_progress_check(safeguard)
+                                .with_absolute_gradient_tolerance(None)
+                                .with_relative_trust_radius_tolerance(tolerance),
+                            ($vector_new)(&[1., 0.]),
+                        )
+                        .max_iter(1)
+                        .run()
+                        .unwrap();
+                        assert_eq!(result.reason, if tolerance == Some(101.) {
+                            TerminationReason::SolverConverged
+                        } else if safeguard {
+                            TerminationReason::NumericalNoProgress
+                        } else {
+                            TerminationReason::MaxIter
+                        });
+                        assert_eq!(result.cost_evals(), 2);
+                    }
+                }
+            }
+
+            #[test]
             fn orthogonality_normalizes_before_squaring() {
                 let tiny: $scalar = $tiny;
                 for scale in [tiny, 1., 1. / tiny] {
