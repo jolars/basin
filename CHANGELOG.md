@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.11.0](https://github.com/jolars/basin/compare/v1.10.0...v1.11.0) (2026-09-11)
+
+### Features
+- add full-form nonlinear constraints ([`49df7ce`](https://github.com/jolars/basin/commit/49df7ce37408eb6c125303193696eee637a2bf30))
+- add optional LM trust-radius convergence ([`d2b6d84`](https://github.com/jolars/basin/commit/d2b6d8417ecf294319ff9fd496c2fca925103d0c))
+- stop LM on numerical no-progress ([`16c12c6`](https://github.com/jolars/basin/commit/16c12c6d698465bcde052ae1eb9e09845c1d4bf0))
+- make LM damping configurable ([`5ae5463`](https://github.com/jolars/basin/commit/5ae54633ba7e89a131c670ff3d6a2cb0c445f432))
+- move convergence settings onto solvers ([`fdf08ca`](https://github.com/jolars/basin/commit/fdf08cadd6b3daf2d86d585435215c4474353c7e))
+
+### Bug Fixes
+- harden LM stopping arithmetic ([`25d1b04`](https://github.com/jolars/basin/commit/25d1b04fc2386bd3a08b75fb8667c1d3d30c88fa))
+
+### Performance Improvements
+- **nelder-mead:** eliminate projected bound-vector clones (#95) ([`ad4ef87`](https://github.com/jolars/basin/commit/ad4ef87ee879df65b7a9ce9b9c3baf60e6470089))
+- **cobyla:** share signed and absolute dot reductions ([`b742f0c`](https://github.com/jolars/basin/commit/b742f0cba1be3b431fb99257f37d1362fb040b62))
+- **cobyla:** reuse trial buffers ([`d80a05a`](https://github.com/jolars/basin/commit/d80a05aadba9bb53c5e6ba184ae0fcbde1852d29))
+
 ## [1.10.0](https://github.com/jolars/basin/compare/v1.9.0...v1.10.0) (2026-09-10)
 
 ### Features
