@@ -119,10 +119,11 @@ include adapter overhead and use inexpensive analytic derivatives.
   `Steihaug::with_forcing_parameters(kappa, theta)` for adaptive or fixed
   residual thresholds, preserving the default forcing rule and iteration
   cap.
-- [ ] **Measure Steihaug with expensive derivatives.** Basin also used more
-  Hessian evaluations on Rosenbrock despite finishing faster: median counts
-  were 22.5 versus 9.5 in 2D and 102 versus 62 in 20D, on shared successful
-  starts. Measure when derivative cost outweighs the lower solver overhead.
+- [x] **Measure Steihaug with expensive derivatives.** Reproduced the evaluation
+  gap. Added Hessian work reverses the timing advantage at about 0.5 µs/call
+  in 2D Rosenbrock and 1.5 µs/call in 20D, on shared successful starts; equal
+  work in both derivative callbacks roughly halves those thresholds. See the
+  [measurements and reproducible probe](crates/competitor-bench/investigations/steihaug-derivatives/README.md).
 - [x] **Investigate gradient descent's extra evaluations on sphere.** Reproduced
   6 objective / 5 gradient calls versus argmin's 3 / 2. One extra pair is an
   accepted-point reevaluation; the remaining two arise from Basin's
