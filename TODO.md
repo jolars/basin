@@ -88,6 +88,69 @@ without reannealing; serialization and performance remain migration work. Run
 the prototype with `cargo test -p basin --test state_api_prototype` and the
 desired backend features.
 
+## Performance investigations
+
+### globalsearch comparison (2026-09-14)
+
+Compared Basin 1.11.0 with argmin 0.11.0 through globalsearch's public local
+solver adapters at commit `70ad94205235a682d9376663a858be4aa3cb3b53`. The
+release benchmark used five problems, 24 shared starts per problem, and nine
+timing rounds on a Ryzen 9 7900. Times below compare identical starts where both
+backends evaluated a point with `f(x) - f* <= 1e-6`, with limits of 1,000 outer
+iterations and 20,000 objective evaluations. Native stopping tests were disabled
+for this comparison; reaching the target at a trial point does not certify a
+returned solution or stationarity.
+
+Steihaug was slower in Basin only on the ill-conditioned quadratic:
+
+  | Problem                        | Basin relative to argmin |
+  | ------------------------------ | ------------------------ |
+  | Sphere, 20D                    | 1.21x faster             |
+  | Ill-conditioned quadratic, 20D | 1.93x slower             |
+  | Rosenbrock, 2D                 | 2.19x faster             |
+  | Rosenbrock, 20D                | 1.74x faster             |
+  | Six-hump camel, 2D             | 3.02x faster             |
+
+Across these five problems, Steihaug's geometric mean speedup was 1.49x, with
+103/120 target hits for Basin versus 100/120 for argmin. These measurements
+include adapter overhead and use inexpensive analytic derivatives.
+
+- [ ] **Investigate Steihaug's inner CG stopping rule.** On the 20D diagonal
+  quadratic with condition number 10,000, Basin took 43.08 us versus
+  argmin's 22.34 us, with median Hessian evaluation counts of 16 versus 4.
+  Basin's adaptive residual tolerance and dimension-sized CG iteration cap
+  differ from argmin's much tighter residual tolerance and effectively
+  unlimited inner iterations. These are possible contributors, not an
+  isolated cause. Reproduce in Basin's benchmark suite and compare matched
+  inner tolerances and caps before changing defaults.
+- [ ] **Measure Steihaug with expensive derivatives.** Basin also used more
+  Hessian evaluations on Rosenbrock despite finishing faster: median counts
+  were 22.5 versus 9.5 in 2D and 102 versus 62 in 20D, on shared successful
+  starts. Measure when derivative cost outweighs the lower solver overhead.
+- [ ] **Investigate gradient descent's extra evaluations on sphere.** Basin used
+  a median of 6 objective and 5 gradient evaluations versus argmin's 3 and 2.
+  Times were approximately tied at 0.90 us versus 0.88 us; the evaluation
+  difference is more useful to investigate than the small timing difference.
+  Check line-search initialization and evaluation reuse.
+- [ ] **Profile copies in the globalsearch adapter.** The integration copies
+  parameters, gradients, and Hessians between ndarray and Basin's Vec/dense
+  representations. Quantify allocations and copying at larger dimensions
+  before attributing costs to the solver. This is an integration concern;
+  its contribution has not been profiled.
+- [ ] **Expand convergence coverage and budgets.** Both backends struggled with
+  gradient descent, Cauchy steps, and Nelder-Mead on the harder 20D cases.
+  Neither Nelder-Mead implementation reached the target on any of the three
+  20D problems within 1,000 iterations. Compare larger budgets and retain
+  target-hit rates alongside timings; these misses do not establish a
+  Basin-specific regression.
+
+Local artifacts: [report and
+methodology](../globalsearch-rs/target/backend-comparison/REPORT.md),
+[reproducible
+harness](../globalsearch-rs/target/backend-comparison/src/main.rs), and
+[plots](../globalsearch-rs/target/backend-comparison/plots/index.html). These
+live in globalsearch's ignored `target/` directory.
+
 ## Basin 2.0
 
 - [ ] **Migrate existing solvers to shared progress states.** Build on the
