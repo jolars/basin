@@ -212,10 +212,8 @@ pub enum StepOutcome {
 pub struct Stepper<P, S, So> {
     problem: Problem<P>,
     // `Option<S>` because `Solver::next_iter` consumes the state by
-    // value. Take it out, hand it to the solver, put the returned state
-    // back. The slot is `Some` whenever a caller can observe it (between
-    // `step` calls and at construction/drop), so `state()` and
-    // `into_state` can unwrap without checks.
+    // value. A hard error cannot restore that owned value, so the slot
+    // remains empty after a failed step. Successful steps restore it.
     state: Option<S>,
     solver: So,
     control: RunControl<S>,
@@ -231,6 +229,11 @@ where
     So: Solver<P, S>,
 {
     /// Read-only access to the current state, between steps.
+    ///
+    /// # Panics
+    ///
+    /// Panics after [`step`](Self::step) returns `Err`, because the
+    /// failing solver call consumed the state.
     pub fn state(&self) -> &S {
         self.state
             .as_ref()
@@ -258,6 +261,11 @@ where
 
     /// Total iterations that have completed so far. Convenience read
     /// equivalent to `self.state().iter()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics after [`step`](Self::step) returns `Err`, as
+    /// [`state`](Self::state) does.
     pub fn iter(&self) -> u64 {
         self.state().iter()
     }
@@ -275,11 +283,11 @@ where
     ///
     /// Returns `Err` when the underlying problem returns `Err` from any
     /// cost/gradient/residual/Jacobian/Hessian call during the
-    /// step. The stepper is *not* made sticky on `Err`: the typical
-    /// downstream pattern is to surface the error and drop the stepper,
-    /// but callers may inspect [`state`](Self::state) and try again.
-    /// Observers do *not* fire on the `Err` path (the state has been
-    /// consumed by the failing call).
+    /// step. A hard error consumes the state and may leave solver machinery
+    /// partially updated. It does not set [`finished`](Self::finished).
+    /// Callers can inspect [`counts`](Self::counts), then drop the stepper;
+    /// state access and further stepping are not supported after the error.
+    /// Observers and checkpoint sinks do not fire on the failed transition.
     pub fn step(&mut self) -> Result<StepOutcome, So::Error> {
         if let Some(reason) = self.finished {
             return Ok(StepOutcome::Stopped(reason));
@@ -358,6 +366,11 @@ where
     }
 
     /// Consume the stepper and return the final state.
+    ///
+    /// # Panics
+    ///
+    /// Panics after [`step`](Self::step) returns `Err`, because the
+    /// failing solver call consumed the state.
     pub fn into_state(self) -> S {
         self.state.expect("state slot is Some at drop")
     }
@@ -376,11 +389,10 @@ where
 /// [`EvalCounts::default`] (fresh wrapper), for nested
 /// [`run_loop`] calls it is the wrapper count at run-loop entry.
 ///
-/// Returns `Err` when [`Solver::next_iter`] does. The state slot is
-/// untouched on `Err` (the previous iterate is still readable).
-///
-/// Invariant: `state_slot` is `Some` on entry and `Some` on return
-/// (including on the `Err` path).
+/// The state slot must be `Some` on entry and is `Some` after an `Ok`
+/// return. If [`Solver::next_iter`] returns `Err`, it has consumed the
+/// previous state, so the slot remains empty and execution cannot resume
+/// from this pair. The wrapper's charged counts remain available.
 fn step_once<P, S, So>(
     problem: &mut Problem<P>,
     baseline: &EvalCounts,
@@ -416,15 +428,9 @@ where
     let (mut next, mid_iter_reason) = match next_iter_result {
         Ok(t) => t,
         Err(e) => {
-            // step_once owes the caller the `state_slot is Some on return`
-            // invariant even on the error path; we lost `prev` to
-            // `next_iter` (which took it by value), so there's nothing to
-            // put back. Mid-iter hard-aborts therefore leave the slot
-            // empty and the stepper consumes itself; this is the
-            // intentional shape: typed Err is terminal, the typical
-            // caller bubbles it out and drops the stepper. The wrapper's
-            // own counts are still authoritative on the Err path; see
-            // [`Stepper::counts`].
+            // The solver consumed `prev`, so restoring the state would
+            // require a separate snapshot. Preserve the hard error and
+            // leave the wrapper's charged counts available for diagnosis.
             return Err(e);
         }
     };

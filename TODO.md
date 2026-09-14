@@ -4,7 +4,82 @@ Ordered by recommended sequence.
 
 ## General design
 
+### State API prototype
+
+- [x] **Prototype shared progress states with solver-owned machinery.** Follow
+  the [state and lifecycle
+  contracts](CONTRIBUTING.md#state-and-lifecycle-contracts). Exercise BFGS
+  and L-BFGS for ownership and backend inference, Nelder-Mead for
+  observation, and simulated annealing for continuation. Preserve Basin 1.x
+  public APIs and behavior while evaluating compatible additions.
+
+#### Acceptance checks
+
+Covered by the [executable prototype](crates/basin/tests/state_api_prototype.rs)
+and its test-only support modules:
+
+- [x] An external test solver updates shared first-order storage through public
+  methods and obtains correct executor bookkeeping without custom state
+  code.
+- [x] Checked access distinguishes a seed, an evaluated rejected point, and an
+  incumbent. Missing gradients cannot silently disable an attached check.
+  Invalid structural updates preserve the previous record. Solver-owned
+  memory capacity and explicit scale/simplex inputs have one construction
+  path.
+- [x] Nonmonotone iterations and complete population replacement preserve
+  matching historical point/cost records. Equal costs retain metadata; NaN
+  and positive infinity cannot poison incumbent selection; negative infinity
+  does not establish unboundedness. CMA-ES considers mean and samples.
+  Selection changes are explicit events, not inferred from iteration
+  numbers.
+- [x] A constrained transition to a higher-cost feasible incumbent preserves the
+  solver's selection. Cost-only controls cannot treat an infeasible
+  incumbent as a successful objective target.
+- [x] Scalar, fused, batch, nested, and failing evaluations preserve raw counts.
+  Mid-step publication stamps the final charged count without adding an
+  iteration. Repeated boundary observation does not refresh incumbent age.
+  Batches charge submitted work even on failure; fused calls charge each
+  category. Shared-wrapper inner runs use deltas, and adapter counts merge
+  once.
+- [x] Reusing a solver for a fresh run agrees with fresh construction, including
+  after a dimension change. Point warm starts reevaluate the point and reset
+  momentum, model history, and convergence history. Independent chains use
+  explicit seeds without consuming a prototype's live RNG.
+- [x] Pausing and resuming BFGS/L-BFGS and deterministic seeded annealing
+  reproduces uninterrupted evaluations and iterates, including
+  iteration-zero checkpoints and stateful convergence checks. Hard errors do
+  not publish partial state.
+- [x] Nelder-Mead observation uses authoritative simplex storage without a
+  second full copy. Final model access and checkpoint extraction consume
+  ownership without imposing `Clone` or serialization on the solver.
+- [x] Construction and the selected capability bounds work on every claimed
+  backend, preserve `f32` round trips and the default WASM build, and keep
+  matrix inference practical at ordinary BFGS call sites.
+
+#### Findings and remaining design work
+
+The ownership split works across the four backends and both scalar types. BFGS
+infers its matrix through a backend association and accepts an explicit
+override. Existing observers borrow the shared simplex, and owned checkpoints
+preserve model, RNG, neighbor, and convergence history. Population updates
+preserve member order so solver-owned per-member data stays aligned.
+
+Before adding production APIs, settle the public home of the matrix association
+and rank-update capability (currently a test-local adapter), factories for
+resetting configured components, and integration with execution controls. The
+algorithm adapters cover unbounded L-BFGS, classical Nelder-Mead, and annealing
+without reannealing; serialization and performance remain migration work. Run
+the prototype with `cargo test -p basin --test state_api_prototype` and the
+desired backend features.
+
 ## Basin 2.0
+
+- [ ] **Migrate the state API after validating the
+  [prototype](#state-api-prototype).** Apply the accepted ownership and
+  lifecycle contracts, including uniform evaluation categories, explicit
+  incumbent-selection capabilities, and solver/state checkpoints. Document
+  replacement constructors, public types, trait bounds, stopping semantics,
+  and serialized-format compatibility.
 
 - [ ] **Simplify and strengthen the full-form constraint API (tenet 4).**
   Consider having COBYLA consume `NonlinearConstraints` directly, removing

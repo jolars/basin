@@ -196,6 +196,46 @@ These shape API decisions and are non-obvious from the code alone.
    to a backend the moment it can be done honestly (pure-Rust, wasm-clean, no
    BLAS/LAPACK, no stub).
 
+## State and lifecycle contracts
+
+The target is shared progress states with solver-owned algorithm machinery.
+Preserve Basin 1.x behavior during the [prototype and
+migration](TODO.md#state-api-prototype); incompatible changes belong in 2.0.
+
+- **Ownership:** solvers own settings, models, history, RNGs, and working
+  buffers. States expose progress through a few capability-based shapes.
+  Observable simplexes and populations may live directly in state to avoid
+  duplicate storage. Initialization inputs remain explicit.
+- **Availability:** construction is not evaluation. Provide checked access to
+  missing records, and populate every advertised capability before observation.
+  A state that never supplies a gradient must not implement `GradientState`.
+- **Updates:** external solvers can reuse shared storage through public
+  operations that keep points, costs, derivatives, and population entries
+  consistent. The executor owns bookkeeping. Observers see coherent boundaries
+  without triggering evaluations.
+- **Incumbents:** retain matching point, cost, and selection metadata across
+  iterations. Best tracking covers published candidates, not every evaluation;
+  timestamps record publication. Constrained selection may prefer a higher-cost
+  feasible point, so generic objective-based controls require a capability that
+  guarantees compatible selection semantics.
+- **Counts:** `Problem` owns authoritative `EvalCounts`; state preserves every
+  category. Category readers and budgets must agree, with explicit names for
+  aggregates. Keep the existing folded readers until migration. Iterations count
+  completed steps; a clean mid-step stop updates counts without adding a step.
+- **Continuation:** fresh runs reset evolving machinery and bookkeeping; point
+  warm starts reevaluate their input. Model reuse requires an explicit contract.
+  Exact continuation retains the solver/state/counts together and skips
+  initialization and convergence reset. Executor clocks and hooks are separate.
+  A hard error promises neither rollback nor recoverable state.
+- **Results:** ordinary results retain progress. Provide an opt-in path that
+  returns the solver and counts by ownership for diagnostics and checkpoints,
+  without requiring workspace cloning or serialization.
+
+Current API guarantees belong in the rustdoc for
+[state](crates/basin/src/core/state.rs),
+[solver](crates/basin/src/core/solver.rs), and
+[executor](crates/basin/src/core/executor.rs).
+
 ## WASM as a hard constraint
 
 Basin must build for `wasm32-unknown-unknown` out of the box: a constraint on

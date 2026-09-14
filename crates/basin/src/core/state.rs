@@ -16,8 +16,7 @@
 //! both `Lbfgs` modes, the NLLS family, CMA-ES, barrier/AL, etc.) and the
 //! shipped termination criteria all carry the same `F = f64` default. See
 //! `tests/f32_round_trip.rs` for an end-to-end demonstration that the full
-//! pipeline composes at `F = f32`, and the *Provisional choices* section of
-//! `CONTRIBUTING.md`.
+//! pipeline composes at `F = f32`.
 //!
 //! [`AcceptanceState`] exposes proposal acceptance history to generic stall
 //! criteria. [`ExactResumeState`] marks a state that contains the complete
@@ -83,8 +82,8 @@ use crate::core::problem::EvalCounts;
 /// - **Implementor must:** keep [`param`](Self::param) stable between
 ///   iterations: the returned reference is valid until the next
 ///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
-///   returns. [`cost_evals`](Self::cost_evals) counts every call to the
-///   problem's cost function, not iterations: a single
+///   returns. [`cost_evals`](Self::cost_evals) reports evaluation work
+///   using the state's [`CountsMirror`] mapping, not iterations: a single
 ///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter) may
 ///   evaluate the cost many times (line searches, Nelder-Mead shrinks),
 ///   and users budget against this counter rather than
@@ -95,15 +94,18 @@ use crate::core::problem::EvalCounts;
 /// The trait exposes two parallel views of the iterate stream:
 ///
 /// - **Current** ([`param`](Self::param), [`cost`](Self::cost)): what
-///   the solver is working with right now. May be non-monotone: a
-///   line-search probe, a rejected Brent step, a CMA-ES sample. Solvers
-///   write these.
-/// - **Best so far** ([`best_param`](Self::best_param),
+///   the solver's reported point and its evaluated cost. Examples include
+///   an accepted iterate, a Brent probe, and the CMA-ES distribution mean.
+///   The sequence may be nonmonotone. Solvers write these.
+/// - **Selected incumbent** ([`best_param`](Self::best_param),
 ///   [`best_cost`](Self::best_cost), [`best_iter`](Self::best_iter),
-///   [`best_cost_evals`](Self::best_cost_evals)): the lowest-cost
-///   iterate ever observed and the iter/eval count at which it was
-///   found. **Executor-maintained**: solvers do not write these; the
-///   executor calls [`update_best`](Self::update_best) after every
+///   [`best_cost_evals`](Self::best_cost_evals)): the retained point and
+///   the iter/eval counts recorded by the state's selection rule.
+///   Most states retain the lowest-cost published point. Constrained
+///   states such as [`CobylaState`] and [`ConstrainedMadsState`] instead
+///   mirror a solver-selected incumbent whose objective may increase
+///   as feasibility improves. The executor calls
+///   [`update_best`](Self::update_best) after every
 ///   successful [`Solver::init`](crate::core::solver::Solver::init)/
 ///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
 ///   Termination criteria like
@@ -113,19 +115,22 @@ use crate::core::problem::EvalCounts;
 ///   [`CostTolerance`](crate::core::termination::CostTolerance) bind on
 ///   `cost()`.
 ///
-/// For state shapes whose [`cost`](Self::cost) is monotone non-increasing
-/// by construction (sorted-simplex/sorted-population), `best_cost()`
-/// equals `cost()` at every check: the two accessors coincide. Single-
-/// iterate shapes ([`BasicState`], [`QuasiNewtonState`], [`LbfgsState`])
-/// have the two diverge whenever the current iterate is worse than the
-/// running best (Brent on a non-improving probe; SA/basin-hopping on a
-/// transient uphill step; …).
+/// Best tracking sees published state, not every problem evaluation.
+/// For example, [`CmaEsState`] considers its mean and sampled population.
+/// An unreported line-search probe is not automatically considered.
+/// Evaluation metadata records the count at publication, which can include
+/// evaluations made after the selected point was found.
+///
+/// [`BasicSimplexState`] and [`BasicPopulationState`] return their current
+/// first member as `best_param()`. Their solvers must retain the historical
+/// best member to keep that point paired with `best_cost()`; sorting alone
+/// does not establish this invariant. Single-iterate shapes can retain a
+/// historical point separately from a worse current iterate.
 pub trait State {
     /// The parameter type the solver iterates over (e.g. `Vec<f64>`,
     /// `nalgebra::DVector<f64>`).
     type Param;
-    /// The scalar type of the objective. In practice always `f64` (see
-    /// the module docs).
+    /// The scalar type of the objective, such as `f64` or `f32`.
     type Float;
 
     /// Number of fully completed iterations. A
@@ -137,7 +142,9 @@ pub trait State {
     /// Increment [`iter`](Self::iter) by one. Called by the executor
     /// after a successful [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
     fn increment_iter(&mut self);
-    /// Cumulative count of cost-function evaluations performed so far.
+    /// Cumulative evaluation work under the state's [`CountsMirror`] mapping.
+    /// In Basin 1.x this can include residual or derivative work as well as
+    /// cost-function calls; it is not uniformly the raw cost-call count.
     /// Diverges from `iter()` whenever a single iteration evaluates the
     /// cost more than once (line searches, Nelder-Mead shrinks, etc.);
     /// this is what users actually budget against.
@@ -154,7 +161,9 @@ pub trait State {
     fn cost_evals(&self) -> u64;
     /// Current iterate. Stable between
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
-    /// calls; safe to read at any iteration including iter 0.
+    /// calls; available after successful initialization, including iter 0.
+    /// Some constructors supply it immediately, while an empty population
+    /// such as [`BasicPopulationState::with_size`] must first be initialized.
     fn param(&self) -> &Self::Param;
     /// Cost at the current [`param`](Self::param).
     ///
@@ -167,16 +176,16 @@ pub trait State {
     /// the cached cost. By contract the executor calls `init` before any
     /// termination criterion check, so reads from criteria and from
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
-    /// are safe. Sorted-simplex/sorted-population states
-    /// ([`BasicSimplexState`], [`BasicPopulationState`]) are populated at
-    /// construction and never panic.
+    /// are safe after successful initialization. Simplex and population
+    /// constructors may leave placeholder costs or empty storage, so their
+    /// pre-initialization reads are not a uniform evaluated-cost interface.
     fn cost(&self) -> Self::Float;
 
-    /// Best [`param`](Self::param) ever observed by the executor's
-    /// best-tracking on this state.
+    /// Selected incumbent under this state's best-tracking rule.
     ///
-    /// For sorted-simplex/sorted-population shapes, coincides with
-    /// [`param`](Self::param) (the best vertex is always at index 0).
+    /// For [`BasicSimplexState`] and [`BasicPopulationState`], coincides
+    /// with [`param`](Self::param); their solvers must preserve the
+    /// historical best member. See the trait's current-vs-best contract.
     ///
     /// # Panics
     ///
@@ -188,21 +197,22 @@ pub trait State {
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
     /// are safe.
     fn best_param(&self) -> &Self::Param;
-    /// Cost at [`best_param`](Self::best_param): the lowest cost ever
-    /// observed on this state.
+    /// Cost of the selected incumbent. This is the historical minimum for
+    /// objective-ordered states, but can increase under constrained
+    /// incumbent selection.
     fn best_cost(&self) -> Self::Float;
-    /// Iteration at which the current best was found. `0` before the
-    /// first [`update_best`](Self::update_best) call; thereafter, the
-    /// value of [`iter`](Self::iter) at the moment of the last strict
-    /// improvement in `best_cost()`.
+    /// Iteration recorded by the most recent incumbent update. Objective-
+    /// ordered states record strict improvements; states that mirror a
+    /// solver-selected incumbent may refresh this on every publication.
     fn best_iter(&self) -> u64;
-    /// Cumulative cost evaluations at the moment the current best was
-    /// found; useful for benchmarking ("how many evals until the
-    /// solver hit its best?").
+    /// [`cost_evals`](Self::cost_evals) at the publication boundary that
+    /// recorded the incumbent. This need not be the precise evaluation
+    /// that found the point.
     fn best_cost_evals(&self) -> u64;
-    /// Refresh the best-so-far slots from the current iterate, if
-    /// [`cost`](Self::cost) strictly improves on
-    /// [`best_cost`](Self::best_cost).
+    /// Refresh the incumbent using this state's selection rule. Most
+    /// states retain strict objective improvements; population states can
+    /// also consider exposed samples, and constrained states can mirror
+    /// the solver's selected incumbent.
     ///
     /// Called by the [`Executor`](crate::core::executor::Executor) after
     /// every successful
@@ -240,9 +250,9 @@ pub trait State {
 pub trait GradientState: State {
     /// Gradient at the current [`param`](State::param), if populated.
     fn gradient(&self) -> Option<&Self::Param>;
-    /// Cumulative count of gradient evaluations performed so far. Lives
-    /// on `GradientState` rather than `State` so derivative-free states
-    /// don't carry a counter they can never increment.
+    /// Cumulative derivative work under the state's [`CountsMirror`]
+    /// mapping. In Basin 1.x this can include Jacobian, Hessian, and
+    /// Hessian-product evaluations as well as gradient calls.
     ///
     /// Populated by the
     /// [`Executor`](crate::core::executor::Executor) from the wrapper's
@@ -250,10 +260,10 @@ pub trait GradientState: State {
     /// [`State::cost_evals`] for the broader rule and
     /// [`CountsMirror`] for the per-state mapping.
     fn gradient_evals(&self) -> u64;
-    /// Cumulative gradient evaluations at the moment the current best
-    /// was found, the companion to [`State::best_cost_evals`]. Useful for
-    /// benchmarking first-order solvers ("how many gradient calls until
-    /// the solver hit its best?").
+    /// [`gradient_evals`](Self::gradient_evals) at the publication boundary
+    /// that recorded the incumbent, the companion to
+    /// [`State::best_cost_evals`]. This is not necessarily the count at
+    /// the precise evaluation that found the point.
     fn best_gradient_evals(&self) -> u64;
 }
 
@@ -313,6 +323,9 @@ pub trait CountsMirror: State {
 /// live in the state itself. Exact continuation additionally assumes the same
 /// deterministic problem, solver configuration, scalar type, and code;
 /// executor-owned termination criteria are not part of the snapshot.
+/// This path resets solver-owned convergence history. To retain that history
+/// too, use [`ExactCheckpoint`](crate::ExactCheckpoint) and
+/// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
 pub trait ExactResumeState: State {
     /// Complete evaluation counts at the point represented by this snapshot.
     fn resume_counts(&self) -> EvalCounts;

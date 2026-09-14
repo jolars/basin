@@ -2,7 +2,10 @@
 
 This file is the operational repository guide for AI agents. Detailed design
 rationale lives in `CONTRIBUTING.md`; read the relevant sections there before
-changing architecture, public APIs, dependencies, or platform support.
+changing architecture, public APIs, dependencies, or platform support. For state
+or lifecycle changes, read its [state and lifecycle
+contracts](CONTRIBUTING.md#state-and-lifecycle-contracts) and preserve the
+stated Basin 1.x compatibility boundaries.
 
 ## Project priorities
 
