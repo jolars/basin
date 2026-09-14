@@ -169,13 +169,14 @@ where
             .expect("cost not set: Solver::init must run before next_iter");
         let mut direction = grad.clone();
         direction.neg_in_place();
-        let alpha = match self.line_search.next_with_outcome(
+        let line_search_result = self.line_search.next_with_evaluation(
             problem,
             &state.param,
             prev_cost,
             &grad,
             &direction,
-        )? {
+        )?;
+        let alpha = match line_search_result.outcome {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
                 state.gradient = Some(grad);
@@ -184,9 +185,15 @@ where
             }
         };
 
+        // Momentum can change the actual iterate, so only plain descent can
+        // adopt the line search's retained evaluation without recomputing it.
         if self.beta == F::zero() {
-            // No momentum: the plain steepest-descent step, bit-identical to
-            // the pre-momentum implementation (no persistent velocity buffer).
+            if let Some(evaluation) = line_search_result.evaluation {
+                state.param = evaluation.param;
+                state.cost = Some(evaluation.cost);
+                state.gradient = Some(evaluation.gradient);
+                return Ok((state, None));
+            }
             state.param.scaled_add(alpha, &direction);
         } else {
             // Heavy ball: v ← β·v + αₖ·direction (direction = −∇f), then

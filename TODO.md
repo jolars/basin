@@ -128,10 +128,10 @@ include adapter overhead and use inexpensive analytic derivatives.
   accepted-point reevaluation; the remaining two arise from Basin's
   reference-compatible 0.4995 step versus argmin's 0.5. Both initialize at 1.
   Verified against the original Fortran line search and 72 deterministic starts.
-- [ ] **Reuse gradient descent's accepted line-search evaluation.** The existing
-  `next_with_evaluation` API reduces the sphere run to 5 objective / 4 gradient
-  calls without changing trial points. Preserve the fallback for searches
-  without retained values and account for momentum changing the actual iterate.
+- [x] **Reuse gradient descent's accepted line-search evaluation.** Plain descent
+  adopts retained values through `next_with_evaluation`, reducing the sphere
+  run to 5 objective / 4 gradient calls without changing trial points. Searches
+  without retained values and momentum steps still evaluate the actual iterate.
 
 Local artifacts: [report and
 methodology](../globalsearch-rs/target/backend-comparison/REPORT.md),

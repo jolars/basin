@@ -131,6 +131,28 @@ fn solver_calls_fused_override() {
     assert!(result.cost() < 1e-8, "got cost {}", result.cost());
 }
 
+#[test]
+fn gradient_descent_reuses_the_fused_line_search_evaluation() {
+    let counter = Rc::new(Cell::new(0));
+    let result = Executor::new(
+        Counted {
+            fused_calls: counter.clone(),
+        },
+        GradientDescent::with_line_search(
+            basin::MoreThuente::new().alpha_init(0.5),
+        ),
+        BasicState::new(vec![1.0, 2.0]),
+    )
+    .max_iter(1)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.param(), &[0.0, 0.0]);
+    assert_eq!(result.cost(), 0.0);
+    assert_eq!(counter.get(), 2);
+    assert_eq!(result.cost_evals(), 2);
+}
+
 // ---------------------------------------------------------------------
 // 3. CostAndGradientAndHessian: defaulted body equals separate calls.
 // ---------------------------------------------------------------------
