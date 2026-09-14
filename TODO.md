@@ -12,7 +12,7 @@ Ship these in order, preserving existing public APIs and behavior:
   `Stepper::into_checkpoint()` using `ExactCheckpoint`, then an opt-in run
   method returning the final solver, state, counts, and termination reason.
   Require neither `Clone` nor serialization.
-- [ ] **Introduce shared progress storage.** Start with point and first-order
+- [x] **Introduce shared progress storage.** Start with point and first-order
   states for external and new solvers. Keep existing solver/state types,
   constructors, associated types, and serialized representations compatible.
 - [ ] **Add opt-in state capabilities.** Use new interfaces for checked record

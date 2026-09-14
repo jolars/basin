@@ -103,6 +103,11 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `numdiff.rs`: the `FiniteDiff` wrapper: synthesizes
     `Gradient`/`Jacobian`/`Hessian` from function values via finite differences.
   - `state.rs` (+ `state/`): the `State` trait and concrete states:
+    `PointState<V>` and `FirstOrderState<V>` provide shared progress storage
+    with public record updates for external and new solvers. They retain raw
+    evaluation counts alongside Basin 1.x folded readers; solver-owned
+    machinery is preserved through solver-aware checkpoints. Existing solvers
+    keep their established state types:
     `BasicState<P>` (single iterate), `BasicSimplexState<V>` (simplex),
     `QuasiNewtonState<V, M>` (BFGS), `LbfgsState` (L-BFGS history),
     `BasicPopulationState<V>` (population), `GlobalBestPsoState` (particles,

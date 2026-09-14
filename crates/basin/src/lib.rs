@@ -401,10 +401,11 @@ pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
     AcceptanceState, BasicPopulationState, BasicSimplexState, BasicState,
     BobyqaState, CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror,
-    ExactResumeState, GbnmState, GlobalBestPsoState, GradientState,
-    IntoInitialSimplex, LbfgsState, LincoaState, MadsState, MeshState,
-    NewuoaState, NllsState, PopulationState, RhoState, ScalarGradientState,
-    ScalarState, SimplexState, SimulatedAnnealingState, SolisWetsState, State,
+    ExactResumeState, FirstOrderState, GbnmState, GlobalBestPsoState,
+    GradientDimensionMismatch, GradientState, IntoInitialSimplex, LbfgsState,
+    LincoaState, MadsState, MeshState, NewuoaState, NllsState, PointState,
+    PopulationState, RhoState, ScalarGradientState, ScalarState, SimplexState,
+    SimulatedAnnealingState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 #[allow(deprecated)]

@@ -21,6 +21,10 @@
 //! [`AcceptanceState`] exposes proposal acceptance history to generic stall
 //! criteria. [`ExactResumeState`] marks a state that contains the complete
 //! evolution snapshot needed by [`Executor::resume`](crate::Executor::resume).
+//!
+//! External and new solvers can use [`PointState`] or [`FirstOrderState`] for
+//! shared progress storage with public, coherent record updates. See
+//! [`progress`] for their lifecycle and an external-solver example.
 
 /// BOBYQA solver state (`BobyqaState`).
 pub mod bobyqa;
@@ -42,6 +46,7 @@ pub mod mads;
 pub mod newuoa;
 /// Nonlinear least-squares state (`NllsState`).
 pub mod nlls;
+pub mod progress;
 /// One-dimensional solver state (`ScalarState`).
 pub mod scalar;
 /// One-dimensional gradient-carrying solver state (`ScalarGradientState`).
@@ -61,6 +66,7 @@ pub use lincoa::LincoaState;
 pub use mads::{ConstrainedMadsState, MadsState};
 pub use newuoa::NewuoaState;
 pub use nlls::NllsState;
+pub use progress::{FirstOrderState, GradientDimensionMismatch, PointState};
 pub use scalar::ScalarState;
 pub use scalar_gradient::ScalarGradientState;
 pub use simulated_annealing::SimulatedAnnealingState;
@@ -170,8 +176,8 @@ pub trait State {
     /// # Panics
     ///
     /// States that cache cost lazily ([`BasicState`], `QuasiNewtonState`,
-    /// [`LbfgsState`], and [`CmaEsState`]) panic if `cost()`
-    /// is read before
+    /// [`LbfgsState`], [`CmaEsState`], [`PointState`], and [`FirstOrderState`])
+    /// panic if `cost()` is read before
     /// [`Solver::init`](crate::core::solver::Solver::init) has populated
     /// the cached cost. By contract the executor calls `init` before any
     /// termination criterion check, so reads from criteria and from
@@ -196,6 +202,9 @@ pub trait State {
     /// best slot. Reads from termination criteria and from
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
     /// are safe.
+    /// [`PointState`] and [`FirstOrderState`] can also lack an incumbent after
+    /// initialization if all published costs are NaN or positive infinity;
+    /// use their checked `best()` readers in that case.
     fn best_param(&self) -> &Self::Param;
     /// Cost of the selected incumbent. This is the historical minimum for
     /// objective-ordered states, but can increase under constrained
@@ -288,6 +297,10 @@ pub trait GradientState: State {
 ///
 /// # Per-state mapping
 ///
+/// - **[`PointState`]/[`FirstOrderState`]** preserve every raw category in
+///   their inherent `counts()` and `best_counts()` readers. For compatibility
+///   with Basin 1.x accounting, `PointState` folds all work into `cost_evals`,
+///   while `FirstOrderState` uses the cost/gradient folds of `BasicState` below.
 /// - **[`BasicState`]/[`QuasiNewtonState`]/[`LbfgsState`]** (carry
 ///   both cost and gradient counters):
 ///   `cost_evals = cost + residual`,
