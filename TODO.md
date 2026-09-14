@@ -123,12 +123,15 @@ include adapter overhead and use inexpensive analytic derivatives.
   Hessian evaluations on Rosenbrock despite finishing faster: median counts
   were 22.5 versus 9.5 in 2D and 102 versus 62 in 20D, on shared successful
   starts. Measure when derivative cost outweighs the lower solver overhead.
-- [ ] **Investigate gradient descent's extra evaluations on sphere.** Basin used
-  a median of 6 objective and 5 gradient evaluations versus argmin's 3 and 2.
-  Times were approximately tied at 0.90 us versus 0.88 us; the evaluation
-  difference is more useful to investigate than the small timing difference.
-  Check line-search initialization and evaluation reuse. Basin-specific
-  regression.
+- [x] **Investigate gradient descent's extra evaluations on sphere.** Reproduced
+  6 objective / 5 gradient calls versus argmin's 3 / 2. One extra pair is an
+  accepted-point reevaluation; the remaining two arise from Basin's
+  reference-compatible 0.4995 step versus argmin's 0.5. Both initialize at 1.
+  Verified against the original Fortran line search and 72 deterministic starts.
+- [ ] **Reuse gradient descent's accepted line-search evaluation.** The existing
+  `next_with_evaluation` API reduces the sphere run to 5 objective / 4 gradient
+  calls without changing trial points. Preserve the fallback for searches
+  without retained values and account for momentum changing the actual iterate.
 
 Local artifacts: [report and
 methodology](../globalsearch-rs/target/backend-comparison/REPORT.md),
