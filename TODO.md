@@ -4,6 +4,22 @@ Ordered by recommended sequence.
 
 ## General design
 
+### State API additions for Basin 1.x
+
+Ship these in order, preserving existing public APIs and behavior:
+
+- [ ] **Add owned checkpoint and result extraction.** Add a consuming
+  `Stepper::into_checkpoint()` using `ExactCheckpoint`, then an opt-in run
+  method returning the final solver, state, counts, and termination reason.
+  Require neither `Clone` nor serialization.
+- [ ] **Introduce shared progress storage.** Start with point and first-order
+  states for external and new solvers. Keep existing solver/state types,
+  constructors, associated types, and serialized representations compatible.
+- [ ] **Add opt-in state capabilities.** Use new interfaces for checked record
+  access, raw evaluation counts, and explicit incumbent-selection semantics.
+  Bind new controls to the capabilities they need; preserve existing readers
+  and stopping behavior.
+
 ### State API prototype
 
 - [x] **Prototype shared progress states with solver-owned machinery.** Follow
@@ -74,12 +90,13 @@ desired backend features.
 
 ## Basin 2.0
 
-- [ ] **Migrate the state API after validating the
-  [prototype](#state-api-prototype).** Apply the accepted ownership and
-  lifecycle contracts, including uniform evaluation categories, explicit
-  incumbent-selection capabilities, and solver/state checkpoints. Document
-  replacement constructors, public types, trait bounds, stopping semantics,
-  and serialized-format compatibility.
+- [ ] **Migrate existing solvers to shared progress states.** Build on the
+  validated [prototype](#state-api-prototype) and [1.x
+  additions](#state-api-additions-for-basin-1x). Replace legacy public
+  solver/state types and apply uniform evaluation categories and the
+  accepted initialization and continuation contracts. Document replacement
+  constructors, public types, trait bounds, stopping semantics, and
+  serialized-format compatibility.
 
 - [ ] **Simplify and strengthen the full-form constraint API (tenet 4).**
   Consider having COBYLA consume `NonlinearConstraints` directly, removing
