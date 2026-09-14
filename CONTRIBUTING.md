@@ -115,12 +115,16 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     cost/gradient at iter 0), `next_iter`, plus convergence reset/check hooks and the legacy `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
     `run()` returns an `OptimizationResult<S>` (final state +
-    `TerminationReason`). Also `run_loop_with_control`/`Stepper`, solver-and-state
+    `TerminationReason`); opt-in `run_with_solver()` returns an
+    `OptimizationResultWithSolver<S, So>` retaining the final solver and raw
+    counts. Also `run_loop_with_control`/`Stepper`, solver-and-state
     `Executor::resume`/`Executor::resume_from_checkpoint`, and the cooperative,
     top-level `CancellationToken`.
   - `checkpoint.rs`: solver-aware exact checkpoints. The executor captures the
     solver, state, and authoritative evaluation counts at coherent iteration
-    boundaries; the state-only observer remains a warm-start facility.
+    boundaries; consuming `Stepper::into_checkpoint()` and completed-result
+    extraction require neither cloning nor serialization. The state-only
+    observer remains a warm-start facility.
   - `convergence.rs`: fixed solver convergence slots and shared calculations.
     Optional checks add only the backend capabilities they need.
   - `run_control.rs`: budgets, targets, stagnation stops, and application hooks.

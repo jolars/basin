@@ -8,7 +8,7 @@ Ordered by recommended sequence.
 
 Ship these in order, preserving existing public APIs and behavior:
 
-- [ ] **Add owned checkpoint and result extraction.** Add a consuming
+- [x] **Add owned checkpoint and result extraction.** Add a consuming
   `Stepper::into_checkpoint()` using `ExactCheckpoint`, then an opt-in run
   method returning the final solver, state, counts, and termination reason.
   Require neither `Clone` nor serialization.

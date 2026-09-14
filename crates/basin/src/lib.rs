@@ -360,8 +360,9 @@ pub use crate::core::constraint::{
 pub use crate::core::convergence::ConfiguredSolver;
 #[allow(deprecated)]
 pub use crate::core::executor::{
-    CancellationToken, Executor, OptimizationResult, StepOutcome, Stepper,
-    run_loop, run_loop_with_control,
+    CancellationToken, Executor, OptimizationResult,
+    OptimizationResultWithSolver, StepOutcome, Stepper, run_loop,
+    run_loop_with_control,
 };
 pub use crate::core::inner::{
     InitialState, InnerExecutor, ResumableInner, WarmStart,

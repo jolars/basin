@@ -37,6 +37,8 @@
 //! [`Executor::resume`] restores state-carried evolution data and evaluation
 //! counters, while [`Executor::resume_from_checkpoint`] restores the solver,
 //! state, and counters from an [`ExactCheckpoint`] and skips `init`.
+//! Consume a paused stepper with [`Stepper::into_checkpoint`], or retain the
+//! final solver and raw counters with [`Executor::run_with_solver`].
 
 // Keep the Basin 1.x compatibility bridge and shared check implementations local.
 #![allow(deprecated)]
@@ -107,6 +109,8 @@ impl CancellationToken {
 /// Owns the final solver state plus the reason the executor stopped.
 /// Delegates `param()`/`cost()`/`iter()` to the underlying state so
 /// callers don't need to import `State` for the common reads.
+/// Use [`Executor::run_with_solver`] to retain the final solver and raw counts
+/// in an [`OptimizationResultWithSolver`].
 pub struct OptimizationResult<S> {
     /// Final solver state at termination.
     pub state: S,
@@ -164,6 +168,100 @@ impl<S: State> OptimizationResult<S> {
     /// Consume the result and return the final state.
     pub fn into_state(self) -> S {
         self.state
+    }
+}
+
+/// Outcome of an optimization run that retains the final solver by ownership.
+///
+/// Returned by [`Executor::run_with_solver`] and
+/// [`Stepper::run_to_end_with_solver`]. The solver retains its final model,
+/// history, and other evolving machinery. Neither it nor the state needs to
+/// implement `Clone` or serialization.
+///
+/// Convenience readers use the same state semantics as [`OptimizationResult`].
+/// In particular, [`cost_evals`](Self::cost_evals) can fold evaluation
+/// categories according to the state's [`CountsMirror`] implementation. Use
+/// [`counts`](Self::counts) for the authoritative per-category counters.
+pub struct OptimizationResultWithSolver<S, So> {
+    /// Final solver state at termination.
+    pub state: S,
+    /// Final solver, including its evolving machinery and convergence history.
+    pub solver: So,
+    /// Authoritative evaluation counters, including counts restored on resume.
+    pub counts: EvalCounts,
+    /// Why the executor stopped.
+    pub reason: TerminationReason,
+}
+
+impl<S, So> OptimizationResultWithSolver<S, So> {
+    /// Consume the result and return the final state, dropping the solver.
+    pub fn into_state(self) -> S {
+        self.state
+    }
+
+    /// Consume the result and retain ordinary progress and its stop reason.
+    ///
+    /// Drops the solver and the raw counters. State-mirrored counts remain
+    /// available through the returned [`OptimizationResult`].
+    pub fn into_result(self) -> OptimizationResult<S> {
+        OptimizationResult {
+            state: self.state,
+            reason: self.reason,
+        }
+    }
+
+    /// Consume the result into a checkpoint for exact continuation.
+    ///
+    /// Moves the solver and state without cloning or serialization and
+    /// discards the termination reason. Pass the checkpoint to
+    /// [`Executor::resume_from_checkpoint`] with the same problem and newly
+    /// configured execution policy to continue from this boundary.
+    pub fn into_checkpoint(self) -> ExactCheckpoint<So, S> {
+        ExactCheckpoint::from_parts(self.solver, self.state, self.counts)
+    }
+}
+
+impl<S: State, So> OptimizationResultWithSolver<S, So> {
+    /// Final iterate.
+    pub fn param(&self) -> &S::Param {
+        self.state.param()
+    }
+
+    /// Cost at the final iterate.
+    pub fn cost(&self) -> S::Float {
+        self.state.cost()
+    }
+
+    /// Number of fully completed iterations.
+    pub fn iter(&self) -> u64 {
+        self.state.iter()
+    }
+
+    /// Cumulative evaluation work under the state's [`CountsMirror`] mapping.
+    ///
+    /// Use `counts.cost_evals` for the raw number of cost-function calls.
+    pub fn cost_evals(&self) -> u64 {
+        self.state.cost_evals()
+    }
+
+    /// Best iterate under the state's incumbent-selection semantics.
+    pub fn best_param(&self) -> &S::Param {
+        self.state.best_param()
+    }
+
+    /// Cost at [`best_param`](Self::best_param).
+    pub fn best_cost(&self) -> S::Float {
+        self.state.best_cost()
+    }
+
+    /// Iteration at which [`best_param`](Self::best_param) was selected.
+    pub fn best_iter(&self) -> u64 {
+        self.state.best_iter()
+    }
+
+    /// State-mirrored evaluation work when the best iterate was selected.
+    pub fn best_cost_evals(&self) -> u64 {
+        self.state.best_cost_evals()
     }
 }
 
@@ -285,8 +383,9 @@ where
     /// cost/gradient/residual/Jacobian/Hessian call during the
     /// step. A hard error consumes the state and may leave solver machinery
     /// partially updated. It does not set [`finished`](Self::finished).
-    /// Callers can inspect [`counts`](Self::counts), then drop the stepper;
-    /// state access and further stepping are not supported after the error.
+    /// Callers can inspect [`counts`](Self::counts), then drop the stepper or
+    /// call [`into_checkpoint`](Self::into_checkpoint), which returns `None`.
+    /// State access and further stepping are not supported after the error.
     /// Observers and checkpoint sinks do not fire on the failed transition.
     pub fn step(&mut self) -> Result<StepOutcome, So::Error> {
         if let Some(reason) = self.finished {
@@ -351,18 +450,89 @@ where
 
     /// Drive [`step`](Self::step) to completion and return an
     /// [`OptimizationResult`].
-    pub fn run_to_end(mut self) -> Result<OptimizationResult<S>, So::Error> {
+    /// Use [`run_to_end_with_solver`](Self::run_to_end_with_solver) to retain
+    /// the final solver and raw evaluation counters as well.
+    pub fn run_to_end(self) -> Result<OptimizationResult<S>, So::Error> {
+        self.run_to_end_with_solver()
+            .map(OptimizationResultWithSolver::into_result)
+    }
+
+    /// Drive [`step`](Self::step) to completion, retaining the final solver,
+    /// state, raw evaluation counters, and termination reason by ownership.
+    ///
+    /// Uses the same lifecycle as [`run_to_end`](Self::run_to_end), including
+    /// observer and checkpoint callbacks. An already-stopped stepper returns
+    /// its recorded reason without repeating final callbacks. No `Clone` or
+    /// serialization bounds are required.
+    ///
+    /// Returns the solver's error on a failed transition, without a partial
+    /// result or recoverable checkpoint. Calling this after a previous
+    /// [`step`](Self::step) error is unsupported, just as with `run_to_end`.
+    pub fn run_to_end_with_solver(
+        mut self,
+    ) -> Result<OptimizationResultWithSolver<S, So>, So::Error> {
         loop {
             if let StepOutcome::Stopped(reason) = self.step()? {
-                return Ok(OptimizationResult {
+                return Ok(OptimizationResultWithSolver {
                     state: self
                         .state
                         .take()
                         .expect("state slot is Some on stop"),
+                    solver: self.solver,
+                    counts: *self.problem.counts(),
                     reason,
                 });
             }
         }
+    }
+
+    /// Consume the stepper into a checkpoint at its current boundary.
+    ///
+    /// Returns `Some` after successful initialization, between completed
+    /// steps, or after a clean stop (including cancellation and a mid-step
+    /// stop). Returns `None` after a hard [`step`](Self::step) error consumed
+    /// the state; partial solver machinery cannot form an exact checkpoint.
+    ///
+    /// Moves the solver and state and copies the authoritative counters
+    /// without requiring `Clone` or serialization. Extraction performs no
+    /// evaluations, convergence checks, or observer/checkpoint callbacks.
+    /// The problem, execution policy, and any recorded termination reason
+    /// are dropped. Resume through [`Executor::resume_from_checkpoint`],
+    /// which describes the requirements for exact continuation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use basin::{CostFunction, Executor, NelderMead, State};
+    /// # fn main() -> Result<(), std::convert::Infallible> {
+    /// struct Sphere;
+    /// impl CostFunction for Sphere {
+    ///     type Param = Vec<f64>;
+    ///     type Output = f64;
+    ///     type Error = std::convert::Infallible;
+    ///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+    ///         Ok(x.iter().map(|v| v * v).sum())
+    ///     }
+    /// }
+    /// let mut stepper = Executor::from_start(
+    ///     Sphere, NelderMead::new(), vec![2.0, 1.0],
+    /// ).into_stepper()?;
+    /// stepper.step()?;
+    /// let checkpoint = stepper.into_checkpoint().unwrap();
+    /// assert_eq!(checkpoint.state().iter(), 1);
+    /// let result = Executor::resume_from_checkpoint(Sphere, checkpoint)
+    ///     .max_iter(10)
+    ///     .run()?;
+    /// assert_eq!(result.iter(), 10);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn into_checkpoint(self) -> Option<ExactCheckpoint<So, S>> {
+        Some(ExactCheckpoint::from_parts(
+            self.solver,
+            self.state?,
+            *self.problem.counts(),
+        ))
     }
 
     /// Consume the stepper and return the final state.
@@ -690,6 +860,9 @@ where
     /// [`NoImprovement`](crate::NoImprovement) preserve history stored in the
     /// state, while criteria with private clocks or anchors begin a new
     /// criterion run.
+    /// Obtain an owned checkpoint with [`Stepper::into_checkpoint`] or
+    /// [`OptimizationResultWithSolver::into_checkpoint`], without cloning
+    /// or serializing the solver and state.
     pub fn resume_from_checkpoint(
         problem: P,
         checkpoint: ExactCheckpoint<So, S>,
@@ -919,6 +1092,8 @@ where
 
     /// Drive the iteration loop to completion and return the
     /// [`OptimizationResult`].
+    /// Use [`run_with_solver`](Self::run_with_solver) to retain the final
+    /// solver and raw evaluation counters as well.
     ///
     /// Returns `Err` when the underlying problem returns `Err` from any
     /// cost/gradient/residual/Jacobian/Hessian call (the
@@ -926,5 +1101,46 @@ where
     /// [`problem`](crate::core::problem) module docs).
     pub fn run(self) -> Result<OptimizationResult<S>, So::Error> {
         self.into_stepper()?.run_to_end()
+    }
+
+    /// Drive the iteration loop to completion, retaining the final solver,
+    /// state, raw evaluation counters, and termination reason by ownership.
+    ///
+    /// Follows the same initialization, stopping, and callback lifecycle as
+    /// [`run`](Self::run). Neither the solver nor the state needs to implement
+    /// `Clone` or serialization. Errors propagate with the same type and
+    /// without a partial result.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use basin::{CostFunction, Executor, NelderMead};
+    /// # fn main() -> Result<(), std::convert::Infallible> {
+    /// struct Sphere;
+    /// impl CostFunction for Sphere {
+    ///     type Param = Vec<f64>;
+    ///     type Output = f64;
+    ///     type Error = std::convert::Infallible;
+    ///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+    ///         Ok(x.iter().map(|v| v * v).sum())
+    ///     }
+    /// }
+    /// let result = Executor::from_start(
+    ///     Sphere, NelderMead::new(), vec![2.0, 1.0],
+    /// ).max_iter(3).run_with_solver()?;
+    /// assert_eq!(result.iter(), 3);
+    /// let counts = result.counts;
+    /// let checkpoint = result.into_checkpoint();
+    /// let continued = Executor::resume_from_checkpoint(Sphere, checkpoint)
+    ///     .max_iter(10)
+    ///     .run_with_solver()?;
+    /// assert!(continued.counts.cost_evals > counts.cost_evals);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn run_with_solver(
+        self,
+    ) -> Result<OptimizationResultWithSolver<S, So>, So::Error> {
+        self.into_stepper()?.run_to_end_with_solver()
     }
 }

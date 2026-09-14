@@ -4,6 +4,11 @@
 //! evaluation counters at one coherent iteration boundary. This differs from
 //! `CheckpointWriter`, which intentionally writes only a state for a later
 //! warm start.
+//!
+//! [`Stepper::into_checkpoint`](crate::Stepper::into_checkpoint) consumes a
+//! paused or cleanly stopped run without cloning or serialization. For a
+//! completed run, use [`Executor::run_with_solver`](crate::Executor::run_with_solver)
+//! followed by [`OptimizationResultWithSolver::into_checkpoint`](crate::OptimizationResultWithSolver::into_checkpoint).
 
 use crate::core::problem::EvalCounts;
 
@@ -12,6 +17,11 @@ use crate::core::problem::EvalCounts;
 /// Pass a restored checkpoint to
 /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint)
 /// to continue without calling [`Solver::init`](crate::Solver::init) again.
+/// Owned extraction from [`Stepper`](crate::Stepper::into_checkpoint) or
+/// [`OptimizationResultWithSolver`](crate::OptimizationResultWithSolver::into_checkpoint)
+/// keeps the solver and state together with the authoritative counts and
+/// requires neither `Clone` nor serialization. A checkpoint does not retain
+/// the problem, execution policy, or termination reason.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct ExactCheckpoint<So, S> {
