@@ -117,7 +117,8 @@ include adapter overhead and use inexpensive analytic derivatives.
 
 - [x] **Investigate Steihaug's inner CG stopping rule.** Added
   `Steihaug::with_forcing_parameters(kappa, theta)` for adaptive or fixed
-  residual thresholds, preserving the default forcing rule and iteration cap.
+  residual thresholds, preserving the default forcing rule and iteration
+  cap.
 - [ ] **Measure Steihaug with expensive derivatives.** Basin also used more
   Hessian evaluations on Rosenbrock despite finishing faster: median counts
   were 22.5 versus 9.5 in 2D and 102 versus 62 in 20D, on shared successful
@@ -126,18 +127,8 @@ include adapter overhead and use inexpensive analytic derivatives.
   a median of 6 objective and 5 gradient evaluations versus argmin's 3 and 2.
   Times were approximately tied at 0.90 us versus 0.88 us; the evaluation
   difference is more useful to investigate than the small timing difference.
-  Check line-search initialization and evaluation reuse.
-- [ ] **Profile copies in the globalsearch adapter.** The integration copies
-  parameters, gradients, and Hessians between ndarray and Basin's Vec/dense
-  representations. Quantify allocations and copying at larger dimensions
-  before attributing costs to the solver. This is an integration concern;
-  its contribution has not been profiled.
-- [ ] **Expand convergence coverage and budgets.** Both backends struggled with
-  gradient descent, Cauchy steps, and Nelder-Mead on the harder 20D cases.
-  Neither Nelder-Mead implementation reached the target on any of the three
-  20D problems within 1,000 iterations. Compare larger budgets and retain
-  target-hit rates alongside timings; these misses do not establish a
-  Basin-specific regression.
+  Check line-search initialization and evaluation reuse. Basin-specific
+  regression.
 
 Local artifacts: [report and
 methodology](../globalsearch-rs/target/backend-comparison/REPORT.md),
