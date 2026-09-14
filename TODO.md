@@ -115,14 +115,9 @@ Across these five problems, Steihaug's geometric mean speedup was 1.49x, with
 103/120 target hits for Basin versus 100/120 for argmin. These measurements
 include adapter overhead and use inexpensive analytic derivatives.
 
-- [ ] **Investigate Steihaug's inner CG stopping rule.** On the 20D diagonal
-  quadratic with condition number 10,000, Basin took 43.08 us versus
-  argmin's 22.34 us, with median Hessian evaluation counts of 16 versus 4.
-  Basin's adaptive residual tolerance and dimension-sized CG iteration cap
-  differ from argmin's much tighter residual tolerance and effectively
-  unlimited inner iterations. These are possible contributors, not an
-  isolated cause. Reproduce in Basin's benchmark suite and compare matched
-  inner tolerances and caps before changing defaults.
+- [x] **Investigate Steihaug's inner CG stopping rule.** Added
+  `Steihaug::with_forcing_parameters(kappa, theta)` for adaptive or fixed
+  residual thresholds, preserving the default forcing rule and iteration cap.
 - [ ] **Measure Steihaug with expensive derivatives.** Basin also used more
   Hessian evaluations on Rosenbrock despite finishing faster: median counts
   were 22.5 versus 9.5 in 2D and 102 versus 62 in 20D, on shared successful

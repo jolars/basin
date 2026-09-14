@@ -360,6 +360,38 @@ fn matrix_free_trust_region_f32_round_trips_state_solver_termination() {
 }
 
 #[test]
+fn configured_steihaug_f32_runs_in_both_modes() {
+    for (kappa, theta) in [(0.5_f32, 0.5), (0.1, 1.0), (1e-5, 0.0)] {
+        let subproblem = Steihaug::new()
+            .with_forcing_parameters(kappa, theta)
+            .with_max_iter(6);
+        let exact = Executor::from_start(
+            ShiftedQuadF32 {
+                c: vec![1.0, 2.0, 3.0],
+            },
+            TrustRegion::with_subproblem(subproblem),
+            vec![0.0_f32; 3],
+        )
+        .target_cost(1e-8_f32)
+        .run()
+        .unwrap();
+        let free = Executor::from_start(
+            ShiftedQuadF32 {
+                c: vec![1.0, 2.0, 3.0],
+            },
+            TrustRegion::matrix_free_with(subproblem),
+            vec![0.0_f32; 3],
+        )
+        .target_cost(1e-8_f32)
+        .run()
+        .unwrap();
+        assert!(exact.cost() <= 1e-8_f32);
+        assert_eq!(exact.cost(), free.cost());
+        assert_eq!(exact.param(), free.param());
+    }
+}
+
+#[test]
 fn solis_wets_f32_round_trips_state_solver_termination() {
     // The derivative-free adaptive-random-search pipeline (SolisWets,
     // SolisWetsState, RhoTolerance via RhoState) runs end-to-end at
