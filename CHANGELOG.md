@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.12.0](https://github.com/jolars/basin/compare/v1.11.0...v1.12.0) (2026-09-15)
+
+### Features
+- add opt-in state capabilities ([`a731623`](https://github.com/jolars/basin/commit/a7316237579492b4bfc1f68314587fe2fe5dae87))
+- add configurable forcing to `Steihaug` ([`aa7e842`](https://github.com/jolars/basin/commit/aa7e8424a912bbfecafb4e3ee46d83170bf0abdb))
+- add shared point and first-order progress states ([`5e5504c`](https://github.com/jolars/basin/commit/5e5504c05dac23014890d24554296dacd1dd382c))
+- add owned checkpoint and result extraction ([`a055377`](https://github.com/jolars/basin/commit/a0553771bf1e73e33026ceed9a85e0ef2f829afc))
+
+### Bug Fixes
+- preserve numeric casts for `TerminationReason` ([`79b4f61`](https://github.com/jolars/basin/commit/79b4f61ee9e56d8714bbd7779f5e81f3682c59bf))
+
+### Performance Improvements
+- reuse gradient descent line-search evaluations ([`a58dc97`](https://github.com/jolars/basin/commit/a58dc97015c3780c3d46485067c002e42f8cab44))
+
 ## [1.11.0](https://github.com/jolars/basin/compare/v1.10.0...v1.11.0) (2026-09-11)
 
 ### Features
