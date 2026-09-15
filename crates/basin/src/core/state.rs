@@ -25,9 +25,13 @@
 //! External and new solvers can use [`PointState`] or [`FirstOrderState`] for
 //! shared progress storage with public, coherent record updates. See
 //! [`progress`] for their lifecycle and an external-solver example.
+//! Their opt-in [`capabilities`] expose checked current and incumbent records,
+//! raw evaluation counts, and objective-selection guarantees. Existing state
+//! shapes and Basin 1.x readers retain their current contracts.
 
 /// BOBYQA solver state (`BobyqaState`).
 pub mod bobyqa;
+pub mod capabilities;
 /// CMA-ES distribution state (`CmaEsState`).
 pub mod cma_es;
 /// COBYLA solver state (`CobylaState`).
@@ -57,6 +61,10 @@ pub mod simulated_annealing;
 pub mod solis_wets;
 
 pub use bobyqa::BobyqaState;
+pub use capabilities::{
+    EvaluatedGradientState, EvaluatedState, IncumbentRef, IncumbentState,
+    ObjectiveIncumbentState, RawEvaluationState,
+};
 pub use cma_es::CmaEsState;
 pub use cobyla::CobylaState;
 pub use gbnm::GbnmState;

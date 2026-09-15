@@ -8,15 +8,72 @@
 #![allow(deprecated)]
 
 use super::math::Scalar;
-use super::problem::EvalCounts;
-use super::state::{AcceptanceState, GradientState, State};
+use super::problem::{EvalCounts, EvaluationKind};
+use super::state::{
+    AcceptanceState, EvaluatedState, GradientState, ObjectiveIncumbentState,
+    RawEvaluationState, State,
+};
 use super::termination::{
     NoAcceptance, NoImprovement, TargetCost, TerminationCriterion,
     TerminationReason,
 };
 use web_time::{Duration, Instant};
 
+#[cfg(test)]
+mod tests;
+
 type Stop<S> = Box<dyn FnMut(&S) -> Option<TerminationReason>>;
+
+struct RawBudgets<S> {
+    limits: [Option<u64>; 7],
+    counts: fn(&S) -> &EvalCounts,
+}
+
+struct ObjectiveTarget<F: Scalar>(F);
+
+impl<S: ObjectiveIncumbentState<Float = F>, F: Scalar> TerminationCriterion<S>
+    for ObjectiveTarget<F>
+{
+    fn check(&mut self, state: &S) -> Option<TerminationReason> {
+        (state.incumbent_record()?.cost <= self.0)
+            .then_some(TerminationReason::TargetCost)
+    }
+}
+
+struct ObjectiveStall<F: Scalar> {
+    patience: u64,
+    min_delta: F,
+    anchor: Option<(F, u64)>,
+}
+
+impl<S: ObjectiveIncumbentState<Float = F>, F: Scalar> TerminationCriterion<S>
+    for ObjectiveStall<F>
+{
+    fn check(&mut self, state: &S) -> Option<TerminationReason> {
+        let incumbent = state.incumbent_record()?;
+        let improved_at = if self.min_delta == F::zero() {
+            incumbent.iter
+        } else {
+            let (anchor, iter) =
+                self.anchor.get_or_insert((incumbent.cost, state.iter()));
+            // Subtract costs rather than the tolerance so an overflowing
+            // finite decrease or a new negative infinity still improves.
+            if incumbent.cost < *anchor
+                && *anchor - incumbent.cost > self.min_delta
+            {
+                *anchor = incumbent.cost;
+                *iter = state.iter();
+            }
+            *iter
+        };
+        (state.iter().saturating_sub(improved_at) >= self.patience)
+            .then_some(TerminationReason::NoImprovement)
+    }
+
+    fn reset(&mut self) {
+        self.anchor = None;
+    }
+}
 
 enum Entry<S> {
     Legacy(Box<dyn TerminationCriterion<S>>),
@@ -40,11 +97,15 @@ pub(crate) struct Limits {
 /// Used with [`run_loop_with_control`](super::executor::run_loop_with_control).
 /// Builders replace their corresponding setting; custom hooks are appended.
 /// Checks run in this order: iteration, cost evaluations, gradient evaluations,
-/// elapsed time, target cost, improvement stall, acceptance stall, and hooks.
+/// raw evaluation budgets (in [`EvaluationKind`] order), elapsed time, target
+/// cost, improvement stall, acceptance stall, and hooks.
 /// The clock starts at the first check after initialization.
+/// Publication validation, when enabled, precedes observers and all checks.
 pub struct RunControl<S> {
     pub(crate) max_iter: u64,
     pub(crate) limits: Limits,
+    raw: Option<RawBudgets<S>>,
+    validate: Option<fn(&S)>,
     start: Option<Instant>,
     target: Option<Box<dyn TerminationCriterion<S>>>,
     improvement: Option<Box<dyn TerminationCriterion<S>>>,
@@ -64,6 +125,8 @@ impl<S> RunControl<S> {
         Self {
             max_iter: 1000,
             limits: Limits::default(),
+            raw: None,
+            validate: None,
             start: None,
             target: None,
             improvement: None,
@@ -91,6 +154,120 @@ impl<S> RunControl<S> {
         S: GradientState,
     {
         self.limits.gradient = Some(limit);
+        self
+    }
+
+    /// Require a complete evaluated record at every publication boundary.
+    ///
+    /// Requires [`EvaluatedState`]. Initialization, successful iterations,
+    /// clean mid-step stops, and restored checkpoints are validated before
+    /// incumbent updates, observers, or stopping checks. Non-finite evaluated
+    /// values are allowed. Repeated calls keep validation enabled.
+    ///
+    /// # Panics
+    ///
+    /// During execution, panics with `solver published incomplete state` if a
+    /// record is unavailable. This is a solver contract violation, not a
+    /// numerical termination or a recoverable problem error. Hard problem
+    /// errors bypass validation and retain their original error type.
+    pub fn require_evaluated_state(mut self) -> Self
+    where
+        S: EvaluatedState,
+    {
+        self.validate = Some(|state| {
+            assert!(
+                state.current_record().is_some(),
+                "solver published incomplete state"
+            );
+        });
+        self
+    }
+
+    /// Set a raw category or total-work budget, requiring [`RawEvaluationState`].
+    ///
+    /// Checks run after initialization and between iterations, so even a zero
+    /// limit permits initialization. Limits are not hard caps inside a step.
+    /// Fresh and nested runs use per-run counts; exact continuation uses
+    /// cumulative counts. No gradient capability is required.
+    ///
+    /// Replaces the limit for `kind`. Different kinds and legacy budgets are
+    /// independent; legacy budgets are checked first. Exhaustion reports
+    /// [`TerminationReason::MaxEvaluations`]. Capability controls on an
+    /// [`InnerExecutor`](crate::InnerExecutor) cannot be serialized.
+    ///
+    /// ```compile_fail
+    /// use basin::{BasicState, EvaluationKind, RunControl};
+    /// let _ = RunControl::<BasicState<Vec<f64>>>::new()
+    ///     .max_evaluations(EvaluationKind::Cost, 10);
+    /// ```
+    pub fn max_evaluations(mut self, kind: EvaluationKind, limit: u64) -> Self
+    where
+        S: RawEvaluationState,
+    {
+        let raw = self.raw.get_or_insert(RawBudgets {
+            limits: [None; 7],
+            counts: S::raw_counts,
+        });
+        raw.limits[kind as usize] = Some(limit);
+        self
+    }
+
+    /// Stop when an eligible objective-ordered incumbent reaches `target`.
+    ///
+    /// Requires [`ObjectiveIncumbentState`]; no incumbent means no target
+    /// success. Replaces [`target_cost`](Self::target_cost), and vice versa.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `target` is not finite.
+    ///
+    /// ```compile_fail
+    /// use basin::{CobylaState, RunControl};
+    /// let _ = RunControl::<CobylaState<Vec<f64>>>::new().target_objective(0.0);
+    /// ```
+    pub fn target_objective<F: Scalar + 'static>(mut self, target: F) -> Self
+    where
+        S: ObjectiveIncumbentState<Float = F>,
+    {
+        assert!(target.is_finite(), "target objective must be finite");
+        self.target = Some(Box::new(ObjectiveTarget(target)));
+        self
+    }
+
+    /// Stop after `patience` completed iterations without objective improvement.
+    ///
+    /// Requires [`ObjectiveIncumbentState`]. Tracking waits for an incumbent.
+    /// Zero `min_delta` uses its publication iteration and preserves stall age
+    /// on exact continuation. Positive delta tracks strict decreases exceeding
+    /// the delta from a running anchor, starting at the first observation.
+    /// Repeated observations do not age the stall. Negative infinity can be
+    /// an incumbent and does not itself establish unboundedness.
+    ///
+    /// Replaces [`no_improvement`](Self::no_improvement), and vice versa.
+    /// Borrowed runs reset anchor history. Controls are not part of an exact
+    /// checkpoint; reattaching a positive-delta check starts fresh history.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `patience` is zero, or `min_delta` is negative or non-finite.
+    pub fn no_objective_improvement<F: Scalar + 'static>(
+        mut self,
+        patience: u64,
+        min_delta: F,
+    ) -> Self
+    where
+        S: ObjectiveIncumbentState<Float = F>,
+    {
+        assert!(patience > 0, "patience must be positive");
+        assert!(
+            min_delta.is_finite() && min_delta >= F::zero(),
+            "minimum improvement must be finite and nonnegative"
+        );
+        self.improvement = Some(Box::new(ObjectiveStall {
+            patience,
+            min_delta,
+            anchor: None,
+        }));
         self
     }
 
@@ -199,9 +376,17 @@ impl<S> RunControl<S> {
     #[cfg(feature = "serde")]
     pub(crate) fn has_unserializable_stops(&self) -> bool {
         self.target.is_some()
+            || self.raw.is_some()
+            || self.validate.is_some()
             || self.improvement.is_some()
             || self.acceptance.is_some()
             || !self.entries.is_empty()
+    }
+
+    pub(crate) fn validate(&self, state: &S) {
+        if let Some(validate) = self.validate {
+            validate(state);
+        }
     }
 
     pub(crate) fn check(
@@ -224,6 +409,16 @@ impl<S> RunControl<S> {
             .is_some_and(|n| counts.gradient_evals >= n)
         {
             return Some(TerminationReason::MaxGradientEvals);
+        }
+        if let Some(raw) = &self.raw {
+            let counts = (raw.counts)(state);
+            for kind in EvaluationKind::ALL {
+                if raw.limits[kind as usize]
+                    .is_some_and(|limit| kind.count(counts) >= limit)
+                {
+                    return Some(TerminationReason::MaxEvaluations(kind));
+                }
+            }
         }
         if let Some(limit) = self.limits.time {
             if self.start.get_or_insert_with(Instant::now).elapsed() >= limit {
@@ -261,6 +456,69 @@ impl<S> RunControl<S> {
 // Keep the owned and borrowed builders identical without duplicating checks.
 macro_rules! control_methods {
     () => {
+        /// Validate complete records at publication boundaries.
+        ///
+        /// See [`RunControl::require_evaluated_state`](crate::RunControl::require_evaluated_state)
+        /// for validation ordering and solver-contract panics. This control
+        /// cannot be serialized as part of an inner executor.
+        pub fn require_evaluated_state(mut self) -> Self
+        where
+            S: crate::core::state::EvaluatedState,
+        {
+            self.control =
+                std::mem::take(&mut self.control).require_evaluated_state();
+            self
+        }
+        /// Set a raw category or total-work budget at iteration boundaries.
+        ///
+        /// See [`RunControl::max_evaluations`](crate::RunControl::max_evaluations)
+        /// for accounting, precedence, and serialization limits.
+        pub fn max_evaluations(
+            mut self,
+            kind: crate::EvaluationKind,
+            limit: u64,
+        ) -> Self
+        where
+            S: crate::core::state::RawEvaluationState,
+        {
+            self.control =
+                std::mem::take(&mut self.control).max_evaluations(kind, limit);
+            self
+        }
+        /// Stop when an eligible objective-ordered incumbent reaches a finite target.
+        ///
+        /// Replaces `target_cost`, and vice versa. See
+        /// [`RunControl::target_objective`](crate::RunControl::target_objective).
+        pub fn target_objective<F: crate::core::math::Scalar + 'static>(
+            mut self,
+            target: F,
+        ) -> Self
+        where
+            S: crate::core::state::ObjectiveIncumbentState<Float = F>,
+        {
+            self.control =
+                std::mem::take(&mut self.control).target_objective(target);
+            self
+        }
+        /// Stop after completed iterations without a sufficient objective decrease.
+        ///
+        /// Replaces `no_improvement`, and vice versa. See
+        /// [`RunControl::no_objective_improvement`](crate::RunControl::no_objective_improvement)
+        /// for threshold validation, publication age, and resume behavior.
+        pub fn no_objective_improvement<
+            F: crate::core::math::Scalar + 'static,
+        >(
+            mut self,
+            patience: u64,
+            min_delta: F,
+        ) -> Self
+        where
+            S: crate::core::state::ObjectiveIncumbentState<Float = F>,
+        {
+            self.control = std::mem::take(&mut self.control)
+                .no_objective_improvement(patience, min_delta);
+            self
+        }
         /// Set a cost-evaluation budget, checked after initialization and between iterations.
         pub fn max_cost_evals(mut self, limit: u64) -> Self {
             self.control =

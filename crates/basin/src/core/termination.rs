@@ -87,6 +87,11 @@ pub enum TerminationReason {
     /// this reason does not establish stationarity or parameter recovery.
     /// Outer solvers may consume the finite result and continue.
     NumericalNoProgress,
+    /// A raw evaluation category or total-work budget was exhausted.
+    ///
+    /// Checked at iteration boundaries through the state's raw-count
+    /// capability; distinct from the legacy cost and gradient budget reasons.
+    MaxEvaluations(crate::core::problem::EvaluationKind),
 }
 
 impl TerminationReason {

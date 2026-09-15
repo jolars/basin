@@ -106,8 +106,12 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     `PointState<V>` and `FirstOrderState<V>` provide shared progress storage
     with public record updates for external and new solvers. They retain raw
     evaluation counts alongside Basin 1.x folded readers; solver-owned
-    machinery is preserved through solver-aware checkpoints. Existing solvers
-    keep their established state types:
+    machinery is preserved through solver-aware checkpoints. Opt-in
+    `EvaluatedState`/`EvaluatedGradientState`, `RawEvaluationState`, and
+    `IncumbentState` traits expose checked records and publication metadata.
+    `ObjectiveIncumbentState` guarantees objective-ordered eligible selection
+    for generic targets and stalls. Existing solvers keep their established
+    state types:
     `BasicState<P>` (single iterate), `BasicSimplexState<V>` (simplex),
     `QuasiNewtonState<V, M>` (BFGS), `LbfgsState` (L-BFGS history),
     `BasicPopulationState<V>` (population), `GlobalBestPsoState` (particles,
@@ -133,6 +137,11 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `convergence.rs`: fixed solver convergence slots and shared calculations.
     Optional checks add only the backend capabilities they need.
   - `run_control.rs`: budgets, targets, stagnation stops, and application hooks.
+    New capability-bound builders provide raw `max_evaluations` budgets,
+    `target_objective`, `no_objective_improvement`, and opt-in
+    `require_evaluated_state` publication validation. Existing builders retain
+    their 1.x behavior. Inner-executor serialization rejects capability
+    controls instead of discarding them; legacy budget layouts remain stable.
   - `termination.rs`: stopping reasons and the deprecated Basin 1.x criterion
     compatibility layer, scheduled for removal in Basin 2.0.
   - `constraint.rs` (+ `constraint/`), `barrier.rs`, `augmented_lagrangian.rs`:

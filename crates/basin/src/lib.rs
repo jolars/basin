@@ -387,8 +387,8 @@ pub use crate::core::numdiff::{
 pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
 pub use crate::core::observer::{History, Observe, ObserverMode, Report};
 pub use crate::core::problem::{
-    CostFunction, EvalCounts, Gradient, Hessian, HessianProduct, Jacobian,
-    MiniBatchGradient, Problem, Residual,
+    CostFunction, EvalCounts, EvaluationKind, Gradient, Hessian,
+    HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,
 };
 pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::Solver;
@@ -401,11 +401,13 @@ pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
     AcceptanceState, BasicPopulationState, BasicSimplexState, BasicState,
     BobyqaState, CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror,
-    ExactResumeState, FirstOrderState, GbnmState, GlobalBestPsoState,
-    GradientDimensionMismatch, GradientState, IntoInitialSimplex, LbfgsState,
-    LincoaState, MadsState, MeshState, NewuoaState, NllsState, PointState,
-    PopulationState, RhoState, ScalarGradientState, ScalarState, SimplexState,
-    SimulatedAnnealingState, SolisWetsState, State,
+    EvaluatedGradientState, EvaluatedState, ExactResumeState, FirstOrderState,
+    GbnmState, GlobalBestPsoState, GradientDimensionMismatch, GradientState,
+    IncumbentRef, IncumbentState, IntoInitialSimplex, LbfgsState, LincoaState,
+    MadsState, MeshState, NewuoaState, NllsState, ObjectiveIncumbentState,
+    PointState, PopulationState, RawEvaluationState, RhoState,
+    ScalarGradientState, ScalarState, SimplexState, SimulatedAnnealingState,
+    SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 #[allow(deprecated)]

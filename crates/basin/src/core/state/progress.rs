@@ -12,6 +12,13 @@
 //! Their [`State`] and [`GradientState`] readers use the existing Basin 1.x
 //! folded accounting described by [`CountsMirror`].
 //!
+//! Both states implement [`EvaluatedState`], [`RawEvaluationState`],
+//! [`IncumbentState`], and [`ObjectiveIncumbentState`]; [`FirstOrderState`]
+//! additionally implements [`EvaluatedGradientState`]. These unsealed traits
+//! also support external states. Use `require_evaluated_state` to validate
+//! publication, `max_evaluations` for raw budgets, and `target_objective` or
+//! `no_objective_improvement` for controls requiring objective ordering.
+//!
 //! # Lifecycle
 //!
 //! Construction supplies an unevaluated seed. In [`Solver::init`](crate::Solver::init),
@@ -83,12 +90,19 @@
 //! }
 //! let result = Executor::new(
 //!     Quadratic, Descent, FirstOrderState::new(vec![2.0]),
-//! ).max_iter(3).run().unwrap();
+//! ).require_evaluated_state()
+//!     .max_evaluations(basin::EvaluationKind::Gradient, 100)
+//!     .target_objective(0.01)
+//!     .max_iter(3).run().unwrap();
 //! assert_eq!(result.state.cost(), 0.0625);
 //! assert_eq!(result.state.counts().gradient_evals, 4);
 //! ```
 
-use super::{CountsMirror, GradientState, State};
+use super::{
+    CountsMirror, EvaluatedGradientState, EvaluatedState, GradientState,
+    IncumbentRef, IncumbentState, ObjectiveIncumbentState, RawEvaluationState,
+    State,
+};
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::EvalCounts;
 
@@ -402,11 +416,49 @@ macro_rules! impl_progress_state {
                 self.progress.counts = *counts;
             }
         }
+
+        impl<V: Clone, F: Scalar> RawEvaluationState for $state<V, F> {
+            fn raw_counts(&self) -> &EvalCounts {
+                self.counts()
+            }
+        }
+
+        impl<V: Clone, F: Scalar> IncumbentState for $state<V, F> {
+            fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
+                let best = self.progress.best.as_ref()?;
+                Some(IncumbentRef {
+                    param: &best.param,
+                    cost: best.cost,
+                    iter: best.iter,
+                    counts: &best.counts,
+                })
+            }
+        }
+
+        impl<V: Clone, F: Scalar> ObjectiveIncumbentState for $state<V, F> {}
     };
 }
 
 impl_progress_state!(PointState, EvalCounts::total_work);
 impl_progress_state!(FirstOrderState, cost_work);
+
+impl<V: Clone, F: Scalar> EvaluatedState for PointState<V, F> {
+    fn current_record(&self) -> Option<(&V, F)> {
+        self.current()
+    }
+}
+
+impl<V: Clone, F: Scalar> EvaluatedState for FirstOrderState<V, F> {
+    fn current_record(&self) -> Option<(&V, F)> {
+        self.current().map(|(param, cost, _)| (param, cost))
+    }
+}
+
+impl<V: Clone, F: Scalar> EvaluatedGradientState for FirstOrderState<V, F> {
+    fn current_gradient_record(&self) -> Option<(&V, F, &V)> {
+        self.current()
+    }
+}
 
 impl<V: Clone, F: Scalar> GradientState for FirstOrderState<V, F> {
     fn gradient(&self) -> Option<&V> {

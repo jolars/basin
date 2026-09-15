@@ -8,9 +8,10 @@ use basin::core::math::{
     NormSquared, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
 };
 use basin::{
-    CostFunction, CountsMirror, EvalCounts, Executor, FirstOrderState,
-    Gradient, GradientDimensionMismatch, GradientState, PointState, Problem,
-    RunControl, Solver, State, TerminationReason,
+    CostFunction, CountsMirror, EvalCounts, EvaluatedGradientState,
+    EvaluatedState, EvaluationKind, Executor, FirstOrderState, Gradient,
+    GradientDimensionMismatch, GradientState, IncumbentState, PointState,
+    Problem, RawEvaluationState, RunControl, Solver, State, TerminationReason,
 };
 use std::convert::Infallible;
 use std::marker::PhantomData;
@@ -95,6 +96,10 @@ where
         Descent::default(),
         FirstOrderState::new(seed.clone()),
     )
+    .require_evaluated_state()
+    .max_evaluations(EvaluationKind::Gradient, 100)
+    .target_objective(-F::one())
+    .no_objective_improvement(100, F::zero())
     .max_iter(3)
     .run_with_solver()
     .unwrap();
@@ -104,6 +109,13 @@ where
     assert_eq!(result.counts.cost_evals, 4);
     assert_eq!(result.counts.gradient_evals, 4);
     assert_eq!(state.counts(), &result.counts);
+    assert_eq!(state.raw_counts(), &result.counts);
+    assert_eq!(state.current_record().unwrap().1, state.cost());
+    assert_eq!(
+        state.current_gradient_record().unwrap().2.vec_len(),
+        state.param().vec_len()
+    );
+    assert_eq!(state.incumbent_record().unwrap().cost, state.best_cost());
     let best_evals = if initial_cost == F::zero() { 1 } else { 4 };
     assert_eq!(state.best_counts().unwrap().cost_evals, best_evals);
     assert_eq!(state.best_counts().unwrap().gradient_evals, best_evals);
@@ -113,6 +125,8 @@ where
 
     let point_result =
         Executor::new(Sphere(PhantomData), Halve, PointState::new(seed))
+            .require_evaluated_state()
+            .max_evaluations(EvaluationKind::Cost, 100)
             .max_iter(3)
             .run_with_solver()
             .unwrap();

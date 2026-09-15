@@ -15,7 +15,7 @@ Ship these in order, preserving existing public APIs and behavior:
 - [x] **Introduce shared progress storage.** Start with point and first-order
   states for external and new solvers. Keep existing solver/state types,
   constructors, associated types, and serialized representations compatible.
-- [ ] **Add opt-in state capabilities.** Use new interfaces for checked record
+- [x] **Add opt-in state capabilities.** Use new interfaces for checked record
   access, raw evaluation counts, and explicit incumbent-selection semantics.
   Bind new controls to the capabilities they need; preserve existing readers
   and stopping behavior.

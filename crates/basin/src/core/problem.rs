@@ -756,6 +756,56 @@ pub struct EvalCounts {
     pub hessian_product_evals: u64,
 }
 
+/// A raw evaluation category or the explicitly named sum of all categories.
+///
+/// Used by [`Executor::max_evaluations`](crate::Executor::max_evaluations).
+/// Fused calls charge each category they produce, and batches charge submitted
+/// work even when evaluation fails. These metrics do not use legacy state folds.
+/// Variants are listed in raw-budget check order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum EvaluationKind {
+    /// Cost-function evaluations.
+    Cost,
+    /// Gradient evaluations, including mini-batch gradients.
+    Gradient,
+    /// Residual evaluations.
+    Residual,
+    /// Jacobian evaluations.
+    Jacobian,
+    /// Hessian evaluations.
+    Hessian,
+    /// Hessian-vector products.
+    HessianProduct,
+    /// Sum of all six categories, as in [`EvalCounts::total_work`].
+    TotalWork,
+}
+
+impl EvaluationKind {
+    pub(crate) const ALL: [Self; 7] = [
+        Self::Cost,
+        Self::Gradient,
+        Self::Residual,
+        Self::Jacobian,
+        Self::Hessian,
+        Self::HessianProduct,
+        Self::TotalWork,
+    ];
+
+    pub(crate) fn count(self, counts: &EvalCounts) -> u64 {
+        match self {
+            Self::Cost => counts.cost_evals,
+            Self::Gradient => counts.gradient_evals,
+            Self::Residual => counts.residual_evals,
+            Self::Jacobian => counts.jacobian_evals,
+            Self::Hessian => counts.hessian_evals,
+            Self::HessianProduct => counts.hessian_product_evals,
+            Self::TotalWork => counts.total_work(),
+        }
+    }
+}
+
 impl EvalCounts {
     /// Sum across every counter. Used for state-mirror rules that fold all
     /// problem work into a single `state.cost_evals` (derivative-free outer

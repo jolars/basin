@@ -16,9 +16,9 @@
 //!       configured. Cancellation stops the run with
 //!       [`TerminationReason::Cancelled`]. The borrowed [`run_loop_with_control`] path
 //!       has no attached token and skips this step.
-//!    2. Execution controls check iteration, cost and gradient evaluations,
-//!       elapsed time, target cost, improvement stall, and acceptance stall,
-//!       followed by application hooks. See [`RunControl`]. Deprecated
+//!    2. Execution controls check iteration, legacy cost and gradient budgets,
+//!       raw evaluation budgets, elapsed time, target cost, improvement stall,
+//!       and acceptance stall, followed by application hooks. See [`RunControl`]. Deprecated
 //!       criteria retain insertion order within the hook list.
 //!    3. [`Solver::check_convergence`] evaluates solver-owned convergence.
 //!       Its default delegates to the legacy [`Solver::terminate`] hook.
@@ -33,6 +33,12 @@
 //! Because checks happen *before* iter 0, an already-optimal initial
 //! point exits immediately with the corresponding reason rather than
 //! taking one redundant step.
+//!
+//! With [`Executor::require_evaluated_state`], each successful `init` or
+//! `next_iter` return is checked for a complete record before bookkeeping or
+//! observation, including clean mid-step stops. Restored checkpoints are also
+//! validated before observation. Missing records panic as solver contract
+//! violations; hard problem errors bypass publication and validation.
 //!
 //! [`Executor::resume`] restores state-carried evolution data and evaluation
 //! counters, while [`Executor::resume_from_checkpoint`] restores the solver,
@@ -604,6 +610,7 @@ where
             return Err(e);
         }
     };
+    control.validate(&next);
     next.mirror(&problem.counts().delta_since(baseline));
     if let Some(reason) = mid_iter_reason {
         // Refresh best-so-far from the mid-iter state too: the solver
@@ -717,6 +724,7 @@ where
     // inner) without best-so-far bleeding from one run into the next.
     state.reset_best();
     let mut state = solver.init(problem, state)?;
+    control.validate(&state);
     // Mirror init's work onto the state before any termination check.
     state.mirror(&problem.counts().delta_since(&baseline));
     state.update_best();
@@ -1065,10 +1073,12 @@ where
             state.reset_best();
         }
         let state = if skip_init {
+            control.validate(&state);
             state
         } else {
             solver.reset_convergence();
             let mut state = solver.init(&mut problem, state)?;
+            control.validate(&state);
             // Mirror init's work onto the state before any termination
             // check. Baseline is zero: this is a fresh top-level wrapper.
             state.mirror(problem.counts());

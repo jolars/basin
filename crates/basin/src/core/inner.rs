@@ -189,7 +189,8 @@ where
 /// # Serialization
 ///
 /// With `serde`, the solver and iteration/evaluation/time budgets serialize.
-/// Application hooks, deprecated criteria, and erased target/stall checks
+/// Application hooks, deprecated criteria, capability controls (raw budgets
+/// and publication validation), and erased target/stall checks
 /// cannot be reconstructed and cause a serialization error. They are never
 /// silently dropped from an exact checkpoint.
 ///
@@ -255,8 +256,8 @@ where
 
         if self.control.has_unserializable_stops() {
             return Err(Error::custom(
-                "InnerExecutor cannot serialize boxed termination criteria; \
-                 use an inner iteration budget for an exact checkpoint",
+                "InnerExecutor cannot serialize boxed termination criteria or capability controls; \
+                 use legacy iteration/evaluation/time budgets or an owned checkpoint",
             ));
         }
 
