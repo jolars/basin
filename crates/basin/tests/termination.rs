@@ -10,6 +10,38 @@ use basin::{
 };
 use std::time::Duration;
 
+#[test]
+fn termination_reasons_preserve_numeric_casts_and_values() {
+    let reasons = [
+        TerminationReason::MaxIter,
+        TerminationReason::MaxCostEvals,
+        TerminationReason::MaxGradientEvals,
+        TerminationReason::GradientTolerance,
+        TerminationReason::RelativeGradientTolerance,
+        TerminationReason::ProjectedGradientTolerance,
+        TerminationReason::ParamTolerance,
+        TerminationReason::RelativeParamTolerance,
+        TerminationReason::CostTolerance,
+        TerminationReason::RelativeCostTolerance,
+        TerminationReason::TargetCost,
+        TerminationReason::NoImprovement,
+        TerminationReason::NoAcceptedMove,
+        TerminationReason::SimplexTolerance,
+        TerminationReason::CmaEsTolerance,
+        TerminationReason::RhoTolerance,
+        TerminationReason::MeshTolerance,
+        TerminationReason::MaxTime,
+        TerminationReason::Cancelled,
+        TerminationReason::UserRequested,
+        TerminationReason::SolverConverged,
+        TerminationReason::SolverFailed,
+        TerminationReason::NumericalNoProgress,
+    ];
+    for (reason, value) in reasons.into_iter().zip(0u8..) {
+        assert_eq!(reason as u8, value);
+    }
+}
+
 /// f(x) = ½ ‖x‖²: convex quadratic with minimum at origin, gradient = x.
 struct Quadratic;
 

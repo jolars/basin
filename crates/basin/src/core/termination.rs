@@ -21,6 +21,9 @@ use crate::core::state::{
 /// Why the executor stopped. Returned on
 /// [`OptimizationResult::reason`](crate::core::executor::OptimizationResult::reason)
 /// and the various step/run hooks.
+///
+/// Variants remain fieldless in Basin 1.x to preserve numeric casts such as
+/// `TerminationReason::MaxIter as u8`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
@@ -91,7 +94,9 @@ pub enum TerminationReason {
     ///
     /// Checked at iteration boundaries through the state's raw-count
     /// capability; distinct from the legacy cost and gradient budget reasons.
-    MaxEvaluations(crate::core::problem::EvaluationKind),
+    /// Compare [`RawEvaluationState::raw_counts`](crate::RawEvaluationState::raw_counts)
+    /// with the configured limits to identify exhausted budgets.
+    MaxEvaluations,
 }
 
 impl TerminationReason {

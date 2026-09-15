@@ -28,7 +28,7 @@ fn raw_categories_read_the_state_without_legacy_folds() {
         control = control.max_evaluations(kind, count);
         assert_eq!(
             control.check(&state, &EvalCounts::default()),
-            Some(TerminationReason::MaxEvaluations(kind))
+            Some(TerminationReason::MaxEvaluations)
         );
     }
 }
@@ -54,12 +54,12 @@ fn raw_setters_replace_and_preserve_budget_precedence() {
         .target_objective(1.0);
     assert_eq!(
         control.check(&state, &counts),
-        Some(TerminationReason::MaxEvaluations(EvaluationKind::Gradient))
+        Some(TerminationReason::MaxEvaluations)
     );
     control = control.max_evaluations(EvaluationKind::Cost, 2);
     assert_eq!(
         control.check(&state, &counts),
-        Some(TerminationReason::MaxEvaluations(EvaluationKind::Cost))
+        Some(TerminationReason::MaxEvaluations)
     );
     control = control.max_gradient_evals(1);
     assert_eq!(

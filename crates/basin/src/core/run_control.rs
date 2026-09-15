@@ -192,7 +192,9 @@ impl<S> RunControl<S> {
     ///
     /// Replaces the limit for `kind`. Different kinds and legacy budgets are
     /// independent; legacy budgets are checked first. Exhaustion reports
-    /// [`TerminationReason::MaxEvaluations`]. Capability controls on an
+    /// [`TerminationReason::MaxEvaluations`] for every kind. Compare the
+    /// state's [`raw_counts`](RawEvaluationState::raw_counts) with configured
+    /// limits to identify exhausted budgets. Capability controls on an
     /// [`InnerExecutor`](crate::InnerExecutor) cannot be serialized.
     ///
     /// ```compile_fail
@@ -416,7 +418,7 @@ impl<S> RunControl<S> {
                 if raw.limits[kind as usize]
                     .is_some_and(|limit| kind.count(counts) >= limit)
                 {
-                    return Some(TerminationReason::MaxEvaluations(kind));
+                    return Some(TerminationReason::MaxEvaluations);
                 }
             }
         }

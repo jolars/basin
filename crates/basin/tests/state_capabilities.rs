@@ -235,10 +235,7 @@ fn raw_budget_observes_init_and_nested_run_deltas() {
             .run()
             .unwrap();
     assert_eq!(result.iter(), 0);
-    assert_eq!(
-        result.reason,
-        TerminationReason::MaxEvaluations(EvaluationKind::Cost)
-    );
+    assert_eq!(result.reason, TerminationReason::MaxEvaluations);
     let mut problem = Problem::new(Identity);
     problem.cost(&10.0).unwrap();
     let mut inner = InnerExecutor::new(Trajectory::new(&[]))
@@ -521,7 +518,7 @@ fn every_raw_budget_counts_fused_and_batch_work_without_folding() {
                 .max_evaluations(kind, work + 1)
                 .run_with_solver()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxEvaluations(kind));
+        assert_eq!(result.reason, TerminationReason::MaxEvaluations);
         assert_eq!(result.iter(), 1);
         let mut expected = WORK;
         expected.add(&WORK);
