@@ -24,7 +24,7 @@ numerical work against analytic cases and reference implementations.
   coordinates and narrow intervals. Forwarding bounds alone does not keep
   the current probes feasible. Cover gradients and Jacobians first, with
   tests for objectives defined only inside their bounds.
-- [ ] **Add gradient and Jacobian checkers.** Compare analytic derivatives
+- [x] **Add gradient and Jacobian checkers.** Compare analytic derivatives
   with finite differences using scale-aware error reports and optional
   directional checks. Reuse the bound-aware probe machinery when bounds are
   supplied, and distinguish non-finite evaluations from derivative mismatches.

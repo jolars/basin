@@ -378,11 +378,12 @@ pub use crate::core::math::{
     VectorLen,
 };
 pub use crate::core::numdiff::{
-    BoundedFiniteDiff, FiniteDiff, Method, central_difference_gradient,
-    central_difference_hessian, central_difference_hessian_product,
-    central_difference_jacobian, forward_difference_gradient,
-    forward_difference_hessian, forward_difference_hessian_product,
-    forward_difference_jacobian,
+    BoundedFiniteDiff, DerivativeCheckError, DerivativeCheckReport,
+    DerivativeChecker, DerivativeComparison, DerivativeSource, FiniteDiff,
+    Method, central_difference_gradient, central_difference_hessian,
+    central_difference_hessian_product, central_difference_jacobian,
+    forward_difference_gradient, forward_difference_hessian,
+    forward_difference_hessian_product, forward_difference_jacobian,
 };
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 pub use crate::core::observer::{CheckpointWriter, read_checkpoint};

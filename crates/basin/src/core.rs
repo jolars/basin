@@ -9,7 +9,9 @@
 //!   [`Residual`](problem::Residual)/[`Jacobian`](problem::Jacobian)
 //!   (least squares), and [`Hessian`](problem::Hessian) (second order).
 //!   Future: operators (matrix-free).
-//! - [`numdiff`]: finite-difference derivative synthesis: the
+//! - [`numdiff`]: finite-difference derivative synthesis and analytic checks.
+//!   [`DerivativeChecker`](numdiff::DerivativeChecker) checks gradients and
+//!   Jacobians with optional bounds and directional probes. The
 //!   [`FiniteDiff`](numdiff::FiniteDiff) wrapper adds
 //!   [`Gradient`](problem::Gradient)/[`Jacobian`](problem::Jacobian)/
 //!   [`Hessian`](problem::Hessian) to a problem that only exposes

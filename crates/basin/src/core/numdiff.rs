@@ -1,4 +1,7 @@
-//! Finite-difference derivative synthesis.
+//! Finite-difference derivative synthesis and analytic derivative checks.
+//!
+//! [`DerivativeChecker`] diagnoses analytic gradients and residual Jacobians
+//! with scale-aware coordinate or directional comparisons and optional bounds.
 //!
 //! [`FiniteDiff`] wraps a problem that only exposes function values
 //! ([`CostFunction`] and/or [`Residual`]) and *adds* the derivative traits
@@ -810,6 +813,11 @@ where
 /// Bound-aware first-derivative adapters.
 pub mod bounded;
 pub use bounded::BoundedFiniteDiff;
+pub mod check;
+pub use check::{
+    DerivativeCheckError, DerivativeCheckReport, DerivativeChecker,
+    DerivativeComparison, DerivativeSource,
+};
 
 impl<P, V> ConstraintJacobian for FiniteDiff<P>
 where
