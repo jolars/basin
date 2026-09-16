@@ -5,13 +5,18 @@
 //! Kraft accuracy test differs from the references' absolute function-change
 //! test; equal numeric tolerances do not imply identical stopping rules.
 
+pub mod workloads;
+
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::rc::Rc;
 use std::time::Instant;
 
 use basin::problems::{rosenbrock, rosenbrock_gradient};
-use basin::{CostFunction, Executor, Gradient, Slsqp, SlsqpState, State};
+use basin::{
+    CostFunction, CountsMirror, Executor, Gradient, Problem, Slsqp, SlsqpState,
+    Solver, State, TerminationReason,
+};
 
 use crate::unconstrained::Unconstrained;
 
@@ -22,6 +27,7 @@ pub const BUDGET: usize = 200;
 #[derive(Clone, Copy, Debug)]
 pub enum Library {
     Basin,
+    BasinManual,
     Slsqp,
     Nlopt,
 }
@@ -30,6 +36,7 @@ impl Library {
     pub fn name(self) -> &'static str {
         match self {
             Self::Basin => "basin",
+            Self::BasinManual => "basin_manual",
             Self::Slsqp => "slsqp",
             Self::Nlopt => "nlopt",
         }
@@ -42,6 +49,7 @@ pub struct Run {
     pub cost: f64,
     pub cost_evals: usize,
     pub gradient_evals: usize,
+    pub iterations: Option<u64>,
     pub status: String,
     pub converged: bool,
 }
@@ -118,6 +126,33 @@ impl Objective {
     }
 }
 
+fn manual(obj: Objective) -> (SlsqpState<Vec<f64>>, TerminationReason) {
+    let mut problem = Problem::new(Unconstrained(obj));
+    let mut solver = Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY);
+    let mut state = solver
+        .init(&mut problem, SlsqpState::new(START.to_vec()))
+        .unwrap();
+    state.mirror(problem.counts());
+    state.update_best();
+    loop {
+        if state.iter() >= BUDGET as u64 {
+            return (state, TerminationReason::MaxIter);
+        }
+        if let Some(reason) = solver.check_convergence(&problem, &state) {
+            return (state, reason);
+        }
+        let (mut next, reason) = solver.next_iter(&mut problem, state).unwrap();
+        next.mirror(problem.counts());
+        if let Some(reason) = reason {
+            next.update_best();
+            return (next, reason);
+        }
+        next.increment_iter();
+        next.update_best();
+        state = next;
+    }
+}
+
 pub fn run(library: Library) -> Run {
     let f0 = rosenbrock(&START);
     let log = Rc::new(RefCell::new(Log {
@@ -128,21 +163,28 @@ pub fn run(library: Library) -> Run {
         gradient_evals: 0,
     }));
     let obj = Objective(Rc::clone(&log));
+    let mut iterations = None;
     let (x, cost, status, converged) = match library {
-        Library::Basin => {
-            let result = Executor::new(
-                Unconstrained(obj),
-                Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY),
-                SlsqpState::new(START.to_vec()),
-            )
-            .max_iter(BUDGET as u64)
-            .run()
-            .unwrap();
+        Library::Basin | Library::BasinManual => {
+            let (state, reason) = if matches!(library, Library::BasinManual) {
+                manual(obj)
+            } else {
+                let result = Executor::new(
+                    Unconstrained(obj),
+                    Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY),
+                    SlsqpState::new(START.to_vec()),
+                )
+                .max_iter(BUDGET as u64)
+                .run()
+                .unwrap();
+                (result.state, result.reason)
+            };
+            iterations = Some(state.iter());
             (
-                result.state.param().clone(),
-                result.state.cost(),
-                format!("{:?}", result.reason),
-                result.reason == basin::TerminationReason::SolverConverged,
+                state.param().clone(),
+                state.cost(),
+                format!("{reason:?}"),
+                reason == TerminationReason::SolverConverged,
             )
         }
         Library::Slsqp => {
@@ -203,6 +245,7 @@ pub fn run(library: Library) -> Run {
         cost,
         cost_evals: log.cost_evals,
         gradient_evals: log.gradient_evals,
+        iterations,
         status,
         converged,
     }
@@ -211,6 +254,25 @@ pub fn run(library: Library) -> Run {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manual_loop_matches_executor_work_and_trace() {
+        let executor = run(Library::Basin);
+        let manual = run(Library::BasinManual);
+        executor.verify();
+        manual.verify();
+        assert_eq!(executor.x, manual.x);
+        assert_eq!(executor.cost, manual.cost);
+        assert_eq!(executor.cost_evals, manual.cost_evals);
+        assert_eq!(executor.gradient_evals, manual.gradient_evals);
+        assert_eq!(executor.iterations, Some(35));
+        assert_eq!(executor.iterations, manual.iterations);
+        assert_eq!(executor.status, manual.status);
+        assert_eq!(
+            executor.points.iter().map(|p| p.1).collect::<Vec<_>>(),
+            manual.points.iter().map(|p| p.1).collect::<Vec<_>>(),
+        );
+    }
 
     #[test]
     fn references_reach_the_rosenbrock_minimum() {

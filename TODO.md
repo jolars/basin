@@ -121,14 +121,14 @@ numerical work against analytic cases and reference implementations.
   optional integrations before expanding the core or adding heavy solver
   dependencies, preserving the default pure-Rust WASM build.
 
-### Deferred outreach
+### Outreach
 
-- [ ] **Contact EGObox about switching to Basin.** Depends on completing and
-  validating the SLSQP task above. Revisit consolidation of `argmin`, `cobyla`,
+- [ ] **Contact EGObox about switching to Basin.** SLSQP is implemented and
+  validated, so outreach is ready. Revisit consolidation of `argmin`, `cobyla`,
   `slsqp`, and optional `nlopt`, accounting for EGObox's public argmin
   integration. Ask the [maintainer](https://github.com/relf/EGObox) whether they
   would consider a switch and offer a PR with numerical and performance
-  comparisons. Outreach is deferred until SLSQP is ready.
+  comparisons on EGObox workloads.
 
 ## General design
 
@@ -250,8 +250,7 @@ include adapter overhead and use inexpensive analytic derivatives.
 - [x] **Measure Steihaug with expensive derivatives.** Reproduced the evaluation
   gap. Added Hessian work reverses the timing advantage at about 0.5 µs/call
   in 2D Rosenbrock and 1.5 µs/call in 20D, on shared successful starts; equal
-  work in both derivative callbacks roughly halves those thresholds. See the
-  [measurements and reproducible probe](crates/competitor-bench/investigations/steihaug-derivatives/README.md).
+  work in both derivative callbacks roughly halves those thresholds.
 - [x] **Investigate gradient descent's extra evaluations on sphere.** Reproduced
   6 objective / 5 gradient calls versus argmin's 3 / 2. One extra pair is an
   accepted-point reevaluation; the remaining two arise from Basin's

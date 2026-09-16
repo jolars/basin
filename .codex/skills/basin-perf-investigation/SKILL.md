@@ -135,10 +135,10 @@ changes, and record the finding rather than accumulating speculative rewrites.
 
 ## Leave reproducible evidence
 
-Keep raw profiles and exploratory output in ignored `target/` directories or a
-temporary workspace. Preserve useful probes and compact findings under
-`crates/competitor-bench/investigations/<topic>/` when durable artifacts are
-part of the task. Record enough metadata and exact commands to repeat the run.
+Keep raw profiles, exploratory output, and investigation reports in ignored
+`target/` directories or a temporary workspace. Integrate reusable probes into
+the existing benchmark and test harnesses. Record enough metadata and exact
+commands to repeat the run.
 The `task bench:*` commands also regenerate published web data; use the direct
 harness for investigation and refresh website results only within the requested
 scope.

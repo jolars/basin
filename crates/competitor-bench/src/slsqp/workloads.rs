@@ -1,4 +1,4 @@
-//! Contrasting complete solves for the SLSQP workspace investigation.
+//! Shared constrained workloads keep timing and allocation probes comparable.
 
 use std::convert::Infallible;
 

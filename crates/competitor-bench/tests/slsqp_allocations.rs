@@ -5,8 +5,7 @@ use std::{
     cell::Cell,
 };
 
-#[path = "../investigations/slsqp/workloads.rs"]
-mod workloads;
+use competitor_bench::slsqp::workloads;
 
 thread_local! {
     // Per-thread accounting excludes concurrent tests and harness activity.

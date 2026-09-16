@@ -5,10 +5,7 @@ use std::{hint::black_box, time::Instant};
 
 use basin::{RawEvaluationState, State};
 pub use basin::{SlsqpFailure, core};
-use competitor_bench::slsqp::{Library, run};
-
-#[path = "../../investigations/slsqp/workloads.rs"]
-mod workloads;
+use competitor_bench::slsqp::{Library, run, workloads};
 
 // Compile the production kernel without exposing private math as public API.
 #[path = "../../../basin/src/solver/slsqp/least_squares.rs"]
@@ -85,16 +82,23 @@ fn measure<T>(name: &str, batch: usize, mut solve: impl FnMut() -> T) {
 
 fn main() {
     let profile = std::env::args().any(|a| a == "--profile");
-    for library in [Library::Basin, Library::Slsqp, Library::Nlopt] {
+    let libraries = [
+        Library::Basin,
+        Library::BasinManual,
+        Library::Slsqp,
+        Library::Nlopt,
+    ];
+    for library in libraries {
         let result = run(library);
         result.verify();
         eprintln!(
-            "{}: f={:.17e}, x={:?}, nf={}, ng={}, status={}",
+            "{}: f={:.17e}, x={:?}, nf={}, ng={}, iterations={:?}, status={}",
             library.name(),
             result.cost,
             result.x,
             result.cost_evals,
             result.gradient_evals,
+            result.iterations,
             result.status,
         );
     }
@@ -105,7 +109,7 @@ fn main() {
         return;
     }
     println!("case,sample,ns");
-    for library in [Library::Basin, Library::Slsqp, Library::Nlopt] {
+    for library in libraries {
         measure(library.name(), 1000, || run(library));
     }
     let hs71 = workloads::hs71();

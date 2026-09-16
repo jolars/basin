@@ -52,7 +52,7 @@ impl<F: Scalar> Matrix<F> {
         &mut self.data[i * self.cols..(i + 1) * self.cols]
     }
     fn column_norm(&self, j: usize, start: usize, end: usize) -> F {
-        (start..end).fold(F::zero(), |length, i| length.hypot(self.get(i, j)))
+        norm_iter((start..end).map(|i| self.get(i, j)))
     }
 }
 
@@ -60,7 +60,12 @@ pub(super) fn dot<F: Scalar>(x: &[F], y: &[F]) -> F {
     x.iter().zip(y).map(|(&a, &b)| a * b).sum()
 }
 pub(super) fn norm<F: Scalar>(x: &[F]) -> F {
-    x.iter().fold(F::zero(), |a, &b| a.hypot(b))
+    norm_iter(x.iter().copied())
+}
+fn norm_iter<F: Scalar>(mut values: impl Iterator<Item = F>) -> F {
+    // The first hypot(0, x) is exactly |x|, including subnormals and infinities.
+    let first = values.next().unwrap_or_else(F::zero).abs();
+    values.fold(first, |a, b| a.hypot(b))
 }
 pub(super) fn number<F: Scalar>(x: f64) -> F {
     F::from_f64(x).unwrap()
@@ -94,6 +99,22 @@ impl<F: Scalar> Reflection<F> {
                 v,
                 beta: F::zero(),
                 factor: F::zero(),
+            };
+        }
+        if v.len() == 1 && scale.is_finite() {
+            // A scalar reflection only changes sign. These are exactly the
+            // scaled coefficients, without normalization or division.
+            let beta = -v[0];
+            v[0] = if v[0] > F::zero() {
+                number(2.0)
+            } else {
+                number(-2.0)
+            };
+            return Self {
+                start,
+                v,
+                beta,
+                factor: number(-0.5),
             };
         }
         for value in &mut v {
@@ -554,6 +575,70 @@ mod tests {
     use super::*;
 
     #[test]
+    fn norms_preserve_extreme_scales_and_nonfinite_values() {
+        for values in [
+            vec![],
+            vec![-0.0],
+            vec![-3.0, 4.0],
+            vec![3e200, -4e200],
+            vec![3e-200, -4e-200],
+            vec![f64::from_bits(1)],
+            vec![-f64::MAX],
+            vec![f64::NAN],
+            vec![f64::NAN, f64::INFINITY],
+            vec![f64::NEG_INFINITY, f64::NAN],
+        ] {
+            let expected = values.iter().fold(0.0_f64, |a, &b| a.hypot(b));
+            let mut matrix = Matrix::zeros(values.len() + 2, 2);
+            matrix.set(0, 1, f64::NAN);
+            matrix.set(values.len() + 1, 1, f64::NAN);
+            for (i, &value) in values.iter().enumerate() {
+                matrix.set(i + 1, 1, value);
+            }
+            for result in
+                [norm(&values), matrix.column_norm(1, 1, values.len() + 1)]
+            {
+                if expected.is_nan() {
+                    assert!(result.is_nan());
+                } else {
+                    assert_eq!(result.to_bits(), expected.to_bits());
+                }
+            }
+        }
+        assert_eq!(norm(&[-3.0_f32, 4.0]), 5.0);
+        assert_eq!(norm(&[f32::from_bits(1)]), f32::from_bits(1));
+        assert_eq!(norm(&[-f32::MAX]), f32::MAX);
+    }
+
+    #[test]
+    fn scalar_reflections_preserve_extreme_scales() {
+        for value in [1.0, 1e-200, 1e200, f64::from_bits(1), f64::MAX] {
+            for value in [value, -value] {
+                let reflection = Reflection::new(&[0.0, value], 1);
+                assert_eq!(reflection.beta.to_bits(), (-value).to_bits());
+                assert_eq!(reflection.factor, -0.5);
+                assert_eq!(reflection.v, vec![2.0 * value.signum()]);
+                let mut rhs = [7.0, -3.0];
+                reflection.apply(&mut rhs);
+                assert_eq!(rhs, [7.0, 3.0]);
+            }
+        }
+        for value in [0.0, -0.0] {
+            let reflection = Reflection::new(&[value], 0);
+            assert_eq!(reflection.factor, 0.0);
+            let mut rhs = [-3.0];
+            reflection.apply(&mut rhs);
+            assert_eq!(rhs, [-3.0]);
+        }
+        for value in [f32::from_bits(1), -f32::MAX] {
+            let reflection = Reflection::new(&[value], 0);
+            assert_eq!(reflection.beta, -value);
+            assert_eq!(reflection.factor, -0.5);
+            assert_eq!(reflection.v, vec![2.0 * value.signum()]);
+        }
+    }
+
+    #[test]
     fn reused_workspace_reorders_pivots_and_recovers_after_failure() {
         let mut workspace = Workspace::default();
         for n in [4, 1, 3, 2, 4] {
@@ -613,7 +698,12 @@ mod tests {
 
     #[test]
     fn no_equalities_rejects_singular_and_nonfinite_subproblems() {
-        for (diagonal, rhs) in [(0.0, 1.0), (1.0, f64::NAN)] {
+        for (diagonal, rhs) in [
+            (0.0, 1.0),
+            (1.0, f64::NAN),
+            (f64::NAN, 1.0),
+            (f64::INFINITY, 1.0),
+        ] {
             let e = Matrix {
                 rows: 1,
                 cols: 1,

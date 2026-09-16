@@ -41,12 +41,10 @@ The LM competitor harness normally matches nalgebra 0.34 on both sides;
 timings that silently change backends or enable parallelism. Record resolved
 backend versions and features; moving `*_latest` aliases are not lasting pins.
 
-For COBYLA, read `crates/competitor-bench/investigations/cobyla.md` for the
-completed investigation, comparison asymmetries, retained regression guards, and
-archived experiment provenance. The public comparison is part of `gd_nm`; the
-private driver retains its own benchmark. For LM, read
-`crates/competitor-bench/investigations/lm/README.md` and its production
-verification commands. Neither maintained comparison needs GlobalSearch.
+COBYLA's public comparison is part of `gd_nm`; its private driver has a
+separate benchmark and allocation tests. For LM, use `src/bin/verify.rs`,
+`verify_lm_qr.rs`, and `verify_lm_stopping.rs` in `competitor-bench`.
+Neither maintained comparison needs GlobalSearch.
 Historical measurements are leads to remeasure, not current facts.
 
 Extend a nearby harness when needed. Keep native competitors and instrumentation
