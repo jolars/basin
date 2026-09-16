@@ -143,29 +143,28 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
 
     const startVec = `vec![${rustFloat(cfg.start[0])}, ${rustFloat(cfg.start[1])}]`;
 
-    return (
-        [
-            "use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};",
-            "",
-            "struct Rosenbrock;",
-            "",
-            COST_IMPL,
-            "",
-            GRADIENT_IMPL,
-            "",
-            "fn main() {",
-            `    let solver = ${solverExpr};`,
-            `    let state = BasicState::new(${startVec});`,
-            "",
-            `    let result = Executor::new(Rosenbrock, solver, state)`,
-            `        .max_iter(${rustInt(cfg.maxIter)})`,
-            "        .run()",
-            "        .unwrap();",
-            "",
-            `    println!("${buildOutputLine("{:?}", "{}")}", result.param(), result.cost());`,
-            "}",
-        ].join("\n") + "\n"
-    );
+    return [
+        "use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};",
+        "",
+        "struct Rosenbrock;",
+        "",
+        COST_IMPL,
+        "",
+        GRADIENT_IMPL,
+        "",
+        "fn main() {",
+        `    let solver = ${solverExpr};`,
+        `    let state = BasicState::new(${startVec});`,
+        "",
+        `    let result = Executor::new(Rosenbrock, solver, state)`,
+        `        .max_iter(${rustInt(cfg.maxIter)})`,
+        "        .run()",
+        "        .unwrap();",
+        "",
+        `    println!("${buildOutputLine("{:?}", "{}")}", result.param(), result.cost());`,
+        "}",
+        "",
+    ].join("\n");
 }
 
 export interface NamedConfig {

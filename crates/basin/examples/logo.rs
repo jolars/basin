@@ -1453,6 +1453,7 @@ impl Svg {
             min_x, min_y, w, h, w, h
         );
         out.push('\n');
+        out.push_str("<title>Basin logo</title>\n");
         // No background rect: the logo renders on a transparent canvas.
         out.push_str(&self.body);
         out.push_str("</svg>\n");

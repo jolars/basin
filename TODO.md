@@ -75,14 +75,13 @@ numerical work against analytic cases and reference implementations.
   deficiency, active bounds, and robust losses. Use [SciPy
   curve_fit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html)
   as a comparison for convenience and reporting.
-- [ ] **Expand scalar roots and bracketing.** Start with automatic root and
-  minimum bracketing and a safeguarded Newton/secant solver. Consider TOMS
-  748, Halley, and other bracketed methods afterward. Add batched independent
-  scalar solves when there is a concrete consumer; preserve the direct root
-  API and distinguish root convergence from minimization convergence. See
-  [SciPy scalar
-  roots](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.root_scalar.html)
-  and [elementwise
+- [x] **Expand scalar roots and bracketing.** Added automatic root and minimum
+  bracketing, safeguarded secant, Newton, and Halley methods, and TOMS 748
+  (`k = 2`). Root solvers retain direct fallible callbacks, signed function
+  values, and bracket-based convergence. Bracketing is an explicit first stage.
+- [ ] **Add batched independent scalar solves when a consumer needs them.**
+  Build on the direct scalar root and bracketing APIs, preserving separate
+  root and minimization convergence semantics. See [elementwise
   optimization](https://docs.scipy.org/doc/scipy/reference/optimize.elementwise.html).
 - [ ] **Add multivariate root solving when an integration needs it.** Start
   with a safeguarded Newton/hybrid method or Broyden, then assess Anderson

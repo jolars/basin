@@ -3,6 +3,50 @@
 //! provisional-choice trigger from `CONTRIBUTING.md` is now satisfiable: the
 //! whole pipeline runs at a non-`f64` scalar without further refactor.
 
+#[test]
+fn scalar_bracketing_and_roots_f32() {
+    use basin::{
+        HalleyRoot, MinimumBracketer, NewtonRoot, RootBracketer, SecantRoot,
+        Toms748Root,
+    };
+    use std::convert::Infallible;
+    let f = |x: f32| Ok::<_, Infallible>(x * x - 2.0);
+    let bracket = RootBracketer::new(0.0_f32, 0.5)
+        .with_lower_bound(0.0)
+        .bracket(f)
+        .unwrap();
+    assert!(bracket.bracketed());
+    let (a, b) = bracket.bracket();
+    let results = [
+        SecantRoot::new(a, b).solve(f).unwrap(),
+        NewtonRoot::new(a, b).solve(f, |x| Ok(2.0 * x)).unwrap(),
+        NewtonRoot::new(a, b)
+            .solve_combined(|x| Ok::<_, Infallible>((x * x - 2.0, 2.0 * x)))
+            .unwrap(),
+        HalleyRoot::new(a, b)
+            .solve(f, |x| Ok(2.0 * x), |_| Ok(2.0))
+            .unwrap(),
+        HalleyRoot::new(a, b)
+            .solve_combined(|x| {
+                Ok::<_, Infallible>((x * x - 2.0, 2.0 * x, 2.0))
+            })
+            .unwrap(),
+        Toms748Root::new(a, b).solve(f).unwrap(),
+    ];
+    for result in results {
+        let root: f32 = result.root();
+        assert!(result.converged(), "{result:?}");
+        assert!((root - 2.0_f32.sqrt()).abs() <= 8.0 * f32::EPSILON);
+        assert_eq!(result.value(), f(root).unwrap());
+    }
+    let minimum = MinimumBracketer::new(-1.0_f32, 0.0, 1.0)
+        .bracket(|x| Ok::<_, Infallible>((x - 10.0).powi(2)))
+        .unwrap();
+    assert!(minimum.bracketed());
+    let (a, _, b): (f32, f32, f32) = minimum.bracket();
+    assert!(a < 10.0 && 10.0 < b);
+}
+
 use basin::core::executor::Executor;
 use basin::core::math::DenseMatrix;
 use basin::core::problem::{CostFunction, Gradient, Hessian, HessianProduct};

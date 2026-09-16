@@ -182,11 +182,19 @@ export function chainSegments(
     if (n === 0) return [];
     const key = (x: number, y: number) => `${x},${y}`;
     const endpoints = new Map<string, number[]>();
+    const addEndpoint = (k: string, index: number): void => {
+        const indices = endpoints.get(k);
+        if (indices) {
+            indices.push(index);
+        } else {
+            endpoints.set(k, [index]);
+        }
+    };
     for (let i = 0; i < n; i++) {
         const k0 = key(segs[4 * i], segs[4 * i + 1]);
         const k1 = key(segs[4 * i + 2], segs[4 * i + 3]);
-        (endpoints.get(k0) ?? endpoints.set(k0, []).get(k0)!).push(i);
-        (endpoints.get(k1) ?? endpoints.set(k1, []).get(k1)!).push(i);
+        addEndpoint(k0, i);
+        addEndpoint(k1, i);
     }
     const visited = new Uint8Array(n);
     const chains: number[][] = [];

@@ -419,6 +419,7 @@ fn compose_adaptive(day: Svg, night: Svg) -> String {
         vx, vy, side, side, side, side
     );
     out.push('\n');
+    out.push_str("<title>Basin icon</title>\n");
     out.push_str(
         "<style>#dark-icon{display:none}\
          @media (prefers-color-scheme:dark){#light-icon{display:none}#dark-icon{display:inline}}</style>\n",
@@ -933,6 +934,7 @@ impl Svg {
             vx, vy, side, side, side, side
         );
         out.push('\n');
+        out.push_str("<title>Basin icon</title>\n");
         out.push_str(&self.body);
         out.push_str("</svg>\n");
         out

@@ -22,11 +22,14 @@ pub struct RootResult<F = f64> {
     upper: F,
     iterations: u64,
     function_evals: u64,
+    derivative_evals: u64,
+    second_derivative_evals: u64,
+    callback_evals: u64,
     reason: RootTerminationReason,
 }
 
 impl<F: Scalar> RootResult<F> {
-    fn new(
+    pub(super) fn new(
         root: F,
         value: F,
         bracket: (F, F),
@@ -43,6 +46,9 @@ impl<F: Scalar> RootResult<F> {
             upper,
             iterations,
             function_evals,
+            derivative_evals: 0,
+            second_derivative_evals: 0,
+            callback_evals: function_evals,
             reason,
         }
     }
@@ -63,7 +69,11 @@ impl<F: Scalar> RootResult<F> {
         (self.lower, self.upper)
     }
 
-    /// Number of interpolation or bisection steps performed.
+    /// Number of algorithm iterations performed.
+    ///
+    /// Brent, secant, Newton, and Halley count evaluated trial steps. TOMS
+    /// 748 counts its startup step and subsequent interpolation cycles, each
+    /// of which can evaluate several points.
     pub fn iterations(&self) -> u64 {
         self.iterations
     }
@@ -71,6 +81,28 @@ impl<F: Scalar> RootResult<F> {
     /// Number of function evaluations performed, including the endpoints.
     pub fn function_evals(&self) -> u64 {
         self.function_evals
+    }
+
+    /// Number of first derivatives returned by callbacks, including combined calls.
+    pub fn derivative_evals(&self) -> u64 {
+        self.derivative_evals
+    }
+
+    /// Number of second derivatives returned by callbacks, including combined calls.
+    pub fn second_derivative_evals(&self) -> u64 {
+        self.second_derivative_evals
+    }
+
+    /// Total user callback invocations. A combined evaluation counts once.
+    pub fn callback_evals(&self) -> u64 {
+        self.callback_evals
+    }
+
+    pub(super) fn with_counts(mut self, counts: super::common::Counts) -> Self {
+        self.derivative_evals = counts.derivative;
+        self.second_derivative_evals = counts.second_derivative;
+        self.callback_evals = counts.callback;
+        self
     }
 
     /// Why the run stopped.

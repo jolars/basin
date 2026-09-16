@@ -15,6 +15,39 @@ the trailing note cites the paper it implements (or the source it ports).
   quadratic interpolation (Brent, 1971). It uses a direct fallible-closure API
   rather than `Executor`, preserving the signed function value and final
   bracket in a root-specific result.
+- **[`SecantRoot`](https://docs.rs/basin/latest/basin/root/secant/struct.SecantRoot.html)**:
+  secant iteration with bracket preservation and bisection safeguards (SciPy
+  1.16.3, `scipy.optimize.newton`, secant update; Basin adds bracketing and
+  bracket-based termination).
+- **[`NewtonRoot`](https://docs.rs/basin/latest/basin/root/newton/struct.NewtonRoot.html)**:
+  safeguarded Newton iteration using first derivatives (Boost.Math 1.89.0,
+  "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder"; Basin
+  adds secant fallback, a two-trial contraction safeguard, and bracket-based
+  termination).
+- **[`HalleyRoot`](https://docs.rs/basin/latest/basin/root/halley/struct.HalleyRoot.html)**:
+  safeguarded Halley iteration using first and second derivatives (Boost.Math
+  1.89.0, "Root Finding With Derivatives: Newton-Raphson, Halley & Schroeder";
+  Basin adds secant fallback, a two-trial contraction safeguard, and
+  bracket-based termination).
+- **[`Toms748Root`](https://docs.rs/basin/latest/basin/root/toms748/struct.Toms748Root.html)**:
+  derivative-free bracketed root finding using Algorithm 4.2 (`k = 2`,
+  `μ = 0.5`) from Alefeld, Potra, and Shi (1995), "Algorithm 748: Enclosing
+  Zeros of Continuous Functions," _ACM Transactions on Mathematical Software_,
+  21(3), 327–344, [doi:10.1145/210089.210111](https://doi.org/10.1145/210089.210111).
+
+All five use direct fallible callbacks and preserve signed function values and
+the final bracket. Newton and Halley accept separate or combined derivative
+callbacks. Convergence requires an exact zero or a sufficiently narrow bracket.
+
+[`RootBracketer`](https://docs.rs/basin/latest/basin/bracket/root/struct.RootBracketer.html)
+and
+[`MinimumBracketer`](https://docs.rs/basin/latest/basin/bracket/minimum/struct.MinimumBracketer.html)
+provide automatic geometric bracket searches with optional domain limits.
+Bracketing is a separate stage with its own evaluation counts. Pass a root
+bracket to a root solver, or put a minimum bracket's outer endpoints on the
+problem's `BoxConstraints` and use its middle point to seed a scalar minimizer.
+Both searches follow the scalar recurrences in SciPy 1.16.3's elementwise
+bracketing routines.
 
 ## First-Order
 
@@ -300,6 +333,10 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `SolisWets`                 | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Brent`                     | Derivative-free |     —      |    —     |    —    |  —   |
   | `BrentRoot`                 | Root finding    |     —      |    —     |    —    |  —   |
+  | `SecantRoot`                | Root finding    |     —      |    —     |    —    |  —   |
+  | `NewtonRoot`                | Root finding    |     —      |    —     |    —    |  —   |
+  | `HalleyRoot`                | Root finding    |     —      |    —     |    —    |  —   |
+  | `Toms748Root`               | Root finding    |     —      |    —     |    —    |  —   |
   | `GoldenSection`             | Derivative-free |     —      |    —     |    —    |  —   |
   | `BrentDerivative`           | First-order     |     —      |    —     |    —    |  —   |
   | `Bfgs`                      | Quasi-Newton    |     ✓      |    ✓     |    ✓    |  ✓   |
@@ -329,8 +366,9 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `AugmentedLagrangianMethod` | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
 
 `Brent`, `GoldenSection`, and `BrentDerivative` minimize over a scalar interval;
-`BrentRoot` finds a bracketed scalar zero directly. All four support `f64` and
-`f32`, so the vector-backend choice does not apply.
+`BrentRoot`, `SecantRoot`, `NewtonRoot`, `HalleyRoot`, and `Toms748Root` find a
+bracketed scalar zero directly. These scalar algorithms and both bracket
+searches support `f64` and `f32`, so the vector-backend choice does not apply.
 
 † `DeInject` and `BasinHopping` are themselves backend-generic, but their
 effective coverage is the intersection of the outer driver and the chosen inner

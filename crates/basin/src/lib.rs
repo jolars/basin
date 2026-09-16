@@ -146,10 +146,11 @@
 //! optimization keeps `Result<f64, Infallible>` the same layout as a bare `f64`,
 //! so the happy path stays zero-cost.
 //!
-//! The direct [`BrentRoot`] API follows the same typed-error principle without
+//! The direct scalar [`root`] APIs follow the same typed-error principle without
 //! using optimization state: callback failures are wrapped in
-//! [`BrentRootError::Evaluation`], structural bracket failures have distinct
-//! variants, and an iteration-limit exit is a clean [`RootResult`].
+//! [`BrentRootError::Evaluation`] or [`RootError::Evaluation`], structural
+//! bracket failures have distinct variants, and an iteration-limit exit is a
+//! clean [`RootResult`].
 //!
 //! The [`problem`](crate::core::problem) module docs carry the per-trait detail.
 //!
@@ -334,6 +335,8 @@ compile_error!("`ndarray_all` is internal; enable an `ndarray_v*` feature");
 ))]
 compile_error!("`faer_all` is internal; enable a `faer_v*` feature");
 
+/// Automatic scalar root and minimum bracketing.
+pub mod bracket;
 pub mod core;
 pub mod line_search;
 /// Catalog of test problems used by the example tests and benchmarks.
@@ -344,6 +347,10 @@ pub mod root;
 /// Concrete solver implementations.
 pub mod solver;
 
+pub use crate::bracket::{
+    BracketError, BracketTerminationReason, MinimumBracketResult,
+    MinimumBracketer, RootBracketResult, RootBracketer,
+};
 pub use crate::core::augmented_lagrangian::AugmentedLagrangian;
 pub use crate::core::barrier::LogBarrier;
 pub use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
@@ -427,7 +434,8 @@ pub use crate::line_search::{
     Wolfe,
 };
 pub use crate::root::{
-    BrentRoot, BrentRootError, RootResult, RootTerminationReason,
+    BrentRoot, BrentRootError, HalleyRoot, NewtonRoot, RootError, RootResult,
+    RootTerminationReason, SecantRoot, Toms748Root,
 };
 pub use crate::solver::Bfgs;
 pub use crate::solver::lbfgs::{Lbfgs, Lbfgsb};

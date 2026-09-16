@@ -13,7 +13,8 @@
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg"><sodipodi:namedview
+   xmlns:svg="http://www.w3.org/2000/svg">
+<title>Basin numerical optimization library</title><sodipodi:namedview
      id="namedview1"
      pagecolor="#ffffff"
      bordercolor="#000000"
@@ -44,12 +45,12 @@
      id="layer1"
      transform="translate(-98.26061,-69.516797)"><text
        xml:space="preserve"
-       style="font-weight:bold;font-size:35.9989px;font-family:Sans;-inkscape-font-specification:'Sans Bold';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#000000;stroke-width:2.99992;stroke-dasharray:2.99992, 17.9995"
+       style="font-weight:bold;font-size:35.9989px;font-family:Sans,sans-serif;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#000000;stroke-width:2.99992;stroke-dasharray:2.99992, 17.9995"
        x="141.87007"
        y="143.69949"
        id="text1"><tspan
          id="tspan1"
-         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-family:Inconsolata;-inkscape-font-specification:'Inconsolata Semi-Bold';stroke-width:2.99992"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-family:Inconsolata,monospace;stroke-width:2.99992"
          x="141.87007"
          y="143.69949">Basin</tspan></text><g
        id="g1"

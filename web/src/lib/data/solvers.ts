@@ -122,8 +122,12 @@ export interface ProblemSection {
 export const BY_PROBLEM: ProblemSection[] = (() => {
     const groups = new Map<string, StartCard[]>();
     for (const s of STARTS) {
-        if (!groups.has(s.problem)) groups.set(s.problem, []);
-        groups.get(s.problem)!.push(s);
+        const panels = groups.get(s.problem);
+        if (panels) {
+            panels.push(s);
+        } else {
+            groups.set(s.problem, [s]);
+        }
     }
     return [...groups.entries()].map(([problem, panels]) => ({
         problem,
