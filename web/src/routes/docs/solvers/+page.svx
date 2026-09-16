@@ -77,7 +77,8 @@ the trailing note cites the paper it implements (or the source it ports).
   interpolation at the `n+1` vertices of a simplex and steers by an L-infinity
   exact-penalty merit function. For nonlinear inequalities `c(x) ≤ 0`, supply a
   `CostFunction` and `NonlinearInequalityConstraints`. For nonlinear inequalities
-  with optional linear inequalities, equalities, and box bounds, implement
+  with optional nonlinear equalities, linear constraints, and box bounds,
+  implement
   [`NonlinearConstraints`](https://docs.rs/basin/latest/basin/core/constraint/trait.NonlinearConstraints.html)
   and pass
   [`FoldedConstraints::new(problem)`](https://docs.rs/basin/latest/basin/core/constraint/folded/struct.FoldedConstraints.html)
@@ -230,9 +231,23 @@ composition primitives:
   local-search operator implementing the `ResumableInner` (seed + snapshot +
   resume) trait.
 
-## Constrained (Composed)
+## Constrained
 
-These wrap any gradient inner solver in an outer loop that handles linear
+- **[`Slsqp`](https://docs.rs/basin/latest/basin/solver/slsqp/struct.Slsqp.html)**:
+  dense Han–Powell sequential least-squares programming with damped BFGS,
+  constrained least-squares subproblems, and an inexact L1 merit line search.
+  Supports box bounds, linear and nonlinear equalities, and linear and nonlinear
+  inequalities through `NonlinearConstraints` and `ConstraintJacobian`, with
+  analytic or finite-difference derivatives. Reports feasibility, projected
+  Lagrangian stationarity, and complementarity alongside Kraft's native
+  convergence tests. Kraft, D. (1988), *A software package for sequential
+  quadratic programming*, Technical Report DFVLR-FB 88-28, Institut für Dynamik
+  der Flugsysteme, Oberpfaffenhofen, §§2.2 and 3.2
+  ([report](https://degenerateconic.com/uploads/2018/03/DFVLR_FB_88_28.pdf)).
+  Reference implementation: Jacob Williams's SLSQP 1.6.1, commit
+  `97884f98042624007f736dc536fa5636906ff26a`, original NNLS and inexact line search.
+
+The following wrap a gradient inner solver in an outer loop for linear
 constraints:
 
 - **[`BarrierMethod`](https://docs.rs/basin/latest/basin/solver/barrier_method/struct.BarrierMethod.html)**:
@@ -309,6 +324,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `DeInject`                  | Memetic         |     ✓†     |    ✓     |   ✓†    |  ✓   |
   | `MaLsChCma`                 | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
   | `MaLsChSw`                  | Memetic         |     ✓§     |    ✓§    |   ✓§    |  ✓§  |
+  | `Slsqp`                     | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
   | `BarrierMethod`             | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
   | `AugmentedLagrangianMethod` | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
 

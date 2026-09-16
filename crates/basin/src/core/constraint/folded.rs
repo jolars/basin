@@ -19,6 +19,8 @@ use crate::core::{
 /// 4. Positive equality residuals: `A_eq x − b_eq`.
 /// 5. Linear inequalities: `A_ineq x − b_ineq`.
 /// 6. Nonlinear inequalities.
+/// 7. Positive nonlinear equality residuals: `h(x)`.
+/// 8. Negative nonlinear equality residuals: `−h(x)`.
 ///
 /// Every block keeps its original scale; no normalization or relaxation is
 /// applied. This preserves the full feasible set, while COBYLA retains its
@@ -112,7 +114,8 @@ where
     P::Matrix: MatVec<P::Param>,
 {
     pub(crate) fn constraint_count(&self, n: usize) -> usize {
-        let mut count = self.problem.num_nonlinear_constraints();
+        let mut count = self.problem.num_nonlinear_constraints()
+            + 2 * self.problem.num_nonlinear_equalities();
         for (bounds, name) in [
             (self.problem.lower(), "lower"),
             (self.problem.upper(), "upper"),
@@ -181,6 +184,16 @@ where
             "FoldedConstraints: nonlinear output must match declared count"
         );
         constraints.extend((0..nonlinear.vec_len()).map(|i| nonlinear[i]));
+        let equalities = self.problem.nonlinear_equalities(x)?;
+        assert_eq!(
+            equalities.as_ref().map_or(0, VectorLen::vec_len),
+            self.problem.num_nonlinear_equalities(),
+            "FoldedConstraints: nonlinear equality output must match declared count"
+        );
+        if let Some(values) = equalities {
+            constraints.extend((0..values.vec_len()).map(|i| values[i]));
+            constraints.extend((0..values.vec_len()).map(|i| -values[i]));
+        }
         Ok(constraints)
     }
 }

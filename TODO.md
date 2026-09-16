@@ -12,14 +12,14 @@ numerical work against analytic cases and reference implementations.
 
 ### Priority additions
 
-- [ ] **Implement SLSQP.** Add a dense, pure-Rust solver for smooth objectives
+- [x] **Implement SLSQP.** Add a dense, pure-Rust solver for smooth objectives
   with box bounds, nonlinear equalities, and nonlinear inequalities. Add
   compatible problem-side interfaces for nonlinear equalities and constraint
   Jacobians, with analytic derivatives and finite-difference adapters. Preserve
   the default WASM build and validate every supported backend against analytic
   cases and SciPy/NLopt reference results, including feasibility, stationarity,
   rank-deficient constraints, and failure handling.
-- [ ] **Make finite differences respect box bounds.** Add an opt-in path that
+- [x] **Make finite differences respect box bounds.** Add an opt-in path that
   adjusts probe directions and step sizes near bounds, including fixed
   coordinates and narrow intervals. Forwarding bounds alone does not keep
   the current probes feasible. Cover gradients and Jacobians first, with

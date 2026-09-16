@@ -395,6 +395,18 @@ impl<F: Scalar> super::FactorizePivotedQr<Vec<F>, F> for DenseMatrix<F> {
     }
 }
 
+impl<F: Scalar> super::MatrixIndex<F> for DenseMatrix<F> {
+    fn matrix_rows(&self) -> usize {
+        self.nrows()
+    }
+    fn matrix_cols(&self) -> usize {
+        self.ncols()
+    }
+    fn matrix_entry(&self, row: usize, col: usize) -> F {
+        self.get(row, col)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

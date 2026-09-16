@@ -353,7 +353,7 @@ pub use crate::core::checkpoint::{
     read_exact_checkpoint,
 };
 pub use crate::core::constraint::{
-    BoxConstraints, FoldedConstraints, LinearConstraints,
+    BoxConstraints, ConstraintJacobian, FoldedConstraints, LinearConstraints,
     LinearEqualityConstraints, LinearInequalityConstraints,
     NonlinearConstraints, NonlinearInequalityConstraints,
 };
@@ -371,13 +371,14 @@ pub use crate::core::math::{
     AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseMatrix,
     DenseMatrixFromFn, Dot, FactorizePivotedQr, GramMatrix, LinearSolveError,
     LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity,
-    NormSquared, QrFactorization, QrSolveError, RegularizedQrSolve,
-    SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd,
-    SymmetricEigen, SymmetricEigenError, VectorIndex, VectorLen,
+    MatrixFromDiagonal, MatrixIdentity, MatrixIndex, MaxDiagonal, NegInPlace,
+    NormInfinity, NormSquared, QrFactorization, QrSolveError,
+    RegularizedQrSolve, SampleStandardNormal, SampleUniformBox, Scalar,
+    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex,
+    VectorLen,
 };
 pub use crate::core::numdiff::{
-    FiniteDiff, Method, central_difference_gradient,
+    BoundedFiniteDiff, FiniteDiff, Method, central_difference_gradient,
     central_difference_hessian, central_difference_hessian_product,
     central_difference_jacobian, forward_difference_gradient,
     forward_difference_hessian, forward_difference_hessian_product,
@@ -407,7 +408,7 @@ pub use crate::core::state::{
     MadsState, MeshState, NewuoaState, NllsState, ObjectiveIncumbentState,
     PointState, PopulationState, RawEvaluationState, RhoState,
     ScalarGradientState, ScalarState, SimplexState, SimulatedAnnealingState,
-    SolisWetsState, State,
+    SlsqpState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 #[allow(deprecated)]
@@ -443,5 +444,5 @@ pub use crate::solver::{
     MemeticInner, Metropolis, Neighbor, NelderMead, Newuoa,
     ProjectedGradientDescent, PsoBoundaryHandling, PsoVelocityLimit,
     RandomDisplacement, RandomSearch, Reannealing, Sgd, SimulatedAnnealing,
-    SolisWets, Ssga, StepTaker, TemperatureSchedule, Trf,
+    Slsqp, SlsqpFailure, SolisWets, Ssga, StepTaker, TemperatureSchedule, Trf,
 };

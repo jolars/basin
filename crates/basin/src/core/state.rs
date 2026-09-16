@@ -1224,3 +1224,7 @@ impl<V, F: Scalar> PopulationState for BasicPopulationState<V, F> {
         &self.costs
     }
 }
+
+/// Accepted sequential least-squares programming progress.
+pub mod slsqp;
+pub use slsqp::SlsqpState;

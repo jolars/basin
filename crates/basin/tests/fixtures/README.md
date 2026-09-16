@@ -386,3 +386,74 @@ cargo run --quiet > global_best_pso_argmin_0_11.csv
 
 Restore the fixture's `# cost,x0,x1` header after regeneration. CI consumes the
 committed CSV and does not depend on Argmin.
+
+# SLSQP fixtures
+
+`slsqp_hs71.tsv` records accepted major iterates of Jacob Williams's **SLSQP
+1.6.1**, commit `97884f98042624007f736dc536fa5636906ff26a`. Its BSD-3 and
+original SLSQP notices are reproduced in `crates/basin/COPYRIGHT`. The algorithm
+is Kraft's Han–Powell SQP: damped BFGS in packed LDLᵀ form, LSEI/LSI/LDP with the
+original Lawson–Hanson NNLS, an inexact L1 merit line search, and an extra slack
+variable for inconsistent linearizations. Kraft's 1988 report, §§2.2 and 3.2,
+is the mathematical reference:
+<https://degenerateconic.com/uploads/2018/03/DFVLR_FB_88_28.pdf>.
+
+The locked problem is HS71:
+
+- `f = x0*x3*(x0+x1+x2) + x2`;
+- equality `sum(x_i²) - 40 = 0`;
+- public inequality `25 - product(x_i) <= 0` (the Fortran sign is reversed);
+- bounds `[1,5]^4`, start `(1,5,5,1)`, analytic derivatives;
+- accuracy `1e-10`, iteration limit 100, line-search factors `[0.1,1]`,
+  original NNLS (`nnls_mode=1`, automatic `3*n` limit), auxiliary stopping
+  tolerances disabled.
+
+Columns are `accepted_index f x0 x1 x2 x3`. The first row is initialization;
+`mode=-1` requests mark accepted points. The driver also prints the final point
+on `mode=0`, duplicating the preceding row when the following QP recognizes
+convergence. Tests omit that duplicate. Basin's independent Householder and
+Givens arithmetic is compared at `2e-8` absolute tolerance. Every accepted
+record also checks its objective gradient, incumbent, and counts. The same
+trajectory continues across an exact checkpoint, including a serialization
+round trip when `serde` is enabled.
+
+Regenerate from the repository root (external source stays gitignored):
+
+```bash
+mkdir -p references/slsqp-1.6.1
+for file in slsqp_kinds.F90 slsqp_support.F90 bvls_module.f90 slsqp_core.f90; do
+    curl --fail -L "https://raw.githubusercontent.com/jacobwilliams/slsqp/97884f98042624007f736dc536fa5636906ff26a/src/$file" \
+        -o "references/slsqp-1.6.1/$file"
+done
+gfortran -O0 -cpp -J references/slsqp-1.6.1 -I references/slsqp-1.6.1 \
+    references/slsqp-1.6.1/slsqp_kinds.F90 \
+    references/slsqp-1.6.1/slsqp_support.F90 \
+    references/slsqp-1.6.1/bvls_module.f90 \
+    references/slsqp-1.6.1/slsqp_core.f90 \
+    crates/basin/tests/fixtures/slsqp_driver.f90 \
+    -o references/slsqp-1.6.1/driver
+references/slsqp-1.6.1/driver > crates/basin/tests/fixtures/slsqp_hs71.tsv
+```
+
+`slsqp_hs71_libraries.tsv` supplies independent final-output checks against
+**SciPy 1.16.3** (commit `b9105ccc2237f57acb1060202cd77f6dd264fb34`) and
+**NLopt 2.10.0** (commit `7d04da19236148f9ae9d8dfa470a2264f5d2aa33`). Both use
+the same problem and analytic derivatives, with absolute objective tolerance
+`1e-10`; NLopt also uses constraint and absolute parameter tolerances `1e-10`.
+The generation environment uses NumPy 2.5.3. The fixture includes signed
+constraint residuals and projected stationarity from multipliers fitted on
+free variables. Tests compare final cost to `1e-8`, parameters to `1e-7`, and
+check feasibility and stationarity separately. Different wrapper stopping
+rules mean iteration and evaluation counts are not compared to these libraries.
+
+```bash
+uv venv references/slsqp-python
+uv pip install --python references/slsqp-python/bin/python \
+    numpy==2.5.3 scipy==1.16.3 nlopt==2.10.0
+references/slsqp-python/bin/python crates/basin/tests/fixtures/slsqp_python_driver.py \
+    > crates/basin/tests/fixtures/slsqp_hs71_libraries.tsv
+```
+
+On NixOS, wheel extension modules additionally need the system zlib and GCC
+runtime library directories on `LD_LIBRARY_PATH`. CI reads the compact fixtures
+and does not build or install these reference implementations.

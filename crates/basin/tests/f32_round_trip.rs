@@ -498,3 +498,53 @@ fn levenberg_marquardt_qr_f32_round_trip() {
     assert!((result.param()[0] - 1.).abs() < 1e-5);
     assert!((result.param()[1] - 2.).abs() < 1e-5);
 }
+
+#[test]
+fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
+    struct Equality;
+    impl CostFunction for Equality {
+        type Param = Vec<f32>;
+        type Output = f32;
+        type Error = std::convert::Infallible;
+        fn cost(&self, x: &Vec<f32>) -> Result<f32, Self::Error> {
+            Ok(x[0] * x[0] + x[1] * x[1])
+        }
+    }
+    impl NonlinearConstraints for Equality {
+        type Matrix = DenseMatrix<f32>;
+        fn num_nonlinear_constraints(&self) -> usize {
+            0
+        }
+        fn nonlinear_constraints(
+            &self,
+            _: &Vec<f32>,
+        ) -> Result<Vec<f32>, Self::Error> {
+            Ok(vec![])
+        }
+        fn num_nonlinear_equalities(&self) -> usize {
+            1
+        }
+        fn nonlinear_equalities(
+            &self,
+            x: &Vec<f32>,
+        ) -> Result<Option<Vec<f32>>, Self::Error> {
+            Ok(Some(vec![x[0] + x[1] - 1.0]))
+        }
+    }
+    let p = basin::BoundedFiniteDiff::<_, f32>::new(
+        Equality,
+        vec![-2.; 2],
+        vec![2.; 2],
+    );
+    let result = Executor::from_start(
+        p,
+        basin::Slsqp::<f32>::new().with_absolute_accuracy_tolerance(1e-4),
+        vec![0.; 2],
+    )
+    .max_iter(30)
+    .run()
+    .unwrap();
+    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert!(result.param().iter().all(|v| (*v - 0.5).abs() < 1e-3));
+    assert!(result.state.constraint_violation().unwrap() < 1e-4);
+}

@@ -19,8 +19,9 @@
 //!
 //! [`LinearConstraints`] describes box bounds, linear equalities, and linear
 //! inequalities together for [`Lincoa`](crate::Lincoa). [`NonlinearConstraints`]
-//! adds nonlinear inequalities to that general form. Wrap it in
-//! [`FoldedConstraints`] to pass all four kinds to [`Cobyla`](crate::Cobyla).
+//! adds nonlinear equalities and inequalities to that general form. Add
+//! [`ConstraintJacobian`] for [`Slsqp`](crate::Slsqp), or wrap it in
+//! [`FoldedConstraints`] to pass every block to [`Cobyla`](crate::Cobyla).
 //! Both aggregator traits are standalone, with no hierarchy or blanket bridges
 //! to the single-kind traits.
 
@@ -255,21 +256,22 @@ pub trait NonlinearInequalityConstraints: CostFunction {
     fn num_constraints(&self) -> usize;
 }
 
-/// The general nonlinearly constrained problem: nonlinear inequalities with
+/// The general constrained problem: nonlinear equalities and inequalities,
 /// optional box bounds, linear equalities, and linear inequalities.
 ///
 /// The feasible set is
 ///
 /// ```text
-/// { x ∈ ℝⁿ : c(x) ≤ 0, lower ≤ x ≤ upper, A_eq x = b_eq, A_ineq x ≤ b_ineq }
+/// { x ∈ ℝⁿ : h(x) = 0, c(x) ≤ 0, lower ≤ x ≤ upper, A_eq x = b_eq, A_ineq x ≤ b_ineq }
 /// ```
 ///
 /// Implement this trait and wrap the problem in [`FoldedConstraints`] to use
 /// [`Cobyla`](crate::Cobyla). Optional accessors default to `None`; the nonlinear
 /// block may also be empty, with [`num_nonlinear_constraints`](Self::num_nonlinear_constraints)
 /// returning zero and [`nonlinear_constraints`](Self::nonlinear_constraints)
-/// returning an empty vector. The nonlinear callback is evaluated even when
-/// its declared count is zero.
+/// returning an empty vector. `FoldedConstraints` evaluates empty callbacks;
+/// SLSQP skips nonlinear blocks whose declared count is zero. Add
+/// [`ConstraintJacobian`] and [`crate::Gradient`] to use [`crate::Slsqp`].
 ///
 /// This trait is standalone, like [`LinearConstraints`]. It does not extend
 /// [`NonlinearInequalityConstraints`] or the single-kind linear and box traits,
@@ -286,7 +288,7 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 ///
 /// Constraint values must be pure functions of the iterate, as for
 /// [`CostFunction::cost`]. Keep block presence, shapes, finite-bound positions,
-/// and the nonlinear count fixed throughout a solve. Malformed output lengths,
+/// and both nonlinear counts fixed throughout a solve. Malformed output lengths,
 /// bound lengths, and matrix-product/right-hand-side lengths panic in
 /// [`FoldedConstraints`]; matrix column mismatches follow
 /// [`MatVec`](crate::core::math::MatVec)'s panic contract.
@@ -296,7 +298,8 @@ pub trait NonlinearInequalityConstraints: CostFunction {
 /// [`Matrix`](Self::Matrix) has no math bounds here. COBYLA's folded-constraint
 /// path requires only [`MatVec<Param>`](crate::core::math::MatVec), available
 /// on all four dense backends. Choose the backend's matrix type even if both
-/// linear blocks are absent.
+/// linear blocks are absent. SLSQP additionally requires
+/// [`MatrixIndex`](crate::MatrixIndex) for the same four dense backends.
 pub trait NonlinearConstraints: CostFunction {
     /// The matrix type for the optional linear constraint blocks.
     type Matrix;
@@ -311,6 +314,23 @@ pub trait NonlinearConstraints: CostFunction {
     /// The number of nonlinear inequalities, excluding bounds and linear
     /// constraints. Zero is valid.
     fn num_nonlinear_constraints(&self) -> usize;
+
+    /// Number of native nonlinear equalities `h(x) = 0`. Defaults to zero.
+    /// Keep this count fixed throughout a solve.
+    fn num_nonlinear_equalities(&self) -> usize {
+        0
+    }
+
+    /// Evaluate native nonlinear equalities. `None` means an absent block
+    /// and requires a zero declared count. A present vector must have length
+    /// [`num_nonlinear_equalities`](Self::num_nonlinear_equalities).
+    /// SLSQP handles these natively; [`FoldedConstraints`] folds both signs.
+    fn nonlinear_equalities(
+        &self,
+        _x: &Self::Param,
+    ) -> Result<Option<Self::Param>, Self::Error> {
+        Ok(None)
+    }
 
     /// Linear inequalities `A_ineq x ≤ b_ineq` as `(A_ineq, b_ineq)`, or
     /// `None` (the default) when absent.
@@ -336,6 +356,26 @@ pub trait NonlinearConstraints: CostFunction {
     fn upper(&self) -> Option<&Self::Param> {
         None
     }
+}
+
+/// Analytic Jacobian of the nonlinear blocks of [`NonlinearConstraints`].
+///
+/// Rows contain nonlinear equalities first, then nonlinear inequalities in
+/// callback order; columns correspond to parameters. Differentiate the public
+/// `c(x) ≤ 0` inequalities without changing their signs. The matrix has
+/// `num_nonlinear_equalities() + num_nonlinear_constraints()` rows and `n`
+/// columns, including when it has zero rows. Linear blocks already supply
+/// their own Jacobians and are excluded here.
+///
+/// [`crate::FiniteDiff`] and [`crate::BoundedFiniteDiff`] synthesize this
+/// capability from constraint values. Consumers add the matrix math bounds
+/// they need; the trait itself leaves the matrix carrier unconstrained.
+pub trait ConstraintJacobian: NonlinearConstraints {
+    /// Evaluate the nonlinear constraint Jacobian at `x`.
+    fn constraint_jacobian(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Matrix, Self::Error>;
 }
 
 /// The general linearly-constrained problem: box bounds, linear equalities,

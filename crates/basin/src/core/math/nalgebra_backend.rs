@@ -872,6 +872,18 @@ impl<F: Scalar> super::RegularizedQrSolve<DVector<F>, F>
     }
 }
 
+impl<F: Scalar> super::MatrixIndex<F> for nalgebra::DMatrix<F> {
+    fn matrix_rows(&self) -> usize {
+        self.nrows()
+    }
+    fn matrix_cols(&self) -> usize {
+        self.ncols()
+    }
+    fn matrix_entry(&self, row: usize, col: usize) -> F {
+        self[(row, col)]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

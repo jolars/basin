@@ -289,6 +289,17 @@ impl<F: Scalar> BoxAffineScaling<F> for Vec<F> {
     }
 }
 
+impl<F: Scalar> super::DenseMatrixFromFn<F> for Vec<F> {
+    type Matrix = super::DenseMatrix<F>;
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        f: G,
+    ) -> Self::Matrix {
+        super::DenseMatrix::from_fn(rows, cols, f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

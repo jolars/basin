@@ -157,3 +157,7 @@ pub use trust_region::{
     CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
     TrustRegion,
 };
+
+/// Sequential least-squares programming.
+pub mod slsqp;
+pub use slsqp::{Slsqp, SlsqpFailure};

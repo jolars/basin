@@ -740,11 +740,11 @@ pub struct EvalCounts {
     /// [`Gradient::gradient`] calls (including the gradient side of fused
     /// calls).
     pub gradient_evals: u64,
-    /// [`Residual::residual`] calls (including the residual side of fused
-    /// [`Jacobian::residual_and_jacobian`]).
+    /// Residual and nonlinear constraint-block calls, including the residual
+    /// side of fused [`Jacobian::residual_and_jacobian`].
     pub residual_evals: u64,
-    /// [`Jacobian::jacobian`] calls (including the Jacobian side of fused
-    /// calls).
+    /// Residual and constraint Jacobian calls, including the Jacobian side
+    /// of fused calls.
     pub jacobian_evals: u64,
     /// [`Hessian::hessian`] calls (including the Hessian side of fused
     /// calls).
@@ -770,9 +770,9 @@ pub enum EvaluationKind {
     Cost,
     /// Gradient evaluations, including mini-batch gradients.
     Gradient,
-    /// Residual evaluations.
+    /// Residual and nonlinear constraint-block evaluations.
     Residual,
-    /// Jacobian evaluations.
+    /// Residual and nonlinear constraint Jacobian evaluations.
     Jacobian,
     /// Hessian evaluations.
     Hessian,
@@ -934,6 +934,37 @@ impl<P> Problem<P> {
     /// Consume the wrapper and return the inner problem.
     pub fn into_inner(self) -> P {
         self.inner
+    }
+}
+
+impl<P: crate::core::constraint::NonlinearConstraints> Problem<P> {
+    /// Count and evaluate one nonlinear inequality block as residual work.
+    pub fn nonlinear_constraints(
+        &mut self,
+        x: &P::Param,
+    ) -> Result<P::Param, P::Error> {
+        self.counts.residual_evals += 1;
+        self.inner.nonlinear_constraints(x)
+    }
+
+    /// Count and evaluate one nonlinear equality block as residual work.
+    pub fn nonlinear_equalities(
+        &mut self,
+        x: &P::Param,
+    ) -> Result<Option<P::Param>, P::Error> {
+        self.counts.residual_evals += 1;
+        self.inner.nonlinear_equalities(x)
+    }
+}
+
+impl<P: crate::core::constraint::ConstraintJacobian> Problem<P> {
+    /// Count and evaluate the nonlinear constraint Jacobian as Jacobian work.
+    pub fn constraint_jacobian(
+        &mut self,
+        x: &P::Param,
+    ) -> Result<P::Matrix, P::Error> {
+        self.counts.jacobian_evals += 1;
+        self.inner.constraint_jacobian(x)
     }
 }
 

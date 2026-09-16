@@ -664,3 +664,26 @@ impl<F: Scalar> super::RegularizedQrSolve<Array1<F>, F>
         self.solve(mu, &d, tolerance).map(Array1::from_vec)
     }
 }
+
+impl<F: Scalar> super::MatrixIndex<F> for Array2<F> {
+    fn matrix_rows(&self) -> usize {
+        self.nrows()
+    }
+    fn matrix_cols(&self) -> usize {
+        self.ncols()
+    }
+    fn matrix_entry(&self, row: usize, col: usize) -> F {
+        self[(row, col)]
+    }
+}
+
+impl<F: Scalar> super::DenseMatrixFromFn<F> for Array1<F> {
+    type Matrix = Array2<F>;
+    fn dense_from_fn<G: FnMut(usize, usize) -> F>(
+        rows: usize,
+        cols: usize,
+        mut f: G,
+    ) -> Self::Matrix {
+        Array2::from_shape_fn((rows, cols), |(i, j)| f(i, j))
+    }
+}

@@ -666,6 +666,18 @@ impl<F: Scalar> super::RegularizedQrSolve<Col<F>, F>
     }
 }
 
+impl<F: Scalar> super::MatrixIndex<F> for faer::Mat<F> {
+    fn matrix_rows(&self) -> usize {
+        self.nrows()
+    }
+    fn matrix_cols(&self) -> usize {
+        self.ncols()
+    }
+    fn matrix_entry(&self, row: usize, col: usize) -> F {
+        self[(row, col)]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -411,18 +411,16 @@ pub trait MatrixFromDiagonal<V> {
 ///
 /// - **Implementor must:** return a freshly allocated `rows × cols` matrix
 ///   with entry `(i, j) = f(i, j)`. `f` is called once per entry; the call
-///   order is backend-defined (column-major for both current backends), so
+///   order is backend-defined, so
 ///   callers that care about evaluation order must precompute their data
 ///   and let `f` be a pure read.
 ///
 /// # Backends
 ///
-/// Implemented for `nalgebra::DVector<f64>` (`Matrix = DMatrix<f64>`) and
-/// `faer::Col<f64>` (`Matrix = Mat<f64>`). `Vec<f64>` and `ndarray` do not
-/// implement it (they have no honest dense matrix type), so finite-
-/// difference `Jacobian`/`Hessian` over them is a compile-time error
-/// (tenet 5 in `CONTRIBUTING.md`), mirroring the analytic
-/// [`Jacobian`](crate::core::problem::Jacobian) backend coverage.
+/// Implemented for `Vec<F>` (`Matrix = DenseMatrix<F>`), nalgebra
+/// `DVector<F>` (`DMatrix<F>`), ndarray `Array1<F>` (`Array2<F>`), and
+/// faer `Col<F>` (`Mat<F>`), with `F = f32` or `f64`. Optional backends
+/// require their corresponding features. All implementations are pure Rust.
 pub trait DenseMatrixFromFn<F = f64>: Sized {
     /// The dense matrix type paired with this vector backend.
     type Matrix;
@@ -433,6 +431,22 @@ pub trait DenseMatrixFromFn<F = f64>: Sized {
         cols: usize,
         f: G,
     ) -> Self::Matrix;
+}
+
+/// Read the shape and individual entries of a dense matrix.
+///
+/// Available for [`super::DenseMatrix`], nalgebra `DMatrix`, ndarray
+/// `Array2`, and faer `Mat`, for `f64` and `f32`. Entries must be read in
+/// constant time and use mathematical row/column indices, independently of
+/// storage order. Out-of-range indices panic. SLSQP uses this capability to
+/// copy constraint Jacobians into its scalar-generic factorization workspace.
+pub trait MatrixIndex<F = f64> {
+    /// Number of rows, including zero for an empty constraint block.
+    fn matrix_rows(&self) -> usize;
+    /// Number of columns.
+    fn matrix_cols(&self) -> usize;
+    /// Read entry `(row, col)`.
+    fn matrix_entry(&self, row: usize, col: usize) -> F;
 }
 
 /// Symmetric (self-adjoint) eigendecomposition `A = U diag(λ) Uᵀ`. The
