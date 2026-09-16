@@ -15,11 +15,11 @@ import rawData from "./competitor-benchmarks.json";
 export { PROBLEM_LABELS, SOLVER_LABELS, type Solver };
 
 /** Competing libraries a case is run against. */
-export type Library = "basin" | "argmin" | "gomez" | "nlopt";
+export type Library = "basin" | "argmin" | "gomez" | "nlopt" | "slsqp";
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
 export interface TracePoint {
-    /** Wall-clock time since iter 0, nanoseconds (median over reps). */
+    /** Wall-clock time, nanoseconds (median over reps). SLSQP includes initialization. */
     tNs: number;
     /** Suboptimality `f(x) − f*`, floored at a small positive value. */
     subopt: number;
@@ -44,22 +44,30 @@ export interface CompetitorBenchmarks {
 
 export const COMPETITOR_BENCHMARKS = rawData as CompetitorBenchmarks;
 
-export const LIBRARY_ORDER: Library[] = ["basin", "argmin", "gomez", "nlopt"];
+export const LIBRARY_ORDER: Library[] = [
+    "basin",
+    "argmin",
+    "gomez",
+    "slsqp",
+    "nlopt",
+];
 
 export const LIBRARY_LABELS: Record<Library, string> = {
     basin: "basin",
     argmin: "argmin",
     gomez: "gomez",
+    slsqp: "slsqp",
     nlopt: "nlopt",
 };
 
 /** Line and legend colors per library, legible on light and dark backgrounds.
  * basin is indigo (its backend-chart `Vec<f64>` hue); argmin is amber;
- * gomez is teal; nlopt is rose. */
+ * gomez is teal; slsqp is sky; nlopt is rose. */
 export const LIBRARY_COLORS: Record<Library, string> = {
     basin: "#6366f1",
     argmin: "#f59e0b",
     gomez: "#14b8a6",
+    slsqp: "#0ea5e9",
     nlopt: "#e11d48",
 };
 
@@ -72,12 +80,16 @@ export interface CompetitorCase {
 }
 
 /**
- * The curated case set, in display order: all on Rosenbrock so the
- * comparison varies only the algorithm family. Keep in sync with `CASE_ORDER`
+ * The curated case set, in display order. Keep in sync with `CASE_ORDER`
  * in `scripts/collect-competitors.ts` and the cases in
  * `crates/competitor-bench/src/bin/trace.rs`.
  */
 export const COMPETITOR_CASES: CompetitorCase[] = [
+    {
+        solver: "slsqp",
+        problem: "rosenbrock",
+        blurb: "SLSQP with analytic gradients on unconstrained Rosenbrock (n = 2), from (−1.2, 1). Basin versus slsqp 1.0.2 (a Rust translation of NLopt 2.7.1) and NLopt 2.9.1. This case does not measure constraint handling.",
+    },
     {
         solver: "gd",
         problem: "rosenbrock",

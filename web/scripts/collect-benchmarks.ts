@@ -48,6 +48,7 @@ const SOLVER_ORDER = [
     "cmaes",
     "lm",
     "gn",
+    "slsqp",
 ] as const;
 const BACKEND_ORDER = ["vec", "nalgebra", "ndarray", "faer"] as const;
 
@@ -61,6 +62,7 @@ type Backend = (typeof BACKEND_ORDER)[number];
  * `count` is the expected `dims × backends` rows for that case.
  */
 const CASE_ORDER: { solver: Solver; problem: string; count: number }[] = [
+    { solver: "slsqp", problem: "rosenbrock", count: 5 * 4 },
     { solver: "gd", problem: "rosenbrock", count: 5 * 4 },
     { solver: "nm", problem: "ackley", count: 5 * 4 },
     { solver: "lbfgs", problem: "styblinski", count: 5 * 4 },
@@ -108,7 +110,7 @@ function findEstimates(dir: string, out: string[] = []): string[] {
 }
 
 const GROUP_RE =
-    /^(gd|nm|lbfgs|bfgs|cmaes|lm|gn)_(rosenbrock|ackley|styblinski|levy|rastrigin|sparselsq)_n(\d+)$/;
+    /^(gd|nm|lbfgs|bfgs|cmaes|lm|gn|slsqp)_(rosenbrock|ackley|styblinski|levy|rastrigin|sparselsq)_n(\d+)$/;
 
 const results: BenchResult[] = [];
 

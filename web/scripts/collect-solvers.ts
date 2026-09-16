@@ -2,8 +2,8 @@
  * Collect the solver-axis convergence traces into a committed JSON file
  * the `/benchmarks/solvers` page imports.
  *
- * Reads `target/solver-traces.json` (basin's five general solvers on
- * Rosenbrock n=2 from six curated starts, each capped on a 20 ms wall-clock
+ * Reads `target/solver-traces.json` (basin's six general solvers on
+ * Rosenbrock n=10 from six seeded starts, each capped on a 20 ms wall-clock
  * budget), filters and orders the rows, wraps them with run metadata, and
  * writes `web/src/lib/data/solver-benchmarks.json`.
  *
@@ -31,7 +31,7 @@ const outFile = resolve(
     "solver-benchmarks.json",
 );
 
-const SOLVER_ORDER = ["gd", "nm", "bfgs", "lbfgs", "cmaes"] as const;
+const SOLVER_ORDER = ["gd", "nm", "bfgs", "lbfgs", "slsqp", "cmaes"] as const;
 type Solver = (typeof SOLVER_ORDER)[number];
 
 type TracePoint = { tNs: number; subopt: number };

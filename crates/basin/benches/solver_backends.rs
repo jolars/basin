@@ -14,6 +14,7 @@
 //! | L-Bfgs        | Styblinski–Tang  | vec/nalg/nd/faer | compact form, all four   |
 //! | Bfgs          | Levy             | vec/nalg/faer    | ndarray lacks the dense  |
 //! |               |                  |                  | rank-1 update + identity |
+//! | SLSQP         | Rosenbrock       | vec/nalg/nd/faer | shared dense SQP kernel  |
 //! | CMA-ES        | Rastrigin        | vec/nalg/faer    | ndarray lacks the        |
 //! |               |                  |                  | symmetric eigensolver    |
 //! | Levenberg–M.  | sparse least-sq. | nalgebra/faer    | only these two carry     |
@@ -27,7 +28,8 @@
 //! every backend does identical algorithmic work, so the ratio across a group
 //! is pure per-iteration backend cost. The least-squares cases and CMA-ES
 //! *converge before* the budget, so there `MAX_ITERS` is only a cap and the
-//! comparison is per-solve backend cost. Problem + start-state construction is
+//! comparison is per-solve backend cost. SLSQP also stops at its native
+//! absolute accuracy of `1e-10`. Problem + start-state construction is
 //! charged to `iter_batched` setup, not the timed routine.
 //!
 //! Run with
@@ -43,7 +45,7 @@ use basin::{
     BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix,
     DenseQuasiNewtonState, Executor, FaerQuasiNewtonState, GaussNewton,
     GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente,
-    NalgebraQuasiNewtonState, NelderMead, NllsState,
+    NalgebraQuasiNewtonState, NelderMead, NllsState, Slsqp, SlsqpState,
 };
 use criterion::{
     BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
@@ -138,6 +140,24 @@ macro_rules! backends_all4 {
             $state,
         );
     }};
+}
+
+type SlsqpRosenbrock<V> = unconstrained::Unconstrained<Rosenbrock<V>>;
+
+fn bench_slsqp(c: &mut Criterion) {
+    // Dense SQP subproblems have cubic cost, so use the smaller size grid.
+    for n in CMA_DIMS {
+        let mut g = c.benchmark_group(format!("slsqp_rosenbrock_n{n}"));
+        backends_all4!(
+            g,
+            SlsqpRosenbrock,
+            rosenbrock_start(n),
+            n,
+            Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
+            SlsqpState::new,
+        );
+        g.finish();
+    }
 }
 
 /// Scalable sparse least-squares design for `n` parameters: an `n×n` identity
@@ -425,9 +445,12 @@ fn bench_config() -> Criterion {
 criterion_group! {
     name = benches;
     config = bench_config();
-    targets = bench_gd, bench_nm, bench_lbfgs, bench_bfgs, bench_cmaes, bench_lm, bench_gn
+    targets = bench_gd, bench_nm, bench_lbfgs, bench_bfgs, bench_cmaes, bench_lm, bench_gn, bench_slsqp
 }
 criterion_main!(benches);
 
 #[path = "support/backend_aliases.rs"]
 mod backend_aliases;
+
+#[path = "support/unconstrained.rs"]
+mod unconstrained;

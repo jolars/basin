@@ -334,6 +334,7 @@ dependencies = [
  "nalgebra 0.35.0",
  "nlopt",
  "rayon",
+ "slsqp",
 ]
 
 [[package]]
@@ -2275,6 +2276,12 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+
+[[package]]
+name = "slsqp"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efc936a3843a594a178e2e740be58a0bf23dfdca0fd3e5a02691e7f599edd22a"
 
 [[package]]
 name = "smallvec"

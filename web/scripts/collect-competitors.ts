@@ -3,7 +3,7 @@
  * the `/benchmarks/competitors` page imports.
  *
  * Reads the trace harness output at `target/competitor-traces.json` (basin
- * vs argmin suboptimality-vs-time curves), wraps it with run metadata, and
+ * vs competing libraries as suboptimality-vs-time curves), wraps it with run metadata, and
  * writes `web/src/lib/data/competitor-benchmarks.json`.
  *
  * Run with: `npm run collect:competitors` (uses tsx). Produce the input first:
@@ -33,7 +33,7 @@ const outFile = resolve(
 /** Iteration budget the harness caps each solve at (`MAX_ITERS`). */
 const ITERATIONS = 200;
 
-const LIBRARY_ORDER = ["basin", "argmin", "gomez", "nlopt"] as const;
+const LIBRARY_ORDER = ["basin", "argmin", "gomez", "slsqp", "nlopt"] as const;
 type Library = (typeof LIBRARY_ORDER)[number];
 
 /**
@@ -45,10 +45,16 @@ type Library = (typeof LIBRARY_ORDER)[number];
  * (its `Lbfgs` is the closest first-order analog). The NEWUOA case is the only
  * one off Rosenbrock: Styblinski–Tang at n = 5. Keep in sync with
  * `COMPETITOR_CASES` in `src/lib/data/competitors.ts` and the cases in the
- * `trace` bench (`crates/competitor-bench/src/bin/trace.rs`).
+ * `trace` bench (`crates/competitor-bench/src/bin/trace.rs`). SLSQP compares
+ * Basin, the `slsqp` crate, and NLopt on unconstrained Rosenbrock.
  */
 const CASE_ORDER: { solver: string; problem: string; libraries: Library[] }[] =
     [
+        {
+            solver: "slsqp",
+            problem: "rosenbrock",
+            libraries: ["basin", "slsqp", "nlopt"],
+        },
         { solver: "gd", problem: "rosenbrock", libraries: ["basin", "argmin"] },
         {
             solver: "nm",

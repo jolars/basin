@@ -22,14 +22,14 @@
         {
             title: "Competitors",
             href: "/benchmarks/competitors/",
-            body: "Basin compared against established crates such as argmin on matched problems.",
+            body: "Basin compared against argmin, gomez, slsqp, and NLopt on matched problems.",
         },
     ];
 </script>
 
 <Seo
     title="Benchmarks – Basin"
-    description="Benchmarks for the Basin optimization library, along three axes: linear-algebra backends, solver families, and competing crates such as argmin."
+    description="Benchmarks for the Basin optimization library, along three axes: linear-algebra backends, solver families, and competing libraries including argmin, slsqp, and NLopt."
 />
 
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">

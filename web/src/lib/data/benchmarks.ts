@@ -17,6 +17,7 @@ export type Solver =
     | "bfgs"
     | "cmaes"
     | "lm"
+    | "slsqp"
     | "gn"
     | "newuoa";
 /** Linear-algebra backends. */
@@ -53,6 +54,7 @@ export const SOLVER_ORDER: Solver[] = [
     "cmaes",
     "lm",
     "gn",
+    "slsqp",
 ];
 export const BACKEND_ORDER: Backend[] = ["vec", "nalgebra", "ndarray", "faer"];
 
@@ -64,6 +66,7 @@ export const SOLVER_LABELS: Record<Solver, string> = {
     cmaes: "CMA-ES",
     lm: "Levenberg–Marquardt",
     gn: "Gauss–Newton",
+    slsqp: "SLSQP",
     newuoa: "NEWUOA",
 };
 
@@ -95,6 +98,11 @@ export interface Case {
  * `solver_backends.rs`.
  */
 export const CASES: Case[] = [
+    {
+        solver: "slsqp",
+        problem: "rosenbrock",
+        blurb: "Dense sequential quadratic programming on unconstrained Rosenbrock. All four backends use the same internal least-squares kernel; accuracy 1e-10, with a 200-iteration cap.",
+    },
     {
         solver: "gd",
         problem: "rosenbrock",

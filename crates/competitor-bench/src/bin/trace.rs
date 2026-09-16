@@ -35,6 +35,14 @@
 //!     global minimum; both sides converge on ρ rather than running the fixed
 //!     iteration budget the others use.
 //!
+//! SLSQP uses the same unconstrained Rosenbrock start for Basin, the `slsqp`
+//! crate (NLopt 2.7.1 translation), and NLopt 2.9.1. All three record best
+//! objective trials per callback, including initialization and a final solve
+//! endpoint. Accuracy is `1e-10`: Kraft's composite test in Basin versus
+//! absolute function-change tolerance in both references. The cap is 200
+//! iterations for Basin and 200 objective evaluations for the references.
+//! Returned points are independently checked before emitting timings.
+//!
 //! Timing: the solvers are deterministic, so the cost sequence is identical
 //! every run and only timing jitters. We run `REPS` reps per (case, library)
 //! and take the *median* elapsed-ns per sample index, paired with the
@@ -71,7 +79,7 @@ use basin::{
     IntoInitialSimplex, LbfgsState, Lbfgsb, MoreThuente, NelderMead, Newuoa,
     NewuoaState, Solver, State as BasinState, StepOutcome,
 };
-use competitor_bench::{ArgminProblem, GomezProblem};
+use competitor_bench::{ArgminProblem, GomezProblem, slsqp};
 use gomez::OptimizerDriver;
 use gomez::algo::NelderMead as GomezNelderMead;
 
@@ -430,7 +438,7 @@ fn main() {
     // Cost at the shared start, used to give argmin's curve a finite t = 0.
     let f0 = rosenbrock(&start());
 
-    let traces = vec![
+    let mut traces = vec![
         // ---- gradient descent (steepest + More-Thuente) ----
         Trace {
             solver: "gd",
@@ -638,6 +646,35 @@ fn main() {
             }),
         },
     ];
+
+    for library in [
+        slsqp::Library::Basin,
+        slsqp::Library::Slsqp,
+        slsqp::Library::Nlopt,
+    ] {
+        let verified = slsqp::run(library);
+        verified.verify();
+        eprintln!(
+            "SLSQP/{}: f={:.3e}, cost_evals={}, gradient_evals={}, status={}",
+            library.name(),
+            verified.cost,
+            verified.cost_evals,
+            verified.gradient_evals,
+            verified.status,
+        );
+        traces.push(Trace {
+            solver: "slsqp",
+            problem: "rosenbrock",
+            n: slsqp::START.len(),
+            f_opt: F_OPT,
+            library: library.name(),
+            points: median_reps(|| {
+                let result = slsqp::run(library);
+                result.verify();
+                result.points
+            }),
+        });
+    }
 
     print_traces(&traces);
 }

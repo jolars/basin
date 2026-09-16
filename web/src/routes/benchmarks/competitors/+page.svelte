@@ -32,7 +32,7 @@
 
 <Seo
     title="Competitor Benchmarks – Basin"
-    description="Basin versus established Rust optimization crates such as argmin and gomez on matched problems, as suboptimality-vs-time convergence traces."
+    description="Basin versus established Rust optimization crates including argmin, gomez, slsqp, and NLopt on matched problems, as suboptimality-vs-time convergence traces."
 />
 
 <section class="max-w-screen-2xl mx-auto px-4 md:px-8 py-16">
@@ -47,7 +47,7 @@
         Competitor Benchmarks
     </h1>
     <p class="mt-3 max-w-3xl text-stone-600 dark:text-stone-300">
-        This benchmark compars Basin against <a
+        This benchmark compares Basin against <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
             href="https://argmin-rs.org/"
             target="_blank"
@@ -58,6 +58,12 @@
             href="https://docs.rs/gomez/"
             target="_blank"
             rel="noreferrer">gomez</a
+        >,
+        <a
+            class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
+            href="https://docs.rs/slsqp/1.0.2/slsqp/"
+            target="_blank"
+            rel="noreferrer">slsqp</a
         >, and
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
@@ -102,9 +108,20 @@
         <code class="font-mono">nalgebra::DVector&lt;f64&gt;</code>). The GD,
         NM, and L-BFGS cases run from the classic Rosenbrock start to a
         {data.iterations}-iteration cap. Each point is the median wall-clock
-        time per iteration over repeated runs (nlopt, which exposes no
+        time per sample over 11 repeated runs (nlopt, which exposes no
         per-iteration hook, is sampled per function evaluation as a best-so-far
         curve); the solvers are deterministic, so only the timing varies.
+    </p>
+
+    <p class="mt-4 max-w-3xl text-sm text-stone-500 dark:text-stone-400">
+        For SLSQP, all three curves record the best objective seen at function
+        evaluations, include solve initialization, and end after termination.
+        Basin uses Kraft's composite accuracy test at 1e-10; slsqp and NLopt use
+        an absolute function-change tolerance of 1e-10, with their other
+        optional tolerances disabled. These stopping rules differ. Basin has a
+        200-iteration safety cap, and the references have a 200-evaluation cap.
+        All three returned solutions pass an independent objective and gradient
+        check before the harness emits results.
     </p>
 
     <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">

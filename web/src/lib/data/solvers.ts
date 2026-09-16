@@ -1,5 +1,5 @@
 /**
- * Typed view over the committed solver-axis benchmark results: basin's five
+ * Typed view over the committed solver-axis benchmark results: basin's six
  * general optimizers head-to-head from several seeded starting points,
  * recorded as suboptimality-vs-wall-clock-time convergence traces under a
  * fixed wall-clock budget per run.
@@ -14,7 +14,14 @@
 import rawData from "./solver-benchmarks.json";
 
 /** The solver lineup, in display order. */
-export const SOLVER_ORDER = ["gd", "nm", "bfgs", "lbfgs", "cmaes"] as const;
+export const SOLVER_ORDER = [
+    "gd",
+    "nm",
+    "bfgs",
+    "lbfgs",
+    "slsqp",
+    "cmaes",
+] as const;
 export type Solver = (typeof SOLVER_ORDER)[number];
 
 /** One `(time, suboptimality)` sample on a convergence trace. */
@@ -56,6 +63,7 @@ export const SOLVER_LABELS: Record<Solver, string> = {
     nm: "Nelder–Mead",
     bfgs: "BFGS",
     lbfgs: "L-BFGS",
+    slsqp: "SLSQP",
     cmaes: "CMA-ES",
 };
 
@@ -67,6 +75,7 @@ export const SOLVER_COLORS: Record<Solver, string> = {
     nm: "#f59e0b", // amber
     bfgs: "#10b981", // emerald
     lbfgs: "#8b5cf6", // violet
+    slsqp: "#64748b", // slate
     cmaes: "#f43f5e", // rose
 };
 

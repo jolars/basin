@@ -94,10 +94,10 @@
     <p class="mt-8 max-w-3xl text-sm text-stone-500 dark:text-stone-400">
         Measured {data.generatedAt} on {data.env.cpu}
         ({data.env.os}/{data.env.arch}), criterion mean per solve over a fixed
-        {data.iterations}-iteration budget (a cap: the least-squares and CMA-ES
-        cases converge sooner). Both axes are logarithmic. Absolute times are
-        machine-specific; compare the spread between backends within a chart,
-        not across machines.
+        {data.iterations}-iteration budget (a cap: the least-squares, CMA-ES,
+        and SLSQP cases can converge sooner). Both axes are logarithmic.
+        Absolute times are machine-specific; compare the spread between backends
+        within a chart, not across machines.
     </p>
 
     <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">

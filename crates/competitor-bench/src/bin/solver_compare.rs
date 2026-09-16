@@ -1,5 +1,5 @@
 //! Convergence-trace harness for the *solvers* benchmark axis: basin's
-//! general optimizers (GD, NM, Bfgs, L-Bfgs, CMA-ES) on Rosenbrock from
+//! general optimizers (GD, NM, Bfgs, L-Bfgs, SLSQP, CMA-ES) on Rosenbrock from
 //! multiple seeded starting points, each capped on wall-clock time. Powers
 //! the `/benchmarks/solvers` page (see `web/scripts/collect-solvers.ts`).
 //!
@@ -29,8 +29,11 @@ use basin::problems::Rosenbrock;
 use basin::{
     BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, CountsMirror,
     DenseMatrix, DenseQuasiNewtonState, Executor, GradientDescent, LbfgsState,
-    Lbfgsb, MoreThuente, NelderMead, Solver, State as BasinState, StepOutcome,
+    Lbfgsb, MoreThuente, NelderMead, Slsqp, SlsqpState, Solver,
+    State as BasinState, StepOutcome,
 };
+
+use competitor_bench::unconstrained::Unconstrained;
 
 /// Wall-clock budget per (solver, start, rep). 20 ms gives GD room to either
 /// converge or visibly stall on hard starts; Bfgs and L-Bfgs converge in a few
@@ -299,6 +302,20 @@ fn run_lbfgs(start: &[f64]) -> Vec<(u128, f64)> {
     })
 }
 
+fn run_slsqp(start: &[f64]) -> Vec<(u128, f64)> {
+    median_reps(|| {
+        basin_trace(
+            Executor::new(
+                Unconstrained(Rosenbrock::<Vec<f64>>::default()),
+                // The common objective target owns the accuracy stop here.
+                Slsqp::new().with_absolute_accuracy_tolerance(None),
+                SlsqpState::new(start.to_vec()),
+            ),
+            BUDGET,
+        )
+    })
+}
+
 fn run_cmaes(start: &[f64], seed: u64) -> Vec<(u128, f64)> {
     let cma_seed = CMAES_BASE_SEED.wrapping_add(seed);
     median_reps(|| {
@@ -368,7 +385,7 @@ fn print_traces(traces: &[Trace]) {
 }
 
 fn main() {
-    let mut traces = Vec::with_capacity(PROBLEMS.len() * START_SEEDS.len() * 5);
+    let mut traces = Vec::with_capacity(PROBLEMS.len() * START_SEEDS.len() * 6);
     for p in PROBLEMS {
         for &seed in &START_SEEDS {
             let start = sample_start(p, seed);
@@ -386,6 +403,7 @@ fn main() {
             push(&mut traces, "nm", run_nm(&start));
             push(&mut traces, "bfgs", run_bfgs(&start));
             push(&mut traces, "lbfgs", run_lbfgs(&start));
+            push(&mut traces, "slsqp", run_slsqp(&start));
             push(&mut traces, "cmaes", run_cmaes(&start, seed));
         }
     }

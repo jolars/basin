@@ -31,6 +31,11 @@
 //! comparable work before the timings are trusted.
 
 pub mod cobyla;
+pub mod slsqp;
+
+// Share the benchmark-only adapter with the backend harness.
+#[path = "../../basin/benches/support/unconstrained.rs"]
+pub mod unconstrained;
 
 use std::marker::PhantomData;
 
