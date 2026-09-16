@@ -386,8 +386,10 @@ impl<F: Scalar> Work<F> {
             return;
         }
         if self.free.is_empty() {
-            self.converged = below(self.violation(), accuracy);
-            if !self.converged {
+            let feasible =
+                below(self.violation(), Some(accuracy.unwrap_or_else(F::zero)));
+            self.converged = accuracy.is_some() && feasible;
+            if !feasible {
                 self.failure = Some(SlsqpFailure::IncompatibleConstraints);
             }
             self.have_multipliers = true;
@@ -756,6 +758,11 @@ where
         if work.failure.is_some() {
             work.diagnostics(&mut state);
             return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
+        if work.free.is_empty() {
+            // No step is possible, so disabled convergence leaves termination
+            // to executor controls without attempting empty BFGS updates.
+            return Ok((state, None));
         }
         let old_cost = state.record.as_ref().unwrap().0;
         let old_x = vector(&state.param);

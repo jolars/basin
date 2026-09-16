@@ -448,28 +448,80 @@ fn linear_blocks_fixed_coordinates_active_bounds_and_unconstrained() {
 }
 #[test]
 fn all_fixed_feasible_and_infeasible() {
-    for feasible in [true, false] {
-        let mut p = LinearQuadratic::new(1);
-        p.lower = vec![1.];
-        p.upper = vec![1.];
-        p.eq = DenseMatrix::from_row_slice(1, 1, &[1.]);
-        p.eq_rhs = vec![if feasible { 1. } else { 2. }];
-        let r = Executor::new(p, Slsqp::new(), SlsqpState::new(vec![0.]))
+    for accuracy in [Some(1e-6), Some(0.), None] {
+        for feasible in [true, false] {
+            let mut p = LinearQuadratic::new(1);
+            p.lower = vec![1.];
+            p.upper = vec![1.];
+            p.eq = DenseMatrix::from_row_slice(1, 1, &[1.]);
+            p.eq_rhs = vec![if feasible { 1. } else { 2. }];
+            let r = Executor::new(
+                p,
+                Slsqp::new().with_absolute_accuracy_tolerance(accuracy),
+                SlsqpState::new(vec![0.]),
+            )
+            .require_evaluated_state()
             .max_iter(10)
             .run()
             .unwrap();
-        assert_eq!(
-            r.reason,
-            if feasible {
-                TerminationReason::SolverConverged
-            } else {
-                TerminationReason::SolverFailed
-            }
-        );
-        assert_eq!(r.state.param(), &vec![1.]);
-        assert_eq!(r.state.iter(), 0);
+            assert_eq!(
+                r.reason,
+                if !feasible {
+                    TerminationReason::SolverFailed
+                } else if accuracy.is_some() {
+                    TerminationReason::SolverConverged
+                } else {
+                    TerminationReason::MaxIter
+                },
+                "accuracy={accuracy:?}, feasible={feasible}"
+            );
+            assert_eq!(
+                r.state.failure(),
+                if feasible {
+                    None
+                } else {
+                    Some(basin::SlsqpFailure::IncompatibleConstraints)
+                }
+            );
+            assert_eq!(r.state.param(), &vec![1.]);
+            assert_eq!(
+                r.state.iter(),
+                if feasible && accuracy.is_none() {
+                    10
+                } else {
+                    0
+                }
+            );
+        }
     }
 }
+
+#[test]
+fn all_fixed_bounds_with_disabled_accuracy_reach_iteration_limit() {
+    let mut p = LinearQuadratic::new(1);
+    p.target = vec![0.];
+    p.lower = vec![1.];
+    p.upper = vec![1.];
+    let r = Executor::new(
+        p,
+        Slsqp::new().with_absolute_accuracy_tolerance(None),
+        SlsqpState::new(vec![0.]),
+    )
+    .require_evaluated_state()
+    .max_iter(10)
+    .run()
+    .unwrap();
+    assert_eq!(r.reason, TerminationReason::MaxIter);
+    assert_eq!(r.state.failure(), None);
+    assert_eq!(r.state.iter(), 10);
+    assert_eq!(r.state.param(), &vec![1.]);
+    assert_eq!(r.state.cost(), 1.);
+    assert_eq!(r.state.gradient(), Some(&vec![2.]));
+    assert_eq!(r.state.constraint_violation(), Some(0.));
+    assert_eq!(r.state.raw_counts().cost_evals, 1);
+    assert_eq!(r.state.raw_counts().gradient_evals, 1);
+}
+
 #[test]
 fn dependent_and_excess_equalities_fail_cleanly() {
     use basin::SlsqpFailure;
