@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.12.0](https://github.com/jolars/basin/compare/v1.11.0...v1.12.0) (2026-09-16)
+
+### Features
+- expand scalar roots and bracketing ([`4eaf902`](https://github.com/jolars/basin/commit/4eaf9028bd12123f74ff9044166ca69be3aeccfa))
+- add gradient and Jacobian checkers ([`e308ce7`](https://github.com/jolars/basin/commit/e308ce70253a854109e8dba19044e9627d08bb69))
+- add `Slsqp` and bounded finite differences ([`2e9ed82`](https://github.com/jolars/basin/commit/2e9ed822e171d96f8b63fd82eed78ed6a014d0dc))
+- add opt-in state capabilities ([`a731623`](https://github.com/jolars/basin/commit/a7316237579492b4bfc1f68314587fe2fe5dae87))
+- add configurable forcing to `Steihaug` ([`aa7e842`](https://github.com/jolars/basin/commit/aa7e8424a912bbfecafb4e3ee46d83170bf0abdb))
+- add shared point and first-order progress states ([`5e5504c`](https://github.com/jolars/basin/commit/5e5504c05dac23014890d24554296dacd1dd382c))
+- add owned checkpoint and result extraction ([`a055377`](https://github.com/jolars/basin/commit/a0553771bf1e73e33026ceed9a85e0ef2f829afc))
+
+### Bug Fixes
+- reject directional probes that need projection ([`2ea1c47`](https://github.com/jolars/basin/commit/2ea1c47f75c0eb31e66f73ac77309d8072d79b85))
+- separate SLSQP feasibility from convergence ([`9d2b170`](https://github.com/jolars/basin/commit/9d2b170bed5876d1b8bd4f6f105919f9b0151509))
+- preserve numeric casts for `TerminationReason` ([`79b4f61`](https://github.com/jolars/basin/commit/79b4f61ee9e56d8714bbd7779f5e81f3682c59bf))
+
+### Performance Improvements
+- streamline SLSQP small kernels ([`6113e89`](https://github.com/jolars/basin/commit/6113e89062d2e3c7669bd16b4532fc7cc5cf3f6e))
+- reuse SLSQP workspaces ([`1ccfd49`](https://github.com/jolars/basin/commit/1ccfd49086c499427c747e83bf03d87b6f0226c0))
+- reduce SLSQP temporary allocations ([`a8c166c`](https://github.com/jolars/basin/commit/a8c166ca7b731ad147cbee1cc1f6e1db6fadf564))
+- reuse gradient descent line-search evaluations ([`a58dc97`](https://github.com/jolars/basin/commit/a58dc97015c3780c3d46485067c002e42f8cab44))
+
 ## [1.11.0](https://github.com/jolars/basin/compare/v1.10.0...v1.11.0) (2026-09-11)
 
 ### Features
