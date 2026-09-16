@@ -31,8 +31,7 @@ impl<F: Scalar> Factor<F> {
     fn lower(&self, i: usize, j: usize) -> F {
         self.packed[self.start(j) + i - j]
     }
-    pub fn product(&self, s: &[F]) -> Vec<F> {
-        let mut v = vec![F::zero(); self.n];
+    pub fn product(&self, s: &[F], v: &mut [F]) {
         for i in 0..self.n {
             v[i] = (s[i]
                 + (i + 1..self.n).map(|j| self.lower(j, i) * s[j]).sum::<F>())
@@ -42,16 +41,18 @@ impl<F: Scalar> Factor<F> {
         for i in (0..self.n).rev() {
             v[i] = v[i] + (0..i).map(|j| self.lower(i, j) * v[j]).sum::<F>();
         }
-        v
     }
     pub fn least_squares(
         &self,
         g: &[F],
         slack: Option<F>,
-    ) -> (Matrix<F>, Vec<F>) {
+        e: &mut Matrix<F>,
+        f: &mut Vec<F>,
+    ) {
         let n = self.n + usize::from(slack.is_some());
-        let mut e = Matrix::zeros(n, n);
-        let mut f = vec![F::zero(); n];
+        e.resize_zeroed(n, n);
+        f.resize(n, F::zero());
+        f.fill(F::zero());
         for i in 0..self.n {
             let diag = self.lower(i, i).sqrt();
             e.set(i, i, diag);
@@ -64,12 +65,18 @@ impl<F: Scalar> Factor<F> {
         if let Some(weight) = slack {
             e.set(n - 1, n - 1, weight);
         }
-        (e, f)
     }
-    pub fn update(&mut self, s: &[F], mut y: Vec<F>) -> bool {
-        let bs = self.product(s);
-        let mut sy = dot(s, &y);
-        let sbs = dot(s, &bs);
+    pub fn update(
+        &mut self,
+        s: &[F],
+        y: &mut [F],
+        bs: &mut Vec<F>,
+        w: &mut Vec<F>,
+    ) -> bool {
+        bs.resize(self.n, F::zero());
+        self.product(s, bs);
+        let mut sy = dot(s, y);
+        let sbs = dot(s, bs);
         let threshold = number::<F>(0.2) * sbs;
         if sy < threshold {
             let theta = (sbs - threshold) / (sbs - sy);
@@ -85,17 +92,17 @@ impl<F: Scalar> Factor<F> {
         {
             return false;
         }
-        self.rank_one(y, F::one() / sy);
-        self.rank_one(bs, -F::one() / sbs);
+        self.rank_one(y, F::one() / sy, w);
+        self.rank_one(bs, -F::one() / sbs, w);
         (0..self.n).all(|i| self.lower(i, i) > F::zero())
             && self.packed.iter().all(|v| v.is_finite())
     }
-    fn rank_one(&mut self, mut z: Vec<F>, sigma: F) {
+    fn rank_one(&mut self, z: &mut [F], sigma: F, w: &mut Vec<F>) {
         let mut t = F::one() / sigma;
-        let mut w = Vec::new();
         let mut ij = 0;
         if sigma < F::zero() {
-            w.clone_from(&z);
+            w.clear();
+            w.extend_from_slice(z);
             for i in 0..self.n {
                 let v = w[i];
                 t = t + v * v / self.packed[ij];
@@ -150,13 +157,21 @@ mod tests {
     #[test]
     fn damped_update_stays_positive_and_satisfies_modified_secant() {
         let mut factor = Factor::<f64>::identity(2);
-        assert!(factor.update(&[1., 0.], vec![-1., 1.]));
-        let bs = factor.product(&[1., 0.]);
+        let mut bs = Vec::new();
+        assert!(factor.update(
+            &[1., 0.],
+            &mut [-1., 1.],
+            &mut bs,
+            &mut Vec::new()
+        ));
+        factor.product(&[1., 0.], &mut bs);
         assert!((bs[0] - 0.2).abs() < 1e-12);
         assert!((bs[1] - 0.4).abs() < 1e-12);
-        let (e, _) = factor.least_squares(&[0., 0.], None);
+        let mut e = Matrix::default();
+        factor.least_squares(&[0., 0.], None, &mut e, &mut Vec::new());
         for v in [[1., 2.], [-3., 1.], [0., 1.]] {
-            let b = factor.product(&v);
+            let mut b = [0.0; 2];
+            factor.product(&v, &mut b);
             let ev: Vec<f64> = (0..2)
                 .map(|i| (0..2).map(|j| e.get(i, j) * v[j]).sum())
                 .collect();

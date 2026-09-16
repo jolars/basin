@@ -116,8 +116,20 @@ impl<V: Clone, F: Scalar> State for SlsqpState<V, F> {
     fn update_best(&mut self) {
         if self.pending_publication {
             if let Some((cost, _)) = &self.record {
-                self.incumbent =
-                    Some((self.param.clone(), *cost, self.iter, self.counts));
+                if let Some((param, value, iter, counts)) = &mut self.incumbent
+                {
+                    param.clone_from(&self.param);
+                    *value = *cost;
+                    *iter = self.iter;
+                    *counts = self.counts;
+                } else {
+                    self.incumbent = Some((
+                        self.param.clone(),
+                        *cost,
+                        self.iter,
+                        self.counts,
+                    ));
+                }
                 self.pending_publication = false;
             }
         }

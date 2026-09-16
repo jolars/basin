@@ -13,7 +13,7 @@ use crate::core::solver::Solver;
 use crate::core::state::SlsqpState;
 use crate::core::termination::TerminationReason;
 use factor::Factor;
-use least_squares::{Matrix, dot, lsei, norm, number};
+use least_squares::{Lsei, Matrix, dot, norm, number};
 
 /// Numerical failure reported alongside [`TerminationReason::SolverFailed`].
 /// User callback errors propagate separately, unchanged.
@@ -225,6 +225,40 @@ struct Work<F> {
     last_step: Option<F>,
     converged: bool,
     failure: Option<SlsqpFailure>,
+    // Scratch is overwritten before use, so checkpoints need only the model.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratch: Scratch<F>,
+}
+
+#[derive(Clone, Debug)]
+struct Scratch<F> {
+    y: Vec<F>,
+    bs: Vec<F>,
+    rank_one: Vec<F>,
+    eq: Matrix<F>,
+    eq_rhs: Vec<F>,
+    ls: Matrix<F>,
+    ls_rhs: Vec<F>,
+    ineq: Matrix<F>,
+    ineq_rhs: Vec<F>,
+    least_squares: least_squares::Workspace<F>,
+}
+
+impl<F> Default for Scratch<F> {
+    fn default() -> Self {
+        Self {
+            y: Vec::new(),
+            bs: Vec::new(),
+            rank_one: Vec::new(),
+            eq: Matrix::default(),
+            eq_rhs: Vec::new(),
+            ls: Matrix::default(),
+            ls_rhs: Vec::new(),
+            ineq: Matrix::default(),
+            ineq_rhs: Vec::new(),
+            least_squares: least_squares::Workspace::default(),
+        }
+    }
 }
 
 fn below<F: Scalar>(value: F, tolerance: Option<F>) -> bool {
@@ -303,18 +337,20 @@ impl<F: Scalar> Work<F> {
             .map(|i| a.get(i, j) * self.multipliers[i])
             .sum::<F>()
     }
-    fn qp(
-        &self,
-        x: &[F],
+    fn qp<V: VectorIndex<F>>(
+        &mut self,
+        x: &V,
         slack: Option<F>,
         limit: Option<usize>,
     ) -> Result<(Vec<F>, Vec<F>), SlsqpFailure> {
         let meq = self.meq();
         let n = self.free.len() + usize::from(slack.is_some());
-        let mut eq = Matrix::zeros(meq, n);
-        let mut iq = Matrix::zeros(self.c.len() - meq, n);
+        let scratch = &mut self.scratch;
+        let (eq, iq) = (&mut scratch.eq, &mut scratch.ineq);
+        eq.resize_zeroed(meq, n);
+        iq.resize_zeroed(self.c.len() - meq, n);
         for i in 0..self.c.len() {
-            let matrix = if i < meq { &mut eq } else { &mut iq };
+            let matrix = if i < meq { &mut *eq } else { &mut *iq };
             let row = if i < meq { i } else { i - meq };
             for j in 0..self.free.len() {
                 matrix.set(row, j, self.a.get(i, j));
@@ -331,8 +367,11 @@ impl<F: Scalar> Work<F> {
                 );
             }
         }
-        let d: Vec<_> = self.c[..meq].iter().map(|v| -*v).collect();
-        let mut h: Vec<_> = self.c[meq..].iter().map(|v| -*v).collect();
+        let (d, h) = (&mut scratch.eq_rhs, &mut scratch.ineq_rhs);
+        d.clear();
+        d.extend(self.c[..meq].iter().map(|v| -*v));
+        h.clear();
+        h.extend(self.c[meq..].iter().map(|v| -*v));
         for lower in [true, false] {
             for (j, &index) in self.free.iter().enumerate() {
                 let bound = if lower {
@@ -346,7 +385,7 @@ impl<F: Scalar> Work<F> {
                         (0..n).map(|k| if k == j { sign } else { F::zero() }),
                     );
                     iq.rows += 1;
-                    h.push(sign * (bound - x[index]));
+                    h.push(sign * (bound - x.get_scalar(index)));
                 }
             }
         }
@@ -360,17 +399,35 @@ impl<F: Scalar> Work<F> {
                 h.push(bound);
             }
         }
-        let (e, f) = self.factor.least_squares(&self.g, slack);
-        let (mut step, mut multipliers) = lsei(eq, &d, e, &f, iq, &h, limit)?;
+        self.factor.least_squares(
+            &self.g,
+            slack,
+            &mut scratch.ls,
+            &mut scratch.ls_rhs,
+        );
+        let (mut step, mut multipliers) = Lsei {
+            c: eq,
+            d,
+            e: &mut scratch.ls,
+            f: &scratch.ls_rhs,
+            g: iq,
+            h,
+        }
+        .solve(limit, &mut scratch.least_squares)?;
         multipliers.truncate(self.c.len());
         for (j, &index) in self.free.iter().enumerate() {
             step[j] = step[j]
-                .max(self.lower[index] - x[index])
-                .min(self.upper[index] - x[index]);
+                .max(self.lower[index] - x.get_scalar(index))
+                .min(self.upper[index] - x.get_scalar(index));
         }
         Ok((step, multipliers))
     }
-    fn prepare(&mut self, x: &[F], accuracy: Option<F>, limit: Option<usize>) {
+    fn prepare<V: VectorIndex<F>>(
+        &mut self,
+        x: &V,
+        accuracy: Option<F>,
+        limit: Option<usize>,
+    ) {
         if self
             .c
             .iter()
@@ -714,6 +771,7 @@ where
             last_step: None,
             converged: false,
             failure: None,
+            scratch: Scratch::default(),
         };
         let (cost, gradient) = problem.cost_and_gradient(&state.param)?;
         assert_eq!(
@@ -732,7 +790,7 @@ where
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
         } else {
             work.prepare(
-                &vector(&state.param),
+                &state.param,
                 self.accuracy,
                 self.max_subproblem_iterations,
             );
@@ -759,7 +817,6 @@ where
             return Ok((state, None));
         }
         let old_cost = state.record.as_ref().unwrap().0;
-        let old_x = vector(&state.param);
         let merit = old_cost + work.weighted_violation();
         if !merit.is_finite() {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
@@ -768,12 +825,12 @@ where
         }
         let mut alpha = F::one();
         let mut accepted = None;
+        let mut param = state.param.clone();
         for trial in 0..11 {
-            let mut param = state.param.clone();
             for (j, &i) in work.free.iter().enumerate() {
                 param.set_scalar(
                     i,
-                    (old_x[i] + alpha * work.direction[j])
+                    (state.param.get_scalar(i) + alpha * work.direction[j])
                         .max(work.lower[i])
                         .min(work.upper[i]),
                 );
@@ -821,12 +878,10 @@ where
         let gradient = problem.gradient(&param)?;
         assert_eq!(
             gradient.vec_len(),
-            old_x.len(),
+            state.param.vec_len(),
             "SLSQP objective gradient length mismatch"
         );
         let a = work.jacobian(problem, &param)?;
-        let g: Vec<_> =
-            work.free.iter().map(|&i| gradient.get_scalar(i)).collect();
         if work.failure.is_some()
             || (0..gradient.vec_len())
                 .any(|i| !gradient.get_scalar(i).is_finite())
@@ -836,35 +891,32 @@ where
             work.diagnostics(&mut state);
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
-        let y: Vec<_> = (0..g.len())
-            .map(|j| {
-                work.lagrangian_component(g[j], &a, j)
-                    - work.lagrangian_component(work.g[j], &work.a, j)
-            })
-            .collect();
-        let step: Vec<_> = work
-            .free
-            .iter()
-            .map(|&i| param.get_scalar(i) - old_x[i])
-            .collect();
+        work.scratch.y.resize(work.free.len(), F::zero());
+        for (j, &i) in work.free.iter().enumerate() {
+            let g = gradient.get_scalar(i);
+            work.scratch.y[j] = work.lagrangian_component(g, &a, j)
+                - work.lagrangian_component(work.g[j], &work.a, j);
+            work.g[j] = g;
+            // The accepted displacement replaces the exhausted search direction.
+            work.direction[j] = param.get_scalar(i) - state.param.get_scalar(i);
+        }
         work.c = c;
-        work.g = g;
         work.a = a;
         work.last_change = Some((cost - old_cost).abs());
-        work.last_step = Some(norm(&step));
+        work.last_step = Some(norm(&work.direction));
         work.converged = !work.inconsistent
             && below(work.violation(), self.accuracy)
             && (below((cost - old_cost).abs(), self.accuracy)
-                || below(norm(&step), self.accuracy));
+                || below(norm(&work.direction), self.accuracy));
         if !work.converged
-            && (work.factor.update(&step, y)
-                || work.reset_factor(self.accuracy))
+            && (work.factor.update(
+                &work.direction,
+                &mut work.scratch.y,
+                &mut work.scratch.bs,
+                &mut work.scratch.rank_one,
+            ) || work.reset_factor(self.accuracy))
         {
-            work.prepare(
-                &vector(&param),
-                self.accuracy,
-                self.max_subproblem_iterations,
-            );
+            work.prepare(&param, self.accuracy, self.max_subproblem_iterations);
         }
         state.param = param;
         state.record = Some((cost, gradient));

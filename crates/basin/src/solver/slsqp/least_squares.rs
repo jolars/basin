@@ -15,6 +15,16 @@ pub(super) struct Matrix<F> {
     pub data: Vec<F>,
 }
 
+impl<F> Default for Matrix<F> {
+    fn default() -> Self {
+        Self {
+            rows: 0,
+            cols: 0,
+            data: Vec::new(),
+        }
+    }
+}
+
 impl<F: Scalar> Matrix<F> {
     pub fn zeros(rows: usize, cols: usize) -> Self {
         Self {
@@ -22,6 +32,12 @@ impl<F: Scalar> Matrix<F> {
             cols,
             data: vec![F::zero(); rows * cols],
         }
+    }
+    pub fn resize_zeroed(&mut self, rows: usize, cols: usize) {
+        self.rows = rows;
+        self.cols = cols;
+        self.data.resize(rows * cols, F::zero());
+        self.data.fill(F::zero());
     }
     pub fn get(&self, i: usize, j: usize) -> F {
         self.data[i * self.cols + j]
@@ -60,8 +76,15 @@ impl<F: Scalar> Reflection<F> {
     fn new(x: &[F], start: usize) -> Self {
         Self::from_tail(x[start..].to_vec(), start)
     }
-    fn from_column(a: &Matrix<F>, j: usize, start: usize) -> Self {
-        Self::from_tail((start..a.rows).map(|i| a.get(i, j)).collect(), start)
+    fn from_column(
+        a: &Matrix<F>,
+        j: usize,
+        start: usize,
+        mut v: Vec<F>,
+    ) -> Self {
+        v.clear();
+        v.extend((start..a.rows).map(|i| a.get(i, j)));
+        Self::from_tail(v, start)
     }
     fn from_tail(mut v: Vec<F>, start: usize) -> Self {
         let scale = v.iter().fold(F::zero(), |a, &b| a.max(b.abs()));
@@ -147,7 +170,7 @@ fn nnls<F: Scalar>(
                 return Ok((x, norm(&b[active..])));
             }
             let j = index[selected];
-            let h = Reflection::from_column(&a, j, active);
+            let h = Reflection::from_column(&a, j, active, Vec::new());
             let upper = a.column_norm(j, 0, active);
             z = b.clone();
             if h.beta.abs() * number(0.01) >= upper * F::epsilon()
@@ -274,9 +297,44 @@ fn ldp<F: Scalar>(
     Ok((x, dual))
 }
 
-fn qr<F: Scalar>(e: &mut Matrix<F>, f: &mut [F], pivot: bool) -> Vec<usize> {
+#[derive(Clone, Debug)]
+pub(super) struct Workspace<F> {
+    rhs: Vec<F>,
+    bounds: Vec<F>,
+    permutation: Vec<usize>,
+    reflection: Vec<F>,
+}
+
+impl<F> Default for Workspace<F> {
+    fn default() -> Self {
+        Self {
+            rhs: Vec::new(),
+            bounds: Vec::new(),
+            permutation: Vec::new(),
+            reflection: Vec::new(),
+        }
+    }
+}
+
+impl<F: Scalar> Workspace<F> {
+    fn set_rhs(&mut self, f: &[F], h: &[F]) {
+        self.rhs.clear();
+        self.rhs.extend_from_slice(f);
+        self.bounds.clear();
+        self.bounds.extend_from_slice(h);
+    }
+}
+
+fn qr<F: Scalar>(
+    e: &mut Matrix<F>,
+    f: &mut [F],
+    pivot: bool,
+    permutation: &mut Vec<usize>,
+    buffer: &mut Vec<F>,
+) {
     let n = e.cols;
-    let mut permutation: Vec<_> = (0..n).collect();
+    permutation.clear();
+    permutation.extend(0..n);
     for k in 0..n {
         if pivot {
             let mut selected = k;
@@ -295,7 +353,8 @@ fn qr<F: Scalar>(e: &mut Matrix<F>, f: &mut [F], pivot: bool) -> Vec<usize> {
                 e.set(i, selected, value);
             }
         }
-        let reflection = Reflection::from_column(e, k, k);
+        let reflection =
+            Reflection::from_column(e, k, k, std::mem::take(buffer));
         for j in k + 1..n {
             reflection.apply_column(e, j);
         }
@@ -304,19 +363,25 @@ fn qr<F: Scalar>(e: &mut Matrix<F>, f: &mut [F], pivot: bool) -> Vec<usize> {
         for i in k + 1..e.rows {
             e.set(i, k, F::zero());
         }
+        *buffer = reflection.v;
     }
-    permutation
 }
 
 fn lsi<F: Scalar>(
-    mut e: Matrix<F>,
-    mut f: Vec<F>,
-    mut g: Matrix<F>,
-    mut h: Vec<F>,
+    e: &mut Matrix<F>,
+    g: &mut Matrix<F>,
     limit: Option<usize>,
+    workspace: &mut Workspace<F>,
 ) -> Result<(Vec<F>, Vec<F>), SlsqpFailure> {
     let n = e.cols;
-    let permutation = qr(&mut e, &mut f, g.rows == 0);
+    let Workspace {
+        rhs,
+        bounds,
+        permutation,
+        reflection,
+    } = workspace;
+    let (f, h) = (rhs, bounds);
+    qr(e, f, g.rows == 0, permutation, reflection);
     let rank_threshold = if g.rows == 0 {
         F::epsilon().sqrt()
     } else {
@@ -334,19 +399,25 @@ fn lsi<F: Scalar>(
         }
         h[i] = h[i] - dot(g.row(i), &f[..n]);
     }
-    let (mut x, multipliers) = ldp(&g, &h, limit)?;
+    let (mut x, multipliers) = ldp(g, h, limit)?;
     for i in (0..n).rev() {
         let previous = (i + 1..n).map(|j| e.get(i, j) * x[j]).sum::<F>();
         x[i] = (x[i] + f[i] - previous) / e.get(i, i);
     }
-    let mut ordered = vec![F::zero(); n];
     for i in 0..n {
-        ordered[permutation[i]] = x[i];
+        // Permutation cycles restore variable order without a second solution.
+        while permutation[i] != i {
+            let j = permutation[i];
+            x.swap(i, j);
+            permutation.swap(i, j);
+        }
     }
-    Ok((ordered, multipliers))
+    Ok((x, multipliers))
 }
 
 /// Minimize `||E x - f||`, subject to `C x = d` and `G x >= h`.
+// Keep the owning entry point for standalone kernel tests and the benchmark probe.
+#[allow(dead_code)]
 pub(super) fn lsei<F: Scalar>(
     mut c: Matrix<F>,
     d: &[F],
@@ -356,102 +427,171 @@ pub(super) fn lsei<F: Scalar>(
     h: &[F],
     limit: Option<usize>,
 ) -> Result<(Vec<F>, Vec<F>), SlsqpFailure> {
-    let (n, meq) = (e.cols, c.rows);
-    if meq > n {
-        return Err(SlsqpFailure::TooManyEqualities);
+    Lsei {
+        c: &mut c,
+        d,
+        e: &mut e,
+        f,
+        g: &mut g,
+        h,
     }
-    if meq == 0 && n > 0 {
-        // With no equality elimination, LSI can consume the original matrices.
-        // Copying a reduced problem and recovering equality multipliers would
-        // only recreate the same problem and compute an unused residual.
-        let (x, multipliers) = lsi(e, f.to_vec(), g, h.to_vec(), limit)?;
+    .solve(limit, &mut Workspace::default())
+}
+
+pub(super) struct Lsei<'a, F> {
+    pub c: &'a mut Matrix<F>,
+    pub d: &'a [F],
+    pub e: &'a mut Matrix<F>,
+    pub f: &'a [F],
+    pub g: &'a mut Matrix<F>,
+    pub h: &'a [F],
+}
+
+impl<F: Scalar> Lsei<'_, F> {
+    pub fn solve(
+        self,
+        limit: Option<usize>,
+        workspace: &mut Workspace<F>,
+    ) -> Result<(Vec<F>, Vec<F>), SlsqpFailure> {
+        let Self { c, d, e, f, g, h } = self;
+        let (n, meq) = (e.cols, c.rows);
+        if meq > n {
+            return Err(SlsqpFailure::TooManyEqualities);
+        }
+        if meq == 0 && n > 0 {
+            // With no equality elimination, LSI can consume the original matrices.
+            // Copying a reduced problem and recovering equality multipliers would
+            // only recreate the same problem and compute an unused residual.
+            workspace.set_rhs(f, h);
+            let (x, multipliers) = lsi(e, g, limit, workspace)?;
+            if x.iter().chain(&multipliers).any(|v| !v.is_finite()) {
+                return Err(SlsqpFailure::SingularSubproblem);
+            }
+            return Ok((x, multipliers));
+        }
+        let mut reflections = Vec::with_capacity(meq);
+        for i in 0..meq {
+            let reflection = Reflection::new(c.row(i), i);
+            for j in i + 1..meq {
+                reflection.apply(c.row_mut(j));
+            }
+            for j in 0..e.rows {
+                reflection.apply(e.row_mut(j));
+            }
+            for j in 0..g.rows {
+                reflection.apply(g.row_mut(j));
+            }
+            c.set(i, i, reflection.beta);
+            reflections.push(reflection);
+        }
+        let mut x = vec![F::zero(); n];
+        for i in 0..meq {
+            let diag = c.get(i, i);
+            if !diag.is_finite() || diag.abs() < F::epsilon() {
+                return Err(SlsqpFailure::RankDeficientEqualities);
+            }
+            x[i] = (d[i] - dot(&c.row(i)[..i], &x[..i])) / diag;
+        }
+        let mut multipliers = vec![F::zero(); meq + g.rows];
+        if meq < n {
+            let free = n - meq;
+            let mut er = Matrix::zeros(e.rows, free);
+            let mut gr = Matrix::zeros(g.rows, free);
+            workspace.set_rhs(f, h);
+            let (fr, hr) = (&mut workspace.rhs, &mut workspace.bounds);
+            for i in 0..e.rows {
+                fr[i] = fr[i] - dot(&e.row(i)[..meq], &x[..meq]);
+                for j in 0..free {
+                    er.set(i, j, e.get(i, meq + j));
+                }
+            }
+            for i in 0..g.rows {
+                hr[i] = hr[i] - dot(&g.row(i)[..meq], &x[..meq]);
+                for j in 0..free {
+                    gr.set(i, j, g.get(i, meq + j));
+                }
+            }
+            let (xr, lambda) = lsi(&mut er, &mut gr, limit, workspace)?;
+            x[meq..].copy_from_slice(&xr);
+            multipliers[meq..].copy_from_slice(&lambda);
+        } else {
+            // The equality-determined point must also satisfy the inequalities.
+            // Skipping this test can turn an inconsistent QP into false success.
+            for i in 0..g.rows {
+                let gx = dot(g.row(i), &x);
+                let roundoff = number::<F>(100.0)
+                    * F::epsilon()
+                    * (F::one() + gx.abs() + h[i].abs());
+                if gx < h[i] - roundoff {
+                    return Err(SlsqpFailure::IncompatibleConstraints);
+                }
+            }
+        }
+        let residual: Vec<_> =
+            (0..e.rows).map(|i| dot(e.row(i), &x) - f[i]).collect();
+        for i in (0..meq).rev() {
+            let rhs = (0..e.rows).map(|j| e.get(j, i) * residual[j]).sum::<F>()
+                - (0..g.rows)
+                    .map(|j| g.get(j, i) * multipliers[meq + j])
+                    .sum::<F>()
+                - (i + 1..meq)
+                    .map(|j| c.get(j, i) * multipliers[j])
+                    .sum::<F>();
+            multipliers[i] = rhs / c.get(i, i);
+        }
+        for reflection in reflections.iter().rev() {
+            reflection.apply(&mut x);
+        }
         if x.iter().chain(&multipliers).any(|v| !v.is_finite()) {
             return Err(SlsqpFailure::SingularSubproblem);
         }
-        return Ok((x, multipliers));
+        Ok((x, multipliers))
     }
-    let mut reflections = Vec::with_capacity(meq);
-    for i in 0..meq {
-        let reflection = Reflection::new(c.row(i), i);
-        for j in i + 1..meq {
-            reflection.apply(c.row_mut(j));
-        }
-        for j in 0..e.rows {
-            reflection.apply(e.row_mut(j));
-        }
-        for j in 0..g.rows {
-            reflection.apply(g.row_mut(j));
-        }
-        c.set(i, i, reflection.beta);
-        reflections.push(reflection);
-    }
-    let mut x = vec![F::zero(); n];
-    for i in 0..meq {
-        let diag = c.get(i, i);
-        if !diag.is_finite() || diag.abs() < F::epsilon() {
-            return Err(SlsqpFailure::RankDeficientEqualities);
-        }
-        x[i] = (d[i] - dot(&c.row(i)[..i], &x[..i])) / diag;
-    }
-    let mut multipliers = vec![F::zero(); meq + g.rows];
-    if meq < n {
-        let free = n - meq;
-        let mut er = Matrix::zeros(e.rows, free);
-        let mut gr = Matrix::zeros(g.rows, free);
-        let mut fr = f.to_vec();
-        let mut hr = h.to_vec();
-        for i in 0..e.rows {
-            fr[i] = fr[i] - dot(&e.row(i)[..meq], &x[..meq]);
-            for j in 0..free {
-                er.set(i, j, e.get(i, meq + j));
-            }
-        }
-        for i in 0..g.rows {
-            hr[i] = hr[i] - dot(&g.row(i)[..meq], &x[..meq]);
-            for j in 0..free {
-                gr.set(i, j, g.get(i, meq + j));
-            }
-        }
-        let (xr, lambda) = lsi(er, fr, gr, hr, limit)?;
-        x[meq..].copy_from_slice(&xr);
-        multipliers[meq..].copy_from_slice(&lambda);
-    } else {
-        // The equality-determined point must also satisfy the inequalities.
-        // Skipping this test can turn an inconsistent QP into false success.
-        for i in 0..g.rows {
-            let gx = dot(g.row(i), &x);
-            let roundoff = number::<F>(100.0)
-                * F::epsilon()
-                * (F::one() + gx.abs() + h[i].abs());
-            if gx < h[i] - roundoff {
-                return Err(SlsqpFailure::IncompatibleConstraints);
-            }
-        }
-    }
-    let residual: Vec<_> =
-        (0..e.rows).map(|i| dot(e.row(i), &x) - f[i]).collect();
-    for i in (0..meq).rev() {
-        let rhs = (0..e.rows).map(|j| e.get(j, i) * residual[j]).sum::<F>()
-            - (0..g.rows)
-                .map(|j| g.get(j, i) * multipliers[meq + j])
-                .sum::<F>()
-            - (i + 1..meq)
-                .map(|j| c.get(j, i) * multipliers[j])
-                .sum::<F>();
-        multipliers[i] = rhs / c.get(i, i);
-    }
-    for reflection in reflections.iter().rev() {
-        reflection.apply(&mut x);
-    }
-    if x.iter().chain(&multipliers).any(|v| !v.is_finite()) {
-        return Err(SlsqpFailure::SingularSubproblem);
-    }
-    Ok((x, multipliers))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reused_workspace_reorders_pivots_and_recovers_after_failure() {
+        let mut workspace = Workspace::default();
+        for n in [4, 1, 3, 2, 4] {
+            let mut e = Matrix::zeros(n, n);
+            let expected: Vec<_> = (0..n).map(|i| i as f64 - 2.0).collect();
+            for i in 0..n {
+                for j in i..n {
+                    e.set(i, j, if i == j { (i + 1) as f64 } else { 0.25 });
+                }
+            }
+            let f: Vec<_> = (0..n).map(|i| dot(e.row(i), &expected)).collect();
+            let (x, multipliers) = Lsei {
+                c: &mut Matrix::zeros(0, n),
+                d: &[],
+                e: &mut e,
+                f: &f,
+                g: &mut Matrix::zeros(0, n),
+                h: &[],
+            }
+            .solve(None, &mut workspace)
+            .unwrap();
+            assert!(multipliers.is_empty());
+            for (x, expected) in x.iter().zip(expected) {
+                assert!((x - expected).abs() < 1e-12);
+            }
+            let result = Lsei {
+                c: &mut Matrix::zeros(0, n),
+                d: &[],
+                e: &mut Matrix::zeros(n, n),
+                f: &f,
+                g: &mut Matrix::zeros(0, n),
+                h: &[],
+            }
+            .solve(None, &mut workspace);
+            assert_eq!(result.unwrap_err(), SlsqpFailure::SingularSubproblem);
+        }
+    }
+
     #[test]
     fn no_equalities_preserves_active_inequality_multipliers() {
         let e = Matrix::<f64> {

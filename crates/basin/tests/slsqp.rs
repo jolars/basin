@@ -324,6 +324,61 @@ fn hs71_reference_accepted_trajectory_and_exact_continuation() {
     assert_eq!(result.reason, TerminationReason::SolverConverged);
 }
 
+#[test]
+#[cfg(feature = "serde")]
+fn checkpoint_rebuilds_scratch_for_exact_continuation() {
+    let problem = Hs71::new(|v: &[f64]| v.to_vec());
+    let run = || {
+        Executor::from_start(
+            problem.clone(),
+            Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
+            vec![1.0, 5.0, 5.0, 1.0],
+        )
+        .max_iter(100)
+    };
+    let expected = run().run_with_solver().unwrap();
+    for split in [0, 1, 3, 5] {
+        let mut stepper = run().into_stepper().unwrap();
+        for _ in 0..split {
+            stepper.step().unwrap();
+        }
+        let checkpoint = stepper.into_checkpoint().unwrap();
+        let bytes = bincode::serde::encode_to_vec(
+            checkpoint,
+            bincode::config::standard(),
+        )
+        .unwrap();
+        let (checkpoint, consumed): (
+            basin::ExactCheckpoint<Slsqp, SlsqpState<Vec<f64>>>,
+            usize,
+        ) = bincode::serde::decode_from_slice(
+            &bytes,
+            bincode::config::standard(),
+        )
+        .unwrap();
+        assert_eq!(consumed, bytes.len());
+        let resumed =
+            Executor::resume_from_checkpoint(problem.clone(), checkpoint)
+                .max_iter(100)
+                .run_with_solver()
+                .unwrap();
+        assert_eq!(resumed.reason, expected.reason);
+        assert_eq!(resumed.state.param(), expected.state.param());
+        assert_eq!(resumed.state.cost(), expected.state.cost());
+        assert_eq!(resumed.state.gradient(), expected.state.gradient());
+        assert_eq!(resumed.counts, expected.counts);
+        assert_eq!(resumed.state.iter(), expected.state.iter());
+        assert_eq!(
+            resumed.solver.equality_multipliers(),
+            expected.solver.equality_multipliers()
+        );
+        assert_eq!(
+            resumed.solver.inequality_multipliers(),
+            expected.solver.inequality_multipliers()
+        );
+    }
+}
+
 #[derive(Clone)]
 struct LinearQuadratic {
     target: Vec<f64>,

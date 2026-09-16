@@ -3,12 +3,16 @@
 
 use std::{hint::black_box, time::Instant};
 
+use basin::{RawEvaluationState, State};
 pub use basin::{SlsqpFailure, core};
 use competitor_bench::slsqp::{Library, run};
 
+#[path = "../../investigations/slsqp/workloads.rs"]
+mod workloads;
+
 // Compile the production kernel without exposing private math as public API.
 #[path = "../../../basin/src/solver/slsqp/least_squares.rs"]
-#[allow(unexpected_cfgs)]
+#[allow(dead_code, unexpected_cfgs)]
 mod least_squares;
 use least_squares::{Matrix, lsei};
 
@@ -104,6 +108,17 @@ fn main() {
     for library in [Library::Basin, Library::Slsqp, Library::Nlopt] {
         measure(library.name(), 1000, || run(library));
     }
+    let hs71 = workloads::hs71();
+    workloads::verify_hs71(&hs71);
+    eprintln!(
+        "hs71: f={:.17e}, x={:?}, iterations={}, counts={:?}, status={:?}",
+        hs71.state.cost(),
+        hs71.state.param(),
+        hs71.state.iter(),
+        hs71.state.raw_counts(),
+        hs71.reason,
+    );
+    measure("basin_hs71", 1000, workloads::hs71);
     for n in [2, 8, 32] {
         for constrained in [false, true] {
             let kernel = Kernel::new(n, constrained);

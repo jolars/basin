@@ -5,6 +5,9 @@ use std::{
     cell::Cell,
 };
 
+#[path = "../investigations/slsqp/workloads.rs"]
+mod workloads;
+
 thread_local! {
     // Per-thread accounting excludes concurrent tests and harness activity.
     static REQUESTS: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
@@ -57,5 +60,23 @@ fn rosenbrock_allocations_preserve_the_reference_work() {
     assert!((result.cost - 1.543_632_681_658_564_5e-16).abs() < 1e-25);
     // Include callbacks and trace storage, but reject renewed scratch copies
     // throughout the least-squares reduction and BFGS update.
-    assert!(requests <= 800, "{requests} allocation requests");
+    assert!(requests <= 140, "{requests} allocation requests");
+}
+
+#[test]
+fn hs71_allocations_preserve_constraints_and_reference_work() {
+    use basin::{RawEvaluationState, State};
+
+    REQUESTS.set((0, 0));
+    let result = workloads::hs71();
+    let (requests, bytes) = REQUESTS.get();
+    eprintln!("HS71: {requests} allocation requests, {bytes} requested bytes");
+    workloads::verify_hs71(&result);
+    assert_eq!(result.state.iter(), 5);
+    let counts = result.state.raw_counts();
+    assert_eq!(counts.cost_evals, 6);
+    assert_eq!(counts.gradient_evals, 6);
+    assert_eq!(counts.residual_evals, 12);
+    assert_eq!(counts.jacobian_evals, 6);
+    assert!(requests <= 250, "{requests} allocation requests");
 }
