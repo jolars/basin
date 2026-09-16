@@ -655,7 +655,7 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
                 let t = (s[0] - anchor) / sign;
                 let mut probe = x.clone();
                 for (j, &v) in d.iter().enumerate() {
-                    let mut value = if j == pivot {
+                    let value = if j == pivot {
                         s[0]
                     } else if v == F::zero() {
                         x.get_scalar(j)
@@ -663,9 +663,13 @@ impl<F: Scalar + MaybeSend + MaybeSync> DerivativeChecker<F> {
                         t.mul_add(v, x.get_scalar(j))
                     };
                     if let Some((lo, hi)) = &self.bounds {
-                        // The scalar interval already restricts the line. Clamping
-                        // removes final-rounding excursions at a box face only.
-                        value = value.max(lo[j]).min(hi[j]);
+                        // The scalar interval can round outward at the anchor's
+                        // precision. Clamping would change the checked direction.
+                        if value < lo[j] || value > hi[j] {
+                            return Err(
+                                DerivativeCheckError::NoFeasibleDirection,
+                            );
+                        }
                     }
                     probe.set_scalar(j, value);
                 }

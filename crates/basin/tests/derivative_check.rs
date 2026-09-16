@@ -349,6 +349,78 @@ fn adjacent_float_bounds_work_for_coordinates_and_directions() {
 }
 
 #[test]
+fn directional_checks_reject_probes_requiring_projection() {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+
+    struct NarrowBox {
+        derivative: f64,
+        calls: AtomicUsize,
+    }
+    impl CostFunction for NarrowBox {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = &'static str;
+        fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+            self.calls.fetch_add(1, Relaxed);
+            Ok(x[1])
+        }
+    }
+    impl Gradient for NarrowBox {
+        type Gradient = Vec<f64>;
+        fn gradient(&self, _: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            Ok(vec![0., self.derivative])
+        }
+    }
+    impl Residual for NarrowBox {
+        type Param = Vec<f64>;
+        type Output = Vec<f64>;
+        type Error = &'static str;
+        fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+            Ok(vec![self.cost(x)?])
+        }
+    }
+    impl Jacobian for NarrowBox {
+        type Jacobian = DenseMatrix;
+        fn jacobian(&self, _: &Vec<f64>) -> Result<DenseMatrix, Self::Error> {
+            Ok(DenseMatrix::from_row_slice(1, 2, &[0., self.derivative]))
+        }
+    }
+
+    let lower = vec![1e16, 0.];
+    let upper = vec![1e16 + 2., 1.1];
+    for method in [basin::Method::Forward, basin::Method::Central] {
+        let checker = DerivativeChecker::new()
+            .method(method)
+            .with_bounds(lower.clone(), upper.clone());
+        for x in [&lower, &upper] {
+            for d in [vec![1., 1.], vec![-1., -1.]] {
+                // Projection previously made the incorrect derivative pass.
+                for derivative in [0.55, 1.] {
+                    let p = NarrowBox {
+                        derivative,
+                        calls: 0.into(),
+                    };
+                    for result in [
+                        checker.check_gradient_direction(&p, x, &d),
+                        checker.check_jacobian_direction(&p, x, &d),
+                    ] {
+                        assert!(
+                            matches!(
+                                result,
+                                Err(DerivativeCheckError::NoFeasibleDirection)
+                            ),
+                            "{method:?}, x={x:?}, d={d:?}, derivative={derivative}: {result:?}"
+                        );
+                    }
+                    // Only base evaluations may reach the callbacks.
+                    assert_eq!(p.calls.load(Relaxed), 2);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn invalid_points_directions_and_shapes_return_errors() {
     let checker = DerivativeChecker::new();
     let p = Polynomial { wrong: false };
