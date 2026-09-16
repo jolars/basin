@@ -298,14 +298,10 @@ impl<F: Scalar> Work<F> {
             })
             .sum()
     }
-    fn lagrangian(&self, g: &[F], a: &Matrix<F>) -> Vec<F> {
-        (0..g.len())
-            .map(|j| {
-                g[j] - (0..self.c.len())
-                    .map(|i| a.get(i, j) * self.multipliers[i])
-                    .sum::<F>()
-            })
-            .collect()
+    fn lagrangian_component(&self, g: F, a: &Matrix<F>, j: usize) -> F {
+        g - (0..self.c.len())
+            .map(|i| a.get(i, j) * self.multipliers[i])
+            .sum::<F>()
     }
     fn qp(
         &self,
@@ -510,13 +506,12 @@ impl<F: Scalar> Work<F> {
             self.nonlinear_ineq,
             "nonlinear inequality count changed"
         );
-        let full = vector(x);
         let mut c: Vec<_> = (0..self.linear_eq.rows)
             .map(|i| {
-                dot(
-                    &self.linear_eq.data[i * full.len()..(i + 1) * full.len()],
-                    &full,
-                ) - self.rhs_eq[i]
+                (0..x.vec_len())
+                    .map(|j| self.linear_eq.get(i, j) * x.get_scalar(j))
+                    .sum::<F>()
+                    - self.rhs_eq[i]
             })
             .collect();
         if self.nonlinear_eq > 0 {
@@ -532,11 +527,9 @@ impl<F: Scalar> Work<F> {
         }
         c.extend((0..self.linear_ineq.rows).map(|i| {
             self.rhs_ineq[i]
-                - dot(
-                    &self.linear_ineq.data
-                        [i * full.len()..(i + 1) * full.len()],
-                    &full,
-                )
+                - (0..x.vec_len())
+                    .map(|j| self.linear_ineq.get(i, j) * x.get_scalar(j))
+                    .sum::<F>()
         }));
         if self.nonlinear_ineq > 0 {
             let v = problem.nonlinear_constraints(x)?;
@@ -613,10 +606,10 @@ impl<F: Scalar> Work<F> {
         });
         state.failure = self.failure;
         if self.have_multipliers {
-            let lag = self.lagrangian(&self.g, &self.a);
             let mut stationarity = F::zero();
             for (j, &i) in self.free.iter().enumerate() {
-                if !lag[j].is_finite() {
+                let lag = self.lagrangian_component(self.g[j], &self.a, j);
+                if !lag.is_finite() {
                     stationarity = F::infinity();
                     break;
                 }
@@ -624,7 +617,7 @@ impl<F: Scalar> Work<F> {
                 // Clip the displacement directly so x - (x - g) cannot
                 // cancel a small gradient at a large-magnitude parameter.
                 let projected =
-                    lag[j].max(x - self.upper[i]).min(x - self.lower[i]);
+                    lag.max(x - self.upper[i]).min(x - self.lower[i]);
                 stationarity = stationarity.max(projected.abs());
             }
             state.stationarity = Some(stationarity);
@@ -733,7 +726,8 @@ where
         work.a = work.jacobian(problem, &state.param)?;
         if work.failure.is_some()
             || !cost.is_finite()
-            || vector(&gradient).iter().any(|v| !v.is_finite())
+            || (0..gradient.vec_len())
+                .any(|i| !gradient.get_scalar(i).is_finite())
         {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
         } else {
@@ -834,19 +828,20 @@ where
         let g: Vec<_> =
             work.free.iter().map(|&i| gradient.get_scalar(i)).collect();
         if work.failure.is_some()
-            || vector(&gradient)
-                .iter()
-                .chain(&a.data)
-                .any(|v| !v.is_finite())
+            || (0..gradient.vec_len())
+                .any(|i| !gradient.get_scalar(i).is_finite())
+            || a.data.iter().any(|v| !v.is_finite())
         {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
             work.diagnostics(&mut state);
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
-        let old_lag = work.lagrangian(&work.g, &work.a);
-        let new_lag = work.lagrangian(&g, &a);
-        let y: Vec<_> =
-            new_lag.iter().zip(&old_lag).map(|(&u, &v)| u - v).collect();
+        let y: Vec<_> = (0..g.len())
+            .map(|j| {
+                work.lagrangian_component(g[j], &a, j)
+                    - work.lagrangian_component(work.g[j], &work.a, j)
+            })
+            .collect();
         let step: Vec<_> = work
             .free
             .iter()
@@ -862,7 +857,7 @@ where
             && (below((cost - old_cost).abs(), self.accuracy)
                 || below(norm(&step), self.accuracy));
         if !work.converged
-            && (work.factor.update(&step, &y)
+            && (work.factor.update(&step, y)
                 || work.reset_factor(self.accuracy))
         {
             work.prepare(

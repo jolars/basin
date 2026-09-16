@@ -35,8 +35,8 @@ impl<F: Scalar> Matrix<F> {
     fn row_mut(&mut self, i: usize) -> &mut [F] {
         &mut self.data[i * self.cols..(i + 1) * self.cols]
     }
-    fn column(&self, j: usize) -> Vec<F> {
-        (0..self.rows).map(|i| self.get(i, j)).collect()
+    fn column_norm(&self, j: usize, start: usize, end: usize) -> F {
+        (start..end).fold(F::zero(), |length, i| length.hypot(self.get(i, j)))
     }
 }
 
@@ -58,7 +58,12 @@ struct Reflection<F> {
 }
 impl<F: Scalar> Reflection<F> {
     fn new(x: &[F], start: usize) -> Self {
-        let mut v = x[start..].to_vec();
+        Self::from_tail(x[start..].to_vec(), start)
+    }
+    fn from_column(a: &Matrix<F>, j: usize, start: usize) -> Self {
+        Self::from_tail((start..a.rows).map(|i| a.get(i, j)).collect(), start)
+    }
+    fn from_tail(mut v: Vec<F>, start: usize) -> Self {
         let scale = v.iter().fold(F::zero(), |a, &b| a.max(b.abs()));
         if scale == F::zero() {
             return Self {
@@ -92,10 +97,19 @@ impl<F: Scalar> Reflection<F> {
         }
     }
     fn apply_column(&self, a: &mut Matrix<F>, j: usize) {
-        let mut column = a.column(j);
-        self.apply(&mut column);
-        for (i, value) in column.into_iter().enumerate() {
-            a.set(i, j, value);
+        if self.factor == F::zero() {
+            return;
+        }
+        let alpha = self
+            .v
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| v * a.get(self.start + i, j))
+            .sum::<F>()
+            * self.factor;
+        for (i, &v) in self.v.iter().enumerate() {
+            let row = self.start + i;
+            a.set(row, j, a.get(row, j) + alpha * v);
         }
     }
 }
@@ -133,9 +147,8 @@ fn nnls<F: Scalar>(
                 return Ok((x, norm(&b[active..])));
             }
             let j = index[selected];
-            let h = Reflection::new(&a.column(j), active);
-            let upper =
-                norm(&(0..active).map(|i| a.get(i, j)).collect::<Vec<_>>());
+            let h = Reflection::from_column(&a, j, active);
+            let upper = a.column_norm(j, 0, active);
             z = b.clone();
             if h.beta.abs() * number(0.01) >= upper * F::epsilon()
                 && h.beta != F::zero()
@@ -269,7 +282,7 @@ fn qr<F: Scalar>(e: &mut Matrix<F>, f: &mut [F], pivot: bool) -> Vec<usize> {
             let mut selected = k;
             let mut largest = F::zero();
             for j in k..n {
-                let length = norm(&e.column(j)[k..]);
+                let length = e.column_norm(j, k, e.rows);
                 if length > largest {
                     largest = length;
                     selected = j;
@@ -282,7 +295,7 @@ fn qr<F: Scalar>(e: &mut Matrix<F>, f: &mut [F], pivot: bool) -> Vec<usize> {
                 e.set(i, selected, value);
             }
         }
-        let reflection = Reflection::new(&e.column(k), k);
+        let reflection = Reflection::from_column(e, k, k);
         for j in k + 1..n {
             reflection.apply_column(e, j);
         }
@@ -346,6 +359,16 @@ pub(super) fn lsei<F: Scalar>(
     let (n, meq) = (e.cols, c.rows);
     if meq > n {
         return Err(SlsqpFailure::TooManyEqualities);
+    }
+    if meq == 0 && n > 0 {
+        // With no equality elimination, LSI can consume the original matrices.
+        // Copying a reduced problem and recovering equality multipliers would
+        // only recreate the same problem and compute an unused residual.
+        let (x, multipliers) = lsi(e, f.to_vec(), g, h.to_vec(), limit)?;
+        if x.iter().chain(&multipliers).any(|v| !v.is_finite()) {
+            return Err(SlsqpFailure::SingularSubproblem);
+        }
+        return Ok((x, multipliers));
     }
     let mut reflections = Vec::with_capacity(meq);
     for i in 0..meq {
@@ -429,6 +452,49 @@ pub(super) fn lsei<F: Scalar>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn no_equalities_preserves_active_inequality_multipliers() {
+        let e = Matrix::<f64> {
+            rows: 2,
+            cols: 2,
+            data: vec![1.0, 0.0, 0.0, 1.0],
+        };
+        let g = Matrix {
+            rows: 1,
+            cols: 2,
+            data: vec![1.0, 0.0],
+        };
+        let (x, multipliers) =
+            lsei(Matrix::zeros(0, 2), &[], e, &[-1.0, 2.0], g, &[0.0], None)
+                .unwrap();
+        assert!(x[0].abs() < 1e-12 && (x[1] - 2.0).abs() < 1e-12);
+        assert!((multipliers[0] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn no_equalities_rejects_singular_and_nonfinite_subproblems() {
+        for (diagonal, rhs) in [(0.0, 1.0), (1.0, f64::NAN)] {
+            let e = Matrix {
+                rows: 1,
+                cols: 1,
+                data: vec![diagonal],
+            };
+            assert_eq!(
+                lsei(
+                    Matrix::zeros(0, 1),
+                    &[],
+                    e,
+                    &[rhs],
+                    Matrix::zeros(0, 1),
+                    &[],
+                    None,
+                )
+                .unwrap_err(),
+                SlsqpFailure::SingularSubproblem,
+            );
+        }
+    }
+
     #[test]
     fn nnls_deletes_a_passive_variable() {
         let a = Matrix::<f64> {

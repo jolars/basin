@@ -38,9 +38,11 @@ impl<F: Scalar> Factor<F> {
                 + (i + 1..self.n).map(|j| self.lower(j, i) * s[j]).sum::<F>())
                 * self.lower(i, i);
         }
-        (0..self.n)
-            .map(|i| v[i] + (0..i).map(|j| self.lower(i, j) * v[j]).sum::<F>())
-            .collect()
+        // Descending rows preserve the inputs still needed by lower columns.
+        for i in (0..self.n).rev() {
+            v[i] = v[i] + (0..i).map(|j| self.lower(i, j) * v[j]).sum::<F>();
+        }
+        v
     }
     pub fn least_squares(
         &self,
@@ -64,8 +66,7 @@ impl<F: Scalar> Factor<F> {
         }
         (e, f)
     }
-    pub fn update(&mut self, s: &[F], y: &[F]) -> bool {
-        let mut y = y.to_vec();
+    pub fn update(&mut self, s: &[F], mut y: Vec<F>) -> bool {
         let bs = self.product(s);
         let mut sy = dot(s, &y);
         let sbs = dot(s, &bs);
@@ -91,7 +92,7 @@ impl<F: Scalar> Factor<F> {
     }
     fn rank_one(&mut self, mut z: Vec<F>, sigma: F) {
         let mut t = F::one() / sigma;
-        let mut w = vec![F::zero(); self.n];
+        let mut w = Vec::new();
         let mut ij = 0;
         if sigma < F::zero() {
             w.clone_from(&z);
@@ -149,7 +150,7 @@ mod tests {
     #[test]
     fn damped_update_stays_positive_and_satisfies_modified_secant() {
         let mut factor = Factor::<f64>::identity(2);
-        assert!(factor.update(&[1., 0.], &[-1., 1.]));
+        assert!(factor.update(&[1., 0.], vec![-1., 1.]));
         let bs = factor.product(&[1., 0.]);
         assert!((bs[0] - 0.2).abs() < 1e-12);
         assert!((bs[1] - 0.4).abs() < 1e-12);
