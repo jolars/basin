@@ -3,6 +3,14 @@
 //! provisional-choice trigger from `CONTRIBUTING.md` is now satisfiable: the
 //! whole pipeline runs at a non-`f64` scalar without further refactor.
 
+#[path = "support/reflective_backend.rs"]
+mod reflective_backend;
+
+#[test]
+fn trust_region_reflective_f32() {
+    reflective_backend::check::<_, f32>(|x| x.to_vec());
+}
+
 #[test]
 fn scalar_bracketing_and_roots_f32() {
     use basin::{

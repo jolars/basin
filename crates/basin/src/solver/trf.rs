@@ -10,11 +10,16 @@ use crate::core::solver::Solver;
 use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
 
-/// Levenberg-Marquardt with box bounds (TRF, trust-region-reflective)
+/// Levenberg-Marquardt with Coleman–Li box scaling (simplified TRF)
 /// for nonlinear least-squares problems `min ½‖r(x)‖²` subject to
 /// `lower ≤ x ≤ upper`. The first n-D box-constrained NLLS solver in
 /// basin and the natural extension of [`LevenbergMarquardt`](super::LevenbergMarquardt)
 /// to bounded problems.
+///
+/// For an explicit trust-region radius, reflected steps, and rank-aware dense
+/// subproblems, use [`TrustRegionReflective`](super::TrustRegionReflective).
+/// This type retains its bounded-LM behavior and backend support through
+/// Basin 1.x.
 ///
 /// # Algorithm
 ///
@@ -52,7 +57,7 @@ use crate::core::termination::TerminationReason;
 /// level (the reverse is a compile error: LM bounds on
 /// `Residual + Jacobian` only, not [`BoxConstraints`]).
 ///
-/// # What basin's S6 ships, and what it doesn't
+/// # Simplified bounded-LM variant
 ///
 /// Basin's `Trf` is a deliberate simplification of the full STIR
 /// algorithm in BCL §4. It ships:
@@ -73,9 +78,8 @@ use crate::core::termination::TerminationReason;
 ///   future session.
 /// - **Reflection technique** (BCL §2 / FIG.2). The unconstrained step
 ///   is straight-line stepped back to the box boundary, never
-///   reflected off it. Reflection saves ~2-3× iterations on problems
-///   where many components bind (BCL Table 1); defer until a test
-///   case demands it.
+///   reflected off it. Full reflection is available in
+///   [`TrustRegionReflective`](super::TrustRegionReflective).
 /// - **Explicit trust-region radius `Δ`** with Moré-Sorensen-style
 ///   λ-adaptation (BCL FIG.6). The LM-style μ-update is simpler and
 ///   reuses [`LevenbergMarquardt`](super::LevenbergMarquardt)'s

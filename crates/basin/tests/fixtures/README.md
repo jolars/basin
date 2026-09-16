@@ -504,3 +504,42 @@ references/scalar-roots/python/bin/python crates/basin/tests/fixtures/scalar_ref
 On NixOS, include zlib and the GCC runtime library directories in
 `LD_LIBRARY_PATH` when running the Python wheel environment. External source
 and the original Alefeld–Potra–Shi paper stay under gitignored `references/`.
+
+# Dense trust-region-reflective fixtures
+
+`trust_region_reflective_reference.tsv` contains endpoint comparisons against
+SciPy **1.16.2** (BSD-3-Clause), with NumPy **2.3.3**, analytic Jacobians,
+`method="trf"`, `tr_solver="exact"`, `loss="linear"`, `x_scale=1`,
+`gtol=1e-10`, disabled `ftol`/`xtol`, and at most 1,000 residual evaluations.
+Inputs, reference parameters, cost, scaled optimality, and evaluation counts
+are recorded in each pipe-delimited row; vectors use comma-separated entries.
+The header names every column. Infinite bounds use `-inf`/`inf`.
+
+The cases cover interior and active-bound linear fits, deficient rank,
+underdetermined and ill-conditioned Jacobians, fixed parameters, and bounded
+Rosenbrock. Fixed coordinates are eliminated before invoking SciPy. Basin and
+SciPy need not choose the same point in a nonunique solution set; the
+ill-conditioned case likewise checks the objective and stationarity rather
+than weakly determined parameters. Objective comparisons use `1e-8 * max(1,
+reference_cost)`, parameter comparisons use `2e-5`, and Basin's scaled
+optimality must satisfy `1.01e-10`. Evaluation counts are provenance, not parity
+assertions. In particular, Basin permits a minimum-norm interior step when the
+Jacobian is rank deficient, whereas SciPy may choose a boundary step.
+
+`trust_region_reflective_steps.tsv` locks quadratic models selecting each of
+the truncated, reflected, and gradient candidates in SciPy's `select_step`.
+The generator uses NumPy seed **391** to locate the first example of each.
+The fixed geometry is recorded in the header. Unit tests compare selected
+steps and predicted reductions with absolute tolerance `1e-12`.
+
+Regenerate both files from the repository root:
+
+```bash
+uv run --no-project --with scipy==1.16.2 --with numpy==2.3.3 \
+  python crates/basin/tests/fixtures/trust_region_reflective_reference.py
+```
+
+On NixOS, the wheel environment may need the zlib and C++ runtime library
+directories in `LD_LIBRARY_PATH`. Rust tests read the committed files and need
+neither Python nor SciPy. Candidate-selection code retains SciPy's BSD notice
+in `src/solver/trust_region_reflective/step.rs`.

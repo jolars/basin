@@ -33,12 +33,13 @@ numerical work against analytic cases and reference implementations.
   gradient, local model, and convergence tests consistent with the chosen
   loss. Compare outlier-contaminated fits with [SciPy's least-squares
   API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html).
-- [ ] **Add full trust-region-reflective least squares.** Build on the
-  Coleman-Li scaling in `Trf`, adding an explicit trust-region radius and
-  reflected-step selection. Start with a rank-aware dense subproblem solve;
-  add the large-scale path described below afterward. Preserve access to the
-  existing simplified bounded-LM behavior through Basin 1.x. Test active
-  bounds, rank-deficient Jacobians, and agreement with reference TRF results.
+- [x] **Add full trust-region-reflective least squares.** Added
+  `TrustRegionReflective` with Coleman-Li scaling, an explicit radius,
+  reflected-step selection, a rank-aware dense SVD solve, and fixed-coordinate
+  elimination. All four dense backends support `f32` and `f64`; active bounds
+  and rank deficiency are covered by analytic and SciPy 1.16.2 comparisons.
+  `Trf` retains its existing bounded-LM behavior through Basin 1.x. The
+  large-scale path remains a follow-up below.
 - [ ] **Implement nonlinear conjugate gradient.** Add a low-memory
   first-order solver using the existing line-search interfaces. Choose a
   research-grounded update and restart policy, and test descent safeguards

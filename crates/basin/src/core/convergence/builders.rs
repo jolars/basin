@@ -218,6 +218,8 @@ cost_setters!([V,M,F:Scalar] LevenbergMarquardt<V,M,F>, []);
 cost_setters!([V,M,F:Scalar] LevenbergMarquardtQr<V,M,F>, [M: crate::FactorizePivotedQr<V,F>]);
 cost_setters!([V,M,F:Scalar] Trf<V,M,F>, []);
 step_setters!([V,M,F:Scalar] Trf<V,M,F>, []);
+cost_setters!([F:Scalar] TrustRegionReflective<F>, []);
+step_setters!([F:Scalar] TrustRegionReflective<F>, []);
 cost_setters!([F:Scalar] Brent<F>, []);
 step_setters!([F:Scalar] Brent<F>, []);
 cost_setters!([F:Scalar] BrentDerivative<F>, []);

@@ -97,7 +97,7 @@
 //! | `Bfgs` | `QuasiNewtonState` | ✓ (`Vec`/nalgebra/ndarray/faer) |
 //! | `Lbfgs`, `Lbfgsb` | `LbfgsState` | ✓ |
 //! | `TrustRegion` | `BasicState` | ✓ |
-//! | `GaussNewton`, `LevenbergMarquardt`, `LevenbergMarquardtQr`, `Trf` | `NllsState` | ✓ |
+//! | `GaussNewton`, `LevenbergMarquardt`, `LevenbergMarquardtQr`, `Trf`, `TrustRegionReflective` | `NllsState` | ✓ |
 //! | `NelderMead` | `BasicSimplexState` | ✓ |
 //! | `Gbnm` | `GbnmState` | ✓ |
 //! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
@@ -454,4 +454,5 @@ pub use crate::solver::{
     ProjectedGradientDescent, PsoBoundaryHandling, PsoVelocityLimit,
     RandomDisplacement, RandomSearch, Reannealing, Sgd, SimulatedAnnealing,
     Slsqp, SlsqpFailure, SolisWets, Ssga, StepTaker, TemperatureSchedule, Trf,
+    TrustRegionReflective,
 };

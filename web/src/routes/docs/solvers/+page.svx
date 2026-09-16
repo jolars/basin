@@ -187,8 +187,21 @@ For problems expressed as residuals (`Residual` + `Jacobian`):
   [`lmder`](https://netlib.org/minpack/lmder.f) radius updates, using bracketed
   parameter selection instead of [`lmpar`](https://netlib.org/minpack/lmpar.f).
 - **[`Trf`](https://docs.rs/basin/latest/basin/solver/trf/struct.Trf.html)**:
-  trust-region reflective: Levenberg–Marquardt with box bounds (Branch, Coleman
-  & Li, 1999, affine scaling).
+  simplified bounded Levenberg–Marquardt with Coleman–Li affine scaling
+  (Branch, Coleman & Li, 1999). Its existing behavior and sparse support remain
+  available through Basin 1.x.
+- **[`TrustRegionReflective`](https://docs.rs/basin/latest/basin/solver/trust_region_reflective/struct.TrustRegionReflective.html)**:
+  dense trust-region-reflective least squares with an explicit radius, reflected
+  steps, a rank-aware SVD solve, and fixed-parameter elimination. Supports all
+  four dense backends in pure Rust, including `f32` and `f64`. Branch, Coleman &
+  Li (1999), “A Subspace, Interior, and Conjugate Gradient Method for Large-Scale
+  Bound-Constrained Minimization Problems,” _SIAM Journal on Scientific
+  Computing_ 21(1), 1–23
+  ([doi:10.1137/S1064827595289108](https://doi.org/10.1137/S1064827595289108));
+  Moré (1978), “The Levenberg-Marquardt Algorithm: Implementation and Theory,”
+  _Numerical Analysis_, Lecture Notes in Mathematics 630, 105–116
+  ([doi:10.1007/BFb0067700](https://doi.org/10.1007/BFb0067700)). Reference
+  comparisons use [SciPy 1.16.2's dense TRF](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py).
 
 ## Global & Stochastic
 
@@ -347,6 +360,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `LevenbergMarquardt`        | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `LevenbergMarquardtQr`      | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Trf`                       | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `TrustRegionReflective`     | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Gbnm`                      | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `SimulatedAnnealing`        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `CmaEs`                     | Global          |     ✓      |    ✓     |    ✓    |  ✓   |

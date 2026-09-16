@@ -485,3 +485,13 @@ impl<CG, CX, CC, CT, V, F: Scalar> ConfiguredSolver<Sgd<V, F>, CG, CX, CC, CT> {
     forward_setting!(Sgd, with_momentum, beta: F);
     forward_setting!(Sgd, with_cost_eval_every, period: usize);
 }
+
+impl<CG, CX, CC, CT, F: Scalar>
+    ConfiguredSolver<TrustRegionReflective<F>, CG, CX, CC, CT>
+{
+    forward_setting!(TrustRegionReflective, with_absolute_scaled_gradient_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(TrustRegionReflective, with_initial_radius, value: impl Into<Option<F>>);
+    forward_setting!(TrustRegionReflective, with_rank_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(TrustRegionReflective, with_max_inner_attempts, value: usize);
+    forward_setting!(TrustRegionReflective, with_max_subproblem_iterations, value: usize);
+}

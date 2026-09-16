@@ -7,7 +7,9 @@ use crate::core::state::{CountsMirror, State};
 /// State for the nonlinear least-squares solvers
 /// ([`GaussNewton`](crate::solver::GaussNewton),
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt),
-/// [`Trf`](crate::solver::Trf)): one `param`, an optional cached cost, and
+/// [`Trf`](crate::solver::Trf),
+/// [`TrustRegionReflective`](crate::solver::TrustRegionReflective)):
+/// one `param`, an optional cached cost, and
 /// iteration/evaluation counters split into residual and Jacobian work.
 ///
 /// # Why not [`BasicState`](crate::core::state::BasicState)?

@@ -110,6 +110,8 @@ pub mod cobyla;
 /// pluggable subproblem strategies (Steihaug-CG, dogleg, Moré–Sorensen,
 /// Cauchy point).
 pub mod trust_region;
+/// Dense trust-region-reflective least squares with rank-aware subproblems.
+pub mod trust_region_reflective;
 
 pub use augmented_lagrangian_method::AugmentedLagrangianMethod;
 pub use barrier_method::BarrierMethod;
@@ -157,6 +159,7 @@ pub use trust_region::{
     CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
     TrustRegion,
 };
+pub use trust_region_reflective::TrustRegionReflective;
 
 /// Sequential least-squares programming.
 pub mod slsqp;

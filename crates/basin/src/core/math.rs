@@ -255,6 +255,7 @@ mod dense;
 mod dense_chol;
 mod dense_eig;
 mod dense_qr;
+pub(crate) mod dense_svd;
 mod linalg;
 mod sample;
 mod scalar;
