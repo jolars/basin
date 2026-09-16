@@ -2,6 +2,135 @@
 
 Ordered by recommended sequence.
 
+## Solvers and integrations
+
+These priorities come from comparing Basin with the [SciPy optimization
+catalog](https://docs.scipy.org/doc/scipy/reference/optimize.html). Favor
+capabilities that help downstream integrations. Preserve Basin 1.x APIs and
+behavior, the default WASM build, and honest backend support. Validate new
+numerical work against analytic cases and reference implementations.
+
+### Priority additions
+
+- [ ] **Implement SLSQP.** Add a dense, pure-Rust solver for smooth objectives
+  with box bounds, nonlinear equalities, and nonlinear inequalities. Add
+  compatible problem-side interfaces for nonlinear equalities and constraint
+  Jacobians, with analytic derivatives and finite-difference adapters. Preserve
+  the default WASM build and validate every supported backend against analytic
+  cases and SciPy/NLopt reference results, including feasibility, stationarity,
+  rank-deficient constraints, and failure handling.
+- [ ] **Make finite differences respect box bounds.** Add an opt-in path that
+  adjusts probe directions and step sizes near bounds, including fixed
+  coordinates and narrow intervals. Forwarding bounds alone does not keep
+  the current probes feasible. Cover gradients and Jacobians first, with
+  tests for objectives defined only inside their bounds.
+- [ ] **Add gradient and Jacobian checkers.** Compare analytic derivatives
+  with finite differences using scale-aware error reports and optional
+  directional checks. Reuse the bound-aware probe machinery when bounds are
+  supplied, and distinguish non-finite evaluations from derivative mismatches.
+- [ ] **Add robust nonlinear least squares.** Support Huber, soft-L1, Cauchy,
+  and arctangent losses with a residual scale. Keep the reported objective,
+  gradient, local model, and convergence tests consistent with the chosen
+  loss. Compare outlier-contaminated fits with [SciPy's least-squares
+  API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html).
+- [ ] **Add full trust-region-reflective least squares.** Build on the
+  Coleman-Li scaling in `Trf`, adding an explicit trust-region radius and
+  reflected-step selection. Start with a rank-aware dense subproblem solve;
+  add the large-scale path described below afterward. Preserve access to the
+  existing simplified bounded-LM behavior through Basin 1.x. Test active
+  bounds, rank-deficient Jacobians, and agreement with reference TRF results.
+- [ ] **Implement nonlinear conjugate gradient.** Add a low-memory
+  first-order solver using the existing line-search interfaces. Choose a
+  research-grounded update and restart policy, and test descent safeguards
+  and ill-conditioned problems. Distinguish this from the linear CG used
+  inside Steihaug's trust-region subproblem solver.
+- [ ] **Implement DIRECT.** Add deterministic global optimization over finite
+  box bounds, with documented subdivision and rectangle-selection rules.
+  Compare solution quality and evaluation counts with [SciPy
+  DIRECT](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.direct.html)
+  on low- and moderate-dimensional multimodal problems.
+
+### Follow-up candidates
+
+- [ ] **Add iterative sparse least squares and Jacobian coloring.** Extend
+  the full TRF work with Jacobian and transpose-Jacobian products, an LSMR
+  solve, and the two-dimensional subspace method. Add sparsity-pattern-based
+  finite-difference coloring to reduce residual evaluations. Existing sparse
+  storage and direct solves do not provide this large-scale algorithm.
+- [ ] **Expand differential evolution.** Prioritize additional mutation and
+  crossover strategies and generation-wise mutation dithering beyond the
+  current `DE/rand/1/bin`. Then assess supplied populations, Latin hypercube
+  or low-discrepancy initialization, nonlinear constraint handling, and
+  integer variables. Preserve seeded reproducibility and compose with the
+  existing local-search facilities. See [SciPy differential
+  evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html).
+- [ ] **Add dedicated linear least-squares solvers.** Implement nonnegative
+  least squares and general box-bounded linear least squares. Reuse suitable
+  factorizations and test rank deficiency, active bounds, and optimality
+  against analytic solutions and [SciPy bounded linear least
+  squares](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.lsq_linear.html).
+- [ ] **Add curve-fitting helpers.** Provide residual construction, weighting
+  or whitening, and optional local covariance estimates around existing
+  least-squares solvers. Document the approximation and behavior under rank
+  deficiency, active bounds, and robust losses. Use [SciPy
+  curve_fit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html)
+  as a comparison for convenience and reporting.
+- [ ] **Expand scalar roots and bracketing.** Start with automatic root and
+  minimum bracketing and a safeguarded Newton/secant solver. Consider TOMS
+  748, Halley, and other bracketed methods afterward. Add batched independent
+  scalar solves when there is a concrete consumer; preserve the direct root
+  API and distinguish root convergence from minimization convergence. See
+  [SciPy scalar
+  roots](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.root_scalar.html)
+  and [elementwise
+  optimization](https://docs.scipy.org/doc/scipy/reference/optimize.elementwise.html).
+- [ ] **Add multivariate root solving when an integration needs it.** Start
+  with a safeguarded Newton/hybrid method or Broyden, then assess Anderson
+  acceleration and Newton-Krylov. Require residual-based root validation:
+  convergence of a least-squares objective can leave a nonzero residual.
+  Promote this work if a downstream consumer needs it, including access to
+  the final Jacobian for sensitivities. See [SciPy nonlinear
+  roots](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.root.html).
+- [ ] **Evaluate COBYQA.** Add a quadratic-model method for nonlinear
+  constraints if benchmarks justify it alongside COBYLA, BOBYQA, and LINCOA.
+  Those existing methods cover different model or constraint classes.
+
+### Longer-term candidates
+
+- [ ] **Evaluate a trust-constr-style solver.** After SLSQP establishes
+  constraint derivatives and native nonlinear equalities, assess a general
+  constrained trust-region method with sparse derivatives, suitable
+  factorizations, and feasibility and stationarity diagnostics. This is a
+  larger project than the current barrier and augmented-Lagrangian adapters.
+- [ ] **Assess remaining local methods.** Consider Powell's direction-set
+  method, line-search Newton-CG, TNC, GLTR/`trust-krylov`, and SR1 Hessian
+  updates when a workload demonstrates value. Powell's direction-set method
+  is distinct from NEWUOA and BOBYQA; GLTR is distinct from Steihaug CG.
+  Compare against [SciPy's local
+  methods](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html).
+- [ ] **Evaluate dogbox after strengthening TRF.** Add rectangular
+  trust-region least squares if small bounded fitting problems benefit.
+- [ ] **Assess complex-step differentiation.** Design an opt-in callback and
+  scalar interface for complex perturbations without broadening every real
+  solver's requirements. Document the analyticity requirement and operations
+  that invalidate the approximation.
+- [ ] **Evaluate SHGO and dual annealing after DIRECT.** Require evidence of
+  useful coverage beyond the existing global methods. Treat dual annealing
+  as a distinct algorithm from the current simulated annealing solver.
+- [ ] **Defer LP/MILP, assignment, and isotonic regression.** Revisit these
+  separate problem families only with concrete downstream demand. Assess
+  optional integrations before expanding the core or adding heavy solver
+  dependencies, preserving the default pure-Rust WASM build.
+
+### Deferred outreach
+
+- [ ] **Contact EGObox about switching to Basin.** Depends on completing and
+  validating the SLSQP task above. Revisit consolidation of `argmin`, `cobyla`,
+  `slsqp`, and optional `nlopt`, accounting for EGObox's public argmin
+  integration. Ask the [maintainer](https://github.com/relf/EGObox) whether they
+  would consider a switch and offer a PR with numerical and performance
+  comparisons. Outreach is deferred until SLSQP is ready.
+
 ## General design
 
 ### State API additions for Basin 1.x
@@ -210,6 +339,8 @@ live in globalsearch's ignored `target/` directory.
   could stop at the first feasible but nonoptimal iterate.
 
 - [ ] **Design nonlinear equality constraints when a solver needs their
-  structure (tenet 4).** For now, represent `g(x) = 0` as the pair
-  `g(x) ≤ 0` and `−g(x) ≤ 0`. Do not add a dedicated trait without a
-  consumer that can validate equality-specific operations and semantics.
+  structure (tenet 4).** Coordinate with the [SLSQP
+  task](#priority-additions), which supplies that consumer. Existing
+  derivative-free paths can represent `g(x) = 0` as the pair `g(x) ≤ 0`
+  and `−g(x) ≤ 0`; the native interface must validate equality-specific
+  operations and semantics with SLSQP.
