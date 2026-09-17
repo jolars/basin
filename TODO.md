@@ -219,6 +219,60 @@ desired backend features.
 
 ## Performance investigations
 
+### Ariadne L-BFGS-B comparison (2026-09-17)
+
+- [ ] **Reduce L-BFGS-B implementation overhead against ariadne-lbfgsb.**
+  The Ariadne migration from argmin/ariadne-lbfgsb to Basin 1.12.0 exposed a
+  slowdown on the L-BFGS-B 3.0 reference problems. The comparison calls Basin
+  directly, without Theseus's FDM adapter. Both implementations pass the
+  reference checks and take the same accepted iterations and objective/gradient
+  evaluations. This is a performance finding, not an observed correctness
+  failure or a regression against an earlier Basin release.
+
+  A follow-up probe compares the published Basin 1.12.0 `Vec<f64>` backend
+  with ariadne-lbfgsb 0.1.0 at Ariadne commit
+  `c8e957cfe58648f07ce4222e4f6e925563d834b2`. Median microseconds per fresh
+  solve on an Intel Core Ultra 7 155U, pinned to CPU 2, with Rust 1.98.1,
+  release LTO, one Rayon thread, and 15 interleaved timing rounds:
+
+  | Case | Old solver, faer | Old solver, scalar | Basin, original hook | Basin, direct loop |
+  | --- | ---: | ---: | ---: | ---: |
+  | Driver 1, 25 variables | 40.00 | 39.75 | 51.51 | 49.58 |
+  | Driver 2, 25 variables | 84.51 | 83.40 | 107.52 | 103.50 |
+  | Driver 3, 1,000 variables | 2,947.94 | 3,332.94 | 4,465.32 | 4,311.75 |
+
+  The direct loop initializes the production solver and preserves count,
+  iteration, and best-state bookkeeping, but runs exactly the accepted steps
+  from the original solve. It is a diagnostic control, not a replacement
+  stopping policy. All variants match final parameters within tolerance and
+  use 23/28, 46/53, and 49/58 iterations/evaluations, respectively. Removing
+  the custom stopping hook accounts for about 2-3% on these drivers; bypassing
+  the executor saves little more. The faer backend explains part of the
+  large-case advantage, but Basin remains about 29% slower than the scalar
+  reference even with the direct loop.
+
+  Separate allocation instrumentation counted 328 versus 27 requests on
+  Driver 1 and 674 versus 27 on Driver 3 (Basin/original hook versus reference).
+  Driver 3 requested 3,028,928 versus 314,440 bytes cumulatively; these are not
+  peak-memory figures. The direct loop still makes 670 requests. Sampling
+  attributes about 96% of Basin's Driver 3 cycles to `Lbfgs::next_iter`
+  inclusive and 3% to the stopping hook. Allocation counts alone do not
+  explain the whole gap: allocator self-time is small on Driver 3.
+
+  Follow up on compact-history products and the Cauchy/subspace kernels,
+  then repeated history-view allocations, temporary parameter/gradient
+  vectors, and best-state copies. Preserve the numerical safeguards,
+  accepted work, public state contracts, and WASM/backend support. Measure
+  changes on both small and large reference cases before claiming a speedup.
+
+  Local artifacts: [diagnostic report and commands](target/ariadne-lbfgsb-investigation/REPORT.md),
+  [probe source](target/ariadne-lbfgsb-investigation/src/main.rs), and
+  [raw timing samples](target/ariadne-lbfgsb-investigation/timing.log).
+  The isolated probe and profiles are ignored local artifacts. The reusable
+  reference harness and original end-to-end results are on Ariadne's
+  `feat/basin-optimization` branch in
+  [its benchmark report](../Ariadne/crates/theseus/BENCHMARKS.md).
+
 ### globalsearch comparison (2026-09-14)
 
 Compared Basin 1.11.0 with argmin 0.11.0 through globalsearch's public local
