@@ -1,5 +1,7 @@
 //! Fresh solves of the L-BFGS-B 3.0 reference drivers, including initialization.
 
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;
 #[path = "support/lbfgsb.rs"]
 mod support;
 
@@ -13,9 +15,19 @@ fn benchmark(c: &mut Criterion) {
         problem.check_feasibility = true;
         problem.verify(&problem.solve());
         problem.check_feasibility = false;
-        group.bench_function(format!("driver{number}"), |b| {
+        group.bench_function(format!("driver{number}/vec"), |b| {
             b.iter(|| black_box(problem.solve()));
         });
+        #[cfg(feature = "faer_all")]
+        {
+            let mut problem = support::Driver::<backend_aliases::faer::Col<f64>>::with_backend(number);
+            problem.check_feasibility = true;
+            problem.verify(&problem.solve());
+            problem.check_feasibility = false;
+            group.bench_function(format!("driver{number}/faer"), |b| {
+                b.iter(|| black_box(problem.solve()));
+            });
+        }
     }
     group.finish();
 }

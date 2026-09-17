@@ -173,10 +173,7 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
         let wy = wy_cols[jy].as_float_slice();
         let ws = ws_cols[jy].as_float_slice();
         let js = col + jy;
-        for i in 0..nsub {
-            let k = ind[i];
-            d[i] = d[i] + wy[k] * wv[jy] / theta + ws[k] * wv[js];
-        }
+        add_history_column(&mut d[..nsub], ind, wy, ws, wv[jy], wv[js], theta);
     }
     for slot in d.iter_mut().take(nsub) {
         *slot = *slot / theta;
@@ -293,6 +290,40 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
     Ok(iword)
 }
 
+fn add_history_column<F: Scalar>(
+    d: &mut [F],
+    ind: &[usize],
+    wy: &[F],
+    ws: &[F],
+    y_weight: F,
+    s_weight: F,
+    theta: F,
+) {
+    // Gather independent coordinates before arithmetic so the compiler can
+    // vectorize the correction without reassociating sums or divisions.
+    let end = d.len() / 4 * 4;
+    for (di, indices) in d[..end].chunks_exact_mut(4).zip(ind.chunks_exact(4)) {
+        let y = [
+            wy[indices[0]],
+            wy[indices[1]],
+            wy[indices[2]],
+            wy[indices[3]],
+        ];
+        let s = [
+            ws[indices[0]],
+            ws[indices[1]],
+            ws[indices[2]],
+            ws[indices[3]],
+        ];
+        for i in 0..4 {
+            di[i] = di[i] + y[i] * y_weight / theta + s[i] * s_weight;
+        }
+    }
+    for (di, &k) in d[end..].iter_mut().zip(&ind[end..]) {
+        *di = *di + wy[k] * y_weight / theta + ws[k] * s_weight;
+    }
+}
+
 #[cfg(test)]
 // Explicit `i * m2 + j` indexing (including `0 * m2 + 0`) mirrors the
 // Fortran source's 2-D layout: load-bearing for readability when
@@ -300,6 +331,57 @@ pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
 #[allow(clippy::identity_op, clippy::erasing_op)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_correction_preserves_index_order_and_scalar_arithmetic() {
+        fn check<F: Scalar>() {
+            let n = 19;
+            let s: Vec<_> = (0..n)
+                .map(|i| F::from_f64((i as f64 - 9.0) / 7.0).unwrap())
+                .collect();
+            let mut y: Vec<_> = s.iter().map(|&s| s * s - F::one()).collect();
+            // The indexed update must not evaluate unused history entries.
+            y[3] = F::nan();
+            let indices: Vec<_> = (0..n).rev().filter(|&i| i != 3).collect();
+            for nfree in 0..=indices.len() {
+                let ind = &indices[..nfree];
+                let mut d: Vec<_> = ind.iter().map(|&i| s[i]).collect();
+                let mut expected = d.clone();
+                let theta = F::from_f64(1.7).unwrap();
+                let yw = F::from_f64(-0.3).unwrap();
+                let sw = F::from_f64(0.8).unwrap();
+                for (di, &i) in expected.iter_mut().zip(ind) {
+                    *di = *di + y[i] * yw / theta + s[i] * sw;
+                }
+                add_history_column(&mut d, ind, &y, &s, yw, sw, theta);
+                assert_eq!(d, expected);
+            }
+        }
+        check::<f32>();
+        check::<f64>();
+    }
+
+    #[test]
+    fn history_correction_keeps_division_after_product_at_extreme_scales() {
+        fn check<F: Scalar>() {
+            let two = F::one() + F::one();
+            let ind = [0, 1, 2, 3, 4];
+            let mut d = [F::zero(); 5];
+            let s = [F::zero(); 5];
+            let y = [F::max_value(); 5];
+            add_history_column(&mut d, &ind, &y, &s, two, F::zero(), two);
+            assert!(d.iter().all(|x| *x == F::infinity()));
+
+            let half = F::one() / two;
+            let tiny = F::min_positive_value() * F::epsilon();
+            let y = [tiny; 5];
+            d.fill(F::zero());
+            add_history_column(&mut d, &ind, &y, &s, half, F::zero(), half);
+            assert_eq!(d, [F::zero(); 5]);
+        }
+        check::<f32>();
+        check::<f64>();
+    }
 
     /// `nsub == 0` ⇒ no free variables ⇒ subsm returns immediately
     /// with `iword = 0` and `x` unchanged.

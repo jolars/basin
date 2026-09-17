@@ -1,5 +1,7 @@
 //! Reference work and numerical checks also used by the L-BFGS-B benchmark.
 
+#[path = "support/backend_aliases.rs"]
+mod backend_aliases;
 #[path = "../benches/support/lbfgsb.rs"]
 mod support;
 
@@ -68,5 +70,41 @@ fn reference_driver_allocations_stay_bounded() {
             requests <= ceiling,
             "driver{number}: {requests} allocation requests exceed {ceiling}"
         );
+    }
+}
+
+#[cfg(feature = "faer_all")]
+#[test]
+fn faer_reference_drivers_match_vec_work_and_results() {
+    use basin::GradientState;
+    use support::Vector;
+    for number in 1..=3 {
+        let mut vec = support::Driver::new(number);
+        let mut faer =
+            support::Driver::<backend_aliases::faer::Col<f64>>::with_backend(
+                number,
+            );
+        vec.check_feasibility = true;
+        faer.check_feasibility = true;
+        let vec_result = vec.solve();
+        let faer_result = faer.solve();
+        vec.verify(&vec_result);
+        faer.verify(&faer_result);
+        for (&a, &b) in vec_result
+            .param()
+            .iter()
+            .zip(faer_result.param().as_slice())
+        {
+            assert!((a - b).abs() <= 1e-12 * (1.0 + a.abs()));
+        }
+        for (&a, &b) in vec_result
+            .state
+            .gradient()
+            .unwrap()
+            .iter()
+            .zip(faer_result.state.gradient().unwrap().as_slice())
+        {
+            assert!((a - b).abs() <= 1e-12 * (1.0 + a.abs()));
+        }
     }
 }

@@ -165,9 +165,11 @@ pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
             let mut temp1 = F::zero(); // (Y'ZZ'Y)[last, jy] over free indices
             let mut temp2 = F::zero(); // (S'AA'S)[last, jy] over active indices
             let mut temp3 = F::zero(); // (L_a)[last, jy] over active indices
+            let mut temp4 = F::zero();
             for k in 0..nsub {
                 let k1 = ind[k];
                 temp1 = temp1 + wy_last[k1] * wy_j[k1];
+                temp4 = temp4 + ws_j[k1] * wy_last[k1];
             }
             for k in nsub..n {
                 let k1 = ind[k];
@@ -177,18 +179,10 @@ pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
             wn1[last * two_m + jy] = temp1;
             wn1[(m + last) * two_m + (m + jy)] = temp2;
             wn1[(m + last) * two_m + jy] = temp3;
-        }
-
-        // Last column of (2,1): R_z column for the new pair. Walks the
-        // *free* index set with `last` on the `wy` side.
-        for i in 0..col {
-            let ws_i = ws_cols[i].as_float_slice();
-            let mut temp3 = F::zero();
-            for k in 0..nsub {
-                let k1 = ind[k];
-                temp3 = temp3 + ws_i[k1] * wy_last[k1];
-            }
-            wn1[(m + i) * two_m + last] = temp3;
+            // Both free-set products share the newest Y column. Keep
+            // their coordinate order, and let R_z overwrite L_a on
+            // the diagonal as in the reference's separate column pass.
+            wn1[(m + jy) * two_m + last] = temp4;
         }
         col - 1
     } else {
@@ -366,6 +360,93 @@ pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
 mod tests {
     use super::*;
 
+    #[test]
+    fn gram_cache_matches_direct_products_after_rollover_and_set_changes() {
+        let n = 17;
+        for m in [1, 3, 5] {
+            let mut state = crate::LbfgsState::new(vec![0.0; n], m);
+            let mut wn = vec![0.0; 4 * m * m];
+            let mut wn1 = wn.clone();
+            let mut previous_free = vec![false; n];
+            for update in 1..=2 * m + 2 {
+                let s: Vec<_> = (0..n)
+                    .map(|i| ((i * (update + 2) + update) % 13) as f64 - 6.0)
+                    .collect();
+                let y = s
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &s)| s * (i + 1) as f64)
+                    .collect();
+                assert!(state.append_pair(s, y));
+                let free: Vec<_> =
+                    (0..n).map(|i| (i + update) % 4 != 0).collect();
+                let ind: Vec<_> = (0..n)
+                    .filter(|&i| free[i])
+                    .chain((0..n).rev().filter(|&i| !free[i]))
+                    .collect();
+                let nfree = free.iter().filter(|&&f| f).count();
+                let mut changes = vec![0; n];
+                let mut nenter = 0;
+                let mut ileave = n;
+                if update > 1 {
+                    for i in 0..n {
+                        if free[i] && !previous_free[i] {
+                            changes[nenter] = i;
+                            nenter += 1;
+                        } else if !free[i] && previous_free[i] {
+                            ileave -= 1;
+                            changes[ileave] = i;
+                        }
+                    }
+                }
+                let col = state.col();
+                formk(
+                    &mut wn,
+                    &mut wn1,
+                    m,
+                    col,
+                    state.theta,
+                    &state.sy,
+                    &state.ws,
+                    &state.wy,
+                    nfree,
+                    &ind,
+                    nenter,
+                    ileave,
+                    &changes,
+                    update as u32,
+                    true,
+                )
+                .unwrap();
+                for i in 0..col {
+                    for j in 0..col {
+                        let dot = |a: &[f64], b: &[f64], selected: bool| {
+                            (0..n)
+                                .filter(|&k| free[k] == selected)
+                                .map(|k| a[k] * b[k])
+                                .sum::<f64>()
+                        };
+                        if i >= j {
+                            assert_eq!(
+                                wn1[i * 2 * m + j],
+                                dot(&state.wy[i], &state.wy[j], true)
+                            );
+                            assert_eq!(
+                                wn1[(m + i) * 2 * m + m + j],
+                                dot(&state.ws[i], &state.ws[j], false)
+                            );
+                        }
+                        assert_eq!(
+                            wn1[(m + i) * 2 * m + j],
+                            dot(&state.ws[i], &state.wy[j], i <= j)
+                        );
+                    }
+                }
+                previous_free = free;
+            }
+        }
+    }
+
     /// First-iteration formk: `col == 1`, one history pair
     /// `s = (1, 2), y = (1, 1)`, `θ = 1`, var 0 free, var 1 active.
     /// Verifies the resulting `wn` matches the hand-built fixture in
@@ -407,7 +488,7 @@ mod tests {
         // wn1[1,1] = ws[0][1]^2 = 4 (S'AA'S active part).
         assert!((wn1[1 * two_m + 1] - 4.0).abs() < 1e-12);
         // wn1[1,0] gets written twice: once with the active dot (=2),
-        // then overwritten by the free dot (=1) from the column loop.
+        // then overwritten by the free dot (=1) for the new column.
         assert!((wn1[1 * two_m + 0] - 1.0).abs() < 1e-12);
 
         // wn[0,0] = 2 (= √4, the Cholesky of D + Y'ZZ'Y/θ = 3 + 1).

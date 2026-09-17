@@ -295,21 +295,46 @@ desired backend features.
   674 to 239, and cumulative requested bytes from 3,028,928 to 1,811,168. It
   remains about 11% slower than Ariadne's scalar kernels and 24% slower than
   Ariadne's faer kernels, so the comparison stays open. Both Ariadne modes
-  use `Vec<f64>` storage; Basin's own faer backend has not been timed in this
+  use `Vec<f64>` storage; Basin's own faer backend was not timed in that
   comparison. See the [follow-up
   report](target/lbfgsb-optimization/REPORT.md), [paired
   samples](target/lbfgsb-optimization/comparison-after.json), and [reproduction
   script](target/lbfgsb-optimization/compare.py).
 
-  Next, benchmark Basin's `Vec<f64>` and faer backends on the same reference
-  cases, checking numerical results and evaluation counts before timing.
-  Then benchmark the Gram updates, `formk`, and `subsm` on identical history
-  vectors and free-variable indices to identify opportunities in dot-product
-  reductions, batched products, and indexed accesses. Evaluate flat history
-  storage if it enables a measured kernel improvement; each current history
-  column is already contiguous. Preserve the existing safeguards and verify
-  any changes in floating-point accumulation order against the reference
-  trajectories, ill-conditioned cases, and all supported backends.
+  Second follow-up (2026-09-17): Basin's own faer backend retains the same
+  verified results and evaluation counts, but does not improve latency over
+  `Vec<f64>`. Both use ordered scalar history products; Ariadne's faer path
+  batches those products. The maintained `lbfgsb` benchmark now compares both
+  Basin backends with `--features faer_v0_24`.
+
+  Matched-input kernel measurements supported two further changes: combine
+  `formk`'s free-set products in one traversal, and gather four independent
+  coordinates before `subsm`'s direction update. Both preserve floating-point
+  operation order. On the 1,000-variable fixtures, the kernels improve by
+  about 1.36-1.43x and 1.33-1.34x, respectively; the untouched Gram update
+  shows no resolved change. New checks cover the Gram cache through rollover
+  and active-set changes, plus `f32`/`f64` correction tails, unused non-finite
+  entries, and extreme scales.
+
+  With the same Rust 1.89.0/CPU/release settings, 21 alternating rounds against
+  commit `496d95d` give Driver 1/2/3 speedups of 1.036x, 1.051x, and 1.088x
+  (bootstrap 95% intervals: 1.026-1.043x, 1.040-1.055x, and 1.078-1.097x).
+  All five reference cases preserve their verified results and accepted work.
+  Driver 3 is now about 2.2% slower than scalar Ariadne and 13.7% slower than
+  Ariadne faer, using paired ratios from this run. The small-driver gaps
+  remain larger, so the comparison stays open. See the [kernel/backend
+  report](target/lbfgsb-kernels/REPORT.md), [final
+  samples](target/lbfgsb-kernels/comparison-after.json), and [kernel
+  probe](target/lbfgsb-kernels/src/bin/kernels.rs).
+
+  Next, compare identical-input newest-history products with Ariadne's native
+  batched products. Test batching independent ordered reductions before
+  accepting changed accumulation order; evaluate flat history storage only
+  if it enables a measured kernel improvement. Each current history column
+  is already contiguous. Investigate initialization and allocation costs
+  separately for the remaining small-driver gap. Preserve safeguards and
+  verify any accumulation-order changes against reference trajectories,
+  ill-conditioned cases, and all supported backends.
 
 ### globalsearch comparison (2026-09-14)
 

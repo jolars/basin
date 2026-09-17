@@ -5,29 +5,66 @@
 
 use basin::{
     BoxConstraints, CostFunction, Executor, Gradient, GradientState,
-    LbfgsState, Lbfgsb, OptimizationResult, State, TerminationReason,
+    LbfgsState, Lbfgsb, OptimizationResult, Solver, State, TerminationReason,
 };
 use std::convert::Infallible;
 
-pub struct Driver {
+pub trait Vector: Clone + 'static {
+    fn filled(n: usize, value: f64) -> Self;
+    fn as_slice(&self) -> &[f64];
+    fn as_mut_slice(&mut self) -> &mut [f64];
+}
+
+impl Vector for Vec<f64> {
+    fn filled(n: usize, value: f64) -> Self {
+        vec![value; n]
+    }
+    fn as_slice(&self) -> &[f64] {
+        self
+    }
+    fn as_mut_slice(&mut self) -> &mut [f64] {
+        self
+    }
+}
+
+#[cfg(feature = "faer_all")]
+impl Vector for crate::backend_aliases::faer::Col<f64> {
+    fn filled(n: usize, value: f64) -> Self {
+        Self::from_fn(n, |_| value)
+    }
+    fn as_slice(&self) -> &[f64] {
+        self.try_as_col_major().unwrap().as_slice()
+    }
+    fn as_mut_slice(&mut self) -> &mut [f64] {
+        self.try_as_col_major_mut().unwrap().as_slice_mut()
+    }
+}
+
+pub struct Driver<V = Vec<f64>> {
     number: usize,
-    pub lower: Vec<f64>,
-    pub upper: Vec<f64>,
+    pub lower: V,
+    pub upper: V,
     pub check_feasibility: bool,
 }
 
 impl Driver {
     pub fn new(number: usize) -> Self {
+        Self::with_backend(number)
+    }
+}
+
+impl<V: Vector> Driver<V> {
+    pub fn with_backend(number: usize) -> Self {
         assert!((1..=3).contains(&number));
         let n = if number == 3 { 1000 } else { 25 };
-        let mut lower = vec![-100.0; n];
+        let mut lower = V::filled(n, -100.0);
         for i in (0..n).step_by(2) {
-            lower[i] = 1.0;
+            lower.as_mut_slice()[i] = 1.0;
         }
         Self {
             number,
             lower,
-            upper: vec![100.0; n],
+            upper: V::filled(n, 100.0),
             check_feasibility: false,
         }
     }
@@ -35,8 +72,8 @@ impl Driver {
     pub fn evaluate(&self, x: &[f64], g: &mut [f64]) -> f64 {
         if self.check_feasibility {
             assert!(x.iter().enumerate().all(|(i, &v)| v.is_finite()
-                && self.lower[i] <= v
-                && v <= self.upper[i]));
+                && self.lower.as_slice()[i] <= v
+                && v <= self.upper.as_slice()[i]));
         }
         let n = x.len();
         let mut value = 0.25 * (x[0] - 1.0).powi(2);
@@ -60,15 +97,18 @@ impl Driver {
             .enumerate()
             .map(|(i, (&x, &g))| {
                 if g < 0.0 {
-                    g.max(x - self.upper[i]).abs()
+                    g.max(x - self.upper.as_slice()[i]).abs()
                 } else {
-                    g.min(x - self.lower[i]).abs()
+                    g.min(x - self.lower.as_slice()[i]).abs()
                 }
             })
             .fold(0.0, f64::max)
     }
 
-    pub fn solve(&self) -> OptimizationResult<LbfgsState<Vec<f64>>> {
+    pub fn solve(&self) -> OptimizationResult<LbfgsState<V>>
+    where
+        Lbfgsb: for<'a> Solver<&'a Self, LbfgsState<V>, Error = Infallible>,
+    {
         let first = self.number == 1;
         let evaluation_limit = if self.number == 3 { 900 } else { 99 };
         let history = if self.number == 3 { 10 } else { 5 };
@@ -80,22 +120,23 @@ impl Driver {
         Executor::new(
             self,
             solver,
-            LbfgsState::new(vec![3.0; lower.len()], history),
+            LbfgsState::new(V::filled(lower.as_slice().len(), 3.0), history),
         )
         .max_iter(2000)
-        .stop_when(move |state: &LbfgsState<Vec<f64>>| {
+        .stop_when(move |state: &LbfgsState<V>| {
             let value = state.cost();
             let old = previous.replace(value);
             let pg = state
                 .param()
+                .as_slice()
                 .iter()
-                .zip(state.gradient().unwrap())
+                .zip(state.gradient().unwrap().as_slice())
                 .enumerate()
                 .map(|(i, (&x, &g))| {
                     if g < 0.0 {
-                        g.max(x - upper[i]).abs()
+                        g.max(x - upper.as_slice()[i]).abs()
                     } else {
-                        g.min(x - lower[i]).abs()
+                        g.min(x - lower.as_slice()[i]).abs()
                     }
                 })
                 .fold(0.0, f64::max);
@@ -122,7 +163,7 @@ impl Driver {
         .unwrap()
     }
 
-    pub fn verify(&self, result: &OptimizationResult<LbfgsState<Vec<f64>>>) {
+    pub fn verify(&self, result: &OptimizationResult<LbfgsState<V>>) {
         let (iterations, evaluations, objective, objective_tolerance, pg_limit) =
             match self.number {
                 1 => (23, 28, 1.08349008e-9, 1e-16, 1.8e-4),
@@ -141,45 +182,48 @@ impl Driver {
                 TerminationReason::UserRequested
             }
         );
-        let mut gradient = vec![0.0; self.lower.len()];
+        let mut gradient = vec![0.0; self.lower.as_slice().len()];
         // Independent verification calls are outside the solve's counters/timer.
-        let cost = self.evaluate(result.param(), &mut gradient);
+        let cost = self.evaluate(result.param().as_slice(), &mut gradient);
         assert!((cost - objective).abs() <= objective_tolerance);
         assert_eq!(cost, result.cost());
-        assert_eq!(&gradient, result.state.gradient().unwrap());
-        assert!(self.projected_gradient(result.param(), &gradient) <= pg_limit);
-        assert_eq!(result.state.best_param(), result.param());
+        assert_eq!(&gradient, result.state.gradient().unwrap().as_slice());
+        assert!(
+            self.projected_gradient(result.param().as_slice(), &gradient)
+                <= pg_limit
+        );
+        assert_eq!(
+            result.state.best_param().as_slice(),
+            result.param().as_slice()
+        );
         assert_eq!(result.state.best_cost(), result.cost());
     }
 }
 
-impl CostFunction for &Driver {
-    type Param = Vec<f64>;
+impl<V: Vector> CostFunction for &Driver<V> {
+    type Param = V;
     type Output = f64;
     type Error = Infallible;
-    fn cost(&self, x: &Vec<f64>) -> Result<f64, Infallible> {
-        Ok(self.evaluate(x, &mut vec![0.0; x.len()]))
+    fn cost(&self, x: &V) -> Result<f64, Infallible> {
+        Ok(self.evaluate(x.as_slice(), &mut vec![0.0; x.as_slice().len()]))
     }
 }
-impl Gradient for &Driver {
-    type Gradient = Vec<f64>;
-    fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
+impl<V: Vector> Gradient for &Driver<V> {
+    type Gradient = V;
+    fn gradient(&self, x: &V) -> Result<V, Infallible> {
         Ok(self.cost_and_gradient(x)?.1)
     }
-    fn cost_and_gradient(
-        &self,
-        x: &Vec<f64>,
-    ) -> Result<(f64, Vec<f64>), Infallible> {
-        let mut gradient = vec![0.0; x.len()];
-        let cost = self.evaluate(x, &mut gradient);
+    fn cost_and_gradient(&self, x: &V) -> Result<(f64, V), Infallible> {
+        let mut gradient = V::filled(x.as_slice().len(), 0.0);
+        let cost = self.evaluate(x.as_slice(), gradient.as_mut_slice());
         Ok((cost, gradient))
     }
 }
-impl BoxConstraints for &Driver {
-    fn lower(&self) -> &Vec<f64> {
+impl<V: Vector> BoxConstraints for &Driver<V> {
+    fn lower(&self) -> &V {
         &self.lower
     }
-    fn upper(&self) -> &Vec<f64> {
+    fn upper(&self) -> &V {
         &self.upper
     }
 }
