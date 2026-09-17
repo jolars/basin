@@ -290,13 +290,12 @@ desired backend features.
   alternating prebuilt binaries, paired before/after speedups were 1.108x,
   1.106x, and 1.234x for Drivers 1/2/3 (bootstrap 95% intervals: 1.097-1.130x,
   1.100-1.120x, and 1.231-1.239x). Background system activity caused drift,
-  especially on the small audit case. These estimates compare paired Rust
-  1.89.0 builds. Driver 3 allocation requests fell from
-  674 to 239, and cumulative requested bytes from 3,028,928 to 1,811,168. It
-  remains about 11% slower than Ariadne's scalar kernels and 24% slower than
-  Ariadne's faer kernels, so the comparison stays open. Both Ariadne modes
-  use `Vec<f64>` storage; Basin's own faer backend was not timed in that
-  comparison. See the [follow-up
+  especially on the small audit case. These estimates compare paired Rust 1.89.0
+  builds. Driver 3 allocation requests fell from 674 to 239, and cumulative
+  requested bytes from 3,028,928 to 1,811,168. It remains about 11% slower than
+  Ariadne's scalar kernels and 24% slower than Ariadne's faer kernels, so the
+  comparison stays open. Both Ariadne modes use `Vec<f64>` storage; Basin's own
+  faer backend was not timed in that comparison. See the [follow-up
   report](target/lbfgsb-optimization/REPORT.md), [paired
   samples](target/lbfgsb-optimization/comparison-after.json), and [reproduction
   script](target/lbfgsb-optimization/compare.py).
@@ -310,31 +309,63 @@ desired backend features.
   Matched-input kernel measurements supported two further changes: combine
   `formk`'s free-set products in one traversal, and gather four independent
   coordinates before `subsm`'s direction update. Both preserve floating-point
-  operation order. On the 1,000-variable fixtures, the kernels improve by
-  about 1.36-1.43x and 1.33-1.34x, respectively; the untouched Gram update
-  shows no resolved change. New checks cover the Gram cache through rollover
-  and active-set changes, plus `f32`/`f64` correction tails, unused non-finite
+  operation order. On the 1,000-variable fixtures, the kernels improve by about
+  1.36-1.43x and 1.33-1.34x, respectively; the untouched Gram update shows no
+  resolved change. New checks cover the Gram cache through rollover and
+  active-set changes, plus `f32`/`f64` correction tails, unused non-finite
   entries, and extreme scales.
 
   With the same Rust 1.89.0/CPU/release settings, 21 alternating rounds against
   commit `496d95d` give Driver 1/2/3 speedups of 1.036x, 1.051x, and 1.088x
-  (bootstrap 95% intervals: 1.026-1.043x, 1.040-1.055x, and 1.078-1.097x).
-  All five reference cases preserve their verified results and accepted work.
-  Driver 3 is now about 2.2% slower than scalar Ariadne and 13.7% slower than
-  Ariadne faer, using paired ratios from this run. The small-driver gaps
-  remain larger, so the comparison stays open. See the [kernel/backend
+  (bootstrap 95% intervals: 1.026-1.043x, 1.040-1.055x, and 1.078-1.097x). All
+  five reference cases preserve their verified results and accepted work. Driver
+  3 is now about 2.2% slower than scalar Ariadne and 13.7% slower than Ariadne
+  faer, using paired ratios from this run. The small-driver gaps remain larger,
+  so the comparison stays open. See the [kernel/backend
   report](target/lbfgsb-kernels/REPORT.md), [final
   samples](target/lbfgsb-kernels/comparison-after.json), and [kernel
   probe](target/lbfgsb-kernels/src/bin/kernels.rs).
 
-  Next, compare identical-input newest-history products with Ariadne's native
-  batched products. Test batching independent ordered reductions before
-  accepting changed accumulation order; evaluate flat history storage only
-  if it enables a measured kernel improvement. Each current history column
-  is already contiguous. Investigate initialization and allocation costs
-  separately for the remaining small-driver gap. Preserve safeguards and
-  verify any accumulation-order changes against reference trajectories,
-  ill-conditioned cases, and all supported backends.
+  Third follow-up (2026-09-17): newest-history products now batch two history
+  columns, keeping all four reductions in their original coordinate order. The
+  columns retain their existing storage. Boxing the private bounded workspace
+  reduces `LbfgsState<Vec<f64>>` from 648 to 264 bytes on x86-64, reducing the
+  state moved through the executor. This adds one allocation and 392 requested
+  bytes per fresh bounded solve. Tests cover exact ordered products through
+  rollover, both scalar types, cancellation, extreme scales, non-finite inputs,
+  and all four backends on the reference drivers.
+
+  A fresh comparison on a Ryzen 9 7900, pinned to CPU 2 with Rust 1.89.0, thin
+  LTO, and one Rayon thread, gives Driver 1/2/3 speedups of 1.026x, 1.022x, and
+  1.103x against `3cc7d41` across 21 alternating rounds (bootstrap 95%
+  intervals: 1.022-1.033x, 1.019-1.029x, and 1.076-1.109x). These are matched
+  builds on this machine, not comparisons with the earlier Intel timings. Driver
+  3 now takes about 12.3% less time than scalar Ariadne and 1.3% more than
+  Ariadne faer. The small drivers remain about 13-14% slower than scalar
+  Ariadne, so the comparison stays open. All five reference cases retain their
+  results and accepted work; the two mixed-bound audit trajectories are
+  identical before and after.
+
+  Native faer still wins the isolated newest-products comparison, but the
+  ordered batching narrows that gap without changing accumulation order. A
+  further experiment batching the three new-pair diagonal products improved its
+  microbenchmark but regressed complete solves by about 3% on the small drivers
+  and 1% on Driver 3; it was discarded. Initialization is below 1 us on the
+  small case and does not explain the remaining gap.
+
+  Further headroom looks most promising on the small drivers. Prioritize `bmv`
+  and triangular solves, which together account for about 12% of sampled cycles
+  on Driver 1. Halving that cost would save about 6% overall; another few
+  percent seems plausible, but closing the entire small-driver gap remains
+  uncertain. Then test ordered batching of the Cauchy-point history products and
+  inspect remaining iteration bookkeeping. The large-case comparison is already
+  close to Ariadne faer, so expectations there should be modest. Validate each
+  change with complete solves across additional dimensions, history lengths, and
+  active sets: the rejected diagonal-product experiment shows why an isolated
+  kernel speedup is insufficient. See the [third-pass
+  report](target/lbfgsb-third-pass/REPORT.md), [paired
+  samples](target/lbfgsb-third-pass/comparison-final.json), and [kernel
+  samples](target/lbfgsb-third-pass/kernels-final.json).
 
 ### globalsearch comparison (2026-09-14)
 

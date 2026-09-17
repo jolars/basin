@@ -38,6 +38,7 @@ pub(crate) mod backend;
 pub(crate) mod cauchy;
 pub(crate) mod compact;
 pub(crate) mod formk;
+pub(crate) mod history;
 pub(crate) mod subsm;
 
 use core::marker::PhantomData;
@@ -394,7 +395,7 @@ where
     ) -> Result<LbfgsState<V, F>, Self::Error> {
         let n = state.param.as_float_slice().len();
         let m = state.m_capacity;
-        let mut work = LbfgsbWork::<F>::new(n, m);
+        let mut work = Box::new(LbfgsbWork::<F>::new(n, m));
 
         // Project the initial iterate onto the feasible box and
         // initialize `iwhere`, `cnstnd`, `boxed` (Fortran `active`,

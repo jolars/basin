@@ -27,6 +27,32 @@ impl Vector for Vec<f64> {
     }
 }
 
+#[cfg(feature = "nalgebra_all")]
+impl Vector for crate::backend_aliases::nalgebra::DVector<f64> {
+    fn filled(n: usize, value: f64) -> Self {
+        Self::from_element(n, value)
+    }
+    fn as_slice(&self) -> &[f64] {
+        self.as_slice()
+    }
+    fn as_mut_slice(&mut self) -> &mut [f64] {
+        self.as_mut_slice()
+    }
+}
+
+#[cfg(feature = "ndarray_all")]
+impl Vector for crate::backend_aliases::ndarray::Array1<f64> {
+    fn filled(n: usize, value: f64) -> Self {
+        Self::from_elem(n, value)
+    }
+    fn as_slice(&self) -> &[f64] {
+        self.as_slice_memory_order().unwrap()
+    }
+    fn as_mut_slice(&mut self) -> &mut [f64] {
+        self.as_slice_mut().unwrap()
+    }
+}
+
 #[cfg(feature = "faer_all")]
 impl Vector for crate::backend_aliases::faer::Col<f64> {
     fn filled(n: usize, value: f64) -> Self {

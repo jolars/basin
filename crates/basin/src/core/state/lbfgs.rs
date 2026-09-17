@@ -13,6 +13,7 @@
 use crate::core::math::{Dot, Scalar};
 use crate::core::problem::EvalCounts;
 use crate::core::state::{CountsMirror, GradientState, State};
+use crate::solver::lbfgs::{backend::AsFloatSlice, history::newest_products};
 
 /// Solver state for L-BFGS-B and the unbounded L-BFGS solver.
 ///
@@ -59,7 +60,9 @@ pub struct LbfgsState<V, F = f64> {
     /// pieces of `isave`/`dsave` that survive across iterations).
     /// Initialized lazily by `LBFGSB::init`; absent when [`LbfgsState`]
     /// is used by other solvers (e.g. the unbounded L-BFGS path).
-    pub(crate) work: Option<LbfgsbWork<F>>,
+    // Indirection keeps workspace headers out of the state moved through
+    // the executor on every iteration.
+    pub(crate) work: Option<Box<LbfgsbWork<F>>>,
 }
 
 /// Mutable working storage threaded through the L-BFGS-B iteration.
@@ -235,7 +238,7 @@ impl<V, F: Scalar> LbfgsState<V, F> {
     /// that case.
     pub(crate) fn append_pair(&mut self, s: V, y: V) -> bool
     where
-        V: Dot<F>,
+        V: Dot<F> + AsFloatSlice<F>,
     {
         let sy_dot = s.dot(&y);
         let yy_dot = y.dot(&y);
@@ -272,13 +275,15 @@ impl<V, F: Scalar> LbfgsState<V, F> {
         // the two-loop recursion uses only its diagonal. Computing the
         // upper triangle would add an unused dot product per history pair.
         let new_idx = self.ws.len();
+        newest_products(
+            s.as_float_slice(),
+            &self.ws,
+            &self.wy,
+            &mut self.sy[new_idx * m..new_idx * m + new_idx],
+            &mut self.ss[new_idx * m..new_idx * m + new_idx],
+        );
         for i in 0..new_idx {
-            let s_new_y_i = s.dot(&self.wy[i]);
-            let s_i_s_new = self.ws[i].dot(&s);
-            self.sy[new_idx * m + i] = s_new_y_i;
-            // ss is symmetric.
-            self.ss[i * m + new_idx] = s_i_s_new;
-            self.ss[new_idx * m + i] = s_i_s_new;
+            self.ss[i * m + new_idx] = self.ss[new_idx * m + i];
         }
         self.sy[new_idx * m + new_idx] = sy_dot;
         self.ss[new_idx * m + new_idx] = s.dot(&s);
@@ -394,6 +399,96 @@ impl<V: Clone, F: Scalar> CountsMirror for LbfgsState<V, F> {
 mod tests {
     use super::*;
 
+    fn check_history_products<F: Scalar>(scales: &[F]) {
+        for &scale in scales {
+            for n in [1, 3, 25, 180, 1000] {
+                for m in [1, 2, 3, 5, 10] {
+                    let mut state = LbfgsState::new(vec![F::zero(); n], m);
+                    for step in 0..2 * m + 3 {
+                        let s: Vec<_> = (0..n)
+                            .map(|i| {
+                                scale
+                                    * F::from_f64(
+                                        ((i * 13 + step * 7) % 37) as f64
+                                            - 18.5,
+                                    )
+                                    .unwrap()
+                            })
+                            .collect();
+                        let y: Vec<_> = s
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &s)| {
+                                s * F::from_usize(1 + i % 7).unwrap()
+                            })
+                            .collect();
+                        assert!(state.append_pair(s, y));
+                        let col = state.col();
+                        assert_eq!(
+                            state.theta,
+                            state.wy[col - 1].dot(&state.wy[col - 1])
+                                / state.ws[col - 1].dot(&state.wy[col - 1])
+                        );
+                        for i in 0..col {
+                            for j in 0..col {
+                                assert_eq!(
+                                    state.ss[i * m + j],
+                                    state.ws[i].dot(&state.ws[j])
+                                );
+                                if j <= i {
+                                    assert_eq!(
+                                        state.sy[i * m + j],
+                                        state.ws[i].dot(&state.wy[j])
+                                    );
+                                } else {
+                                    assert_eq!(state.sy[i * m + j], F::zero());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn history_products_match_ordered_dots_f64() {
+        check_history_products(&[1e-140_f64, 1.0, 1e140]);
+    }
+
+    #[test]
+    fn history_products_match_ordered_dots_f32() {
+        check_history_products(&[1e-15_f32, 1.0, 1e15]);
+    }
+
+    #[test]
+    fn invalid_pair_preserves_existing_history() {
+        let mut state = LbfgsState::new(vec![0.0; 2], 2);
+        assert!(state.append_pair(vec![1.0, 2.0], vec![3.0, 4.0]));
+        assert!(state.append_pair(vec![2.0, -1.0], vec![4.0, -3.0]));
+        let before = (
+            state.ws.clone(),
+            state.wy.clone(),
+            state.sy.clone(),
+            state.ss.clone(),
+            state.theta,
+        );
+        for (s, y) in [
+            (vec![0.0, -0.0], vec![1.0, 1.0]),
+            (vec![1.0, 2.0], vec![-1.0, -2.0]),
+            (vec![f64::NAN, 1.0], vec![1.0, 1.0]),
+            (vec![1.0, 1.0], vec![f64::INFINITY, 1.0]),
+            (vec![1e-200, 0.0], vec![1e200, 0.0]),
+        ] {
+            assert!(!state.append_pair(s, y));
+            assert_eq!(state.ws, before.0);
+            assert_eq!(state.wy, before.1);
+            assert_eq!(state.sy, before.2);
+            assert_eq!(state.ss, before.3);
+            assert_eq!(state.theta, before.4);
+        }
+    }
+
     #[test]
     fn history_product_work_stays_bounded_through_rollover() {
         use std::{cell::Cell, rc::Rc};
@@ -406,6 +501,11 @@ mod tests {
             fn dot(&self, other: &Self) -> f64 {
                 self.calls.set(self.calls.get() + 1);
                 self.values.dot(&other.values)
+            }
+        }
+        impl AsFloatSlice for Counted {
+            fn as_float_slice(&self) -> &[f64] {
+                &self.values
             }
         }
 
@@ -424,7 +524,7 @@ mod tests {
                 assert!(state.append_pair(s, y));
                 let col = state.col();
                 assert!(
-                    calls.get() <= 2 * col + 1,
+                    calls.get() <= 3,
                     "unneeded history products: {} for {col} columns",
                     calls.get()
                 );

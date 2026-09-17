@@ -26,7 +26,7 @@
 //! [`penalty`](CmaEsState): an `Option<BoundPenalty>` that is `None`
 //! for plain [`CmaEs`](crate::solver::CmaEs) and installed by
 //! [`BoundedCmaEs`](crate::solver::BoundedCmaEs)'s `init`. This mirrors
-//! [`LbfgsState`](crate::LbfgsState)'s `work: Option<LbfgsbWork>` field,
+//! [`LbfgsState`](crate::LbfgsState)'s optional `work` field,
 //! where one state serves both the bounded and unbounded solver.
 
 use std::collections::VecDeque;

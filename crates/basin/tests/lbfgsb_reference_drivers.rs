@@ -73,27 +73,33 @@ fn reference_driver_allocations_stay_bounded() {
     }
 }
 
-#[cfg(feature = "faer_all")]
-#[test]
-fn faer_reference_drivers_match_vec_work_and_results() {
+#[cfg(any(
+    feature = "faer_all",
+    feature = "nalgebra_all",
+    feature = "ndarray_all"
+))]
+fn check_backend<V: support::Vector>()
+where
+    basin::Lbfgsb: for<'a> basin::Solver<
+            &'a support::Driver<V>,
+            basin::LbfgsState<V>,
+            Error = std::convert::Infallible,
+        >,
+{
     use basin::GradientState;
-    use support::Vector;
     for number in 1..=3 {
         let mut vec = support::Driver::new(number);
-        let mut faer =
-            support::Driver::<backend_aliases::faer::Col<f64>>::with_backend(
-                number,
-            );
+        let mut backend = support::Driver::<V>::with_backend(number);
         vec.check_feasibility = true;
-        faer.check_feasibility = true;
+        backend.check_feasibility = true;
         let vec_result = vec.solve();
-        let faer_result = faer.solve();
+        let backend_result = backend.solve();
         vec.verify(&vec_result);
-        faer.verify(&faer_result);
+        backend.verify(&backend_result);
         for (&a, &b) in vec_result
             .param()
             .iter()
-            .zip(faer_result.param().as_slice())
+            .zip(backend_result.param().as_slice())
         {
             assert!((a - b).abs() <= 1e-12 * (1.0 + a.abs()));
         }
@@ -102,9 +108,27 @@ fn faer_reference_drivers_match_vec_work_and_results() {
             .gradient()
             .unwrap()
             .iter()
-            .zip(faer_result.state.gradient().unwrap().as_slice())
+            .zip(backend_result.state.gradient().unwrap().as_slice())
         {
             assert!((a - b).abs() <= 1e-12 * (1.0 + a.abs()));
         }
     }
+}
+
+#[cfg(feature = "faer_all")]
+#[test]
+fn faer_reference_drivers_match_vec_work_and_results() {
+    check_backend::<backend_aliases::faer::Col<f64>>();
+}
+
+#[cfg(feature = "nalgebra_all")]
+#[test]
+fn nalgebra_reference_drivers_match_vec_work_and_results() {
+    check_backend::<backend_aliases::nalgebra::DVector<f64>>();
+}
+
+#[cfg(feature = "ndarray_all")]
+#[test]
+fn ndarray_reference_drivers_match_vec_work_and_results() {
+    check_backend::<backend_aliases::ndarray::Array1<f64>>();
 }
