@@ -13,12 +13,11 @@
 //! `x_c` (the GCP) is what subspace minimization (`subsm`) then
 //! refines.
 //!
-//! All array arguments are `&[F]`/`&mut [F]` for `F: Scalar`; the
-//! surrounding solver supplies them by viewing the active backend's
-//! storage as a slice (nalgebra `DVector::as_slice`, faer
-//! `Col::try_as_col_major().unwrap().as_slice()`, or plain
-//! `Vec::as_slice()`).
+//! Working arrays are scalar slices for `F: Scalar`. History columns
+//! are borrowed from the active backend through [`AsFloatSlice`], so
+//! the surrounding solver need not allocate temporary column views.
 
+use super::backend::AsFloatSlice;
 use super::compact::{BmvError, bmv};
 use crate::core::math::Scalar;
 
@@ -76,13 +75,13 @@ impl From<BmvError> for CauchyError {
 /// convention); the Fortran `nbd(i)` code is recovered per-component
 /// from `l[i].is_finite() / u[i].is_finite()`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn cauchy<F: Scalar>(
+pub(crate) fn cauchy<F: Scalar, V: AsFloatSlice<F>>(
     x: &[F],
     l: &[F],
     u: &[F],
     g: &[F],
-    ws_cols: &[&[F]],
-    wy_cols: &[&[F]],
+    ws_cols: &[V],
+    wy_cols: &[V],
     sy: &[F],
     wt: &[F],
     m: usize,
@@ -132,11 +131,6 @@ pub(crate) fn cauchy<F: Scalar>(
     let mut bkmin: F = zero;
     let mut f1: F = zero;
 
-    // Zero the leading 2*col of p_buf (Fortran loop 20).
-    for slot in p_buf.iter_mut().take(col2) {
-        *slot = zero;
-    }
-
     // Per-variable classify / direction / breakpoint (Fortran loop 50).
     for i in 0..n {
         let neggi = -g[i];
@@ -167,11 +161,6 @@ pub(crate) fn cauchy<F: Scalar>(
         } else {
             d[i] = neggi;
             f1 = f1 - neggi * neggi;
-            // p ← p − Wᵀ eᵢ · gᵢ.
-            for j in 0..col {
-                p_buf[j] = p_buf[j] + wy_cols[j][i] * neggi;
-                p_buf[col + j] = p_buf[col + j] + ws_cols[j][i] * neggi;
-            }
             let lower_finite = l[i].is_finite();
             let upper_finite = u[i].is_finite();
             if lower_finite && neggi < zero {
@@ -202,6 +191,26 @@ pub(crate) fn cauchy<F: Scalar>(
                 }
             }
         }
+    }
+
+    // Traverse contiguous history columns, keeping each dot product in
+    // variable order. Skip active coordinates rather than multiplying by
+    // zero, which would propagate non-finite entries from unused rows.
+    for j in 0..col {
+        let wy = wy_cols[j].as_float_slice();
+        let ws = ws_cols[j].as_float_slice();
+        let mut yp = zero;
+        let mut sp = zero;
+        for i in 0..n {
+            if iwhere[i] == iwhere::FREE_MOVED
+                || iwhere[i] == iwhere::ALWAYS_FREE
+            {
+                yp = yp + wy[i] * d[i];
+                sp = sp + ws[i] * d[i];
+            }
+        }
+        p_buf[j] = yp;
+        p_buf[col + j] = sp;
     }
 
     // θ-scale the second half of p (`lbfgsb.f:1514`).
@@ -316,8 +325,8 @@ pub(crate) fn cauchy<F: Scalar>(
             }
             // wbp = row of W at variable `ibp`.
             for j in 0..col {
-                wbp_buf[j] = wy_cols[j][ibp];
-                wbp_buf[col + j] = theta * ws_cols[j][ibp];
+                wbp_buf[j] = wy_cols[j].as_float_slice()[ibp];
+                wbp_buf[col + j] = theta * ws_cols[j].as_float_slice()[ibp];
             }
             // v = M · wbp.
             bmv(sy, wt, col, m, wbp_buf, v_buf)?;
@@ -825,6 +834,85 @@ mod tests {
         assert!((b.xcp[0] - 1.0).abs() < 1e-12);
         assert_eq!(b.iwhere[0], iwhere::AT_UPPER);
         assert_eq!(res.nseg, 1);
+    }
+
+    #[test]
+    fn multiple_columns_exclude_active_coordinates() {
+        // With y = 2s for each pair, the compact Hessian stays 2I.
+        // The projected ray therefore stops at x - g/2 on free coordinates.
+        let x = [0.0, 0.5, 1.0, 0.0, 0.0, 0.0];
+        let l = [
+            0.0,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+            0.0,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        let u = [
+            f64::INFINITY,
+            f64::INFINITY,
+            1.0,
+            0.0,
+            f64::INFINITY,
+            f64::INFINITY,
+        ];
+        let g = [3.0, 2.0, -4.0, 9.0, 0.0, -1.0];
+        let mut state = crate::LbfgsState::new(x.to_vec(), 2);
+        for s in [
+            vec![1.0, 0.0, 0.0, 2.0, 1.0, 1.0],
+            vec![0.0, 2.0, 1.0, 0.0, 0.0, 1.0],
+        ] {
+            let y = s.iter().map(|v| 2.0 * v).collect();
+            assert!(state.append_pair(s, y));
+        }
+        let mut wt = vec![0.0; 4];
+        super::super::compact::formt(2.0, &state.sy, &state.ss, 2, 2, &mut wt)
+            .unwrap();
+        let ws: Vec<_> = state.ws.iter().map(Vec::as_slice).collect();
+        let wy: Vec<_> = state.wy.iter().map(Vec::as_slice).collect();
+        let mut b = Buffers::new(6, 2);
+        b.iwhere = vec![
+            iwhere::FREE_MOVED,
+            iwhere::ALWAYS_FREE,
+            iwhere::FREE_MOVED,
+            iwhere::ALWAYS_FIXED,
+            iwhere::ALWAYS_FREE,
+            iwhere::ALWAYS_FREE,
+        ];
+        let result = cauchy(
+            &x,
+            &l,
+            &u,
+            &g,
+            &ws,
+            &wy,
+            &state.sy,
+            &wt,
+            2,
+            2.0,
+            2.0,
+            &mut b.xcp,
+            &mut b.d,
+            &mut b.t,
+            &mut b.iwhere,
+            &mut b.iorder,
+            &mut b.p,
+            &mut b.c,
+            &mut b.wbp,
+            &mut b.v,
+        )
+        .unwrap();
+        assert_eq!(result.nseg, 1);
+        assert_eq!(b.p, [2.0, -6.0, 2.0, -6.0]);
+        for (actual, expected) in
+            b.xcp.iter().zip([0.0, -0.5, 1.0, 0.0, 0.0, 0.5])
+        {
+            assert!((actual - expected).abs() < 1e-14);
+        }
+        assert_eq!(b.iwhere[0], iwhere::AT_LOWER);
+        assert_eq!(b.iwhere[2], iwhere::AT_UPPER);
+        assert_eq!(b.iwhere[3], iwhere::ALWAYS_FIXED);
     }
 
     #[test]

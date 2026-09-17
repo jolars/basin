@@ -180,6 +180,10 @@ name = "rosenbrock"
 harness = false
 
 [[bench]]
+name = "lbfgsb"
+harness = false
+
+[[bench]]
 name = "lm_backends"
 harness = false
 required-features = ["nalgebra_all", "faer_all", "problems"]

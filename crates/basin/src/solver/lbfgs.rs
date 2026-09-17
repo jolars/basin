@@ -468,17 +468,13 @@ where
             if !cnstnd && col > 0 {
                 work.z.copy_from_slice(state.param.as_float_slice());
             } else {
-                let ws_cols: Vec<&[F]> =
-                    state.ws.iter().map(|v| v.as_float_slice()).collect();
-                let wy_cols: Vec<&[F]> =
-                    state.wy.iter().map(|v| v.as_float_slice()).collect();
                 let cauchy_res = cauchy(
                     state.param.as_float_slice(),
                     problem.inner().lower().as_float_slice(),
                     problem.inner().upper().as_float_slice(),
                     g_v.as_float_slice(),
-                    &ws_cols,
-                    &wy_cols,
+                    &state.ws,
+                    &state.wy,
                     &state.sy,
                     &work.wt,
                     m,
@@ -523,20 +519,16 @@ where
 
             // Minimize over the free-variable subspace.
             if nfree > 0 && col > 0 {
-                if wrk {
-                    let ws_cols: Vec<&[F]> =
-                        state.ws.iter().map(|v| v.as_float_slice()).collect();
-                    let wy_cols: Vec<&[F]> =
-                        state.wy.iter().map(|v| v.as_float_slice()).collect();
-                    if formk(
+                if wrk
+                    && formk(
                         &mut work.wn,
                         &mut work.wn1,
                         m,
                         col,
                         theta,
                         &state.sy,
-                        &ws_cols,
-                        &wy_cols,
+                        &state.ws,
+                        &state.wy,
                         nfree,
                         &work.index,
                         nenter,
@@ -546,20 +538,15 @@ where
                         updatd,
                     )
                     .is_err()
+                {
+                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
                     {
-                        if try_restart(
-                            &mut state,
-                            &g_v,
-                            f_old,
-                            &mut restart_budget,
-                        ) {
-                            continue;
-                        } else {
-                            return Ok((
-                                state,
-                                Some(TerminationReason::SolverFailed),
-                            ));
-                        }
+                        continue;
+                    } else {
+                        return Ok((
+                            state,
+                            Some(TerminationReason::SolverFailed),
+                        ));
                     }
                 }
 
@@ -597,10 +584,6 @@ where
                 }
 
                 // subsm: writes the subspace minimizer into `z`.
-                let ws_cols: Vec<&[F]> =
-                    state.ws.iter().map(|v| v.as_float_slice()).collect();
-                let wy_cols: Vec<&[F]> =
-                    state.wy.iter().map(|v| v.as_float_slice()).collect();
                 let subsm_res = subsm(
                     &mut work.z,
                     &mut work.r,
@@ -610,8 +593,8 @@ where
                     &work.index[0..nfree],
                     problem.inner().lower().as_float_slice(),
                     problem.inner().upper().as_float_slice(),
-                    &ws_cols,
-                    &wy_cols,
+                    &state.ws,
+                    &state.wy,
                     &work.wn,
                     &mut work.wa_v,
                     m,
@@ -764,13 +747,14 @@ where
             let ddum = -work.gdold * stp;
 
             if dr > self.epsilon * ddum.abs() {
-                // Accept the (s, y) pair. Build s, y as V then push.
-                let mut s_v = state.param.clone();
+                // The line search has finished with the direction and old
+                // gradient, so their storage can become the new history pair.
+                let mut s_v = d_v;
                 let s_slice = s_v.as_float_slice_mut();
                 for i in 0..n {
                     s_slice[i] = stp * work.d[i];
                 }
-                let mut y_v = g_new.clone();
+                let mut y_v = g_v;
                 let y_slice = y_v.as_float_slice_mut();
                 for i in 0..n {
                     y_slice[i] = g_new_slice[i] - g_old_slice[i];

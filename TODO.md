@@ -15,19 +15,21 @@ numerical work against analytic cases and reference implementations.
 - [x] **Implement SLSQP.** Add a dense, pure-Rust solver for smooth objectives
   with box bounds, nonlinear equalities, and nonlinear inequalities. Add
   compatible problem-side interfaces for nonlinear equalities and constraint
-  Jacobians, with analytic derivatives and finite-difference adapters. Preserve
-  the default WASM build and validate every supported backend against analytic
-  cases and SciPy/NLopt reference results, including feasibility, stationarity,
-  rank-deficient constraints, and failure handling.
+  Jacobians, with analytic derivatives and finite-difference adapters.
+  Preserve the default WASM build and validate every supported backend
+  against analytic cases and SciPy/NLopt reference results, including
+  feasibility, stationarity, rank-deficient constraints, and failure
+  handling.
 - [x] **Make finite differences respect box bounds.** Add an opt-in path that
   adjusts probe directions and step sizes near bounds, including fixed
   coordinates and narrow intervals. Forwarding bounds alone does not keep
   the current probes feasible. Cover gradients and Jacobians first, with
   tests for objectives defined only inside their bounds.
-- [x] **Add gradient and Jacobian checkers.** Compare analytic derivatives
-  with finite differences using scale-aware error reports and optional
+- [x] **Add gradient and Jacobian checkers.** Compare analytic derivatives with
+  finite differences using scale-aware error reports and optional
   directional checks. Reuse the bound-aware probe machinery when bounds are
-  supplied, and distinguish non-finite evaluations from derivative mismatches.
+  supplied, and distinguish non-finite evaluations from derivative
+  mismatches.
 - [ ] **Add robust nonlinear least squares.** Support Huber, soft-L1, Cauchy,
   and arctangent losses with a residual scale. Keep the reported objective,
   gradient, local model, and convergence tests consistent with the chosen
@@ -35,13 +37,13 @@ numerical work against analytic cases and reference implementations.
   API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html).
 - [x] **Add full trust-region-reflective least squares.** Added
   `TrustRegionReflective` with Coleman-Li scaling, an explicit radius,
-  reflected-step selection, a rank-aware dense SVD solve, and fixed-coordinate
-  elimination. All four dense backends support `f32` and `f64`; active bounds
-  and rank deficiency are covered by analytic and SciPy 1.16.2 comparisons.
-  `Trf` retains its existing bounded-LM behavior through Basin 1.x. The
-  large-scale path remains a follow-up below.
-- [ ] **Implement nonlinear conjugate gradient.** Add a low-memory
-  first-order solver using the existing line-search interfaces. Choose a
+  reflected-step selection, a rank-aware dense SVD solve, and
+  fixed-coordinate elimination. All four dense backends support `f32` and
+  `f64`; active bounds and rank deficiency are covered by analytic and SciPy
+  1.16.2 comparisons. `Trf` retains its existing bounded-LM behavior through
+  Basin 1.x. The large-scale path remains a follow-up below.
+- [ ] **Implement nonlinear conjugate gradient.** Add a low-memory first-order
+  solver using the existing line-search interfaces. Choose a
   research-grounded update and restart policy, and test descent safeguards
   and ill-conditioned problems. Distinguish this from the linear CG used
   inside Steihaug's trust-region subproblem solver.
@@ -53,8 +55,8 @@ numerical work against analytic cases and reference implementations.
 
 ### Follow-up candidates
 
-- [ ] **Add iterative sparse least squares and Jacobian coloring.** Extend
-  the full TRF work with Jacobian and transpose-Jacobian products, an LSMR
+- [ ] **Add iterative sparse least squares and Jacobian coloring.** Extend the
+  full TRF work with Jacobian and transpose-Jacobian products, an LSMR
   solve, and the two-dimensional subspace method. Add sparsity-pattern-based
   finite-difference coloring to reduce residual evaluations. Existing sparse
   storage and direct solves do not provide this large-scale algorithm.
@@ -70,8 +72,8 @@ numerical work against analytic cases and reference implementations.
   factorizations and test rank deficiency, active bounds, and optimality
   against analytic solutions and [SciPy bounded linear least
   squares](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.lsq_linear.html).
-- [ ] **Add curve-fitting helpers.** Provide residual construction, weighting
-  or whitening, and optional local covariance estimates around existing
+- [ ] **Add curve-fitting helpers.** Provide residual construction, weighting or
+  whitening, and optional local covariance estimates around existing
   least-squares solvers. Document the approximation and behavior under rank
   deficiency, active bounds, and robust losses. Use [SciPy
   curve_fit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html)
@@ -79,13 +81,14 @@ numerical work against analytic cases and reference implementations.
 - [x] **Expand scalar roots and bracketing.** Added automatic root and minimum
   bracketing, safeguarded secant, Newton, and Halley methods, and TOMS 748
   (`k = 2`). Root solvers retain direct fallible callbacks, signed function
-  values, and bracket-based convergence. Bracketing is an explicit first stage.
+  values, and bracket-based convergence. Bracketing is an explicit first
+  stage.
 - [ ] **Add batched independent scalar solves when a consumer needs them.**
   Build on the direct scalar root and bracketing APIs, preserving separate
   root and minimization convergence semantics. See [elementwise
   optimization](https://docs.scipy.org/doc/scipy/reference/optimize.elementwise.html).
-- [ ] **Add multivariate root solving when an integration needs it.** Start
-  with a safeguarded Newton/hybrid method or Broyden, then assess Anderson
+- [ ] **Add multivariate root solving when an integration needs it.** Start with
+  a safeguarded Newton/hybrid method or Broyden, then assess Anderson
   acceleration and Newton-Krylov. Require residual-based root validation:
   convergence of a least-squares objective can leave a nonzero residual.
   Promote this work if a downstream consumer needs it, including access to
@@ -108,8 +111,8 @@ numerical work against analytic cases and reference implementations.
   is distinct from NEWUOA and BOBYQA; GLTR is distinct from Steihaug CG.
   Compare against [SciPy's local
   methods](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html).
-- [ ] **Evaluate dogbox after strengthening TRF.** Add rectangular
-  trust-region least squares if small bounded fitting problems benefit.
+- [ ] **Evaluate dogbox after strengthening TRF.** Add rectangular trust-region
+  least squares if small bounded fitting problems benefit.
 - [ ] **Assess complex-step differentiation.** Design an opt-in callback and
   scalar interface for complex perturbations without broadening every real
   solver's requirements. Document the analyticity requirement and operations
@@ -125,11 +128,11 @@ numerical work against analytic cases and reference implementations.
 ### Outreach
 
 - [ ] **Contact EGObox about switching to Basin.** SLSQP is implemented and
-  validated, so outreach is ready. Revisit consolidation of `argmin`, `cobyla`,
-  `slsqp`, and optional `nlopt`, accounting for EGObox's public argmin
-  integration. Ask the [maintainer](https://github.com/relf/EGObox) whether they
-  would consider a switch and offer a PR with numerical and performance
-  comparisons on EGObox workloads.
+  validated, so outreach is ready. Revisit consolidation of `argmin`,
+  `cobyla`, `slsqp`, and optional `nlopt`, accounting for EGObox's public
+  argmin integration. Ask the [maintainer](https://github.com/relf/EGObox)
+  whether they would consider a switch and offer a PR with numerical and
+  performance comparisons on EGObox workloads.
 
 ## General design
 
@@ -221,57 +224,92 @@ desired backend features.
 
 ### Ariadne L-BFGS-B comparison (2026-09-17)
 
-- [ ] **Reduce L-BFGS-B implementation overhead against ariadne-lbfgsb.**
-  The Ariadne migration from argmin/ariadne-lbfgsb to Basin 1.12.0 exposed a
-  slowdown on the L-BFGS-B 3.0 reference problems. The comparison calls Basin
-  directly, without Theseus's FDM adapter. Both implementations pass the
-  reference checks and take the same accepted iterations and objective/gradient
-  evaluations. This is a performance finding, not an observed correctness
-  failure or a regression against an earlier Basin release.
+- [ ] **Reduce L-BFGS-B implementation overhead against ariadne-lbfgsb.** The
+  Ariadne migration from argmin/ariadne-lbfgsb to Basin 1.12.0 exposed a
+  slowdown on the L-BFGS-B 3.0 reference problems. The comparison calls
+  Basin directly, without Theseus's FDM adapter. Both implementations pass
+  the reference checks and take the same accepted iterations and
+  objective/gradient evaluations. This is a performance finding, not an
+  observed correctness failure or a regression against an earlier Basin
+  release.
 
-  A follow-up probe compares the published Basin 1.12.0 `Vec<f64>` backend
-  with ariadne-lbfgsb 0.1.0 at Ariadne commit
+  A follow-up probe compares the published Basin 1.12.0 `Vec<f64>` backend with
+  ariadne-lbfgsb 0.1.0 at Ariadne commit
   `c8e957cfe58648f07ce4222e4f6e925563d834b2`. Median microseconds per fresh
   solve on an Intel Core Ultra 7 155U, pinned to CPU 2, with Rust 1.98.1,
   release LTO, one Rayon thread, and 15 interleaved timing rounds:
 
-  | Case | Old solver, faer | Old solver, scalar | Basin, original hook | Basin, direct loop |
-  | --- | ---: | ---: | ---: | ---: |
-  | Driver 1, 25 variables | 40.00 | 39.75 | 51.51 | 49.58 |
-  | Driver 2, 25 variables | 84.51 | 83.40 | 107.52 | 103.50 |
-  | Driver 3, 1,000 variables | 2,947.94 | 3,332.94 | 4,465.32 | 4,311.75 |
+  | Case                      | Old solver, faer | Old solver, scalar | Basin, original hook | Basin, direct loop |
+  | ------------------------- | ---------------: | -----------------: | -------------------: | -----------------: |
+  | Driver 1, 25 variables    |            40.00 |              39.75 |                51.51 |              49.58 |
+  | Driver 2, 25 variables    |            84.51 |              83.40 |               107.52 |             103.50 |
+  | Driver 3, 1,000 variables |         2,947.94 |           3,332.94 |             4,465.32 |           4,311.75 |
 
   The direct loop initializes the production solver and preserves count,
   iteration, and best-state bookkeeping, but runs exactly the accepted steps
   from the original solve. It is a diagnostic control, not a replacement
-  stopping policy. All variants match final parameters within tolerance and
-  use 23/28, 46/53, and 49/58 iterations/evaluations, respectively. Removing
-  the custom stopping hook accounts for about 2-3% on these drivers; bypassing
-  the executor saves little more. The faer backend explains part of the
-  large-case advantage, but Basin remains about 29% slower than the scalar
-  reference even with the direct loop.
+  stopping policy. All variants match final parameters within tolerance and use
+  23/28, 46/53, and 49/58 iterations/evaluations, respectively. Removing the
+  custom stopping hook accounts for about 2-3% on these drivers; bypassing the
+  executor saves little more. The faer backend explains part of the large-case
+  advantage, but Basin remains about 29% slower than the scalar reference even
+  with the direct loop.
 
-  Separate allocation instrumentation counted 328 versus 27 requests on
-  Driver 1 and 674 versus 27 on Driver 3 (Basin/original hook versus reference).
-  Driver 3 requested 3,028,928 versus 314,440 bytes cumulatively; these are not
+  Separate allocation instrumentation counted 328 versus 27 requests on Driver 1
+  and 674 versus 27 on Driver 3 (Basin/original hook versus reference). Driver 3
+  requested 3,028,928 versus 314,440 bytes cumulatively; these are not
   peak-memory figures. The direct loop still makes 670 requests. Sampling
   attributes about 96% of Basin's Driver 3 cycles to `Lbfgs::next_iter`
-  inclusive and 3% to the stopping hook. Allocation counts alone do not
-  explain the whole gap: allocator self-time is small on Driver 3.
+  inclusive and 3% to the stopping hook. Allocation counts alone do not explain
+  the whole gap: allocator self-time is small on Driver 3.
 
-  Follow up on compact-history products and the Cauchy/subspace kernels,
-  then repeated history-view allocations, temporary parameter/gradient
-  vectors, and best-state copies. Preserve the numerical safeguards,
-  accepted work, public state contracts, and WASM/backend support. Measure
-  changes on both small and large reference cases before claiming a speedup.
+  Follow up on compact-history products and the Cauchy/subspace kernels, then
+  repeated history-view allocations, temporary parameter/gradient vectors, and
+  best-state copies. Preserve the numerical safeguards, accepted work, public
+  state contracts, and WASM/backend support. Measure changes on both small and
+  large reference cases before claiming a speedup.
 
-  Local artifacts: [diagnostic report and commands](target/ariadne-lbfgsb-investigation/REPORT.md),
-  [probe source](target/ariadne-lbfgsb-investigation/src/main.rs), and
-  [raw timing samples](target/ariadne-lbfgsb-investigation/timing.log).
-  The isolated probe and profiles are ignored local artifacts. The reusable
-  reference harness and original end-to-end results are on Ariadne's
-  `feat/basin-optimization` branch in
-  [its benchmark report](../Ariadne/crates/theseus/BENCHMARKS.md).
+  Local artifacts: [diagnostic report and
+  commands](target/ariadne-lbfgsb-investigation/REPORT.md), [probe
+  source](target/ariadne-lbfgsb-investigation/src/main.rs), and [raw timing
+  samples](target/ariadne-lbfgsb-investigation/timing.log). The isolated probe
+  and profiles are ignored local artifacts. The reusable reference harness and
+  original end-to-end results are on Ariadne's `feat/basin-optimization` branch
+  in [its benchmark report](../Ariadne/crates/theseus/BENCHMARKS.md).
+
+  Follow-up (2026-09-17): the current implementation traverses Cauchy history
+  columns contiguously, omits unused upper-triangle `SᵀY` products, borrows
+  history columns directly, and reuses the finished line-search direction, old
+  gradient, and incumbent storage. All five reference cases retain their
+  objectives, projected gradients, accepted iterations, and evaluation counts.
+  Deterministic tests guard history-product work and allocation ceilings;
+  `cargo bench -p basin --bench lbfgsb` now exercises the three main reference
+  drivers.
+
+  With Rust 1.89.0, the same CPU and release settings, and 21 rounds of
+  alternating prebuilt binaries, paired before/after speedups were 1.108x,
+  1.106x, and 1.234x for Drivers 1/2/3 (bootstrap 95% intervals: 1.097-1.130x,
+  1.100-1.120x, and 1.231-1.239x). Background system activity caused drift,
+  especially on the small audit case. These estimates compare paired Rust
+  1.89.0 builds. Driver 3 allocation requests fell from
+  674 to 239, and cumulative requested bytes from 3,028,928 to 1,811,168. It
+  remains about 11% slower than Ariadne's scalar kernels and 24% slower than
+  Ariadne's faer kernels, so the comparison stays open. Both Ariadne modes
+  use `Vec<f64>` storage; Basin's own faer backend has not been timed in this
+  comparison. See the [follow-up
+  report](target/lbfgsb-optimization/REPORT.md), [paired
+  samples](target/lbfgsb-optimization/comparison-after.json), and [reproduction
+  script](target/lbfgsb-optimization/compare.py).
+
+  Next, benchmark Basin's `Vec<f64>` and faer backends on the same reference
+  cases, checking numerical results and evaluation counts before timing.
+  Then benchmark the Gram updates, `formk`, and `subsm` on identical history
+  vectors and free-variable indices to identify opportunities in dot-product
+  reductions, batched products, and indexed accesses. Evaluate flat history
+  storage if it enables a measured kernel improvement; each current history
+  column is already contiguous. Preserve the existing safeguards and verify
+  any changes in floating-point accumulation order against the reference
+  trajectories, ill-conditioned cases, and all supported backends.
 
 ### globalsearch comparison (2026-09-14)
 
@@ -304,17 +342,19 @@ include adapter overhead and use inexpensive analytic derivatives.
   cap.
 - [x] **Measure Steihaug with expensive derivatives.** Reproduced the evaluation
   gap. Added Hessian work reverses the timing advantage at about 0.5 µs/call
-  in 2D Rosenbrock and 1.5 µs/call in 20D, on shared successful starts; equal
-  work in both derivative callbacks roughly halves those thresholds.
+  in 2D Rosenbrock and 1.5 µs/call in 20D, on shared successful starts;
+  equal work in both derivative callbacks roughly halves those thresholds.
 - [x] **Investigate gradient descent's extra evaluations on sphere.** Reproduced
   6 objective / 5 gradient calls versus argmin's 3 / 2. One extra pair is an
   accepted-point reevaluation; the remaining two arise from Basin's
   reference-compatible 0.4995 step versus argmin's 0.5. Both initialize at 1.
-  Verified against the original Fortran line search and 72 deterministic starts.
-- [x] **Reuse gradient descent's accepted line-search evaluation.** Plain descent
-  adopts retained values through `next_with_evaluation`, reducing the sphere
-  run to 5 objective / 4 gradient calls without changing trial points. Searches
-  without retained values and momentum steps still evaluate the actual iterate.
+  Verified against the original Fortran line search and 72 deterministic
+  starts.
+- [x] **Reuse gradient descent's accepted line-search evaluation.** Plain
+  descent adopts retained values through `next_with_evaluation`, reducing
+  the sphere run to 5 objective / 4 gradient calls without changing trial
+  points. Searches without retained values and momentum steps still evaluate
+  the actual iterate.
 
 Local artifacts: [report and
 methodology](../globalsearch-rs/target/backend-comparison/REPORT.md),
@@ -394,6 +434,6 @@ live in globalsearch's ignored `target/` directory.
 - [ ] **Design nonlinear equality constraints when a solver needs their
   structure (tenet 4).** Coordinate with the [SLSQP
   task](#priority-additions), which supplies that consumer. Existing
-  derivative-free paths can represent `g(x) = 0` as the pair `g(x) ≤ 0`
-  and `−g(x) ≤ 0`; the native interface must validate equality-specific
+  derivative-free paths can represent `g(x) = 0` as the pair `g(x) ≤ 0` and
+  `−g(x) ≤ 0`; the native interface must validate equality-specific
   operations and semantics with SLSQP.

@@ -36,6 +36,7 @@
 //! falling back to a uniform-α bound-backtracking step
 //! (`lbfgsb.f:3273-3329`, the v3.0 deviation from Algorithm 778).
 
+use super::backend::AsFloatSlice;
 use super::compact::{solve_upper_tri, solve_upper_tri_transposed};
 use crate::core::math::Scalar;
 
@@ -90,7 +91,7 @@ pub(crate) enum SubsmError {
 /// - `m`, `col`, `theta`: compact-form parameters matching the data
 ///   stored in `wn`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn subsm<F: Scalar>(
+pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
     x: &mut [F],
     d: &mut [F],
     xp: &mut [F],
@@ -99,8 +100,8 @@ pub(crate) fn subsm<F: Scalar>(
     ind: &[usize],
     l: &[F],
     u: &[F],
-    ws_cols: &[&[F]],
-    wy_cols: &[&[F]],
+    ws_cols: &[V],
+    wy_cols: &[V],
     wn: &[F],
     wv: &mut [F],
     m: usize,
@@ -133,12 +134,14 @@ pub(crate) fn subsm<F: Scalar>(
     //   wv[i]       = Σ_j wy[k, i] · d[j]            k = ind[j]
     //   wv[col + i] = θ · Σ_j ws[k, i] · d[j]
     for i in 0..col {
+        let wy = wy_cols[i].as_float_slice();
+        let ws = ws_cols[i].as_float_slice();
         let mut temp1 = zero;
         let mut temp2 = zero;
         for j in 0..nsub {
             let k = ind[j];
-            temp1 = temp1 + wy_cols[i][k] * d[j];
-            temp2 = temp2 + ws_cols[i][k] * d[j];
+            temp1 = temp1 + wy[k] * d[j];
+            temp2 = temp2 + ws[k] * d[j];
         }
         wv[i] = temp1;
         wv[col + i] = theta * temp2;
@@ -167,12 +170,12 @@ pub(crate) fn subsm<F: Scalar>(
     //   Increment: d[i] += wy[k, jy] · wv[jy] / θ + ws[k, jy] · wv[col + jy].
     //   Then d ← d / θ to absorb the remaining 1/θ.
     for jy in 0..col {
+        let wy = wy_cols[jy].as_float_slice();
+        let ws = ws_cols[jy].as_float_slice();
         let js = col + jy;
         for i in 0..nsub {
             let k = ind[i];
-            d[i] = d[i]
-                + wy_cols[jy][k] * wv[jy] / theta
-                + ws_cols[jy][k] * wv[js];
+            d[i] = d[i] + wy[k] * wv[jy] / theta + ws[k] * wv[js];
         }
     }
     for slot in d.iter_mut().take(nsub) {

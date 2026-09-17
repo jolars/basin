@@ -35,8 +35,8 @@ pub struct LbfgsState<V, F = f64> {
     pub(crate) ws: Vec<V>,
     /// `y_k = g_{k+1} − g_k`, same length and order as `ws`.
     pub(crate) wy: Vec<V>,
-    /// `SᵀY` as row-major `m_capacity²` storage; only the leading
-    /// `col × col` block (`col = ws.len()`) is live.
+    /// Lower triangle of `SᵀY` as row-major `m_capacity²` storage;
+    /// only the leading `col × col` block (`col = ws.len()`) is live.
     pub(crate) sy: Vec<F>,
     /// `SᵀS`, same row-major layout as `sy`.
     pub(crate) ss: Vec<F>,
@@ -268,16 +268,13 @@ impl<V, F: Scalar> LbfgsState<V, F> {
             }
         }
 
-        // Fill the new last row/column of sy = SᵀY and ss = SᵀS.
-        // `new_idx` is where (s, y) will sit after we push, so the
-        // existing history occupies indices `0..new_idx`.
+        // The compact form uses only the lower triangle of SᵀY, and
+        // the two-loop recursion uses only its diagonal. Computing the
+        // upper triangle would add an unused dot product per history pair.
         let new_idx = self.ws.len();
         for i in 0..new_idx {
-            let s_i_y_new = self.ws[i].dot(&y);
             let s_new_y_i = s.dot(&self.wy[i]);
             let s_i_s_new = self.ws[i].dot(&s);
-            // sy[i, new] = sᵢ · y_new, sy[new, i] = s_new · yᵢ.
-            self.sy[i * m + new_idx] = s_i_y_new;
             self.sy[new_idx * m + i] = s_new_y_i;
             // ss is symmetric.
             self.ss[i * m + new_idx] = s_i_s_new;
@@ -345,7 +342,11 @@ impl<V: Clone, F: Scalar> State for LbfgsState<V, F> {
     fn update_best(&mut self) {
         if let Some(curr) = self.cost {
             if self.best_param.is_none() || curr < self.best_cost {
-                self.best_param = Some(self.param.clone());
+                if let Some(best) = self.best_param.as_mut() {
+                    best.clone_from(&self.param);
+                } else {
+                    self.best_param = Some(self.param.clone());
+                }
                 self.best_cost = curr;
                 self.best_iter = self.iter;
                 self.best_cost_evals = self.cost_evals;
@@ -394,6 +395,60 @@ mod tests {
     use super::*;
 
     #[test]
+    fn history_product_work_stays_bounded_through_rollover() {
+        use std::{cell::Cell, rc::Rc};
+
+        struct Counted {
+            values: Vec<f64>,
+            calls: Rc<Cell<usize>>,
+        }
+        impl Dot for Counted {
+            fn dot(&self, other: &Self) -> f64 {
+                self.calls.set(self.calls.get() + 1);
+                self.values.dot(&other.values)
+            }
+        }
+
+        for m in [1, 3, 10] {
+            let calls = Rc::new(Cell::new(0));
+            let vector = |values| Counted {
+                values,
+                calls: calls.clone(),
+            };
+            let mut state = LbfgsState::new(vector(vec![0.0; 4]), m);
+            for step in 1..=2 * m + 1 {
+                let a = step as f64;
+                let s = vector(vec![a, -1.0, 0.5, 2.0]);
+                let y = vector(vec![2.0 * a, -3.0, 2.0, 1.0]);
+                calls.set(0);
+                assert!(state.append_pair(s, y));
+                let col = state.col();
+                assert!(
+                    calls.get() <= 2 * col + 1,
+                    "unneeded history products: {} for {col} columns",
+                    calls.get()
+                );
+                for i in 0..col {
+                    for j in 0..col {
+                        let expected_ss =
+                            state.ws[i].values.dot(&state.ws[j].values);
+                        assert_eq!(state.ss[i * m + j], expected_ss);
+                        if j <= i {
+                            let expected_sy =
+                                state.ws[i].values.dot(&state.wy[j].values);
+                            assert_eq!(state.sy[i * m + j], expected_sy);
+                        }
+                    }
+                }
+                assert_eq!(
+                    state.theta,
+                    (4.0 * a * a + 14.0) / (2.0 * a * a + 6.0)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn new_state_is_empty() {
         let s = LbfgsState::<Vec<f64>>::new(vec![0.0; 4], 5);
         assert_eq!(s.col(), 0);
@@ -431,10 +486,8 @@ mod tests {
         state.append_pair(s2, y2);
 
         // m = 3, so indexing is i * 3 + j.
-        // sy[0,0] = s1·y1 = 2, sy[0,1] = s1·y2 = 0,
-        // sy[1,0] = s2·y1 = 0, sy[1,1] = s2·y2 = 12.
+        // The lower triangle stores s_i · y_j for i >= j.
         assert_eq!(state.sy[0 * 3 + 0], 2.0);
-        assert_eq!(state.sy[0 * 3 + 1], 0.0);
         assert_eq!(state.sy[1 * 3 + 0], 0.0);
         assert_eq!(state.sy[1 * 3 + 1], 12.0);
 
@@ -471,11 +524,10 @@ mod tests {
         assert_eq!(state.wy[1], y3);
 
         // Gram blocks should reflect the post-eviction history.
-        // sy[0,0] = s2·y2 = 12, sy[0,1] = s2·y3 = 18,
+        // sy[0,0] = s2·y2 = 12,
         // sy[1,0] = s3·y2 = 20, sy[1,1] = s3·y3 = 30.
         let m = 2;
         assert_eq!(state.sy[0 * m + 0], 12.0);
-        assert_eq!(state.sy[0 * m + 1], 18.0);
         assert_eq!(state.sy[1 * m + 0], 20.0);
         assert_eq!(state.sy[1 * m + 1], 30.0);
     }

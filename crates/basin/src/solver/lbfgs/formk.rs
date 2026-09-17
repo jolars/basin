@@ -49,6 +49,7 @@
 //! triangle of `wn` ends up storing the upper-triangular `L^T` factor
 //! used by [`super::subsm`].
 
+use super::backend::AsFloatSlice;
 use crate::core::math::Scalar;
 
 /// Reasons [`formk`] can fail. Matches Fortran's `info ≠ 0` exits.
@@ -89,15 +90,15 @@ pub(crate) enum FormkError {
 ///   for the `> m` shift trigger).
 /// - `updatd`: was history updated since the previous formk call?
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn formk<F: Scalar>(
+pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
     wn: &mut [F],
     wn1: &mut [F],
     m: usize,
     col: usize,
     theta: F,
     sy: &[F],
-    ws_cols: &[&[F]],
-    wy_cols: &[&[F]],
+    ws_cols: &[V],
+    wy_cols: &[V],
     nsub: usize,
     ind: &[usize],
     nenter: usize,
@@ -156,18 +157,22 @@ pub(crate) fn formk<F: Scalar>(
         // column contributes its row of `Y'ZZ'Y`, `S'AA'Y`, `S'AA'S`.
         // `last = col − 1` is the 0-indexed slot of the newest pair.
         let last = col - 1;
+        let wy_last = wy_cols[last].as_float_slice();
+        let ws_last = ws_cols[last].as_float_slice();
         for jy in 0..col {
+            let wy_j = wy_cols[jy].as_float_slice();
+            let ws_j = ws_cols[jy].as_float_slice();
             let mut temp1 = F::zero(); // (Y'ZZ'Y)[last, jy] over free indices
             let mut temp2 = F::zero(); // (S'AA'S)[last, jy] over active indices
             let mut temp3 = F::zero(); // (L_a)[last, jy] over active indices
             for k in 0..nsub {
                 let k1 = ind[k];
-                temp1 = temp1 + wy_cols[last][k1] * wy_cols[jy][k1];
+                temp1 = temp1 + wy_last[k1] * wy_j[k1];
             }
             for k in nsub..n {
                 let k1 = ind[k];
-                temp2 = temp2 + ws_cols[last][k1] * ws_cols[jy][k1];
-                temp3 = temp3 + ws_cols[last][k1] * wy_cols[jy][k1];
+                temp2 = temp2 + ws_last[k1] * ws_j[k1];
+                temp3 = temp3 + ws_last[k1] * wy_j[k1];
             }
             wn1[last * two_m + jy] = temp1;
             wn1[(m + last) * two_m + (m + jy)] = temp2;
@@ -177,10 +182,11 @@ pub(crate) fn formk<F: Scalar>(
         // Last column of (2,1): R_z column for the new pair. Walks the
         // *free* index set with `last` on the `wy` side.
         for i in 0..col {
+            let ws_i = ws_cols[i].as_float_slice();
             let mut temp3 = F::zero();
             for k in 0..nsub {
                 let k1 = ind[k];
-                temp3 = temp3 + ws_cols[i][k1] * wy_cols[last][k1];
+                temp3 = temp3 + ws_i[k1] * wy_last[k1];
             }
             wn1[(m + i) * two_m + last] = temp3;
         }
@@ -194,20 +200,24 @@ pub(crate) fn formk<F: Scalar>(
     // (1,1) and (2,2) symmetric / lower-tri updates.
     // -----------------------------------------------------------------
     for iy in 0..upcl {
+        let wy_i = wy_cols[iy].as_float_slice();
+        let ws_i = ws_cols[iy].as_float_slice();
         for jy in 0..=iy {
+            let wy_j = wy_cols[jy].as_float_slice();
+            let ws_j = ws_cols[jy].as_float_slice();
             let mut temp1 = F::zero();
             let mut temp2 = F::zero();
             let mut temp3 = F::zero();
             let mut temp4 = F::zero();
             for k in 0..nenter {
                 let k1 = indx2[k];
-                temp1 = temp1 + wy_cols[iy][k1] * wy_cols[jy][k1];
-                temp2 = temp2 + ws_cols[iy][k1] * ws_cols[jy][k1];
+                temp1 = temp1 + wy_i[k1] * wy_j[k1];
+                temp2 = temp2 + ws_i[k1] * ws_j[k1];
             }
             for k in ileave..n {
                 let k1 = indx2[k];
-                temp3 = temp3 + wy_cols[iy][k1] * wy_cols[jy][k1];
-                temp4 = temp4 + ws_cols[iy][k1] * ws_cols[jy][k1];
+                temp3 = temp3 + wy_i[k1] * wy_j[k1];
+                temp4 = temp4 + ws_i[k1] * ws_j[k1];
             }
             wn1[iy * two_m + jy] = wn1[iy * two_m + jy] + temp1 - temp3;
             wn1[(m + iy) * two_m + (m + jy)] =
@@ -218,16 +228,18 @@ pub(crate) fn formk<F: Scalar>(
     // (2,1) block update: full rectangle, with sign flip across the
     // (block) diagonal (`is ≤ jy + m` in Fortran ⇔ `iy ≤ jy` here).
     for iy in 0..upcl {
+        let ws_i = ws_cols[iy].as_float_slice();
         for jy in 0..upcl {
+            let wy_j = wy_cols[jy].as_float_slice();
             let mut temp1 = F::zero();
             let mut temp3 = F::zero();
             for k in 0..nenter {
                 let k1 = indx2[k];
-                temp1 = temp1 + ws_cols[iy][k1] * wy_cols[jy][k1];
+                temp1 = temp1 + ws_i[k1] * wy_j[k1];
             }
             for k in ileave..n {
                 let k1 = indx2[k];
-                temp3 = temp3 + ws_cols[iy][k1] * wy_cols[jy][k1];
+                temp3 = temp3 + ws_i[k1] * wy_j[k1];
             }
             let delta = if iy <= jy {
                 temp1 - temp3

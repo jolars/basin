@@ -24,6 +24,12 @@ pub(crate) trait AsFloatSliceMut<F = f64>: AsFloatSlice<F> {
     fn as_float_slice_mut(&mut self) -> &mut [F];
 }
 
+impl<F> AsFloatSlice<F> for &[F] {
+    fn as_float_slice(&self) -> &[F] {
+        self
+    }
+}
+
 impl<F> AsFloatSlice<F> for Vec<F> {
     fn as_float_slice(&self) -> &[F] {
         self.as_slice()
