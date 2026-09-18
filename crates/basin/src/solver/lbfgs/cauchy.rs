@@ -75,6 +75,7 @@ impl From<BmvError> for CauchyError {
 /// convention); the Fortran `nbd(i)` code is recovered per-component
 /// from `l[i].is_finite() / u[i].is_finite()`.
 #[allow(clippy::too_many_arguments)]
+#[inline(never)]
 pub(crate) fn cauchy<F: Scalar, V: AsFloatSlice<F>>(
     x: &[F],
     l: &[F],
@@ -193,25 +194,7 @@ pub(crate) fn cauchy<F: Scalar, V: AsFloatSlice<F>>(
         }
     }
 
-    // Traverse contiguous history columns, keeping each dot product in
-    // variable order. Skip active coordinates rather than multiplying by
-    // zero, which would propagate non-finite entries from unused rows.
-    for j in 0..col {
-        let wy = wy_cols[j].as_float_slice();
-        let ws = ws_cols[j].as_float_slice();
-        let mut yp = zero;
-        let mut sp = zero;
-        for i in 0..n {
-            if iwhere[i] == iwhere::FREE_MOVED
-                || iwhere[i] == iwhere::ALWAYS_FREE
-            {
-                yp = yp + wy[i] * d[i];
-                sp = sp + ws[i] * d[i];
-            }
-        }
-        p_buf[j] = yp;
-        p_buf[col + j] = sp;
-    }
+    project_history(d, iwhere, ws_cols, wy_cols, p_buf);
 
     // θ-scale the second half of p (`lbfgsb.f:1514`).
     if theta != F::one() {
@@ -498,9 +481,138 @@ fn hpsolb<F: Scalar>(
     iorder[nleft - 1] = out_i;
 }
 
+/// Form W^T d without reading history entries on inactive coordinates.
+fn project_history<F: Scalar, V: AsFloatSlice<F>>(
+    d: &[F],
+    iwhere: &[i8],
+    ws_cols: &[V],
+    wy_cols: &[V],
+    p_buf: &mut [F],
+) {
+    let n = d.len();
+    let col = ws_cols.len();
+    let zero = F::zero();
+    // Pair columns to share the direction and active-set loads. Each of the
+    // four reductions keeps its original variable order, including skipped
+    // coordinates whose unused history entries may be non-finite.
+    let paired = col / 2 * 2;
+    for j in (0..paired).step_by(2) {
+        let y0 = wy_cols[j].as_float_slice();
+        let y1 = wy_cols[j + 1].as_float_slice();
+        let s0 = ws_cols[j].as_float_slice();
+        let s1 = ws_cols[j + 1].as_float_slice();
+        assert_eq!(y0.len(), n);
+        assert_eq!(y1.len(), n);
+        assert_eq!(s0.len(), n);
+        assert_eq!(s1.len(), n);
+        let mut yp0 = zero;
+        let mut yp1 = zero;
+        let mut sp0 = zero;
+        let mut sp1 = zero;
+        for i in 0..n {
+            if iwhere[i] == iwhere::FREE_MOVED
+                || iwhere[i] == iwhere::ALWAYS_FREE
+            {
+                let di = d[i];
+                yp0 = yp0 + y0[i] * di;
+                sp0 = sp0 + s0[i] * di;
+                yp1 = yp1 + y1[i] * di;
+                sp1 = sp1 + s1[i] * di;
+            }
+        }
+        p_buf[j] = yp0;
+        p_buf[j + 1] = yp1;
+        p_buf[col + j] = sp0;
+        p_buf[col + j + 1] = sp1;
+    }
+    if paired < col {
+        let wy = wy_cols[paired].as_float_slice();
+        let ws = ws_cols[paired].as_float_slice();
+        let mut yp = zero;
+        let mut sp = zero;
+        for i in 0..n {
+            if iwhere[i] == iwhere::FREE_MOVED
+                || iwhere[i] == iwhere::ALWAYS_FREE
+            {
+                yp = yp + wy[i] * d[i];
+                sp = sp + ws[i] * d[i];
+            }
+        }
+        p_buf[paired] = yp;
+        p_buf[col + paired] = sp;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn check_history_projection<F: Scalar>() {
+        for n in 0..=17 {
+            let classes = [
+                iwhere::FREE_MOVED,
+                iwhere::ALWAYS_FREE,
+                iwhere::AT_LOWER,
+                iwhere::AT_UPPER,
+                iwhere::FREE_NOT_MOVED,
+                iwhere::ALWAYS_FIXED,
+            ];
+            let iwhere: Vec<_> = (0..n).map(|i| classes[i % 6]).collect();
+            for col in 0..=9 {
+                let d: Vec<_> = (0..n)
+                    .map(|i| {
+                        F::from_f64([1e16, 1.0, -1e16, -0.0][i % 4]).unwrap()
+                    })
+                    .collect();
+                let s: Vec<Vec<_>> = (0..col)
+                    .map(|j| {
+                        (0..n)
+                            .map(|i| {
+                                if i % 6 >= 2 {
+                                    F::nan()
+                                } else {
+                                    F::from_f64((i * 7 + j * 3) as f64 / 8.0)
+                                        .unwrap()
+                                }
+                            })
+                            .collect()
+                    })
+                    .collect();
+                let mut y = s.clone();
+                if col > 2 && n > 0 {
+                    y[2][0] = F::infinity();
+                }
+                let mut actual = vec![F::infinity(); 2 * col + 3];
+                project_history(&d, &iwhere, &s, &y, &mut actual);
+                for j in 0..col {
+                    for (offset, column) in [(0, &y[j]), (col, &s[j])] {
+                        let mut expected = F::zero();
+                        for i in 0..n {
+                            if i % 6 < 2 {
+                                expected = expected + column[i] * d[i];
+                            }
+                        }
+                        assert_eq!(actual[offset + j], expected);
+                        assert_eq!(
+                            actual[offset + j].is_sign_negative(),
+                            expected.is_sign_negative()
+                        );
+                    }
+                }
+                assert!(actual[2 * col..].iter().all(|x| *x == F::infinity()));
+            }
+        }
+    }
+
+    #[test]
+    fn history_projection_preserves_order_and_ignores_inactive_rows_f64() {
+        check_history_projection::<f64>();
+    }
+
+    #[test]
+    fn history_projection_preserves_order_and_ignores_inactive_rows_f32() {
+        check_history_projection::<f32>();
+    }
 
     /// Helper to allocate the working buffers cauchy expects.
     struct Buffers {

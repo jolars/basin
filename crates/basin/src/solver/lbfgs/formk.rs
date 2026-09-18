@@ -90,6 +90,7 @@ pub(crate) enum FormkError {
 ///   for the `> m` shift trigger).
 /// - `updatd`: was history updated since the previous formk call?
 #[allow(clippy::too_many_arguments)]
+#[inline(never)]
 pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
     wn: &mut [F],
     wn1: &mut [F],
@@ -193,54 +194,58 @@ pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
     // Phase 2: modify old parts of `wn1` for entering and leaving vars.
     // (1,1) and (2,2) symmetric / lower-tri updates.
     // -----------------------------------------------------------------
-    for iy in 0..upcl {
-        let wy_i = wy_cols[iy].as_float_slice();
-        let ws_i = ws_cols[iy].as_float_slice();
-        for jy in 0..=iy {
-            let wy_j = wy_cols[jy].as_float_slice();
-            let ws_j = ws_cols[jy].as_float_slice();
-            let mut temp1 = F::zero();
-            let mut temp2 = F::zero();
-            let mut temp3 = F::zero();
-            let mut temp4 = F::zero();
-            for k in 0..nenter {
-                let k1 = indx2[k];
-                temp1 = temp1 + wy_i[k1] * wy_j[k1];
-                temp2 = temp2 + ws_i[k1] * ws_j[k1];
+    // With an unchanged free set, the cached blocks already contain these
+    // products. Avoid walking the history merely to add empty sums.
+    if nenter > 0 || ileave < n {
+        for iy in 0..upcl {
+            let wy_i = wy_cols[iy].as_float_slice();
+            let ws_i = ws_cols[iy].as_float_slice();
+            for jy in 0..=iy {
+                let wy_j = wy_cols[jy].as_float_slice();
+                let ws_j = ws_cols[jy].as_float_slice();
+                let mut temp1 = F::zero();
+                let mut temp2 = F::zero();
+                let mut temp3 = F::zero();
+                let mut temp4 = F::zero();
+                for k in 0..nenter {
+                    let k1 = indx2[k];
+                    temp1 = temp1 + wy_i[k1] * wy_j[k1];
+                    temp2 = temp2 + ws_i[k1] * ws_j[k1];
+                }
+                for k in ileave..n {
+                    let k1 = indx2[k];
+                    temp3 = temp3 + wy_i[k1] * wy_j[k1];
+                    temp4 = temp4 + ws_i[k1] * ws_j[k1];
+                }
+                wn1[iy * two_m + jy] = wn1[iy * two_m + jy] + temp1 - temp3;
+                wn1[(m + iy) * two_m + (m + jy)] =
+                    wn1[(m + iy) * two_m + (m + jy)] + (-temp2 + temp4);
             }
-            for k in ileave..n {
-                let k1 = indx2[k];
-                temp3 = temp3 + wy_i[k1] * wy_j[k1];
-                temp4 = temp4 + ws_i[k1] * ws_j[k1];
-            }
-            wn1[iy * two_m + jy] = wn1[iy * two_m + jy] + temp1 - temp3;
-            wn1[(m + iy) * two_m + (m + jy)] =
-                wn1[(m + iy) * two_m + (m + jy)] + (-temp2 + temp4);
         }
-    }
 
-    // (2,1) block update: full rectangle, with sign flip across the
-    // (block) diagonal (`is ≤ jy + m` in Fortran ⇔ `iy ≤ jy` here).
-    for iy in 0..upcl {
-        let ws_i = ws_cols[iy].as_float_slice();
-        for jy in 0..upcl {
-            let wy_j = wy_cols[jy].as_float_slice();
-            let mut temp1 = F::zero();
-            let mut temp3 = F::zero();
-            for k in 0..nenter {
-                let k1 = indx2[k];
-                temp1 = temp1 + ws_i[k1] * wy_j[k1];
+        // (2,1) block update: full rectangle, with sign flip across the
+        // (block) diagonal (`is ≤ jy + m` in Fortran ⇔ `iy ≤ jy` here).
+        for iy in 0..upcl {
+            let ws_i = ws_cols[iy].as_float_slice();
+            for jy in 0..upcl {
+                let wy_j = wy_cols[jy].as_float_slice();
+                let mut temp1 = F::zero();
+                let mut temp3 = F::zero();
+                for k in 0..nenter {
+                    let k1 = indx2[k];
+                    temp1 = temp1 + ws_i[k1] * wy_j[k1];
+                }
+                for k in ileave..n {
+                    let k1 = indx2[k];
+                    temp3 = temp3 + ws_i[k1] * wy_j[k1];
+                }
+                let delta = if iy <= jy {
+                    temp1 - temp3
+                } else {
+                    -temp1 + temp3
+                };
+                wn1[(m + iy) * two_m + jy] = wn1[(m + iy) * two_m + jy] + delta;
             }
-            for k in ileave..n {
-                let k1 = indx2[k];
-                temp3 = temp3 + ws_i[k1] * wy_j[k1];
-            }
-            let delta = if iy <= jy {
-                temp1 - temp3
-            } else {
-                -temp1 + temp3
-            };
-            wn1[(m + iy) * two_m + jy] = wn1[(m + iy) * two_m + jy] + delta;
         }
     }
 
@@ -301,13 +306,22 @@ pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
     // Phase 5: solve `L^T · X = wn(0..col, col..2col)` in place. One
     // forward solve per column of the (1,2) block.
     // -----------------------------------------------------------------
-    for js in col..col2 {
-        for i in 0..col {
-            let mut s = wn[i * two_m + js];
-            for k in 0..i {
-                s = s - wn[k * two_m + i] * wn[k * two_m + js];
+    // All right-hand sides share the same triangular factor. Updating a
+    // whole row exposes independent entries while retaining each column's
+    // subtraction order.
+    for i in 0..col {
+        let (previous, current) = wn.split_at_mut(i * two_m);
+        let diagonal = current[i];
+        let row = &mut current[col..col2];
+        for k in 0..i {
+            let a = previous[k * two_m + i];
+            let source = &previous[k * two_m + col..k * two_m + col2];
+            for (rhs, &x) in row.iter_mut().zip(source) {
+                *rhs = *rhs - a * x;
             }
-            wn[i * two_m + js] = s / wn[i * two_m + i];
+        }
+        for rhs in row {
+            *rhs = *rhs / diagonal;
         }
     }
 
@@ -360,26 +374,31 @@ pub(crate) fn formk<F: Scalar, V: AsFloatSlice<F>>(
 mod tests {
     use super::*;
 
-    #[test]
-    fn gram_cache_matches_direct_products_after_rollover_and_set_changes() {
+    fn check_gram_cache<F: Scalar>() {
         let n = 17;
-        for m in [1, 3, 5] {
-            let mut state = crate::LbfgsState::new(vec![0.0; n], m);
-            let mut wn = vec![0.0; 4 * m * m];
+        for m in [1, 3, 5, 8] {
+            let mut state =
+                crate::LbfgsState::<Vec<F>, F>::new(vec![F::zero(); n], m);
+            let mut wn = vec![F::zero(); 4 * m * m];
             let mut wn1 = wn.clone();
             let mut previous_free = vec![false; n];
             for update in 1..=2 * m + 2 {
                 let s: Vec<_> = (0..n)
-                    .map(|i| ((i * (update + 2) + update) % 13) as f64 - 6.0)
+                    .map(|i| {
+                        F::from_f64(
+                            ((i * (update + 2) + update) % 13) as f64 - 6.0,
+                        )
+                        .unwrap()
+                    })
                     .collect();
                 let y = s
                     .iter()
                     .enumerate()
-                    .map(|(i, &s)| s * (i + 1) as f64)
+                    .map(|(i, &s)| s * F::from_usize(i + 1).unwrap())
                     .collect();
                 assert!(state.append_pair(s, y));
                 let free: Vec<_> =
-                    (0..n).map(|i| (i + update) % 4 != 0).collect();
+                    (0..n).map(|i| (i + update / 3) % 4 != 0).collect();
                 let ind: Vec<_> = (0..n)
                     .filter(|&i| free[i])
                     .chain((0..n).rev().filter(|&i| !free[i]))
@@ -420,11 +439,11 @@ mod tests {
                 .unwrap();
                 for i in 0..col {
                     for j in 0..col {
-                        let dot = |a: &[f64], b: &[f64], selected: bool| {
+                        let dot = |a: &[F], b: &[F], selected: bool| {
                             (0..n)
                                 .filter(|&k| free[k] == selected)
                                 .map(|k| a[k] * b[k])
-                                .sum::<f64>()
+                                .sum::<F>()
                         };
                         if i >= j {
                             assert_eq!(
@@ -445,6 +464,18 @@ mod tests {
                 previous_free = free;
             }
         }
+    }
+
+    #[test]
+    fn gram_cache_matches_products_through_rollover_and_stable_or_changed_sets_f64()
+     {
+        check_gram_cache::<f64>();
+    }
+
+    #[test]
+    fn gram_cache_matches_products_through_rollover_and_stable_or_changed_sets_f32()
+     {
+        check_gram_cache::<f32>();
     }
 
     /// First-iteration formk: `col == 1`, one history pair

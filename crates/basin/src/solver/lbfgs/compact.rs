@@ -124,6 +124,7 @@ pub(crate) fn cholesky_upper_in_place<F: Scalar>(
 /// Cholesky factor stored in the upper triangle of `j_upper`
 /// (row-major, stride `m`, leading `col × col` live). Mirrors LINPACK's
 /// `dtrsl(..., job=01, ...)`.
+#[inline(always)]
 pub(crate) fn solve_upper_tri<F: Scalar>(
     j_upper: &[F],
     col: usize,
@@ -146,6 +147,7 @@ pub(crate) fn solve_upper_tri<F: Scalar>(
 /// Solve `Jᵀ x = b` in place on `b`. Mirrors LINPACK's `dtrsl(...,
 /// job=11, ...)`: `J` is upper triangular, the transposed solve runs
 /// top-down.
+#[inline(always)]
 pub(crate) fn solve_upper_tri_transposed<F: Scalar>(
     j_upper: &[F],
     col: usize,

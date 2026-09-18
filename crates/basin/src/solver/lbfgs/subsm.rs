@@ -91,6 +91,7 @@ pub(crate) enum SubsmError {
 /// - `m`, `col`, `theta`: compact-form parameters matching the data
 ///   stored in `wn`.
 #[allow(clippy::too_many_arguments)]
+#[inline(never)]
 pub(crate) fn subsm<F: Scalar, V: AsFloatSlice<F>>(
     x: &mut [F],
     d: &mut [F],
