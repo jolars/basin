@@ -3,6 +3,9 @@
 //! commit c8e957cfe58648f07ce4222e4f6e925563d834b2. Objective and gradient
 //! evaluations are fused, and each run includes fresh solver initialization.
 
+#[path = "lbfgsb_short.rs"]
+pub mod short;
+
 use basin::{
     BoxConstraints, CostFunction, Executor, Gradient, GradientState,
     LbfgsState, Lbfgsb, OptimizationResult, Solver, State, TerminationReason,

@@ -119,16 +119,89 @@ where
 #[test]
 fn faer_reference_drivers_match_vec_work_and_results() {
     check_backend::<backend_aliases::faer::Col<f64>>();
+    check_short_backend::<backend_aliases::faer::Col<f64>>();
 }
 
 #[cfg(feature = "nalgebra_all")]
 #[test]
 fn nalgebra_reference_drivers_match_vec_work_and_results() {
     check_backend::<backend_aliases::nalgebra::DVector<f64>>();
+    check_short_backend::<backend_aliases::nalgebra::DVector<f64>>();
 }
 
 #[cfg(feature = "ndarray_all")]
 #[test]
 fn ndarray_reference_drivers_match_vec_work_and_results() {
     check_backend::<backend_aliases::ndarray::Array1<f64>>();
+    check_short_backend::<backend_aliases::ndarray::Array1<f64>>();
+}
+
+#[test]
+fn short_cases_preserve_reference_work_and_adapter_results() {
+    check_short_backend::<Vec<f64>>();
+}
+
+fn check_short_backend<V: support::Vector>()
+where
+    basin::Lbfgsb: for<'a> basin::Solver<
+            &'a support::short::Short<V>,
+            basin::LbfgsState<V>,
+            Error = std::convert::Infallible,
+        >,
+{
+    use support::short::{Adapter, Case, Short};
+    for case in [Case::Mixed, Case::Rollover] {
+        let mut problem = Short::<V>::new(case);
+        problem.check_feasibility = true;
+        for adapter in
+            [Adapter::Reference, Adapter::Trimmed, Adapter::RequiredStops]
+        {
+            let result = problem.solve(adapter);
+            problem.verify(&result);
+            let initialized = problem.initialize(adapter);
+            assert_eq!(initialized.counts().cost_evals, 1);
+            assert_eq!(initialized.counts().gradient_evals, 1);
+            let resumed = initialized.run_to_end().unwrap();
+            problem.verify(&resumed);
+            assert_eq!(
+                problem.extract(&result).0.as_slice(),
+                resumed.param().as_slice()
+            );
+        }
+    }
+}
+
+#[test]
+fn short_case_allocations_separate_setup_iterations_and_extraction() {
+    use support::short::{Adapter, Case, Short};
+    for (case, ceiling) in [(Case::Mixed, 36), (Case::Rollover, 64)] {
+        let problem = Short::<Vec<f64>>::new(case);
+        for adapter in
+            [Adapter::Reference, Adapter::Trimmed, Adapter::RequiredStops]
+        {
+            REQUESTS.set(0);
+            let initialized = problem.initialize(adapter);
+            let setup = REQUESTS.get();
+            let result = initialized.run_to_end().unwrap();
+            let iterations = REQUESTS.get() - setup;
+            let extracted = problem.extract(&result);
+            let extraction = REQUESTS.get() - setup - iterations;
+            assert_eq!(extraction, 1);
+            let total = setup + iterations + extraction;
+            let ceiling = ceiling
+                - match (case, adapter) {
+                    (_, Adapter::Reference) => 0,
+                    (Case::Mixed, Adapter::RequiredStops) => 4,
+                    _ => 2,
+                };
+            assert!(total <= ceiling, "{total} allocations exceed {ceiling}");
+            assert_eq!(extracted.0, result.param().as_slice());
+            problem.verify(&result);
+            eprintln!(
+                "{} {}: setup={setup}, iterations={iterations}, extraction={extraction}, total={total}",
+                case.name(),
+                adapter.name()
+            );
+        }
+    }
 }

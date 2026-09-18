@@ -240,15 +240,42 @@ reference drivers were at parity or faster than the baseline.
   adapter allocates one per evaluation. Assess an additive, opt-in way to
   fill reusable storage while preserving existing trait implementations,
   fused evaluation counts, supported backends, and the default WASM build.
-- [ ] **Cover short solves and distinguish adapter overhead in benchmarks.** Add
-  the mixed-bound and fixed-variable cases alongside the three existing
-  L-BFGS-B reference drivers, with allocation measurements separate from
-  uninstrumented timings. Measure initialization and iteration costs
-  separately, identify bound clones and redundant convergence calculations
-  in adapters, and account for result extraction. Preserve feasibility,
-  objective, residual, and evaluation-count checks. Report timing
-  variability rather than treating the initial 17–22% slowdown as a fixed
-  penalty.
+- [x] **Cover short solves and distinguish adapter overhead in benchmarks.**
+  The `lbfgsb` benchmark includes both short cases, the original and trimmed
+  adapters, a variant omitting unused stop hooks, and separate initialization
+  and iteration measurements. Allocation
+  tests account for setup, iterations, and owned-point extraction, with
+  feasibility, objective, projected-gradient, and evaluation-count checks on
+  all four backends. Run `cargo test -p basin --test lbfgsb_reference_drivers
+  -- --nocapture` for counts and `cargo bench -p basin --bench lbfgsb --
+  'mixed|rollover'` for uninstrumented timings.
+
+The follow-up investigation reproduced the original allocation counts. With
+the trimmed adapter, both short cases spend 25 allocations on initialization
+and one on point extraction; their iterations spend 8 and 36, respectively.
+Isolated prototypes reduced total allocations from 34/62 to 32/47 through
+vector reuse, then to 31/33 with reusable line-search and gradient output
+storage. An additive gradient method can preserve existing fused overrides
+and evaluation accounting, but callers also need a way to pass workspace
+through the line-search interface. These prototypes preserved all five
+reference results and evaluation counts, but did not establish a timing win.
+Instruction counts changed by about +0.3%/-2.2% despite the allocation
+reduction. Early timings were disrupted by concurrent system builds; a later
+alternating comparison still found no clear benefit from the buffer prototypes.
+Omitting the mixed case's unused stop hook saved two more setup allocations
+and about 5% elapsed time relative to the trimmed adapter. No production buffer
+API was added.
+
+- [ ] **Measure deferred history updates and executor overhead.** Ariadne
+  checks accepted-point stopping before updating history, so its short solves
+  perform 1 and 7 updates. Basin updates history before returning each accepted
+  step to the executor. Equal iterations and evaluations therefore do not mean
+  equal bookkeeping. Test deferred history work while preserving exact
+  continuation, solver reuse, and completed-iteration counts. Also investigate
+  state movement through the executor: a manual loop preserving initialization,
+  stops, counts, and incumbents used about 10% fewer instructions on the
+  four-variable case. Confirm elapsed-time improvements on an idle machine
+  before choosing either change.
 
 ## Basin 2.0
 
