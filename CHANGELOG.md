@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.13.0](https://github.com/jolars/basin/compare/v1.12.0...v1.13.0) (2026-09-18)
+
+### Features
+- add dense trust-region-reflective least squares ([`86cc0d6`](https://github.com/jolars/basin/commit/86cc0d6084feda7fdc5f0383409608128a2baa4e))
+
+### Performance Improvements
+- reduce L-BFGS-B iteration overhead ([`c16a963`](https://github.com/jolars/basin/commit/c16a963db1a8513d1871aa66cfdbf493d8975272))
+- batch L-BFGS-B history products ([`cf58a90`](https://github.com/jolars/basin/commit/cf58a90dff20da68dc32329a63f9fb1efd74444d))
+- speed up L-BFGS-B kernels ([`3cc7d41`](https://github.com/jolars/basin/commit/3cc7d4110b5cdbfe1194bb93f391610cf264609f))
+- reduce L-BFGS-B history overhead ([`496d95d`](https://github.com/jolars/basin/commit/496d95d7537334947a1b34304773bd63feaa1288))
+
 ## [1.12.0](https://github.com/jolars/basin/compare/v1.11.0...v1.12.0) (2026-09-16)
 
 ### Features
