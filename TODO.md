@@ -213,6 +213,43 @@ desired backend features.
 
 ## Performance investigations
 
+The September 18, 2026, comparison for [Ariadne issue
+#12](https://github.com/adam-t-burke/Ariadne/issues/12) found remaining overhead
+in short L-BFGS-B solves with Basin 1.13.0, `Vec<f64>`, and no optional
+features. The baseline was `ariadne-lbfgsb` with its faer backend at Ariadne
+commit `c8e957c`. Allocation counts include fresh solver setup and result
+construction:
+
+  | Reference case                                   | Iterations / evaluations | Baseline allocations | Basin allocations | Basin with trimmed adapter |
+  | ------------------------------------------------ | -----------------------: | -------------------: | ----------------: | -------------------------: |
+  | Mixed bounds, four variables                     |                    2 / 3 |                   27 |                36 |                         34 |
+  | Fixed variable/history rollover, eight variables |                   8 / 11 |                   27 |                64 |                         62 |
+
+The trimmed adapter avoids two bound-vector clones and unnecessary projected
+gradient calculations. It improves timings but leaves a gap. Timing percentages
+varied across reruns; the allocation counts were reproducible. The three larger
+reference drivers were at parity or faster than the baseline.
+
+- [ ] **Reuse L-BFGS-B and line-search vector buffers.** Investigate the
+  direction-vector clone in `solver/lbfgs.rs` and trial-parameter allocation
+  in `line_search/more_thuente.rs`. Retain compatible workspace storage
+  across iterations while preserving accepted evaluations, rejected trials,
+  failure handling, and solver reuse after dimension changes.
+- [ ] **Allow gradient output buffers to be reused.** The current fused
+  `cost_and_gradient` interface returns an owned gradient, and the Ariadne
+  adapter allocates one per evaluation. Assess an additive, opt-in way to
+  fill reusable storage while preserving existing trait implementations,
+  fused evaluation counts, supported backends, and the default WASM build.
+- [ ] **Cover short solves and distinguish adapter overhead in benchmarks.** Add
+  the mixed-bound and fixed-variable cases alongside the three existing
+  L-BFGS-B reference drivers, with allocation measurements separate from
+  uninstrumented timings. Measure initialization and iteration costs
+  separately, identify bound clones and redundant convergence calculations
+  in adapters, and account for result extraction. Preserve feasibility,
+  objective, residual, and evaluation-count checks. Report timing
+  variability rather than treating the initial 17–22% slowdown as a fixed
+  penalty.
+
 ## Basin 2.0
 
 - [ ] **Migrate existing solvers to shared progress states.** Build on the
