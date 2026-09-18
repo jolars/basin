@@ -125,15 +125,6 @@ numerical work against analytic cases and reference implementations.
   optional integrations before expanding the core or adding heavy solver
   dependencies, preserving the default pure-Rust WASM build.
 
-### Outreach
-
-- [ ] **Contact EGObox about switching to Basin.** SLSQP is implemented and
-  validated, so outreach is ready. Revisit consolidation of `argmin`,
-  `cobyla`, `slsqp`, and optional `nlopt`, accounting for EGObox's public
-  argmin integration. Ask the [maintainer](https://github.com/relf/EGObox)
-  whether they would consider a switch and offer a PR with numerical and
-  performance comparisons on EGObox workloads.
-
 ## General design
 
 ### State API additions for Basin 1.x
@@ -221,58 +212,6 @@ the prototype with `cargo test -p basin --test state_api_prototype` and the
 desired backend features.
 
 ## Performance investigations
-
-### globalsearch comparison (2026-09-14)
-
-Compared Basin 1.11.0 with argmin 0.11.0 through globalsearch's public local
-solver adapters at commit `70ad94205235a682d9376663a858be4aa3cb3b53`. The
-release benchmark used five problems, 24 shared starts per problem, and nine
-timing rounds on a Ryzen 9 7900. Times below compare identical starts where both
-backends evaluated a point with `f(x) - f* <= 1e-6`, with limits of 1,000 outer
-iterations and 20,000 objective evaluations. Native stopping tests were disabled
-for this comparison; reaching the target at a trial point does not certify a
-returned solution or stationarity.
-
-Steihaug was slower in Basin only on the ill-conditioned quadratic:
-
-  | Problem                        | Basin relative to argmin |
-  | ------------------------------ | ------------------------ |
-  | Sphere, 20D                    | 1.21x faster             |
-  | Ill-conditioned quadratic, 20D | 1.93x slower             |
-  | Rosenbrock, 2D                 | 2.19x faster             |
-  | Rosenbrock, 20D                | 1.74x faster             |
-  | Six-hump camel, 2D             | 3.02x faster             |
-
-Across these five problems, Steihaug's geometric mean speedup was 1.49x, with
-103/120 target hits for Basin versus 100/120 for argmin. These measurements
-include adapter overhead and use inexpensive analytic derivatives.
-
-- [x] **Investigate Steihaug's inner CG stopping rule.** Added
-  `Steihaug::with_forcing_parameters(kappa, theta)` for adaptive or fixed
-  residual thresholds, preserving the default forcing rule and iteration
-  cap.
-- [x] **Measure Steihaug with expensive derivatives.** Reproduced the evaluation
-  gap. Added Hessian work reverses the timing advantage at about 0.5 µs/call
-  in 2D Rosenbrock and 1.5 µs/call in 20D, on shared successful starts;
-  equal work in both derivative callbacks roughly halves those thresholds.
-- [x] **Investigate gradient descent's extra evaluations on sphere.** Reproduced
-  6 objective / 5 gradient calls versus argmin's 3 / 2. One extra pair is an
-  accepted-point reevaluation; the remaining two arise from Basin's
-  reference-compatible 0.4995 step versus argmin's 0.5. Both initialize at 1.
-  Verified against the original Fortran line search and 72 deterministic
-  starts.
-- [x] **Reuse gradient descent's accepted line-search evaluation.** Plain
-  descent adopts retained values through `next_with_evaluation`, reducing
-  the sphere run to 5 objective / 4 gradient calls without changing trial
-  points. Searches without retained values and momentum steps still evaluate
-  the actual iterate.
-
-Local artifacts: [report and
-methodology](../globalsearch-rs/target/backend-comparison/REPORT.md),
-[reproducible
-harness](../globalsearch-rs/target/backend-comparison/src/main.rs), and
-[plots](../globalsearch-rs/target/backend-comparison/plots/index.html). These
-live in globalsearch's ignored `target/` directory.
 
 ## Basin 2.0
 
