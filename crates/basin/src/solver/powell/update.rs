@@ -594,11 +594,10 @@ impl<F: Scalar> QuadraticModel<F> {
                     self.zsign[kn] = -F::one(); // s⁺_2 = −1
                 }
             }
-            (None, None) => {
-                panic!(
-                    "commit_update: Ω_tt = 0 (no factor column couples to t)"
-                );
-            }
+            // A zero t-th row gives Ω e_t = 0 and α = 0, so every term in
+            // the Ω block of eq. 4.11 vanishes. The update is still valid
+            // when σ = τ² != 0; Ξ, Υ, and the model must still be updated.
+            (None, None) => {}
         }
     }
 
@@ -906,6 +905,46 @@ mod tests {
         model.commit_update(t, &ctx, &scalars, f(&xabs));
 
         assert_h_matches_inverse(&model, 1e-9);
+    }
+
+    #[test]
+    fn zero_factor_row_update_preserves_kkt_and_interpolation() {
+        let f = |x: &[f64]| {
+            x[0] * x[0] + 2.0 * x[1] * x[1] + 3.0 * x[2] * x[2] + x[2].powi(3)
+        };
+
+        for height in [-2.0, 2.0] {
+            let mut model = QuadraticModel::initialize(vec![0.0; 3], 1.0, 7, f);
+
+            // Replacing -e3 by a point in the x3 = 0 plane leaves e3 as the
+            // only point outside that plane. Its Lagrange function is linear,
+            // so its row in Z is zero even though the KKT matrix is invertible.
+            let xnew = [1.0, 1.0, 0.0];
+            let ctx = model.prepare_update(&xnew);
+            let scalars = model.update_params(6, &ctx);
+            model.commit_update(6, &ctx, &scalars, f(&xnew));
+            assert_h_matches_inverse(&model, 1e-12);
+
+            let t = 3;
+            assert!((0..3).all(|k| model.zmat.get(t, k) == 0.0));
+            let xnew = [0.25, -0.5, height];
+            let ctx = model.prepare_update(&xnew);
+            let scalars = model.update_params(t, &ctx);
+            assert_eq!(scalars.alpha, 0.0);
+            assert!((scalars.tau - height).abs() < 1e-12);
+            assert_eq!(scalars.sigma, scalars.tau * scalars.tau);
+            assert!(scalars.sigma > 0.0);
+
+            model.commit_update(t, &ctx, &scalars, f(&xnew));
+            assert_h_matches_inverse(&model, 1e-12);
+
+            let xopt = model.xpt_row(model.kopt());
+            for i in 0..model.m() {
+                let xi = model.xpt_row(i);
+                let predicted = model.eval_change(xi) - model.eval_change(xopt);
+                assert!((predicted - (f(xi) - f(xopt))).abs() < 1e-11);
+            }
+        }
     }
 
     /// A long, well-conditioned sequence of updates: the KKT identity must hold
