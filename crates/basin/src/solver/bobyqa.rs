@@ -412,6 +412,47 @@ mod tests {
         assert!((x[1] + 2.0).abs() < 1e-3, "x1 = {}", x[1]);
     }
 
+    /// A linear objective whose minimum is a corner of the box: the iterate walks onto the
+    /// bound faces, the interpolation set collapses there, and the `Z` row of the point being
+    /// replaced becomes exactly zero (`Ω_tt = 0`). `update_omega_factorization` used to panic
+    /// on that (`no factor column couples to t`); eq. 4.18 with `Z_{t,k} = 0` is the update.
+    //
+    // TBD: hallucination on "equation 4.18", i cant find source...
+    #[test]
+    fn corner_minimum_collapses_the_interpolation_set_onto_the_faces() {
+        struct Corner {
+            lower: Vec<f64>,
+            upper: Vec<f64>,
+        }
+        impl CostFunction for Corner {
+            type Param = Vec<f64>;
+            type Output = f64;
+            type Error = std::convert::Infallible;
+            fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+                Ok(-x.iter().sum::<f64>())
+            }
+        }
+        impl BoxConstraints for Corner {
+            fn lower(&self) -> &Vec<f64> {
+                &self.lower
+            }
+            fn upper(&self) -> &Vec<f64> {
+                &self.upper
+            }
+        }
+        let result = Executor::new(
+            Corner { lower: vec![0.0; 4], upper: vec![1.0; 4] },
+            Bobyqa::new().with_initial_radius(0.05).with_final_radius(5e-5),
+            BobyqaState::new(vec![0.0, 0.0, 1.0, 1.0]),
+        )
+            .max_cost_evals(300)
+            .run()
+            .unwrap();
+        let x = result.best_param();
+        assert!(x.iter().all(|v| (v - 1.0).abs() < 1e-6), "x = {x:?}");
+        assert!((result.best_cost() + 4.0).abs() < 1e-6, "f = {}", result.best_cost());
+    }
+
     /// An infeasible start is clipped into the box, and BOBYQA still converges.
     #[test]
     fn infeasible_start_converges() {

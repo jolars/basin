@@ -594,11 +594,26 @@ impl<F: Scalar> QuadraticModel<F> {
                     self.zsign[kn] = -F::one(); // s⁺_2 = −1
                 }
             }
-            (None, None) => {
-                panic!(
-                    "commit_update: Ω_tt = 0 (no factor column couples to t)"
-                );
-            }
+            // |K| = m−n−1: the t-th component of every z_k is zero, so every column is retained
+            // unchanged and there is nothing to compute.
+            //
+            // Powell NEWUOA §4 pp. 13–14: eq. (4.15) retains z⁺_k = z_k,
+            // s⁺_k = s_k for every k in K, "where k is in K if and only if the t-th component
+            // of z_k is zero"; (4.17) rotates so |K| ≥ m−n−3; (4.18) is the |K| = m−n−2 case
+            // ("the usual situation"), (4.19)/(4.20) the |K| = m−n−3 cases. |K| = m−n−1 is not
+            // named, and (4.15) covers it: K is everything. Powell, "The BOBYQA algorithm for
+            // bound constrained optimization without derivatives", DAMTP 2009/NA06, §4 eq.
+            // (4.14): after rotating so only the first component of the t-th row is nonzero,
+            // (Z_new)_{i1} = σ^{-1/2} [τ Z_{i1} + (e_t − e_s − H{w−v})_i Z_{t1}]; with Z_{t1} = 0
+            // and α = Ω_tt = 0 (so σ = τ²) that is ±Z_{i1}: the same Ω. PRIMA's
+            // fortran/bobyqa/update.f90 `updateh` computes exactly that line with no branch.
+            // The H update (4.11, NEWUOA numbering) agrees: the Ω-part of H e_t is
+            // Z S (Zᵀ e_t) = 0, so every Ω term vanishes and Ω⁺ = Ω.
+            //
+            // Reached in practice when the interpolation set has collapsed onto box faces: a
+            // minimum in a corner of the box gets here in a dozen steps.
+            (None, None) => {}
+
         }
     }
 
@@ -1039,6 +1054,67 @@ mod tests {
                         (got - want).abs() < 1e-9,
                         "β={beta} Ω⁺[{i},{j}]: got {got} want {want} (Δ={:e})",
                         (got - want).abs()
+                    );
+                }
+            }
+        }
+    }
+
+    /// The t-th row of `Z` exactly zero: no column couples to `t`, `α = Ω_tt = 0`, and by
+    /// Powell (NEWUOA §4, eq. 4.15) every column is retained -- the rank-2 identity for Ω
+    /// (eq. 4.11) reduces to `Ω⁺ = Ω` because `b = Ω e_t = 0` and `α = 0`. This used to be the
+    /// `(None, None)` arm's `panic!`. The identity is asserted, not the representation: a
+    /// fix that scales a column by ±1 passes too, one that zeroes it or skips the update
+    /// elsewhere would not.
+    #[test]
+    fn zero_row_of_z_leaves_omega_unchanged() {
+        use crate::solver::powell::kkt::omega_from_factorization;
+
+        let n = 1;
+        let m = 4;
+        let rank = m - n - 1; // = 2
+        let z1 = [0.0, 0.5, -0.3, 0.7];
+        let z2 = [0.0, -0.6, 0.2, 0.9];
+        let t = 0; // both columns have a zero t-th entry
+        let chop = [0.2, -0.5, 0.8, -0.1];
+        let tau = 0.37;
+
+        for &beta in &[0.85_f64, -0.85] {
+            let mut zdata = Vec::with_capacity(m * rank);
+            for i in 0..m {
+                zdata.push(z1[i]);
+                zdata.push(z2[i]);
+            }
+            let mut model = QuadraticModel::from_parts(
+                n,
+                m,
+                vec![0.0; n],
+                DenseMatrix::from_fn(m, n, |_, _| 0.0),
+                vec![0.0; m],
+                0,
+                vec![0.0; n],
+                DenseMatrix::from_fn(n, n, |_, _| 0.0),
+                vec![0.0; m],
+                DenseMatrix::from_fn(n, m, |_, _| 0.0),
+                DenseMatrix::from_fn(n, n, |_, _| 0.0),
+                DenseMatrix::from_row_slice(m, rank, &zdata),
+                vec![1.0, -1.0],
+            );
+
+            let alpha = 0.0; // s_1 z_{1,t}² + s_2 z_{2,t}² with both entries zero
+            let sigma = alpha * beta + tau * tau;
+
+            let old_omega = omega_from_factorization(&model);
+            model.update_omega_factorization(t, &chop, tau, sigma, beta);
+            let new_omega = omega_from_factorization(&model);
+
+            for i in 0..m {
+                for j in 0..m {
+                    let want = old_omega.get(i, j);
+                    let got = new_omega.get(i, j);
+                    assert!(
+                        (got - want).abs() < 1e-12,
+                        "β={beta} Ω⁺[{i},{j}]: got {got} want {want} -- Ω must not change when no column couples to t"
                     );
                 }
             }
