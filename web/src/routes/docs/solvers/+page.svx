@@ -166,6 +166,16 @@ analytic, or synthesized by `FiniteDiff`):
 
 For problems expressed as residuals (`Residual` + `Jacobian`):
 
+All five solvers accept
+[`RobustLeastSquares`](https://docs.rs/basin/latest/basin/core/least_squares/struct.RobustLeastSquares.html)
+to fit with Huber, soft-L1, Cauchy, arctangent, or custom losses and a residual
+scale. The adapter adjusts the Gauss–Newton model while reporting the true
+robust objective. It supports `f32` and `f64` on each solver's supported
+backends and also exposes the objective to general optimizers. See the
+[loss API and model](https://docs.rs/basin/latest/basin/core/least_squares/index.html)
+for the safeguarded curvature formula, following Triggs et al. (1999),
+_Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
+
 - **[`GaussNewton`](https://docs.rs/basin/latest/basin/solver/gauss_newton/struct.GaussNewton.html)**:
   undamped normal-equations solver (Madsen, Nielsen & Tingleff, 2004, §3.1).
 - **[`LevenbergMarquardt`](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html)**:

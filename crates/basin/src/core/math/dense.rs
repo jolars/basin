@@ -407,6 +407,18 @@ impl<F: Scalar> super::MatrixIndex<F> for DenseMatrix<F> {
     }
 }
 
+impl<F: Scalar> super::ScaleRowsInPlace<F> for DenseMatrix<F> {
+    fn scale_rows_in_place(&mut self, factors: &[F]) {
+        assert_eq!(self.rows, factors.len(), "row scale shape mismatch");
+        for (i, &factor) in factors.iter().enumerate() {
+            for j in 0..self.cols {
+                self.data[i * self.cols + j] =
+                    self.data[i * self.cols + j] * factor;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

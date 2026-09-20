@@ -884,6 +884,17 @@ impl<F: Scalar> super::MatrixIndex<F> for nalgebra::DMatrix<F> {
     }
 }
 
+impl<F: Scalar> super::ScaleRowsInPlace<F> for DMatrix<F> {
+    fn scale_rows_in_place(&mut self, factors: &[F]) {
+        assert_eq!(self.nrows(), factors.len(), "row scale shape mismatch");
+        for (i, &factor) in factors.iter().enumerate() {
+            for j in 0..self.ncols() {
+                self[(i, j)] = self[(i, j)] * factor;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

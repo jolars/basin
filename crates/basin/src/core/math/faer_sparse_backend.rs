@@ -247,6 +247,20 @@ where
     }
 }
 
+impl<F: Scalar> super::ScaleRowsInPlace<F> for SparseColMat<usize, F> {
+    fn scale_rows_in_place(&mut self, factors: &[F]) {
+        assert_eq!(self.nrows(), factors.len(), "row scale shape mismatch");
+        let (symbolic, values) = self.parts_mut();
+        for col in 0..symbolic.ncols() {
+            // Uncompressed CSC columns can contain unused capacity.
+            for entry in symbolic.col_range(col) {
+                values[entry] =
+                    values[entry] * factors[symbolic.row_idx()[entry]];
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

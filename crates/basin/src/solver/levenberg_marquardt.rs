@@ -1,3 +1,4 @@
+use crate::core::least_squares::evaluation::Evaluation;
 use crate::core::math::{
     AddDiagonalVectorInPlace, ComponentDivAssign, ComponentMaxAssign,
     ComponentMulAssign, ComponentZip, Dot, FactorizePivotedQr,
@@ -9,6 +10,9 @@ use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
+use crate::{
+    LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
+};
 
 mod damping;
 mod stopping;
@@ -184,10 +188,19 @@ pub enum LmDamping {
 /// The sparse damping path requires the diagonal of `JᵀJ` to be in the
 /// CSC pattern (always true when `J` has no zero columns); see
 /// `AddDiagonalVectorInPlace` and `MatDiagonal`.
+/// All support `f32` and `f64`; use `LevenbergMarquardt::default()` for `f32`.
+/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
+/// Jacobian types.
 ///
 /// # State convention
 ///
-/// `state.cost` carries the LM convention `½‖r‖²`, derived from the
+/// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss
+/// with either damping strategy. The adapter supplies the safeguarded
+/// Gauss–Newton model. Reported costs, actual reductions, and convergence
+/// use the robust objective and its gradient.
+///
+/// For an ordinary residual problem, `state.cost` carries the LM convention
+/// `½‖r‖²`, derived from the
 /// residual the solver evaluates itself. The bound on `P` is
 /// [`Residual`] + [`Jacobian`], not
 /// [`CostFunction`](crate::core::problem::CostFunction); problems
@@ -262,11 +275,12 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     r_cache: Option<V>,
     model_cache: Option<Result<M, QrSolveError>>,
     jtr_cache: Option<V>,
+    failed: bool,
 }
 
-impl<V, M> Default for LevenbergMarquardt<V, M> {
+impl<V, M, F: Scalar> Default for LevenbergMarquardt<V, M, F> {
     fn default() -> Self {
-        Self::new()
+        Self::defaults()
     }
 }
 
@@ -302,6 +316,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             r_cache: None,
             model_cache: None,
             jtr_cache: None,
+            failed: false,
         }
     }
 
@@ -359,6 +374,12 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 
     /// Configure the maximum residual/Jacobian-column absolute cosine.
+    ///
+    /// With [`RobustLeastSquares`], the test is instead
+    /// `max_j |g_j| / (sqrt(2C) · ‖J̃_j‖) ≤ tolerance`, where `C` is the
+    /// robust cost, `g` its gradient, and `J̃` the safeguarded model Jacobian.
+    /// The model residual norm can grow under curvature clipping and must
+    /// not be used to infer stationarity.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
     /// Values must be finite and nonnegative. Enabled tests combine with OR;
@@ -613,25 +634,69 @@ where
         problem: &mut Problem<P>,
         state: NllsState<V, F>,
     ) -> Result<NllsState<V, F>, Self::Error> {
-        self.init_model::<P, M, NormalEquations>(problem, state)
+        self.init_model::<_, M, NormalEquations>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
         state: NllsState<V, F>,
     ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
-        self.next_iter_model::<P, M, NormalEquations>(problem, state, None)
+        self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
+    }
+}
+
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+    for LevenbergMarquardt<V, M, F>
+where
+    F: Scalar,
+    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    V: ScaledAdd<F>
+        + NormSquared<F>
+        + NormInfinity<F>
+        + NegInPlace
+        + Dot<F>
+        + ScaleInPlace<F>
+        + ComponentMulAssign
+        + ComponentDivAssign
+        + ComponentZip<F>
+        + ComponentMaxAssign
+        + FloorZerosInPlace<F>
+        + Clone,
+    M: GramMatrix
+        + MatTransposeVec<V>
+        + LinearSolveSpd<V>
+        + AddDiagonalVectorInPlace<V>
+        + MatDiagonal<V>
+        + Clone,
+    L: LossFunction<F>,
+    V: VectorLen + VectorIndex<F>,
+    M: ScaleRowsInPlace<F>,
+{
+    type Error = <P as Residual>::Error;
+    fn init(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
+        self.init_model::<_, M, NormalEquations>(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
     }
 }
 
 impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
-    fn init_model<P, M, Model>(
+    fn init_model<E, M, Model>(
         &mut self,
-        problem: &mut Problem<P>,
+        problem: &mut E,
         mut state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, <P as Residual>::Error>
+    ) -> Result<NllsState<V, F>, E::Error>
     where
-        P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+        E: Evaluation<V, M, F>,
         M: MatTransposeVec<V>,
         Model: LinearModel<M, V, F, Cache = C>,
         V: ScaledAdd<F>
@@ -649,10 +714,20 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
     {
         // Seed both the state and the cross-iteration caches from one
         // residual/Jacobian evaluation.
+        self.failed = false;
+        self.r_cache = None;
+        self.model_cache = None;
+        self.jtr_cache = None;
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
+        state.cost = Some(
+            problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
+        );
+        let Some((model_r, j)) = problem.model(&r, j) else {
+            self.failed = true;
+            return Ok(state);
+        };
 
-        let a = Model::prepare(&j, &r);
+        let a = Model::prepare(&j, model_r.as_ref().unwrap_or(&r));
         self.diag = a.as_ref().ok().map(|a| {
             let mut d = Model::diagonal(a);
             d.floor_zeros_in_place(F::one());
@@ -675,20 +750,22 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             F::zero()
         });
         self.nu = F::from_f64(2.0).unwrap();
-        self.jtr_cache = Some(j.mat_transpose_vec(&r));
+        let gradient = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
+        self.failed = !problem.valid_vector(&gradient);
+        self.jtr_cache = Some(gradient);
         self.model_cache = Some(a);
         self.r_cache = Some(r);
         Ok(state)
     }
 
-    fn next_iter_model<P, M, Model>(
+    fn next_iter_model<E, M, Model>(
         &mut self,
-        problem: &mut Problem<P>,
+        problem: &mut E,
         mut state: NllsState<V, F>,
         rank_tolerance: Option<F>,
-    ) -> LmStep<V, F, <P as Residual>::Error>
+    ) -> LmStep<V, F, E::Error>
     where
-        P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+        E: Evaluation<V, M, F>,
         M: MatTransposeVec<V>,
         Model: LinearModel<M, V, F, Cache = C>,
         V: ScaledAdd<F>
@@ -704,6 +781,9 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             + FloorZerosInPlace<F>
             + Clone,
     {
+        if self.failed {
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
         let r = match self.r_cache.take() {
             Some(r) => r,
             None => problem.residual(&state.param)?,
@@ -713,7 +793,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             (Some(a), Some(g)) => (a, g),
             _ => {
                 let j = problem.jacobian(&state.param)?;
-                (Model::prepare(&j, &r), j.mat_transpose_vec(&r))
+                let Some((model_r, j)) = problem.model(&r, j) else {
+                    self.failed = true;
+                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                };
+                (
+                    Model::prepare(&j, model_r.as_ref().unwrap_or(&r)),
+                    j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r)),
+                )
             }
         };
         let a = match a {
@@ -726,8 +813,13 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             }
         };
         // Squaring a finite gradient can overflow even when the QR step is valid.
-        if (Model::CHECK_FINITE || self.damping == LmDamping::TrustRegion)
-            && (!r.norm_squared().is_finite() || !g.norm_infinity().is_finite())
+        if (Model::CHECK_FINITE
+            || self.damping == LmDamping::TrustRegion
+            || E::ROBUST)
+            && ((!E::ROBUST && !r.norm_squared().is_finite())
+                || !state.cost.expect("initialized cost").is_finite()
+                || !g.norm_infinity().is_finite()
+                || !problem.valid_vector(&g))
         {
             self.model_cache = Some(Ok(a));
             self.r_cache = Some(r);
@@ -741,9 +833,18 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         //   * relative   max_j |gⱼ|/(‖J·,ⱼ‖·‖r‖) ≤ tol_grad_rel  (MINPACK gtol)
         let abs_converged =
             self.tol_grad.is_some_and(|tol| g.norm_infinity() <= tol);
-        let rel_converged = self
-            .tol_grad_rel
-            .is_some_and(|tol| orthogonality_converged(&g, &diag_cur, &r, tol));
+        let rel_converged = self.tol_grad_rel.is_some_and(|tol| {
+            if E::ROBUST {
+                stopping::robust_gradient_converged(
+                    &g,
+                    &diag_cur,
+                    state.cost.expect("initialized cost"),
+                    tol,
+                )
+            } else {
+                orthogonality_converged(&g, &diag_cur, &r, tol)
+            }
+        });
         if abs_converged || rel_converged {
             // Termination does not move the iterate, so the caches remain valid.
             self.r_cache = Some(r);
@@ -823,7 +924,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         x_trial.scaled_add(F::one(), &h);
         let r_trial = problem.residual(&x_trial)?;
         state.cost_evals += 1;
-        let f_trial = half * r_trial.norm_squared();
+        let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
         let prev_cost = state
             .cost
@@ -1027,6 +1128,9 @@ where
 /// near rank deficiency; neither strategy guarantees MINPACK's nonlinear
 /// convergence trajectory or evaluation counts.
 ///
+/// [`RobustLeastSquares`] supplies robust objectives with the same model,
+/// cost, and convergence conventions as [`LevenbergMarquardt`].
+///
 /// # Rank and failures
 ///
 /// Rank is checked after diagonal regularization and column equilibration.
@@ -1048,6 +1152,8 @@ where
 /// `Col<F>`/`Mat<F>`, for `f32` and `f64`, in pure Rust. Sparse matrices
 /// deliberately lack [`FactorizePivotedQr`]: nalgebra-sparse has no QR, and
 /// faer's sparse QR does not provide numerical column pivoting.
+/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
+/// Jacobian types.
 ///
 /// # References
 ///
@@ -1180,7 +1286,8 @@ where
         self
     }
 
-    /// Configure the maximum residual/Jacobian-column absolute cosine.
+    /// Configure [`LevenbergMarquardt::with_gradient_orthogonality_tolerance`],
+    /// including its robust-objective normalization.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
     /// Values must be finite and nonnegative. Enabled tests combine with OR;
@@ -1298,14 +1405,57 @@ where
         problem: &mut Problem<P>,
         state: NllsState<V, F>,
     ) -> Result<NllsState<V, F>, Self::Error> {
-        self.inner.init_model::<P, M, PivotedQr>(problem, state)
+        self.inner.init_model::<_, M, PivotedQr>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
         state: NllsState<V, F>,
     ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
-        self.inner.next_iter_model::<P, M, PivotedQr>(
+        self.inner.next_iter_model::<_, M, PivotedQr>(
+            problem,
+            state,
+            self.rank_tolerance,
+        )
+    }
+}
+
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+    for LevenbergMarquardtQr<V, M, F>
+where
+    F: Scalar,
+    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    V: ScaledAdd<F>
+        + NormSquared<F>
+        + NormInfinity<F>
+        + NegInPlace
+        + Dot<F>
+        + ScaleInPlace<F>
+        + ComponentMulAssign
+        + ComponentDivAssign
+        + ComponentZip<F>
+        + ComponentMaxAssign
+        + FloorZerosInPlace<F>
+        + Clone,
+    M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
+    L: LossFunction<F>,
+    V: VectorLen + VectorIndex<F>,
+    M: ScaleRowsInPlace<F>,
+{
+    type Error = <P as Residual>::Error;
+    fn init(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
+        self.inner.init_model::<_, M, PivotedQr>(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.inner.next_iter_model::<_, M, PivotedQr>(
             problem,
             state,
             self.rank_tolerance,

@@ -4,12 +4,14 @@ mod step;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::inner::InitialState;
+use crate::core::least_squares::evaluation::{BoundedEvaluation, NllsStep};
 use crate::core::math::dense_svd::{DenseSvd, norm};
 use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
+use crate::{LossFunction, RobustLeastSquares, ScaleRowsInPlace};
 use step::{Model, interior, number, update_radius};
 
 /// Trust-region-reflective minimization of `½‖r(x)‖²` with box bounds.
@@ -19,6 +21,11 @@ use step::{Model, interior, number, update_radius};
 /// trust-region step, a first-boundary reflection, and a scaled-gradient step.
 /// [`Trf`](crate::Trf) retains the earlier bounded-LM algorithm, including its
 /// sparse and downstream-backend support.
+///
+/// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss.
+/// The adapter supplies the safeguarded Gauss–Newton model. Reported costs,
+/// actual reductions, and Coleman–Li scaling use the robust objective and
+/// its gradient.
 ///
 /// # Algorithm
 ///
@@ -47,7 +54,8 @@ use step::{Model, interior, number, update_radius};
 /// # Bounds and failure behavior
 ///
 /// Supply [`Residual`], [`Jacobian`], and [`BoxConstraints`]. The solver never
-/// calls `CostFunction::cost`; state cost is always `½‖r‖²`. Use
+/// calls the raw problem's `CostFunction::cost`; state cost is `½‖r‖²` for an
+/// ordinary residual problem, or the chosen robust objective. Use
 /// [`crate::BoundedFiniteDiff`] when numerical Jacobians must respect bounds.
 /// Residual dimensions and bounds must remain fixed during a solve.
 ///
@@ -85,6 +93,8 @@ use step::{Model, interior, number, update_radius};
 /// and optional backend features are unnecessary for the default `Vec` path.
 /// Sparse Jacobians are not supported. Custom dense types can implement
 /// `MatrixIndex`, `VectorIndex`, and `VectorLen`.
+/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
+/// Jacobian types.
 ///
 /// # References
 ///
@@ -347,17 +357,71 @@ where
     V: Clone + VectorLen + VectorIndex<F>,
 {
     type Error = <P as Residual>::Error;
-
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: NllsState<V, F>,
     ) -> Result<NllsState<V, F>, Self::Error> {
+        self.init_evaluated(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_evaluated(problem, state)
+    }
+    fn terminate(&self, state: &NllsState<V, F>) -> Option<TerminationReason> {
+        self.terminate_evaluated(state)
+    }
+}
+
+impl<P, L, V, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+    for TrustRegionReflective<F>
+where
+    F: Scalar,
+    P: Residual<Param = V, Output = V> + Jacobian + BoxConstraints<Param = V>,
+    P::Jacobian: MatrixIndex<F>,
+    V: Clone + VectorLen + VectorIndex<F>,
+    L: LossFunction<F>,
+    P::Jacobian: ScaleRowsInPlace<F>,
+{
+    type Error = <P as Residual>::Error;
+    fn init(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
+        self.init_evaluated(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_evaluated(problem, state)
+    }
+    fn terminate(&self, state: &NllsState<V, F>) -> Option<TerminationReason> {
+        self.terminate_evaluated(state)
+    }
+}
+
+impl<F: Scalar> TrustRegionReflective<F> {
+    fn init_evaluated<V, M, E>(
+        &mut self,
+        problem: &mut E,
+        state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, E::Error>
+    where
+        V: Clone + VectorLen + VectorIndex<F>,
+        M: MatrixIndex<F>,
+        E: BoundedEvaluation<V, M, F>,
+    {
         self.work = None;
         let mut state = NllsState::new(state.param);
         let n = state.param.vec_len();
         assert!(n > 0, "TRF requires at least one parameter");
-        let (lo, hi) = (problem.inner().lower(), problem.inner().upper());
+        let (lo, hi) = (problem.lower(), problem.upper());
         assert_eq!(lo.vec_len(), n, "lower bound shape mismatch");
         assert_eq!(hi.vec_len(), n, "upper bound shape mismatch");
         let mut work = Work {
@@ -400,15 +464,25 @@ where
         state.cost = Some(F::infinity());
         if !work.failed {
             if work.free.is_empty() {
-                work.residual = vector(&problem.residual(&state.param)?);
+                let r = problem.residual(&state.param)?;
+                work.residual = vector(&r);
+                state.cost = Some(problem.cost(&r, |_| cost(&work.residual)));
                 work.optimality = F::zero();
             } else {
                 let (r, j) = problem.residual_and_jacobian(&state.param)?;
                 work.residual = vector(&r);
-                if let Some(j) =
-                    jacobian(&j, work.residual.len(), n, &work.free)
-                {
-                    work.jacobian = j;
+                state.cost = Some(problem.cost(&r, |_| cost(&work.residual)));
+                if let Some((model_r, j)) = problem.model(&r, j) {
+                    if let Some(model_r) = model_r {
+                        work.residual = vector(&model_r);
+                    }
+                    if let Some(j) =
+                        jacobian(&j, work.residual.len(), n, &work.free)
+                    {
+                        work.jacobian = j;
+                    } else {
+                        work.failed = true;
+                    }
                 } else {
                     work.failed = true;
                 }
@@ -417,7 +491,7 @@ where
                 !work.residual.is_empty(),
                 "TRF requires at least one residual"
             );
-            let f = cost(&work.residual);
+            let f = state.cost.expect("evaluated cost");
             state.cost = Some(if f.is_finite() { f } else { F::infinity() });
             work.failed |=
                 !f.is_finite() || work.residual.iter().any(|x| !x.is_finite());
@@ -446,11 +520,16 @@ where
         Ok(state)
     }
 
-    fn next_iter(
+    fn next_evaluated<V, M, E>(
         &mut self,
-        problem: &mut Problem<P>,
+        problem: &mut E,
         mut state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> NllsStep<V, F, E::Error>
+    where
+        V: Clone + VectorLen + VectorIndex<F>,
+        M: MatrixIndex<F>,
+        E: BoundedEvaluation<V, M, F>,
+    {
         let work = self.work.as_mut().expect("TRF must be initialized");
         let failed = Some(TerminationReason::SolverFailed);
         if work.failed {
@@ -536,9 +615,10 @@ where
             {
                 break;
             }
-            let r = vector(&problem.residual(&trial)?);
+            let raw_r = problem.residual(&trial)?;
+            let r = vector(&raw_r);
             assert_eq!(r.len(), m, "residual shape changed during solve");
-            let new_cost = cost(&r);
+            let new_cost = problem.cost(&raw_r, |_| cost(&r));
             if !new_cost.is_finite() || r.iter().any(|x| !x.is_finite()) {
                 work.radius = number::<F>(0.25) * length;
                 continue;
@@ -549,12 +629,15 @@ where
                 update_radius(work.radius, length, ratio).min(F::max_value());
             if actual > F::zero() {
                 let j = problem.jacobian(&trial)?;
+                let Some((model_r, j)) = problem.model(&raw_r, j) else {
+                    break;
+                };
                 let Some(j) =
                     jacobian(&j, m, state.param.vec_len(), &work.free)
                 else {
                     break;
                 };
-                work.residual = r;
+                work.residual = model_r.map_or(r, |r| vector(&r));
                 work.jacobian = j;
                 state.param = trial;
                 state.cost = Some(new_cost);
@@ -567,7 +650,10 @@ where
         Ok((state, failed))
     }
 
-    fn terminate(&self, _: &NllsState<V, F>) -> Option<TerminationReason> {
+    fn terminate_evaluated<V>(
+        &self,
+        _: &NllsState<V, F>,
+    ) -> Option<TerminationReason> {
         self.work
             .as_ref()
             .filter(|w| {

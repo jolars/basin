@@ -67,6 +67,7 @@ pub mod constraint;
 pub mod convergence;
 pub mod executor;
 pub mod inner;
+pub mod least_squares;
 pub mod math;
 pub mod numdiff;
 pub mod observer;

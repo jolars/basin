@@ -449,6 +449,18 @@ pub trait MatrixIndex<F = f64> {
     fn matrix_entry(&self, row: usize, col: usize) -> F;
 }
 
+/// Multiply each matrix row by the corresponding entry in `factors`.
+///
+/// Implemented for all shipped dense matrices and nalgebra/faer CSC matrices,
+/// for `f32` and `f64`. Sparse implementations preserve the storage pattern.
+/// Panics when the number of factors differs from the matrix's row count.
+/// Robust least-squares solvers use this capability to adjust their local
+/// model without changing the original residual/Jacobian contract.
+pub trait ScaleRowsInPlace<F: super::Scalar = f64> {
+    /// Apply `self[i, j] *= factors[i]` in place.
+    fn scale_rows_in_place(&mut self, factors: &[F]);
+}
+
 /// Symmetric (self-adjoint) eigendecomposition `A = U diag(λ) Uᵀ`. The
 /// load-bearing op for CMA-ES, which factors its covariance every
 /// iteration to compute both the sampling map `B D z_k = y_k ~ N(0, C)`

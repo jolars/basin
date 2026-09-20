@@ -374,6 +374,10 @@ pub use crate::core::executor::{
 pub use crate::core::inner::{
     InitialState, InnerExecutor, ResumableInner, WarmStart,
 };
+pub use crate::core::least_squares::{
+    ArctanLoss, CauchyLoss, HuberLoss, LossEvaluation, LossFunction,
+    RobustLeastSquares, SoftL1Loss, SquaredLoss,
+};
 pub use crate::core::math::{
     AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseMatrix,
     DenseMatrixFromFn, Dot, FactorizePivotedQr, GramMatrix, LinearSolveError,
@@ -381,8 +385,8 @@ pub use crate::core::math::{
     MatrixFromDiagonal, MatrixIdentity, MatrixIndex, MaxDiagonal, NegInPlace,
     NormInfinity, NormSquared, QrFactorization, QrSolveError,
     RegularizedQrSolve, SampleStandardNormal, SampleUniformBox, Scalar,
-    ScaleInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError, VectorIndex,
-    VectorLen,
+    ScaleInPlace, ScaleRowsInPlace, ScaledAdd, SymmetricEigen,
+    SymmetricEigenError, VectorIndex, VectorLen,
 };
 pub use crate::core::numdiff::{
     BoundedFiniteDiff, DerivativeCheckError, DerivativeCheckReport,

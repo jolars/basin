@@ -283,8 +283,8 @@ pub use linalg::{
     AddDiagonalVectorInPlace, DenseMatrixFromFn, FactorizePivotedQr,
     GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
     MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, MatrixIndex,
-    MaxDiagonal, QrSolveError, RegularizedQrSolve, SymmetricEigen,
-    SymmetricEigenError,
+    MaxDiagonal, QrSolveError, RegularizedQrSolve, ScaleRowsInPlace,
+    SymmetricEigen, SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 

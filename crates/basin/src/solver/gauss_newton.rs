@@ -1,4 +1,5 @@
 use crate::core::inner::InitialState;
+use crate::core::least_squares::evaluation::{Evaluation, NllsStep};
 use crate::core::math::{
     GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity,
     NormSquared, Scalar, ScaledAdd,
@@ -7,9 +8,16 @@ use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
+use crate::{
+    LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
+};
 
 /// Pure Gauss-Newton solver for nonlinear least-squares problems
 /// `min ½‖r(x)‖²`.
+///
+/// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss.
+/// The adapter supplies the safeguarded Gauss–Newton model, and reported
+/// costs and convergence use the robust objective and its gradient.
 ///
 /// Each iteration solves the normal equations `(JᵀJ) δ = −Jᵀr` via
 /// Cholesky on the Gram matrix `JᵀJ` and takes the full step
@@ -61,10 +69,14 @@ use crate::core::termination::TerminationReason;
 /// `Mat<f64>`), and ndarray (`Array1<f64>`/`Array2<f64>`, the latter over
 /// the same pure-Rust Cholesky), plus the nalgebra-sparse / faer-sparse
 /// matrices.
+/// All support `f32` and `f64`; use `GaussNewton::default()` for `f32`.
+/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
+/// Jacobian types.
 ///
 /// # State convention
 ///
-/// `state.cost` carries the LM convention `½‖r‖²`, derived from the
+/// For an ordinary residual problem, `state.cost` carries the LM convention
+/// `½‖r‖²`, derived from the
 /// residual the solver computes itself. The bound on `P` is
 /// [`Residual`] + [`Jacobian`], not [`CostFunction`](crate::core::problem::CostFunction);
 /// problems whose user-facing `cost()` uses an unscaled `Σ rᵢ²` form
@@ -88,11 +100,19 @@ pub struct GaussNewton<V, M, F = f64> {
     // is dropped.
     r_cache: Option<V>,
     j_cache: Option<M>,
+    model_r_cache: Option<V>,
+    failed: bool,
 }
 
-impl<V, M> Default for GaussNewton<V, M> {
+impl<V, M, F: Scalar> Default for GaussNewton<V, M, F> {
     fn default() -> Self {
-        Self::new()
+        Self {
+            tol_grad: Some(F::from_f64(1e-8).unwrap()),
+            r_cache: None,
+            j_cache: None,
+            model_r_cache: None,
+            failed: false,
+        }
     }
 }
 
@@ -100,11 +120,7 @@ impl<V, M> GaussNewton<V, M> {
     /// Pure Gauss-Newton with the default first-order optimality
     /// tolerance (`tol_grad = 1e-8`).
     pub fn new() -> Self {
-        Self {
-            tol_grad: Some(1e-8),
-            r_cache: None,
-            j_cache: None,
-        }
+        Self::default()
     }
 }
 
@@ -156,43 +172,116 @@ where
     M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
 {
     type Error = <P as Residual>::Error;
-
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: NllsState<V, F>,
+        state: NllsState<V, F>,
     ) -> Result<NllsState<V, F>, Self::Error> {
-        // Seed cost so iter-0 termination criteria see a populated
-        // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
-        // `next_iter` doesn't re-evaluate them at the same point.
-        let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
-        self.r_cache = Some(r);
-        self.j_cache = Some(j);
-        Ok(state)
+        self.init_evaluated(problem, state)
     }
-
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: NllsState<V, F>,
+        state: NllsState<V, F>,
     ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_evaluated(problem, state)
+    }
+}
+
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+    for GaussNewton<V, M, F>
+where
+    F: Scalar,
+    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
+    M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
+    L: LossFunction<F>,
+    V: VectorLen + VectorIndex<F>,
+    M: ScaleRowsInPlace<F>,
+{
+    type Error = <P as Residual>::Error;
+    fn init(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
+        self.init_evaluated(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_evaluated(problem, state)
+    }
+}
+
+impl<V, M, F: Scalar> GaussNewton<V, M, F>
+where
+    V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
+    M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
+{
+    fn init_evaluated<E: Evaluation<V, M, F>>(
+        &mut self,
+        problem: &mut E,
+        mut state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, E::Error> {
+        // Seed cost so iter-0 termination criteria see a populated
+        // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
+        // `next_iter` doesn't re-evaluate them at the same point.
+        self.failed = false;
+        self.r_cache = None;
+        self.j_cache = None;
+        self.model_r_cache = None;
+        let (r, j) = problem.residual_and_jacobian(&state.param)?;
+        state.cost = Some(
+            problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
+        );
+        let Some((model_r, j)) = problem.model(&r, j) else {
+            self.failed = true;
+            return Ok(state);
+        };
+        self.r_cache = Some(r);
+        self.j_cache = Some(j);
+        self.model_r_cache = model_r;
+        Ok(state)
+    }
+
+    fn next_evaluated<E: Evaluation<V, M, F>>(
+        &mut self,
+        problem: &mut E,
+        mut state: NllsState<V, F>,
+    ) -> NllsStep<V, F, E::Error> {
+        if self.failed {
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
         let r = match self.r_cache.take() {
             Some(r) => r,
             None => problem.residual(&state.param)?,
         };
-        let j = match self.j_cache.take() {
-            Some(j) => j,
-            None => problem.jacobian(&state.param)?,
+        let (model_r, j) = match self.j_cache.take() {
+            Some(j) => (self.model_r_cache.take(), j),
+            None => {
+                let j = problem.jacobian(&state.param)?;
+                let Some(model) = problem.model(&r, j) else {
+                    self.failed = true;
+                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                };
+                model
+            }
         };
 
-        // g = Jᵀr is the gradient of ½‖r‖². First-order optimality
-        // (Madsen/Nielsen/Tingleff eq. 3.3a) is the canonical NLLS
-        // convergence test.
-        let g = j.mat_transpose_vec(&r);
+        // The corrected model preserves the objective gradient, so the same
+        // first-order optimality test applies to ordinary and robust losses.
+        let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
+        if !problem.valid_vector(&g) {
+            self.failed = true;
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
         if self.tol_grad.is_some_and(|tol| g.norm_infinity() <= tol) {
             self.r_cache = Some(r);
             self.j_cache = Some(j);
+            self.model_r_cache = model_r;
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
 
@@ -209,6 +298,7 @@ where
                 // for any subsequent reuse (e.g. via `InnerExecutor`).
                 self.r_cache = Some(r);
                 self.j_cache = Some(j);
+                self.model_r_cache = model_r;
                 return Ok((state, Some(TerminationReason::SolverFailed)));
             }
         };
@@ -219,10 +309,15 @@ where
         // `J(x_new)` is not computed, so `j_cache` stays empty.
         state.param.scaled_add(F::one(), &delta);
         let r_new = problem.residual(&state.param)?;
-        state.cost = Some(F::from_f64(0.5).unwrap() * r_new.norm_squared());
+        state.cost =
+            Some(problem.cost(&r_new, |r| {
+                F::from_f64(0.5).unwrap() * r.norm_squared()
+            }));
         self.r_cache = Some(r_new);
         self.j_cache = None;
 
-        Ok((state, None))
+        let failed = E::ROBUST && !state.cost.unwrap().is_finite();
+        self.failed = failed;
+        Ok((state, failed.then_some(TerminationReason::SolverFailed)))
     }
 }

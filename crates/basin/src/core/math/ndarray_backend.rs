@@ -687,3 +687,11 @@ impl<F: Scalar> super::DenseMatrixFromFn<F> for Array1<F> {
         Array2::from_shape_fn((rows, cols), |(i, j)| f(i, j))
     }
 }
+impl<F: Scalar> super::ScaleRowsInPlace<F> for Array2<F> {
+    fn scale_rows_in_place(&mut self, factors: &[F]) {
+        assert_eq!(self.nrows(), factors.len(), "row scale shape mismatch");
+        for (mut row, &factor) in self.rows_mut().into_iter().zip(factors) {
+            row.mapv_inplace(|v| v * factor);
+        }
+    }
+}

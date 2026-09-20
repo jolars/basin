@@ -60,6 +60,43 @@ where
     })
 }
 
+// The corrected residual may be enormous when robust curvature is clipped.
+// Normalize by the actual objective so that this cannot imply stationarity.
+pub(super) fn robust_gradient_converged<V, F>(
+    g: &V,
+    diagonal: &V,
+    cost: F,
+    tol: F,
+) -> bool
+where
+    F: Scalar,
+    V: NormInfinity<F> + ComponentZip<F>,
+{
+    if !cost.is_finite() || cost < F::zero() || !g.norm_infinity().is_finite() {
+        return false;
+    }
+    g.all_zip(diagonal, |value, square| {
+        if !value.is_finite() || !square.is_finite() || square < F::zero() {
+            return false;
+        }
+        if value == F::zero() {
+            return true;
+        }
+        if tol == F::zero() || cost == F::zero() || square == F::zero() {
+            return false;
+        }
+        product_le(
+            &[value.abs()],
+            &[
+                tol,
+                cost.sqrt(),
+                F::from_f64(2.0).unwrap().sqrt(),
+                square.sqrt(),
+            ],
+        )
+    })
+}
+
 pub(super) fn relative_step_converged<V, F>(h: &V, x: &V, tol: F) -> bool
 where
     F: Scalar,

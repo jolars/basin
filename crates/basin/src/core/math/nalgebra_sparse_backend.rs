@@ -236,6 +236,15 @@ where
     }
 }
 
+impl<F: Scalar> super::ScaleRowsInPlace<F> for CscMatrix<F> {
+    fn scale_rows_in_place(&mut self, factors: &[F]) {
+        assert_eq!(self.nrows(), factors.len(), "row scale shape mismatch");
+        for (i, _, value) in self.triplet_iter_mut() {
+            *value = *value * factors[i];
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

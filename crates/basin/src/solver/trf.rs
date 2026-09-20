@@ -1,5 +1,6 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::inner::InitialState;
+use crate::core::least_squares::evaluation::{BoundedEvaluation, NllsStep};
 use crate::core::math::{
     AddDiagonalVectorInPlace, BoxAffineScaling, Dot, GramMatrix,
     LinearSolveSpd, MatTransposeVec, MaxDiagonal, NegInPlace, NormSquared,
@@ -9,6 +10,9 @@ use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::NllsState;
 use crate::core::termination::TerminationReason;
+use crate::{
+    LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
+};
 
 /// Levenberg-Marquardt with Coleman–Li box scaling (simplified TRF)
 /// for nonlinear least-squares problems `min ½‖r(x)‖²` subject to
@@ -20,6 +24,11 @@ use crate::core::termination::TerminationReason;
 /// subproblems, use [`TrustRegionReflective`](super::TrustRegionReflective).
 /// This type retains its bounded-LM behavior and backend support through
 /// Basin 1.x.
+///
+/// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss.
+/// The adapter supplies the safeguarded Gauss–Newton model. Reported costs,
+/// actual reductions, and Coleman–Li scaling use the robust objective and
+/// its gradient.
 ///
 /// # Algorithm
 ///
@@ -129,10 +138,14 @@ use crate::core::termination::TerminationReason;
 /// The sparse damping path requires the diagonal of `JᵀJ` to be in the
 /// CSC pattern (always true when `J` has no zero columns); see
 /// `AddDiagonalVectorInPlace`.
+/// All support `f32` and `f64`; use `Trf::default()` for `f32`.
+/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
+/// Jacobian types.
 ///
 /// # State convention
 ///
-/// Same as [`LevenbergMarquardt`](super::LevenbergMarquardt):
+/// For an ordinary residual problem, as with
+/// [`LevenbergMarquardt`](super::LevenbergMarquardt),
 /// `state.cost` carries the LM convention `½‖r‖²`. The bound on `P`
 /// includes [`BoxConstraints`] (which inherits
 /// [`CostFunction`](crate::core::problem::CostFunction)) but the solver
@@ -168,11 +181,25 @@ pub struct Trf<V, M, F = f64> {
     // unchanged at the current iterate (both stashed).
     r_cache: Option<V>,
     j_cache: Option<M>,
+    model_r_cache: Option<V>,
+    failed: bool,
 }
 
-impl<V, M> Default for Trf<V, M> {
+impl<V, M, F: Scalar> Default for Trf<V, M, F> {
     fn default() -> Self {
-        Self::new()
+        Self {
+            tol_grad: Some(F::from_f64(1e-8).unwrap()),
+            tau: F::from_f64(1e-3).unwrap(),
+            rstep: F::from_f64(1e-10).unwrap(),
+            theta: F::from_f64(0.99995).unwrap(),
+            max_inner_attempts: 50,
+            mu: None,
+            nu: F::from_f64(2.0).unwrap(),
+            r_cache: None,
+            j_cache: None,
+            model_r_cache: None,
+            failed: false,
+        }
     }
 }
 
@@ -181,17 +208,7 @@ impl<V, M> Trf<V, M> {
     /// `tau = 1e-3`, `rstep = 1e-10`, `theta = 0.99995`,
     /// `max_inner_attempts = 50`.
     pub fn new() -> Self {
-        Self {
-            tol_grad: Some(1e-8),
-            tau: 1e-3,
-            rstep: 1e-10,
-            theta: 0.99995,
-            max_inner_attempts: 50,
-            mu: None,
-            nu: 2.0,
-            r_cache: None,
-            j_cache: None,
-        }
+        Self::default()
     }
 }
 
@@ -297,34 +314,118 @@ where
         + Clone,
 {
     type Error = <P as Residual>::Error;
-
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: NllsState<V, F>,
+        state: NllsState<V, F>,
     ) -> Result<NllsState<V, F>, Self::Error> {
+        self.init_evaluated(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<P>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_evaluated(problem, state)
+    }
+}
+
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+    for Trf<V, M, F>
+where
+    F: Scalar,
+    P: Residual<Param = V, Output = V>
+        + Jacobian<Jacobian = M>
+        + BoxConstraints<Param = V>,
+    V: ScaledAdd<F>
+        + NormSquared<F>
+        + NegInPlace
+        + Dot<F>
+        + BoxAffineScaling<F>
+        + Clone,
+    M: GramMatrix
+        + MatTransposeVec<V>
+        + LinearSolveSpd<V>
+        + AddDiagonalVectorInPlace<V>
+        + MaxDiagonal<F>
+        + Clone,
+    L: LossFunction<F>,
+    V: VectorLen + VectorIndex<F>,
+    M: ScaleRowsInPlace<F>,
+{
+    type Error = <P as Residual>::Error;
+    fn init(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, Self::Error> {
+        self.init_evaluated(problem, state)
+    }
+    fn next_iter(
+        &mut self,
+        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        state: NllsState<V, F>,
+    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        self.next_evaluated(problem, state)
+    }
+}
+
+impl<V, M, F: Scalar> Trf<V, M, F>
+where
+    V: ScaledAdd<F>
+        + NormSquared<F>
+        + NegInPlace
+        + Dot<F>
+        + BoxAffineScaling<F>
+        + Clone,
+    M: GramMatrix
+        + MatTransposeVec<V>
+        + LinearSolveSpd<V>
+        + AddDiagonalVectorInPlace<V>
+        + MaxDiagonal<F>
+        + Clone,
+{
+    fn init_evaluated<E: BoundedEvaluation<V, M, F>>(
+        &mut self,
+        problem: &mut E,
+        mut state: NllsState<V, F>,
+    ) -> Result<NllsState<V, F>, E::Error> {
         // Project the starting iterate strictly into (lower, upper).
         // D is undefined where v_i = 0 (a finite face), so an
         // on-boundary or infeasible start is silently corrected.
         state.param.project_strictly_inside(
-            problem.inner().lower(),
-            problem.inner().upper(),
+            problem.lower(),
+            problem.upper(),
             self.rstep,
         );
 
+        self.failed = false;
+        self.r_cache = None;
+        self.j_cache = None;
+        self.model_r_cache = None;
         let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(F::from_f64(0.5).unwrap() * r.norm_squared());
+        state.cost = Some(
+            problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
+        );
+        let Some((model_r, j)) = problem.model(&r, j) else {
+            self.failed = true;
+            return Ok(state);
+        };
 
         // μ₀ = τ · max diag(JᵀJ + diag(c)). The C-correction is
         // typically small; the τ · max diag scaling matches Nielsen's
         // recommendation for LM, generalized to the BCL M-matrix.
-        let g = j.mat_transpose_vec(&r);
+        let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
+        if !problem.valid_vector(&g) {
+            self.failed = true;
+            return Ok(state);
+        }
         let mut d_sq = state.param.clone();
         let mut c_diag = state.param.clone();
         state.param.compute_cl_scaling(
             &g,
-            problem.inner().lower(),
-            problem.inner().upper(),
+            problem.lower(),
+            problem.upper(),
             &mut d_sq,
             &mut c_diag,
         );
@@ -336,27 +437,42 @@ where
         self.nu = F::from_f64(2.0).unwrap();
         self.r_cache = Some(r);
         self.j_cache = Some(j);
+        self.model_r_cache = model_r;
         Ok(state)
     }
 
-    fn next_iter(
+    fn next_evaluated<E: BoundedEvaluation<V, M, F>>(
         &mut self,
-        problem: &mut Problem<P>,
+        problem: &mut E,
         mut state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+    ) -> NllsStep<V, F, E::Error> {
         // Use cached `r`/`J` when available (set by init or by the
         // previous accept-or-reject branch). Only count an eval when the
         // cache misses.
+        if self.failed {
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
         let r = match self.r_cache.take() {
             Some(r) => r,
             None => problem.residual(&state.param)?,
         };
-        let j = match self.j_cache.take() {
-            Some(j) => j,
-            None => problem.jacobian(&state.param)?,
+        let (model_r, j) = match self.j_cache.take() {
+            Some(j) => (self.model_r_cache.take(), j),
+            None => {
+                let j = problem.jacobian(&state.param)?;
+                let Some(model) = problem.model(&r, j) else {
+                    self.failed = true;
+                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                };
+                model
+            }
         };
 
-        let g = j.mat_transpose_vec(&r);
+        let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
+        if !problem.valid_vector(&g) {
+            self.failed = true;
+            return Ok((state, Some(TerminationReason::SolverFailed)));
+        }
 
         // Compute the Coleman-Li affine scaling diagonals at the
         // current iterate. d_sq[i] = 1/|v_i|, c_diag[i] = |g_i|/|v_i|
@@ -365,8 +481,8 @@ where
         let mut c_diag = state.param.clone();
         state.param.compute_cl_scaling(
             &g,
-            problem.inner().lower(),
-            problem.inner().upper(),
+            problem.lower(),
+            problem.upper(),
             &mut d_sq,
             &mut c_diag,
         );
@@ -384,6 +500,7 @@ where
             // mirroring LM's pattern keeps the contract uniform.
             self.r_cache = Some(r);
             self.j_cache = Some(j);
+            self.model_r_cache = model_r;
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
 
@@ -425,6 +542,7 @@ where
                         // State unchanged; restore both caches.
                         self.r_cache = Some(r);
                         self.j_cache = Some(j);
+                        self.model_r_cache = model_r;
                         return Ok((
                             state,
                             Some(TerminationReason::SolverFailed),
@@ -439,11 +557,10 @@ where
         // Step-back to the open feasible region. The unconstrained
         // Newton step h might land on or beyond a face; scale it down
         // by min(1, θ · τ_max) so the iterate stays strictly inside.
-        let tau_max = state.param.max_feasible_step(
-            &h,
-            problem.inner().lower(),
-            problem.inner().upper(),
-        );
+        let tau_max =
+            state
+                .param
+                .max_feasible_step(&h, problem.lower(), problem.upper());
         let alpha = if tau_max >= F::one() {
             F::one()
         } else {
@@ -454,7 +571,7 @@ where
         let mut x_trial = state.param.clone();
         x_trial.scaled_add(alpha, &h);
         let r_trial = problem.residual(&x_trial)?;
-        let f_trial = half * r_trial.norm_squared();
+        let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
         let prev_cost = state
             .cost
@@ -504,6 +621,7 @@ where
             nu = nu * two;
             self.r_cache = Some(r);
             self.j_cache = Some(j);
+            self.model_r_cache = model_r;
         }
 
         self.mu = Some(mu);

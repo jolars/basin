@@ -30,10 +30,11 @@ numerical work against analytic cases and reference implementations.
   directional checks. Reuse the bound-aware probe machinery when bounds are
   supplied, and distinguish non-finite evaluations from derivative
   mismatches.
-- [ ] **Add robust nonlinear least squares.** Support Huber, soft-L1, Cauchy,
-  and arctangent losses with a residual scale. Keep the reported objective,
-  gradient, local model, and convergence tests consistent with the chosen
-  loss. Compare outlier-contaminated fits with [SciPy's least-squares
+- [x] **Add robust nonlinear least squares.** Added `RobustLeastSquares` with
+  squared, Huber, soft-L1, Cauchy, arctangent, and custom losses and a residual
+  scale. All five NLLS solvers use the robust objective, gradient, and
+  safeguarded local model, with `f32` and `f64` support on their existing
+  backends. Outlier-contaminated fits agree with [SciPy's least-squares
   API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html).
 - [x] **Add full trust-region-reflective least squares.** Added
   `TrustRegionReflective` with Coleman-Li scaling, an explicit radius,
