@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.13.1](https://github.com/jolars/basin/compare/v1.13.0...v1.13.1) (2026-09-19)
+
+### Bug Fixes
+- prevent BOBYQA panic at box corners ([`dae8bed`](https://github.com/jolars/basin/commit/dae8bedef19ec732e122fdf127d64c8457cd260e)), fixes [#100](https://github.com/jolars/basin/issues/100)
+
 ## [1.13.0](https://github.com/jolars/basin/compare/v1.12.0...v1.13.0) (2026-09-18)
 
 ### Features
