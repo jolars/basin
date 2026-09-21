@@ -28,6 +28,7 @@
     samply
     pprof
     wasm-pack
+    lychee
     perf
     quartoMinimal
     shfmt

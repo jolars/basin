@@ -1,0 +1,19 @@
+# Run from the repository root after building the site and API documentation.
+# The build output is ignored by Git but must be scanned for links.
+no_ignore = true
+no_progress = true
+root_dir = "web/build"
+index_files = ["index.html"]
+include_fragments = "anchor-only"
+
+max_concurrency = 8
+max_retries = 2
+timeout = 20
+
+# mdsvex marks external links as nofollow, which lychee otherwise skips.
+preprocess = { command = "web/scripts/lychee-preprocess.sh" }
+
+# Publishers often block automated HTML requests. DOI content negotiation
+# validates the identifier through its registration agency instead.
+[hosts."doi.org"]
+headers = { Accept = "application/vnd.citationstyles.csl+json" }

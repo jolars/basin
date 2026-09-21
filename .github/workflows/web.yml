@@ -6,6 +6,8 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "23 6 * * 1"
   workflow_dispatch:
 
 # Same-ref pushes cancel each other; tag pushes and main pushes don't fight.
@@ -16,6 +18,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
@@ -56,10 +60,28 @@ jobs:
       - name: Build site
         working-directory: web
         # No BASIN_BASE_PATH: the site is served at the root of the apex
-        # custom domain (basin.bz), so kit.paths.base stays empty. (Repo
+        # custom domain (basin.rs), so kit.paths.base stays empty. (Repo
         # Pages sites under /<repo>/ would set it; the custom domain does
         # not.)
         run: pnpm run build
+
+      # Check API links against this revision, including APIs that have not
+      # reached docs.rs yet. Only the site's HTML is scanned for links.
+      - name: Build API link targets
+        run: >-
+          cargo doc --no-deps -p basin
+          --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde
+
+      - name: Check website links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --config web/lychee.toml
+            --remap '^https://basin\.rs/ file://${{ github.workspace }}/web/build/'
+            --remap '^https://docs\.rs/basin/latest/basin/ file://${{ github.workspace }}/target/doc/basin/'
+            'web/build/**/*.html'
+          output: ${{ runner.temp }}/lychee-report.md
+          fail: true
 
       - name: Add .nojekyll
         run: touch web/build/.nojekyll

@@ -40,6 +40,30 @@ fit optimization state.
   Run this before committing any rustdoc changes.
 - `cargo fmt`: format (also enforced by pre-commit).
 
+### Website links
+
+The Website workflow checks the rendered HTML with
+[lychee](https://lychee.cli.rs/) after each build and every Monday. It validates
+local pages, assets, and anchors, plus external links. Basin site URLs and
+versionless API links resolve against the local builds so new pages and APIs
+can be checked before publication.
+
+To run the same check locally, build the site with `pnpm --dir web build`, run
+the `cargo doc` command above, and then run this from the repository root:
+
+```sh
+lychee --config web/lychee.toml \
+  --remap "^https://basin\\.rs/ file://$PWD/web/build/" \
+  --remap "^https://docs\\.rs/basin/latest/basin/ file://$PWD/target/doc/basin/" \
+  'web/build/**/*.html'
+```
+
+The checker reads HTML rather than `.svx` sources, whose relative links name
+site routes. Its preprocessor removes mdsvex's `rel="nofollow"` attribute only
+from the checker input so lychee includes those external links. DOI links
+request citation metadata because some publishers block automated HTML
+requests. The published HTML is unchanged.
+
 ### `cargo test --all-features` needs a BLAS/LAPACK provider
 
 `cargo clippy --all-features` and `cargo doc` with acceleration features work
