@@ -1,6 +1,6 @@
 use basin::{
-    CostFunction, Dot, Executor, FirstOrderState, Gradient, NegInPlace,
-    NonlinearCg, NormInfinity, NormSquared, Scalar, ScaledAdd,
+    CgUpdate, CostFunction, Dot, Executor, FirstOrderState, Gradient,
+    NegInPlace, NonlinearCg, NormInfinity, NormSquared, Scalar, ScaledAdd,
     TerminationReason, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
@@ -103,45 +103,51 @@ where
     let num = |v| F::from_f64(v).unwrap();
     let single = F::epsilon() > num(1e-10);
     let tolerance = if single { num(1e-3) } else { num(1e-7) };
-    for (kind, start) in [
-        (Kind::Quadratic, vec![num(2.0), num(-1.0)]),
-        (Kind::Rosenbrock, vec![num(-1.2), F::one()]),
-        (
-            Kind::IllConditioned,
-            vec![F::one(); if single { 3 } else { 7 }],
-        ),
-    ] {
-        let result = Executor::new(
-            Objective { make, kind },
-            NonlinearCg::new().with_absolute_gradient_tolerance(tolerance),
-            FirstOrderState::new(make(&start)),
-        )
-        .require_evaluated_state()
-        .max_iter(10_000)
-        .run()
-        .unwrap();
-        assert_eq!(
-            result.reason,
-            TerminationReason::GradientTolerance,
-            "cost={:?}, iter={}",
-            result.cost(),
-            result.iter()
-        );
-        let (x, cost, gradient) = result.state.current().unwrap();
-        assert!(gradient.norm_squared().sqrt() <= tolerance);
-        let (expected_cost, expected_gradient) =
-            Objective { make, kind }.evaluate(x);
-        assert_eq!(cost, expected_cost);
-        let mut error = gradient.clone();
-        error.scaled_add(-F::one(), &expected_gradient);
-        assert_eq!(error.norm_infinity(), F::zero());
-        let target = if matches!(kind, Kind::Rosenbrock) {
-            F::one()
-        } else {
-            F::zero()
-        };
-        for i in 0..x.vec_len() {
-            assert!((x.get_scalar(i) - target).abs() < num(5.0) * tolerance);
+    for update in [CgUpdate::HagerZhang, CgUpdate::PolakRibierePlus] {
+        for (kind, start) in [
+            (Kind::Quadratic, vec![num(2.0), num(-1.0)]),
+            (Kind::Rosenbrock, vec![num(-1.2), F::one()]),
+            (
+                Kind::IllConditioned,
+                vec![F::one(); if single { 3 } else { 7 }],
+            ),
+        ] {
+            let result = Executor::new(
+                Objective { make, kind },
+                NonlinearCg::new()
+                    .with_update(update)
+                    .with_absolute_gradient_tolerance(tolerance),
+                FirstOrderState::new(make(&start)),
+            )
+            .require_evaluated_state()
+            .max_iter(10_000)
+            .run()
+            .unwrap();
+            assert_eq!(
+                result.reason,
+                TerminationReason::GradientTolerance,
+                "update={update:?}, cost={:?}, iter={}",
+                result.cost(),
+                result.iter()
+            );
+            let (x, cost, gradient) = result.state.current().unwrap();
+            assert!(gradient.norm_squared().sqrt() <= tolerance);
+            let (expected_cost, expected_gradient) =
+                Objective { make, kind }.evaluate(x);
+            assert_eq!(cost, expected_cost);
+            let mut error = gradient.clone();
+            error.scaled_add(-F::one(), &expected_gradient);
+            assert_eq!(error.norm_infinity(), F::zero());
+            let target = if matches!(kind, Kind::Rosenbrock) {
+                F::one()
+            } else {
+                F::zero()
+            };
+            for i in 0..x.vec_len() {
+                assert!(
+                    (x.get_scalar(i) - target).abs() < num(5.0) * tolerance
+                );
+            }
         }
     }
 }

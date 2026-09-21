@@ -67,7 +67,7 @@ pub mod nelder_mead;
 /// NEWUOA (Powell 2006): model-based derivative-free trust-region solver
 /// (quadratic surrogate + least-Frobenius-norm update).
 pub mod newuoa;
-/// Hager–Zhang nonlinear conjugate gradient with a pluggable line search.
+/// Nonlinear conjugate gradient with selectable updates and a pluggable line search.
 pub mod nonlinear_cg;
 /// Shared core of the Powell-family DFO solvers (NEWUOA, BOBYQA, …): the
 /// least-Frobenius-norm [`QuadraticModel`](powell::QuadraticModel), its `H`
@@ -148,7 +148,7 @@ pub use ma_ls_ch_sw::{MaLsChSw, MaLsChSwState};
 pub use mads::{Bounded, Constrained, Mads};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
 pub use newuoa::Newuoa;
-pub use nonlinear_cg::NonlinearCg;
+pub use nonlinear_cg::{CgUpdate, NonlinearCg};
 pub use projected_gradient_descent::ProjectedGradientDescent;
 pub use random_search::RandomSearch;
 pub use sgd::Sgd;

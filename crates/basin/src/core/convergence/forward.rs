@@ -285,6 +285,7 @@ impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<Lincoa<F>, CG, CX, CC, CT> {
 impl<CG, CX, CC, CT, L, V, F: Scalar>
     ConfiguredSolver<NonlinearCg<L, V, F>, CG, CX, CC, CT>
 {
+    forward_setting!(NonlinearCg, with_update, update: CgUpdate);
     forward_setting!(NonlinearCg, with_eta, eta: F);
     forward_setting!(NonlinearCg, with_restart_interval, interval: Option<u64>);
 }

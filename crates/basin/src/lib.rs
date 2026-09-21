@@ -450,7 +450,7 @@ pub use crate::solver::trust_region::{
 };
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
-    Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative,
+    Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative, CgUpdate,
     ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton, Gbnm,
     GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt,
     LevenbergMarquardtQr, Lincoa, LmDamping, MaLsCh, MaLsChCma,
