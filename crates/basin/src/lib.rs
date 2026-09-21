@@ -93,6 +93,7 @@
 //! | Solver | State | `from_start` |
 //! | ------ | ----- | ------------ |
 //! | `GradientDescent`, `Sgd` | `BasicState` | ✓ |
+//! | `NonlinearCg` | `FirstOrderState` | ✓ |
 //! | `ProjectedGradientDescent` | `BasicState` | ✓ (`f64` only) |
 //! | `Bfgs` | `QuasiNewtonState` | ✓ (`Vec`/nalgebra/ndarray/faer) |
 //! | `Lbfgs`, `Lbfgsb` | `LbfgsState` | ✓ |
@@ -454,7 +455,7 @@ pub use crate::solver::{
     GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt,
     LevenbergMarquardtQr, Lincoa, LmDamping, MaLsCh, MaLsChCma,
     MaLsChGenericState, MaLsChState, MaLsChSw, MaLsChSwState, Mads,
-    MemeticInner, Metropolis, Neighbor, NelderMead, Newuoa,
+    MemeticInner, Metropolis, Neighbor, NelderMead, Newuoa, NonlinearCg,
     ProjectedGradientDescent, PsoBoundaryHandling, PsoVelocityLimit,
     RandomDisplacement, RandomSearch, Reannealing, Sgd, SimulatedAnnealing,
     Slsqp, SlsqpFailure, SolisWets, Ssga, StepTaker, TemperatureSchedule, Trf,

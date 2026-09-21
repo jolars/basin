@@ -6,6 +6,14 @@
 #[path = "support/reflective_backend.rs"]
 mod reflective_backend;
 
+#[path = "support/nonlinear_cg_backend.rs"]
+mod nonlinear_cg_backend;
+
+#[test]
+fn nonlinear_cg_f32() {
+    nonlinear_cg_backend::check::<_, f32>(|x| x.to_vec());
+}
+
 #[test]
 fn trust_region_reflective_f32() {
     reflective_backend::check::<_, f32>(|x| x.to_vec());

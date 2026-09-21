@@ -51,6 +51,15 @@ bracketing routines.
 
 ## First-Order
 
+- **[`NonlinearCg`](https://docs.rs/basin/latest/basin/solver/nonlinear_cg/struct.NonlinearCg.html)**:
+  nonlinear conjugate gradient with the safeguarded Hager–Zhang update, O(n)
+  storage, a pluggable line search, and optional periodic restarts. This
+  minimizes smooth unconstrained objectives; Steihaug's linear CG solves a
+  trust-region subproblem. Implements William W. Hager and Hongchao Zhang,
+  “A new conjugate gradient method with guaranteed descent and an efficient
+  line search,” _SIAM Journal on Optimization_ 16(1), 2005, pp. 170–192,
+  equations (1.3), (1.5), and (1.6),
+  [doi:10.1137/030601880](https://doi.org/10.1137/030601880).
 - **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**:
   steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
   `MoreThuente`, `Wolfe`, or `HagerZhang` line searches) and optional
@@ -345,6 +354,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | Solver                      | Family          | `Vec<f64>` | nalgebra | ndarray | faer |
   | --------------------------- | --------------- | :--------: | :------: | :-----: | :--: |
   | `GradientDescent`           | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `NonlinearCg`              | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Sgd`                       | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
   | `ProjectedGradientDescent`  | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
   | `NelderMead`                | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |

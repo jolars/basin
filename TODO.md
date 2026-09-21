@@ -43,11 +43,11 @@ numerical work against analytic cases and reference implementations.
   `f64`; active bounds and rank deficiency are covered by analytic and SciPy
   1.16.2 comparisons. `Trf` retains its existing bounded-LM behavior through
   Basin 1.x. The large-scale path remains a follow-up below.
-- [ ] **Implement nonlinear conjugate gradient.** Add a low-memory first-order
-  solver using the existing line-search interfaces. Choose a
-  research-grounded update and restart policy, and test descent safeguards
-  and ill-conditioned problems. Distinguish this from the linear CG used
-  inside Steihaug's trust-region subproblem solver.
+- [x] **Implement nonlinear conjugate gradient.** Added `NonlinearCg` with the
+  safeguarded Hager–Zhang update, pluggable line searches, and optional periodic
+  restarts. All four dense backends support `f32` and `f64`; tests cover descent
+  safeguards, ill-conditioned problems, and CG_DESCENT C 1.2 reference results.
+  This is distinct from Steihaug's linear trust-region CG.
 - [ ] **Implement DIRECT.** Add deterministic global optimization over finite
   box bounds, with documented subdivision and rectangle-selection rules.
   Compare solution quality and evaluation counts with [SciPy

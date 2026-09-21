@@ -1,3 +1,48 @@
+# Nonlinear conjugate gradient reference fixtures
+
+`nonlinear_cg_reference.tsv` records final solutions from the authors'
+[CG_DESCENT C 1.2](https://www.math.lsu.edu/~hozhang/software-archive.html),
+released November 14, 2005. Its safeguarded Hager–Zhang recurrence follows
+equations (1.3), (1.5), and (1.6) of Hager and Zhang (2005),
+[doi:10.1137/030601880](https://doi.org/10.1137/030601880). The C source is
+GPL-2.0-or-later and stays under gitignored `references/`; Basin implements
+the published equations independently. The committed C driver supplies only
+independent objective callbacks and calls the reference's public API.
+
+Locked cases match `tests/support/nonlinear_cg_backend.rs`:
+
+- `quadratic`: `f(x) = (3x₀² + 2x₀x₁ + 2x₁²)/2`, start `(2, -1)`.
+- `rosenbrock`: `100(x₁ − x₀²)² + (1 − x₀)²`, start `(-1.2, 1)`.
+- `ill_conditioned`: seven-dimensional quadratic with eigenvalues `10⁰`
+  through `10⁶`, rotated by `Q = I − 2uuᵀ`, `u = (1,…,1)/√7`, start `(1,…,1)`.
+
+The reference uses its default settings except `restart_fac = 1000000`
+(beyond the run budget), `maxit_fac = 10000`, and `PrintFinal = 0`.
+Its gradient infinity tolerance is `1e-8`. Each row contains the problem,
+dimension, status, cost, gradient infinity norm, and final coordinates.
+The driver recomputes costs and gradients at the returned point and requires
+status zero. Rust tests verify fixture consistency, then require Basin's
+Euclidean gradient norm to reach `1e-7`, objective agreement within `1e-12`,
+and coordinate agreement within `5e-7`.
+
+These are solution and stationarity comparisons, not trajectory parity.
+CG_DESCENT uses step-initialization heuristics and an approximate-Wolfe
+switching policy that differ from Basin's existing line search. Its original
+default periodic restarts are disabled for comparison with Basin's chosen
+default. Separate analytic tests verify exact-search conjugacy, the coefficient
+lower bound, and sufficient descent.
+
+Regenerate from the repository root with Python and a C compiler:
+
+```sh
+python crates/basin/tests/fixtures/nonlinear_cg_reference.py
+```
+
+The script downloads the pinned archive, checks SHA-256
+`8c09fdb6f98540b214ef348060fa6834d45c32f84cdfbc200e3d97d6631d0573`,
+and builds and runs the reference under `references/nonlinear-cg-c-1.2/`.
+CI reads the committed fixture and needs neither the reference nor a C compiler.
+
 # L-BFGS-B parity fixtures
 
 `lbfgsb_rosenbrock_5d.tsv` is the iteration-wise trajectory of Nocedal's

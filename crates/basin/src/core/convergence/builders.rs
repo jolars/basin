@@ -200,6 +200,9 @@ macro_rules! projected_setters {
 }
 cost_setters!([L, V, F: Scalar] GradientDescent<L, V, F>, []);
 step_setters!([L, V, F: Scalar] GradientDescent<L, V, F>, []);
+cost_setters!([L, V, F: Scalar] NonlinearCg<L, V, F>, []);
+step_setters!([L, V, F: Scalar] NonlinearCg<L, V, F>, []);
+gradient_setters!([L, V, F: Scalar] NonlinearCg<L, V, F>, []);
 cost_setters!([V, F: Scalar] Sgd<V,F>, []);
 step_setters!([V, F: Scalar] Sgd<V,F>, []);
 cost_setters!([L, F: Scalar] Bfgs<L,F>, []);
