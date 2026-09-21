@@ -13,9 +13,12 @@ let result = Executor::from_start(problem, solver, x0)
     .run()?;
 ```
 
-The [migration guide in the repository](https://github.com/jolars/basin/blob/main/MIGRATING.md)
-lists every replacement, optional tolerance semantics, algorithm-specific
-formulas, and changes for composed solves and checkpoints.
+See each [solver's API documentation](../solvers/) for its tolerance setters
+and numerical conventions. The
+[`ConfiguredSolver` reference](https://docs.rs/basin/latest/basin/core/convergence/struct.ConfiguredSolver.html)
+explains optional tolerance semantics and how checks combine. The
+[`Executor` reference](https://docs.rs/basin/latest/basin/core/executor/struct.Executor.html)
+documents execution budgets, application stops, and checkpoints.
 
 For a working introduction, see [Getting Started](../getting-started/).
 The authoritative signatures and defaults live in the

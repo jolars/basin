@@ -192,7 +192,8 @@ These shape API decisions and are non-obvious from the code alone.
    convergence history; exact solver-and-state checkpoints preserve it. Custom
    inner-stop factories create fresh history per run. Executor cancellation is
    checked between top-level iterations; typed problem errors remain the
-   finer-grained hard-abort path. See [the migration guide](MIGRATING.md).
+   finer-grained hard-abort path. See
+   [the convergence migration guide](https://basin.rs/docs/migrating-convergence/).
 4. **First-class constraints.** Constraints describe the *problem*, so they live
    problem-side, not as executor config, never on state. Solvers declare support
    via traits; a constrained problem handed to an unconstrained solver is a

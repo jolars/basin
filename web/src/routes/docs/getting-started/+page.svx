@@ -10,7 +10,7 @@ cargo add basin
 
 Basin works on plain `Vec<f64>` out of the box. Linear-algebra backends are
 opt-in. For example, to use the latest supported
-[nalgebra](https://nalgebra.org) backend (required by some solvers, see
+[nalgebra](https://nalgebra.rs/) backend (required by some solvers, see
 [Solvers](../solvers/)):
 
 ```sh

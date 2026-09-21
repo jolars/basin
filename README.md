@@ -18,6 +18,9 @@ Narrative documentation lives at [basin.rs/docs]; the rustdoc reference is at
 [benchmarks site] comparing Basin against competing crates and across backends
 and solvers.
 
+To port an existing Argmin project, see
+[Migrating from Argmin](https://basin.rs/docs/migrating-from-argmin/).
+
 ## Install
 
 ```sh
@@ -93,7 +96,8 @@ fn main() {
 Configure convergence on the solver and execution budgets on the executor.
 Optional tolerance setters accept a scalar or `None`; enabled tests usually
 combine with OR. The old criterion API is deprecated until Basin 2.0. See the
-[migration guide](MIGRATING.md) for replacements and numerical conventions.
+[convergence migration guide](https://basin.rs/docs/migrating-convergence/)
+for replacements and numerical conventions.
 
 ## Solvers
 
