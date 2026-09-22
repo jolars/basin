@@ -49,11 +49,12 @@ numerical work against analytic cases and reference implementations.
   `f32` and `f64`; tests cover analytic PR+ updates, descent safeguards,
   ill-conditioned problems, and Hager–Zhang's CG_DESCENT C 1.2 reference results.
   This is distinct from Steihaug's linear trust-region CG.
-- [ ] **Implement DIRECT.** Add deterministic global optimization over finite
-  box bounds, with documented subdivision and rectangle-selection rules.
-  Compare solution quality and evaluation counts with [SciPy
-  DIRECT](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.direct.html)
-  on low- and moderate-dimensional multimodal problems.
+- [x] **Implement DIRECT.** Added original `Direct` for deterministic global
+  optimization over finite box bounds, with fixed-coordinate elimination,
+  documented rectangle selection and trisection, and exact checkpoint support.
+  All four dense backends support `f32` and `f64`. Solution quality and
+  evaluation counts are checked against SciPy 1.16.2's original DIRECT on
+  Styblinski–Tang 2D and 6D and translated Ackley 6D.
 
 ### Follow-up candidates
 

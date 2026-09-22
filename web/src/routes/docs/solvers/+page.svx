@@ -236,6 +236,19 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
 
 ## Global & Stochastic
 
+- **[`Direct`](https://docs.rs/basin/latest/basin/solver/direct/struct.Direct.html)**:
+  original DIRECT for deterministic global optimization over finite box bounds.
+  It selects potentially optimal rectangles by their center costs and
+  half-diagonals, then trisects every longest axis. Fixed coordinates are
+  eliminated, and `PointState` exposes the best sampled point. All four dense
+  backends support `f32` and `f64`. Normalized radius stopping defaults to
+  `1e-6`; relative volume stopping is opt-in. Cross-validated against SciPy
+  1.16.2 with `locally_biased=False`.
+  Reference: Donald R. Jones, Cary D. Perttunen, and Bruce E. Stuckman,
+  “Lipschitzian optimization without the Lipschitz constant,”
+  _Journal of Optimization Theory and Applications_ 79, 157–181 (1993),
+  especially pp. 169–170, the subdivision procedure and Definition 4.1,
+  [doi:10.1007/BF00941892](https://doi.org/10.1007/BF00941892).
 - **[`Gbnm`](https://docs.rs/basin/latest/basin/solver/gbnm/struct.Gbnm.html)**:
   Globalized Bounded Nelder-Mead over a feasible box. It combines projected
   local simplex searches with Parzen-density probabilistic restarts and the
@@ -393,6 +406,7 @@ parameter type, ✗ means it is a compile-time error (the tiering rule above).
   | `LevenbergMarquardtQr`      | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Trf`                       | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
   | `TrustRegionReflective`     | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
+  | `Direct`                    | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `Gbnm`                      | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `SimulatedAnnealing`        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
   | `CmaEs`                     | Global          |     ✓      |    ✓     |    ✓    |  ✓   |

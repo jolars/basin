@@ -33,6 +33,8 @@ pub mod de;
 /// DE-flavored sibling of [`cma_inject`]. Inners: Nelder-Mead,
 /// Levenberg-Marquardt, L-BFGS-B.
 pub mod de_inject;
+/// Original DIRECT: deterministic global optimization over finite box bounds.
+pub mod direct;
 /// Pure Gauss-Newton solver for nonlinear least squares.
 pub mod gauss_newton;
 /// Globalized Bounded Nelder-Mead with probabilistic restarts.
@@ -131,6 +133,7 @@ pub use cma_inject::{ClosureInner, CmaInject, MemeticInner};
 pub use cobyla::Cobyla;
 pub use de::De;
 pub use de_inject::DeInject;
+pub use direct::Direct;
 pub use gauss_newton::GaussNewton;
 pub use gbnm::Gbnm;
 pub use global_best_pso::{

@@ -109,6 +109,7 @@
 //! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma`, `MaLsChSw` | `CmaEsState`/`MaLsChState`/… | ✗ (needs a step-size σ or samples the box) |
 //! | `GlobalBestPso` | `GlobalBestPsoState` | ✗ (samples a swarm from the box) |
 //! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
+//! | `Direct` | `PointState` | ✗ (starts at the box midpoint) |
 //! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ (bracket, not a point) |
 //!
 //! # Error model
@@ -451,8 +452,8 @@ pub use crate::solver::trust_region::{
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
     Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative, CgUpdate,
-    ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, GaussNewton, Gbnm,
-    GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt,
+    ClosureInner, CmaEs, CmaInject, Cobyla, De, DeInject, Direct, GaussNewton,
+    Gbnm, GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt,
     LevenbergMarquardtQr, Lincoa, LmDamping, MaLsCh, MaLsChCma,
     MaLsChGenericState, MaLsChState, MaLsChSw, MaLsChSwState, Mads,
     MemeticInner, Metropolis, Neighbor, NelderMead, Newuoa, NonlinearCg,

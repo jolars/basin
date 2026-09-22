@@ -1,3 +1,48 @@
+# DIRECT reference fixtures
+
+`direct_reference.tsv` records original-DIRECT runs from
+[SciPy 1.16.2](https://github.com/scipy/scipy/tree/v1.16.2/scipy/optimize/_direct),
+with NumPy 2.3.3. SciPy is BSD-3-Clause licensed; its DIRECT kernel derives
+from Gablonsky's MIT-licensed DIRECT 2.0.4, translated and reorganized for
+NLopt. Basin independently implements the subdivision procedure and
+Definition 4.1 on pp. 169–170 of Jones, Perttunen, and Stuckman (1993),
+[doi:10.1007/BF00941892](https://doi.org/10.1007/BF00941892).
+
+All cases use `[-5, 5]^n`, `locally_biased=False`, `eps=1e-4`,
+`len_tol=0`, `vol_tol=0`, and `maxiter=1000`. The evaluation budget is
+2,000 for Styblinski–Tang 2D and 10,000 for Styblinski–Tang 6D and
+Ackley 6D translated by `0.37` in every coordinate. The translation keeps
+Ackley's minimizer away from DIRECT's initial midpoint. The generator computes
+the quartic's known minimum from its negative stationary root. Each row records
+the dimension, budget, accuracy threshold, known minimum, returned cost,
+actual evaluations, iterations, and returned coordinates.
+
+`tests/direct.rs` verifies the reference objective values independently, then
+requires objective gaps of at most `1e-4`, `0.5`, and `0.01`, respectively.
+It prints both implementations' gaps and evaluation counts and requires
+Basin to use no more than twice the reference's evaluations. Both solvers
+finish subdivision sweeps before testing budgets, so actual evaluations can
+exceed the requested budget.
+
+These are solution-quality and evaluation-count comparisons, not complete
+trajectory parity. SciPy groups costs within an absolute `1e-13` as ties,
+while Basin uses exact ties and stable coordinate and creation order.
+Different floating-point evaluation orders can therefore change the selected
+rectangles. Separate analytic tests check the initial coordinate cross,
+subdivision geometry, exact ties, and selection inequalities. CI needs neither
+Python nor an external executable.
+
+Regenerate from the repository root:
+
+```sh
+uv run --no-project --with scipy==1.16.2 --with numpy==2.3.3 \
+  python crates/basin/tests/fixtures/direct_reference.py
+```
+
+On NixOS, the wheel environment also needs zlib and the C++ runtime on its
+library search path. Use the existing development environment's libraries;
+the generator does not change project dependencies.
+
 # Nonlinear conjugate gradient reference fixtures
 
 `nonlinear_cg_reference.tsv` records final solutions from the authors'

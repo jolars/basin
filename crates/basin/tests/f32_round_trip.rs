@@ -9,6 +9,14 @@ mod reflective_backend;
 #[path = "support/nonlinear_cg_backend.rs"]
 mod nonlinear_cg_backend;
 
+#[path = "support/direct_backend.rs"]
+mod direct_backend;
+
+#[test]
+fn direct_f32() {
+    direct_backend::check::<_, f32>(|x| x.to_vec());
+}
+
 #[test]
 fn nonlinear_cg_f32() {
     nonlinear_cg_backend::check::<_, f32>(|x| x.to_vec());
