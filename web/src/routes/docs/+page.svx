@@ -82,7 +82,8 @@ that full path on the Rosenbrock function.
 ## Choosing a Solver
 
 A rough map from the shape of your problem to where to start. The
-[Solvers](solvers/) catalog has the full list and the backend each one needs.
+[Solvers](solvers/) catalog has the full list, problem requirements, and
+algorithm references.
 
 - **Smooth objective, gradient available**: `GradientDescent` to start, then
   `Bfgs` or `Lbfgs` for faster convergence (`Lbfgs` when the dimension is

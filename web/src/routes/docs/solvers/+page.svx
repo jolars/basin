@@ -182,6 +182,9 @@ analytic, or synthesized by `FiniteDiff`):
   Hessian-vector products (`HessianProduct`), never forming a matrix, so it
   scales to large problems (`Steihaug` and `CauchyPoint` only; `Dogleg` and
   `MoreSorensen` need the matrix).
+  With ndarray, exact-Hessian mode requires a supplied `Array2` Hessian because
+  `FiniteDiff` cannot construct one. Its matrix-free Hessian-vector products
+  work on every backend.
 
 ## Nonlinear Least Squares
 
@@ -296,11 +299,13 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   basin-hopping (Wales & Doye, 1997): a Metropolis Monte-Carlo walk over the
   `Ẽ(x) = min{f(x)}` transform, wrapping any local solver with a pluggable step
   taker and acceptance test; adaptive step size on by default.
+  Custom step takers or inner solvers can narrow backend support.
 
 ## Memetic (Composed)
 
-These run a local solver inside a global one, an example of Basin's solver
-composition primitives:
+These run a local solver inside a global one using Basin's solver composition
+primitives. Custom inner solvers or local-search operators can narrow backend
+support.
 
 - **[`CmaInject`](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)**/**[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/bounded_cma_inject/struct.BoundedCmaInject.html)**:
   CMA-ES with per-generation local polishing of the best individuals,
@@ -362,97 +367,14 @@ The pluggable line searches are documented alongside the first-order solvers:
 
 ## Backends and Constraints
 
-Two design rules shape which solver you can use where:
+All vector-based solvers support the four dense backends: `Vec`, nalgebra,
+ndarray, and faer. Scalar algorithms need no linear-algebra backend. Each
+solver's **Backends** section on [docs.rs](https://docs.rs/basin) describes its
+supported scalar types, sparse support, and any additional requirements.
 
-- **Constraints are first-class and type-checked.** Box bounds live on the
-  *problem* (`BoxConstraints`). Handing a constrained problem to an
-  unconstrained solver is a compile error, not a runtime surprise.
-- **Backends are tiered.** First-order and derivative-free solvers stay generic
-  over the parameter type (`Vec<f64>`, nalgebra, ndarray, faer). Linear-algebra
-  heavy solvers (the quasi-Newton and least-squares families) require a backend
-  that implements the richer math they need, so an unsupported parameter type
-  fails to compile rather than at runtime.
-
-The matrix below summarizes support: ✓ means it compiles and runs on that
-parameter type, ✗ means it is a compile-time error (the tiering rule above).
-
-  | Solver                      | Family          | `Vec<f64>` | nalgebra | ndarray | faer |
-  | --------------------------- | --------------- | :--------: | :------: | :-----: | :--: |
-  | `GradientDescent`           | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `NonlinearCg`              | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Sgd`                       | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `ProjectedGradientDescent`  | First-order     |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `NelderMead`                | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Mads`                      | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Newuoa`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Bobyqa`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Lincoa`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Cobyla`                    | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `SolisWets`                 | Derivative-free |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Brent`                     | Derivative-free |     —      |    —     |    —    |  —   |
-  | `BrentRoot`                 | Root finding    |     —      |    —     |    —    |  —   |
-  | `SecantRoot`                | Root finding    |     —      |    —     |    —    |  —   |
-  | `NewtonRoot`                | Root finding    |     —      |    —     |    —    |  —   |
-  | `HalleyRoot`                | Root finding    |     —      |    —     |    —    |  —   |
-  | `Toms748Root`               | Root finding    |     —      |    —     |    —    |  —   |
-  | `GoldenSection`             | Derivative-free |     —      |    —     |    —    |  —   |
-  | `BrentDerivative`           | First-order     |     —      |    —     |    —    |  —   |
-  | `Bfgs`                      | Quasi-Newton    |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Lbfgs`                     | Quasi-Newton    |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Lbfgsb`                    | Quasi-Newton    |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `TrustRegion`               | Trust region    |     ✓      |    ✓     |   ✓‡    |  ✓   |
-  | `GaussNewton`               | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `LevenbergMarquardt`        | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `LevenbergMarquardtQr`      | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Trf`                       | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `TrustRegionReflective`     | Least squares   |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Direct`                    | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Gbnm`                      | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `SimulatedAnnealing`        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `CmaEs`                     | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `BoundedCmaEs`              | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `De`                        | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `GlobalBestPso`             | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `RandomSearch`              | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `Ssga`                      | Global          |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `BasinHopping`              | Global          |     ✓†     |    ✓     |   ✓†    |  ✓   |
-  | `CmaInject`                 | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `BoundedCmaInject`          | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `DeInject`                  | Memetic         |     ✓†     |    ✓     |   ✓†    |  ✓   |
-  | `MaLsChCma`                 | Memetic         |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `MaLsChSw`                  | Memetic         |     ✓§     |    ✓§    |   ✓§    |  ✓§  |
-  | `Slsqp`                     | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `BarrierMethod`             | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
-  | `AugmentedLagrangianMethod` | Constrained     |     ✓      |    ✓     |    ✓    |  ✓   |
-
-`Brent`, `GoldenSection`, and `BrentDerivative` minimize over a scalar interval;
-`BrentRoot`, `SecantRoot`, `NewtonRoot`, `HalleyRoot`, and `Toms748Root` find a
-bracketed scalar zero directly. These scalar algorithms and both bracket
-searches support `f64` and `f32`, so the vector-backend choice does not apply.
-
-† `DeInject` and `BasinHopping` are themselves backend-generic, but their
-effective coverage is the intersection of the outer driver and the chosen inner
-solver. The shipped inners (`NelderMead`, `LevenbergMarquardt`, `Lbfgsb`) are
-all backend-generic, so a backend-specific inner of your own is the only thing
-that would narrow it.
-
-§ `MaLsChSw` bounds only on the vector tier—no matrix type is involved at all,
-unlike `MaLsChCma`, whose inner CMA-ES needs each backend's symmetric
-eigendecomposition.
-
-‡ `TrustRegion`'s coverage depends on the subproblem strategy: `Steihaug` (the
-default) and `CauchyPoint` need only matrix-vector products, so they run on
-every backend; `Dogleg` additionally needs a Cholesky solve (`LinearSolveSpd`),
-now available on all four backends. `MoreSorensen` additionally needs a
-symmetric eigendecomposition (`SymmetricEigen`), also available on all four
-dense backends. In exact mode on `ndarray` the Hessian must be supplied
-analytically as an `Array2<f64>`; `FiniteDiff` cannot synthesize one there (no
-dense-matrix constructor). Matrix-free mode has no such caveat: no matrix type
-is bound at all, and `FiniteDiff` synthesizes the Hessian-vector product on
-every backend.
-
-Each algorithm's page on [docs.rs](https://docs.rs/basin) carries a **Backends**
-note listing exactly which parameter types it supports.
+Box bounds and other constraints belong to the problem. Choose a solver that
+supports those constraints, or use an explicit projection, barrier, or penalty
+adapter.
 
 See [Getting Started](../getting-started/) for a worked example, or open the
 [Visualizer](../../visualizer/) to watch several of these solvers converge.

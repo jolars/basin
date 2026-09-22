@@ -231,13 +231,17 @@ These shape API decisions and are non-obvious from the code alone.
    `NonlinearInequalityConstraints`; existing callers keep using that trait
    directly. The full-form solver path additionally requires matrix-vector
    multiplication, supported by all four dense backends.
-5. **Tiered, broadening backends.** A small universal *vector tier* (ops every
-   backend implements well) keeps first-order and derivative-free solvers
-   backend-generic; a richer *`linalg`tier* holds matrix ops that LA-heavy
-   solvers bound on by the minimum subset they need, so a missing op is a
-   compile error, not a runtime surprise. Coverage broadens over time: add an op
-   to a backend the moment it can be done honestly (pure-Rust, wasm-clean, no
-   BLAS/LAPACK, no stub).
+5. **Tiered backends with full solver coverage.** A small universal
+   *vector tier* keeps first-order and derivative-free solvers generic over
+   operations that every backend implements well. The richer *`linalg` tier*
+   holds matrix operations. Solvers bound only on the capabilities they need,
+   which Rust checks at compile time.
+   New vector-based solvers must compile and run on all four dense backends
+   (`Vec`, nalgebra, ndarray, and faer), with tests for both `f32` and `f64` on
+   each. Implement any missing dense capabilities in the same change, in pure
+   Rust, compatible with WASM, and without requiring BLAS/LAPACK or using stubs.
+   Scalar algorithms do not require a linear-algebra backend. Sparse support
+   is optional; document it separately and test every claimed sparse backend.
 
 ## State and lifecycle contracts
 

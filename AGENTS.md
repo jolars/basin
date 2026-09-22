@@ -118,6 +118,9 @@ round-trip coverage in `crates/basin/tests/f32_round_trip.rs`.
   for new numerical algorithms. Use deterministic seeds in stochastic tests,
   scale-appropriate approximate comparisons, and explicit coverage of relevant
   degenerate or non-finite inputs.
+- New vector-based solvers must support all four dense backends (`Vec`,
+  nalgebra, ndarray, and faer), with tests for both `f32` and `f64` on each.
+  Scalar algorithms do not require a linear-algebra backend.
 - Test every backend claimed in public rustdoc. Every solver rustdoc must include
   a `# Backends` note listing supported parameter types.
 - Keep shared vector traits limited to operations every backend implements well.
@@ -125,8 +128,9 @@ round-trip coverage in `crates/basin/tests/f32_round_trip.rs`.
 - Put richer matrix operations in `crates/basin/src/core/math/linalg.rs`.
   Linear-algebra-heavy solvers must bound only the capabilities they need.
 - Add backend operations only when they can be implemented honestly in pure
-  Rust and without a BLAS/LAPACK link or fake stub. It is acceptable to document
-  a realistic backend gap.
+  Rust and without a BLAS/LAPACK link or fake stub. Implement any missing dense
+  capabilities as part of the new solver. Sparse support is optional and must
+  be documented separately.
 
 ## Change-specific synchronization
 
@@ -153,9 +157,9 @@ references, update `web/src/routes/docs/solvers/+page.svx` in the same change:
 
 - The prose catalogue must equal the public solver re-exports in
   `crates/basin/src/lib.rs`.
-- The support matrix must match each solver's rustdoc `# Backends` section. A
-  check means it compiles and runs. For coverage depending on an inner solver,
-  show broad coverage and add a footnote.
+- Keep backend caveats beside the relevant solver entry and consistent with
+  its rustdoc `# Backends` section, including requirements imposed by custom
+  inner solvers or strategies.
 - Each bullet must link to docs.rs and reproduce the solver rustdoc reference.
 
 Canonical docs.rs links include the defining snake-case submodule:

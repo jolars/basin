@@ -70,10 +70,13 @@ algorithm, including:
 - constraints, degeneracies, invalid configuration, and non-finite behavior
   relevant to the algorithm;
 - deterministic seeds and reproducible trajectories for stochastic methods;
-- every backend claimed in public rustdoc, with scale-appropriate approximate
-  comparisons; and
+- all four dense backends (`Vec`, nalgebra, ndarray, and faer) for vector-based
+  solvers, with both `f32` and `f64`, plus every claimed sparse backend, using
+  scale-appropriate approximate comparisons; and
 - `f32` round-trip coverage when the new public surface stores or exposes a
   scalar-valued state.
+
+Scalar algorithms do not require a linear-algebra backend.
 
 For a solver that wraps or orchestrates an existing solver, concentrate new
 tests on the outer algorithm: state transfer, restart or phase decisions,
@@ -112,8 +115,10 @@ dictate a difference.
   constraint traits it supports.
 - Bound only the math capabilities the method needs. Keep first-order and
   derivative-free methods on the universal vector tier when possible; add a
-  `linalg` capability only when every advertised implementation can provide the
-  real operation in pure Rust without a fake fallback.
+  `linalg` capability only when every dense backend can provide the real
+  operation in pure Rust without a fake fallback. Implement missing dense
+  capabilities in the same change. Sparse support is optional and must be
+  documented separately.
 - Use Basin's RNG infrastructure and an explicit seed for stochastic methods.
   Gate parallel execution behind the existing `parallel` feature and preserve
   reproducibility across serial and parallel evaluation.
@@ -139,8 +144,9 @@ Synchronize `web/src/routes/docs/solvers/+page.svx` in the same change:
 
 - add the solver to the appropriate prose family with the same reference;
 - use the canonical docs.rs URL containing the defining snake-case module;
-- update the support matrix to match the rustdoc `# Backends` claim; and
-- add a footnote when support depends on a strategy or inner solver.
+- keep backend notes consistent with the rustdoc `# Backends` claim; and
+- place caveats about custom strategies or inner solvers beside the relevant
+  solver entry.
 
 The catalogue must still equal the solver re-exports in
 `crates/basin/src/lib.rs`. Do not expand the visualizer or add unrelated web

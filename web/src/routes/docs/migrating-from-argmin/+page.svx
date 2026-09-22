@@ -812,6 +812,6 @@ after the like-for-like path passes.
 
 - [Getting Started](../getting-started/): state construction and shared
   solver convergence settings.
-- [Solvers](../solvers/): supported algorithms and backend matrix.
+- [Solvers](../solvers/): supported algorithms and problem requirements.
 - [Full Basin API](https://docs.rs/basin): authoritative type and method
   documentation.
