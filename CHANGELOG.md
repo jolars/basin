@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.0](https://github.com/jolars/basin/compare/v1.13.1...v1.14.0) (2026-09-22)
+
+### Features
+- add original DIRECT solver ([`3b5d90d`](https://github.com/jolars/basin/commit/3b5d90dad78c73f03eba59d32918ec924d753b05))
+- add Polak-Ribiere+ conjugate gradient update ([`92e2337`](https://github.com/jolars/basin/commit/92e23377fefea32040df9b675b4f7bd1690ebe2c))
+- add nonlinear conjugate gradient ([`3b296d5`](https://github.com/jolars/basin/commit/3b296d5c103de94db8f631c9351bbf399170f41f))
+- add robust nonlinear least squares ([`298e671`](https://github.com/jolars/basin/commit/298e671886b8e1ff8caa8b37e772bdb41208488d))
+
 ## [1.13.1](https://github.com/jolars/basin/compare/v1.13.0...v1.13.1) (2026-09-19)
 
 ### Bug Fixes
