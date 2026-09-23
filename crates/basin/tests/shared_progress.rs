@@ -489,15 +489,10 @@ fn serde_preserves_seeds_records_and_raw_history_for_both_scalars() {
             + PartialEq
             + std::fmt::Debug,
     {
-        let bytes =
-            bincode::serde::encode_to_vec(state, bincode::config::standard())
-                .unwrap();
-        let (decoded, read): (S, _) = bincode::serde::decode_from_slice(
-            &bytes,
-            bincode::config::standard(),
-        )
-        .unwrap();
-        assert_eq!(read, bytes.len());
+        let bytes = postcard::to_allocvec(state).unwrap();
+        let (decoded, remaining): (S, _) =
+            postcard::take_from_bytes(&bytes).unwrap();
+        assert!(remaining.is_empty());
         assert_eq!(&decoded, state);
     }
 

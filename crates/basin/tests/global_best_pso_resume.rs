@@ -53,7 +53,7 @@ fn solver() -> TestSolver {
 }
 
 fn encoded<T: serde::Serialize>(value: &T) -> Vec<u8> {
-    bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap()
+    postcard::to_allocvec(value).unwrap()
 }
 
 fn checkpoint_path(name: &str) -> PathBuf {
@@ -82,10 +82,9 @@ fn serialized_state_only_resume_is_bit_identical() {
         .unwrap()
         .into_state();
     let bytes = encoded(&split);
-    let (restored, consumed): (TestState, usize) =
-        bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
-            .unwrap();
-    assert_eq!(consumed, bytes.len());
+    let (restored, remaining): (TestState, &[u8]) =
+        postcard::take_from_bytes(&bytes).unwrap();
+    assert!(remaining.is_empty());
 
     let resumed = Executor::resume(problem(), solver(), restored)
         .max_iter(55)

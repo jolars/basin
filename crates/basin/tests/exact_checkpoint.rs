@@ -252,6 +252,85 @@ mod file {
             .unwrap();
     }
 
+    fn legacy_checkpoint_bytes(checkpoint: &Snapshot) -> Vec<u8> {
+        let config = bincode::config::standard();
+        let header = bincode::serde::encode_to_vec(
+            (
+                env!("CARGO_PKG_VERSION"),
+                std::any::type_name::<CountingSolver>(),
+                std::any::type_name::<TestState>(),
+            ),
+            config,
+        )
+        .unwrap();
+        let payload =
+            bincode::serde::encode_to_vec(checkpoint, config).unwrap();
+        [
+            b"BASINEX\0".as_slice(),
+            &1_u32.to_le_bytes(),
+            &(header.len() as u32).to_le_bytes(),
+            &header,
+            &payload,
+        ]
+        .concat()
+    }
+
+    #[test]
+    fn legacy_checkpoint_resumes_and_writes_postcard() {
+        let path = checkpoint_path("legacy");
+        let checkpoint = Snapshot::from_parts(
+            CountingSolver {
+                init_calls: 1,
+                steps: 300,
+            },
+            TestState {
+                param: (),
+                iter: 300,
+                cost_evals: 400,
+            },
+            EvalCounts {
+                cost_evals: 400,
+                ..EvalCounts::default()
+            },
+        );
+        let legacy = legacy_checkpoint_bytes(&checkpoint);
+        std::fs::write(&path, &legacy).unwrap();
+        let restored: Snapshot = read_exact_checkpoint(&path).unwrap();
+        assert_eq!(restored.solver().steps, 300);
+        assert_eq!(restored.counts().cost_evals, 400);
+        assert_eq!(std::fs::read(&path).unwrap(), legacy);
+
+        Executor::resume_from_checkpoint((), restored)
+            .max_iter(301)
+            .checkpoint_with(
+                ExactCheckpointWriter::new(&path),
+                ObserverMode::Never,
+            )
+            .run()
+            .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[..8], b"BASINEX\0");
+        assert_eq!(&bytes[8..12], &2_u32.to_le_bytes());
+        let header_len =
+            u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        let (header, rest): ((String, String, String), _) =
+            postcard::take_from_bytes(&bytes[16..16 + header_len]).unwrap();
+        assert!(rest.is_empty());
+        assert_eq!(header.0, env!("CARGO_PKG_VERSION"));
+        assert_eq!(header.1, std::any::type_name::<CountingSolver>());
+        assert_eq!(header.2, std::any::type_name::<TestState>());
+        let (checkpoint, rest): (Snapshot, _) =
+            postcard::take_from_bytes(&bytes[16 + header_len..]).unwrap();
+        assert!(rest.is_empty());
+        assert_eq!(checkpoint.solver().init_calls, 1);
+        assert_eq!(checkpoint.solver().steps, 301);
+        assert_eq!(checkpoint.state().iter(), 301);
+        assert_eq!(checkpoint.counts().cost_evals, 400);
+        let restored: Snapshot = read_exact_checkpoint(&path).unwrap();
+        assert_eq!(restored.solver().steps, 301);
+        remove_checkpoint(&path);
+    }
+
     #[test]
     fn file_round_trip_and_header_validation() {
         let path = checkpoint_path("validation");
@@ -259,67 +338,125 @@ mod file {
         let original = std::fs::read(&path).unwrap();
 
         let checkpoint: Snapshot = read_exact_checkpoint(&path).unwrap();
-        assert_eq!(checkpoint.solver().steps, 2);
-        assert_eq!(checkpoint.state().iter(), 2);
+        for original in [original, legacy_checkpoint_bytes(&checkpoint)] {
+            std::fs::write(&path, &original).unwrap();
+            let checkpoint: Snapshot = read_exact_checkpoint(&path).unwrap();
+            assert_eq!(checkpoint.solver().steps, 2);
+            assert_eq!(checkpoint.state().iter(), 2);
 
-        let wrong_type =
-            read_exact_checkpoint::<u64, TestState>(&path).unwrap_err();
-        assert_eq!(wrong_type.kind(), ErrorKind::InvalidData);
-        assert!(wrong_type.to_string().contains("solver type"));
+            let wrong_type =
+                read_exact_checkpoint::<u64, TestState>(&path).unwrap_err();
+            assert_eq!(wrong_type.kind(), ErrorKind::InvalidData);
+            assert!(wrong_type.to_string().contains("solver type"));
 
-        let wrong_state =
-            read_exact_checkpoint::<CountingSolver, u64>(&path).unwrap_err();
-        assert_eq!(wrong_state.kind(), ErrorKind::InvalidData);
-        assert!(wrong_state.to_string().contains("state type"));
+            let wrong_state =
+                read_exact_checkpoint::<CountingSolver, u64>(&path)
+                    .unwrap_err();
+            assert_eq!(wrong_state.kind(), ErrorKind::InvalidData);
+            assert!(wrong_state.to_string().contains("state type"));
 
-        let mut invalid_magic = original.clone();
-        invalid_magic[0] ^= 0xff;
-        std::fs::write(&path, invalid_magic).unwrap();
-        let error = read_exact_checkpoint::<CountingSolver, TestState>(&path)
-            .unwrap_err();
-        assert_eq!(error.kind(), ErrorKind::InvalidData);
-        assert!(error.to_string().contains("magic"));
+            let mut invalid_magic = original.clone();
+            invalid_magic[0] ^= 0xff;
+            std::fs::write(&path, invalid_magic).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::InvalidData);
+            assert!(error.to_string().contains("magic"));
 
-        let mut invalid_version = original.clone();
-        invalid_version[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
-        std::fs::write(&path, invalid_version).unwrap();
-        let error = read_exact_checkpoint::<CountingSolver, TestState>(&path)
-            .unwrap_err();
-        assert_eq!(error.kind(), ErrorKind::InvalidData);
-        assert!(error.to_string().contains("format version"));
+            let mut invalid_version = original.clone();
+            invalid_version[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
+            std::fs::write(&path, invalid_version).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::InvalidData);
+            assert!(error.to_string().contains("format version"));
 
-        let mut invalid_basin_version = original.clone();
-        let version = env!("CARGO_PKG_VERSION").as_bytes();
-        let version_start = invalid_basin_version
-            .windows(version.len())
-            .position(|window| window == version)
-            .expect("Basin version is present in the exact-checkpoint header");
-        invalid_basin_version[version_start..version_start + version.len()]
-            .fill(b'x');
-        std::fs::write(&path, invalid_basin_version).unwrap();
-        let error = read_exact_checkpoint::<CountingSolver, TestState>(&path)
-            .unwrap_err();
-        assert_eq!(error.kind(), ErrorKind::InvalidData);
-        assert!(error.to_string().contains("written by Basin"));
+            let mut invalid_basin_version = original.clone();
+            let version = env!("CARGO_PKG_VERSION").as_bytes();
+            let version_start = invalid_basin_version
+                .windows(version.len())
+                .position(|window| window == version)
+                .expect(
+                    "Basin version is present in the exact-checkpoint header",
+                );
+            invalid_basin_version[version_start..version_start + version.len()]
+                .fill(b'x');
+            std::fs::write(&path, invalid_basin_version).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::InvalidData);
+            assert!(error.to_string().contains("written by Basin"));
 
-        std::fs::write(&path, &original[..10]).unwrap();
-        let error = read_exact_checkpoint::<CountingSolver, TestState>(&path)
-            .unwrap_err();
-        assert_eq!(error.kind(), ErrorKind::InvalidData);
-        assert!(error.to_string().contains("truncated"));
+            std::fs::write(&path, &original[..10]).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::InvalidData);
+            assert!(error.to_string().contains("truncated"));
 
-        std::fs::write(&path, &original[..original.len() - 1]).unwrap();
-        let error = read_exact_checkpoint::<CountingSolver, TestState>(&path)
-            .unwrap_err();
-        assert_eq!(error.kind(), ErrorKind::InvalidData);
+            std::fs::write(&path, &original[..original.len() - 1]).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::InvalidData);
 
-        let mut trailing = original;
-        trailing.push(0);
-        std::fs::write(&path, trailing).unwrap();
-        let error = read_exact_checkpoint::<CountingSolver, TestState>(&path)
-            .unwrap_err();
-        assert_eq!(error.kind(), ErrorKind::InvalidData);
-        assert!(error.to_string().contains("trailing data"));
+            let header_len =
+                u32::from_le_bytes(original[12..16].try_into().unwrap())
+                    as usize;
+            let mut oversized = original.clone();
+            oversized[12..16].copy_from_slice(&65_537_u32.to_le_bytes());
+            std::fs::write(&path, oversized).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert!(error.to_string().contains("too large"));
+
+            std::fs::write(&path, &original[..16 + header_len - 1]).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("truncated exact checkpoint header")
+            );
+
+            std::fs::write(&path, &original[..16 + header_len]).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("missing exact checkpoint payload")
+            );
+
+            let mut trailing_header = original.clone();
+            trailing_header.insert(16 + header_len, 0);
+            trailing_header[12..16]
+                .copy_from_slice(&((header_len + 1) as u32).to_le_bytes());
+            std::fs::write(&path, trailing_header).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("trailing data in exact checkpoint header")
+            );
+
+            let mut trailing = original;
+            trailing.push(0);
+            std::fs::write(&path, trailing).unwrap();
+            let error =
+                read_exact_checkpoint::<CountingSolver, TestState>(&path)
+                    .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::InvalidData);
+            assert!(error.to_string().contains("trailing data"));
+        }
 
         remove_checkpoint(&path);
     }

@@ -304,13 +304,8 @@ fn hs71_reference_accepted_trajectory_and_exact_continuation() {
         if i == 2 {
             let checkpoint = stepper.into_checkpoint().unwrap();
             #[cfg(feature = "serde")]
-            let checkpoint = bincode::serde::decode_from_slice(
-                &bincode::serde::encode_to_vec(
-                    &checkpoint,
-                    bincode::config::standard(),
-                )
-                .unwrap(),
-                bincode::config::standard(),
+            let checkpoint = postcard::take_from_bytes(
+                &postcard::to_allocvec(&checkpoint).unwrap(),
             )
             .unwrap()
             .0;
@@ -343,20 +338,12 @@ fn checkpoint_rebuilds_scratch_for_exact_continuation() {
             stepper.step().unwrap();
         }
         let checkpoint = stepper.into_checkpoint().unwrap();
-        let bytes = bincode::serde::encode_to_vec(
-            checkpoint,
-            bincode::config::standard(),
-        )
-        .unwrap();
-        let (checkpoint, consumed): (
+        let bytes = postcard::to_allocvec(&checkpoint).unwrap();
+        let (checkpoint, remaining): (
             basin::ExactCheckpoint<Slsqp, SlsqpState<Vec<f64>>>,
-            usize,
-        ) = bincode::serde::decode_from_slice(
-            &bytes,
-            bincode::config::standard(),
-        )
-        .unwrap();
-        assert_eq!(consumed, bytes.len());
+            &[u8],
+        ) = postcard::take_from_bytes(&bytes).unwrap();
+        assert!(remaining.is_empty());
         let resumed =
             Executor::resume_from_checkpoint(problem.clone(), checkpoint)
                 .max_iter(100)

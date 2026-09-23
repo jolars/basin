@@ -63,7 +63,7 @@ fn remove_checkpoint(path: &PathBuf) {
 }
 
 fn encoded<T: serde::Serialize>(value: &T) -> Vec<u8> {
-    bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap()
+    postcard::to_allocvec(value).unwrap()
 }
 
 #[test]

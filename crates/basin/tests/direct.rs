@@ -436,15 +436,10 @@ fn checkpoint_continuation_and_fresh_reset() {
     let checkpoint = partial.into_checkpoint();
     #[cfg(feature = "serde")]
     let checkpoint = {
-        let bytes = bincode::serde::encode_to_vec(
-            &checkpoint,
-            bincode::config::standard(),
-        )
-        .unwrap();
-        bincode::serde::decode_from_slice::<
+        let bytes = postcard::to_allocvec(&checkpoint).unwrap();
+        postcard::take_from_bytes::<
             basin::ExactCheckpoint<Direct, PointState<Vec<f64>>>,
-            _,
-        >(&bytes, bincode::config::standard())
+        >(&bytes)
         .unwrap()
         .0
     };

@@ -77,6 +77,8 @@ jobs:
         include:
           - features: default
             flags: ""
+          - features: serde
+            flags: "--features serde"
           - features: nalgebra 0.32
             flags: "--no-default-features --features nalgebra_v0_32,problems"
           - features: nalgebra 0.33
@@ -101,9 +103,9 @@ jobs:
           - features: legacy aliases
             flags: "--features nalgebra,ndarray,faer"
           # Exercise the rayon-backed `parallel` path (FiniteDiff probe
-          # fan-out) and the moving aliases together.
-          - features: latest aliases + parallel
-            flags: "--features nalgebra_latest,ndarray_latest,faer_latest,parallel"
+          # fan-out), moving aliases, and backend serialization together.
+          - features: latest aliases + parallel + serde
+            flags: "--features nalgebra_latest,ndarray_latest,faer_latest,parallel,serde"
     steps:
       - uses: actions/checkout@v7
       - uses: Swatinem/rust-cache@v2
@@ -150,6 +152,8 @@ jobs:
         include:
           - features: default
             flags: ""
+          - features: serde
+            flags: "--features serde"
           - features: nalgebra
             flags: "--features nalgebra"
           - features: nalgebra latest

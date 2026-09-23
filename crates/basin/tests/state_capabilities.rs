@@ -375,10 +375,7 @@ fn capability_controls_are_never_silently_discarded_by_serialization() {
             .no_objective_improvement(3, 0.0),
     ];
     for inner in controls {
-        assert!(
-            bincode::serde::encode_to_vec(&inner, bincode::config::standard())
-                .is_err()
-        );
+        assert!(postcard::to_allocvec(&inner).is_err());
     }
 }
 

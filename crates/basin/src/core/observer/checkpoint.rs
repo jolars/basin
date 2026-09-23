@@ -16,8 +16,15 @@ use crate::core::observer::Observe;
 use crate::core::state::State;
 use crate::core::termination::TerminationReason;
 
-/// Write the current state to a file with [`bincode`], overwriting the
+const MAGIC: &[u8; 8] = b"BASINST\0";
+const FORMAT_VERSION: u32 = 1;
+
+/// Write the current state to a file with [`postcard`], overwriting the
 /// previous snapshot, so the file always holds the latest checkpoint.
+///
+/// New files have a format marker and version preceding the postcard payload.
+/// [`read_checkpoint`] also accepts legacy, unprefixed bincode files. Older
+/// Basin releases cannot read the new format.
 ///
 /// State-only checkpointing is an observer's job in Basin. It records an
 /// iterate for a later warm start without promising an identical trajectory.
@@ -85,9 +92,12 @@ impl CheckpointWriter {
     /// sibling `*.tmp` first and renames into place so a crash mid-write can't
     /// truncate the previous good checkpoint.
     fn write<S: Serialize>(&self, state: &S) -> io::Result<()> {
-        let bytes =
-            bincode::serde::encode_to_vec(state, bincode::config::standard())
-                .map_err(io::Error::other)?;
+        let payload = postcard::to_allocvec(state).map_err(io::Error::other)?;
+        let mut bytes =
+            Vec::with_capacity(MAGIC.len() + size_of::<u32>() + payload.len());
+        bytes.extend_from_slice(MAGIC);
+        bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+        bytes.extend_from_slice(&payload);
         let tmp = self.path.with_extension("tmp");
         fs::write(&tmp, &bytes)?;
         fs::rename(&tmp, &self.path)
@@ -121,10 +131,39 @@ where
 
 /// Load a checkpoint previously written by [`CheckpointWriter`] into a concrete
 /// state, ready for [`Executor::new`](crate::Executor::new) as a warm start.
+///
+/// Reads both versioned postcard files and legacy, unprefixed bincode files.
+/// Reading does not modify the file. Unsupported versions, malformed data, and
+/// trailing bytes in postcard files return [`io::ErrorKind::InvalidData`].
 pub fn read_checkpoint<S: DeserializeOwned>(
     path: impl AsRef<Path>,
 ) -> io::Result<S> {
     let bytes = fs::read(path)?;
+    if let Some(body) = bytes.strip_prefix(MAGIC) {
+        let invalid_data =
+            |message: &str| io::Error::new(io::ErrorKind::InvalidData, message);
+        if body.len() < size_of::<u32>() {
+            return Err(invalid_data("truncated state checkpoint prefix"));
+        }
+        let version = u32::from_le_bytes(
+            body[..size_of::<u32>()]
+                .try_into()
+                .expect("version slice has fixed length"),
+        );
+        if version != FORMAT_VERSION {
+            return Err(invalid_data(&format!(
+                "unsupported state checkpoint format version {version}; expected {FORMAT_VERSION}"
+            )));
+        }
+        let (state, remaining) =
+            postcard::take_from_bytes(&body[size_of::<u32>()..])
+                .map_err(|error| invalid_data(&error.to_string()))?;
+        if !remaining.is_empty() {
+            return Err(invalid_data("trailing data in state checkpoint"));
+        }
+        return Ok(state);
+    }
+
     let (state, _) =
         bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
             .map_err(io::Error::other)?;

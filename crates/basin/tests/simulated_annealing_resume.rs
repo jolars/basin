@@ -116,16 +116,8 @@ fn serialized_solver_and_state_resume_bit_for_bit() {
 
     assert_eq!(resumed_status.last_successful_iter(), Some(80));
     assert_eq!(resumed.cost_evals(), 81);
-    let reference_state = bincode::serde::encode_to_vec(
-        &reference.state,
-        bincode::config::standard(),
-    )
-    .unwrap();
-    let resumed_state = bincode::serde::encode_to_vec(
-        &resumed.state,
-        bincode::config::standard(),
-    )
-    .unwrap();
+    let reference_state = postcard::to_allocvec(&reference.state).unwrap();
+    let resumed_state = postcard::to_allocvec(&resumed.state).unwrap();
     assert_eq!(resumed_state, reference_state);
     assert_eq!(
         std::fs::read(&resumed_path).unwrap(),
@@ -148,12 +140,9 @@ fn state_only_resume_api_remains_exact() {
         .run()
         .unwrap()
         .into_state();
-    let bytes =
-        bincode::serde::encode_to_vec(&split, bincode::config::standard())
-            .unwrap();
-    let (restored, _): (TestState, usize) =
-        bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
-            .unwrap();
+    let bytes = postcard::to_allocvec(&split).unwrap();
+    let (restored, _): (TestState, &[u8]) =
+        postcard::take_from_bytes(&bytes).unwrap();
 
     let resumed = Executor::resume(RuggedCost, solver(), restored)
         .max_iter(80)
@@ -162,16 +151,8 @@ fn state_only_resume_api_remains_exact() {
 
     assert_eq!(resumed.cost_evals(), 81);
     assert_eq!(
-        bincode::serde::encode_to_vec(
-            &resumed.state,
-            bincode::config::standard(),
-        )
-        .unwrap(),
-        bincode::serde::encode_to_vec(
-            &reference.state,
-            bincode::config::standard(),
-        )
-        .unwrap(),
+        postcard::to_allocvec(&resumed.state).unwrap(),
+        postcard::to_allocvec(&reference.state).unwrap(),
     );
 }
 

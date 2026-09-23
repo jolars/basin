@@ -96,7 +96,7 @@ mod file {
     use super::{CheckpointSink, EvalCounts, ExactCheckpoint};
 
     const MAGIC: &[u8; 8] = b"BASINEX\0";
-    const FORMAT_VERSION: u32 = 1;
+    const FORMAT_VERSION: u32 = 2;
     const PREFIX_LEN: usize = MAGIC.len() + 2 * size_of::<u32>();
     const MAX_HEADER_LEN: usize = 64 * 1024;
 
@@ -140,14 +140,13 @@ mod file {
         So: Serialize,
         S: Serialize,
     {
-        let config = bincode::config::standard();
         let header = Header {
             basin_version: env!("CARGO_PKG_VERSION").to_owned(),
             solver_type: type_name::<So>().to_owned(),
             state_type: type_name::<S>().to_owned(),
         };
-        let header = bincode::serde::encode_to_vec(header, config)
-            .map_err(io::Error::other)?;
+        let header =
+            postcard::to_allocvec(&header).map_err(io::Error::other)?;
         if header.len() > MAX_HEADER_LEN {
             return Err(invalid_data("exact checkpoint header is too large"));
         }
@@ -159,8 +158,8 @@ mod file {
             state,
             counts: *counts,
         };
-        let payload = bincode::serde::encode_to_vec(payload, config)
-            .map_err(io::Error::other)?;
+        let payload =
+            postcard::to_allocvec(&payload).map_err(io::Error::other)?;
 
         let mut bytes =
             Vec::with_capacity(PREFIX_LEN + header.len() + payload.len());
@@ -170,6 +169,30 @@ mod file {
         bytes.extend_from_slice(&header);
         bytes.extend_from_slice(&payload);
         Ok(bytes)
+    }
+
+    fn decode_checkpoint_part<T: DeserializeOwned>(
+        bytes: &[u8],
+        format_version: u32,
+        part: &str,
+    ) -> io::Result<T> {
+        let (value, remaining) = if format_version == 1 {
+            let (value, consumed) = bincode::serde::decode_from_slice(
+                bytes,
+                bincode::config::standard(),
+            )
+            .map_err(|error| invalid_data(error.to_string()))?;
+            (value, &bytes[consumed..])
+        } else {
+            postcard::take_from_bytes(bytes)
+                .map_err(|error| invalid_data(error.to_string()))?
+        };
+        if !remaining.is_empty() {
+            return Err(invalid_data(format!(
+                "trailing data in exact checkpoint {part}"
+            )));
+        }
+        Ok(value)
     }
 
     /// A recorded exact-checkpoint write failure.
@@ -198,6 +221,9 @@ mod file {
         }
 
         /// Original error message.
+        ///
+        /// Postcard reports custom Serde serialization errors without retaining
+        /// their application-provided messages.
         pub fn message(&self) -> &str {
             &self.message
         }
@@ -271,6 +297,9 @@ mod file {
     /// to stderr and through [`status`](Self::status), but do not stop the run.
     /// Read the result with [`read_exact_checkpoint`] and pass it to
     /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
+    ///
+    /// Writes format version 2 with postcard-encoded metadata and payload.
+    /// Older Basin releases that only support version 1 cannot read these files.
     #[derive(Clone, Debug)]
     pub struct ExactCheckpointWriter {
         path: PathBuf,
@@ -353,6 +382,9 @@ mod file {
     ///
     /// The format, exact Basin version, and concrete solver/state type names
     /// must match before the payload is deserialized.
+    /// Supports postcard format version 2 and legacy bincode format version 1
+    /// without modifying the file. Both formats require the same Basin version
+    /// as the reader; legacy support does not enable cross-release continuation.
     pub fn read_exact_checkpoint<So, S>(
         path: impl AsRef<Path>,
     ) -> io::Result<ExactCheckpoint<So, S>>
@@ -375,9 +407,9 @@ mod file {
                 .try_into()
                 .expect("version slice has fixed length"),
         );
-        if format_version != FORMAT_VERSION {
+        if !matches!(format_version, 1 | FORMAT_VERSION) {
             return Err(invalid_data(format!(
-                "unsupported exact checkpoint format version {format_version}; expected {FORMAT_VERSION}"
+                "unsupported exact checkpoint format version {format_version}; expected 1 or {FORMAT_VERSION}"
             )));
         }
 
@@ -393,18 +425,11 @@ mod file {
             .checked_add(header_len)
             .filter(|end| *end <= bytes.len())
             .ok_or_else(|| invalid_data("truncated exact checkpoint header"))?;
-        let config = bincode::config::standard();
-        let (header, consumed): (Header, usize) =
-            bincode::serde::decode_from_slice(
-                &bytes[PREFIX_LEN..header_end],
-                config,
-            )
-            .map_err(|error| invalid_data(error.to_string()))?;
-        if consumed != header_len {
-            return Err(invalid_data(
-                "trailing data in exact checkpoint header",
-            ));
-        }
+        let header: Header = decode_checkpoint_part(
+            &bytes[PREFIX_LEN..header_end],
+            format_version,
+            "header",
+        )?;
         if header.basin_version != env!("CARGO_PKG_VERSION") {
             return Err(invalid_data(format!(
                 "exact checkpoint was written by Basin {}; expected {}",
@@ -431,14 +456,8 @@ mod file {
         if payload_bytes.is_empty() {
             return Err(invalid_data("missing exact checkpoint payload"));
         }
-        let (payload, consumed): (Payload<So, S>, usize) =
-            bincode::serde::decode_from_slice(payload_bytes, config)
-                .map_err(|error| invalid_data(error.to_string()))?;
-        if consumed != payload_bytes.len() {
-            return Err(invalid_data(
-                "trailing data in exact checkpoint payload",
-            ));
-        }
+        let payload: Payload<So, S> =
+            decode_checkpoint_part(payload_bytes, format_version, "payload")?;
         Ok(ExactCheckpoint::from_parts(
             payload.solver,
             payload.state,

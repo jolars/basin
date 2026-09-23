@@ -523,15 +523,9 @@ fn configured_solver_and_inner_budgets_round_trip() {
             .with_absolute_cost_change_tolerance(1e-12),
     )
     .max_cost_evals(50);
-    let encoded =
-        bincode::serde::encode_to_vec(&inner, bincode::config::standard())
-            .unwrap();
+    let encoded = postcard::to_allocvec(&inner).unwrap();
     let (mut decoded, _): (InnerExecutor<BasicSimplexState<Vec<f64>>, _>, _) =
-        bincode::serde::decode_from_slice(
-            &encoded,
-            bincode::config::standard(),
-        )
-        .unwrap();
+        postcard::take_from_bytes(&encoded).unwrap();
     std::mem::swap(&mut inner, &mut decoded);
     let expected = inner
         .run(&mut Problem::new(Sphere), BasicSimplexState::new(vec![1.0]))
@@ -543,10 +537,7 @@ fn configured_solver_and_inner_budgets_round_trip() {
     assert_eq!(result.reason, expected.reason);
     assert_eq!(result.param(), expected.param());
     let with_hook = decoded.stop_when(|_| None);
-    assert!(
-        bincode::serde::encode_to_vec(&with_hook, bincode::config::standard())
-            .is_err()
-    );
+    assert!(postcard::to_allocvec(&with_hook).is_err());
 }
 
 #[test]
@@ -613,12 +604,8 @@ fn serialized_checkpoint_preserves_observed_convergence_history() {
     fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(
         value: &T,
     ) -> T {
-        let bytes =
-            bincode::serde::encode_to_vec(value, bincode::config::standard())
-                .unwrap();
-        bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
-            .unwrap()
-            .0
+        let bytes = postcard::to_allocvec(value).unwrap();
+        postcard::take_from_bytes(&bytes).unwrap().0
     }
     let mut solver = NelderMead::new()
         .with_absolute_step_tolerance(1e-10)

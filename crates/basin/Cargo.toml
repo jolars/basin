@@ -94,6 +94,7 @@ faer_v0_24 = ["faer_all", "dep:faer", "dep:faer-traits", "dep:generativity"]
 parallel = ["dep:rayon", "faer?/rayon", "faer_0_22?/rayon", "faer_0_23?/rayon"]
 serde = [
   "dep:serde",
+  "dep:postcard",
   "dep:bincode",
   "rand_chacha/serde",
   "nalgebra?/serde-serialize",
@@ -149,6 +150,8 @@ rayon = { version = "1", optional = true }
 serde = { version = "1", optional = true, default-features = false, features = [
   "derive",
 ] }
+postcard = { version = "1.1.3", optional = true, default-features = false, features = ["alloc"] }
+# Preserve reads of checkpoints written before the migration to postcard.
 bincode = { version = "2", optional = true, features = ["serde"] }
 
 [dev-dependencies]

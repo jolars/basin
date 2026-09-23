@@ -298,6 +298,11 @@ production buffer API was added.
 
 ## Basin 2.0
 
+- [ ] **Remove bincode in Basin 2.0.0.** Drop legacy readers for unprefixed
+  state checkpoints and version 1 exact checkpoints, along with the bincode
+  dependency and compatibility-only tests. Retain the postcard formats and
+  document checkpoint migration requirements for users upgrading from 1.x.
+
 - [ ] **Migrate existing solvers to shared progress states.** Build on the
   validated [prototype](#state-api-prototype) and [1.x
   additions](#state-api-additions-for-basin-1x). Replace legacy public

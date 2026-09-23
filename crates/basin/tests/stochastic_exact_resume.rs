@@ -65,7 +65,7 @@ fn remove_checkpoint(path: &Path) {
 }
 
 fn encoded<T: Serialize>(value: &T) -> Vec<u8> {
-    bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap()
+    postcard::to_allocvec(value).unwrap()
 }
 
 fn assert_round_trip<T>(value: &T)
@@ -73,10 +73,9 @@ where
     T: Serialize + DeserializeOwned,
 {
     let before = encoded(value);
-    let (restored, consumed): (T, usize) =
-        bincode::serde::decode_from_slice(&before, bincode::config::standard())
-            .unwrap();
-    assert_eq!(consumed, before.len());
+    let (restored, remaining): (T, &[u8]) =
+        postcard::take_from_bytes(&before).unwrap();
+    assert!(remaining.is_empty());
     assert_eq!(encoded(&restored), before);
 }
 
@@ -383,13 +382,9 @@ fn basin_hopping_checkpoint_rejects_erased_inner_criteria() {
 
     assert_eq!(status.last_successful_iter(), None);
     assert_eq!(status.failure_count(), 1);
-    assert!(
-        status
-            .last_error()
-            .unwrap()
-            .message()
-            .contains("cannot serialize boxed termination criteria")
-    );
+    let error = status.last_error().unwrap();
+    assert_eq!(error.kind(), std::io::ErrorKind::Other);
+    assert_eq!(error.message(), postcard::Error::SerdeSerCustom.to_string());
     assert!(!path.exists());
     remove_checkpoint(&path);
 }
