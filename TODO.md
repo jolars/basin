@@ -31,10 +31,11 @@ numerical work against analytic cases and reference implementations.
   supplied, and distinguish non-finite evaluations from derivative
   mismatches.
 - [x] **Add robust nonlinear least squares.** Added `RobustLeastSquares` with
-  squared, Huber, soft-L1, Cauchy, arctangent, and custom losses and a residual
-  scale. All five NLLS solvers use the robust objective, gradient, and
-  safeguarded local model, with `f32` and `f64` support on their existing
-  backends. Outlier-contaminated fits agree with [SciPy's least-squares
+  squared, Huber, soft-L1, Cauchy, arctangent, and custom losses and a
+  residual scale. All five NLLS solvers use the robust objective, gradient,
+  and safeguarded local model, with `f32` and `f64` support on their
+  existing backends. Outlier-contaminated fits agree with [SciPy's
+  least-squares
   API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html).
 - [x] **Add full trust-region-reflective least squares.** Added
   `TrustRegionReflective` with Coleman-Li scaling, an explicit radius,
@@ -44,17 +45,18 @@ numerical work against analytic cases and reference implementations.
   1.16.2 comparisons. `Trf` retains its existing bounded-LM behavior through
   Basin 1.x. The large-scale path remains a follow-up below.
 - [x] **Implement nonlinear conjugate gradient.** Added `NonlinearCg` with
-  selectable Hager–Zhang (default) and Polak–Ribière+ updates, pluggable line
-  searches, and optional periodic restarts. All four dense backends support
-  `f32` and `f64`; tests cover analytic PR+ updates, descent safeguards,
-  ill-conditioned problems, and Hager–Zhang's CG_DESCENT C 1.2 reference results.
-  This is distinct from Steihaug's linear trust-region CG.
+  selectable Hager–Zhang (default) and Polak–Ribière+ updates, pluggable
+  line searches, and optional periodic restarts. All four dense backends
+  support `f32` and `f64`; tests cover analytic PR+ updates, descent
+  safeguards, ill-conditioned problems, and Hager–Zhang's CG_DESCENT C 1.2
+  reference results. This is distinct from Steihaug's linear trust-region
+  CG.
 - [x] **Implement DIRECT.** Added original `Direct` for deterministic global
   optimization over finite box bounds, with fixed-coordinate elimination,
-  documented rectangle selection and trisection, and exact checkpoint support.
-  All four dense backends support `f32` and `f64`. Solution quality and
-  evaluation counts are checked against SciPy 1.16.2's original DIRECT on
-  Styblinski–Tang 2D and 6D and translated Ackley 6D.
+  documented rectangle selection and trisection, and exact checkpoint
+  support. All four dense backends support `f32` and `f64`. Solution quality
+  and evaluation counts are checked against SciPy 1.16.2's original DIRECT
+  on Styblinski–Tang 2D and 6D and translated Ackley 6D.
 
 ### Follow-up candidates
 
@@ -297,6 +299,17 @@ production buffer API was added.
   [investigation report](target/ackley-investigation.MQIrRk/REPORT.md).
 
 ## Basin 2.0
+
+- [ ] **Clean up backend compatibility aliases in Basin 2.0.0.** Retire the
+  frozen unversioned `nalgebra`, `ndarray`, and `faer` feature aliases and
+  their LAPACK/BLAS counterparts in favor of exact version features and the
+  explicit `*_latest` aliases. Remove or replace `NalgebraQuasiNewtonState`,
+  `NdarrayQuasiNewtonState`, and `FaerQuasiNewtonState`, whose concrete
+  types currently change when a newer backend version is enabled. Prefer
+  explicit `QuasiNewtonState<V, M, F>` types or version-specific aliases.
+  Preserve independent implementations for every enabled version and
+  version-specific acceleration. Document the 1.x migration and retain
+  simultaneous-version and downstream Cargo feature-unification tests.
 
 - [ ] **Remove bincode in Basin 2.0.0.** Drop legacy readers for unprefixed
   state checkpoints and version 1 exact checkpoints, along with the bincode
