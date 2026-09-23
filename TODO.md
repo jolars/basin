@@ -292,10 +292,14 @@ desired backend features.
 
 ## Deferred design
 
-- [ ] **Revisit a shared constraint-violation capability (tenet 3).** COBYLA and
-  constrained MADS now provide multiple consumers, but they use different
-  violation measures, and only `ConstrainedMadsState` exposes its measure.
-  Define common state semantics before adding a reporting API or a composite
-  feasibility-and-optimality stopping rule. Do not add a standalone
-  `FeasibilityTolerance`: executor criteria are combined with OR, so it
-  could stop at the first feasible but nonoptimal iterate.
+- [ ] **Define shared constraint-violation reporting (tenet 3).**
+  `ConstrainedMadsState` reports the sum of squared positive violations, and
+  `SlsqpState` reports the sum of absolute equality residuals and positive
+  inequality violations. COBYLA retains its maximum positive violation
+  internally. Define a shared state capability with explicit semantics for
+  the measure, scaling, associated iterate, and availability before
+  initialization. Preserve each solver's numerical convergence semantics:
+  SLSQP already combines feasibility with other convergence tests. Do not
+  add a standalone `FeasibilityTolerance` to the executor: its stopping
+  conditions combine with OR, so it could stop at the first feasible but
+  nonoptimal iterate.
