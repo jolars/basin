@@ -299,10 +299,3 @@ desired backend features.
   feasibility-and-optimality stopping rule. Do not add a standalone
   `FeasibilityTolerance`: executor criteria are combined with OR, so it
   could stop at the first feasible but nonoptimal iterate.
-
-- [ ] **Design nonlinear equality constraints when a solver needs their
-  structure (tenet 4).** Coordinate with the [SLSQP
-  task](#priority-additions), which supplies that consumer. Existing
-  derivative-free paths can represent `g(x) = 0` as the pair `g(x) ≤ 0` and
-  `−g(x) ≤ 0`; the native interface must validate equality-specific
-  operations and semantics with SLSQP.
