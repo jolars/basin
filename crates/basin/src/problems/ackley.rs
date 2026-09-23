@@ -121,7 +121,8 @@ impl CostFunction for Ackley<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{Ackley, ackley};
     use crate::CostFunction;
     use nalgebra::DVector;
@@ -140,7 +141,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::{Ackley, ackley};
     use crate::CostFunction;
     use ndarray::Array1;
@@ -159,7 +161,8 @@ mod ndarray_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::{A, Ackley, B};
     use crate::CostFunction;
     use faer::Col;
@@ -246,7 +249,8 @@ impl BoxConstraints for AckleyBoxed<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_boxed_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER, ackley};
     use crate::{BoxConstraints, CostFunction};
     use nalgebra::DVector;
@@ -285,7 +289,8 @@ mod nalgebra_boxed_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_boxed_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_boxed_impl(ndarray);
     use super::{AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER, ackley};
     use crate::{BoxConstraints, CostFunction};
     use ndarray::Array1;
@@ -324,7 +329,8 @@ mod ndarray_boxed_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_boxed_impl {
+crate::backend_macros::faer_versions! {
+    faer_boxed_impl(faer, faer_traits);
     use super::{A, AckleyBoxed, B, STANDARD_LOWER, STANDARD_UPPER};
     use crate::{BoxConstraints, CostFunction};
     use faer::Col;

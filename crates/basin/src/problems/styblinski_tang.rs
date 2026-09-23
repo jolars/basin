@@ -120,7 +120,8 @@ impl Gradient for StyblinskiTang<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{StyblinskiTang, styblinski_tang, styblinski_tang_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
@@ -151,7 +152,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::{StyblinskiTang, styblinski_tang, styblinski_tang_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
@@ -185,7 +187,8 @@ mod ndarray_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::StyblinskiTang;
     use crate::{CostFunction, Gradient};
     use faer::Col;
@@ -290,7 +293,8 @@ impl BoxConstraints for StyblinskiTangBoxed<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_boxed_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
         STANDARD_LOWER, STANDARD_UPPER, StyblinskiTangBoxed, styblinski_tang,
         styblinski_tang_gradient,
@@ -344,7 +348,8 @@ mod nalgebra_boxed_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_boxed_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_boxed_impl(ndarray);
     use super::{
         STANDARD_LOWER, STANDARD_UPPER, StyblinskiTangBoxed, styblinski_tang,
         styblinski_tang_gradient,
@@ -401,7 +406,8 @@ mod ndarray_boxed_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_boxed_impl {
+crate::backend_macros::faer_versions! {
+    faer_boxed_impl(faer, faer_traits);
     use super::{STANDARD_LOWER, STANDARD_UPPER, StyblinskiTangBoxed};
     use crate::{BoxConstraints, CostFunction, Gradient};
     use faer::Col;

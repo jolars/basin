@@ -289,54 +289,63 @@ where
 impl<S, F> WarmStart<Vec<F>> for Bfgs<S, F> where F: Scalar {}
 
 #[cfg(feature = "nalgebra_all")]
-impl<S, F> InitialState<nalgebra::DVector<F>> for Bfgs<S, F>
-where
-    F: Scalar + nalgebra::Scalar + num_traits::Zero,
-{
-    type State =
-        QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
-    fn seed(&self, x: &nalgebra::DVector<F>) -> Self::State {
-        QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(
-            x.clone(),
-        )
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_initial_state(nalgebra, nalgebra_sparse, nalgebra_lapack);
+    use super::*;
+    impl<S, F> InitialState<nalgebra::DVector<F>> for Bfgs<S, F>
+    where
+        F: Scalar + nalgebra::Scalar + num_traits::Zero,
+    {
+        type State =
+            QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
+        fn seed(&self, x: &nalgebra::DVector<F>) -> Self::State {
+            QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(
+                x.clone(),
+            )
+        }
     }
-}
 
-#[cfg(feature = "nalgebra_all")]
-impl<S, F> WarmStart<nalgebra::DVector<F>> for Bfgs<S, F> where
-    F: Scalar + nalgebra::Scalar + num_traits::Zero
-{
-}
-
-#[cfg(feature = "faer_all")]
-impl<S, F> InitialState<faer::Col<F>> for Bfgs<S, F>
-where
-    F: Scalar + faer_traits::ComplexField,
-{
-    type State = QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
-    fn seed(&self, x: &faer::Col<F>) -> Self::State {
-        QuasiNewtonState::<faer::Col<F>, faer::Mat<F>, F>::new(x.clone())
+    impl<S, F> WarmStart<nalgebra::DVector<F>> for Bfgs<S, F> where
+        F: Scalar + nalgebra::Scalar + num_traits::Zero
+    {
     }
 }
 
 #[cfg(feature = "faer_all")]
-impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where
-    F: Scalar + faer_traits::ComplexField
-{
-}
+crate::backend_macros::faer_versions! {
+    faer_initial_state(faer, faer_traits);
+    use super::*;
+    impl<S, F> InitialState<faer::Col<F>> for Bfgs<S, F>
+    where
+        F: Scalar + faer_traits::ComplexField,
+    {
+        type State = QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
+        fn seed(&self, x: &faer::Col<F>) -> Self::State {
+            QuasiNewtonState::<faer::Col<F>, faer::Mat<F>, F>::new(x.clone())
+        }
+    }
 
-#[cfg(feature = "ndarray_all")]
-impl<S, F> InitialState<ndarray::Array1<F>> for Bfgs<S, F>
-where
-    F: Scalar,
-{
-    type State = QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
-    fn seed(&self, x: &ndarray::Array1<F>) -> Self::State {
-        QuasiNewtonState::<ndarray::Array1<F>, ndarray::Array2<F>, F>::new(
-            x.clone(),
-        )
+    impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where
+        F: Scalar + faer_traits::ComplexField
+    {
     }
 }
 
 #[cfg(feature = "ndarray_all")]
-impl<S, F> WarmStart<ndarray::Array1<F>> for Bfgs<S, F> where F: Scalar {}
+crate::backend_macros::ndarray_versions! {
+    ndarray_initial_state(ndarray);
+    use super::*;
+    impl<S, F> InitialState<ndarray::Array1<F>> for Bfgs<S, F>
+    where
+        F: Scalar,
+    {
+        type State = QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
+        fn seed(&self, x: &ndarray::Array1<F>) -> Self::State {
+            QuasiNewtonState::<ndarray::Array1<F>, ndarray::Array2<F>, F>::new(
+                x.clone(),
+            )
+        }
+    }
+
+    impl<S, F> WarmStart<ndarray::Array1<F>> for Bfgs<S, F> where F: Scalar {}
+}

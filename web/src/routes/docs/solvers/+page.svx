@@ -7,6 +7,10 @@ and whether it is constrained.
 
 Each algorithm name links to its API page on [docs.rs](https://docs.rs/basin);
 the trailing note cites the paper it implements (or the source it ports).
+Backend support applies to every enabled version of the listed backend.
+Multiple versions can be used in the same build; see the
+[backend migration notes](/docs/migrating-from-argmin/) for feature selection
+and the legacy quasi-Newton state aliases.
 
 ## Root Finding
 

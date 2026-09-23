@@ -136,10 +136,14 @@ alias that tracks the newest supported release:
 
 The original features remain frozen for compatibility: `nalgebra` selects
 0.34, `ndarray` selects 0.17, and `faer` selects 0.24. If dependency feature
-unification enables several releases of the same backend, Basin implements the
-newest enabled release. First-order and derivative-free solvers run on any
-backend; linear-algebra-heavy solvers may require a specific one and say so in
+unification enables several releases of the same backend, Basin provides
+implementations for every enabled release. First-order and derivative-free
+solvers run on any backend; linear-algebra-heavy solvers may require a specific one and say so in
 their docs.
+
+The legacy backend-specific quasi-Newton state aliases still select the newest
+enabled version. Use `QuasiNewtonState<V, M, F>` with explicit vector and matrix
+types, or `Executor::from_start`, to select a particular version.
 
 Every nalgebra feature includes its matching `nalgebra-sparse` release:
 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Exact acceleration features

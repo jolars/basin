@@ -89,9 +89,11 @@ belong in the core crate.
    driver-loop shape unless another constraint requires divergence.
 2. Each supported backend release has an exact version feature. The
    `*_latest` aliases move to the newest supported release, while the original
-   unversioned features retain their Basin 1.x meanings. If dependency feature
-   unification enables several releases of one backend, implement the newest
-   enabled release.
+   unversioned features retain their Basin 1.x meanings. Implement every enabled
+   backend version independently; enabling another version must preserve existing
+   implementations. Legacy backend-specific quasi-Newton state aliases still
+   select the newest enabled version for Basin 1.x compatibility. Use explicit
+   `QuasiNewtonState<V, M, F>` types when selecting a version.
 3. Numerical convergence settings belong on the solver, with one owner per
    test and shared internal calculations. Execution budgets, targets, stalls,
    cancellation, and application stops belong to the executor. Bind optional

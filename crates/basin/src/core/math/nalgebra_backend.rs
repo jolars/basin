@@ -1,17 +1,3 @@
-#[cfg(all(
-    feature = "nalgebra_v0_32",
-    not(any(
-        feature = "nalgebra_v0_35",
-        feature = "nalgebra_v0_34",
-        feature = "nalgebra_v0_33"
-    ))
-))]
-use nalgebra::{ClosedAdd as ClosedAddAssign, ClosedMul as ClosedMulAssign};
-#[cfg(any(
-    feature = "nalgebra_v0_35",
-    feature = "nalgebra_v0_34",
-    feature = "nalgebra_v0_33"
-))]
 use nalgebra::{ClosedAddAssign, ClosedMulAssign};
 use nalgebra::{DMatrix, DVector, Dim, Matrix, Storage, StorageMut};
 use rand::{Rng, RngExt};
@@ -36,62 +22,6 @@ use super::{
     ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
     NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
-
-macro_rules! if_selected_nalgebra_lapack {
-    ($item:item) => {
-        #[cfg(any(
-            feature = "nalgebra_v0_35-lapack",
-            all(
-                not(feature = "nalgebra_v0_35"),
-                feature = "nalgebra_v0_34-lapack"
-            ),
-            all(
-                not(any(
-                    feature = "nalgebra_v0_35",
-                    feature = "nalgebra_v0_34"
-                )),
-                feature = "nalgebra_v0_33-lapack"
-            ),
-            all(
-                not(any(
-                    feature = "nalgebra_v0_35",
-                    feature = "nalgebra_v0_34",
-                    feature = "nalgebra_v0_33"
-                )),
-                feature = "nalgebra_v0_32-lapack"
-            )
-        ))]
-        $item
-    };
-}
-
-macro_rules! if_not_selected_nalgebra_lapack {
-    ($item:item) => {
-        #[cfg(not(any(
-            feature = "nalgebra_v0_35-lapack",
-            all(
-                not(feature = "nalgebra_v0_35"),
-                feature = "nalgebra_v0_34-lapack"
-            ),
-            all(
-                not(any(
-                    feature = "nalgebra_v0_35",
-                    feature = "nalgebra_v0_34"
-                )),
-                feature = "nalgebra_v0_33-lapack"
-            ),
-            all(
-                not(any(
-                    feature = "nalgebra_v0_35",
-                    feature = "nalgebra_v0_34",
-                    feature = "nalgebra_v0_33"
-                )),
-                feature = "nalgebra_v0_32-lapack"
-            )
-        )))]
-        $item
-    };
-}
 
 // `F: Scalar` (basin's alias) bundles `Float + FromPrimitive + Sum + Debug +
 // Default + 'static`, which transitively satisfies `nalgebra::Scalar`
@@ -603,7 +533,7 @@ impl<F: Scalar> DenseMatrixFromFn<F> for DVector<F> {
 // Pure-Rust symmetric eigendecomposition (default), generic over every
 // `F: RealField`. Swapped for the LAPACK impl below under `nalgebra-lapack`;
 // the two are mutually exclusive (`#[cfg]`).
-if_not_selected_nalgebra_lapack! {
+if_not_nalgebra_lapack! {
 impl<F> SymmetricEigen<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::RealField,
@@ -639,7 +569,7 @@ where
 // bound, unlike `CholeskyScalar` above. f64 and f32 are the only scalars
 // LAPACK's `dsyev`/`ssyev` cover; see the `nalgebra-lapack` feature note in
 // `Cargo.toml`.
-if_selected_nalgebra_lapack! {
+if_nalgebra_lapack! {
 macro_rules! lapack_symmetric_eigen_impl {
     ($scalar:ty) => {
         impl SymmetricEigen<DVector<$scalar>> for DMatrix<$scalar> {
@@ -665,10 +595,10 @@ macro_rules! lapack_symmetric_eigen_impl {
 }
 }
 
-if_selected_nalgebra_lapack! {
+if_nalgebra_lapack! {
 lapack_symmetric_eigen_impl!(f64);
 }
-if_selected_nalgebra_lapack! {
+if_nalgebra_lapack! {
 lapack_symmetric_eigen_impl!(f32);
 }
 
@@ -739,7 +669,7 @@ where
 // Pure-Rust Cholesky (default). Generic over every `F: ComplexField`. Swapped
 // out for the LAPACK impl below when the `nalgebra-lapack` feature is on; the
 // two are mutually exclusive (`#[cfg]`) so coherence is never violated.
-if_not_selected_nalgebra_lapack! {
+if_not_nalgebra_lapack! {
 impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra::ComplexField,
@@ -778,7 +708,7 @@ where
 // The bound narrows from any `F: ComplexField` to `nalgebra_lapack`'s
 // `CholeskyScalar` (f32/f64 and their complex counterparts); see the
 // `nalgebra-lapack` feature note in `Cargo.toml`.
-if_selected_nalgebra_lapack! {
+if_nalgebra_lapack! {
 impl<F> LinearSolveSpd<DVector<F>> for DMatrix<F>
 where
     F: Scalar + nalgebra_lapack::CholeskyScalar + num_traits::Zero,

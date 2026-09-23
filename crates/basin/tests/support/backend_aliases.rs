@@ -1,3 +1,9 @@
+//! Selected-version aliases for the existing solver test suites.
+//!
+//! These also exercise the legacy quasi-Newton state aliases. The separate
+//! `backend_versions` suite names every enabled dependency directly to test
+//! coexistence without hiding displaced implementations.
+
 #![allow(clippy::single_component_path_imports, unused_imports)]
 
 #[cfg(feature = "nalgebra_v0_35")]

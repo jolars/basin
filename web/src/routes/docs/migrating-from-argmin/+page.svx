@@ -41,7 +41,14 @@ The moving aliases `nalgebra_latest`, `ndarray_latest`, and `faer_latest` are
 convenient for new applications. Exact features are safer during a migration
 because they cannot silently change the backend release at the next Basin
 upgrade. If dependency feature unification enables several versions of one
-backend, Basin implements the newest enabled release.
+backend, Basin implements every enabled version independently.
+
+The legacy `NalgebraQuasiNewtonState`, `NdarrayQuasiNewtonState`, and
+`FaerQuasiNewtonState` aliases still select the newest enabled version for
+Basin 1.x compatibility. For explicit version selection, use
+[`QuasiNewtonState<V, M, F>`](https://docs.rs/basin/latest/basin/core/state/struct.QuasiNewtonState.html)
+with your dependency's vector and matrix types, or use `Executor::from_start`
+to infer the state from the starting vector.
 
 ## The Basic Executor Migration
 

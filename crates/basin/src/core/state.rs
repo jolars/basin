@@ -697,63 +697,86 @@ impl IntoInitialSimplex<Self> for Vec<f64> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-impl IntoInitialSimplex<Self> for nalgebra::DVector<f64> {
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
-        let n = self.len();
-        let mut simplex = Vec::with_capacity(n + 1);
-        simplex.push(self.clone());
-        for i in 0..n {
-            let mut v = self.clone();
-            v[i] = if self[i] != 0.0 {
-                (1.0 + relative_step) * self[i]
-            } else {
-                0.00025
-            };
-            simplex.push(v);
+mod nalgebra_simplex {
+    use super::*;
+    crate::backend_macros::nalgebra_versions!(
+        nalgebra,
+        nalgebra_sparse,
+        nalgebra_lapack,
+        {
+            use super::IntoInitialSimplex;
+            impl IntoInitialSimplex<Self> for nalgebra::DVector<f64> {
+                fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
+                    let n = self.len();
+                    let mut simplex = Vec::with_capacity(n + 1);
+                    simplex.push(self.clone());
+                    for i in 0..n {
+                        let mut v = self.clone();
+                        v[i] = if self[i] != 0.0 {
+                            (1.0 + relative_step) * self[i]
+                        } else {
+                            0.00025
+                        };
+                        simplex.push(v);
+                    }
+                    simplex
+                }
+            }
         }
-        simplex
-    }
+    );
 }
 
 #[cfg(feature = "faer_all")]
-impl IntoInitialSimplex<Self> for faer::Col<f64> {
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
-        let n = self.nrows();
-        let mut simplex = Vec::with_capacity(n + 1);
-        simplex.push(self.clone());
-        for i in 0..n {
-            let mut v = self.clone();
-            v[i] = if self[i] != 0.0 {
-                (1.0 + relative_step) * self[i]
-            } else {
-                0.00025
-            };
-            simplex.push(v);
+mod faer_simplex {
+    use super::*;
+    crate::backend_macros::faer_versions!(faer, faer_traits, {
+        use super::IntoInitialSimplex;
+        impl IntoInitialSimplex<Self> for faer::Col<f64> {
+            fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
+                let n = self.nrows();
+                let mut simplex = Vec::with_capacity(n + 1);
+                simplex.push(self.clone());
+                for i in 0..n {
+                    let mut v = self.clone();
+                    v[i] = if self[i] != 0.0 {
+                        (1.0 + relative_step) * self[i]
+                    } else {
+                        0.00025
+                    };
+                    simplex.push(v);
+                }
+                simplex
+            }
         }
-        simplex
-    }
+    });
 }
 
 #[cfg(feature = "ndarray_all")]
-impl IntoInitialSimplex<ndarray::Array1<f64>> for ndarray::Array1<f64> {
-    fn into_initial_simplex(
-        self,
-        relative_step: f64,
-    ) -> Vec<ndarray::Array1<f64>> {
-        let n = self.len();
-        let mut simplex = Vec::with_capacity(n + 1);
-        simplex.push(self.clone());
-        for i in 0..n {
-            let mut v = self.clone();
-            v[i] = if self[i] != 0.0 {
-                (1.0 + relative_step) * self[i]
-            } else {
-                0.00025
-            };
-            simplex.push(v);
+mod ndarray_simplex {
+    use super::*;
+    crate::backend_macros::ndarray_versions!(ndarray, {
+        use super::IntoInitialSimplex;
+        impl IntoInitialSimplex<ndarray::Array1<f64>> for ndarray::Array1<f64> {
+            fn into_initial_simplex(
+                self,
+                relative_step: f64,
+            ) -> Vec<ndarray::Array1<f64>> {
+                let n = self.len();
+                let mut simplex = Vec::with_capacity(n + 1);
+                simplex.push(self.clone());
+                for i in 0..n {
+                    let mut v = self.clone();
+                    v[i] = if self[i] != 0.0 {
+                        (1.0 + relative_step) * self[i]
+                    } else {
+                        0.00025
+                    };
+                    simplex.push(v);
+                }
+                simplex
+            }
         }
-        simplex
-    }
+    });
 }
 
 impl<V, F: Scalar> BasicSimplexState<V, F> {
@@ -947,6 +970,10 @@ pub type DenseQuasiNewtonState<F = f64> =
 /// `NalgebraQuasiNewtonState::new(x)` instead of
 /// `QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(x)`. The scalar `F`
 /// defaults to `f64`.
+///
+/// This legacy alias selects the newest enabled nalgebra version, so enabling
+/// another version can change its concrete type. Use [`QuasiNewtonState`]
+/// with explicit vector and matrix types for stable version selection.
 #[cfg(feature = "nalgebra_all")]
 pub type NalgebraQuasiNewtonState<F = f64> =
     QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
@@ -957,6 +984,10 @@ pub type NalgebraQuasiNewtonState<F = f64> =
 /// `FaerQuasiNewtonState::new(x)` instead of
 /// `QuasiNewtonState::<Col<f64>, Mat<f64>>::new(x)`. The scalar `F` defaults
 /// to `f64`.
+///
+/// This legacy alias selects the newest enabled faer version, so enabling
+/// another version can change its concrete type. Use [`QuasiNewtonState`]
+/// with explicit vector and matrix types for stable version selection.
 #[cfg(feature = "faer_all")]
 pub type FaerQuasiNewtonState<F = f64> =
     QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
@@ -967,6 +998,10 @@ pub type FaerQuasiNewtonState<F = f64> =
 /// `NdarrayQuasiNewtonState::new(x)` instead of
 /// `QuasiNewtonState::<Array1<f64>, Array2<f64>>::new(x)`. The scalar `F`
 /// defaults to `f64`.
+///
+/// This legacy alias selects the newest enabled ndarray version, so enabling
+/// another version can change its concrete type. Use [`QuasiNewtonState`]
+/// with explicit vector and matrix types for stable version selection.
 #[cfg(feature = "ndarray_all")]
 pub type NdarrayQuasiNewtonState<F = f64> =
     QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;

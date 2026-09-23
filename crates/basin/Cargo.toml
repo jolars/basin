@@ -62,7 +62,8 @@ nalgebra_v0_34-lapack = [
 nalgebra_v0_35-lapack = [
   "nalgebra_v0_35",
   "dep:nalgebra-lapack",
-  "nalgebra-lapack/lapack-custom",
+  # Avoid activating the frozen `nalgebra-lapack` feature alias.
+  "nalgebra-lapack?/lapack-custom",
 ]
 ndarray = ["ndarray_v0_17"]
 ndarray_latest = ["ndarray_v0_17"]

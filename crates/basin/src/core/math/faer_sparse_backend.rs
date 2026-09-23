@@ -1,14 +1,14 @@
-//! Sparse impls of the `linalg` tier for
-//! [`faer::sparse::SparseColMat<usize, f64>`] (CSC) over
-//! [`faer::Col<f64>`]. Lands in S2b alongside the dense faer backend.
-//!
-//! Faer's sparse stack covers all five `linalg` traits: SpMV via
-//! [`sparse_dense_matmul`], Aᵀ-SpMV via a CSC column walk, Gram via
-//! [`sparse_sparse_matmul`], SPD solve via supernodal/simplicial
-//! Cholesky ([`SparseColMat::sp_cholesky`]), and least-squares solve
-//! via sparse QR ([`SparseColMat::sp_qr`]). The QR path is the only
-//! `LinearSolveLstsq` implementor in basin today; nalgebra-sparse
-//! doesn't ship sparse QR.
+// Sparse impls of the `linalg` tier for
+// [`faer::sparse::SparseColMat<usize, f64>`] (CSC) over
+// [`faer::Col<f64>`]. Lands in S2b alongside the dense faer backend.
+//
+// Faer's sparse stack covers all five `linalg` traits: SpMV via
+// [`sparse_dense_matmul`], Aᵀ-SpMV via a CSC column walk, Gram via
+// [`sparse_sparse_matmul`], SPD solve via supernodal/simplicial
+// Cholesky ([`SparseColMat::sp_cholesky`]), and least-squares solve
+// via sparse QR ([`SparseColMat::sp_qr`]). The QR path is the only
+// `LinearSolveLstsq` implementor in basin today; nalgebra-sparse
+// doesn't ship sparse QR.
 
 use faer::linalg::solvers::{Solve, SolveLstsq};
 use faer::sparse::SparseColMat;
@@ -263,8 +263,8 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for SparseColMat<usize, F> {
 
 #[cfg(test)]
 mod tests {
+    use super::faer::sparse::{SparseColMat, Triplet};
     use super::*;
-    use faer::sparse::{SparseColMat, Triplet};
 
     fn approx_eq(a: f64, b: f64, tol: f64) -> bool {
         (a - b).abs() < tol

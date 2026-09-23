@@ -200,9 +200,12 @@ These shape API decisions and are non-obvious from the code alone.
 2. **Versioned backend compatibility.** Each supported nalgebra, ndarray, and
    faer release has an exact Cargo feature; `Vec<f64>` needs none. Moving
    `*_latest` aliases select the newest supported releases, while the original
-   unversioned aliases retain their Basin 1.x meanings. Cargo features are
-   additive, so the implementation selects the newest enabled release when
-   dependency feature unification enables several versions of one backend.
+   unversioned aliases retain their Basin 1.x meanings. Every enabled version
+   receives its implementations independently, including problem adapters and
+   version-specific acceleration. The legacy backend-specific quasi-Newton
+   state aliases still select the newest enabled version for Basin 1.x
+   compatibility; use `QuasiNewtonState<V, M, F>` to select explicit types.
+   Test simultaneous versions using their actual dependency aliases.
 3. **Solver-owned convergence.** Numerical convergence settings belong on the
    solver, with one authoritative setting for each test and shared internal
    calculations. The executor owns iteration, evaluation, and time budgets,

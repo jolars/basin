@@ -1,0 +1,9 @@
+[package]
+name = "basin-backend-application"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+basin-backend-older = { path = "../older" }
+basin-backend-newer = { path = "../newer" }

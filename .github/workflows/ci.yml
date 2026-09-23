@@ -19,6 +19,17 @@ jobs:
       - name: Install rustfmt
         run: rustup component add rustfmt
       - run: cargo fmt --all -- --check
+      # rustfmt does not follow include! into the shared adapter sources.
+      - run: >-
+          rustfmt --edition 2024 --check
+          crates/basin/src/core/math/nalgebra_backend.rs
+          crates/basin/src/core/math/nalgebra_sparse_backend.rs
+          crates/basin/src/core/math/ndarray_backend.rs
+          crates/basin/src/core/math/faer_backend.rs
+          crates/basin/src/core/math/faer_sparse_backend.rs
+          crates/basin/tests/support/nalgebra_factorizations.rs
+          crates/basin/tests/fixtures/backend_unification/check.rs
+      - run: cargo fmt --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml --all -- --check
 
   clippy:
     name: clippy
@@ -99,6 +110,8 @@ jobs:
             flags: "--no-default-features --features faer_v0_23,problems"
           - features: faer 0.24
             flags: "--no-default-features --features faer_v0_24,problems"
+          - features: all backend versions
+            flags: "--no-default-features --features nalgebra_v0_32,nalgebra_v0_33,nalgebra_v0_34,nalgebra_v0_35,ndarray_v0_15,ndarray_v0_16,ndarray_v0_17,faer_v0_22,faer_v0_23,faer_v0_24,problems,parallel,serde"
           # Preserve the pre-versioning feature meanings in Basin 1.x.
           - features: legacy aliases
             flags: "--features nalgebra,ndarray,faer"
@@ -130,6 +143,9 @@ jobs:
           - nalgebra_v0_33-lapack
           - nalgebra_v0_34-lapack
           - nalgebra_v0_35-lapack
+          - nalgebra_v0_32-lapack,nalgebra_v0_35
+          - nalgebra_v0_32,nalgebra_v0_35-lapack
+          - nalgebra_v0_32-lapack,nalgebra_v0_33-lapack,nalgebra_v0_34-lapack,nalgebra_v0_35-lapack,ndarray_v0_15-blas,ndarray_v0_16-blas,ndarray_v0_17-blas,faer_v0_22,faer_v0_23,faer_v0_24
     env:
       # Override the workflow-level RUSTFLAGS (job env replaces, not merges), so
       # keep `-D warnings` and append the OpenBLAS link directive.
@@ -141,7 +157,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.feature }}
-      - run: cargo test -p basin --features ${{ matrix.feature }} --test lapack_nalgebra
+      - run: cargo test -p basin --features ${{ matrix.feature }} --test lapack_nalgebra --test backend_versions
+
+  backend-unification:
+    name: downstream backend feature unification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/basin/tests/fixtures/backend_unification
+      - run: cargo test --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml -p basin-backend-older
+      - run: cargo test --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml -p basin-backend-newer
+      - run: cargo run --manifest-path crates/basin/tests/fixtures/backend_unification/Cargo.toml -p basin-backend-application
+      - run: python3 crates/basin/tests/fixtures/backend_unification/check_features.py
 
   wasm:
     name: wasm build (${{ matrix.features }})

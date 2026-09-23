@@ -31,7 +31,7 @@ publish = false
 basin = { path = "../basin", features = ["nalgebra", "faer", "problems"] }
 levenberg-marquardt = "0.15"
 nalgebra = "0.34"
-# Workspace `--all-features` makes Basin select its newest enabled nalgebra.
+# Workspace `--all-features` enables every Basin nalgebra adapter.
 # Keep the benchmark default on 0.34 for the like-for-like LM comparison, but
 # compile its Basin side against 0.35 in the all-feature maintenance build.
 nalgebra_latest = { package = "nalgebra", version = "0.35", optional = true }

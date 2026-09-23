@@ -19,7 +19,7 @@ default-members = [
 ]
 # Lockfile lives at the workspace root; member crates share dependency
 # resolution. Basin's versioned backend features may resolve several releases
-# at once; the library consistently implements the newest enabled release.
+# at once; the library implements every enabled release independently.
 
 [workspace.package]
 edition = "2024"

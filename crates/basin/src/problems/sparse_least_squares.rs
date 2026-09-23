@@ -97,7 +97,8 @@ impl<M, V> HasSpec for SparseLeastSquaresBoxed<M, V> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{SparseLeastSquares, SparseLeastSquaresBoxed};
     use crate::core::math::{MatVec, ScaledAdd};
     use crate::{BoxConstraints, CostFunction, Jacobian, Residual};
@@ -193,7 +194,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::{SparseLeastSquares, SparseLeastSquaresBoxed};
     use crate::core::math::{MatVec, ScaledAdd};
     use crate::{BoxConstraints, CostFunction, Jacobian, Residual};

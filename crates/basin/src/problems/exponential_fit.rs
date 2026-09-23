@@ -189,7 +189,8 @@ mod vec_impl {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
         ExponentialFit, exponential_fit, exponential_fit_jacobian,
         exponential_fit_residuals,
@@ -244,7 +245,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::{
         ExponentialFit, exponential_fit, exponential_fit_jacobian,
         exponential_fit_residuals,
@@ -309,7 +311,8 @@ mod ndarray_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::{
         ExponentialFit, exponential_fit, exponential_fit_jacobian,
         exponential_fit_residuals,

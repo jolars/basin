@@ -1,35 +1,18 @@
-//! Sparse impls of the `linalg` tier for
-//! [`nalgebra_sparse::CscMatrix<f64>`] (CSC) over
-//! [`nalgebra::DVector<f64>`]. Lands in S2b alongside the dense
-//! nalgebra backend.
-//!
-//! nalgebra-sparse covers four of the five `linalg` traits: SpMV /
-//! Aᵀ-SpMV via [`spmm_csc_dense`], Gram via the `&CscMatrix *
-//! &CscMatrix` operator overload (composing transpose + spmm under
-//! the hood), and SPD solve via
-//! [`CscCholesky`](nalgebra_sparse::factorization::CscCholesky).
-//! The fifth (`LinearSolveLstsq`) is **deliberately not
-//! implemented** here: nalgebra-sparse 0.10 doesn't ship a sparse QR.
-//! Reach for the faer-sparse backend if you need least-squares on
-//! sparse `J`.
+// Sparse impls of the `linalg` tier for
+// [`nalgebra_sparse::CscMatrix<f64>`] (CSC) over
+// [`nalgebra::DVector<f64>`]. Lands in S2b alongside the dense
+// nalgebra backend.
+//
+// nalgebra-sparse covers four of the five `linalg` traits: SpMV /
+// Aᵀ-SpMV via [`spmm_csc_dense`], Gram via the `&CscMatrix *
+// &CscMatrix` operator overload (composing transpose + spmm under
+// the hood), and SPD solve via
+// [`CscCholesky`](nalgebra_sparse::factorization::CscCholesky).
+// The fifth (`LinearSolveLstsq`) is **deliberately not
+// implemented** here: nalgebra-sparse 0.10 doesn't ship a sparse QR.
+// Reach for the faer-sparse backend if you need least-squares on
+// sparse `J`.
 
-#[cfg(all(
-    feature = "nalgebra_v0_32",
-    not(any(
-        feature = "nalgebra_v0_35",
-        feature = "nalgebra_v0_34",
-        feature = "nalgebra_v0_33"
-    ))
-))]
-use nalgebra::{
-    ClosedAdd as ClosedAddAssign, ClosedDiv as ClosedDivAssign,
-    ClosedMul as ClosedMulAssign, ClosedSub as ClosedSubAssign,
-};
-#[cfg(any(
-    feature = "nalgebra_v0_35",
-    feature = "nalgebra_v0_34",
-    feature = "nalgebra_v0_33"
-))]
 use nalgebra::{
     ClosedAddAssign, ClosedDivAssign, ClosedMulAssign, ClosedSubAssign,
 };
@@ -247,8 +230,8 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for CscMatrix<F> {
 
 #[cfg(test)]
 mod tests {
+    use super::nalgebra_sparse::CooMatrix;
     use super::*;
-    use nalgebra_sparse::CooMatrix;
 
     fn approx_eq(a: f64, b: f64, tol: f64) -> bool {
         (a - b).abs() < tol

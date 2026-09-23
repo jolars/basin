@@ -171,7 +171,14 @@
 //! The original features remain frozen for Basin 1.x compatibility:
 //! `nalgebra` selects 0.34, `ndarray` selects 0.17, and `faer` selects 0.24.
 //! If dependency feature unification enables several releases of one backend,
-//! Basin implements the newest enabled release.
+//! Basin implements every enabled release independently.
+//!
+//! The legacy `NalgebraQuasiNewtonState`, `NdarrayQuasiNewtonState`, and
+//! `FaerQuasiNewtonState` aliases still select the newest enabled version
+//! for Basin 1.x compatibility. Their selected type can change when features
+//! are unified. Use [`QuasiNewtonState<V, M, F>`](QuasiNewtonState) with explicit
+//! vector and matrix types to select a particular version, or let
+//! [`Executor::from_start`] infer the state from the starting vector.
 //!
 //! Each nalgebra release includes its matching `nalgebra-sparse` release:
 //! 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Versioned acceleration uses
@@ -218,9 +225,10 @@
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
-// Cargo features are additive, so several versions of one backend may be
-// enabled after dependency feature unification. Bind the unversioned crate
-// name to the newest enabled version, matching argmin-math's selection model.
+mod backend_macros;
+
+// Legacy state aliases and single-version examples retain their selected
+// backend. Implementations bind every enabled version independently.
 #[cfg(feature = "nalgebra_v0_35")]
 extern crate nalgebra;
 #[cfg(all(
@@ -239,44 +247,6 @@ extern crate nalgebra_0_32 as nalgebra;
 extern crate nalgebra_0_33 as nalgebra;
 #[cfg(all(not(feature = "nalgebra_v0_35"), feature = "nalgebra_v0_34"))]
 extern crate nalgebra_0_34 as nalgebra;
-
-#[cfg(feature = "nalgebra_v0_35")]
-extern crate nalgebra_sparse;
-#[cfg(all(
-    not(any(feature = "nalgebra_v0_35", feature = "nalgebra_v0_34")),
-    feature = "nalgebra_v0_33"
-))]
-extern crate nalgebra_sparse_0_10 as nalgebra_sparse;
-#[cfg(all(not(feature = "nalgebra_v0_35"), feature = "nalgebra_v0_34"))]
-extern crate nalgebra_sparse_0_11 as nalgebra_sparse;
-#[cfg(all(
-    not(any(
-        feature = "nalgebra_v0_35",
-        feature = "nalgebra_v0_34",
-        feature = "nalgebra_v0_33"
-    )),
-    feature = "nalgebra_v0_32"
-))]
-extern crate nalgebra_sparse_0_9 as nalgebra_sparse;
-
-#[cfg(feature = "nalgebra_v0_35-lapack")]
-extern crate nalgebra_lapack;
-#[cfg(all(
-    not(any(
-        feature = "nalgebra_v0_35",
-        feature = "nalgebra_v0_34",
-        feature = "nalgebra_v0_33"
-    )),
-    feature = "nalgebra_v0_32-lapack"
-))]
-extern crate nalgebra_lapack_0_24 as nalgebra_lapack;
-#[cfg(all(
-    not(any(feature = "nalgebra_v0_35", feature = "nalgebra_v0_34")),
-    feature = "nalgebra_v0_33-lapack"
-))]
-extern crate nalgebra_lapack_0_25 as nalgebra_lapack;
-#[cfg(all(not(feature = "nalgebra_v0_35"), feature = "nalgebra_v0_34-lapack"))]
-extern crate nalgebra_lapack_0_27 as nalgebra_lapack;
 
 #[cfg(feature = "ndarray_v0_17")]
 extern crate ndarray;
@@ -297,16 +267,6 @@ extern crate faer;
 extern crate faer_0_22 as faer;
 #[cfg(all(not(feature = "faer_v0_24"), feature = "faer_v0_23"))]
 extern crate faer_0_23 as faer;
-
-#[cfg(feature = "faer_v0_24")]
-extern crate faer_traits;
-#[cfg(all(
-    not(any(feature = "faer_v0_24", feature = "faer_v0_23")),
-    feature = "faer_v0_22"
-))]
-extern crate faer_traits_0_22 as faer_traits;
-#[cfg(all(not(feature = "faer_v0_24"), feature = "faer_v0_23"))]
-extern crate faer_traits_0_23 as faer_traits;
 
 #[cfg(all(
     feature = "nalgebra_all",

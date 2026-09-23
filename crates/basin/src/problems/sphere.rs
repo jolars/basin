@@ -101,7 +101,8 @@ impl Gradient for Sphere<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{Sphere, sphere, sphere_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
@@ -132,7 +133,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::{Sphere, sphere, sphere_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
@@ -166,7 +168,8 @@ mod ndarray_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::Sphere;
     use crate::{CostFunction, Gradient};
     use faer::Col;
@@ -259,7 +262,8 @@ impl BoxConstraints for SphereBoxed<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_boxed_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{STANDARD_LOWER, STANDARD_UPPER, SphereBoxed, sphere};
     use crate::{BoxConstraints, CostFunction};
     use nalgebra::DVector;
@@ -298,7 +302,8 @@ mod nalgebra_boxed_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_boxed_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_boxed_impl(ndarray);
     use super::{STANDARD_LOWER, STANDARD_UPPER, SphereBoxed, sphere};
     use crate::{BoxConstraints, CostFunction};
     use ndarray::Array1;
@@ -337,7 +342,8 @@ mod ndarray_boxed_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_boxed_impl {
+crate::backend_macros::faer_versions! {
+    faer_boxed_impl(faer, faer_traits);
     use super::{STANDARD_LOWER, STANDARD_UPPER, SphereBoxed};
     use crate::{BoxConstraints, CostFunction};
     use faer::Col;

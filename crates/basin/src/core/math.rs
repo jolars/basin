@@ -262,19 +262,54 @@ mod scalar;
 mod vec;
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_backend;
+mod nalgebra_backend {
+    use super::*;
+    crate::backend_macros::nalgebra_versions!(
+        nalgebra,
+        nalgebra_sparse,
+        nalgebra_lapack,
+        {
+            include!("math/nalgebra_backend.rs");
+        }
+    );
+}
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_sparse_backend;
+mod nalgebra_sparse_backend {
+    use super::*;
+    crate::backend_macros::nalgebra_versions!(
+        nalgebra,
+        nalgebra_sparse,
+        nalgebra_lapack,
+        {
+            include!("math/nalgebra_sparse_backend.rs");
+        }
+    );
+}
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_backend;
+mod ndarray_backend {
+    use super::*;
+    crate::backend_macros::ndarray_versions!(ndarray, {
+        include!("math/ndarray_backend.rs");
+    });
+}
 
 #[cfg(feature = "faer_all")]
-mod faer_backend;
+mod faer_backend {
+    use super::*;
+    crate::backend_macros::faer_versions!(faer, faer_traits, {
+        include!("math/faer_backend.rs");
+    });
+}
 
 #[cfg(feature = "faer_all")]
-mod faer_sparse_backend;
+mod faer_sparse_backend {
+    use super::*;
+    crate::backend_macros::faer_versions!(faer, faer_traits, {
+        include!("math/faer_sparse_backend.rs");
+    });
+}
 
 pub use clamp::ClampInPlace;
 pub use dense::DenseMatrix;

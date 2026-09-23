@@ -67,7 +67,8 @@ impl<M, V> HasSpec for ConstrainedQuadratic<M, V> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::ConstrainedQuadratic;
     use crate::{CostFunction, Gradient, LinearInequalityConstraints};
     use nalgebra::{DMatrix, DVector};
@@ -108,7 +109,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::ConstrainedQuadratic;
     use crate::{CostFunction, Gradient, LinearInequalityConstraints};
     use faer::{Col, Mat};
@@ -192,7 +194,8 @@ mod vec_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::ConstrainedQuadratic;
     use crate::{CostFunction, Gradient, LinearInequalityConstraints};
     use ndarray::{Array1, Array2};

@@ -192,7 +192,8 @@ impl Jacobian for PowellSingular<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
         PowellSingular, powell_singular, powell_singular_jacobian,
         powell_singular_residuals,
@@ -242,7 +243,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::{
         PowellSingular, powell_singular, powell_singular_jacobian,
         powell_singular_residuals,
@@ -300,7 +302,8 @@ mod ndarray_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::{PowellSingular, SQRT_5, SQRT_10, powell_singular_jacobian};
     use crate::{CostFunction, Jacobian, Residual};
     use faer::{Col, Mat};

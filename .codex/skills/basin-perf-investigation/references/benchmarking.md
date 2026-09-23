@@ -89,9 +89,11 @@ not expose private internals as new public API solely for a probe.
 Keep the exact backend release fixed for implementation comparisons. Basin's
 `nalgebra_v0_34`, `ndarray_v0_17`, and `faer_v0_24` are examples of versioned
 features; consult `crates/basin/Cargo.toml` for the intended release. Feature
-unification selects the newest enabled release, so inspect the resolved feature
-graph with the same features as the benchmark. Do not infer it solely from a
-manifest alias or the parameter type's name.
+unification enables implementations for every requested release. Inspect the
+resolved feature graph with the same features as the benchmark and check the
+actual vector and matrix types. Legacy backend-specific quasi-Newton state
+aliases still select the newest enabled version; use explicit generic state
+types to keep a comparison fixed.
 
 ## Measure a stable baseline
 

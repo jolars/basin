@@ -108,7 +108,8 @@ impl Gradient for Rosenbrock<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{Rosenbrock, rosenbrock, rosenbrock_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
@@ -139,7 +140,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::{Rosenbrock, rosenbrock, rosenbrock_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
@@ -174,7 +176,8 @@ mod ndarray_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::Rosenbrock;
     use crate::{CostFunction, Gradient};
     use faer::Col;
@@ -323,7 +326,8 @@ impl Jacobian for RosenbrockResiduals<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_residuals_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_residuals_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
         RosenbrockResiduals, rosenbrock, rosenbrock_residuals,
         rosenbrock_residuals_jacobian,
@@ -371,7 +375,8 @@ mod nalgebra_residuals_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_residuals_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_residuals_impl(ndarray);
     use super::{
         RosenbrockResiduals, rosenbrock, rosenbrock_residuals,
         rosenbrock_residuals_jacobian,
@@ -428,7 +433,8 @@ mod ndarray_residuals_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_residuals_impl {
+crate::backend_macros::faer_versions! {
+    faer_residuals_impl(faer, faer_traits);
     use super::{RosenbrockResiduals, rosenbrock_residuals_jacobian};
     use crate::{CostFunction, Jacobian, Residual};
     use faer::{Col, Mat};

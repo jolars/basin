@@ -146,7 +146,8 @@ impl Gradient for GoldsteinPrice<Vec<f64>> {
 }
 
 #[cfg(feature = "nalgebra_all")]
-mod nalgebra_impl {
+crate::backend_macros::nalgebra_versions! {
+    nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{GoldsteinPrice, goldstein_price, goldstein_price_gradient};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
@@ -177,7 +178,8 @@ mod nalgebra_impl {
 }
 
 #[cfg(feature = "ndarray_all")]
-mod ndarray_impl {
+crate::backend_macros::ndarray_versions! {
+    ndarray_impl(ndarray);
     use super::{GoldsteinPrice, goldstein_price, goldstein_price_gradient};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
@@ -211,7 +213,8 @@ mod ndarray_impl {
 }
 
 #[cfg(feature = "faer_all")]
-mod faer_impl {
+crate::backend_macros::faer_versions! {
+    faer_impl(faer, faer_traits);
     use super::GoldsteinPrice;
     use crate::{CostFunction, Gradient};
     use faer::Col;
