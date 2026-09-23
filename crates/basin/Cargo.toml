@@ -49,21 +49,11 @@ nalgebra_v0_34 = [
   "dep:nalgebra_0_34",
   "dep:nalgebra_sparse_0_11",
 ]
-nalgebra_v0_35 = [
-  "nalgebra_all",
-  "dep:nalgebra",
-  "dep:nalgebra-sparse",
-]
+nalgebra_v0_35 = ["nalgebra_all", "dep:nalgebra", "dep:nalgebra-sparse"]
 nalgebra-lapack = ["nalgebra_v0_34-lapack"]
 nalgebra_latest-lapack = ["nalgebra_v0_35-lapack"]
-nalgebra_v0_32-lapack = [
-  "nalgebra_v0_32",
-  "dep:nalgebra_lapack_0_24",
-]
-nalgebra_v0_33-lapack = [
-  "nalgebra_v0_33",
-  "dep:nalgebra_lapack_0_25",
-]
+nalgebra_v0_32-lapack = ["nalgebra_v0_32", "dep:nalgebra_lapack_0_24"]
+nalgebra_v0_33-lapack = ["nalgebra_v0_33", "dep:nalgebra_lapack_0_25"]
 nalgebra_v0_34-lapack = [
   "nalgebra_v0_34",
   "dep:nalgebra_lapack_0_27",
@@ -100,18 +90,8 @@ faer_v0_23 = [
   "dep:faer_traits_0_23",
   "dep:generativity",
 ]
-faer_v0_24 = [
-  "faer_all",
-  "dep:faer",
-  "dep:faer-traits",
-  "dep:generativity",
-]
-parallel = [
-  "dep:rayon",
-  "faer?/rayon",
-  "faer_0_22?/rayon",
-  "faer_0_23?/rayon",
-]
+faer_v0_24 = ["faer_all", "dep:faer", "dep:faer-traits", "dep:generativity"]
+parallel = ["dep:rayon", "faer?/rayon", "faer_0_22?/rayon", "faer_0_23?/rayon"]
 serde = [
   "dep:serde",
   "dep:bincode",
