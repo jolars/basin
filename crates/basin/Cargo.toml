@@ -12,6 +12,7 @@ documentation = "https://docs.rs/basin"
 readme.workspace = true
 keywords = ["optimization", "math", "numerics", "solver", "nonlinear"]
 categories = ["mathematics", "science", "algorithms"]
+exclude = ["/examples/logo.rs", "/examples/favicon.rs"]
 
 [package.metadata.docs.rs]
 features = [
