@@ -1,0 +1,8 @@
+# SciPy 1.16.2; F=0.5; target=3; peers=1,2,4,5,0
+# mutation donor[0] donor[1] donor[2]
+rand1 1 3.5 2.5
+best1 0 -1 6
+rand2 6.5 -3 4.5
+best2 1 4.5 6
+randtobest1 0.5 5 2
+currenttobest1 -2 -1.5 5.5

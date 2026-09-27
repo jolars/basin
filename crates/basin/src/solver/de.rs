@@ -11,117 +11,163 @@ use crate::core::state::BasicPopulationState;
 use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::sort_population_ascending;
 
-/// Differential Evolution (DE/rand/1/bin) from Storn & Price 1997 (*A
-/// Simple and Efficient Heuristic for Global Optimization over
-/// Continuous Spaces*, J. Global Optim. 11:341–359).
+/// Mutation rule for [`De`]. See its formula table for the donor definitions.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DeMutation {
+    /// Random base plus one difference; the default.
+    #[default]
+    Rand1,
+    /// Generation's best base plus one difference.
+    Best1,
+    /// Random base plus two differences; requires at least six members.
+    Rand2,
+    /// Generation's best base plus two differences; requires at least five members.
+    Best2,
+    /// Random base moved toward the best, plus one difference.
+    RandToBest1,
+    /// Target moved toward the best, plus one difference.
+    CurrentToBest1,
+}
+
+impl DeMutation {
+    fn peer_count(self) -> usize {
+        match self {
+            Self::Best1 | Self::CurrentToBest1 => 2,
+            Self::Rand1 | Self::RandToBest1 => 3,
+            Self::Best2 => 4,
+            Self::Rand2 => 5,
+        }
+    }
+
+    fn minimum_pop_size(self) -> usize {
+        (self.peer_count() + 1).max(4)
+    }
+}
+
+/// Crossover rule for [`De`], independent of its mutation rule.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DeCrossover {
+    /// Independent donor choices with one guaranteed donor coordinate; the default.
+    #[default]
+    Binomial,
+    /// A consecutive, wrapping donor segment with at least one coordinate.
+    Exponential,
+}
+
+/// Differential evolution over a finite box, with configurable mutation,
+/// crossover, and generation-wise mutation dithering.
 ///
-/// Stochastic, derivative-free, population-based: the canonical
-/// black-box optimizer for rugged continuous landscapes with few
-/// hyperparameters and no covariance model. Sits next to
-/// [`Ssga`](crate::solver::Ssga) (steady-state real-coded GA) and
-/// [`CmaEs`](crate::solver::CmaEs) (Gaussian model) in basin's
-/// global/stochastic family.
+/// A stochastic, derivative-free optimizer for rugged continuous landscapes.
+/// The default is Storn and Price's `DE/rand/1/bin`, with the original Basin
+/// seeded trajectory. Select mutation and crossover independently using
+/// [`with_mutation`](Self::with_mutation) and
+/// [`with_crossover`](Self::with_crossover).
+///
+/// ```
+/// use basin::{De, DeCrossover, DeMutation};
+/// let solver = De::<f64>::new(42)
+///     .with_mutation(DeMutation::Best1)
+///     .with_crossover(DeCrossover::Exponential)
+///     .with_dither(0.5, 1.0);
+/// ```
 ///
 /// # Algorithm
 ///
-/// One [`next_iter`](Solver::next_iter) = one full generation =
-/// `pop_size` cost evaluations.
+/// Each [`next_iter`](Solver::next_iter) performs one full generation and
+/// `pop_size` cost evaluations. Every donor uses the frozen current population,
+/// including its best member `b = x[0]`. Random peers `r0, …, r4` are pairwise
+/// distinct and exclude the target `i`; the best member may also be a peer
+/// when it differs from the target. The mutation scale is denoted by `F`:
 ///
-/// For each `i ∈ {0, …, NP − 1}`:
-///
-/// 1. **Mutation (DE/rand/1).** Pick three indices
-///    `r1, r2, r3 ∈ {0, …, NP − 1} \ {i}`, pairwise distinct, and form
-///    the donor `v = x[r1] + F · (x[r2] − x[r3])`.
-/// 2. **Bound repair (reinit-per-coord, DEoptim style).** For each
-///    coordinate `j` with `v[j] ∉ [lower[j], upper[j]]`, resample
-///    `v[j] ~ U(lower[j], upper[j])`. Preserves diversity (no clipping
-///    pile-up at the boundary).
-/// 3. **Binomial crossover.** Pick `j_rand ∈ {0, …, D − 1}` uniformly,
-///    then build the trial `u[j] = v[j]` if `j == j_rand` or
-///    `rng.uniform() < CR`, else `u[j] = x[i][j]`. The `j_rand`
-///    guarantee ensures `u ≠ x[i]` even when `CR = 0`.
-///
-/// All `NP` trials are built from the *unmodified* current generation
-/// (synchronous DE, same as DEoptim and
-/// [`scipy.optimize.differential_evolution`]). After evaluation, each
-/// trial replaces its target if its cost is not worse
-/// (`c_trial ≤ c_x[i]`), then the population is re-sorted ascending so
-/// `state.cost()` always reports the current best.
-///
-/// # Default parameters
-///
-/// | Field | Default | Source |
+/// | Mutation | Donor | Minimum population |
 /// |---|---|---|
-/// | `pop_size` | [`default_pop_size(D)`](Self::default_pop_size) `= max(4, 10·D)` | Storn & Price's `10·D` rule |
-/// | `F` (mutation scale) | `0.8` | Modern convention; matches `scipy.optimize.differential_evolution`'s upper-mutation bound |
-/// | `CR` (crossover probability) | `0.9` | Modern convention for non-separable problems |
+/// | `Rand1` (default) | `x[r0] + F·(x[r1] − x[r2])` | 4 |
+/// | `Best1` | `b + F·(x[r0] − x[r1])` | 4 |
+/// | `Rand2` | `x[r0] + F·(x[r1] + x[r2] − x[r3] − x[r4])` | 6 |
+/// | `Best2` | `b + F·(x[r0] + x[r1] − x[r2] − x[r3])` | 5 |
+/// | `RandToBest1` | `x[r0] + F·(b − x[r0]) + F·(x[r1] − x[r2])` | 4 |
+/// | `CurrentToBest1` | `x[i] + F·(b − x[i] + x[r0] − x[r1])` | 4 |
 ///
-/// Use [`with_pop_size`](Self::with_pop_size), [`with_f`](Self::with_f),
-/// [`with_cr`](Self::with_cr) to override.
+/// The formulas follow the named strategies in SciPy 1.16.2. Basin retains
+/// its own sampling order and repairs the donor *before* crossover: each
+/// out-of-bounds or non-finite coordinate is replaced by a uniform draw from
+/// its inclusive finite bounds. This avoids accumulating clipped donors at
+/// the boundary. Overflow in mutation arithmetic is handled by the same repair.
 ///
-/// # Reproducibility
+/// - **Binomial crossover** independently chooses donor coordinates with
+///   probability `CR`, with one uniformly chosen coordinate always taken
+///   from the donor.
+/// - **Exponential crossover** takes a consecutive, wrapping donor segment
+///   starting at a uniformly chosen coordinate. It always copies the first
+///   coordinate and continues with probability `CR`, up to the full dimension.
 ///
-/// Carries a [`ChaCha8Rng`] seeded from the `seed: u64` passed to
-/// [`new`](Self::new): same seed → same iterate trajectory on every
-/// platform basin builds for (including `wasm32-unknown-unknown`).
-/// With the `serde` feature, both the live RNG and the configuration are
-/// serialized for solver-aware exact checkpoints; pair the solver with its
-/// serialized [`BasicPopulationState`].
+/// Both crossovers copy one donor coordinate when `CR = 0` and all coordinates
+/// when `CR = 1`. Copied values can equal the target, including at fixed bounds.
+/// All trials are evaluated in a batch, with deterministic ordering under
+/// `parallel`. A trial replaces its target when its cost is no worse (`≤`).
+/// The population is then sorted by cost, so `state.cost()` reports its best.
+/// This is synchronous DE, corresponding to SciPy's `updating="deferred"`;
+/// it does not reproduce SciPy's random trajectory.
 ///
-/// # Contract
+/// # Defaults and dithering
 ///
-/// - **Caller must:** implement [`CostFunction<Param = V, Output = f64>`]
-///   *and* [`BoxConstraints<Param = V>`] on the problem. DE is a
-///   bounded-search method by construction (uniform initialization in
-///   the box and per-coordinate bound repair both require `lower` and
-///   `upper`).
-/// - **Caller must:** supply **finite** bounds on every coordinate.
-///   Uniform initialization (and bound repair) over an unbounded
-///   interval is mathematically undefined, so a non-finite (`±∞`) bound
-///   is a contract violation; [`init`](Solver::init) panics naming the
-///   offending coordinate. Note `BoxConstraints` is shared with solvers
-///   that *do* tolerate `±∞` entries (e.g. [`Trf`](crate::solver::Trf),
-///   [`BoundedCmaEs`](crate::solver::BoundedCmaEs), which Gaussian-sample
-///   with a boundary penalty); reusing such a problem with DE requires
-///   replacing each infinite bound with a finite surrogate first.
-/// - **Caller must:** hand in a
-///   [`BasicPopulationState::with_size(λ)`](crate::BasicPopulationState::with_size)
-///   with `λ ≥ 1`; the actual population size is the solver's
-///   `pop_size` (default
-///   [`default_pop_size(D)`](Self::default_pop_size), override via
-///   [`with_pop_size`](Self::with_pop_size)), so `λ` only needs to be
-///   non-zero; the solver clears the state's `candidates`/`costs`
-///   and refills them from a uniform sample of the box.
-/// - **Implementor (this solver) must:** maintain feasibility (every
-///   candidate after `init` and every trial after crossover is repaired
-///   into the box) and the sorted-by-cost invariant on
-///   [`PopulationState`](crate::core::state::PopulationState) at the
-///   start and end of every iteration.
+/// Defaults are `Rand1`, `Binomial`, `F = 0.8`, `CR = 0.9`, and
+/// [`default_pop_size(D)`](Self::default_pop_size) `= max(4, 10·D)`.
+/// Use [`with_pop_size`](Self::with_pop_size), [`with_f`](Self::with_f), and
+/// [`with_cr`](Self::with_cr) to override them.
+/// [`with_dither(min, max)`](Self::with_dither) instead draws one `F` from
+/// `[min, max)` before peer sampling in each generation. All donors share it.
+/// `with_f` disables dithering; the last scale builder wins. Fixed scales and
+/// dithering endpoints must be positive and finite, with `min < max`.
+///
+/// # Contract and lifecycle
+///
+/// The problem implements [`CostFunction`] and [`BoxConstraints`] with the
+/// same vector type and scalar. Bounds must be non-empty, equal in length,
+/// finite, and ordered (`lower[j] ≤ upper[j]`). Equal bounds pin a coordinate.
+/// Invalid settings panic in their builders; initialization checks bounds and
+/// the selected mutation's minimum population size, independently of builder
+/// order. Typed problem errors propagate unchanged.
+///
+/// Initialize with [`BasicPopulationState::with_size`] and any non-zero
+/// capacity. Fresh initialization clears any supplied population, samples a
+/// uniform population of the solver's configured size, and reseeds its
+/// [`ChaCha8Rng`]. Thus reusing a solver starts the same seeded trajectory.
+/// [`DeInject`](crate::DeInject) accepts a configured `De` for local refinement.
+///
+/// The same seed and settings reproduce the trajectory, including with
+/// parallel evaluation. Solver-aware exact checkpoints preserve configuration,
+/// the live RNG, the population, and evaluation counts. The `serde` feature
+/// enables serialization; checkpoint files require the same Basin version.
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test; classical DE has no canonical
-/// fixed-point criterion. Configure convergence on the solver and use execution controls
-/// [`max_iter`](crate::Executor::max_iter),
-/// [`max_cost_evals`](crate::Executor::max_cost_evals),
-/// [`max_time`](crate::Executor::max_time),
-/// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
-/// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance).
-/// Greedy selection ensures `state.cost()` is non-increasing, so the
-/// cost and param tolerances behave honestly under stochastic dynamics.
+/// There is no solver-internal optimality test. Configure optional
+/// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance)
+/// or [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance),
+/// and set execution budgets on [`Executor`](crate::Executor).
+/// Greedy selection keeps the best cost non-increasing for finite objectives.
 ///
 /// # Backends
 ///
-/// Backend-generic; works with any `V` implementing
-/// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<F>`] +
-/// [`ScaleInPlace<F>`] + `Index<usize, Output = F>` +
-/// `IndexMut<usize, Output = F>` + `Clone`. With the default
-/// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
-/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
-/// `faer::Col<f64>` (feature `faer`). No matrix operations are required.
+/// `Vec<F>`, `nalgebra::DVector<F>`, `ndarray::Array1<F>`, and `faer::Col<F>`
+/// for every supported backend release, with `F = f32` or `f64`. Requires
+/// [`SampleUniformBox`], [`VectorLen`], [`ScaledAdd<F>`], [`ScaleInPlace<F>`],
+/// `Index<usize, Output = F>`, `IndexMut<usize, Output = F>`, and `Clone`.
+/// No matrix operations or BLAS/LAPACK provider are required.
 ///
-/// [`scipy.optimize.differential_evolution`]:
-///     https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html
+/// # References
+///
+/// - R. Storn and K. Price, “Differential Evolution – A Simple and Efficient
+///   Heuristic for Global Optimization over Continuous Spaces,”
+///   *Journal of Global Optimization* 11 (1997), 341–359.
+/// - [SciPy 1.16.2 differential evolution](https://docs.scipy.org/doc/scipy-1.16.2/reference/generated/scipy.optimize.differential_evolution.html):
+///   mutation formulas, binomial and exponential crossover, and generation-wise
+///   dithering. Donors and solution quality are checked against this version.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct De<F = f64> {
     pop_size_override: Option<usize>,
@@ -129,6 +175,9 @@ pub struct De<F = f64> {
     cr: f64,
     seed: u64,
     rng: Option<ChaCha8Rng>,
+    mutation: DeMutation,
+    crossover: DeCrossover,
+    dither: Option<(F, F)>,
 }
 
 impl<F: Scalar> De<F> {
@@ -142,14 +191,17 @@ impl<F: Scalar> De<F> {
             cr: 0.9,
             seed,
             rng: None,
+            mutation: DeMutation::Rand1,
+            crossover: DeCrossover::Binomial,
+            dither: None,
         }
     }
 }
 
 impl<F> De<F> {
     /// Storn & Price's `10·D` rule, floored at 4 so mutation always has
-    /// at least three peers to draw from (`pick_three_distinct` requires
-    /// `NP ≥ 4`).
+    /// at least three peers to draw from. For non-empty parameter vectors,
+    /// this default also satisfies every other mutation rule.
     ///
     /// `F`-free, so the `: Scalar` bound is dropped from this impl block;
     /// keeps `De::default_pop_size(D)` callable from the trait-impl
@@ -161,6 +213,42 @@ impl<F> De<F> {
 }
 
 impl<F: Scalar> De<F> {
+    /// Select a mutation rule; defaults to [`DeMutation::Rand1`].
+    ///
+    /// Initialization checks the final population size against this rule,
+    /// independently of builder order. `Rand2` needs six members, `Best2`
+    /// needs five, and the other rules retain the minimum of four.
+    pub fn with_mutation(mut self, mutation: DeMutation) -> Self {
+        self.mutation = mutation;
+        self
+    }
+
+    /// Select crossover independently of mutation; defaults to binomial.
+    pub fn with_crossover(mut self, crossover: DeCrossover) -> Self {
+        self.crossover = crossover;
+        self
+    }
+
+    /// Draw one mutation scale uniformly from `[min, max)` per generation.
+    ///
+    /// All donors in that generation share the scale. The draw occurs before
+    /// peer sampling, using the solver's seeded RNG. This overrides a previous
+    /// [`with_f`](Self::with_f); calling `with_f` later disables dithering.
+    /// There is no upper cap of two, matching Basin's fixed-scale API.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless both endpoints are finite and `0 < min < max`.
+    /// For a constant scale, use `with_f` instead of equal endpoints.
+    pub fn with_dither(mut self, min: F, max: F) -> Self {
+        assert!(
+            min.is_finite() && max.is_finite() && min > F::zero() && min < max,
+            "De dithering requires finite 0 < min < max, got {min:?}, {max:?}"
+        );
+        self.dither = Some((min, max));
+        self
+    }
+
     /// Override the population size (default
     /// [`default_pop_size(D)`](Self::default_pop_size), resolved at
     /// [`Solver::init`]).
@@ -169,7 +257,8 @@ impl<F: Scalar> De<F> {
     ///
     /// Panics if `pop_size < 4`. DE/rand/1 mutation samples three peers
     /// distinct from the target, so at least four individuals are
-    /// required.
+    /// required. Initialization also checks the selected mutation rule's
+    /// minimum, which is five for `Best2` and six for `Rand2`.
     pub fn with_pop_size(mut self, pop_size: usize) -> Self {
         assert!(
             pop_size >= 4,
@@ -182,7 +271,8 @@ impl<F: Scalar> De<F> {
 
     /// Override the mutation scale `F` (default `0.8`). Storn & Price
     /// recommend `F ∈ [0.4, 1.0]`; values near `0.5` mix conservatively,
-    /// values near `1.0` explore aggressively.
+    /// values near `1.0` explore aggressively. Disables previously configured
+    /// [`with_dither`](Self::with_dither).
     ///
     /// # Panics
     ///
@@ -194,6 +284,7 @@ impl<F: Scalar> De<F> {
             f
         );
         self.f = f;
+        self.dither = None;
         self
     }
 
@@ -216,41 +307,28 @@ impl<F: Scalar> De<F> {
     }
 }
 
-/// Sample three pairwise-distinct indices from `0..n`, each also
-/// distinct from `exclude` (the target individual). Used by DE's
-/// mutation step; requires `n ≥ 4`. Rejection-sampled, `O(1)` expected
-/// for the population sizes DE is typically run at.
-///
-/// `pub(crate)` so a future memetic or strategy-variant DE can reuse the
-/// operator directly; not a stable public surface.
-pub(crate) fn pick_three_distinct<R>(
+// Rejection sampling preserves the legacy rand/1 draw order. A stack array
+// avoids an allocation for each target, including the five-peer rand/2 rule.
+fn pick_distinct<R>(
     n: usize,
     exclude: usize,
+    count: usize,
     rng: &mut R,
-) -> (usize, usize, usize)
+) -> [usize; 5]
 where
     R: Rng + ?Sized,
 {
-    debug_assert!(n >= 4, "pick_three_distinct needs n >= 4 (got n = {})", n);
-    let r1 = loop {
-        let k = rng.random_range(0..n);
-        if k != exclude {
-            break k;
-        }
-    };
-    let r2 = loop {
-        let k = rng.random_range(0..n);
-        if k != exclude && k != r1 {
-            break k;
-        }
-    };
-    let r3 = loop {
-        let k = rng.random_range(0..n);
-        if k != exclude && k != r1 && k != r2 {
-            break k;
-        }
-    };
-    (r1, r2, r3)
+    debug_assert!(count <= 5 && n > count && exclude < n);
+    let mut peers = [0; 5];
+    for j in 0..count {
+        peers[j] = loop {
+            let k = rng.random_range(0..n);
+            if k != exclude && !peers[..j].contains(&k) {
+                break k;
+            }
+        };
+    }
+    peers
 }
 
 /// DE/rand/1 mutation: `v = x_r1 + F · (x_r2 − x_r3)`.
@@ -269,9 +347,71 @@ where
     v
 }
 
+fn mutate<V, F>(
+    mutation: DeMutation,
+    population: &[V],
+    target: usize,
+    peers: &[usize],
+    f: F,
+) -> V
+where
+    F: Scalar,
+    V: Clone + ScaledAdd<F> + ScaleInPlace<F>,
+{
+    let best = &population[0];
+    match mutation {
+        DeMutation::Rand1 => de_rand_1_mutate(
+            &population[peers[0]],
+            &population[peers[1]],
+            &population[peers[2]],
+            f,
+        ),
+        DeMutation::Best1 => de_rand_1_mutate(
+            best,
+            &population[peers[0]],
+            &population[peers[1]],
+            f,
+        ),
+        DeMutation::Rand2 | DeMutation::Best2 => {
+            let (base, differences) = if mutation == DeMutation::Rand2 {
+                (&population[peers[0]], &peers[1..])
+            } else {
+                (best, peers)
+            };
+            let mut donor = population[differences[0]].clone();
+            donor.scaled_add(F::one(), &population[differences[1]]);
+            donor.scaled_add(-F::one(), &population[differences[2]]);
+            donor.scaled_add(-F::one(), &population[differences[3]]);
+            donor.scale_in_place(f);
+            donor.scaled_add(F::one(), base);
+            donor
+        }
+        DeMutation::RandToBest1 => {
+            let base = &population[peers[0]];
+            let toward_best = de_rand_1_mutate(base, best, base, f);
+            de_rand_1_mutate(
+                &toward_best,
+                &population[peers[1]],
+                &population[peers[2]],
+                f,
+            )
+        }
+        DeMutation::CurrentToBest1 => {
+            let base = &population[target];
+            let mut donor = best.clone();
+            donor.scaled_add(-F::one(), base);
+            donor.scaled_add(F::one(), &population[peers[0]]);
+            donor.scaled_add(-F::one(), &population[peers[1]]);
+            donor.scale_in_place(f);
+            donor.scaled_add(F::one(), base);
+            donor
+        }
+    }
+}
+
 /// Reinitialize-per-coordinate bound repair (DEoptim style): for each
-/// coordinate `j` with `v[j]` outside `[lower[j], upper[j]]`, replace it
-/// with a fresh uniform draw from `lower[j]..=upper[j]`. Preserves
+/// coordinate `j` with `v[j]` non-finite or outside `[lower[j], upper[j]]`,
+/// replace it with a fresh uniform draw from `lower[j]..=upper[j]`. Preserves
 /// diversity better than clamping, which biases the population toward
 /// the boundary.
 ///
@@ -291,7 +431,7 @@ pub(crate) fn repair_reinit_per_coord<V, F, R>(
 {
     let n = v.vec_len();
     for j in 0..n {
-        if v[j] < lower[j] || v[j] > upper[j] {
+        if !v[j].is_finite() || v[j] < lower[j] || v[j] > upper[j] {
             v[j] = rng.random_range(lower[j]..=upper[j]);
         }
     }
@@ -328,6 +468,34 @@ where
     u
 }
 
+fn exponential_crossover<V, F, R>(
+    target: &V,
+    donor: &V,
+    cr: f64,
+    rng: &mut R,
+) -> V
+where
+    F: Scalar,
+    V: VectorLen
+        + Clone
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
+    R: Rng + ?Sized,
+{
+    let n = target.vec_len();
+    let start = rng.random_range(0..n);
+    let mut trial = target.clone();
+    trial[start] = donor[start];
+    for offset in 1..n {
+        if rng.random::<f64>() >= cr {
+            break;
+        }
+        let j = (start + offset) % n;
+        trial[j] = donor[j];
+    }
+    trial
+}
+
 impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for De<F>
 where
     F: Scalar + SampleUniform + crate::core::parallel::MaybeSend,
@@ -354,14 +522,17 @@ where
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let n = lo.vec_len();
+        assert!(n > 0, "De requires non-empty parameter bounds");
         let pop_size = self
             .pop_size_override
             .unwrap_or_else(|| Self::default_pop_size(n));
-        // Re-check the with_pop_size invariant here in case the user
-        // didn't go through with_pop_size (default path needs the same
-        // guarantee; default_pop_size already enforces it, so this is
-        // belt-and-braces but cheap).
-        assert!(pop_size >= 4, "De requires pop_size >= 4 (got {pop_size})");
+        // Check the final configuration so builder order cannot affect validity.
+        let minimum = self.mutation.minimum_pop_size();
+        assert!(
+            pop_size >= minimum,
+            "De {:?} requires pop_size >= {minimum} (got {pop_size})",
+            self.mutation
+        );
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
         // Same reseed-from-scratch pattern as Ssga and RandomSearch; the
         // solver's trajectory is reproducible regardless of which
@@ -395,6 +566,10 @@ where
             .as_mut()
             .expect("De::init must run before next_iter");
         let np = state.candidates.len();
+        let f = match self.dither {
+            Some((min, max)) => rng.random_range(min..max),
+            None => self.f,
+        };
 
         // Synchronous DE: build all trials from the *unchanged* current
         // generation, then evaluate, then select. Holding trials in a
@@ -402,16 +577,25 @@ where
         // just-replaced x[i] would feed back into the next mutation.
         let mut trials: Vec<V> = Vec::with_capacity(np);
         for i in 0..np {
-            let (r1, r2, r3) = pick_three_distinct(np, i, rng);
-            let mut donor = de_rand_1_mutate(
-                &state.candidates[r1],
-                &state.candidates[r2],
-                &state.candidates[r3],
-                self.f,
-            );
+            let count = self.mutation.peer_count();
+            let peers = pick_distinct(np, i, count, rng);
+            let mut donor =
+                mutate(self.mutation, &state.candidates, i, &peers[..count], f);
             repair_reinit_per_coord(&mut donor, &lo, &hi, rng);
-            let trial =
-                binomial_crossover(&state.candidates[i], &donor, self.cr, rng);
+            let trial = match self.crossover {
+                DeCrossover::Binomial => binomial_crossover(
+                    &state.candidates[i],
+                    &donor,
+                    self.cr,
+                    rng,
+                ),
+                DeCrossover::Exponential => exponential_crossover(
+                    &state.candidates[i],
+                    &donor,
+                    self.cr,
+                    rng,
+                ),
+            };
             trials.push(trial);
         }
         // All trials are built from the frozen current generation, so they
@@ -441,6 +625,176 @@ mod tests {
     use super::*;
     use rand_chacha::ChaCha8Rng;
 
+    const MUTATIONS: [DeMutation; 6] = [
+        DeMutation::Rand1,
+        DeMutation::Best1,
+        DeMutation::Rand2,
+        DeMutation::Best2,
+        DeMutation::RandToBest1,
+        DeMutation::CurrentToBest1,
+    ];
+
+    #[test]
+    fn mutation_donors_match_scipy_1_16_2() {
+        let population = vec![
+            vec![1.0, 2.0, 3.0],
+            vec![2.0, -1.0, 4.0],
+            vec![4.0, 5.0, -2.0],
+            vec![-3.0, 1.0, 2.0],
+            vec![6.0, -4.0, 1.0],
+            vec![0.0, 3.0, -5.0],
+        ];
+        let rows: Vec<_> =
+            include_str!("../../tests/fixtures/de_mutations.tsv")
+                .lines()
+                .filter(|line| !line.starts_with('#'))
+                .collect();
+        assert_eq!(rows.len(), MUTATIONS.len());
+        for (mutation, row) in MUTATIONS.into_iter().zip(rows) {
+            let expected: Vec<f64> = row
+                .split_whitespace()
+                .skip(1)
+                .map(|x| x.parse().unwrap())
+                .collect();
+            let actual =
+                mutate(mutation, &population, 3, &[1, 2, 4, 5, 0], 0.5);
+            assert_eq!(actual, expected, "{mutation:?}");
+        }
+    }
+
+    #[test]
+    fn peer_sampling_excludes_target_at_minimum_population_sizes() {
+        let mut rng = ChaCha8Rng::seed_from_u64(123);
+        for count in 2..=5 {
+            let n = count + 1;
+            for target in 0..n {
+                for _ in 0..100 {
+                    let peers = pick_distinct(n, target, count, &mut rng);
+                    let mut actual = peers[..count].to_vec();
+                    actual.sort_unstable();
+                    let expected: Vec<_> =
+                        (0..n).filter(|&i| i != target).collect();
+                    assert_eq!(actual, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn exponential_crossover_copies_one_wrapping_segment() {
+        let target = vec![0.0; 5];
+        let donor = vec![1.0; 5];
+        let mut saw_wrapping = false;
+        for seed in 0..100 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let trial = exponential_crossover(&target, &donor, 0.6, &mut rng);
+            assert!(trial.contains(&1.0));
+            let transitions =
+                (0..5).filter(|&i| trial[i] != trial[(i + 1) % 5]).count();
+            assert!(transitions <= 2, "non-contiguous crossover: {trial:?}");
+            saw_wrapping |=
+                trial[0] == 1.0 && trial[4] == 1.0 && trial.contains(&0.0);
+            let trial = exponential_crossover(&target, &donor, 0.0, &mut rng);
+            assert_eq!(trial.iter().filter(|&&x| x == 1.0).count(), 1);
+            assert_eq!(
+                exponential_crossover(&target, &donor, 1.0, &mut rng),
+                donor
+            );
+            for cr in [0.0, 0.5, 1.0] {
+                assert_eq!(
+                    exponential_crossover(&vec![0.0], &vec![1.0], cr, &mut rng),
+                    vec![1.0]
+                );
+            }
+        }
+        assert!(saw_wrapping);
+    }
+
+    struct Plateau {
+        lower: Vec<f64>,
+        upper: Vec<f64>,
+    }
+
+    impl CostFunction for Plateau {
+        type Param = Vec<f64>;
+        type Output = f64;
+        type Error = std::convert::Infallible;
+        fn cost(&self, _: &Vec<f64>) -> Result<f64, Self::Error> {
+            Ok(0.0)
+        }
+    }
+
+    impl BoxConstraints for Plateau {
+        fn lower(&self) -> &Vec<f64> {
+            &self.lower
+        }
+        fn upper(&self) -> &Vec<f64> {
+            &self.upper
+        }
+    }
+
+    #[test]
+    fn dithering_draws_one_shared_scale_before_each_generation() {
+        for mutation in MUTATIONS {
+            for crossover in [DeCrossover::Binomial, DeCrossover::Exponential] {
+                let mut problem = Problem::new(Plateau {
+                    lower: vec![-2.0; 3],
+                    upper: vec![3.0; 3],
+                });
+                let make = || {
+                    De::new(17)
+                        .with_pop_size(8)
+                        .with_mutation(mutation)
+                        .with_crossover(crossover)
+                };
+                let mut dithered = make().with_dither(0.3, 1.7);
+                let mut fixed = make();
+                let mut actual = dithered
+                    .init(&mut problem, BasicPopulationState::with_size(1))
+                    .unwrap();
+                let mut expected = fixed
+                    .init(&mut problem, BasicPopulationState::with_size(1))
+                    .unwrap();
+                let mut scales = Vec::new();
+                for _ in 0..4 {
+                    let mut rng = dithered.rng.clone().unwrap();
+                    let scale = rng.random_range(0.3..1.7);
+                    scales.push(scale);
+                    fixed = fixed.with_f(scale);
+                    fixed.rng = Some(rng);
+                    actual =
+                        dithered.next_iter(&mut problem, actual).unwrap().0;
+                    expected =
+                        fixed.next_iter(&mut problem, expected).unwrap().0;
+                    assert_eq!(
+                        actual.candidates, expected.candidates,
+                        "{mutation:?} {crossover:?}"
+                    );
+                    assert_eq!(
+                        dithered.rng.as_ref().unwrap().get_word_pos(),
+                        fixed.rng.as_ref().unwrap().get_word_pos()
+                    );
+                }
+                assert!(scales.windows(2).any(|pair| pair[0] != pair[1]));
+            }
+        }
+    }
+
+    #[test]
+    fn repair_reinitializes_non_finite_donor_coordinates() {
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        let lo = vec![-1.0; 4];
+        let hi = vec![1.0; 4];
+        let mut donor = vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.5];
+        repair_reinit_per_coord(&mut donor, &lo, &hi, &mut rng);
+        assert!(
+            donor
+                .iter()
+                .all(|x| x.is_finite() && (-1.0..=1.0).contains(x))
+        );
+        assert_eq!(donor[3], 0.5);
+    }
+
     #[test]
     fn default_pop_size_uses_ten_d_with_floor_of_four() {
         // F-explicit so inference picks the f64 monomorphization; the
@@ -455,7 +809,7 @@ mod tests {
     fn pick_three_distinct_returns_pairwise_distinct_indices_avoiding_target() {
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         for _ in 0..2_000 {
-            let (r1, r2, r3) = pick_three_distinct(10, 4, &mut rng);
+            let [r1, r2, r3, _, _] = pick_distinct(10, 4, 3, &mut rng);
             assert_ne!(r1, 4);
             assert_ne!(r2, 4);
             assert_ne!(r3, 4);

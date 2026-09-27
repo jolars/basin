@@ -279,8 +279,16 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   and box-bounded; the bounded variant uses Hansen's adaptive `BoundPenalty`
   (the `pycma` default).
 - **[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)**:
-  differential evolution (DE/rand/1/bin) over a feasible box (Storn & Price,
-  1997).
+  differential evolution over a feasible box, with six mutation rules,
+  independently selected binomial or exponential crossover, and optional
+  generation-wise mutation dithering. Defaults to `DE/rand/1/bin` and supports
+  exact resume and `DeInject` local refinement. All four dense backends support
+  `f32` and `f64`. Implements R. Storn and K. Price, “Differential Evolution –
+  A Simple and Efficient Heuristic for Global Optimization over Continuous
+  Spaces,” _Journal of Global Optimization_ 11 (1997), 341–359. Mutation
+  formulas, crossover, and dithering follow
+  [SciPy 1.16.2 differential evolution](https://docs.scipy.org/doc/scipy-1.16.2/reference/generated/scipy.optimize.differential_evolution.html),
+  which also supplies the donor and solution references.
 - **[`GlobalBestPso`](https://docs.rs/basin/latest/basin/solver/global_best_pso/struct.GlobalBestPso.html)**:
   synchronous inertia-weight global-best particle swarm optimization over a
   feasible box, with independent boundary-response and velocity-limit policies.

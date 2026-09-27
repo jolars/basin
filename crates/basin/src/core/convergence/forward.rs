@@ -151,6 +151,13 @@ impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<De<F>, CG, CX, CC, CT> {
     forward_setting!(De, with_pop_size, pop_size: usize);
     forward_setting!(De, with_f, f: F);
     forward_setting!(De, with_cr, cr: f64);
+    forward_setting!(De, with_mutation, mutation: DeMutation);
+    forward_setting!(De, with_crossover, crossover: DeCrossover);
+
+    /// Configure [`with_dither`](De::with_dither) while retaining convergence settings.
+    pub fn with_dither(self, min: F, max: F) -> Self {
+        self.map_solver(|solver| solver.with_dither(min, max))
+    }
 }
 
 impl<CG, CX, CC, CT, Mode, F: Scalar>

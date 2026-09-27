@@ -65,13 +65,29 @@ numerical work against analytic cases and reference implementations.
   solve, and the two-dimensional subspace method. Add sparsity-pattern-based
   finite-difference coloring to reduce residual evaluations. Existing sparse
   storage and direct solves do not provide this large-scale algorithm.
-- [ ] **Expand differential evolution.** Prioritize additional mutation and
-  crossover strategies and generation-wise mutation dithering beyond the
-  current `DE/rand/1/bin`. Then assess supplied populations, Latin hypercube
-  or low-discrepancy initialization, nonlinear constraint handling, and
-  integer variables. Preserve seeded reproducibility and compose with the
-  existing local-search facilities. See [SciPy differential
-  evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html).
+- [x] **Expand differential evolution's core algorithms.** Added six mutation
+  rules, independently selectable binomial and exponential crossover, and
+  generation-wise mutation dithering. The default `DE/rand/1/bin` trajectory
+  is preserved, and every combination supports exact resume and `DeInject`
+  composition. All dense backends support `f32` and `f64`; mutation formulas
+  and solutions are checked against [SciPy 1.16.2 differential
+  evolution](https://docs.scipy.org/doc/scipy-1.16.2/reference/generated/scipy.optimize.differential_evolution.html).
+- [ ] **Add differential-evolution initialization policies.** Start with
+  supplied populations and Latin hypercube sampling. Make initialization an
+  explicit opt-in: `De` currently clears even a supplied population on a
+  fresh run, so silently changing that behavior would break Basin 1.x.
+  Then assess Sobol or Halton sampling, including sequence quality,
+  population-size requirements, and dependency costs.
+- [ ] **Add nonlinear constraints to differential evolution.** Reuse the
+  problem-side constraint interfaces and assess Lampinen's feasibility-based
+  selection. This needs population feasibility records and selection-aware
+  incumbent reporting, since the preferred feasible candidate need not have
+  the lowest objective. Keep objective-based execution controls honest.
+- [ ] **Add integer variables to differential evolution.** Define a
+  problem-side domain contract, validate that each integer interval contains
+  an integer, and preserve integrality through sampling, mutation repair,
+  and local refinement. Specify compatible `DeInject` inner solvers before
+  enabling mixed-integer local search.
 - [ ] **Add dedicated linear least-squares solvers.** Implement nonnegative
   least squares and general box-bounded linear least squares. Reuse suitable
   factorizations and test rank deficiency, active bounds, and optimality

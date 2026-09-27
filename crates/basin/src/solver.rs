@@ -26,7 +26,7 @@ pub mod cma_es;
 /// Levenberg-Marquardt. For L-BFGS-B inner with consistent bound
 /// handling, see [`bounded_cma_inject`].
 pub mod cma_inject;
-/// Differential Evolution (DE/rand/1/bin): Storn-Price 1997 global
+/// Configurable differential evolution: Storn-Price 1997 global
 /// optimizer on a feasible box, fully backend-generic.
 pub mod de;
 /// Memetic [`De`] with per-generation top-k local refinement: the
@@ -131,7 +131,7 @@ pub use brent_derivative::BrentDerivative;
 pub use cma_es::CmaEs;
 pub use cma_inject::{ClosureInner, CmaInject, MemeticInner};
 pub use cobyla::Cobyla;
-pub use de::De;
+pub use de::{De, DeCrossover, DeMutation};
 pub use de_inject::DeInject;
 pub use direct::Direct;
 pub use gauss_newton::GaussNewton;

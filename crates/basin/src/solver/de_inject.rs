@@ -17,9 +17,10 @@ use crate::solver::cma_es::sort_population_ascending;
 use crate::solver::cma_inject::MemeticInner;
 use crate::solver::de::De;
 
-/// Memetic Differential Evolution with per-generation injection: outer
-/// [`De`] runs a full DE/rand/1/bin generation, an inner local solver
-/// ([`MemeticInner`]) refines the best `k` candidates, and the refined
+/// Memetic Differential Evolution with per-generation injection. Outer
+/// [`De`] runs a full generation with its configured mutation, crossover,
+/// and optional dithering. An inner local solver
+/// ([`MemeticInner`]) then refines the best `k` candidates, and the refined
 /// points are box-clipped and written back if they improve the
 /// candidates they came from.
 ///
@@ -35,8 +36,8 @@ use crate::solver::de::De;
 /// One [`next_iter`](Solver::next_iter) =
 ///
 /// 1. **DE generation.** Delegate to [`De::next_iter`]: mutation
-///    (DE/rand/1), reinit-per-coord bound repair, binomial crossover,
-///    greedy (`≤`) selection, sort ascending.
+///    using the configured rule, reinit-per-coord bound repair, configured
+///    crossover, greedy (`≤`) selection, sort ascending.
 /// 2. **Inject best `k`.** For each of the top-`k` candidates (the
 ///    population is sorted ascending after step 1):
 ///    - Seed the inner via
