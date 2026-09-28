@@ -44,6 +44,23 @@ numerical work against analytic cases and reference implementations.
   `f64`; active bounds and rank deficiency are covered by analytic and SciPy
   1.16.2 comparisons. `Trf` retains its existing bounded-LM behavior through
   Basin 1.x. The large-scale path remains a follow-up below.
+- [ ] **Improve full TRF termination at the floating-point cost floor.** Found
+  during the [Navette integration](https://github.com/opticsWolf/Navette/issues/2)
+  and reproduced directly in Basin 1.14.0 with the `Vec<f64>` backend, using
+  both an analytic Jacobian and central `BoundedFiniteDiff`. Minimize
+  `r(x) = [x[0] - 0.3, x[1] - 0.7, 2]` from `[0, 1]` in the unit box,
+  with absolute scaled gradient tolerance `1e-10`, relative cost-change
+  tolerance `1e-12`, relative step tolerance `1e-12`, and 200 iterations.
+  TRF returns `SolverFailed` after four completed iterations at approximately
+  `[0.2999999969867295, 0.7000000030132705]`, with objective `0.5 * ||r||^2 = 2`.
+  Further cost reductions round to zero, and the observed stopping checks
+  cannot inspect the rejected trials inside the solver's loop. SciPy 1.18.1
+  TRF stops on `xtol` on the same problem. Removing the constant residual or
+  loosening the gradient tolerance to `1e-8` lets Basin converge. Add regression
+  coverage for these controls and investigate trial-step termination or a
+  distinct numerical-stagnation outcome, such as `NumericalNoProgress`, while
+  preserving genuine failure reporting. A small step or rounded cost equality
+  must not be presented as proof of stationarity.
 - [x] **Implement nonlinear conjugate gradient.** Added `NonlinearCg` with
   selectable Hager–Zhang (default) and Polak–Ribière+ updates, pluggable
   line searches, and optional periodic restarts. All four dense backends
@@ -163,6 +180,15 @@ Ship these in order, preserving existing public APIs and behavior:
   access, raw evaluation counts, and explicit incumbent-selection semantics.
   Bind new controls to the capabilities they need; preserve existing readers
   and stopping behavior.
+- [ ] **Expose which native convergence test fired.** QR LM combines its
+  gradient, orthogonality, model-reduction, and step tests into
+  `SolverConverged`, so downstream integrations cannot report the actual
+  stopping criterion. Navette had to introduce a generic `Converged` result
+  rather than infer a cost, step, or gradient reason. Add opt-in diagnostics
+  for native stopping tests, including full TRF, while preserving existing
+  Basin 1.x termination values and the fieldless `TerminationReason` enum's
+  numeric casts. Distinguish numerical safeguards from convergence and keep
+  diagnostics consistent across fresh runs and exact continuation.
 
 ### State API prototype
 
