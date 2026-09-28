@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.15.0](https://github.com/jolars/basin/compare/v1.14.0...v1.15.0) (2026-09-28)
+
+### Features
+- expose native convergence diagnostics ([`f762016`](https://github.com/jolars/basin/commit/f762016d1ff946019376dfb4e5b30fc9ecae71e9))
+- expand differential evolution ([`7ad8d84`](https://github.com/jolars/basin/commit/7ad8d84904bc14d2bc2516fba756b42dd60aa751))
+- **checkpoint:** migrate writes to postcard ([`e90a94f`](https://github.com/jolars/basin/commit/e90a94f7b5fbb13b89c1ac1b956fdbf04df9d17c))
+
+### Bug Fixes
+- report numerical stagnation in full TRF ([`1398037`](https://github.com/jolars/basin/commit/13980375ac3f5683ca25c182201345aeeabb2efe))
+- preserve all enabled backend versions ([`21c3e21`](https://github.com/jolars/basin/commit/21c3e2150d6b110aa310ca8e2b0e01ad3df5e93b))
+
 ## [1.14.0](https://github.com/jolars/basin/compare/v1.13.1...v1.14.0) (2026-09-22)
 
 ### Features
