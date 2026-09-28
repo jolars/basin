@@ -86,9 +86,12 @@ pub enum TerminationReason {
     ///
     /// Levenberg-Marquardt reports this after a rejected finite trial whose
     /// computed step leaves every parameter unchanged in floating-point
-    /// arithmetic. The returned point may be inaccurate or heavily damped;
-    /// this reason does not establish stationarity or parameter recovery.
-    /// Outer solvers may consume the finite result and continue.
+    /// arithmetic. Trust-region-reflective least squares reports it when a
+    /// finite equal-cost rejection is followed by a contracted trial that
+    /// changes no parameter. The returned point may be inaccurate, heavily
+    /// damped, or limited by a small trust radius; this reason does not
+    /// establish stationarity or parameter recovery. Outer solvers may consume
+    /// the finite result and continue.
     NumericalNoProgress,
     /// A raw evaluation category or total-work budget was exhausted.
     ///

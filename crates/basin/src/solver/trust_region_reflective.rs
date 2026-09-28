@@ -67,9 +67,13 @@ use step::{Model, interior, number, update_radius};
 ///
 /// Non-finite trial residuals cause rejection and radius contraction. Invalid
 /// initial evaluations or derivatives, failed factorizations (100 Jacobi sweeps),
-/// exhausted inner attempts, or numerical inability to make progress report
-/// [`TerminationReason::SolverFailed`]. A free interval without a representable
-/// interior fails before any callback. User errors propagate unchanged.
+/// exhausted inner attempts, or other numerical breakdowns report
+/// [`TerminationReason::SolverFailed`]. After a finite equal-cost rejection,
+/// a contracted trial that changes no parameter in floating-point arithmetic
+/// reports [`TerminationReason::NumericalNoProgress`] at the last accepted
+/// point. This safeguard does not establish stationarity or solution accuracy.
+/// A free interval without a representable interior fails before any callback.
+/// User errors propagate unchanged.
 ///
 /// # Convergence and lifecycle
 ///
@@ -77,6 +81,8 @@ use step::{Model, interior, number, update_radius};
 /// evaluated at the initial point and after accepted steps. The default is
 /// `1e-8`; `None` disables it and zero requests exact stationarity. Optional
 /// observed cost and step tests are disabled by default and combine with OR.
+/// Those tests inspect accepted iterates, not rejected inner trials. The
+/// numerical no-progress safeguard operates independently of these tolerances.
 /// Execution budgets belong on [`crate::Executor`]. All-fixed successful
 /// termination is structural and does not depend on a tolerance.
 ///
@@ -250,6 +256,7 @@ struct Work<F> {
     gradient: Vec<F>,
     optimality: F,
     radius: F,
+    equal_cost_rejection: bool,
     failed: bool,
 }
 
@@ -433,6 +440,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
             gradient: Vec::new(),
             optimality: F::infinity(),
             radius: F::one(),
+            equal_cost_rejection: false,
             failed: false,
         };
         for i in 0..n {
@@ -601,6 +609,22 @@ impl<F: Scalar> TrustRegionReflective<F> {
             }
             let length = norm(&h);
             let predicted = -model.value(&h);
+            // Equal costs alone do not establish convergence. Once radius
+            // contraction also loses every parameter change to rounding,
+            // preserve the last accepted point as a numerical stop.
+            if feasible
+                && work.equal_cost_rejection
+                && work
+                    .free
+                    .iter()
+                    .zip(&x)
+                    .all(|(&i, &x)| trial.get_scalar(i) == x)
+            {
+                return Ok((
+                    state,
+                    Some(TerminationReason::NumericalNoProgress),
+                ));
+            }
             if !feasible
                 || !length.is_finite()
                 || length == F::zero()
@@ -620,10 +644,12 @@ impl<F: Scalar> TrustRegionReflective<F> {
             assert_eq!(r.len(), m, "residual shape changed during solve");
             let new_cost = problem.cost(&raw_r, |_| cost(&r));
             if !new_cost.is_finite() || r.iter().any(|x| !x.is_finite()) {
+                work.equal_cost_rejection = false;
                 work.radius = number::<F>(0.25) * length;
                 continue;
             }
             let actual = old_cost - new_cost;
+            work.equal_cost_rejection = actual == F::zero();
             let ratio = actual / predicted;
             work.radius =
                 update_radius(work.radius, length, ratio).min(F::max_value());

@@ -320,6 +320,147 @@ fn settings_compose_in_both_orders() {
         .with_relative_step_tolerance::<Vec<f64>, f64>(1e-12);
 }
 
+fn cost_floor_problem(constant: f64) -> Model {
+    Model::linear(
+        &[1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        &[0.3, 0.7, -constant],
+        &[0.0; 2],
+        &[1.0; 2],
+    )
+}
+
+fn check_cost_floor<P>(
+    problem: P,
+    gradient_tolerance: f64,
+    change_tolerance: Option<f64>,
+    expected: TerminationReason,
+) where
+    P: Residual<Param = Vec<f64>, Output = Vec<f64>, Error = &'static str>
+        + Jacobian<Jacobian = DenseMatrix>
+        + BoxConstraints<Param = Vec<f64>>,
+{
+    let result = Executor::from_start(
+        problem,
+        TrustRegionReflective::new()
+            .with_absolute_scaled_gradient_tolerance(gradient_tolerance)
+            .with_relative_cost_change_tolerance(change_tolerance)
+            .with_relative_step_tolerance(change_tolerance),
+        vec![0.0, 1.0],
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
+    assert_eq!(result.reason, expected);
+    for (x, target) in result.param().iter().zip([0.3, 0.7]) {
+        assert!((x - target).abs() < 1e-8);
+    }
+    assert_eq!(result.state.jacobian_evals(), result.iter() + 1);
+    if expected == TerminationReason::NumericalNoProgress {
+        assert_eq!(result.cost(), 2.0);
+        assert_eq!(result.iter(), 4);
+        assert!(result.state.residual_evals() > result.state.jacobian_evals());
+        let x = result.param();
+        let scaled_gradient =
+            ((1.0 - x[0]) * (x[0] - 0.3).abs()).max(x[1] * (x[1] - 0.7).abs());
+        assert!(scaled_gradient > gradient_tolerance);
+        assert!(!result.reason.is_failure());
+    }
+}
+
+#[test]
+fn cost_floor_stops_without_claiming_stationarity() {
+    for tolerance in [Some(1e-12), None, Some(0.0)] {
+        check_cost_floor(
+            cost_floor_problem(2.0),
+            1e-10,
+            tolerance,
+            TerminationReason::NumericalNoProgress,
+        );
+        let problem = basin::BoundedFiniteDiff::new(
+            cost_floor_problem(2.0),
+            vec![0.0; 2],
+            vec![1.0; 2],
+        )
+        .jacobian_method(basin::Method::Central);
+        check_cost_floor(
+            problem,
+            1e-10,
+            tolerance,
+            TerminationReason::NumericalNoProgress,
+        );
+    }
+}
+
+#[test]
+fn cost_floor_controls_still_converge() {
+    for (constant, gradient_tolerance) in [(0.0, 1e-10), (2.0, 1e-8)] {
+        check_cost_floor(
+            cost_floor_problem(constant),
+            gradient_tolerance,
+            Some(1e-12),
+            TerminationReason::SolverConverged,
+        );
+        let problem = basin::BoundedFiniteDiff::new(
+            cost_floor_problem(constant),
+            vec![0.0; 2],
+            vec![1.0; 2],
+        )
+        .jacobian_method(basin::Method::Central);
+        check_cost_floor(
+            problem,
+            gradient_tolerance,
+            Some(1e-12),
+            TerminationReason::SolverConverged,
+        );
+    }
+}
+
+#[test]
+fn cost_floor_checkpoint_preserves_the_numerical_stop() {
+    let stopped = Executor::from_start(
+        cost_floor_problem(2.0),
+        TrustRegionReflective::new()
+            .with_absolute_scaled_gradient_tolerance(1e-10),
+        vec![0.0, 1.0],
+    )
+    .max_iter(200)
+    .run_with_solver()
+    .unwrap();
+    assert_eq!(stopped.reason, TerminationReason::NumericalNoProgress);
+    let snapshot = |state: &NllsState<Vec<f64>>| {
+        (
+            state.param().clone(),
+            state.cost(),
+            state.iter(),
+            state.residual_evals(),
+            state.jacobian_evals(),
+        )
+    };
+    let state = snapshot(&stopped.state);
+    let resumed = Executor::resume_from_checkpoint(
+        cost_floor_problem(2.0),
+        stopped.into_checkpoint(),
+    )
+    .max_iter(200)
+    .run_with_solver()
+    .unwrap();
+    assert_eq!(resumed.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(snapshot(&resumed.state), state);
+    let fresh = Executor::from_start(
+        cost_floor_problem(0.0),
+        resumed.solver.with_absolute_scaled_gradient_tolerance(None),
+        vec![0.3, 0.7],
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
+    // Disabling the stationarity check at an exact solution must retain the
+    // existing failure behavior, without inheriting the earlier rejection.
+    assert_eq!(fresh.reason, TerminationReason::SolverFailed);
+    assert_eq!(fresh.iter(), 0);
+    assert_eq!(fresh.state.residual_evals(), 1);
+}
+
 #[test]
 fn scipy_reference_fixtures() {
     for line in include_str!("fixtures/trust_region_reflective_reference.tsv")
@@ -487,6 +628,56 @@ fn retry_exhaustion_preserves_the_current_state() {
         (result.cost() - 0.5 * guarded_exp(-1.0).unwrap().powi(2)).abs()
             < 1e-15
     );
+}
+
+#[test]
+fn equal_cost_alone_does_not_establish_numerical_no_progress() {
+    let result = Executor::from_start(
+        cost_floor_problem(2.0),
+        TrustRegionReflective::new()
+            .with_absolute_scaled_gradient_tolerance(1e-10)
+            .with_max_inner_attempts(1),
+        vec![0.0, 1.0],
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
+    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.iter(), 4);
+    assert_eq!(result.cost(), 2.0);
+    assert_eq!(result.state.residual_evals(), 6);
+    assert_eq!(result.state.jacobian_evals(), 5);
+}
+
+#[test]
+fn collapsed_trials_after_invalid_or_worse_costs_remain_failures() {
+    for residual in [
+        (|x| Ok(if x == 1.0 { 1.0 } else { f64::INFINITY })) as Callback,
+        |x| Ok(if x == 1.0 { 1.0 } else { 2.0 }),
+        // Early equal-cost rejections must not mask later invalid trials.
+        |x| {
+            Ok(if x == 1.0 || x < 1.0 - 1e-8 {
+                1.0
+            } else {
+                f64::NAN
+            })
+        },
+    ] {
+        let result = Executor::from_start(
+            Callbacks::new(residual, |_| Ok(1.0)),
+            TrustRegionReflective::new(),
+            vec![1.0],
+        )
+        .max_iter(200)
+        .run()
+        .unwrap();
+        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.param(), &[1.0]);
+        assert_eq!(result.cost(), 0.5);
+        assert_eq!(result.iter(), 0);
+        assert_eq!(result.state.jacobian_evals(), 1);
+        assert!(result.state.residual_evals() > 10);
+    }
 }
 
 #[test]

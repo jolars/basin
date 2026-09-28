@@ -124,12 +124,14 @@ where
     }
     check_small_radius(make);
     check_small_secular_root(make);
+    check_cost_floor(make);
 }
 
 struct Diagonal<V, F> {
     make: fn(&[F]) -> V,
     diagonal: Vec<F>,
     target: Vec<F>,
+    constant: Option<F>,
     lower: V,
     upper: V,
 }
@@ -148,12 +150,13 @@ impl<V: VectorIndex<F>, F: Scalar> Residual for Diagonal<V, F> {
     type Output = V;
     type Error = Infallible;
     fn residual(&self, x: &V) -> Result<V, Infallible> {
-        let r: Vec<F> = self
+        let mut r: Vec<F> = self
             .diagonal
             .iter()
             .enumerate()
             .map(|(i, &d)| d * (x.get_scalar(i) - self.target[i]))
             .collect();
+        r.extend(self.constant);
         Ok((self.make)(&r))
     }
 }
@@ -164,9 +167,13 @@ impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar> Jacobian
     type Jacobian = V::Matrix;
     fn jacobian(&self, _: &V) -> Result<V::Matrix, Infallible> {
         let n = self.diagonal.len();
-        Ok(V::dense_from_fn(n, n, |i, j| {
-            if i == j { self.diagonal[i] } else { F::zero() }
-        }))
+        Ok(V::dense_from_fn(
+            n + usize::from(self.constant.is_some()),
+            n,
+            |i, j| {
+                if i == j { self.diagonal[i] } else { F::zero() }
+            },
+        ))
     }
 }
 
@@ -193,6 +200,7 @@ where
                     make,
                     diagonal: vec![F::one()],
                     target: vec![num::<F>(2.0) * start],
+                    constant: None,
                     lower: make(&[F::neg_infinity()]),
                     upper: make(&[F::infinity()]),
                 };
@@ -239,6 +247,7 @@ where
         make,
         diagonal: vec![F::one(), small],
         target: vec![num(3.0), num(10.0)],
+        constant: None,
         lower: make(&[F::neg_infinity(); 2]),
         upper: make(&[F::infinity(); 2]),
     };
@@ -257,4 +266,39 @@ where
     assert!((h0 - F::one()).abs() < num(0.02));
     assert!((h1 - num::<F>(3.0).sqrt()).abs() < num(0.02));
     assert!(result.cost() < num(1e-4));
+}
+
+fn check_cost_floor<V, F>(make: fn(&[F]) -> V)
+where
+    F: Scalar,
+    V: Clone + VectorIndex<F> + VectorLen + DenseMatrixFromFn<F>,
+    V::Matrix: MatrixIndex<F>,
+{
+    let problem = Diagonal {
+        make,
+        diagonal: vec![F::one(); 2],
+        target: vec![num(0.3), num(0.7)],
+        constant: Some(num(2.0)),
+        lower: make(&[F::zero(); 2]),
+        upper: make(&[F::one(); 2]),
+    };
+    let tolerance = num::<F>(1e-10);
+    let result = Executor::from_start(
+        problem,
+        TrustRegionReflective::new()
+            .with_absolute_scaled_gradient_tolerance(tolerance),
+        make(&[F::zero(), F::one()]),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
+    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(result.cost(), num(2.0));
+    let x = result.param().get_scalar(0);
+    let y = result.param().get_scalar(1);
+    let error = (x - num(0.3)).abs().max((y - num(0.7)).abs());
+    assert!(error < num::<F>(2.0) * F::epsilon().sqrt());
+    let optimality =
+        ((F::one() - x) * (x - num(0.3)).abs()).max(y * (y - num(0.7)).abs());
+    assert!(optimality > tolerance);
 }
