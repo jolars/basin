@@ -1,3 +1,6 @@
+use crate::core::convergence::{
+    NativeConvergenceDiagnostics, NativeConvergenceTest,
+};
 use crate::core::least_squares::evaluation::Evaluation;
 use crate::core::math::{
     AddDiagonalVectorInPlace, ComponentDivAssign, ComponentMaxAssign,
@@ -167,6 +170,9 @@ pub enum LmDamping {
 /// exact-zero threshold. Gradient tests run before computing a step; model
 /// reduction, relative step, and trust-radius tests run where the trial
 /// diagnostics are valid.
+/// Use [`Executor::run_with_solver`](crate::Executor::run_with_solver) and
+/// [`OptimizationResultWithSolver::native_convergence_tests`](crate::OptimizationResultWithSolver::native_convergence_tests)
+/// to identify all passing native tests at the stopping stage.
 /// Observed absolute-step and cost-change checks are also opt-in and combine
 /// with native checks using OR. Execution budgets belong on the executor.
 /// The least-squares gradient `Jᵀr` is computed internally; [`NllsState`] does
@@ -276,6 +282,13 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     model_cache: Option<Result<M, QrSolveError>>,
     jtr_cache: Option<V>,
     failed: bool,
+    native_convergence: Vec<NativeConvergenceTest>,
+}
+
+impl<V, M, F> NativeConvergenceDiagnostics for LevenbergMarquardt<V, M, F> {
+    fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
+        &self.native_convergence
+    }
 }
 
 impl<V, M, F: Scalar> Default for LevenbergMarquardt<V, M, F> {
@@ -317,6 +330,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             model_cache: None,
             jtr_cache: None,
             failed: false,
+            native_convergence: Vec::new(),
         }
     }
 
@@ -629,6 +643,9 @@ where
         + Clone,
 {
     type Error = <P as Residual>::Error;
+    fn reset_convergence(&mut self) {
+        self.native_convergence.clear();
+    }
     fn init(
         &mut self,
         problem: &mut Problem<P>,
@@ -673,6 +690,9 @@ where
     M: ScaleRowsInPlace<F>,
 {
     type Error = <P as Residual>::Error;
+    fn reset_convergence(&mut self) {
+        self.native_convergence.clear();
+    }
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
@@ -715,6 +735,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         // Seed both the state and the cross-iteration caches from one
         // residual/Jacobian evaluation.
         self.failed = false;
+        self.native_convergence.clear();
         self.r_cache = None;
         self.model_cache = None;
         self.jtr_cache = None;
@@ -781,6 +802,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             + FloorZerosInPlace<F>
             + Clone,
     {
+        self.native_convergence.clear();
         if self.failed {
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
@@ -846,6 +868,17 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             }
         });
         if abs_converged || rel_converged {
+            if abs_converged {
+                self.native_convergence
+                    .push(NativeConvergenceTest::AbsoluteGradient);
+            }
+            if rel_converged {
+                self.native_convergence.push(if E::ROBUST {
+                    NativeConvergenceTest::RobustGradientOrthogonality
+                } else {
+                    NativeConvergenceTest::GradientOrthogonality
+                });
+            }
             // Termination does not move the iterate, so the caches remain valid.
             self.r_cache = Some(r);
             self.model_cache = Some(Ok(a));
@@ -1018,6 +1051,18 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             .tol_step_rel
             .is_some_and(|tol| relative_step_converged(&h, &state.param, tol));
         if cost_rel_converged || step_rel_converged || radius_rel_converged {
+            if cost_rel_converged {
+                self.native_convergence
+                    .push(NativeConvergenceTest::RelativeModelReduction);
+            }
+            if step_rel_converged {
+                self.native_convergence
+                    .push(NativeConvergenceTest::RelativeTrialStep);
+            }
+            if radius_rel_converged {
+                self.native_convergence
+                    .push(NativeConvergenceTest::RelativeTrustRadius);
+            }
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
 
@@ -1180,6 +1225,14 @@ where
 {
     inner: LevenbergMarquardt<V, M::Factorization, F>,
     rank_tolerance: Option<F>,
+}
+
+impl<V, M: FactorizePivotedQr<V, F>, F: Scalar> NativeConvergenceDiagnostics
+    for LevenbergMarquardtQr<V, M, F>
+{
+    fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
+        self.inner.native_convergence_tests()
+    }
 }
 
 impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
@@ -1400,6 +1453,9 @@ where
     M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
 {
     type Error = <P as Residual>::Error;
+    fn reset_convergence(&mut self) {
+        self.inner.native_convergence.clear();
+    }
     fn init(
         &mut self,
         problem: &mut Problem<P>,
@@ -1443,6 +1499,9 @@ where
     M: ScaleRowsInPlace<F>,
 {
     type Error = <P as Residual>::Error;
+    fn reset_convergence(&mut self) {
+        self.inner.native_convergence.clear();
+    }
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,

@@ -1,7 +1,7 @@
 use basin::{
     BoxConstraints, CostFunction, DenseMatrixFromFn, Executor, Jacobian,
-    MatrixIndex, Residual, Scalar, TerminationReason, TrustRegionReflective,
-    VectorIndex, VectorLen,
+    MatrixIndex, NativeConvergenceTest, Residual, Scalar, TerminationReason,
+    TrustRegionReflective, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -106,9 +106,13 @@ where
             make(&[F::zero(); 3]),
         )
         .max_iter(200)
-        .run()
+        .run_with_solver()
         .unwrap();
         assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(
+            result.native_convergence_tests(),
+            &[NativeConvergenceTest::AbsoluteScaledGradient]
+        );
         assert_eq!(result.param().get_scalar(0), num(0.5));
         if deficient {
             assert!(result.cost() < num(1e-6));
@@ -290,9 +294,10 @@ where
         make(&[F::zero(), F::one()]),
     )
     .max_iter(200)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+    assert!(result.native_convergence_tests().is_empty());
     assert_eq!(result.cost(), num(2.0));
     let x = result.param().get_scalar(0);
     let y = result.param().get_scalar(1);

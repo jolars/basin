@@ -2,7 +2,7 @@
 
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    LmDamping, Residual, State, TerminationReason,
+    LmDamping, NativeConvergenceTest, Residual, State, TerminationReason,
 };
 use std::convert::Infallible;
 
@@ -38,6 +38,42 @@ macro_rules! stopping_checks {
                 fn jacobian(&self, _: &$vector) -> Result<$matrix, Infallible> {
                     Ok(($matrix_new)(&[self.scale[0], 0., 0., self.scale[1]]))
                 }
+            }
+
+            #[test]
+            fn native_diagnostics_preserve_simultaneous_tests_and_stages() {
+                use NativeConvergenceTest as Test;
+                let result = Executor::from_start(
+                    Affine { scale: [1., 1.], target: [1., 0.] },
+                    ($solver)
+                        .with_absolute_gradient_tolerance(0.)
+                        .with_gradient_orthogonality_tolerance(0.)
+                        .with_relative_step_tolerance(1.),
+                    ($vector_new)(&[1., 0.]),
+                ).run_with_solver().unwrap();
+                assert_eq!(result.native_convergence_tests(),
+                    &[Test::AbsoluteGradient, Test::GradientOrthogonality]);
+                assert_eq!(result.counts.residual_evals, 1);
+                assert_eq!(result.counts.jacobian_evals, 1);
+
+                let result = Executor::from_start(
+                    Affine { scale: [1., 1.], target: [3., 0.] },
+                    ($solver)
+                        .with_damping(LmDamping::TrustRegion)
+                        .with_absolute_gradient_tolerance(None)
+                        .with_relative_model_reduction_tolerance(2.)
+                        .with_relative_step_tolerance(1.)
+                        .with_relative_trust_radius_tolerance(2.),
+                    ($vector_new)(&[1., 0.]),
+                ).max_iter(1).run_with_solver().unwrap();
+                assert_eq!(result.native_convergence_tests(), &[
+                    Test::RelativeModelReduction,
+                    Test::RelativeTrialStep,
+                    Test::RelativeTrustRadius,
+                ]);
+                assert_eq!(result.counts.residual_evals, 2);
+                assert_eq!(result.counts.jacobian_evals, 1);
+                assert_eq!(result.iter(), 0);
             }
 
             #[test]
@@ -94,7 +130,7 @@ macro_rules! stopping_checks {
                         ($vector_new)(&[0.1, 0.]),
                     )
                     .max_iter(1)
-                    .run()
+                    .run_with_solver()
                     .unwrap();
                     // The rejected GN trial is 5.05. The radius shrinks to
                     // 0.099, while the base's scaled norm remains 0.02.
@@ -103,6 +139,9 @@ macro_rules! stopping_checks {
                     } else {
                         TerminationReason::MaxIter
                     });
+                    assert_eq!(result.native_convergence_tests(), if converged {
+                        &[NativeConvergenceTest::RelativeTrustRadius][..]
+                    } else { &[] });
                     assert_eq!(result.param()[0], 0.1);
                     assert_eq!(result.cost_evals(), 2);
                     assert_eq!(result.state.jacobian_evals(), 1);

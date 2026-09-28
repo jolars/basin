@@ -181,15 +181,19 @@ Ship these in order, preserving existing public APIs and behavior:
   access, raw evaluation counts, and explicit incumbent-selection semantics.
   Bind new controls to the capabilities they need; preserve existing readers
   and stopping behavior.
-- [ ] **Expose which native convergence test fired.** QR LM combines its
-  gradient, orthogonality, model-reduction, and step tests into
-  `SolverConverged`, so downstream integrations cannot report the actual
-  stopping criterion. Navette had to introduce a generic `Converged` result
-  rather than infer a cost, step, or gradient reason. Add opt-in diagnostics
-  for native stopping tests, including full TRF, while preserving existing
-  Basin 1.x termination values and the fieldless `TerminationReason` enum's
-  numeric casts. Distinguish numerical safeguards from convergence and keep
-  diagnostics consistent across fresh runs and exact continuation.
+- [x] **Expose which native stopping tests caused termination.** Added
+  `NativeConvergenceDiagnostics` and `NativeConvergenceTest` for both LM
+  factorizations and full TRF, including their convergence wrappers.
+  `run_with_solver()` results expose all passing native tests at the stopping
+  stage, including LM's trust-radius test and TRF's all-fixed case. Navette
+  can distinguish these without inferring a cause from the final iterate.
+  Existing stopping behavior, termination values, and fieldless enum numeric
+  casts remain unchanged. Numerical safeguards retain their distinct reasons.
+  Fresh runs clear records, exact checkpoints retain them, and the result
+  accessor excludes earlier native diagnostics when continuation stops on a
+  budget or another non-native reason. Tests cover simultaneous tests, rejected
+  trials, robust objectives, continuation, and all dense backends with both
+  scalar types.
 
 ### State API prototype
 
@@ -261,6 +265,27 @@ desired backend features.
 
 ## Basin 2.0
 
+- [ ] **Make structured termination reports part of ordinary results.** Build
+  on the 1.x native diagnostics. Replace the flat `TerminationReason` with a
+  payload-bearing report distinguishing convergence, execution limits,
+  objective targets, numerical stalls, numerical failures, cancellation, and
+  application stops. Return it with the final state and authoritative counts
+  from ordinary `run()`; retaining the solver remains optional. Native and
+  shared checks should return their explanation with the stopping decision,
+  both at iteration boundaries and inside steps. Preserve precise criterion
+  semantics, simultaneous passing tests, and relevant measurements when
+  available, and provide an extension mechanism for external solvers.
+  Keep iteration completion independent of termination. Reports describe a
+  particular stopping event; exact continuation retains algorithm and
+  convergence history and produces a report for the resumed run. Composition
+  must distinguish inner convergence from outer convergence, retain relevant
+  inner failure details, and explicitly decide whether to consume partial
+  results. Keep typed callback aborts in `Result::Err`, distinct from numerical
+  termination with a published state. Replace enum numeric casts with an
+  explicit documented code mapping if bindings require one. Keep the reporting
+  API compact; general tracing and exhaustive solver measurements are separate
+  concerns. Document migration from the 1.x reasons and diagnostics.
+
 - [ ] **Clean up backend compatibility aliases in Basin 2.0.0.** Retire the
   frozen unversioned `nalgebra`, `ndarray`, and `faer` feature aliases and
   their LAPACK/BLAS counterparts in favor of exact version features and the
@@ -301,9 +326,9 @@ desired backend features.
 - [ ] Remove the deprecated `TerminationCriterion` facility, all shipped
   criterion types and re-exports, `Executor::terminate_on`,
   `InnerExecutor::terminate_on`, composed `inner_terminate_on` methods,
-  `run_loop`, and `ResumableInner::segment_criteria`. Retain stopping
-  reasons, solver convergence setters, direct execution controls, and
-  closure hooks.
+  `run_loop`, and `ResumableInner::segment_criteria`. Preserve stopping
+  semantics through structured reports, solver convergence setters, direct
+  execution controls, and closure hooks.
 
 - [ ] Remove deprecated tolerance and algorithm-setting aliases, including
   scalar/root and line-search aliases.

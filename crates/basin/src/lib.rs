@@ -326,7 +326,9 @@ pub use crate::core::constraint::{
     LinearEqualityConstraints, LinearInequalityConstraints,
     NonlinearConstraints, NonlinearInequalityConstraints,
 };
-pub use crate::core::convergence::ConfiguredSolver;
+pub use crate::core::convergence::{
+    ConfiguredSolver, NativeConvergenceDiagnostics, NativeConvergenceTest,
+};
 #[allow(deprecated)]
 pub use crate::core::executor::{
     CancellationToken, Executor, OptimizationResult,

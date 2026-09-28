@@ -7,6 +7,9 @@
 // Keep the Basin 1.x compatibility bridge and shared check implementations local.
 #![allow(deprecated)]
 
+pub mod native;
+pub use native::{NativeConvergenceDiagnostics, NativeConvergenceTest};
+
 use super::constraint::BoxConstraints;
 use super::inner::{InitialState, WarmStart};
 use super::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd};
@@ -79,6 +82,21 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             simplex: self.simplex,
             checked: None,
             reason: None,
+        }
+    }
+}
+
+impl<So: NativeConvergenceDiagnostics, G, X, C, T> NativeConvergenceDiagnostics
+    for ConfiguredSolver<So, G, X, C, T>
+{
+    fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
+        if self
+            .reason
+            .is_some_and(|reason| reason != TerminationReason::SolverConverged)
+        {
+            &[]
+        } else {
+            self.solver.native_convergence_tests()
         }
     }
 }

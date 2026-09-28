@@ -3,6 +3,9 @@
 mod step;
 
 use crate::core::constraint::BoxConstraints;
+use crate::core::convergence::{
+    NativeConvergenceDiagnostics, NativeConvergenceTest,
+};
 use crate::core::inner::InitialState;
 use crate::core::least_squares::evaluation::{BoundedEvaluation, NllsStep};
 use crate::core::math::dense_svd::{DenseSvd, norm};
@@ -85,6 +88,9 @@ use step::{Model, interior, number, update_radius};
 /// numerical no-progress safeguard operates independently of these tolerances.
 /// Execution budgets belong on [`crate::Executor`]. All-fixed successful
 /// termination is structural and does not depend on a tolerance.
+/// Use [`Executor::run_with_solver`](crate::Executor::run_with_solver) and
+/// [`OptimizationResultWithSolver::native_convergence_tests`](crate::OptimizationResultWithSolver::native_convergence_tests)
+/// to distinguish scaled-gradient convergence from an all-fixed problem.
 ///
 /// [`NllsState`] publishes matching parameters and cost. Residuals, derivatives,
 /// and the radius are solver-owned. Fresh runs reset them; exact solver/state
@@ -161,6 +167,13 @@ pub struct TrustRegionReflective<F: Scalar = f64> {
     max_inner_attempts: usize,
     max_subproblem_iterations: usize,
     work: Option<Work<F>>,
+    native_convergence: Vec<NativeConvergenceTest>,
+}
+
+impl<F: Scalar> NativeConvergenceDiagnostics for TrustRegionReflective<F> {
+    fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
+        &self.native_convergence
+    }
 }
 
 impl<F: Scalar> Default for TrustRegionReflective<F> {
@@ -180,6 +193,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
             max_inner_attempts: 50,
             max_subproblem_iterations: 50,
             work: None,
+            native_convergence: Vec::new(),
         }
     }
 
@@ -364,6 +378,16 @@ where
     V: Clone + VectorLen + VectorIndex<F>,
 {
     type Error = <P as Residual>::Error;
+    fn reset_convergence(&mut self) {
+        self.native_convergence.clear();
+    }
+    fn check_convergence(
+        &mut self,
+        _problem: &Problem<P>,
+        _state: &NllsState<V, F>,
+    ) -> Option<TerminationReason> {
+        self.check_native_convergence()
+    }
     fn init(
         &mut self,
         problem: &mut Problem<P>,
@@ -394,6 +418,16 @@ where
     P::Jacobian: ScaleRowsInPlace<F>,
 {
     type Error = <P as Residual>::Error;
+    fn reset_convergence(&mut self) {
+        self.native_convergence.clear();
+    }
+    fn check_convergence(
+        &mut self,
+        _problem: &Problem<RobustLeastSquares<P, L, F>>,
+        _state: &NllsState<V, F>,
+    ) -> Option<TerminationReason> {
+        self.check_native_convergence()
+    }
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
@@ -424,6 +458,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
         M: MatrixIndex<F>,
         E: BoundedEvaluation<V, M, F>,
     {
+        self.native_convergence.clear();
         self.work = None;
         let mut state = NllsState::new(state.param);
         let n = state.param.vec_len();
@@ -538,6 +573,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
         M: MatrixIndex<F>,
         E: BoundedEvaluation<V, M, F>,
     {
+        self.native_convergence.clear();
         let work = self.work.as_mut().expect("TRF must be initialized");
         let failed = Some(TerminationReason::SolverFailed);
         if work.failed {
@@ -680,15 +716,28 @@ impl<F: Scalar> TrustRegionReflective<F> {
         &self,
         _: &NllsState<V, F>,
     ) -> Option<TerminationReason> {
-        self.work
-            .as_ref()
-            .filter(|w| {
-                !w.failed
-                    && (w.free.is_empty()
-                        || self
-                            .gradient_tolerance
-                            .is_some_and(|t| w.optimality <= t))
-            })
+        self.convergence_test()
             .map(|_| TerminationReason::SolverConverged)
+    }
+
+    fn convergence_test(&self) -> Option<NativeConvergenceTest> {
+        let work = self.work.as_ref().filter(|work| !work.failed)?;
+        if work.free.is_empty() {
+            Some(NativeConvergenceTest::NoFreeParameters)
+        } else if self
+            .gradient_tolerance
+            .is_some_and(|t| work.optimality <= t)
+        {
+            Some(NativeConvergenceTest::AbsoluteScaledGradient)
+        } else {
+            None
+        }
+    }
+
+    fn check_native_convergence(&mut self) -> Option<TerminationReason> {
+        self.native_convergence.clear();
+        let test = self.convergence_test()?;
+        self.native_convergence.push(test);
+        Some(TerminationReason::SolverConverged)
     }
 }

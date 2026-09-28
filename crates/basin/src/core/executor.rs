@@ -50,6 +50,9 @@
 #![allow(deprecated)]
 
 use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
+use crate::core::convergence::{
+    NativeConvergenceDiagnostics, NativeConvergenceTest,
+};
 use crate::core::observer::{Observe, ObserverMode};
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::run_control::RunControl;
@@ -197,6 +200,59 @@ pub struct OptimizationResultWithSolver<S, So> {
     pub counts: EvalCounts,
     /// Why the executor stopped.
     pub reason: TerminationReason,
+}
+
+impl<S, So: NativeConvergenceDiagnostics> OptimizationResultWithSolver<S, So> {
+    /// Native tests that caused this run's [`TerminationReason::SolverConverged`].
+    ///
+    /// Returns an empty slice for every other termination reason, including
+    /// shared observed convergence checks, numerical safeguards, and execution
+    /// limits. This prevents an earlier native stop retained in an exact
+    /// checkpoint from being attributed to a subsequent budget stop.
+    /// Application hooks should report [`TerminationReason::UserRequested`]:
+    /// the 1.x reason cannot distinguish a hook returning `SolverConverged`
+    /// from a native stop.
+    /// Neither this reader nor the solver capability performs evaluations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use basin::{DenseMatrix, Executor, Jacobian, LevenbergMarquardtQr,
+    ///     NativeConvergenceTest, Residual, TerminationReason};
+    /// # struct Fit;
+    /// # impl Residual for Fit {
+    /// #     type Param = Vec<f64>;
+    /// #     type Output = Vec<f64>;
+    /// #     type Error = std::convert::Infallible;
+    /// #     fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
+    /// #         Ok(vec![x[0] - 1.])
+    /// #     }
+    /// # }
+    /// # impl Jacobian for Fit {
+    /// #     type Jacobian = DenseMatrix;
+    /// #     fn jacobian(&self, _: &Vec<f64>) -> Result<DenseMatrix, Self::Error> {
+    /// #         Ok(DenseMatrix::from_row_slice(1, 1, &[1.]))
+    /// #     }
+    /// # }
+    /// # let problem = Fit;
+    /// # let x0 = vec![1.];
+    /// let solver = LevenbergMarquardtQr::<Vec<f64>, DenseMatrix>::new();
+    /// let result = Executor::from_start(problem, solver, x0)
+    ///     .max_iter(100)
+    ///     .run_with_solver()?;
+    /// if result.reason == TerminationReason::SolverConverged {
+    ///     assert!(result.native_convergence_tests()
+    ///         .contains(&NativeConvergenceTest::AbsoluteGradient));
+    /// }
+    /// # Ok::<(), std::convert::Infallible>(())
+    /// ```
+    pub fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
+        if self.reason == TerminationReason::SolverConverged {
+            self.solver.native_convergence_tests()
+        } else {
+            &[]
+        }
+    }
 }
 
 impl<S, So> OptimizationResultWithSolver<S, So> {

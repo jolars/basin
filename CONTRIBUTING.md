@@ -216,10 +216,14 @@ These shape API decisions and are non-obvious from the code alone.
    accept a finite nonnegative scalar or `None`; zero requests an exact-zero
    threshold. Algorithm controls and safeguards remain distinct. Preserve old
    behavior through deprecated aliases until Basin 2.0. Fresh solves reset
-   convergence history; exact solver-and-state checkpoints preserve it. Custom
-   inner-stop factories create fresh history per run. Executor cancellation is
-   checked between top-level iterations; typed problem errors remain the
-   finer-grained hard-abort path. See
+   convergence history; exact solver-and-state checkpoints preserve it. Native
+   convergence diagnostics record the tests at the stopping decision without
+   additional evaluations or changes to precedence. Solver records may survive
+   exact continuation; result readers must check the current stop reason before
+   attributing those records to the run. Numerical safeguards remain distinct
+   from convergence. Custom inner-stop factories create fresh history per run.
+   Executor cancellation is checked between top-level iterations; typed problem
+   errors remain the finer-grained hard-abort path. See
    [the convergence migration guide](https://basin.rs/docs/migrating-convergence/).
 4. **First-class constraints.** Constraints describe the *problem*, so they live
    problem-side, not as executor config, never on state. Solvers declare support
