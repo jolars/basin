@@ -12,9 +12,8 @@ use crate::core::state::{CountsMirror, State};
 /// This is the leanest single-iterate state: only cost evaluations, no
 /// gradient and no residual/Jacobian. It deliberately does **not** impl
 /// [`GradientState`](crate::core::state::GradientState): a 1D minimizer has no
-/// gradient to populate, so attaching
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is a
-/// compile error rather than a criterion that silently never fires (tenet 3).
+/// gradient to populate, so generic gradient-state checks cannot accept it
+/// (tenet 3).
 ///
 /// [`best_param`](State::best_param) tracks the lowest-cost probe, which for a
 /// bracketing search like Brent can differ from the final iterate.

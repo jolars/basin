@@ -19,9 +19,7 @@ use crate::core::termination::TerminationReason;
 /// Brent runs on [`ScalarState`], the
 /// cost-only single-iterate state. It does **not** impl
 /// [`GradientState`](crate::core::state::GradientState) (a 1-D minimizer has
-/// no gradient), so attaching a gradient criterion such as
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) is a
-/// **compile error** rather than one that silently never fires.
+/// no gradient), so gradient convergence settings are absent from its API.
 ///
 /// # Backends
 ///

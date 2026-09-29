@@ -147,8 +147,8 @@ convergence or rule out an accurate solution. Inspect the returned solution
 alongside the reason. For an application condition, use `stop_when(|state| ...)`,
 returning `Some(TerminationReason::UserRequested)` to stop or `None` to continue.
 
-The former `terminate_on` facility and abbreviated tolerance setters are
-deprecated for removal in Basin 2.0. See [Migrating Convergence Settings](../migrating-convergence/).
+Basin 2.0 removes the former `terminate_on` facility. Abbreviated tolerance
+setters remain deprecated pending their separate removal. See [Migrating Convergence Settings](../migrating-convergence/).
 
 ## Next
 

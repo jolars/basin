@@ -11,8 +11,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicPopulationState, CountsMirror, State};
-#[allow(deprecated)]
-use crate::core::termination::{TerminationCriterion, TerminationReason};
+use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::sort_population_ascending;
 use crate::solver::cma_inject::MemeticInner;
 use crate::solver::de::De;
@@ -222,35 +221,6 @@ where
         Self {
             de,
             inner: inner.max_iter(n),
-            k,
-            refine_every,
-            _phantom,
-        }
-    }
-
-    /// Register a termination criterion on the inner loop.
-    /// Criteria are reused across every outer iteration's inner run, but
-    /// each is reset at the start of every run, so stateful criteria,
-    /// including [`max_time`](crate::Executor::max_time), are safe.
-    /// See CONTRIBUTING.md "Solver composition" rule 2.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
-    )]
-    pub fn inner_terminate_on<C>(self, criterion: C) -> Self
-    where
-        C: TerminationCriterion<I::State> + 'static,
-    {
-        let Self {
-            de,
-            inner,
-            k,
-            refine_every,
-            _phantom,
-        } = self;
-        Self {
-            de,
-            inner: inner.terminate_on(criterion),
             k,
             refine_every,
             _phantom,

@@ -446,7 +446,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// predicted reduction, `F = ½‖r‖²`, and `ρ = actred/prered`.
     ///
     /// The `prered` clause is the load-bearing difference from the
-    /// framework's [`RelativeCostTolerance`], which sees only the
+    /// framework's `with_relative_cost_change_tolerance`, which sees only the
     /// achieved reduction between consecutive costs and has no access to
     /// the LM model. Predicted reduction is evaluated at the damped step;
     /// excessive damping can make both reductions small even when a weak
@@ -459,7 +459,6 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// for MINPACK `ftol` parity. Converges when *any* enabled test fires
     /// (see [`with_tol_grad`](Self::with_tol_grad)).
     ///
-    /// [`RelativeCostTolerance`]: crate::core::termination::RelativeCostTolerance
     #[allow(deprecated)]
     #[deprecated(
         note = "use `with_relative_model_reduction_tolerance`; removal scheduled for Basin 2.0"

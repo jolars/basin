@@ -329,11 +329,9 @@ pub use crate::core::constraint::{
 pub use crate::core::convergence::{
     ConfiguredSolver, NativeConvergenceDiagnostics, NativeConvergenceTest,
 };
-#[allow(deprecated)]
 pub use crate::core::executor::{
     CancellationToken, Executor, OptimizationResult,
-    OptimizationResultWithSolver, StepOutcome, Stepper, run_loop,
-    run_loop_with_control,
+    OptimizationResultWithSolver, StepOutcome, Stepper, run_loop_with_control,
 };
 pub use crate::core::inner::{
     InitialState, InnerExecutor, ResumableInner, WarmStart,
@@ -387,15 +385,7 @@ pub use crate::core::state::{
     SlsqpState, SolisWetsState, State,
 };
 pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
-#[allow(deprecated)]
-pub use crate::core::termination::{
-    CmaEsTolerance, CostTolerance, GradientTolerance, MaxCostEvals,
-    MaxGradientEvals, MaxIter, MaxTime, MeshTolerance, NoAcceptance,
-    NoImprovement, ParamTolerance, ProjectedGradientTolerance,
-    RelativeCostTolerance, RelativeGradientTolerance, RelativeParamTolerance,
-    RhoTolerance, SimplexTolerance, TargetCost, TerminationCriterion,
-    TerminationReason,
-};
+pub use crate::core::termination::TerminationReason;
 pub use crate::line_search::{
     Backtracking, Constant, HagerZhang, LineSearch, LineSearchBounds,
     LineSearchEvaluation, LineSearchOutcome, LineSearchResult, MoreThuente,

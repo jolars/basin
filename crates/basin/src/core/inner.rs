@@ -7,15 +7,11 @@
 //! application hooks. Evaluation aggregation and failure routing follow the
 //! composition contracts below.
 
-// Keep the Basin 1.x compatibility bridge and shared check implementations local.
-#![allow(deprecated)]
-
 use crate::core::executor::OptimizationResult;
 use crate::core::math::Scalar;
 use crate::core::problem::Problem;
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, State};
-use crate::core::termination::TerminationCriterion;
 
 /// Marks a solver as eligible to be the *inner* of a composed solver.
 ///
@@ -102,7 +98,7 @@ pub trait InitialState<V> {
 ///   `Solver` impl at its own impl site
 ///   (`LS: Solver<P, LS::State, Error = P::Error>`), never via a
 ///   supertrait here; and follow the three composition contracts on
-///   [`InnerExecutor`] (eval aggregation, criteria reset, failure
+///   [`InnerExecutor`] (eval aggregation, history reset, failure
 ///   routing) when driving the chain segment.
 pub trait ResumableInner<V, F = f64>: Sized
 where
@@ -138,33 +134,14 @@ where
 
     /// Configure execution stops or solver settings for a new chain segment.
     ///
-    /// The default bridges existing `segment_criteria` implementations during
-    /// Basin 1.x. Built-in operators configure their own convergence directly.
+    /// The default leaves the solver and controls unchanged. Built-in
+    /// operators configure their own convergence directly. The outer solver
+    /// supplies execution budgets, which are checked before convergence.
     fn configure_segment(
         &mut self,
-        state: &Self::State,
-        control: &mut crate::RunControl<Self::State>,
-    ) {
-        for criterion in self.segment_criteria(state) {
-            control.push_legacy(criterion);
-        }
-    }
-
-    /// Operator-specific per-segment convergence criteria, built from
-    /// the segment's *starting* state (CMA-ES: TolX at `1e-12 ·` the
-    /// segment's starting σ). Budget criteria
-    /// ([`max_cost_evals`](crate::Executor::max_cost_evals)) are
-    /// the outer's responsibility and are checked before these.
-    /// Default: none (Solis-Wets, which the reference implementation
-    /// runs purely budget-driven).
-    #[deprecated(
-        note = "use `configure_segment`; removal scheduled for Basin 2.0"
-    )]
-    fn segment_criteria(
-        &self,
         _state: &Self::State,
-    ) -> Vec<Box<dyn TerminationCriterion<Self::State>>> {
-        Vec::new()
+        _control: &mut crate::RunControl<Self::State>,
+    ) {
     }
 }
 
@@ -189,7 +166,7 @@ where
 /// # Serialization
 ///
 /// With `serde`, the solver and iteration/evaluation/time budgets serialize.
-/// Application hooks, deprecated criteria, capability controls (raw budgets
+/// Application hooks, capability controls (raw budgets
 /// and publication validation), and erased target/stall checks
 /// cannot be reconstructed and cause a serialization error. They are never
 /// silently dropped from an exact checkpoint.
@@ -225,7 +202,7 @@ where
 ///    contract for the canonical wording.
 ///
 /// 2. **History resets per run.** Each fresh run resets solver convergence,
-///    built-in clocks and stall checks, and deprecated criterion history.
+///    built-in clocks, and stall checks.
 ///    [`stop_when_factory`](Self::stop_when_factory) creates a fresh custom
 ///    closure per run. A direct [`stop_when`](Self::stop_when) closure retains
 ///    its captures across calls.
@@ -256,7 +233,7 @@ where
 
         if self.control.has_unserializable_stops() {
             return Err(Error::custom(
-                "InnerExecutor cannot serialize boxed termination criteria or capability controls; \
+                "InnerExecutor cannot serialize application hooks, target/stall checks, or capability controls; \
                  use legacy iteration/evaluation/time budgets or an owned checkpoint",
             ));
         }
@@ -321,22 +298,6 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     }
 
     crate::core::run_control::control_methods!();
-
-    /// Add a termination criterion to the inner loop. Criteria are
-    /// checked in insertion order before each inner iteration. See the
-    /// type-level "Composition contracts" for the statelessness
-    /// requirement that applies because criteria are reused across
-    /// [`run`](Self::run) calls.
-    #[deprecated(
-        note = "configure inner solver convergence or use `stop_when_factory`; removal scheduled for Basin 2.0"
-    )]
-    pub fn terminate_on<C>(mut self, criterion: C) -> Self
-    where
-        C: TerminationCriterion<S> + 'static,
-    {
-        self.control.push_legacy(Box::new(criterion));
-        self
-    }
 
     /// Append an application stop whose captures persist across inner runs.
     /// Use [`stop_when_factory`](Self::stop_when_factory) for fresh per-run history.

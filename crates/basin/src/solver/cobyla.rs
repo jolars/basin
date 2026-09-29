@@ -125,7 +125,7 @@ use driver::{CobylaWork, Transition};
 /// [`TerminationReason::SolverConverged`]; this does not certify feasibility.
 /// Add
 /// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget (each evaluated point
-/// counts once) or [`RhoTolerance`](crate::RhoTolerance) to stop at a coarser
+/// counts once) or [`with_absolute_radius_tolerance`](crate::Cobyla::with_absolute_radius_tolerance) to stop at a coarser
 /// `ρ`.
 ///
 /// # Backends

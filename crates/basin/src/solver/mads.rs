@@ -41,7 +41,7 @@
 //! MADS's natural convergence is the poll size `Δᵖ` reaching the configured floor
 //! `poll_size_min`; the solver signals it via
 //! [`TerminationReason::SolverConverged`]. Add [`max_cost_evals`](crate::Executor::max_cost_evals)
-//! to cap the evaluation budget, or [`MeshTolerance`](crate::MeshTolerance) to
+//! to cap the evaluation budget, or [`with_absolute_poll_size_tolerance`](crate::Mads::with_absolute_poll_size_tolerance) to
 //! stop early at a coarser poll size.
 //!
 //! # Backends

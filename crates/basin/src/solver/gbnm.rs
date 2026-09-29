@@ -76,9 +76,8 @@ struct BoxGeometry<'a, V> {
 /// coordinates, so an evaluation budget may be exceeded by at most `n + 1`
 /// evaluations.
 ///
-/// Do not apply [`SimplexTolerance`](crate::SimplexTolerance): local simplex
-/// convergence triggers GBNM's restart logic and is not convergence of the
-/// outer search. [`GbnmState`] deliberately does not implement
+/// Local simplex convergence triggers GBNM's restart logic and does not
+/// establish convergence of the outer search. [`GbnmState`] deliberately does not implement
 /// [`SimplexState`](crate::SimplexState), making that mismatch a compile-time
 /// error.
 ///

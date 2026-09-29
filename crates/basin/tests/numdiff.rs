@@ -1,5 +1,3 @@
-// Compatibility coverage for the Basin 1.x criterion API.
-#![allow(deprecated)]
 //! End-to-end: drive real solvers on problems whose derivatives are
 //! synthesized by `FiniteDiff` from function values only.
 
@@ -7,8 +5,7 @@
 
 use basin::problems::Sphere;
 use basin::{
-    BasicState, Executor, FiniteDiff, GradientDescent, GradientTolerance,
-    TerminationReason,
+    BasicState, Executor, FiniteDiff, GradientDescent, TerminationReason,
 };
 
 #[test]
@@ -23,11 +20,10 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
 
     let result = Executor::new(
         problem,
-        GradientDescent::new(0.2),
+        GradientDescent::new(0.2).with_absolute_gradient_tolerance(1e-9),
         BasicState::new(initial),
     )
     .max_iter(500)
-    .terminate_on(GradientTolerance(1e-9))
     .run()
     .unwrap();
 
@@ -43,8 +39,8 @@ mod nalgebra {
     use crate::backend_aliases::nalgebra::DVector;
     use basin::problems::{Rosenbrock, RosenbrockResiduals};
     use basin::{
-        BasicState, Executor, FiniteDiff, GradientTolerance,
-        LevenbergMarquardt, Method, NllsState, TerminationReason, TrustRegion,
+        BasicState, Executor, FiniteDiff, LevenbergMarquardt, Method,
+        NllsState, TerminationReason, TrustRegion,
     };
 
     #[test]
@@ -58,11 +54,10 @@ mod nalgebra {
 
         let result = Executor::new(
             problem,
-            TrustRegion::new(),
+            TrustRegion::new().with_absolute_gradient_tolerance(1e-6),
             BasicState::new(DVector::from_vec(vec![-1.2, 1.0])),
         )
         .max_iter(300)
-        .terminate_on(GradientTolerance(1e-6))
         .run()
         .unwrap();
 

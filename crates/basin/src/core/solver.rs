@@ -16,7 +16,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// - **Caller must:** drive the solver through
 ///   [`Executor`](crate::core::executor::Executor) (or
-///   [`run_loop`](crate::core::executor::run_loop) for composed
+///   [`run_loop_with_control`](crate::core::executor::run_loop_with_control) for composed
 ///   solvers). The executor calls [`init`](Self::init) exactly once
 ///   before any [`next_iter`](Self::next_iter) call, and runs
 ///   termination checks before each iteration including iter 0. See the
@@ -128,7 +128,7 @@ pub trait Solver<P, S: State> {
     ///   wrapper (same problem type, passed via `&mut`), counts flow
     ///   through automatically and no roll-up is needed. See
     ///   `CONTRIBUTING.md` "Solver composition" for the failure-routing and
-    ///   criteria-statelessness contracts that still apply uniformly.
+    ///   history-reset contracts that still apply uniformly.
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
@@ -171,9 +171,7 @@ pub trait Solver<P, S: State> {
 
     /// Optional pre-iteration solver-specific termination test.
     ///
-    /// Called after framework
-    /// [`TerminationCriterion`](crate::core::termination::TerminationCriterion)
-    /// checks but before each [`next_iter`](Self::next_iter) (including
+    /// Called after [`RunControl`](crate::RunControl) checks but before each [`next_iter`](Self::next_iter) (including
     /// iter 0, after [`init`](Self::init)). Returning `Some(_)` halts
     /// the executor. Use for clean convergence tests that depend only
     /// on the current state; mid-iter failures should be reported via

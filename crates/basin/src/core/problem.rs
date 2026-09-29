@@ -820,7 +820,7 @@ impl EvalCounts {
     }
 
     /// Componentwise `self − base`. Used by
-    /// [`run_loop`](crate::core::executor::run_loop) to compute the
+    /// [`run_loop_with_control`](crate::core::executor::run_loop_with_control) to compute the
     /// per-run delta when an outer solver passes its wrapper to an inner.
     pub fn delta_since(&self, base: &EvalCounts) -> EvalCounts {
         EvalCounts {
@@ -839,7 +839,7 @@ impl EvalCounts {
     /// [`LogBarrier`](crate::core::barrier::LogBarrier) or
     /// [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian)):
     /// they construct a fresh inner [`Problem`] and merge its counts back
-    /// into the outer's wrapper after [`run_loop`](crate::core::executor::run_loop).
+    /// into the outer's wrapper after [`run_loop_with_control`](crate::core::executor::run_loop_with_control).
     pub fn add(&mut self, other: &EvalCounts) {
         self.cost_evals += other.cost_evals;
         self.gradient_evals += other.gradient_evals;
@@ -872,10 +872,10 @@ impl EvalCounts {
 /// - **Same-problem inner** (e.g.
 ///   [`CmaInject`](crate::solver::CmaInject)): the outer passes its own
 ///   `&mut Problem<P>` straight through to the inner via
-///   [`run_loop`](crate::core::executor::run_loop). Inner counts flow
+///   [`run_loop_with_control`](crate::core::executor::run_loop_with_control). Inner counts flow
 ///   into the outer's wrapper transparently; no explicit roll-up. Inner
 ///   `state` counts reflect per-run work (snapshot-relative, computed by
-///   [`run_loop`](crate::core::executor::run_loop)).
+///   [`run_loop_with_control`](crate::core::executor::run_loop_with_control)).
 /// - **Adapter-problem inner** (e.g.
 ///   [`BarrierMethod`](crate::solver::BarrierMethod) /
 ///   [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)):
@@ -923,7 +923,7 @@ impl<P> Problem<P> {
 
     /// Mutable access to the wrapper's counters. Used by composed solvers
     /// that drive an inner against an *adapter problem*: after
-    /// [`run_loop`](crate::core::executor::run_loop) returns the inner
+    /// [`run_loop_with_control`](crate::core::executor::run_loop_with_control) returns the inner
     /// wrapper, the outer calls
     /// `outer.counts_mut().add(inner.counts())` to fold the inner's
     /// per-run work into its own.

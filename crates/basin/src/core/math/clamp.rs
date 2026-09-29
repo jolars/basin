@@ -1,9 +1,8 @@
 //! Component-wise clamp into a box `[lower, upper]`.
 //!
-//! First-class projection primitive for box-constrained solvers
-//! ([`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent);
-//! shared with the projected-gradient termination metric
-//! [`ProjectedGradientTolerance`](crate::core::termination::ProjectedGradientTolerance)).
+//! Projection primitive for box-constrained solvers such as
+//! [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent),
+//! also used by projected-gradient convergence checks.
 
 /// In-place component-wise `self[i] ← clamp(self[i], lower[i], upper[i])`.
 ///

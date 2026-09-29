@@ -4,19 +4,13 @@
 //! after initialization and between iterations; evaluation limits are not
 //! hard caps on work performed inside an iteration.
 
-// Keep the Basin 1.x compatibility bridge and shared check implementations local.
-#![allow(deprecated)]
-
 use super::math::Scalar;
 use super::problem::{EvalCounts, EvaluationKind};
 use super::state::{
     AcceptanceState, EvaluatedState, GradientState, ObjectiveIncumbentState,
     RawEvaluationState, State,
 };
-use super::termination::{
-    NoAcceptance, NoImprovement, TargetCost, TerminationCriterion,
-    TerminationReason,
-};
+use super::termination::TerminationReason;
 use web_time::{Duration, Instant};
 
 #[cfg(test)]
@@ -29,27 +23,17 @@ struct RawBudgets<S> {
     counts: fn(&S) -> &EvalCounts,
 }
 
-struct ObjectiveTarget<F: Scalar>(F);
-
-impl<S: ObjectiveIncumbentState<Float = F>, F: Scalar> TerminationCriterion<S>
-    for ObjectiveTarget<F>
-{
-    fn check(&mut self, state: &S) -> Option<TerminationReason> {
-        (state.incumbent_record()?.cost <= self.0)
-            .then_some(TerminationReason::TargetCost)
-    }
-}
-
 struct ObjectiveStall<F: Scalar> {
     patience: u64,
     min_delta: F,
     anchor: Option<(F, u64)>,
 }
 
-impl<S: ObjectiveIncumbentState<Float = F>, F: Scalar> TerminationCriterion<S>
-    for ObjectiveStall<F>
-{
-    fn check(&mut self, state: &S) -> Option<TerminationReason> {
+impl<F: Scalar> ObjectiveStall<F> {
+    fn check<S: ObjectiveIncumbentState<Float = F>>(
+        &mut self,
+        state: &S,
+    ) -> Option<TerminationReason> {
         let incumbent = state.incumbent_record()?;
         let improved_at = if self.min_delta == F::zero() {
             incumbent.iter
@@ -69,19 +53,31 @@ impl<S: ObjectiveIncumbentState<Float = F>, F: Scalar> TerminationCriterion<S>
         (state.iter().saturating_sub(improved_at) >= self.patience)
             .then_some(TerminationReason::NoImprovement)
     }
-
-    fn reset(&mut self) {
-        self.anchor = None;
-    }
 }
 
 enum Entry<S> {
-    Legacy(Box<dyn TerminationCriterion<S>>),
     Hook(Stop<S>),
     Factory {
         make: Box<dyn FnMut() -> Stop<S>>,
         current: Option<Stop<S>>,
     },
+}
+
+impl<S> Entry<S> {
+    fn reset(&mut self) {
+        if let Self::Factory { make, current } = self {
+            *current = Some(make());
+        }
+    }
+
+    fn check(&mut self, state: &S) -> Option<TerminationReason> {
+        match self {
+            Self::Hook(check) => check(state),
+            Self::Factory { make, current } => {
+                current.get_or_insert_with(make)(state)
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -107,9 +103,9 @@ pub struct RunControl<S> {
     raw: Option<RawBudgets<S>>,
     validate: Option<fn(&S)>,
     start: Option<Instant>,
-    target: Option<Box<dyn TerminationCriterion<S>>>,
-    improvement: Option<Box<dyn TerminationCriterion<S>>>,
-    acceptance: Option<Box<dyn TerminationCriterion<S>>>,
+    target: Option<Stop<S>>,
+    improvement: Option<Entry<S>>,
+    acceptance: Option<Stop<S>>,
     entries: Vec<Entry<S>>,
 }
 
@@ -232,7 +228,10 @@ impl<S> RunControl<S> {
         S: ObjectiveIncumbentState<Float = F>,
     {
         assert!(target.is_finite(), "target objective must be finite");
-        self.target = Some(Box::new(ObjectiveTarget(target)));
+        self.target = Some(Box::new(move |state| {
+            (state.incumbent_record()?.cost <= target)
+                .then_some(TerminationReason::TargetCost)
+        }));
         self
     }
 
@@ -265,11 +264,17 @@ impl<S> RunControl<S> {
             min_delta.is_finite() && min_delta >= F::zero(),
             "minimum improvement must be finite and nonnegative"
         );
-        self.improvement = Some(Box::new(ObjectiveStall {
-            patience,
-            min_delta,
-            anchor: None,
-        }));
+        self.improvement = Some(Entry::Factory {
+            make: Box::new(move || {
+                let mut stall = ObjectiveStall {
+                    patience,
+                    min_delta,
+                    anchor: None,
+                };
+                Box::new(move |state| stall.check(state))
+            }),
+            current: None,
+        });
         self
     }
 
@@ -285,7 +290,10 @@ impl<S> RunControl<S> {
         S: State<Float = F>,
     {
         assert!(target.is_finite(), "target cost must be finite");
-        self.target = Some(Box::new(TargetCost(target)));
+        self.target = Some(Box::new(move |state| {
+            (state.best_cost() <= target)
+                .then_some(TerminationReason::TargetCost)
+        }));
         self
     }
 
@@ -303,8 +311,38 @@ impl<S> RunControl<S> {
             min_delta.is_finite() && min_delta >= F::zero(),
             "minimum improvement must be finite and nonnegative"
         );
-        self.improvement =
-            Some(Box::new(NoImprovement::new(patience, min_delta)));
+        self.improvement = Some(Entry::Factory {
+            make: Box::new(move || {
+                let mut anchor = None;
+                let mut stalled = 0;
+                Box::new(move |state: &S| {
+                    let current = state.best_cost();
+                    if min_delta == F::zero()
+                        && anchor.is_none()
+                        && current.is_finite()
+                    {
+                        anchor = Some(current);
+                        stalled =
+                            state.iter().saturating_sub(state.best_iter());
+                        return (stalled >= patience)
+                            .then_some(TerminationReason::NoImprovement);
+                    }
+                    let improved = current.is_finite()
+                        && anchor
+                            .is_none_or(|value| current < value - min_delta);
+                    if improved {
+                        anchor = Some(current);
+                        stalled = 0;
+                        None
+                    } else {
+                        stalled += 1;
+                        (stalled >= patience)
+                            .then_some(TerminationReason::NoImprovement)
+                    }
+                })
+            }),
+            current: None,
+        });
         self
     }
 
@@ -314,7 +352,12 @@ impl<S> RunControl<S> {
     where
         S: AcceptanceState,
     {
-        self.acceptance = Some(Box::new(NoAcceptance::new(patience)));
+        assert!(patience > 0, "patience must be positive");
+        self.acceptance = Some(Box::new(move |state| {
+            (state.iter().saturating_sub(state.last_accepted_iter())
+                >= patience)
+                .then_some(TerminationReason::NoAcceptedMove)
+        }));
         self
     }
 
@@ -345,33 +388,10 @@ impl<S> RunControl<S> {
         self
     }
 
-    pub(crate) fn push_legacy(
-        &mut self,
-        check: Box<dyn TerminationCriterion<S>>,
-    ) {
-        self.entries.push(Entry::Legacy(check));
-    }
-
-    // Borrowed runs reuse controls. Owned executors retain incoming legacy
-    // criterion history, matching the original Basin 1.x contract.
     pub(crate) fn reset(&mut self) {
         self.start = None;
-        for check in [
-            &mut self.target,
-            &mut self.improvement,
-            &mut self.acceptance,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            check.reset();
-        }
-        for entry in &mut self.entries {
-            match entry {
-                Entry::Legacy(check) => check.reset(),
-                Entry::Factory { make, current } => *current = Some(make()),
-                Entry::Hook(_) => {}
-            }
+        for entry in self.improvement.iter_mut().chain(&mut self.entries) {
+            entry.reset();
         }
     }
 
@@ -427,28 +447,26 @@ impl<S> RunControl<S> {
                 return Some(TerminationReason::MaxTime);
             }
         }
-        for check in [
-            &mut self.target,
-            &mut self.improvement,
-            &mut self.acceptance,
-        ]
-        .into_iter()
-        .flatten()
+        if let Some(reason) =
+            self.target.as_mut().and_then(|check| check(state))
         {
-            if let Some(reason) = check.check(state) {
-                return Some(reason);
-            }
+            return Some(reason);
+        }
+        if let Some(reason) = self
+            .improvement
+            .as_mut()
+            .and_then(|check| check.check(state))
+        {
+            return Some(reason);
+        }
+        if let Some(reason) =
+            self.acceptance.as_mut().and_then(|check| check(state))
+        {
+            return Some(reason);
         }
         for entry in &mut self.entries {
-            let reason = match entry {
-                Entry::Legacy(check) => check.check(state),
-                Entry::Hook(check) => check(state),
-                Entry::Factory { make, current } => {
-                    current.get_or_insert_with(make)(state)
-                }
-            };
-            if reason.is_some() {
-                return reason;
+            if let Some(reason) = entry.check(state) {
+                return Some(reason);
             }
         }
         None
@@ -602,8 +620,12 @@ where
 {
     let mut control = RunControl::new().max_iter(max_iter);
     if let Some(tol) = tolerance {
-        control
-            .push_legacy(Box::new(super::termination::GradientTolerance(tol)));
+        control = control.stop_when(move |state: &S| {
+            use crate::NormSquared;
+            let norm_squared = state.gradient()?.norm_squared();
+            (norm_squared <= tol * tol)
+                .then_some(TerminationReason::GradientTolerance)
+        });
     }
     control
 }

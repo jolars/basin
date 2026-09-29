@@ -168,8 +168,7 @@ pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     /// reference, which doesn't terminate on the projected gradient).
     /// Stored on the shared struct; the field is unused (and the
     /// builder unavailable) in [`Unbounded`] mode, where users wire
-    /// the framework-level
-    /// [`GradientTolerance`](crate::core::termination::GradientTolerance)
+    /// [`with_absolute_gradient_tolerance`](Lbfgs::with_absolute_gradient_tolerance)
     /// instead.
     tol_pg: Option<F>,
     tol_pg_reason: TerminationReason,
@@ -241,8 +240,7 @@ impl Lbfgs<Unbounded, MoreThuente> {
     /// Unconstrained L-BFGS with Moré–Thuente line search and the same
     /// curvature-skip and history defaults as the bounded path. The
     /// `tol_pg` field is unused in this mode; terminate via the
-    /// framework-level
-    /// [`GradientTolerance`](crate::core::termination::GradientTolerance).
+    /// solver's `with_absolute_gradient_tolerance` setting.
     pub fn new() -> Self {
         Self {
             line_search: MoreThuente::new(),

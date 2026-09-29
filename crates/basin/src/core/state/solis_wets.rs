@@ -109,9 +109,8 @@ where
 
 impl<V, F: Scalar> SolisWetsState<V, F> {
     /// The current step size `ρ` (per-coordinate standard deviation of
-    /// the sampling noise). Same value the
-    /// [`RhoTolerance`](crate::core::termination::RhoTolerance)
-    /// criterion reads through [`RhoState`].
+    /// the sampling noise). Step-size convergence checks read the same value
+    /// through [`RhoState`].
     pub fn rho(&self) -> F {
         self.rho
     }

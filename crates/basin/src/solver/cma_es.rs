@@ -151,7 +151,7 @@ pub struct CmaEs<V, M, F = f64> {
     lambda_override: Option<usize>,
     /// Derived CMA constants, computed once at [`Solver::init`] from the
     /// state's dimension. Cached on the solver (config-only) rather than
-    /// in the state; persists across `run_loop` re-entry so a resumed
+    /// in the state; persists across `run_loop_with_control` re-entry so a resumed
     /// solver skips recomputation.
     constants: Option<CmaConstants<F>>,
     rng: ChaCha8Rng,
@@ -514,7 +514,7 @@ where
         mut state: CmaEsState<V, M, F>,
     ) -> Result<CmaEsState<V, M, F>, Self::Error> {
         // Compute-once constants guard (cached on the solver: config
-        // only). A resumed solver re-entered via `run_loop` already has
+        // only). A resumed solver re-entered via `run_loop_with_control` already has
         // them, so a chain-paused CmaEs is not rebuilt on every entry.
         if self.constants.is_none() {
             let n = state.m.vec_len();
@@ -753,19 +753,5 @@ where
             self.distribution_tolerance =
                 Some(F::from_f64(1e-12).unwrap() * state.sigma());
         }
-    }
-
-    /// The TolX test at `1e-12 ·` the segment's starting σ (Hansen's
-    /// default, made per-segment-relative so it is resume-safe).
-    #[allow(deprecated)]
-    fn segment_criteria(
-        &self,
-        state: &Self::State,
-    ) -> Vec<Box<dyn crate::core::termination::TerminationCriterion<Self::State>>>
-    {
-        let tol_x = F::from_f64(1e-12).unwrap() * state.sigma();
-        vec![Box::new(crate::core::termination::CmaEsTolerance::new(
-            tol_x,
-        ))]
     }
 }

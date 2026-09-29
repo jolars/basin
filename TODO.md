@@ -351,7 +351,7 @@ desired backend features.
   require only the math capabilities each solver needs. Define migration
   from the 1.x API.
 
-- [ ] Remove the deprecated `TerminationCriterion` facility, all shipped
+- [x] Remove the deprecated `TerminationCriterion` facility, all shipped
   criterion types and re-exports, `Executor::terminate_on`,
   `InnerExecutor::terminate_on`, composed `inner_terminate_on` methods,
   `run_loop`, and `ResumableInner::segment_criteria`. Preserve stopping

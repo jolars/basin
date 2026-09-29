@@ -4,7 +4,7 @@
 //! [`Mads`](crate::solver::Mads). It carries the current incumbent (the best
 //! feasible point found so far, since MADS only ever moves to an improving mesh
 //! point) and the current **poll size** `Δᵖ`, which the natural-convergence
-//! criterion [`MeshTolerance`](crate::core::termination::MeshTolerance) binds on.
+//! poll-size convergence check reads.
 //!
 //! The mesh/poll bookkeeping (the integer mesh index `ℓ`, the Halton-index
 //! schedule, the incumbent in flat scratch) lives on the **solver** struct
@@ -40,7 +40,7 @@ pub struct MadsState<V, F = f64> {
     /// Current poll size `Δᵖ`; `+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it. Shrinks
     /// (≈ halving on unsuccessful iterations) toward the configured floor.
-    /// [`MeshTolerance`](crate::core::termination::MeshTolerance) reads it.
+    /// The solver reads it for poll-size convergence.
     pub(crate) poll_size: F,
     /// Current mesh index `ℓ` (OrthoMADS eq. (1)): `ℓ−1` on success, `ℓ+1` on
     /// failure. `0` before init.

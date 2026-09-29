@@ -172,8 +172,7 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     `require_evaluated_state` publication validation. Existing builders retain
     their 1.x behavior. Inner-executor serialization rejects capability
     controls instead of discarding them; legacy budget layouts remain stable.
-  - `termination.rs`: stopping reasons and the deprecated Basin 1.x criterion
-    compatibility layer, scheduled for removal in Basin 2.0.
+  - `termination.rs`: stopping reasons reported by solvers and execution controls.
   - `constraint.rs` (+ `constraint/`), `barrier.rs`, `augmented_lagrangian.rs`:
     problem-side constraint traits and explicit adapters, including
     `FoldedConstraints` for COBYLA's full constraint form (tenet 4).

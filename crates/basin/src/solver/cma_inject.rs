@@ -11,8 +11,7 @@ use crate::core::state::{
     BasicSimplexState, CmaEsState, CountsMirror, IntoInitialSimplex,
     LbfgsState, NllsState, State,
 };
-#[allow(deprecated)]
-use crate::core::termination::{TerminationCriterion, TerminationReason};
+use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
 use crate::solver::lbfgs::{Bounded, Lbfgs};
 use crate::solver::levenberg_marquardt::LevenbergMarquardt;
@@ -388,33 +387,6 @@ where
         Self {
             cma,
             inner: inner.max_iter(n),
-            k,
-            c_y_override,
-        }
-    }
-
-    /// Register a termination criterion on the inner loop.
-    /// Criteria are reused across every outer iteration's inner run, but
-    /// each is reset at the start of every run, so stateful criteria,
-    /// including [`max_time`](crate::Executor::max_time), are safe.
-    /// See CONTRIBUTING.md "Solver composition" rule 2.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
-    )]
-    pub fn inner_terminate_on<C>(self, criterion: C) -> Self
-    where
-        C: TerminationCriterion<I::State> + 'static,
-    {
-        let Self {
-            cma,
-            inner,
-            k,
-            c_y_override,
-        } = self;
-        Self {
-            cma,
-            inner: inner.terminate_on(criterion),
             k,
             c_y_override,
         }

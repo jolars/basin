@@ -46,7 +46,7 @@
 //! solver, where it also drives the eq-7.6 schedule); the solver signals it via
 //! [`TerminationReason::SolverConverged`]. Add
 //! [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the evaluation budget, or
-//! [`RhoTolerance`](crate::RhoTolerance) to stop early at a coarser `ρ`.
+//! [`with_absolute_radius_tolerance`](crate::Newuoa::with_absolute_radius_tolerance) to stop early at a coarser `ρ`.
 //!
 //! # Backends
 //!

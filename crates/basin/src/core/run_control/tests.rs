@@ -183,3 +183,70 @@ fn invalid_objective_control_settings_are_rejected() {
         .is_err()
     );
 }
+
+#[test]
+fn reused_controls_reset_clocks_and_stall_anchors() {
+    let counts = EvalCounts::default();
+    for objective in [false, true] {
+        let mut control = RunControl::new().max_time(Duration::from_secs(60));
+        control = if objective {
+            control.no_objective_improvement(2, 1.0)
+        } else {
+            control.no_improvement(2, 1.0)
+        };
+        let mut state = point(1.0);
+        assert_eq!(control.check(&state, &counts), None);
+        for _ in 0..2 {
+            state.increment_iter();
+            control.check(&state, &counts);
+        }
+        assert_eq!(
+            control.check(&state, &counts),
+            Some(TerminationReason::NoImprovement)
+        );
+        control.start = Some(Instant::now() - Duration::from_secs(120));
+        assert_eq!(
+            control.check(&state, &counts),
+            Some(TerminationReason::MaxTime)
+        );
+        control.reset();
+        assert_eq!(control.start, None);
+        let fresh = point(100.0);
+        assert_eq!(control.check(&fresh, &counts), None);
+    }
+}
+
+#[test]
+fn direct_hooks_keep_captures_while_factories_reset_history() {
+    use std::{cell::RefCell, rc::Rc};
+    let direct = Rc::new(RefCell::new(Vec::new()));
+    let factory = Rc::new(RefCell::new(Vec::new()));
+    let mut control = RunControl::new()
+        .stop_when({
+            let direct = Rc::clone(&direct);
+            let mut calls = 0;
+            move |_| {
+                calls += 1;
+                direct.borrow_mut().push(calls);
+                None
+            }
+        })
+        .stop_when_factory({
+            let factory = Rc::clone(&factory);
+            move || {
+                let factory = Rc::clone(&factory);
+                let mut calls = 0;
+                move |_| {
+                    calls += 1;
+                    factory.borrow_mut().push(calls);
+                    None
+                }
+            }
+        });
+    for _ in 0..2 {
+        control.reset();
+        assert_eq!(control.check(&point(1.0), &EvalCounts::default()), None);
+    }
+    assert_eq!(*direct.borrow(), [1, 2]);
+    assert_eq!(*factory.borrow(), [1, 1]);
+}

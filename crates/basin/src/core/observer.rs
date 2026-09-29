@@ -3,11 +3,11 @@
 //! An [`Observe`] implementation watches the run as it happens (logging,
 //! progress reporting, recording a trajectory, streaming iterates to a UI)
 //! without influencing it. Observers do **not** decide whether to stop; that
-//! is the job of [`TerminationCriterion`](crate::core::termination::TerminationCriterion).
+//! is the job of [`stop_when`](crate::Executor::stop_when).
 //! The two extension points sit side-by-side on
 //! [`Executor`](crate::core::executor::Executor):
 //!
-//! - [`TerminationCriterion`](crate::core::termination::TerminationCriterion):
+//! - [`stop_when`](crate::Executor::stop_when):
 //!   returns `Option<TerminationReason>`; framework consumes the result and
 //!   stops the run if `Some`.
 //! - [`Observe`]: returns `()`; the executor ignores any side effects on the
@@ -17,7 +17,7 @@
 //!   [`CancellationToken`](crate::core::executor::CancellationToken); the
 //!   executor observes it before the next iteration.
 //!
-//! Like termination criteria, observers bind on the minimum
+//! Like stopping hooks, observers bind on the minimum
 //! [`State`](crate::core::state::State) shape they need (tenet 3): a logger
 //! that just wants `iter`/`cost` impls `Observe<S: State>`; a gradient-norm
 //! observer impls `Observe<S: GradientState>` and is rejected at compile time

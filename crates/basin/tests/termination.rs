@@ -1,12 +1,7 @@
-// Compatibility coverage for the Basin 1.x criterion API.
-#![allow(deprecated)]
 use basin::{
-    Backtracking, BasicSimplexState, BasicState, CostFunction, CostTolerance,
-    Executor, Gradient, GradientDescent, GradientState, GradientTolerance,
-    MaxCostEvals, MaxGradientEvals, MaxIter, MaxTime, NelderMead,
-    NoImprovement, ParamTolerance, Problem, RelativeCostTolerance,
-    RelativeGradientTolerance, RelativeParamTolerance, Solver, State,
-    TargetCost, TerminationCriterion, TerminationReason,
+    Backtracking, BasicSimplexState, BasicState, CostFunction, Executor,
+    Gradient, GradientDescent, GradientState, NelderMead, Problem, Solver,
+    State, TerminationReason,
 };
 use std::time::Duration;
 
@@ -72,10 +67,9 @@ fn gradient_tolerance_fires_at_iter_zero_when_starting_at_optimum() {
     // doing any iterations.
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.1),
+        GradientDescent::new(0.1).with_absolute_gradient_tolerance(1e-8),
         BasicState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(GradientTolerance(1e-8))
     .run()
     .unwrap();
 
@@ -87,11 +81,10 @@ fn gradient_tolerance_fires_at_iter_zero_when_starting_at_optimum() {
 fn gradient_tolerance_fires_after_convergence() {
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.5),
+        GradientDescent::new(0.5).with_absolute_gradient_tolerance(1e-6),
         BasicState::new(vec![1.0, -1.0, 0.5]),
     )
     .max_iter(1_000)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 
@@ -112,11 +105,10 @@ fn relative_gradient_tolerance_fires_after_convergence() {
     // 1e-3, i.e. around iter 10.
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.5),
+        GradientDescent::new(0.5).with_relative_gradient_tolerance(1e-3),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .terminate_on(RelativeGradientTolerance::new(1e-3))
     .run()
     .unwrap();
 
@@ -134,10 +126,9 @@ fn relative_gradient_tolerance_fires_at_iter_zero_when_starting_at_optimum() {
     // (same edge as the absolute GradientTolerance).
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.1),
+        GradientDescent::new(0.1).with_relative_gradient_tolerance(1e-6),
         BasicState::new(vec![0.0, 0.0]),
     )
-    .terminate_on(RelativeGradientTolerance::new(1e-6))
     .run()
     .unwrap();
 
@@ -155,11 +146,10 @@ fn relative_gradient_tolerance_is_scale_invariant() {
     let run_from = |x0: f64| {
         Executor::new(
             Quadratic,
-            GradientDescent::new(0.5),
+            GradientDescent::new(0.5).with_relative_gradient_tolerance(1e-3),
             BasicState::new(vec![x0, x0]),
         )
         .max_iter(1_000)
-        .terminate_on(RelativeGradientTolerance::new(1e-3))
         .run()
         .unwrap()
     };
@@ -192,14 +182,14 @@ fn max_iter_field_default_is_one_thousand() {
 }
 
 #[test]
-fn explicit_max_iter_criterion_works_alongside_default() {
-    // `MaxIter(5)` via `terminate_on` fires before the default 1000.
+fn explicit_max_iter_replaces_default() {
+    // The explicit limit replaces the default of 1000 iterations.
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001),
         BasicState::new(vec![10.0, 10.0]),
     )
-    .terminate_on(MaxIter(5))
+    .max_iter(5)
     .run()
     .unwrap();
 
@@ -211,11 +201,10 @@ fn explicit_max_iter_criterion_works_alongside_default() {
 fn param_tolerance_fires_when_steps_become_small() {
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.5),
+        GradientDescent::new(0.5).with_absolute_step_tolerance(1e-8),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .terminate_on(ParamTolerance::new(1e-8))
     .run()
     .unwrap();
 
@@ -226,11 +215,10 @@ fn param_tolerance_fires_when_steps_become_small() {
 fn cost_tolerance_fires_when_cost_stagnates() {
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.5),
+        GradientDescent::new(0.5).with_absolute_cost_change_tolerance(1e-12),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .terminate_on(CostTolerance::new(1e-12))
     .run()
     .unwrap();
 
@@ -246,11 +234,10 @@ fn relative_param_tolerance_fires_when_relative_step_small() {
     // x → 0).
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.001),
+        GradientDescent::new(0.001).with_relative_step_tolerance(1e-2),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .terminate_on(RelativeParamTolerance::new(1e-2))
     .run()
     .unwrap();
 
@@ -264,11 +251,10 @@ fn relative_cost_tolerance_fires_when_relative_reduction_small() {
     // quadratic; α = 0.001 gives ≈ 2e-3 < 1e-2, so the criterion fires.
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.001),
+        GradientDescent::new(0.001).with_relative_cost_change_tolerance(1e-2),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .terminate_on(RelativeCostTolerance::new(1e-2))
     .run()
     .unwrap();
 
@@ -285,7 +271,7 @@ fn target_cost_fires_at_iter_zero_when_start_is_below_target() {
         GradientDescent::new(0.1),
         BasicState::new(vec![0.5, 0.5]),
     )
-    .terminate_on(TargetCost(1.0))
+    .target_cost(1.0)
     .run()
     .unwrap();
 
@@ -304,7 +290,7 @@ fn target_cost_fires_when_cost_drops_to_target() {
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .terminate_on(TargetCost(1e-3))
+    .target_cost(1e-3)
     .run()
     .unwrap();
 
@@ -322,8 +308,8 @@ fn target_cost_does_not_fire_when_target_unreachable() {
         GradientDescent::new(0.1),
         BasicState::new(vec![1.0, 1.0]),
     )
-    .terminate_on(MaxIter(10))
-    .terminate_on(TargetCost(-1.0))
+    .max_iter(10)
+    .target_cost(-1.0)
     .run()
     .unwrap();
 
@@ -343,7 +329,7 @@ fn no_improvement_fires_after_patience_stalled_iters() {
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(100)
-    .terminate_on(NoImprovement::new(3, 10.0))
+    .no_improvement(3, 10.0)
     .run()
     .unwrap();
 
@@ -361,8 +347,8 @@ fn no_improvement_does_not_fire_under_monotone_decrease() {
         GradientDescent::new(0.5),
         BasicState::new(vec![1.0, 1.0]),
     )
-    .terminate_on(MaxIter(20))
-    .terminate_on(NoImprovement::new(5, 0.0))
+    .max_iter(20)
+    .no_improvement(5, 0.0)
     .run()
     .unwrap();
 
@@ -385,7 +371,7 @@ fn no_improvement_resets_counter_on_real_improvement() {
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(100)
-    .terminate_on(NoImprovement::new(3, 0.1))
+    .no_improvement(3, 0.1)
     .run()
     .unwrap();
 
@@ -403,11 +389,11 @@ fn relative_cost_tolerance_is_scale_invariant() {
     let run_from = |x0: f64| {
         Executor::new(
             Quadratic,
-            GradientDescent::new(0.001),
+            GradientDescent::new(0.001)
+                .with_relative_cost_change_tolerance(1e-2),
             BasicState::new(vec![x0, x0]),
         )
         .max_iter(1_000)
-        .terminate_on(RelativeCostTolerance::new(1e-2))
         .run()
         .unwrap()
     };
@@ -425,16 +411,15 @@ fn relative_cost_tolerance_is_scale_invariant() {
 }
 
 #[test]
-fn first_criterion_to_fire_wins() {
+fn solver_step_tolerance_precedes_iteration_budget() {
     // ParamTolerance with a huge tolerance fires immediately on iter 1
     // (any movement < 100). MaxIter(1000) would otherwise fire later.
     let result = Executor::new(
         Quadratic,
-        GradientDescent::new(0.1),
+        GradientDescent::new(0.1).with_absolute_step_tolerance(100.0),
         BasicState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .terminate_on(ParamTolerance::new(100.0))
     .run()
     .unwrap();
 
@@ -451,7 +436,7 @@ fn max_time_eventually_fires() {
         BasicState::new(vec![1e6, 1e6, 1e6]),
     )
     .max_iter(u64::MAX)
-    .terminate_on(MaxTime::new(Duration::from_millis(50)))
+    .max_time(Duration::from_millis(50))
     .run()
     .unwrap();
 
@@ -540,15 +525,6 @@ fn solver_can_signal_termination_mid_iter() {
     assert_eq!(result.iter(), 1);
 }
 
-/// Verify that a custom criterion plays correctly through `Box<dyn>`.
-struct StopAt(u64);
-
-impl<S: State> TerminationCriterion<S> for StopAt {
-    fn check(&mut self, state: &S) -> Option<TerminationReason> {
-        (state.iter() == self.0).then_some(TerminationReason::SolverConverged)
-    }
-}
-
 #[test]
 fn cost_evals_matches_iter_for_constant_step_gradient_descent() {
     // Constant step + cost+gradient per iter ⇒ exactly 1 cost eval per
@@ -558,7 +534,7 @@ fn cost_evals_matches_iter_for_constant_step_gradient_descent() {
         GradientDescent::new(0.001),
         BasicState::new(vec![10.0, 10.0]),
     )
-    .terminate_on(MaxIter(20))
+    .max_iter(20)
     .run()
     .unwrap();
 
@@ -578,7 +554,7 @@ fn cost_evals_exceeds_iter_with_backtracking() {
         ),
         BasicState::new(vec![1.0, 1.0]),
     )
-    .terminate_on(MaxIter(10))
+    .max_iter(10)
     .run()
     .unwrap();
 
@@ -600,7 +576,7 @@ fn cost_evals_exceeds_iter_for_nelder_mead_shrinks() {
         NelderMead::new(),
         BasicSimplexState::new(vec![2.0, -3.0]),
     )
-    .terminate_on(MaxIter(50))
+    .max_iter(50)
     .run()
     .unwrap();
 
@@ -615,7 +591,7 @@ fn max_gradient_evals_fires_before_max_iter() {
         BasicState::new(vec![10.0, 10.0]),
     )
     .max_iter(10_000)
-    .terminate_on(MaxGradientEvals(5))
+    .max_gradient_evals(5)
     .run()
     .unwrap();
 
@@ -631,7 +607,7 @@ fn max_cost_evals_fires_before_max_iter() {
         BasicSimplexState::new(vec![5.0, -2.0, 4.0]),
     )
     .max_iter(10_000)
-    .terminate_on(MaxCostEvals(25))
+    .max_cost_evals(25)
     .run()
     .unwrap();
 
@@ -644,17 +620,19 @@ fn max_cost_evals_fires_before_max_iter() {
 }
 
 #[test]
-fn custom_termination_criterion() {
+fn custom_stop_hook() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
         BasicState::new(vec![5.0, 5.0]),
     )
     .max_iter(1_000)
-    .terminate_on(StopAt(7))
+    .stop_when(|state| {
+        (state.iter() == 7).then_some(TerminationReason::UserRequested)
+    })
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationReason::UserRequested);
     assert_eq!(result.iter(), 7);
 }

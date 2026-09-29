@@ -4,9 +4,7 @@
 //! **and** the search distribution that defines them: the mean `m`,
 //! step-size `σ`, covariance `C`, its eigenpair `B`/`D` (with `D⁻¹`),
 //! and the evolution paths `p_σ`/`p_c`. Holding the distribution here lets
-//! [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance) bind on
-//! it like [`SimplexTolerance`](crate::core::termination::SimplexTolerance)
-//! binds on a simplex, and lets both [`CmaEs`](crate::solver::CmaEs) and
+//! distribution-size convergence checks inspect it, and lets both [`CmaEs`](crate::solver::CmaEs) and
 //! [`BoundedCmaEs`](crate::solver::BoundedCmaEs) be configuration-only.
 //!
 //! # Result semantics: `xfavorite` vs `xbest`

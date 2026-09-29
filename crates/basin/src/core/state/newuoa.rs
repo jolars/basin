@@ -4,7 +4,7 @@
 //! [`Newuoa`](crate::solver::Newuoa). It carries the current iterate (the best
 //! point found so far, since NEWUOA reports the least-`F` point) and the current
 //! trust-region radius `ρ`, which the natural-convergence criterion
-//! [`RhoTolerance`](crate::core::termination::RhoTolerance) binds on.
+//! radius convergence checks read.
 //!
 //! The quadratic surrogate, the factored inverse-KKT matrix `H`, and the ρ/Δ
 //! schedule live on the **solver** struct (`Newuoa`'s `NewuoaWork`), not here:
@@ -40,7 +40,7 @@ pub struct NewuoaState<V, F = f64> {
     pub(crate) cost: Option<F>,
     /// Current trust-region radius `ρ`; `+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from
-    /// `ρ_beg`. [`RhoTolerance`](crate::core::termination::RhoTolerance) reads it.
+    /// `ρ_beg`. The solver reads it for radius convergence.
     pub(crate) rho: F,
 
     // --- best evaluated point (coincides with the current iterate) ---

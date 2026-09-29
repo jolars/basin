@@ -211,8 +211,9 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///      RNG.
 ///    - Otherwise: take the saved pair out of the chain slot and
 ///      [`prepare_resume`](ResumableInner::prepare_resume) it.
-/// 5. **Drive the inner.** `run_loop(problem, state, &mut ls,
-///    [MaxCostEvals(ls_intensity)] + segment_criteria, u64::MAX)`. The
+/// 5. **Drive the inner.** `run_loop_with_control(problem, state, &mut ls,
+///    &mut control)` uses a per-segment `max_cost_evals(ls_intensity)`
+///    budget and the settings supplied by [`ResumableInner::configure_segment`]. The
 ///    operator's [`Solver::init`] is resume-idempotent (the
 ///    [`ResumableInner`] contract), so resumed runs keep their
 ///    evolution state across calls.
@@ -652,14 +653,14 @@ where
         // -- Phase 3: resume or construct the inner operator. --
         let (mut ls, inner_state) = match state.chains[c_ls].take() {
             Some((ls, mut s)) => {
-                // Local budget reset. `run_loop` already snapshots the
+                // Local budget reset. `run_loop_with_control` already snapshots the
                 // wrapper at entry so the inner state's `cost_evals`
                 // measures per-segment work, but the iteration counter
                 // is the inner's responsibility and the `MaxCostEvals`
                 // criterion in Phase 4 reads `state.cost_evals()`,
                 // which is the wrapper-mirrored per-run value.
                 // `prepare_resume` resets `iter` so the chain restarts
-                // at iter 0; the `run_loop` baseline takes care of the
+                // at iter 0; the `run_loop_with_control` baseline takes care of the
                 // eval counter.
                 ls.prepare_resume(&mut s);
                 (ls, s)

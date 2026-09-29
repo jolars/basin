@@ -14,8 +14,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{BasicState, CountsMirror, State};
-#[allow(deprecated)]
-use crate::core::termination::{TerminationCriterion, TerminationReason};
+use crate::core::termination::TerminationReason;
 use core::ops::{Index, IndexMut};
 
 /// Perturbation strategy for [`BasinHopping`]: given the current iterate,
@@ -481,22 +480,6 @@ where
     /// marks a candidate unsuccessful.
     pub fn with_inner_max_iter(mut self, n: u64) -> Self {
         self.inner = self.inner.max_iter(n);
-        self
-    }
-
-    /// Register a termination criterion on the inner local solver. Reused
-    /// across every hop and reset at the start of each inner run, so
-    /// stateful criteria are safe (CONTRIBUTING.md "Solver composition"
-    /// rule 2).
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
-    )]
-    pub fn inner_terminate_on<C>(mut self, criterion: C) -> Self
-    where
-        C: TerminationCriterion<<I as InitialState<V>>::State> + 'static,
-    {
-        self.inner = self.inner.terminate_on(criterion);
         self
     }
 

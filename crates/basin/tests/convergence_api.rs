@@ -633,37 +633,3 @@ fn serialized_checkpoint_preserves_observed_convergence_history() {
     assert_eq!(direct.param(), decoded.param());
     assert_eq!(direct.cost_evals(), decoded.cost_evals());
 }
-
-#[test]
-#[allow(deprecated)] // Preserve the historical owned-versus-borrowed reset contract.
-fn legacy_criterion_history_is_preserved_by_owned_executors() {
-    use basin::{InnerExecutor, Problem, TerminationCriterion};
-    struct AlreadyChecked {
-        ready: bool,
-    }
-    impl TerminationCriterion<BasicState<Vec<f64>>> for AlreadyChecked {
-        fn check(
-            &mut self,
-            _: &BasicState<Vec<f64>>,
-        ) -> Option<TerminationReason> {
-            self.ready.then_some(TerminationReason::UserRequested)
-        }
-        fn reset(&mut self) {
-            self.ready = false;
-        }
-    }
-    let owned =
-        Executor::from_start(Sphere, GradientDescent::new(0.1), vec![1.0])
-            .max_iter(1)
-            .terminate_on(AlreadyChecked { ready: true })
-            .run()
-            .unwrap();
-    assert_eq!(owned.reason, TerminationReason::UserRequested);
-    assert_eq!(owned.iter(), 0);
-    let borrowed = InnerExecutor::new(GradientDescent::new(0.1))
-        .max_iter(1)
-        .terminate_on(AlreadyChecked { ready: true })
-        .run(&mut Problem::new(Sphere), BasicState::new(vec![1.0]))
-        .unwrap();
-    assert_eq!(borrowed.reason, TerminationReason::MaxIter);
-}

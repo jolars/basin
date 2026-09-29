@@ -13,10 +13,9 @@ use crate::core::state::{CountsMirror, GradientState, State};
 /// It is the gradient-carrying sibling of
 /// [`ScalarState`](crate::core::state::ScalarState): same scalar single-iterate
 /// shape, but it *does* impl [`GradientState`] (its gradient is the scalar
-/// `f'(x)`), so first-order termination criteria such as
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) work on a
-/// 1D solver: the natural "stop when `|f'(x)| ≤ tol`" test. A scalar gradient
-/// satisfies the criteria's norm bounds directly (`f64::norm_squared()` is
+/// `f'(x)`), so gradient-norm convergence checks work on a 1D solver: the
+/// natural "stop when `|f'(x)| ≤ tol`" test. A scalar gradient
+/// satisfies the checks' norm bounds directly (`f64::norm_squared()` is
 /// `f' · f'`).
 ///
 /// [`best_param`](State::best_param) tracks the lowest-cost probe, which for a

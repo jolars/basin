@@ -18,7 +18,7 @@ use crate::core::termination::TerminationReason;
 /// faster and enables a natural stopping test. It runs on
 /// [`ScalarGradientState`], which carries the scalar `f'(x)` and *does* impl
 /// [`GradientState`](crate::core::state::GradientState), so
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance) ("stop
+/// [`with_absolute_gradient_tolerance`](crate::BrentDerivative::with_absolute_gradient_tolerance) ("stop
 /// when `|f'(x)| ≤ tol`") works here, unlike on the derivative-free
 /// [`Brent`](crate::solver::Brent)/[`GoldenSection`](crate::solver::GoldenSection).
 ///

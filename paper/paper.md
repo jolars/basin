@@ -134,7 +134,6 @@ iteration, stopping criteria, and error handling.
 ```rust
 use basin::{
     BasicState, CostFunction, Executor, Gradient, GradientDescent,
-    GradientTolerance,
 };
 use std::convert::Infallible;
 
@@ -164,11 +163,10 @@ impl Gradient for Rosenbrock {
 fn main() {
     let result = Executor::new(
         Rosenbrock,
-        GradientDescent::new(1e-3),
+        GradientDescent::new(1e-3).with_absolute_gradient_tolerance(1e-6),
         BasicState::new(vec![-1.2, 1.0]),
     )
     .max_iter(50_000)
-    .terminate_on(GradientTolerance(1e-6))
     .run()
     .unwrap();
 }

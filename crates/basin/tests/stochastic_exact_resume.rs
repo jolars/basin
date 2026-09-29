@@ -363,16 +363,14 @@ fn basin_hopping_resume_is_bit_identical() {
 }
 
 #[test]
-#[allow(deprecated)] // Verify that legacy criteria cannot disappear from a checkpoint.
-fn basin_hopping_checkpoint_rejects_erased_inner_criteria() {
-    use basin::SimplexTolerance;
-    let path = checkpoint_path("basin-hopping", "inner-criterion");
+fn basin_hopping_checkpoint_rejects_inner_closures() {
+    let path = checkpoint_path("basin-hopping", "inner-hook");
     remove_checkpoint(&path);
     let writer = ExactCheckpointWriter::new(&path);
     let status = writer.status();
     let solver = BasinHopping::new(NelderMead::adaptive(), 7)
         .with_inner_max_iter(12)
-        .inner_terminate_on(SimplexTolerance::new(1e-8, 1e-8));
+        .inner_stop_when_factory(|| |_| None);
 
     Executor::new(Landscape::new(2), solver, BasicState::new(vec![2.0, -2.0]))
         .max_iter(2)

@@ -4,9 +4,6 @@
 //! vector operations or iterate history. Its fixed slots replace settings of
 //! the same kind. No user-defined convergence policy is required.
 
-// Keep the Basin 1.x compatibility bridge and shared check implementations local.
-#![allow(deprecated)]
-
 pub mod native;
 pub use native::{NativeConvergenceDiagnostics, NativeConvergenceTest};
 
@@ -16,7 +13,7 @@ use super::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd};
 use super::problem::Problem;
 use super::solver::Solver;
 use super::state::{GradientState, SimplexState, State};
-use super::termination::*;
+use super::termination::TerminationReason;
 
 /// A solver carrying fixed, optional convergence checks.
 ///
@@ -137,13 +134,20 @@ impl<P, S> Check<P, S> for () {
     }
 }
 
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct RelativeGradientCheck<F: Scalar> {
+    tol: F,
+    initial_norm_squared: Option<F>,
+}
+
 /// Fixed gradient-norm settings; constructed by solver setters.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GradientChecks<F: Scalar = f64> {
-    absolute: Option<GradientTolerance<F>>,
-    relative: Option<RelativeGradientTolerance<F>>,
+    absolute: Option<F>,
+    relative: Option<RelativeGradientCheck<F>>,
 }
 
 impl<F: Scalar> From<()> for GradientChecks<F> {
@@ -163,7 +167,7 @@ where
 {
     fn reset(&mut self) {
         if let Some(c) = &mut self.relative {
-            <RelativeGradientTolerance<F> as TerminationCriterion<S>>::reset(c);
+            c.initial_norm_squared = None;
         }
     }
     fn check(
@@ -171,13 +175,18 @@ where
         _: &Problem<P>,
         state: &S,
     ) -> Option<TerminationReason> {
-        if !state.gradient()?.norm_squared().is_finite() {
+        let norm_squared = state.gradient()?.norm_squared();
+        if !norm_squared.is_finite() {
             return None;
         }
-        self.absolute
-            .as_mut()
-            .and_then(|c| c.check(state))
-            .or_else(|| self.relative.as_mut().and_then(|c| c.check(state)))
+        if self.absolute.is_some_and(|tol| norm_squared <= tol * tol) {
+            return Some(TerminationReason::GradientTolerance);
+        }
+        let relative = self.relative.as_mut()?;
+        let initial =
+            *relative.initial_norm_squared.get_or_insert(norm_squared);
+        (norm_squared <= relative.tol * relative.tol * initial)
+            .then_some(TerminationReason::RelativeGradientTolerance)
     }
 }
 
@@ -293,13 +302,20 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct CostChangeCheck<F: Scalar> {
+    tol: F,
+    last: Option<F>,
+}
+
 /// Fixed objective-change settings; constructed by solver setters.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CostChecks<F: Scalar = f64> {
-    absolute: Option<CostTolerance<F>>,
-    relative: Option<RelativeCostTolerance<F>>,
+    absolute: Option<CostChangeCheck<F>>,
+    relative: Option<CostChangeCheck<F>>,
 }
 impl<F: Scalar> From<()> for CostChecks<F> {
     fn from(_: ()) -> Self {
@@ -317,10 +333,10 @@ where
 {
     fn reset(&mut self) {
         if let Some(c) = &mut self.absolute {
-            <CostTolerance<F> as TerminationCriterion<S>>::reset(c);
+            c.last = None;
         }
         if let Some(c) = &mut self.relative {
-            <RelativeCostTolerance<F> as TerminationCriterion<S>>::reset(c);
+            c.last = None;
         }
     }
     fn check(
@@ -332,9 +348,23 @@ where
             <Self as Check<P, S>>::reset(self);
             return None;
         }
-        let absolute = self.absolute.as_mut().and_then(|c| c.check(state));
-        let relative = self.relative.as_mut().and_then(|c| c.check(state));
-        absolute.or(relative)
+        let current = state.cost();
+        let absolute = self.absolute.as_mut().is_some_and(|check| {
+            check
+                .last
+                .replace(current)
+                .is_some_and(|last| (last - current).abs() <= check.tol)
+        });
+        let relative = self.relative.as_mut().is_some_and(|check| {
+            check.last.replace(current).is_some_and(|last| {
+                (last - current).abs() <= check.tol * last.abs()
+            })
+        });
+        if absolute {
+            Some(TerminationReason::CostTolerance)
+        } else {
+            relative.then_some(TerminationReason::RelativeCostTolerance)
+        }
     }
 }
 
@@ -556,12 +586,6 @@ where
     ) {
         self.solver.configure_segment(state, control);
     }
-    fn segment_criteria(
-        &self,
-        state: &Self::State,
-    ) -> Vec<Box<dyn TerminationCriterion<Self::State>>> {
-        self.solver.segment_criteria(state)
-    }
 }
 
 impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
@@ -573,7 +597,7 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         G: Into<GradientChecks<F>>,
     {
         let mut slot: GradientChecks<F> = self.gradient.into();
-        slot.absolute = optional_tolerance(value).map(GradientTolerance);
+        slot.absolute = optional_tolerance(value);
         ConfiguredSolver {
             solver: self.solver,
             gradient: slot,
@@ -596,7 +620,10 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
     {
         let mut slot: GradientChecks<F> = self.gradient.into();
         slot.relative =
-            optional_tolerance(value).map(RelativeGradientTolerance::new);
+            optional_tolerance(value).map(|tol| RelativeGradientCheck {
+                tol,
+                initial_norm_squared: None,
+            });
         ConfiguredSolver {
             solver: self.solver,
             gradient: slot,
@@ -664,7 +691,8 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         C: Into<CostChecks<F>>,
     {
         let mut slot: CostChecks<F> = self.cost.into();
-        slot.absolute = optional_tolerance(value).map(CostTolerance::new);
+        slot.absolute = optional_tolerance(value)
+            .map(|tol| CostChangeCheck { tol, last: None });
         ConfiguredSolver {
             solver: self.solver,
             gradient: self.gradient,
@@ -686,8 +714,8 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         C: Into<CostChecks<F>>,
     {
         let mut slot: CostChecks<F> = self.cost.into();
-        slot.relative =
-            optional_tolerance(value).map(RelativeCostTolerance::new);
+        slot.relative = optional_tolerance(value)
+            .map(|tol| CostChangeCheck { tol, last: None });
         ConfiguredSolver {
             solver: self.solver,
             gradient: self.gradient,
@@ -840,6 +868,40 @@ mod tests {
                 };
                 assert_eq!(cost_only.check(&problem, &state), None);
                 assert_eq!(combined.check(&problem, &state), None);
+            }
+        }
+    }
+
+    #[test]
+    fn cost_change_history_resets_between_runs_and_after_nonfinite_costs() {
+        use crate::PointState;
+
+        let problem = Problem::new(());
+        for relative in [false, true] {
+            let mut checks = CostChecks::<f64>::from(());
+            let check = Some(CostChangeCheck {
+                tol: 0.0,
+                last: None,
+            });
+            let expected = if relative {
+                checks.relative = check;
+                TerminationReason::RelativeCostTolerance
+            } else {
+                checks.absolute = check;
+                TerminationReason::CostTolerance
+            };
+            let mut state = PointState::new(1.0);
+            state.replace(1.0, 1.0);
+            assert_eq!(checks.check(&problem, &state), None);
+            assert_eq!(checks.check(&problem, &state), Some(expected));
+            <CostChecks as Check<(), PointState<f64>>>::reset(&mut checks);
+            assert_eq!(checks.check(&problem, &state), None);
+            for cost in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                state.replace(1.0, cost);
+                assert_eq!(checks.check(&problem, &state), None);
+                state.replace(1.0, 1.0);
+                assert_eq!(checks.check(&problem, &state), None);
+                assert_eq!(checks.check(&problem, &state), Some(expected));
             }
         }
     }

@@ -122,12 +122,10 @@ use crate::core::problem::EvalCounts;
 ///   [`update_best`](Self::update_best) after every
 ///   successful [`Solver::init`](crate::core::solver::Solver::init)/
 ///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
-///   Termination criteria like
-///   [`NoImprovement`](crate::core::termination::NoImprovement) and
-///   [`TargetCost`](crate::core::termination::TargetCost) bind on
-///   `best_cost()`; one-step change tests like
-///   [`CostTolerance`](crate::core::termination::CostTolerance) bind on
-///   `cost()`.
+///   Execution controls like
+///   [`no_improvement`](crate::Executor::no_improvement) and
+///   [`target_cost`](crate::Executor::target_cost) bind on
+///   `best_cost()`; solver-owned cost-change tests bind on `cost()`.
 ///
 /// Best tracking sees published state, not every problem evaluation.
 /// For example, [`CmaEsState`] considers its mean and sampled population.
@@ -242,7 +240,7 @@ pub trait State {
     /// (`best_cost = +∞`, all best counters zero).
     ///
     /// Called by fresh [`Executor`](crate::Executor) and
-    /// [`run_loop`](crate::core::executor::run_loop) paths at run entry so a
+    /// [`run_loop_with_control`](crate::core::executor::run_loop_with_control) paths at run entry so a
     /// reused state tracks per-run best. [`Executor::resume`](crate::Executor::resume)
     /// deliberately preserves the snapshot's best history instead.
     fn reset_best(&mut self);
@@ -262,8 +260,7 @@ pub trait State {
 /// - `None` means "no gradient available at this iterate yet": the
 ///   only legitimate case is before
 ///   [`Solver::init`](crate::core::solver::Solver::init) has run, used
-///   by criteria like [`GradientTolerance`](crate::core::termination::GradientTolerance)
-///   to silently skip the check.
+///   by gradient-norm convergence checks to skip unavailable data.
 pub trait GradientState: State {
     /// Gradient at the current [`param`](State::param), if populated.
     fn gradient(&self) -> Option<&Self::Param>;
@@ -366,9 +363,8 @@ pub trait AcceptanceState: State {
 
 /// States built around a simplex of `n + 1` vertices and parallel costs.
 ///
-/// Mirrors [`GradientState`]: the trait exists so termination criteria
-/// (e.g. the simplex-collapse test of Lagarias et al. 1998, eq. T1, in
-/// [`SimplexTolerance`](crate::core::termination::SimplexTolerance)) can
+/// Mirrors [`GradientState`]: the trait exists so convergence checks
+/// (e.g. the simplex-collapse test of Lagarias et al. 1998, eq. T1) can
 /// bound on a richer view than [`State::param`]/[`State::cost`], which
 /// only see the best vertex.
 ///
@@ -432,9 +428,7 @@ pub trait PopulationState: State {
 }
 
 /// State that carries a trust-region radius or step size `ρ`, the minimum
-/// shape the
-/// [`RhoTolerance`](crate::core::termination::RhoTolerance) criterion binds on
-/// (tenet 3). Implemented by the Powell-family DFO states
+/// shape radius and step-size convergence checks bind on (tenet 3). Implemented by the Powell-family DFO states
 /// ([`NewuoaState`], [`BobyqaState`], [`LincoaState`], [`CobylaState`]), whose
 /// trust-region `ρ` shrinks from `ρ_beg` toward `ρ_end` on Powell's schedule,
 /// and by [`SolisWetsState`], whose `ρ` is the adaptive mutation standard
@@ -446,9 +440,7 @@ pub trait RhoState: State {
 }
 
 /// State that carries a mesh adaptive direct search **poll size** `Δᵖ` and mesh
-/// index `ℓ`, the minimum shape the
-/// [`MeshTolerance`](crate::core::termination::MeshTolerance) criterion binds on
-/// (tenet 3). Implemented by [`MadsState`]; the poll size shrinks
+/// index `ℓ`, the minimum shape poll-size convergence checks bind on (tenet 3). Implemented by [`MadsState`]; the poll size shrinks
 /// (≈ halving on unsuccessful iterations) toward a configured floor, and the
 /// criterion fires once it reaches that floor.
 pub trait MeshState: State {

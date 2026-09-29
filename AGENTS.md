@@ -74,7 +74,7 @@ pre-commit.
   `crates/basin/src/core/executor.rs` owns the driver loop; and
   `crates/basin/src/core/convergence.rs` shares solver convergence checks;
   `crates/basin/src/core/run_control.rs` owns execution limits and hooks; and
-  `crates/basin/src/core/termination.rs` retains the deprecated 1.x facility.
+  `crates/basin/src/core/termination.rs` defines stopping reasons.
 - Problem-side constraints and adapters live under `crates/basin/src/core/` in
   `constraint.rs`, `barrier.rs`, and `augmented_lagrangian.rs`; composition
   contracts live in `inner.rs`.

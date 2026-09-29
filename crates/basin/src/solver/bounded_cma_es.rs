@@ -177,9 +177,8 @@ impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
     /// Build a bounded CMA-ES with the default population size
     /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48) and a seeded RNG. The
     /// initial mean, step-size, and stds are supplied via [`CmaEsState`];
-    /// TolX is the
-    /// [`CmaEsTolerance`](crate::core::termination::CmaEsTolerance)
-    /// criterion.
+    /// configure TolX with
+    /// [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance).
     pub fn new(seed: u64) -> Self {
         Self {
             lambda_override: None,
@@ -498,7 +497,7 @@ where
         mut state: CmaEsState<V, M, F>,
     ) -> Result<CmaEsState<V, M, F>, Self::Error> {
         // Constants compute-once guard (cached on the solver: config
-        // only; persists across `run_loop` re-entry for chain resumption).
+        // only; persists across `run_loop_with_control` re-entry for chain resumption).
         if self.constants.is_none() {
             let n = state.m.vec_len();
             assert!(n >= 1, "BoundedCmaEs requires a non-empty mean");

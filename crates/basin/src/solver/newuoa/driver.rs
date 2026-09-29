@@ -185,8 +185,7 @@ impl<F: Scalar> NewuoaWork<F> {
         Ok((work, best_x, best_f))
     }
 
-    /// The current trust-region radius `ρ` (read by the public solver and by
-    /// [`RhoTolerance`](crate::RhoTolerance) via the state).
+    /// The current trust-region radius `ρ`, read by the public solver.
     pub(crate) fn rho(&self) -> F {
         self.rho
     }

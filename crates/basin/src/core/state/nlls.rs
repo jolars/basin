@@ -16,16 +16,10 @@ use crate::core::state::{CountsMirror, State};
 ///
 /// `NllsState` deliberately does **not** impl
 /// [`GradientState`](crate::core::state::GradientState). The NLLS solvers
-/// have no L2 gradient to populate: their first-order optimality test is the
-/// ∞-norm of `Jᵀr`, exposed through each solver's own `with_tol_grad`/
-/// `with_tol_grad_rel`, not the framework's
-/// [`GradientTolerance`](crate::core::termination::GradientTolerance). Were
-/// these solvers to run on `BasicState` (which *is* a `GradientState`), a user
-/// could attach `GradientTolerance` and have it **silently never fire**:
-/// `gradient()` stays `None`, so the criterion short-circuits and falls
-/// through to `MaxIter`. Binding NLLS to a state that is not a `GradientState`
-/// turns that misconfiguration into a compile error (tenet 3), the same guard
-/// that already keeps gradient criteria off derivative-free solvers.
+/// expose first-order optimality through solver-owned checks on `Jᵀr`.
+/// Configure these with `with_absolute_gradient_tolerance` and
+/// `with_relative_gradient_tolerance` on the solver. A state that does not
+/// publish a gradient cannot satisfy a generic gradient-state bound.
 ///
 /// # Eval counters
 ///

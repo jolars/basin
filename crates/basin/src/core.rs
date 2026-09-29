@@ -40,8 +40,7 @@
 //! - [`convergence`]: shared fixed slots for solver-owned optional checks.
 //!   Enabled checks require only their minimum state and backend capabilities.
 //! - [`run_control`]: execution budgets, targets, stalls, and application hooks.
-//! - [`termination`]: stopping reasons and the deprecated Basin 1.x criterion
-//!   facility, scheduled for removal in Basin 2.0.
+//! - [`termination`]: stopping reasons reported by solvers and execution controls.
 //! - [`observer`]: read-only side-effect hooks fired around the loop
 //!   ([`Observe`](observer::Observe) + [`ObserverMode`](observer::ObserverMode)).
 //! - [`checkpoint`]: solver-aware snapshots for exact continuation. State-only

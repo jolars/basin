@@ -519,7 +519,7 @@ where
         state.iter = 0;
     }
 
-    // `segment_criteria` stays the default (none): the reference
+    // `configure_segment` stays the default (unchanged): the reference
     // implementation runs Solis-Wets segments purely budget-driven.
 }
 

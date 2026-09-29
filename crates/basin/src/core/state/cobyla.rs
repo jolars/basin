@@ -4,7 +4,7 @@
 //! solver [`Cobyla`](crate::solver::Cobyla). It carries the current iterate (the
 //! incumbent COBYLA would return) and the current trust-region radius `ρ`, which
 //! the natural-convergence criterion
-//! [`RhoTolerance`](crate::core::termination::RhoTolerance) binds on.
+//! radius convergence checks read.
 //!
 //! As with [`LincoaState`](crate::core::state::LincoaState), the simplex
 //! (`sim`/`simi`/`fval`/`conmat`/`cval`), the penalty parameter `μ`
@@ -44,7 +44,7 @@ pub struct CobylaState<V, F = f64> {
     pub(crate) cost: Option<F>,
     /// Current trust-region radius `ρ`; `+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from
-    /// `ρ_beg`. [`RhoTolerance`](crate::core::termination::RhoTolerance) reads it.
+    /// `ρ_beg`. The solver reads it for radius convergence.
     pub(crate) rho: F,
 
     // --- best evaluated point (mirrors the current iterate; see module docs) ---

@@ -140,7 +140,7 @@ use init::fold_constraints;
 /// Natural convergence is `ρ` reaching `ρ_end`, signalled as
 /// [`TerminationReason::SolverConverged`]. Add
 /// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget or
-/// [`RhoTolerance`](crate::RhoTolerance) to stop at a coarser `ρ`.
+/// [`with_absolute_radius_tolerance`](crate::Lincoa::with_absolute_radius_tolerance) to stop at a coarser `ρ`.
 ///
 /// # Backends
 ///

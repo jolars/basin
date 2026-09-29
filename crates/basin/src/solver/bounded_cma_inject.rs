@@ -10,8 +10,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CmaEsState, CountsMirror, State};
-#[allow(deprecated)]
-use crate::core::termination::{TerminationCriterion, TerminationReason};
+use crate::core::termination::TerminationReason;
 use crate::solver::bounded_cma_es::{BoundedCmaEs, evaluate_with_penalty};
 use crate::solver::cma_es::sort_population_ascending;
 use crate::solver::cma_inject::{MemeticInner, default_c_y};
@@ -129,31 +128,6 @@ where
         Self {
             cma,
             inner: inner.max_iter(n),
-            k,
-            c_y_override,
-        }
-    }
-
-    /// Register a termination criterion on the inner loop.
-    /// See [`CmaInject::inner_terminate_on`](super::CmaInject::inner_terminate_on)
-    /// for the reset-per-run contract (stateful criteria are safe).
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "configure inner solver tolerances or use `inner_stop_when_factory`; removal scheduled for Basin 2.0"
-    )]
-    pub fn inner_terminate_on<C>(self, criterion: C) -> Self
-    where
-        C: TerminationCriterion<I::State> + 'static,
-    {
-        let Self {
-            cma,
-            inner,
-            k,
-            c_y_override,
-        } = self;
-        Self {
-            cma,
-            inner: inner.terminate_on(criterion),
             k,
             c_y_override,
         }

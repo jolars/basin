@@ -5,7 +5,7 @@
 //! [`NewuoaState`](crate::core::state::NewuoaState): the current iterate (the
 //! best feasible point found so far) plus the trust-region radius `ρ` that the
 //! natural-convergence criterion
-//! [`RhoTolerance`](crate::core::termination::RhoTolerance) binds on.
+//! radius convergence checks read.
 //!
 //! As with NEWUOA, the quadratic surrogate, the factored inverse-KKT matrix `H`,
 //! the shifted bounds `sl`/`su`, and the ρ/Δ schedule live on the **solver**

@@ -4,7 +4,7 @@
 //! derivative-free solver [`Lincoa`](crate::solver::Lincoa). It carries the
 //! current iterate (the best **feasible** point found so far) and the current
 //! trust-region radius `ρ`, which the natural-convergence criterion
-//! [`RhoTolerance`](crate::core::termination::RhoTolerance) binds on.
+//! radius convergence checks read.
 //!
 //! As with [`NewuoaState`](crate::core::state::NewuoaState) and
 //! [`BobyqaState`](crate::core::state::BobyqaState), the quadratic surrogate, the
@@ -38,7 +38,7 @@ pub struct LincoaState<V, F = f64> {
     pub(crate) cost: Option<F>,
     /// Current trust-region radius `ρ`; `+∞` before
     /// [`Solver::init`](crate::core::solver::Solver::init) seeds it from
-    /// `ρ_beg`. [`RhoTolerance`](crate::core::termination::RhoTolerance) reads it.
+    /// `ρ_beg`. The solver reads it for radius convergence.
     pub(crate) rho: F,
 
     // --- best evaluated point (coincides with the current iterate) ---
