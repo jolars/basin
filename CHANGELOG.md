@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.15.1](https://github.com/jolars/basin/compare/v1.15.0...v1.15.1) (2026-09-29)
+
+### Bug Fixes
+- skip change tolerances after rejected steps ([`093090c`](https://github.com/jolars/basin/commit/093090c1346ec2a816c9a12eb59a1b4c1e7a6134)), fixes [#108](https://github.com/jolars/basin/issues/108)
+- reject false trust-region convergence ([`a6cab59`](https://github.com/jolars/basin/commit/a6cab59c7e27a3da61af078f773889115233d4db)), fixes [#107](https://github.com/jolars/basin/issues/107)
+
 ## [1.15.0](https://github.com/jolars/basin/compare/v1.14.0...v1.15.0) (2026-09-28)
 
 ### Features
