@@ -267,7 +267,7 @@ desired backend features.
 
 - [ ] **Complete the stable-release handoff before publishing 2.0.0.** Follow
   [Maintenance and releases](MAINTENANCE.md#publishing-200): disable Latest
-  promotion on `1.x`, finish in-flight maintenance releases, record the 1.x
+  promotion on `v1`, finish in-flight maintenance releases, record the 1.x
   support end date, and publish migration guidance. Keep the 2.0 release PR
   open until the release is ready.
 

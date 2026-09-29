@@ -10,7 +10,7 @@ opt-in features arrive in minor releases.
 
 `main` develops Basin 2.0 and accepts the planned breaking changes in
 [the roadmap](TODO.md#basin-20), with migration guidance for each change.
-The 1.x compatibility requirements in this guide apply to the `1.x`
+The 1.x compatibility requirements in this guide apply to the `v1`
 maintenance branch. See [Maintenance and releases](MAINTENANCE.md) for
 support dates, backports, and the independent Versionary workflows.
 
@@ -261,7 +261,7 @@ These shape API decisions and are non-obvious from the code alone.
 The target is shared progress states with solver-owned algorithm machinery.
 Build the 2.0 migration on `main` from the validated
 [prototype](TODO.md#state-api-prototype), preserving the contracts below.
-The `1.x` branch retains its existing APIs and behavior.
+The `v1` branch retains its existing APIs and behavior.
 
 - **Ownership:** solvers own settings, models, history, RNGs, and working
   buffers. States expose progress through a few capability-based shapes.

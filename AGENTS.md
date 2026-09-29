@@ -8,10 +8,10 @@ contracts](CONTRIBUTING.md#state-and-lifecycle-contracts) and preserve the
 stated ownership and lifecycle contracts.
 
 For backports and releases, follow [MAINTENANCE.md](MAINTENANCE.md). `main`
-prepares Basin 2.0, while `1.x` maintains the latest 1.x release. Each branch
+prepares Basin 2.0, while `v1` maintains the latest 1.x release. Each branch
 owns its release configuration, versions, changelog, and baseline manifest.
 The Basin 1.x compatibility requirements in this guide and `CONTRIBUTING.md`
-apply to the `1.x` branch. On `main`, implement the planned breaking changes
+apply to the `v1` branch. On `main`, implement the planned breaking changes
 in [the Basin 2.0 roadmap](TODO.md#basin-20) and document how users migrate.
 
 ## Project priorities
@@ -20,7 +20,7 @@ Basin is a semver-stable Rust numerical-optimization library with a generic
 `Executor`/`Solver`/`State` core and support for `Vec<f64>`, nalgebra, ndarray,
 and faer backends.
 
-- Preserve public API compatibility on `1.x`. Treat changes to public signatures,
+- Preserve public API compatibility on `v1`. Treat changes to public signatures,
   required trait methods, enum variants, generic defaults, feature semantics,
   and re-exports as potentially breaking. Prefer additive changes and
   default-bodied trait methods for backports. On `main`, planned 2.0 changes
