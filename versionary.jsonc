@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/jolars/versionary/main/schemas/config.json",
   "version": 1,
   "release-type": "rust",
-  "release-branch": "versionary/release-1.x",
+  "release-branch": "versionary/release-v1",
   // Keep 1.x as Latest until the first stable 2.0 release.
   "release-latest": true,
   "allow-stable-major": true,

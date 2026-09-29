@@ -2,9 +2,9 @@ name: Website
 
 on:
   push:
-    branches: [main, '1.x']
+    branches: [main, v1]
   pull_request:
-    branches: [main, '1.x']
+    branches: [main, v1]
   release:
     types: [published]
   schedule:

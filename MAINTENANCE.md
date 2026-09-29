@@ -2,16 +2,16 @@
 
 ## Supported release lines
 
-Basin develops 2.0 on `main` and maintains the latest 1.x release on `1.x`,
-which starts from v1.15.1. The 1.x line receives correctness, regression, and
-security fixes throughout 2.0 development and for at least six months after the
-first stable 2.0.0 release. We will record the earliest end-of-support date here
-when 2.0.0 ships and announce the end of support in the release notes. No end
-date is set while 2.0 is in development.
+Basin develops 2.0 on `main` and maintains the latest 1.x release on `v1`, which
+starts from v1.15.1. The 1.x line receives correctness, regression, and security
+fixes throughout 2.0 development and for at least six months after the first
+stable 2.0.0 release. We will record the earliest end-of-support date here when
+2.0.0 ships and announce the end of support in the release notes. No end date is
+set while 2.0 is in development.
 
 Only the latest 1.x patch release is maintained; earlier minor releases do not
 have separate maintenance branches. Applications can use `basin = "1"` and
-update their lockfiles to receive fixes. The 1.x branch preserves its public
+update their lockfiles to receive fixes. The `v1` branch preserves its public
 API, convergence defaults, backend feature meanings, Rust 1.87-compatible
 feature set, and default WASM build. New features and breaking changes target
 2.x.
@@ -24,10 +24,10 @@ backend features, and a reproducer when opening an issue.
 
 Fixes normally land on `main` first. For a bug affecting 1.x, cherry-pick the
 fix and its regression test with `git cherry-pick -x <commit>` onto a branch
-based on `origin/1.x`. Adapt the implementation if the APIs have diverged, run
+based on `origin/v1`. Adapt the implementation if the APIs have diverged, run
 the relevant checks from [CONTRIBUTING.md](CONTRIBUTING.md#commands), and open a
-PR targeting `1.x`. A fix developed on `1.x` should also be ported to `main`
-when applicable.
+PR targeting `v1`. A fix developed on `v1` should also be ported to `main` when
+applicable.
 
 Keep the conventional `fix:` commit or PR title so Versionary proposes a patch
 release. Review the planned version before merging a release PR: Versionary does
@@ -35,7 +35,7 @@ not enforce a version range from the branch name.
 
 Backport source changes and tests. Each branch owns its versions, changelog, and
 `.versionary-manifest.json`; let Versionary generate those independently. Do not
-merge `main` into `1.x` or cherry-pick release bookkeeping between them.
+merge `main` into `v1` or cherry-pick release bookkeeping between them.
 
 ## Release automation
 
@@ -47,12 +47,12 @@ branch's `versionary.jsonc` names the generated release PR branch:
   | Base branch | Generated release PR branch | Purpose                           |
   | ----------- | --------------------------- | --------------------------------- |
   | `main`      | `versionary/release`        | Prepare the next 2.x release.     |
-  | `1.x`       | `versionary/release-1.x`    | Release compatible fixes for 1.x. |
+  | `v1`        | `versionary/release-v1`     | Release compatible fixes for 1.x. |
 
 Keep the 2.0 release PR open during development. Check that its proposed version
 is 2.0.0 before merging it; until a breaking commit or explicit `Release-As:`
 override selects that version, ordinary fixes can still propose a 1.x version on
-`main`. Publish further 1.x releases only from `1.x`.
+`main`. Publish further 1.x releases only from `v1`.
 
 Merging a release PR creates its tag and GitHub Release. The existing Publish
 Crates workflow publishes the tagged crate to crates.io. The `RELEASE_TOKEN`
@@ -67,9 +67,9 @@ needs a separate prerelease policy.
 
 Before merging the first stable 2.0 release PR:
 
-1. Set `release-latest` to `false` in `versionary.jsonc` on the `1.x` branch,
-   and finish any in-flight 1.x release jobs. Keep it `true` on `main`. Later
-   1.x patches will then leave 2.x marked as Latest.
+1. Set `release-latest` to `false` in `versionary.jsonc` on the `v1` branch, and
+   finish any in-flight 1.x release jobs. Keep it `true` on `main`. Later 1.x
+   patches will then leave 2.x marked as Latest.
 2. Record the earliest end-of-support date for 1.x here, at least six months
    after the 2.0.0 release date, and update both branches' README policy.
 3. Publish migration guidance and retain links to the 1.x API reference.

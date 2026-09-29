@@ -8,7 +8,7 @@ contracts](CONTRIBUTING.md#state-and-lifecycle-contracts) and preserve the
 stated Basin 1.x compatibility boundaries.
 
 For backports and releases, follow [MAINTENANCE.md](MAINTENANCE.md). `main`
-prepares Basin 2.0, while `1.x` maintains the latest 1.x release. Each branch
+prepares Basin 2.0, while `v1` maintains the latest 1.x release. Each branch
 owns its release configuration, versions, changelog, and baseline manifest.
 
 ## Project priorities

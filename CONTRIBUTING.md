@@ -8,7 +8,7 @@ opt-in features arrive in minor releases.
 
 [semantic versioning]: https://semver.org/
 
-`main` prepares Basin 2.0; `1.x` maintains the latest compatible release.
+`main` prepares Basin 2.0; `v1` maintains the latest compatible release.
 See [Maintenance and releases](MAINTENANCE.md) for support dates, backports,
 and the independent Versionary workflows.
 
