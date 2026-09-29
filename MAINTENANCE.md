@@ -49,10 +49,10 @@ branch's `versionary.jsonc` names the generated release PR branch:
   | `main`      | `versionary/release`        | Prepare the next 2.x release.     |
   | `1.x`       | `versionary/release-1.x`    | Release compatible fixes for 1.x. |
 
-Keep the 2.0 release PR open during development. Check that its proposed version
-is 2.0.0 before merging it; until a breaking commit or explicit `Release-As:`
-override selects that version, ordinary fixes can still propose a 1.x version on
-`main`. Publish further 1.x releases only from `1.x`.
+The commit starting 2.0 development carries `Release-As: 2.0.0`, so Versionary
+targets 2.0.0 on `main` from the start. Keep its release PR open while
+implementing the planned breaking changes. Merging that PR is the decision to
+publish 2.0.0. Publish further 1.x releases only from `1.x`.
 
 Merging a release PR creates its tag and GitHub Release. The existing Publish
 Crates workflow publishes the tagged crate to crates.io. The `RELEASE_TOKEN`

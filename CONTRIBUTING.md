@@ -8,9 +8,11 @@ opt-in features arrive in minor releases.
 
 [semantic versioning]: https://semver.org/
 
-`main` prepares Basin 2.0; `1.x` maintains the latest compatible release.
-See [Maintenance and releases](MAINTENANCE.md) for support dates, backports,
-and the independent Versionary workflows.
+`main` develops Basin 2.0 and accepts the planned breaking changes in
+[the roadmap](TODO.md#basin-20), with migration guidance for each change.
+The 1.x compatibility requirements in this guide apply to the `1.x`
+maintenance branch. See [Maintenance and releases](MAINTENANCE.md) for
+support dates, backports, and the independent Versionary workflows.
 
 ## What this is
 
@@ -257,8 +259,9 @@ These shape API decisions and are non-obvious from the code alone.
 ## State and lifecycle contracts
 
 The target is shared progress states with solver-owned algorithm machinery.
-Preserve Basin 1.x behavior during the [prototype and
-migration](TODO.md#state-api-prototype); incompatible changes belong in 2.0.
+Build the 2.0 migration on `main` from the validated
+[prototype](TODO.md#state-api-prototype), preserving the contracts below.
+The `1.x` branch retains its existing APIs and behavior.
 
 - **Ownership:** solvers own settings, models, history, RNGs, and working
   buffers. States expose progress through a few capability-based shapes.
