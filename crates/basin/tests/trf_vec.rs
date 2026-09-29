@@ -6,6 +6,8 @@
 //! BCL scaled-gradient dynamics are backend-independent; the assertions match
 //! the nalgebra mirror exactly.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::BoothBoxedResiduals;
 use basin::{Executor, NllsState, TerminationReason, Trf};
 

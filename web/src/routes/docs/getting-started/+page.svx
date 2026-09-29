@@ -23,8 +23,12 @@ Exact version features are also available for nalgebra 0.32–0.35, ndarray
 available for compatibility: they select nalgebra 0.34, ndarray 0.17, and faer
 0.24. When several releases of one backend are enabled, Basin uses the newest.
 The package MSRV is Rust 1.87; nalgebra 0.35 and `nalgebra_latest` require Rust
-1.89. The `problems` feature (a corpus of standard test functions) is on by
-default; disable it with `default-features = false` to shrink a wasm build.
+1.89.
+
+In Basin 2.0, no features are enabled by default. Enable `problems` with
+`cargo add basin --features problems` to use the standard test-function corpus
+in `basin::problems`. Basin 1.x enables this feature by default; on that release
+line, `default-features = false` excludes it.
 
 ## A Simple Example
 

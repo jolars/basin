@@ -1,4 +1,4 @@
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{Rosenbrock, Sphere};

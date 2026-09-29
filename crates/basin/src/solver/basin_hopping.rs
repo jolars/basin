@@ -261,7 +261,11 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 ///
 /// # Examples
 ///
+/// Enable the `problems` feature to run this example.
+///
 /// ```
+/// # #[cfg(feature = "problems")]
+/// # {
 /// use basin::problems::Ackley;
 /// use basin::{BasicState, BasinHopping, Executor, NelderMead};
 ///
@@ -286,6 +290,7 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 ///     "Ackley best cost {}",
 ///     result.best_cost()
 /// );
+/// # }
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasinHopping<

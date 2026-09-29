@@ -20,8 +20,8 @@
 //! [`ProblemSpec`](crate::problems::ProblemSpec) cite the original source where
 //! applicable.
 //!
-//! Gated behind the `problems` feature (default-on). Disable with
-//! `default-features = false` to drop the corpus from the build.
+//! Enable the opt-in `problems` feature to include this corpus:
+//! `cargo add basin --features problems`.
 
 pub mod ackley;
 pub mod beale;

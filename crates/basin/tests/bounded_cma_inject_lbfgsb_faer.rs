@@ -5,7 +5,7 @@
 //! by the nalgebra mirror test
 //! (`tests/bounded_cma_inject_lbfgsb_nalgebra.rs`).
 
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::BoothBoxed;

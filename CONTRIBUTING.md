@@ -37,6 +37,11 @@ fit optimization state.
 - `cargo build`: build the library.
 - `cargo test`: run tests.
 - `cargo test <name>`: run a single test by name.
+- `cargo test -p basin --features problems`: include tests that use the
+  standard test-function corpus. Basin 2.0 enables no features by default;
+  `cargo test -p basin` exercises the library without the corpus. Examples
+  and benchmarks that use the corpus must declare `required-features =
+  ["problems"]` in `crates/basin/Cargo.toml` and be run with `--features problems`.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: lint.
 - `cargo doc --no-deps -p basin --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde`:
   build the public docs with the latest backend versions. CI runs this, and

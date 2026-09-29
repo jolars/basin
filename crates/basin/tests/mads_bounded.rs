@@ -7,6 +7,8 @@
 //! unbounded `mads_public.rs` tests (the bounded path differs only in the
 //! barrier eval closure, which is backend-agnostic).
 
+#![cfg(feature = "problems")]
+
 use basin::problems::BoothBoxed;
 use basin::{Executor, Mads, MadsState, State, TerminationReason};
 

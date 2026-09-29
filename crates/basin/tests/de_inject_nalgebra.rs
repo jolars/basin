@@ -9,7 +9,7 @@
 //! `de_inject_lbfgsb_nalgebra.rs`; for the failure-bubbling contract
 //! test (rule 3) see `de_inject_solver_failed_bubbles.rs`.
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{AckleyBoxed, RastriginBoxed};

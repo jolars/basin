@@ -1,4 +1,4 @@
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 //! nalgebra-backend tests for [`MaLsChSw`]: the deep mirror. Covers
 //! convergence, reproducibility, the chain-resume mechanism, and the

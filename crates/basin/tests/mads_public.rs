@@ -143,6 +143,7 @@ fn respects_cost_eval_budget() {
 /// staircase on its mesh and reaches the minimum. Both run from the same start
 /// with the same budget.
 #[test]
+#[cfg(feature = "problems")]
 fn outperforms_nelder_mead_on_discontinuous_step() {
     use basin::problems::Step;
     use basin::{BasicSimplexState, NelderMead};

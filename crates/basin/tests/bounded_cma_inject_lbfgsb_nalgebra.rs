@@ -6,7 +6,7 @@
 //! and work-unit aggregation (L-Bfgs-B `cost_evals` + `gradient_evals`
 //! roll into the outer's `cost_evals`).
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::BoothBoxed;

@@ -4,6 +4,8 @@
 //! the constraint solver now runs on the default backend with no external
 //! linear-algebra crate.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, BasicState, CostFunction, DenseMatrix,

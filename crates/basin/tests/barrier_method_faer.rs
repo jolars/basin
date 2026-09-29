@@ -1,4 +1,4 @@
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 //! Integration tests for the log-barrier [`BarrierMethod`] on linearly
 //! constrained quadratics (faer backend), mirror of
 //! `barrier_method_nalgebra.rs`.

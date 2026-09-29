@@ -1,5 +1,7 @@
 //! Integration tests for the public `Stepper` API.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::Rosenbrock;
 use basin::{
     BasicState, CostFunction, Executor, GradientDescent, State, StepOutcome,

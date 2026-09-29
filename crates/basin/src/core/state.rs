@@ -461,7 +461,7 @@ pub trait MeshState: State {
 /// With the `serde` feature this state is `Serialize`/`Deserialize` (when
 /// `P` and `F` are), so it can be checkpointed and reloaded to warm-start a
 /// later run; see
-/// [`CheckpointWriter`](crate::core::observer::CheckpointWriter).
+/// [`CheckpointWriter`](https://docs.rs/basin/latest/basin/core/observer/checkpoint/struct.CheckpointWriter.html).
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasicState<P, F = f64> {
     pub(crate) param: P,
@@ -891,7 +891,7 @@ impl<V, F: Scalar> SimplexState for BasicSimplexState<V, F> {
 ///
 /// With the `serde` feature this state is `Serialize`/`Deserialize` (when
 /// `V`, `M`, and `F` are) for checkpointing; see
-/// [`CheckpointWriter`](crate::core::observer::CheckpointWriter).
+/// [`CheckpointWriter`](https://docs.rs/basin/latest/basin/core/observer/checkpoint/struct.CheckpointWriter.html).
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuasiNewtonState<V, M, F = f64> {
     pub(crate) param: V,
@@ -922,9 +922,9 @@ impl<V: VectorLen, M: MatrixIdentity, F: Scalar> QuasiNewtonState<V, M, F> {
     ///
     /// For the common path, prefer the per-backend alias so neither `V` nor
     /// `M` has to be spelled: [`DenseQuasiNewtonState`] (`Vec<f64>`),
-    /// [`NalgebraQuasiNewtonState`] (feature `nalgebra`),
-    /// [`NdarrayQuasiNewtonState`] (feature `ndarray`), or
-    /// [`FaerQuasiNewtonState`] (feature `faer`), e.g.
+    /// [`NalgebraQuasiNewtonState`](https://docs.rs/basin/latest/basin/core/state/type.NalgebraQuasiNewtonState.html) (feature `nalgebra`),
+    /// [`NdarrayQuasiNewtonState`](https://docs.rs/basin/latest/basin/core/state/type.NdarrayQuasiNewtonState.html) (feature `ndarray`), or
+    /// [`FaerQuasiNewtonState`](https://docs.rs/basin/latest/basin/core/state/type.FaerQuasiNewtonState.html) (feature `faer`), e.g.
     /// `DenseQuasiNewtonState::new(x)`.
     pub fn new(param: V) -> Self {
         let n = param.vec_len();

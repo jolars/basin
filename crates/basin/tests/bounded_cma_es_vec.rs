@@ -5,6 +5,8 @@
 //! covariance, including the extra `MatDiagonal` (diagonal extraction) the
 //! adaptive boundary penalty needs.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::BoothBoxed;
 use basin::{
     BoundedCmaEs, CmaEsState, DenseMatrix, Executor, PopulationState,

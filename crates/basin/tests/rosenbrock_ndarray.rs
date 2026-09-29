@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray_all")]
+#![cfg(all(feature = "ndarray_all", feature = "problems"))]
 
 use crate::backend_aliases::ndarray::{Array1, array};
 use basin::problems::Rosenbrock;

@@ -1,3 +1,5 @@
+#![cfg(feature = "problems")]
+
 use basin::problems::RastriginBoxed;
 use basin::{
     BasicPopulationState, De, Executor, PopulationState, State, StepOutcome,

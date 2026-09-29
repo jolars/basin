@@ -3,6 +3,8 @@
 //! backend, using the hand-rolled [`DenseMatrix`]. Mirrors
 //! `augmented_lagrangian_nalgebra.rs`.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
     AugmentedLagrangianMethod, Backtracking, BasicState, DenseMatrix, Executor,

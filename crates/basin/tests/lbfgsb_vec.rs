@@ -15,6 +15,8 @@
 //!   convex 5-D quadratic where the limited-memory approximation
 //!   captures the exact Hessian within `m` iterations.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::BoothBoxed;
 use basin::{CostFunction, Executor, Gradient, LbfgsState, Lbfgsb};
 

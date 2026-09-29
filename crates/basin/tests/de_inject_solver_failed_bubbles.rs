@@ -5,7 +5,7 @@
 //! Mirror of `cma_inject_solver_failed_bubbles.rs`: same
 //! `AlwaysFails` fixture wrapped in [`ClosureInner`] for the seeder.
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::RastriginBoxed;

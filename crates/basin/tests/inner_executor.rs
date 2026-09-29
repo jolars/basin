@@ -19,6 +19,8 @@
 //! show that composition works through the public `State`, `Solver`, and
 //! `CountsMirror` traits alone.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::Booth;
 use basin::{
     Backtracking, BasicState, CostFunction, CountsMirror, EvalCounts, Executor,

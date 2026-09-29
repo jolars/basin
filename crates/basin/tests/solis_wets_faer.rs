@@ -1,4 +1,4 @@
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 //! faer-backend mirror of the `Vec<f64>` Solis-Wets suite
 //! (`tests/solis_wets_vec.rs`): reduced to the checks that exercise the

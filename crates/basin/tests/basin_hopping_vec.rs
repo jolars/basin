@@ -10,6 +10,8 @@
 //! (`RandomDisplacement`, `Metropolis`) live in the solver module's unit
 //! tests.
 
+#![cfg(feature = "problems")]
+
 use std::cell::RefCell;
 use std::rc::Rc;
 

@@ -1,4 +1,4 @@
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 //! Integration tests for the augmented-Lagrangian [`AugmentedLagrangianMethod`]
 //! on linearly-equality-constrained quadratics (nalgebra backend).
 

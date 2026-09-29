@@ -3,7 +3,7 @@
 //! deeper algorithmic invariants are covered by the nalgebra mirror
 //! test (`tests/ma_ls_ch_cma_nalgebra.rs`).
 
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{RastriginBoxed, SphereBoxed};

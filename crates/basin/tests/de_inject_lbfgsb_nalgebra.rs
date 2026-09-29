@@ -6,7 +6,7 @@
 //! in the basin within a handful of generations; L-Bfgs-B drives them
 //! to gradient-descent precision. Assert `‖x* − (1, 3)‖_∞ ≤ 1e-6`.
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;

@@ -5,7 +5,7 @@
 //! are covered by the nalgebra mirror test
 //! (`tests/bounded_cma_inject_lbfgsb_nalgebra.rs`).
 
-#![cfg(feature = "ndarray_all")]
+#![cfg(all(feature = "ndarray_all", feature = "problems"))]
 
 use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::BoothBoxed;

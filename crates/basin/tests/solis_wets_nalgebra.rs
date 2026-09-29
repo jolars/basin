@@ -1,4 +1,4 @@
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 //! nalgebra-backend mirror of the `Vec<f64>` Solis-Wets suite
 //! (`tests/solis_wets_vec.rs`): reduced to the checks that exercise the

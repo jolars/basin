@@ -7,6 +7,8 @@
 //! rank-deficient failure) are backend-independent, so the assertions match
 //! the nalgebra mirror exactly.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{PowellSingular, RosenbrockResiduals};
 use basin::{Executor, GaussNewton, NllsState, TerminationReason};
 

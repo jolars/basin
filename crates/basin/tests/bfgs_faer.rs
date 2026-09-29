@@ -1,4 +1,4 @@
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 //! Bfgs convergence over the faer backend (`Col<f64>` and `Mat<f64>`).
 //!

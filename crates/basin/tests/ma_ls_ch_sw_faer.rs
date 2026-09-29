@@ -1,4 +1,4 @@
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 //! faer-backend smoke mirror for [`MaLsChSw`]; the deep tests live in
 //! `tests/ma_ls_ch_sw_nalgebra.rs`. Vector type only—no `Mat`.

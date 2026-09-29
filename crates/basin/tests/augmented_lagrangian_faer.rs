@@ -1,4 +1,4 @@
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 //! Integration tests for the augmented-Lagrangian [`AugmentedLagrangianMethod`]
 //! on linearly-equality-constrained quadratics (faer backend).
 

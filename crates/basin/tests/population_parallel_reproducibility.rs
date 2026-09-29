@@ -21,6 +21,8 @@
 //! These run on the default `Vec<f64>` backend so the file needs no LA
 //! feature; the `parallel` matrix entry exercises the rayon path.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{RastriginBoxed, Rosenbrock};
 use basin::{
     BasicPopulationState, CmaEs, CmaEsState, De, DenseMatrix, Executor,

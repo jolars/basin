@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray_all")]
+#![cfg(all(feature = "ndarray_all", feature = "problems"))]
 
 //! L-Bfgs-B convergence tests over the ndarray backend. Mirrors
 //! `tests/lbfgsb_faer.rs` to confirm the `Array1<f64>` impl of

@@ -4,7 +4,7 @@
 //! boundary; the deeper algorithmic invariants are covered by the
 //! nalgebra mirror test (`tests/cma_inject_nalgebra.rs`).
 
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{Rosenbrock, Sphere};

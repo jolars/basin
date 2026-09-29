@@ -4,6 +4,8 @@
 //! deeper algorithmic invariants are covered by the nalgebra mirror
 //! test (`tests/ma_ls_ch_cma_nalgebra.rs`).
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{RastriginBoxed, SphereBoxed};
 use basin::{DenseMatrix, Executor, MaLsChCma, MaLsChState};
 

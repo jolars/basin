@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray_all")]
+#![cfg(all(feature = "ndarray_all", feature = "problems"))]
 
 //! Levenberg-Marquardt over the `ndarray` backend (`Array1<f64>`/
 //! `Array2<f64>`). Mirrors `tests/levenberg_marquardt_nalgebra.rs`: `Array2`'s

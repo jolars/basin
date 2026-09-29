@@ -9,7 +9,7 @@
 //! deferred test promoted to a real fixture (S11 hardwired NelderMead
 //! and NelderMead never returns `SolverFailed`).
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::Sphere;

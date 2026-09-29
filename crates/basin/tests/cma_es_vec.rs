@@ -7,6 +7,8 @@
 //! assert bit-identity against nalgebra/faer, whose eigensolvers round
 //! differently.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     CmaEs, CmaEsState, CostFunction, DenseMatrix, Executor, PopulationState,

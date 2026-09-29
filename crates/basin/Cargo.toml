@@ -30,7 +30,7 @@ name = "basin"
 path = "src/lib.rs"
 
 [features]
-default = ["problems"]
+default = []
 nalgebra = ["nalgebra_v0_34"]
 nalgebra_latest = ["nalgebra_v0_35"]
 nalgebra_all = []
@@ -160,6 +160,7 @@ criterion = { version = "0.8", default-features = false, features = [
 [[bench]]
 name = "rosenbrock"
 harness = false
+required-features = ["problems"]
 
 [[bench]]
 name = "lbfgsb"

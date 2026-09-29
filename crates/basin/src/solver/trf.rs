@@ -158,7 +158,8 @@ use crate::{
 /// never calls `cost()`; it computes `½‖r‖²` from the residual it
 /// evaluates itself. Problems whose user-facing `cost()` uses an
 /// unscaled `Σ rᵢ²` form (e.g.
-/// [`BoothBoxedResiduals`](crate::problems::BoothBoxedResiduals)) will
+/// [`BoothBoxedResiduals`](https://docs.rs/basin/latest/basin/problems/booth/struct.BoothBoxedResiduals.html),
+/// available with the `problems` feature) will
 /// see `state.cost()` differ from `problem.cost(state.param())` by a
 /// factor of two; both go to zero at the optimum.
 ///

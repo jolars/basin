@@ -6,7 +6,7 @@
 //! invariants are covered by the nalgebra mirror test
 //! (`tests/cma_inject_nalgebra.rs`).
 
-#![cfg(feature = "ndarray_all")]
+#![cfg(all(feature = "ndarray_all", feature = "problems"))]
 
 use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::{Rosenbrock, Sphere};

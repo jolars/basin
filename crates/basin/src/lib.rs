@@ -156,6 +156,12 @@
 //!
 //! The [`problem`](crate::core::problem) module docs carry the per-trait detail.
 //!
+//! # Features
+//!
+//! Basin enables no features by default. Enable `problems` to use the standard
+//! test-function corpus through `basin::problems`, for example with
+//! `cargo add basin --features problems`.
+//!
 //! # Backends
 //!
 //! Parameters and linear algebra are generic over the backend. `Vec<f64>` needs
@@ -302,6 +308,8 @@ pub mod bracket;
 pub mod core;
 pub mod line_search;
 /// Catalog of test problems used by the example tests and benchmarks.
+///
+/// Available with the opt-in `problems` feature.
 #[cfg(feature = "problems")]
 pub mod problems;
 /// Scalar root-finding algorithms with direct solve APIs.

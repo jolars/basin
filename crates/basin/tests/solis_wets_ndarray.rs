@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray_all")]
+#![cfg(all(feature = "ndarray_all", feature = "problems"))]
 
 //! ndarray-backend mirror of the `Vec<f64>` Solis-Wets suite
 //! (`tests/solis_wets_vec.rs`): reduced to the checks that exercise the

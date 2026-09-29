@@ -1,4 +1,4 @@
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 //! L-Bfgs-B convergence tests over the nalgebra backend.
 //!

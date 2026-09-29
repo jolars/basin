@@ -8,7 +8,7 @@ publish = false
 lapack = ["basin/nalgebra_v0_35-lapack"]
 
 [dependencies]
-basin = { path = "../../../..", features = ["nalgebra_v0_35", "ndarray_v0_17", "faer_v0_24"] }
+basin = { path = "../../../..", features = ["nalgebra_v0_35", "ndarray_v0_17", "faer_v0_24", "problems"] }
 nalgebra = "0.35"
 ndarray = "0.17"
 faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }

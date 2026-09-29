@@ -1,3 +1,5 @@
+#![cfg(feature = "problems")]
+
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     BasicSimplexState, CostFunction, Executor, NelderMead, SimplexState,

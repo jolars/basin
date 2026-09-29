@@ -3,6 +3,8 @@
 //! ndarray,faer}.rs`) run reduced versions of the same checks to confirm
 //! the per-backend `SampleStandardNormal`/`ScaledAdd` wiring.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     CmaEs, CmaEsState, CmaInject, DenseMatrix, Executor, SolisWets,

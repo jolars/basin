@@ -1,5 +1,26 @@
 # Migrating to Basin 2.0
 
+## Test problems
+
+Basin 2.0 enables no features by default. If your code imports
+`basin::problems`, add `problems` to your dependency's feature list:
+
+```toml
+[dependencies]
+basin = { version = "2", features = ["problems"] }
+```
+
+Keep any backend or other features you already enable. The corpus API is
+unchanged, and `problems` adds no dependencies. Applications that implement
+their own objectives need no changes for this feature switch. Basin 1.x keeps
+`problems` enabled by default.
+
+When working in this repository, use `cargo test -p basin --features problems`
+to include corpus-dependent tests. Enable the same feature for corpus
+benchmarks, for example `cargo bench -p basin --features problems --bench
+rosenbrock`. The WASM visualizer and competitor benchmark crate enable it
+explicitly in their dependencies.
+
 ## Checkpoint files
 
 Basin 2.0 removes bincode and the readers for the two legacy checkpoint formats.

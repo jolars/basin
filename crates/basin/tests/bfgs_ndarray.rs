@@ -1,4 +1,4 @@
-#![cfg(feature = "ndarray_all")]
+#![cfg(all(feature = "ndarray_all", feature = "problems"))]
 
 //! Bfgs convergence over the ndarray backend (`Array1<f64>` and `Array2<f64>`).
 //!

@@ -6,6 +6,8 @@
 //! are covered by the nalgebra mirror test
 //! (`tests/bounded_cma_inject_lbfgsb_nalgebra.rs`).
 
+#![cfg(feature = "problems")]
+
 use basin::problems::BoothBoxed;
 use basin::{
     BoundedCmaEs, BoundedCmaInject, CmaEsState, DenseMatrix, Executor, Lbfgsb,

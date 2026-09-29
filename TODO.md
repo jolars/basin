@@ -368,7 +368,7 @@ desired backend features.
 - [ ] Move remaining shared numerical calculations out of the compatibility
   criterion types and remove the compatibility-only tests and bridges.
 
-- [ ] **Make the `problems` feature opt-in.** Set `default = []` while retaining
+- [x] **Make the `problems` feature opt-in.** Set `default = []` while retaining
   `problems = []` for benchmarks, examples, and other corpus consumers. Keep
   the existing default through Basin 1.x: removing it breaks downstream
   imports that rely on implicit activation. Update documentation and ensure

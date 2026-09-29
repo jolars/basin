@@ -6,6 +6,8 @@
 //! algorithmic invariants are covered by the nalgebra mirror test
 //! (`tests/cma_inject_nalgebra.rs`).
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{CmaEs, CmaEsState, CmaInject, DenseMatrix, Executor, NelderMead};
 

@@ -1,3 +1,5 @@
+#![cfg(feature = "problems")]
+
 use basin::problems::BoothBoxed;
 use basin::{
     Backtracking, BasicState, Executor, ProjectedGradientDescent,

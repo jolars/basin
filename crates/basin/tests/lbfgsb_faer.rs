@@ -1,4 +1,4 @@
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 //! L-Bfgs-B convergence tests over the faer backend. Mirrors
 //! `tests/lbfgsb_vec.rs` to confirm the `Col<f64>` impl of

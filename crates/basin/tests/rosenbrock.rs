@@ -1,3 +1,5 @@
+#![cfg(feature = "problems")]
+
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, BasicState, CostFunction, Executor, GradientDescent,

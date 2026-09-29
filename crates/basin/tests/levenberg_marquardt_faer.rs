@@ -1,4 +1,4 @@
-#![cfg(feature = "faer_all")]
+#![cfg(all(feature = "faer_all", feature = "problems"))]
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};

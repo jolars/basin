@@ -7,7 +7,7 @@
 //! failure on a NaN-returning problem, exercised at the boundary via
 //! `inner_executor.rs`).
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{RastriginBoxed, SphereBoxed};

@@ -78,6 +78,7 @@ jobs:
       - run: >-
           cargo doc --no-deps -p basin
           --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde
+      - run: cargo doc --no-deps -p basin
 
   test:
     name: test (${{ matrix.features }})
@@ -88,6 +89,8 @@ jobs:
         include:
           - features: default
             flags: ""
+          - features: problems
+            flags: "--features problems"
           - features: serde
             flags: "--features serde"
           - features: nalgebra 0.32
@@ -114,17 +117,18 @@ jobs:
             flags: "--no-default-features --features nalgebra_v0_32,nalgebra_v0_33,nalgebra_v0_34,nalgebra_v0_35,ndarray_v0_15,ndarray_v0_16,ndarray_v0_17,faer_v0_22,faer_v0_23,faer_v0_24,problems,parallel,serde"
           # Preserve the pre-versioning feature meanings in Basin 1.x.
           - features: legacy aliases
-            flags: "--features nalgebra,ndarray,faer"
+            flags: "--features nalgebra,ndarray,faer,problems"
           # Exercise the rayon-backed `parallel` path (FiniteDiff probe
           # fan-out), moving aliases, and backend serialization together.
           - features: latest aliases + parallel + serde
-            flags: "--features nalgebra_latest,ndarray_latest,faer_latest,parallel,serde"
+            flags: "--features nalgebra_latest,ndarray_latest,faer_latest,parallel,serde,problems"
     steps:
       - uses: actions/checkout@v7
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.features }}
       - run: cargo build -p basin ${{ matrix.flags }}
+      - run: cargo check -p basin --all-targets ${{ matrix.flags }}
       - run: cargo test -p basin ${{ matrix.flags }}
 
   # The versioned nalgebra LAPACK features link a system LAPACK, so they get a
@@ -157,7 +161,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.feature }}
-      - run: cargo test -p basin --features ${{ matrix.feature }} --test lapack_nalgebra --test backend_versions
+      - run: cargo test -p basin --features ${{ matrix.feature }},problems --test lapack_nalgebra --test backend_versions
 
   backend-unification:
     name: downstream backend feature unification
@@ -206,6 +210,9 @@ jobs:
       - name: Bare workspace wasm build
         if: matrix.features == 'default'
         run: cargo build --target wasm32-unknown-unknown
+      - name: Bare workspace wasm build without default features
+        if: matrix.features == 'default'
+        run: cargo build --target wasm32-unknown-unknown --no-default-features
 
   snippets:
     name: website snippets compile

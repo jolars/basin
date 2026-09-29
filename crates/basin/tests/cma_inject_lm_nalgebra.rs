@@ -7,7 +7,7 @@
 //! `gradient_evals` roll into the outer's `cost_evals`), and continuation
 //! after inner numerical no-progress stops.
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::RosenbrockResiduals;

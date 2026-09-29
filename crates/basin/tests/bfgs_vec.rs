@@ -4,6 +4,8 @@
 //! `Solver` impl runs on the hand-rolled
 //! [`DenseMatrix`](basin::DenseMatrix) inverse-Hessian.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::Rosenbrock;
 use basin::{
     Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient,

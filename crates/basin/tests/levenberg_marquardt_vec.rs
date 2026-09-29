@@ -8,6 +8,8 @@
 //! `PowellSingular`: LM's damping makes `JᵀJ + μI` SPD where bare Gauss-Newton
 //! fails the Cholesky (see `gauss_newton_vec.rs`).
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{PowellSingular, RosenbrockResiduals};
 use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
 

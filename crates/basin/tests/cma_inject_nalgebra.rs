@@ -11,7 +11,7 @@
 //! `SolverFailed`-bubbling contract test (CONTRIBUTING.md "Solver composition"
 //! rule 3) see `cma_inject_solver_failed_bubbles.rs`.
 
-#![cfg(feature = "nalgebra_all")]
+#![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{Rosenbrock, Sphere};

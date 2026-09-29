@@ -8,6 +8,8 @@
 //! exercises the same `ClampInPlace` paths); revisit per-backend
 //! coverage here only if a backend-specific bug surfaces.
 
+#![cfg(feature = "problems")]
+
 use basin::problems::{BoothBoxed, RastriginBoxed};
 use basin::{BasicSimplexState, Executor, NelderMead, TerminationReason};
 
