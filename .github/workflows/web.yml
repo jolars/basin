@@ -2,15 +2,16 @@ name: Website
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
+    branches: [main, '1.x']
   pull_request:
-    branches: [main]
+    branches: [main, '1.x']
+  release:
+    types: [published]
   schedule:
     - cron: "23 6 * * 1"
   workflow_dispatch:
 
-# Same-ref pushes cancel each other; tag pushes and main pushes don't fight.
+# Builds on different release lines do not cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -87,20 +88,45 @@ jobs:
         run: touch web/build/.nojekyll
 
       - uses: actions/upload-pages-artifact@v5
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        if: >-
+          (github.event_name == 'release' && !github.event.release.prerelease) ||
+          (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
         with:
           path: web/build
 
   deploy:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: >-
+      (github.event_name == 'release' && !github.event.release.prerelease) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Check after waiting for other deployments so an older build cannot
+      # replace the documentation for a newer stable release.
+      - name: Select the current stable release
+        id: stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          if [[ "$GITHUB_REF" == refs/tags/* &&
+                "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ &&
+                "$GITHUB_REF_NAME" == "$latest_tag" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping deployment of $GITHUB_REF_NAME; current stable release is $latest_tag."
+          fi
       - id: deployment
+        if: steps.stable.outputs.deploy == 'true'
         uses: actions/deploy-pages@v5

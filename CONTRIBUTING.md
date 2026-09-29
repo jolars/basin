@@ -8,6 +8,10 @@ opt-in features arrive in minor releases.
 
 [semantic versioning]: https://semver.org/
 
+`main` prepares Basin 2.0; `1.x` maintains the latest compatible release.
+See [Maintenance and releases](MAINTENANCE.md) for support dates, backports,
+and the independent Versionary workflows.
+
 ## What this is
 
 Basin is a Rust library crate for numerical optimization, inspired by `argmin`.

@@ -21,6 +21,15 @@ and solvers.
 To port an existing Argmin project, see
 [Migrating from Argmin](https://basin.rs/docs/migrating-from-argmin/).
 
+## Release support
+
+Development of Basin 2.0 takes place on `main`. The `1.x` branch receives
+correctness, regression, and security fixes for the latest 1.x release during
+2.0 development and for at least six months after 2.0.0 is released. New features
+target 2.x. To stay on the supported 1.x line, use `basin = "1"` and keep its
+patch version current. See the [maintenance policy](MAINTENANCE.md) for the
+support window, backport procedure, and release workflow.
+
 ## Install
 
 ```sh

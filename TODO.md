@@ -265,6 +265,12 @@ desired backend features.
 
 ## Basin 2.0
 
+- [ ] **Complete the stable-release handoff before publishing 2.0.0.** Follow
+  [Maintenance and releases](MAINTENANCE.md#publishing-200): disable Latest
+  promotion on `1.x`, finish in-flight maintenance releases, record the 1.x
+  support end date, and publish migration guidance. Keep the 2.0 release PR
+  open until the release is ready.
+
 - [ ] **Revise solver convergence defaults ([#109](https://github.com/jolars/basin/issues/109)).**
   Preserve existing defaults throughout Basin 1.x. Use established
   solver-specific stopping policies as the baseline for 2.0: paired absolute

@@ -7,6 +7,10 @@ or lifecycle changes, read its [state and lifecycle
 contracts](CONTRIBUTING.md#state-and-lifecycle-contracts) and preserve the
 stated Basin 1.x compatibility boundaries.
 
+For backports and releases, follow [MAINTENANCE.md](MAINTENANCE.md). `main`
+prepares Basin 2.0, while `1.x` maintains the latest 1.x release. Each branch
+owns its release configuration, versions, changelog, and baseline manifest.
+
 ## Project priorities
 
 Basin is a semver-stable Rust numerical-optimization library with a generic
