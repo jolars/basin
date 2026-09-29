@@ -265,6 +265,27 @@ desired backend features.
 
 ## Basin 2.0
 
+- [ ] **Revise solver convergence defaults ([#109](https://github.com/jolars/basin/issues/109)).**
+  Preserve existing defaults throughout Basin 1.x. Use established
+  solver-specific stopping policies as the baseline for 2.0: paired absolute
+  simplex-size and cost-spread tests for Nelder-Mead, projected-gradient or
+  normalized cost-reduction tests for L-BFGS-B, MINPACK-style orthogonality,
+  model-reduction, and scaled-step tests for LM, and cost and step tests
+  alongside the bound-scaled gradient test for full TRF. Compare the precise
+  formulas, observation stages, and defaults with
+  [SciPy](https://docs.scipy.org/doc/scipy/reference/optimize.html) and
+  [Ceres](https://ceres-solver.readthedocs.io/latest/nnls_solving.html), and
+  distinguish full `TrustRegionReflective` from the legacy bounded-LM `Trf`.
+  Match the mathematics rather than only similarly named tolerance settings;
+  do not promise universal scale invariance. Obtain the reporter's NIST StRD
+  harness and validate solution accuracy as well as termination reasons on
+  both supplied starting points, rescaled objectives and parameters, zero-cost
+  optima, active bounds, and stagnation away from a solution. Select and test
+  defaults for both `f32` and `f64` across supported backends. Keep numerical
+  no-progress safeguards distinct from convergence, account for new vector
+  capability requirements in default simplex checks, and document explicit
+  settings that recover the 1.x behavior.
+
 - [ ] **Make structured termination reports part of ordinary results.** Build
   on the 1.x native diagnostics. Replace the flat `TerminationReason` with a
   payload-bearing report distinguishing convergence, execution limits,

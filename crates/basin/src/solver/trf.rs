@@ -122,6 +122,12 @@ use crate::{
 /// `None` disables the test; zero tests exact stationarity. The scaled metric
 /// vanishes at a KKT point and differs from the unscaled projected gradient.
 /// Observed cost and step checks are opt-in and combine with it using OR.
+/// Distance-to-bound scaling does not make this absolute threshold invariant
+/// to residual or parameter units. Tune it for the problem's scale, and use
+/// [`with_relative_cost_change_tolerance`](Self::with_relative_cost_change_tolerance)
+/// or [`with_relative_step_tolerance`](Self::with_relative_step_tolerance)
+/// when additional observed checks are appropriate. These checks do not
+/// replace the gradient test or establish stationarity when progress stalls.
 /// Execution budgets belong on the executor. The gradient is computed inside
 /// TRF; [`NllsState`] does not expose a [`GradientState`](crate::GradientState).
 ///

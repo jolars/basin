@@ -86,6 +86,14 @@ use step::{Model, interior, number, update_radius};
 /// observed cost and step tests are disabled by default and combine with OR.
 /// Those tests inspect accepted iterates, not rejected inner trials. The
 /// numerical no-progress safeguard operates independently of these tolerances.
+///
+/// The native gradient scaling accounts for bounds; its absolute threshold
+/// is still sensitive to residual and parameter units. Tune it for the
+/// problem's scale. [`with_relative_cost_change_tolerance`](Self::with_relative_cost_change_tolerance)
+/// and [`with_relative_step_tolerance`](Self::with_relative_step_tolerance)
+/// enable additional observed checks, without replacing the gradient check
+/// or establishing solution accuracy when progress stalls.
+///
 /// Execution budgets belong on [`crate::Executor`]. All-fixed successful
 /// termination is structural and does not depend on a tolerance.
 /// Use [`Executor::run_with_solver`](crate::Executor::run_with_solver) and

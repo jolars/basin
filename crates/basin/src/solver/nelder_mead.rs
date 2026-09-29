@@ -14,6 +14,23 @@ use crate::core::termination::TerminationReason;
 /// `α` (reflection), `β` (expansion), `γ` (contraction), `δ` (shrink), with
 /// the constraints `α > 0`, `β > 1`, `0 < γ < 1`, `0 < δ < 1`.
 ///
+/// # Convergence
+///
+/// All convergence tests are disabled by default, for both unbounded and
+/// projected variants. Without an explicit test, a collapsed simplex does
+/// not stop the solver; it continues until an executor limit or another
+/// configured stop ends the run.
+///
+/// Configure [`with_absolute_simplex_size_tolerance`](Self::with_absolute_simplex_size_tolerance)
+/// and [`with_absolute_simplex_cost_tolerance`](Self::with_absolute_simplex_cost_tolerance)
+/// to stop when both the maximum infinity-norm distance from the best vertex
+/// and the maximum absolute cost difference from that vertex meet their
+/// tolerances. These tests measure the whole simplex, so an unchanged best
+/// vertex alone does not trigger them. Both thresholds are absolute; choose
+/// them for the units of the parameters and objective. `None` disables a
+/// test; zero requires an exact-zero spread. Keep an iteration or evaluation
+/// budget on the executor as well. The example below configures both tests.
+///
 /// # Bounds
 ///
 /// `NelderMead` is generic over a type-state [`Mode`](Unbounded) marker
@@ -140,6 +157,7 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
     /// α=1, β=2, γ=0.5, δ=0.5. These coefficients *are* the default, so
     /// this is the canonical entry point; [`adaptive`](Self::adaptive)
     /// and [`with_params`](Self::with_params) are presets and overrides.
+    /// No convergence test is enabled; see [Convergence](Self#convergence).
     pub fn new() -> Self {
         Self {
             config: ParamConfig::Standard,

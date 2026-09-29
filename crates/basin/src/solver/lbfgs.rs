@@ -127,8 +127,16 @@ use self::subsm::subsm;
 /// [`with_absolute_projected_gradient_tolerance`](Self::with_absolute_projected_gradient_tolerance).
 /// It uses the current problem's bounds and defaults to `1e-10`.
 /// `None` disables a configurable check; zero tests exact stationarity.
-/// Optional observed step and cost checks combine with it using OR.
+/// Observed step and cost checks are disabled by default and combine with
+/// it using OR when enabled.
 /// Keep iteration and evaluation budgets on the executor.
+///
+/// The projected-gradient threshold is absolute and depends on the scaling
+/// of the objective and parameters. Choose it for the problem's units and
+/// required accuracy. [`with_relative_cost_change_tolerance`](Self::with_relative_cost_change_tolerance)
+/// and [`with_relative_step_tolerance`](Self::with_relative_step_tolerance)
+/// provide additional stopping tests, but do not replace the existing
+/// gradient check. A small cost or step change does not establish stationarity.
 ///
 /// # Backends
 ///

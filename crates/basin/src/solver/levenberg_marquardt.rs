@@ -147,6 +147,12 @@ pub enum LmDamping {
 ///
 /// # Convergence
 ///
+/// Only the absolute gradient test is enabled by default. Its threshold
+/// depends on residual and parameter units: multiplying all residuals by
+/// a constant multiplies `Jᵀr` by that constant squared. Choose tolerances
+/// for the problem's scale and required accuracy; enabling an additional
+/// test does not disable the absolute gradient test.
+///
 /// Five native tests combine with OR and report
 /// [`TerminationReason::SolverConverged`]:
 ///
@@ -181,6 +187,24 @@ pub enum LmDamping {
 /// Disabling convergence tests does not disable this safeguard; set
 /// [`with_no_progress_check(false)`](Self::with_no_progress_check)
 /// to retain the previous budget-stop behavior at an unchanged trial.
+///
+/// For example, to replace the absolute gradient test with orthogonality
+/// and relative model-reduction tests for an `f64` problem:
+///
+/// ```
+/// use basin::{DenseMatrix, LevenbergMarquardt};
+///
+/// let solver: LevenbergMarquardt<Vec<f64>, DenseMatrix> =
+///     LevenbergMarquardt::new()
+///         .with_absolute_gradient_tolerance(None)
+///         .with_gradient_orthogonality_tolerance(1e-8)
+///         .with_relative_model_reduction_tolerance(1e-8);
+/// ```
+///
+/// These values illustrate a configuration, not a guarantee of parameter
+/// accuracy. Relative stopping tests do not correct poor conditioning, and
+/// a small change can indicate stagnation. Inspect the termination reason
+/// and the returned solution, and retain an executor budget.
 ///
 /// # Backends
 ///
@@ -299,9 +323,8 @@ impl<V, M, F: Scalar> Default for LevenbergMarquardt<V, M, F> {
 }
 
 impl<V, M> LevenbergMarquardt<V, M> {
-    /// Levenberg-Marquardt with Nielsen damping: `tol_grad = 1e-8`,
-    /// `tol_grad_rel = 0.0` (disabled), `tol_cost_rel = 0.0` (disabled),
-    /// `tol_step_rel = 0.0` (disabled), trust-radius convergence disabled,
+    /// Levenberg-Marquardt with Nielsen damping: absolute gradient tolerance
+    /// `1e-8`, orthogonality and all relative convergence tests disabled,
     /// `tau = 1e-3`, `max_inner_attempts = 50`, and numerical no-progress
     /// handling enabled.
     pub fn new() -> Self {

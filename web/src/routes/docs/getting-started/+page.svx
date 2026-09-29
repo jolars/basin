@@ -62,7 +62,8 @@ impl Gradient for Rosenbrock {
 }
 
 fn main() {
-    let solver = GradientDescent::new(1e-3);
+    let solver = GradientDescent::new(1e-3)
+        .with_absolute_gradient_tolerance(1e-6);
     let state = BasicState::new(vec![-1.2, 1.0]);
 
     let result = Executor::new(Rosenbrock, solver, state)
@@ -125,10 +126,26 @@ Nelder–Mead's enabled simplex size and cost-spread tests combine with AND.
 Algorithm-specific defaults and safeguards still apply. Read each solver's
 rustdoc for the norm and scaling used by a test.
 
+Defaults vary by solver. In particular,
+[`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html#convergence)
+has **no convergence test enabled by default**: even a collapsed simplex
+continues until a run limit or another configured stop fires. Its API example
+shows how to configure both simplex tests.
+
+Choose tolerances for the scale of your objective and parameters. An absolute
+gradient threshold changes meaning when you rescale the problem. For least
+squares, the
+[`LevenbergMarquardt` convergence guide](https://docs.rs/basin/latest/basin/solver/levenberg_marquardt/struct.LevenbergMarquardt.html#convergence)
+shows how to select orthogonality and relative model-reduction tests through
+existing setters. Adding a relative check leaves any absolute check enabled
+unless you explicitly disable it with `None`.
+
 Budgets are checked after initialization and between iterations, so evaluation
 limits can be exceeded within an iteration. `result.reason` reports why the run
-ended. For an application condition, use `stop_when(|state| ...)`, returning
-`Some(TerminationReason::UserRequested)` to stop or `None` to continue.
+ended. Reaching a budget or reporting `NumericalNoProgress` does not establish
+convergence or rule out an accurate solution. Inspect the returned solution
+alongside the reason. For an application condition, use `stop_when(|state| ...)`,
+returning `Some(TerminationReason::UserRequested)` to stop or `None` to continue.
 
 The former `terminate_on` facility and abbreviated tolerance setters are
 deprecated for removal in Basin 2.0. See [Migrating Convergence Settings](../migrating-convergence/).
