@@ -10,7 +10,8 @@ macro_rules! cost_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_absolute_cost_change_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, (), (), CostChecks<Q>, ()>
              { ConfiguredSolver::new(self).set_absolute_cost_change_tolerance(value) }
             /// Stop when the observed cost change is at most the tolerance times the previous absolute cost.
@@ -18,7 +19,8 @@ macro_rules! cost_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_relative_cost_change_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, (), (), CostChecks<Q>, ()>
              { ConfiguredSolver::new(self).set_relative_cost_change_tolerance(value) }
         }
@@ -28,7 +30,8 @@ macro_rules! cost_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_absolute_cost_change_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, CG, CX, CostChecks<Q>, CT>
             where CC: Into<CostChecks<Q>> { self.set_absolute_cost_change_tolerance(value) }
             /// Stop when the observed cost change is at most the tolerance times the previous absolute cost.
@@ -36,7 +39,8 @@ macro_rules! cost_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_relative_cost_change_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, CG, CX, CostChecks<Q>, CT>
             where CC: Into<CostChecks<Q>> { self.set_relative_cost_change_tolerance(value) }
         }
@@ -50,7 +54,8 @@ macro_rules! step_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_absolute_step_tolerance<Param, Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, (), StepChecks<Param,Q>, (), ()>
              { ConfiguredSolver::new(self).set_absolute_step_tolerance(value) }
             /// Stop when the Euclidean iterate change is at most the tolerance times the current iterate norm.
@@ -58,7 +63,8 @@ macro_rules! step_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_relative_step_tolerance<Param, Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, (), StepChecks<Param,Q>, (), ()>
              { ConfiguredSolver::new(self).set_relative_step_tolerance(value) }
         }
@@ -68,7 +74,8 @@ macro_rules! step_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_absolute_step_tolerance<Param, Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, CG, StepChecks<Param,Q>, CC, CT>
             where CX: Into<StepChecks<Param,Q>> { self.set_absolute_step_tolerance(value) }
             /// Stop when the Euclidean iterate change is at most the tolerance times the current iterate norm.
@@ -76,7 +83,8 @@ macro_rules! step_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_relative_step_tolerance<Param, Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, CG, StepChecks<Param,Q>, CC, CT>
             where CX: Into<StepChecks<Param,Q>> { self.set_relative_step_tolerance(value) }
         }
@@ -287,7 +295,8 @@ macro_rules! absolute_step_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_absolute_step_tolerance<Param, Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, (), StepChecks<Param,Q>, (), ()>
              { ConfiguredSolver::new(self).set_absolute_step_tolerance(value) }
         }
@@ -297,7 +306,8 @@ macro_rules! absolute_step_setters {
             /// Disabled by default. `None` disables; zero requests an exact-zero
             /// threshold. Values must be finite and nonnegative. Distinct enabled tests combine with OR.
             /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting. Change tests need two observed iterates.
+            /// this setting. Change tests need two observed iterates. Trust-region
+            /// solvers skip rejected iterations and compare accepted iterates.
             pub fn with_absolute_step_tolerance<Param, Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, CG, StepChecks<Param,Q>, CC, CT>
             where CX: Into<StepChecks<Param,Q>> { self.set_absolute_step_tolerance(value) }
         }

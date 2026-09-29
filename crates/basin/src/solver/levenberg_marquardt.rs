@@ -271,6 +271,7 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
 
     mu: Option<F>,
     nu: F,
+    rejected_step: bool,
 
     // Monotone Marquardt scaling diagonal D = max diag(JᵀJ). Zero
     // columns are floored to one so damping keeps the system nonsingular.
@@ -325,6 +326,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             max_inner_attempts: 50,
             mu: None,
             nu: F::from_f64(2.0).unwrap(),
+            rejected_step: false,
             diag: None,
             r_cache: None,
             model_cache: None,
@@ -643,6 +645,9 @@ where
         + Clone,
 {
     type Error = <P as Residual>::Error;
+    fn should_check_iterate_change(&self) -> bool {
+        !self.rejected_step
+    }
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
     }
@@ -690,6 +695,9 @@ where
     M: ScaleRowsInPlace<F>,
 {
     type Error = <P as Residual>::Error;
+    fn should_check_iterate_change(&self) -> bool {
+        !self.rejected_step
+    }
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
     }
@@ -735,6 +743,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         // Seed both the state and the cross-iteration caches from one
         // residual/Jacobian evaluation.
         self.failed = false;
+        self.rejected_step = false;
         self.native_convergence.clear();
         self.r_cache = None;
         self.model_cache = None;
@@ -1001,6 +1010,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         }
 
         if rho > F::zero() {
+            self.rejected_step = false;
             // Nielsen eq. 2.5 with β=2, γ=3, p=3.
             state.param = x_trial;
             state.cost = Some(f_trial);
@@ -1015,6 +1025,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             self.jtr_cache = None;
         } else {
             // Preserve iterate-dependent caches and increase damping.
+            self.rejected_step = true;
             if self.damping == LmDamping::Nielsen {
                 mu = mu * nu;
                 nu = nu * two;
@@ -1453,6 +1464,9 @@ where
     M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
 {
     type Error = <P as Residual>::Error;
+    fn should_check_iterate_change(&self) -> bool {
+        !self.inner.rejected_step
+    }
     fn reset_convergence(&mut self) {
         self.inner.native_convergence.clear();
     }
@@ -1499,6 +1513,9 @@ where
     M: ScaleRowsInPlace<F>,
 {
     type Error = <P as Residual>::Error;
+    fn should_check_iterate_change(&self) -> bool {
+        !self.inner.rejected_step
+    }
     fn reset_convergence(&mut self) {
         self.inner.native_convergence.clear();
     }

@@ -141,6 +141,20 @@ pub trait Solver<P, S: State> {
     /// Exact solver-aware checkpoint resumes retain this history.
     fn reset_convergence(&mut self) {}
 
+    /// Whether the current boundary can enter cost- and step-change checks.
+    ///
+    /// Return `true` after initialization to seed their history. Solvers that
+    /// can reject every trial in an iteration must return `false` at that
+    /// boundary, then `true` after an accepted step. Rejection must not update
+    /// the checks' history or turn an unchanged iterate into convergence.
+    /// Gradient checks and solver-native convergence tests remain active.
+    ///
+    /// The default preserves observation of every boundary for existing
+    /// implementations. Wrappers should forward this hook to their solver.
+    fn should_check_iterate_change(&self) -> bool {
+        true
+    }
+
     /// Check convergence at an initialized iteration boundary.
     ///
     /// Stateful checks must be idempotent at the same boundary. The default

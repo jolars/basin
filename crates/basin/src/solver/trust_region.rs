@@ -450,6 +450,7 @@ pub struct TrustRegion<Sub = Steihaug, F = f64, Mode = ExactHessian> {
     max_radius: F,
     eta: F,
     max_inner: u32,
+    rejected_step: bool,
     mode: PhantomData<Mode>,
 }
 
@@ -507,6 +508,7 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
             max_radius: F::from_f64(100.0).unwrap(),
             eta: F::from_f64(0.125).unwrap(),
             max_inner: 10,
+            rejected_step: false,
             mode: PhantomData,
         }
     }
@@ -523,6 +525,7 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F> {
             max_radius: F::from_f64(100.0).unwrap(),
             eta: F::from_f64(0.125).unwrap(),
             max_inner: 10,
+            rejected_step: false,
             mode: PhantomData,
         }
     }
@@ -607,6 +610,8 @@ where
 /// of N&W Algorithm 4.1. The mode-specific part — how a subproblem attempt
 /// obtains `B·v` — is injected as `attempt(problem, x, g, radius)`, called
 /// once per inner radius reduction at the *same* iterate `x`.
+/// The final tuple element reports whether a step was accepted, so rejected
+/// iterations cannot trigger the generic iterate-change checks.
 #[allow(clippy::type_complexity)]
 fn tr_next_iter<P, V, F>(
     radius: &mut F,
@@ -621,7 +626,7 @@ fn tr_next_iter<P, V, F>(
         &V,
         F,
     ) -> Result<Step<V, F>, P::Error>,
-) -> Result<(BasicState<V, F>, Option<TerminationReason>), P::Error>
+) -> Result<(BasicState<V, F>, Option<TerminationReason>, bool), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -646,7 +651,7 @@ where
         // untrustworthy, regardless of the gradient norm.
         if !step.predicted_reduction.is_finite() {
             state.gradient = Some(g);
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok((state, Some(TerminationReason::SolverFailed), false));
         }
 
         // Radius collapse or roundoff can erase the predicted reduction
@@ -660,7 +665,7 @@ where
                 TerminationReason::NumericalNoProgress
             };
             state.gradient = Some(g);
-            return Ok((state, Some(reason)));
+            return Ok((state, Some(reason), false));
         }
 
         let mut trial = state.param.clone();
@@ -700,7 +705,7 @@ where
             state.cost = Some(cost_trial);
             let g_new = problem.gradient(&state.param)?;
             state.gradient = Some(g_new);
-            return Ok((state, None));
+            return Ok((state, None, true));
         }
         // Reject: radius has shrunk; retry at the same iterate.
     }
@@ -710,7 +715,7 @@ where
     // the state stays consistent and let the next outer iteration retry
     // (or a termination criterion fire).
     state.gradient = Some(g);
-    Ok((state, None))
+    Ok((state, None, false))
 }
 
 impl<P, Sub, V, M, F> Solver<P, BasicState<V, F>>
@@ -725,11 +730,16 @@ where
 {
     type Error = P::Error;
 
+    fn should_check_iterate_change(&self) -> bool {
+        !self.rejected_step
+    }
+
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: BasicState<V, F>,
     ) -> Result<BasicState<V, F>, Self::Error> {
+        self.rejected_step = false;
         tr_init(&mut self.radius, self.initial_radius, problem, state)
     }
 
@@ -744,7 +754,7 @@ where
         // likewise fixed while x is).
         let b = problem.hessian(&state.param)?;
         let subproblem = &self.subproblem;
-        tr_next_iter(
+        let (state, reason, accepted) = tr_next_iter(
             &mut self.radius,
             self.max_radius,
             self.eta,
@@ -752,7 +762,9 @@ where
             problem,
             state,
             |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
-        )
+        )?;
+        self.rejected_step = !accepted;
+        Ok((state, reason))
     }
 }
 
@@ -768,11 +780,16 @@ where
 {
     type Error = P::Error;
 
+    fn should_check_iterate_change(&self) -> bool {
+        !self.rejected_step
+    }
+
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: BasicState<V, F>,
     ) -> Result<BasicState<V, F>, Self::Error> {
+        self.rejected_step = false;
         tr_init(&mut self.radius, self.initial_radius, problem, state)
     }
 
@@ -788,7 +805,7 @@ where
         // shrunken radius truncates CG earlier, so re-attempts get
         // cheaper); `hessian_product_evals` makes that cost visible.
         let subproblem = &self.subproblem;
-        tr_next_iter(
+        let (state, reason, accepted) = tr_next_iter(
             &mut self.radius,
             self.max_radius,
             self.eta,
@@ -799,7 +816,9 @@ where
                 subproblem
                     .solve_hvp(g, radius, |v| problem.hessian_product(x, v))
             },
-        )
+        )?;
+        self.rejected_step = !accepted;
+        Ok((state, reason))
     }
 }
 
@@ -984,7 +1003,7 @@ mod tests {
             )
             .unwrap();
             let counts = *problem.counts();
-            let (state, reason) = tr_next_iter(
+            let (state, reason, _) = tr_next_iter(
                 &mut radius,
                 100.0,
                 0.125,

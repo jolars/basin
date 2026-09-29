@@ -26,6 +26,8 @@ use super::termination::*;
 /// disabled until configured. `None` disables a check; zero is an exact-zero
 /// threshold. The original solver's algorithm controls and safeguards remain
 /// active. Settings and history accompany composed inner solves.
+/// Trust-region solvers skip cost- and step-change checks after rejected
+/// iterations, retaining the initial or last accepted iterate as the anchor.
 ///
 /// Unsupported settings are absent from a solver's API:
 ///
@@ -451,6 +453,9 @@ where
     fn terminate(&self, state: &S) -> Option<TerminationReason> {
         self.solver.terminate(state)
     }
+    fn should_check_iterate_change(&self) -> bool {
+        self.solver.should_check_iterate_change()
+    }
     fn reset_convergence(&mut self) {
         self.checked = None;
         self.reason = None;
@@ -470,11 +475,19 @@ where
             return self.reason;
         }
         self.checked = Some(boundary);
+        let check_change = self.solver.should_check_iterate_change();
         self.reason = self
             .gradient
             .check(problem, state)
-            .or_else(|| self.step.check(problem, state))
-            .or_else(|| self.cost.check(problem, state))
+            .or_else(|| {
+                if check_change {
+                    self.step
+                        .check(problem, state)
+                        .or_else(|| self.cost.check(problem, state))
+                } else {
+                    None
+                }
+            })
             .or_else(|| self.simplex.check(problem, state))
             .or_else(|| self.solver.check_convergence(problem, state));
         self.reason

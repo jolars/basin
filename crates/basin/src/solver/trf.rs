@@ -173,6 +173,7 @@ pub struct Trf<V, M, F = f64> {
     // through `&mut self`.
     mu: Option<F>,
     nu: F,
+    rejected_step: bool,
 
     // Residual and Jacobian caches across iterations, same shape as
     // [`LevenbergMarquardt`](super::LevenbergMarquardt). On accept the
@@ -195,6 +196,7 @@ impl<V, M, F: Scalar> Default for Trf<V, M, F> {
             max_inner_attempts: 50,
             mu: None,
             nu: F::from_f64(2.0).unwrap(),
+            rejected_step: false,
             r_cache: None,
             j_cache: None,
             model_r_cache: None,
@@ -314,6 +316,9 @@ where
         + Clone,
 {
     type Error = <P as Residual>::Error;
+    fn should_check_iterate_change(&self) -> bool {
+        !self.rejected_step
+    }
     fn init(
         &mut self,
         problem: &mut Problem<P>,
@@ -354,6 +359,9 @@ where
     M: ScaleRowsInPlace<F>,
 {
     type Error = <P as Residual>::Error;
+    fn should_check_iterate_change(&self) -> bool {
+        !self.rejected_step
+    }
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
@@ -400,6 +408,7 @@ where
         );
 
         self.failed = false;
+        self.rejected_step = false;
         self.r_cache = None;
         self.j_cache = None;
         self.model_r_cache = None;
@@ -602,6 +611,7 @@ where
         };
 
         if rho > F::zero() {
+            self.rejected_step = false;
             // Accept. Update x and cost; adapt μ via Nielsen smooth
             // cubic with β=2, γ=3, p=3 (matches LevenbergMarquardt).
             // Stash the trial residual (now at the new iterate); clear
@@ -617,6 +627,7 @@ where
             // Reject. Bump μ geometrically; double ν so consecutive
             // rejections escalate damping faster. Both r and J remain
             // valid at the unchanged iterate.
+            self.rejected_step = true;
             mu = mu * nu;
             nu = nu * two;
             self.r_cache = Some(r);

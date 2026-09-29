@@ -91,6 +91,52 @@ fn unchanged_trial_preserves_errors_nonfinite_rejections_and_acceptance() {
 }
 
 #[test]
+fn observed_step_tolerance_uses_acceptance_even_at_identical_coordinates() {
+    fn check<S>(solver: S, response: f64)
+    where
+        S: Solver<TrialProblem, NllsState<Vec<f64>>, Error = CallbackError>,
+    {
+        let result = Executor::new(
+            TrialProblem {
+                calls: Rc::new(Cell::new(0)),
+                response: Ok(response),
+            },
+            solver,
+            NllsState::new(vec![1.]),
+        )
+        .max_iter(2)
+        .run()
+        .unwrap();
+        assert_eq!(result.param(), &[1.]);
+        assert_eq!(
+            result.reason,
+            if response == 0. {
+                TerminationReason::ParamTolerance
+            } else {
+                TerminationReason::MaxIter
+            }
+        );
+    }
+
+    for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+        for response in [0., f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+            let solver = || {
+                LevenbergMarquardt::new()
+                    .with_damping(damping)
+                    .with_tau(1e20)
+                    .with_initial_step_bound(1e-20)
+                    .with_absolute_gradient_tolerance(None)
+            };
+            check(solver().with_absolute_step_tolerance(0.), response);
+            check(
+                solver().with_pivoted_qr().with_absolute_step_tolerance(0.),
+                response,
+            );
+        }
+    }
+}
+
+#[test]
 fn trust_radius_preserves_callback_errors_and_nonfinite_rejections() {
     for response in [
         Err(CallbackError),
@@ -297,7 +343,7 @@ fn execution_budget_precedes_a_trial_and_its_numerical_stop() {
 }
 
 #[test]
-fn numerical_stop_precedes_the_next_observed_change_check() {
+fn rejected_zero_steps_stop_only_on_the_numerical_safeguard_or_budget() {
     for enabled in [true, false] {
         let result = Executor::from_start(
             TrialProblem {
@@ -319,10 +365,10 @@ fn numerical_stop_precedes_the_next_observed_change_check() {
             if enabled {
                 TerminationReason::NumericalNoProgress
             } else {
-                TerminationReason::ParamTolerance
+                TerminationReason::MaxIter
             }
         );
-        assert_eq!(result.iter(), if enabled { 0 } else { 1 });
-        assert_eq!(result.cost_evals(), 2);
+        assert_eq!(result.iter(), if enabled { 0 } else { 4 });
+        assert_eq!(result.cost_evals(), if enabled { 2 } else { 5 });
     }
 }

@@ -170,17 +170,24 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
     // The scale-invariant termination side of issue #6: a relative cost
     // tolerance is portable across problem scales where the absolute
     // CostTolerance is not. Disable the solver's own ‖Jᵀr‖∞ check so the
-    // framework criterion is what stops the run. Disable numerical no-progress
-    // handling as well so the observed change reaches the next boundary.
-    let problem = ExponentialFit::<Array1<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
+    // framework criterion is what stops the run. Symmetric observations give
+    // a known positive minimum of 10, allowing small accepted reductions
+    // to satisfy a relative tolerance before numerical stagnation.
+    let mut problem =
+        ExponentialFit::<Array1<f64>>::sampled(1.0e5, -1.0, 10, 0.4);
+    problem.t = problem.t.into_iter().flat_map(|t| [t, t]).collect();
+    problem.y = problem
+        .y
+        .into_iter()
+        .flat_map(|y| [y - 1., y + 1.])
+        .collect();
     let initial = Array1::from_vec(vec![5.0e4, -0.3]);
 
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new()
             .with_absolute_gradient_tolerance(None)
-            .with_no_progress_check(false)
-            .with_relative_cost_change_tolerance(1e-10),
+            .with_relative_cost_change_tolerance(1e-8),
         NllsState::new(initial),
     )
     .max_iter(200)
@@ -188,7 +195,11 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::RelativeCostTolerance);
-    assert!(result.cost() < 1e-3, "cost = {}", result.cost());
+    assert!(
+        (result.cost() - 10.).abs() < 1e-6,
+        "cost = {}",
+        result.cost()
+    );
     assert!(
         (result.param()[0] - 1.0e5).abs() < 1e2,
         "a = {} (expected ≈1e5)",
