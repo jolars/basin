@@ -22,9 +22,9 @@ const FORMAT_VERSION: u32 = 1;
 /// Write the current state to a file with [`postcard`], overwriting the
 /// previous snapshot, so the file always holds the latest checkpoint.
 ///
-/// New files have a format marker and version preceding the postcard payload.
-/// [`read_checkpoint`] also accepts legacy, unprefixed bincode files. Older
-/// Basin releases cannot read the new format.
+/// Files start with `BASINST\0` and a little-endian `u32` format version of 1,
+/// followed by the postcard payload. Basin 2.0 reads only this format. See
+/// [`read_checkpoint`] for migration from legacy 1.x files.
 ///
 /// State-only checkpointing is an observer's job in Basin. It records an
 /// iterate for a later warm start without promising an identical trajectory.
@@ -132,40 +132,45 @@ where
 /// Load a checkpoint previously written by [`CheckpointWriter`] into a concrete
 /// state, ready for [`Executor::new`](crate::Executor::new) as a warm start.
 ///
-/// Reads both versioned postcard files and legacy, unprefixed bincode files.
-/// Reading does not modify the file. Unsupported versions, malformed data, and
-/// trailing bytes in postcard files return [`io::ErrorKind::InvalidData`].
+/// Reads postcard state format version 1 without modifying the file. Missing
+/// format markers, unsupported versions, malformed data, and trailing bytes
+/// return [`io::ErrorKind::InvalidData`].
+///
+/// # Migrating from Basin 1.x
+///
+/// Basin 2.0 no longer reads unprefixed bincode files. Before upgrading, load
+/// them with a compatible 1.x release and rewrite them using
+/// [`CheckpointWriter`] from Basin 1.15 or later in the 1.x series, which writes
+/// postcard. The concrete state's serialized layout must still match. If it
+/// changes, export parameters from the 1.x application and construct a fresh
+/// state in 2.0. State snapshots do not promise exact continuation.
 pub fn read_checkpoint<S: DeserializeOwned>(
     path: impl AsRef<Path>,
 ) -> io::Result<S> {
     let bytes = fs::read(path)?;
-    if let Some(body) = bytes.strip_prefix(MAGIC) {
-        let invalid_data =
-            |message: &str| io::Error::new(io::ErrorKind::InvalidData, message);
-        if body.len() < size_of::<u32>() {
-            return Err(invalid_data("truncated state checkpoint prefix"));
-        }
-        let version = u32::from_le_bytes(
-            body[..size_of::<u32>()]
-                .try_into()
-                .expect("version slice has fixed length"),
-        );
-        if version != FORMAT_VERSION {
-            return Err(invalid_data(&format!(
-                "unsupported state checkpoint format version {version}; expected {FORMAT_VERSION}"
-            )));
-        }
-        let (state, remaining) =
-            postcard::take_from_bytes(&body[size_of::<u32>()..])
-                .map_err(|error| invalid_data(&error.to_string()))?;
-        if !remaining.is_empty() {
-            return Err(invalid_data("trailing data in state checkpoint"));
-        }
-        return Ok(state);
+    let invalid_data =
+        |message: &str| io::Error::new(io::ErrorKind::InvalidData, message);
+    let body = bytes
+        .strip_prefix(MAGIC)
+        .ok_or_else(|| invalid_data("invalid state checkpoint magic"))?;
+    if body.len() < size_of::<u32>() {
+        return Err(invalid_data("truncated state checkpoint prefix"));
     }
-
-    let (state, _) =
-        bincode::serde::decode_from_slice(&bytes, bincode::config::standard())
-            .map_err(io::Error::other)?;
+    let version = u32::from_le_bytes(
+        body[..size_of::<u32>()]
+            .try_into()
+            .expect("version slice has fixed length"),
+    );
+    if version != FORMAT_VERSION {
+        return Err(invalid_data(&format!(
+            "unsupported state checkpoint format version {version}; expected {FORMAT_VERSION}"
+        )));
+    }
+    let (state, remaining) =
+        postcard::take_from_bytes(&body[size_of::<u32>()..])
+            .map_err(|error| invalid_data(&error.to_string()))?;
+    if !remaining.is_empty() {
+        return Err(invalid_data("trailing data in state checkpoint"));
+    }
     Ok(state)
 }

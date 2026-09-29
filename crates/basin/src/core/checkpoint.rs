@@ -173,20 +173,10 @@ mod file {
 
     fn decode_checkpoint_part<T: DeserializeOwned>(
         bytes: &[u8],
-        format_version: u32,
         part: &str,
     ) -> io::Result<T> {
-        let (value, remaining) = if format_version == 1 {
-            let (value, consumed) = bincode::serde::decode_from_slice(
-                bytes,
-                bincode::config::standard(),
-            )
+        let (value, remaining) = postcard::take_from_bytes(bytes)
             .map_err(|error| invalid_data(error.to_string()))?;
-            (value, &bytes[consumed..])
-        } else {
-            postcard::take_from_bytes(bytes)
-                .map_err(|error| invalid_data(error.to_string()))?
-        };
         if !remaining.is_empty() {
             return Err(invalid_data(format!(
                 "trailing data in exact checkpoint {part}"
@@ -300,6 +290,7 @@ mod file {
     ///
     /// Writes format version 2 with postcard-encoded metadata and payload.
     /// Older Basin releases that only support version 1 cannot read these files.
+    /// See [`read_exact_checkpoint`] for migration from Basin 1.x.
     #[derive(Clone, Debug)]
     pub struct ExactCheckpointWriter {
         path: PathBuf,
@@ -382,9 +373,18 @@ mod file {
     ///
     /// The format, exact Basin version, and concrete solver/state type names
     /// must match before the payload is deserialized.
-    /// Supports postcard format version 2 and legacy bincode format version 1
-    /// without modifying the file. Both formats require the same Basin version
-    /// as the reader; legacy support does not enable cross-release continuation.
+    /// Reads only postcard format version 2 without modifying the file.
+    /// Unsupported formats, mismatched metadata, malformed data, and trailing
+    /// bytes return [`io::ErrorKind::InvalidData`].
+    ///
+    /// # Migrating from Basin 1.x
+    ///
+    /// Basin 2.0 no longer reads bincode format version 1. Exact checkpoints
+    /// from 1.x cannot continue in 2.0, even when written in postcard format,
+    /// because the exact Basin version must match. Finish the run with the
+    /// matching 1.x application, or load the checkpoint there and export its
+    /// parameters to initialize a fresh 2.0 run. Rewriting the format or editing
+    /// the version metadata does not make solver and state layouts compatible.
     pub fn read_exact_checkpoint<So, S>(
         path: impl AsRef<Path>,
     ) -> io::Result<ExactCheckpoint<So, S>>
@@ -407,9 +407,9 @@ mod file {
                 .try_into()
                 .expect("version slice has fixed length"),
         );
-        if !matches!(format_version, 1 | FORMAT_VERSION) {
+        if format_version != FORMAT_VERSION {
             return Err(invalid_data(format!(
-                "unsupported exact checkpoint format version {format_version}; expected 1 or {FORMAT_VERSION}"
+                "unsupported exact checkpoint format version {format_version}; expected {FORMAT_VERSION}"
             )));
         }
 
@@ -425,11 +425,8 @@ mod file {
             .checked_add(header_len)
             .filter(|end| *end <= bytes.len())
             .ok_or_else(|| invalid_data("truncated exact checkpoint header"))?;
-        let header: Header = decode_checkpoint_part(
-            &bytes[PREFIX_LEN..header_end],
-            format_version,
-            "header",
-        )?;
+        let header: Header =
+            decode_checkpoint_part(&bytes[PREFIX_LEN..header_end], "header")?;
         if header.basin_version != env!("CARGO_PKG_VERSION") {
             return Err(invalid_data(format!(
                 "exact checkpoint was written by Basin {}; expected {}",
@@ -457,7 +454,7 @@ mod file {
             return Err(invalid_data("missing exact checkpoint payload"));
         }
         let payload: Payload<So, S> =
-            decode_checkpoint_part(payload_bytes, format_version, "payload")?;
+            decode_checkpoint_part(payload_bytes, "payload")?;
         Ok(ExactCheckpoint::from_parts(
             payload.solver,
             payload.state,

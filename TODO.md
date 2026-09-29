@@ -324,10 +324,11 @@ desired backend features.
   version-specific acceleration. Document the 1.x migration and retain
   simultaneous-version and downstream Cargo feature-unification tests.
 
-- [ ] **Remove bincode in Basin 2.0.0.** Drop legacy readers for unprefixed
+- [x] **Remove bincode in Basin 2.0.0.** Drop legacy readers for unprefixed
   state checkpoints and version 1 exact checkpoints, along with the bincode
   dependency and compatibility-only tests. Retain the postcard formats and
-  document checkpoint migration requirements for users upgrading from 1.x.
+  document [checkpoint migration requirements](MIGRATING.md#checkpoint-files)
+  for users upgrading from 1.x.
 
 - [ ] **Migrate existing solvers to shared progress states.** Build on the
   validated [prototype](#state-api-prototype) and [1.x

@@ -8,7 +8,7 @@ mod backend_aliases;
 
 use basin::{
     BasicState, CheckpointWriter, CostFunction, Executor, Gradient,
-    GradientDescent, Observe, ObserverMode, State, read_checkpoint,
+    GradientDescent, ObserverMode, State, read_checkpoint,
 };
 
 struct Quadratic;
@@ -93,34 +93,21 @@ fn checkpoint_warm_start_matches_uninterrupted_run() {
 }
 
 #[test]
-fn legacy_checkpoint_can_be_read_and_rewritten_as_postcard() {
+fn unprefixed_checkpoints_are_rejected() {
     let path = std::env::temp_dir()
-        .join(format!("basin-legacy-{}.ckpt", std::process::id()));
-    let state = BasicState::<Vec<f64>>::new(vec![1.0; 300]);
-    let legacy =
-        bincode::serde::encode_to_vec(&state, bincode::config::standard())
-            .unwrap();
-    std::fs::write(&path, &legacy).unwrap();
-    let restored: BasicState<Vec<f64>> = read_checkpoint(&path).unwrap();
-    assert_eq!(restored.param(), state.param());
-    assert_eq!(std::fs::read(&path).unwrap(), legacy);
-
-    // The legacy reader has always permitted trailing bytes.
-    let mut trailing = legacy;
-    trailing.push(0);
-    std::fs::write(&path, trailing).unwrap();
-    let restored: BasicState<Vec<f64>> = read_checkpoint(&path).unwrap();
-    CheckpointWriter::new(&path).observe_iter(&restored);
-    let bytes = std::fs::read(&path).unwrap();
-    assert_eq!(&bytes[..8], b"BASINST\0");
-    assert_eq!(&bytes[12..], postcard::to_allocvec(&state).unwrap());
-    let restored: BasicState<Vec<f64>> = read_checkpoint(&path).unwrap();
-    assert_eq!(restored.param(), state.param());
+        .join(format!("basin-unprefixed-{}.ckpt", std::process::id()));
+    // The scalar payload is valid by itself, but a file needs a prefix.
+    let bytes = [1];
+    std::fs::write(&path, bytes).unwrap();
+    let error = read_checkpoint::<u8>(&path).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert!(error.to_string().contains("magic"));
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
     std::fs::remove_file(&path).unwrap();
 }
 
 #[test]
-fn invalid_postcard_checkpoints_do_not_fall_back_to_bincode() {
+fn invalid_postcard_checkpoints_are_rejected() {
     let path = std::env::temp_dir()
         .join(format!("basin-invalid-{}.ckpt", std::process::id()));
     let prefix = [b"BASINST\0".as_slice(), &1_u32.to_le_bytes()].concat();
@@ -128,6 +115,9 @@ fn invalid_postcard_checkpoints_do_not_fall_back_to_bincode() {
     unsupported[8..12].copy_from_slice(&2_u32.to_le_bytes());
 
     for bytes in [
+        vec![],
+        prefix[..3].to_vec(),
+        [b"BASINEX\0".as_slice(), &1_u32.to_le_bytes(), &[1]].concat(),
         prefix[..8].to_vec(),
         prefix[..10].to_vec(),
         unsupported,
@@ -135,7 +125,6 @@ fn invalid_postcard_checkpoints_do_not_fall_back_to_bincode() {
         [prefix.as_slice(), &[1, 0]].concat(),
     ] {
         std::fs::write(&path, bytes).unwrap();
-        // A bincode fallback would accept the first magic byte as a u8.
         let error = read_checkpoint::<u8>(&path).unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }

@@ -30,6 +30,9 @@ target 2.x. To stay on the supported 1.x line, use `basin = "1"` and keep its
 patch version current. See the [maintenance policy](MAINTENANCE.md) for the
 support window, backport procedure, and release workflow.
 
+For breaking changes on `main`, see [Migrating to Basin 2.0](MIGRATING.md),
+including the requirements for upgrading checkpoint files.
+
 ## Install
 
 ```sh

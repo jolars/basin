@@ -688,39 +688,3 @@ fn external_selection_is_explicit_and_does_not_claim_objective_ordering() {
     impl<T: ?Sized + ObjectiveIncumbentState> WithoutObjective<HasObjective> for T {}
     let _ = <Selected as WithoutObjective<_>>::check;
 }
-
-#[cfg(feature = "serde")]
-#[test]
-fn existing_binary_layouts_remain_compatible() {
-    let config = bincode::config::standard();
-    // Basin 1.11's unevaluated scalar seed: parameter, absent record and
-    // incumbent, then the iteration and six raw counters.
-    let seed_bytes = [0, 0, 0, 0, 0, 0, 240, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    let (seed, read): (PointState<f64>, _) =
-        bincode::serde::decode_from_slice(&seed_bytes, config).unwrap();
-    assert_eq!(read, seed_bytes.len());
-    assert_eq!(*seed.param(), 1.0);
-    assert!(seed.current_record().is_none());
-    assert_eq!(
-        bincode::serde::encode_to_vec(seed, config).unwrap(),
-        seed_bytes
-    );
-
-    // Empty trajectory, next index zero, max_iter ten, and three unset limits.
-    let inner_bytes = [0, 0, 10, 0, 0, 0];
-    let (inner, read): (InnerExecutor<PointState<f64>, Trajectory>, _) =
-        bincode::serde::decode_from_slice(&inner_bytes, config).unwrap();
-    assert_eq!(read, inner_bytes.len());
-    assert_eq!(
-        bincode::serde::encode_to_vec(inner, config).unwrap(),
-        inner_bytes
-    );
-    assert_eq!(
-        bincode::serde::encode_to_vec(
-            TerminationReason::NumericalNoProgress,
-            config
-        )
-        .unwrap(),
-        [22]
-    );
-}
