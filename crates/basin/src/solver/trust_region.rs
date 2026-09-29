@@ -58,17 +58,16 @@ use crate::core::state::BasicState;
 use crate::core::termination::TerminationReason;
 
 /// The outcome of an (approximate) trust-region subproblem solve: the step
-/// `d`, the predicted model decrease `m(0) − m(d) ≥ 0`, and whether the
+/// `d`, the predicted model decrease `m(0) − m(d)`, and whether the
 /// step landed on the trust-region boundary (which gates radius growth).
 pub(crate) struct Step<V, F> {
     /// The step `d` (relative to the current iterate).
     pub(crate) d: V,
-    /// Predicted reduction `m(0) − m(d) = −(gᵀd) − ½ dᵀBd`, always `≥ 0`
-    /// for the shipped strategies. Zero only when `d = 0` (gradient already
-    /// negligible), which the driver reads as convergence. A non-finite
-    /// value means the strategy could not solve the subproblem because the
-    /// model data was non-finite; the driver reports that as a solver
-    /// failure so a bad derivative cannot masquerade as a stationary point.
+    /// Predicted reduction `m(0) − m(d) = −(gᵀd) − ½ dᵀBd`. Roundoff or
+    /// radius collapse can make this non-positive away from stationarity,
+    /// so the driver must check the gradient before reporting convergence.
+    /// A non-finite value signals an unusable model or subproblem solve;
+    /// the driver reports it as a solver failure.
     pub(crate) predicted_reduction: F,
     /// `true` when `‖d‖ ≈ Δ`: the constraint is active. Only then may the
     /// driver grow the radius on a very good step (N&W Algorithm 4.1).
@@ -278,6 +277,13 @@ where
 /// `with_absolute_gradient_tolerance`, `with_relative_gradient_tolerance`,
 /// or the observed step/cost-change setters, all disabled by default. Keep
 /// iteration and evaluation budgets on the executor.
+///
+/// A finite, non-positive predicted reduction stops the solver. It reports
+/// [`TerminationReason::SolverConverged`] only if the computed gradient norm
+/// is zero; otherwise it reports [`TerminationReason::NumericalNoProgress`],
+/// which does not establish stationarity. Configured gradient tolerances
+/// are checked before each iteration and can establish approximate
+/// convergence before this safeguard is reached.
 ///
 /// # Matrix-free mode
 ///
@@ -636,21 +642,25 @@ where
     for _ in 0..max_inner {
         let step = attempt(problem, &state.param, &g, *radius)?;
 
-        // A non-finite predicted reduction is the strategies' signal that
-        // the model data itself was non-finite, so no step is trustworthy.
-        // That is a failure, not the stationary point the zero-reduction
-        // branch below describes.
+        // Non-finite model data or subproblem arithmetic makes the step
+        // untrustworthy, regardless of the gradient norm.
         if !step.predicted_reduction.is_finite() {
             state.gradient = Some(g);
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
 
-        // Predicted reduction ≤ 0 means the model cannot decrease; for
-        // the shipped strategies this only happens at a stationary point
-        // (g ≈ 0). Report a clean convergence stop.
+        // Radius collapse or roundoff can erase the predicted reduction
+        // away from stationarity. Configured gradient tolerances are
+        // checked before next_iter; only a zero norm establishes
+        // convergence here without adding an implicit tolerance.
         if step.predicted_reduction <= F::zero() {
+            let reason = if g.norm_squared() == F::zero() {
+                TerminationReason::SolverConverged
+            } else {
+                TerminationReason::NumericalNoProgress
+            };
             state.gradient = Some(g);
-            return Ok((state, Some(TerminationReason::SolverConverged)));
+            return Ok((state, Some(reason)));
         }
 
         let mut trial = state.param.clone();
@@ -953,6 +963,50 @@ mod tests {
 
         assert_eq!(result.reason, TerminationReason::SolverFailed);
         assert!(result.reason.is_failure());
+    }
+
+    #[test]
+    fn invalid_model_reduction_preserves_the_nonstationary_state() {
+        for (predicted_reduction, expected_reason) in [
+            (0.0, TerminationReason::NumericalNoProgress),
+            (-1.0, TerminationReason::NumericalNoProgress),
+            (f64::NAN, TerminationReason::SolverFailed),
+            (f64::INFINITY, TerminationReason::SolverFailed),
+            (f64::NEG_INFINITY, TerminationReason::SolverFailed),
+        ] {
+            let mut problem = Problem::new(Quadratic);
+            let mut radius = 1.0;
+            let state = tr_init(
+                &mut radius,
+                1.0,
+                &mut problem,
+                BasicState::new(vec![1.0, 0.0]),
+            )
+            .unwrap();
+            let counts = *problem.counts();
+            let (state, reason) = tr_next_iter(
+                &mut radius,
+                100.0,
+                0.125,
+                10,
+                &mut problem,
+                state,
+                |_, _, _, _| {
+                    Ok(Step {
+                        d: vec![0.0, 0.0],
+                        predicted_reduction,
+                        hit_boundary: false,
+                    })
+                },
+            )
+            .unwrap();
+
+            assert_eq!(reason, Some(expected_reason));
+            assert_eq!(state.param, vec![1.0, 0.0]);
+            assert_eq!(state.gradient, Some(vec![1.0, 0.0]));
+            assert_eq!(state.cost, Some(0.5));
+            assert_eq!(*problem.counts(), counts);
+        }
     }
 
     #[test]

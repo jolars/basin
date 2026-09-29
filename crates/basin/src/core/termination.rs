@@ -88,7 +88,9 @@ pub enum TerminationReason {
     /// computed step leaves every parameter unchanged in floating-point
     /// arithmetic. Trust-region-reflective least squares reports it when a
     /// finite equal-cost rejection is followed by a contracted trial that
-    /// changes no parameter. The returned point may be inaccurate, heavily
+    /// changes no parameter. Trust-region minimization reports it when the
+    /// predicted reduction is finite and non-positive but the computed
+    /// gradient norm is nonzero. The returned point may be inaccurate, heavily
     /// damped, or limited by a small trust radius; this reason does not
     /// establish stationarity or parameter recovery. Outer solvers may consume
     /// the finite result and continue.
