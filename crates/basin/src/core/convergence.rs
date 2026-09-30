@@ -111,6 +111,7 @@ mod sealed {
 #[doc(hidden)]
 pub trait Check<P, S: State>: sealed::Sealed {
     fn reset(&mut self);
+    fn invalidate_cache(&mut self) {}
     fn check(
         &mut self,
         problem: &Problem<P>,
@@ -286,6 +287,9 @@ where
         self.last = None;
         self.cache = None;
     }
+    fn invalidate_cache(&mut self) {
+        self.cache = None;
+    }
     fn check(
         &mut self,
         _: &Problem<P>,
@@ -393,6 +397,9 @@ where
         if let Some(c) = &mut self.relative {
             c.last = None;
         }
+    }
+    fn invalidate_cache(&mut self) {
+        self.cache = None;
     }
     fn check(
         &mut self,
@@ -589,7 +596,11 @@ where
         problem: &mut Problem<P>,
         state: S,
     ) -> Result<SolverStep<S>, Self::Error> {
-        self.solver.next_iter(problem, state)
+        let step = self.solver.next_iter(problem, state)?;
+        // A partial step can publish new state without advancing either cache key.
+        self.step.invalidate_cache();
+        self.cost.invalidate_cache();
+        Ok(step)
     }
     fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
         self.solver.terminate(state)
@@ -903,7 +914,67 @@ mod forward;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PointState, SimplexProgress};
+    use crate::{
+        Executor, PointState, SimplexProgress, TerminationCode,
+        TerminationStage,
+    };
+
+    struct PartialWithoutEvaluation(bool);
+
+    impl Solver<(), PointState<Vec<f64>>> for PartialWithoutEvaluation {
+        type Error = std::convert::Infallible;
+
+        fn init(
+            &mut self,
+            _: &mut Problem<()>,
+            mut state: PointState<Vec<f64>>,
+        ) -> Result<PointState<Vec<f64>>, Self::Error> {
+            state.replace(vec![2.0], 0.0);
+            Ok(state)
+        }
+
+        fn next_iter(
+            &mut self,
+            _: &mut Problem<()>,
+            mut state: PointState<Vec<f64>>,
+        ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
+            state.replace(vec![if self.0 { 0.0 } else { 1.0 }], 0.0);
+            let completed = self.0;
+            self.0 = true;
+            Ok(SolverStep {
+                state,
+                completed,
+                termination: None,
+            })
+        }
+    }
+
+    #[test]
+    fn partial_step_without_evaluation_checks_step_and_cost_change() {
+        let solver = ConfiguredSolver::new(PartialWithoutEvaluation(false))
+            .set_absolute_step_tolerance::<Vec<f64>, f64>(1.0)
+            .set_absolute_cost_change_tolerance(0.0);
+        let result = Executor::new((), solver, PointState::new(vec![2.0]))
+            .max_iter(1)
+            .run()
+            .unwrap();
+        assert_eq!(result.report.stage, TerminationStage::Boundary);
+        assert_eq!(result.iter(), 0);
+        assert_eq!(result.report.code(), TerminationCode::ParamTolerance);
+        let Termination::Converged(convergence) = result.report.termination
+        else {
+            panic!("expected convergence after the partial step");
+        };
+        assert_eq!(convergence.criteria().len(), 2);
+        assert_eq!(
+            convergence.criteria()[0].test,
+            ConvergenceTest::AbsoluteStep
+        );
+        assert_eq!(
+            convergence.criteria()[1].test,
+            ConvergenceTest::AbsoluteCostChange
+        );
+    }
 
     #[test]
     fn step_history_recovers_after_nonfinite_observations() {
