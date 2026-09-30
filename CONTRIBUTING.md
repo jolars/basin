@@ -140,21 +140,43 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `state.rs` (+ `state/`): the `State` trait and concrete states:
     `PointState<V>` and `FirstOrderState<V>` provide shared progress storage
     with public record updates for external and new solvers. They retain raw
-    evaluation counts alongside Basin 1.x folded readers; solver-owned
+    evaluation counts, and category readers report only the named category; solver-owned
     machinery is preserved through solver-aware checkpoints. Opt-in
     `EvaluatedState`/`EvaluatedGradientState`, `RawEvaluationState`, and
     `IncumbentState` traits expose checked records and publication metadata.
     `ObjectiveIncumbentState` guarantees objective-ordered eligible selection
-    for generic targets and stalls. Existing solvers keep their established
-    state types:
-    `BasicState<P>` (single iterate), `BasicSimplexState<V>` (simplex),
-    `QuasiNewtonState<V, M>` (BFGS), `LbfgsState` (L-BFGS history),
-    `BasicPopulationState<V>` (population), `GlobalBestPsoState` (particles,
-    personal/global bests, and live RNG), and `SimulatedAnnealingState`
-    (observable Markov-chain state). Extension traits
+    for generic targets and stalls. Gradient descent, projected gradient descent,
+    trust regions, BFGS, both L-BFGS modes, and derivative Brent use `FirstOrderState`; SGD, Solis-Wets, basin-hopping, the barrier method, and cost-only
+    scalar and least-squares solvers use `PointState`. The augmented-Lagrangian
+    outer method, COBYLA, and constrained MADS use `SelectedState`, whose explicit selection events preserve
+    feasibility ordering and publication metadata. Simulated annealing uses
+    `ProposalState`, which adds acceptance bookkeeping to point-and-cost
+    progress while the solver owns its neighbor, RNG, and cooling history.
+    Nelder-Mead uses `SimplexProgress`, which owns the observable vertices
+    and costs while the solver owns scratch storage and coefficients.
+    GBNM publishes `PointState` while owning its local simplex and restart history.
+    NEWUOA, BOBYQA, and LINCOA also use `PointState`; their solvers own
+    interpolation models, radius schedules, and any active-set factorization.
+    Random search, DE, SSGA, DE injection, and global-best PSO use `PopulationProgress`, which
+    preserves member order and retains a separate historical incumbent.
+    Their solvers own RNGs and any inner solver. The `PopulationState` trait
+    requires matching member/cost records without imposing an ordering.
+    PSO owns velocities, personal bests, and live RNG state; shared progress
+    publishes the current swarm and its global-best representative.
+    Unbounded and box-bounded MADS use `PointState`; the solver owns the
+    mesh, Halton schedule, and progressive-barrier history in every mode.
+    SLSQP uses `SelectedFirstOrderState`, adding coherent objective gradients
+    to explicit constrained selections. Its model-dependent diagnostics live
+    on the solver. CMA-ES and its bounded and injection variants use
+    `PopulationProgress`; their solvers own distributions, eigenpairs, and
+    boundary penalties. Bounded CMA publishes clipped points with raw costs
+    while retaining genotypes and penalized rankings in the solver. MA-LS
+    also publishes `PopulationProgress`, with persistent solver/state chain
+    pairs and eligibility history owned by its solver. Extension traits
     `GradientState`/`SimplexState`/`PopulationState`/`AcceptanceState` expose
     the richer shapes that convergence checks and execution controls bind on. Fields are
-    `pub(crate)`; access goes through trait methods.
+    private or `pub(crate)`; shared states expose checked records and complete
+    replacement operations for external solvers.
   - `solver.rs`: the `Solver` trait: `init` (one-time setup, e.g. seeding
     cost/gradient at iter 0), `next_iter`, plus convergence reset/check hooks and the legacy `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
@@ -212,9 +234,10 @@ These shape API decisions and are non-obvious from the code alone.
    `*_latest` aliases select the newest supported releases, while the original
    unversioned aliases retain their Basin 1.x meanings. Every enabled version
    receives its implementations independently, including problem adapters and
-   version-specific acceleration. The legacy backend-specific quasi-Newton
-   state aliases still select the newest enabled version for Basin 1.x
-   compatibility; use `QuasiNewtonState<V, M, F>` to select explicit types.
+   version-specific acceleration. BFGS uses the `DenseBackend` association to infer its solver-owned
+   matrix from the starting vector, independently for every enabled version.
+   Explicit solver matrix parameters allow custom storage. Basin 1.x retains
+   its legacy backend-specific quasi-Newton state aliases on `v1`.
    Test simultaneous versions using their actual dependency aliases.
 3. **Solver-owned convergence.** Numerical convergence settings belong on the
    solver, with one authoritative setting for each test and shared internal
@@ -262,9 +285,9 @@ These shape API decisions and are non-obvious from the code alone.
 
 ## State and lifecycle contracts
 
-The target is shared progress states with solver-owned algorithm machinery.
-Build the 2.0 migration on `main` from the validated
-[prototype](TODO.md#state-api-prototype), preserving the contracts below.
+Basin 2.0 on `main` uses shared progress states with solver-owned algorithm
+machinery. The migration follows the validated
+[prototype](TODO.md#state-api-prototype) and the contracts below.
 The `v1` branch retains its existing APIs and behavior.
 
 - **Ownership:** solvers own settings, models, history, RNGs, and working
@@ -285,7 +308,8 @@ The `v1` branch retains its existing APIs and behavior.
   guarantees compatible selection semantics.
 - **Counts:** `Problem` owns authoritative `EvalCounts`; state preserves every
   category. Category readers and budgets must agree, with explicit names for
-  aggregates. Keep the existing folded readers until migration. Iterations count
+  aggregates. All shipped shared states report raw categories; use an explicit aggregate
+  when budgeting total work. Iterations count
   completed steps; a clean mid-step stop updates counts without adding a step.
 - **Continuation:** fresh runs reset evolving machinery and bookkeeping; point
   warm starts reevaluate their input. Model reuse requires an explicit contract.

@@ -2,7 +2,7 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    Backtracking, BasicState, CostFunction, Executor, GradientDescent,
+    Backtracking, CostFunction, Executor, FirstOrderState, GradientDescent,
     TerminationReason,
 };
 
@@ -15,7 +15,7 @@ fn gradient_descent_decreases_rosenbrock_cost() {
     let result = Executor::new(
         problem,
         GradientDescent::new(0.001),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(10_000)
     .run()
@@ -44,7 +44,7 @@ fn gradient_descent_with_momentum_decreases_rosenbrock_cost() {
     let result = Executor::new(
         problem,
         GradientDescent::new(0.0008).with_momentum(0.85),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(10_000)
     .run()
@@ -67,7 +67,7 @@ fn gradient_descent_with_backtracking_decreases_rosenbrock_cost() {
     let result = Executor::new(
         problem,
         GradientDescent::with_line_search(Backtracking::new()),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(10_000)
     .run()

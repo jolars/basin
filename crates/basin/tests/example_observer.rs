@@ -16,7 +16,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent,
+    CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
     GradientState, Observe, ObserverMode, State, TerminationReason,
 };
 
@@ -149,7 +149,7 @@ fn example_observer_on_quadratic() {
     let result = Executor::new(
         Quadratic,
         (GradientDescent::new(0.5)).with_absolute_gradient_tolerance(1e-8),
-        BasicState::new(vec![3.0, -4.0, 5.0]),
+        FirstOrderState::new(vec![3.0, -4.0, 5.0]),
     )
     .max_iter(200)
     .observe_with(recorder, ObserverMode::Always)

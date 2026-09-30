@@ -3,8 +3,7 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    BoundedCmaEs, Executor, PopulationProgress, StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory on the bounded variant. Reproducibility
@@ -18,8 +17,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0.clone()),
     )
     .max_iter(30)
     .run()
@@ -27,8 +26,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(30)
     .run()
@@ -51,8 +50,8 @@ fn with_stds_ones_matches_default() {
 
     let default = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0.clone()),
     )
     .max_iter(40)
     .run()
@@ -60,8 +59,9 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5).with_stds(ones),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.5)
+            .with_stds(ones),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(40)
     .run()
@@ -84,8 +84,8 @@ fn with_stds_anisotropic_recovers_minimum() {
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5).with_stds(stds),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.5).with_stds(stds),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(400)
     .run()
@@ -104,9 +104,18 @@ fn with_stds_anisotropic_recovers_minimum() {
 #[test]
 #[should_panic(expected = "stds.len() == mean.len()")]
 fn with_stds_panics_on_length_mismatch() {
-    let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let _ = CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5)
-        .with_stds(DVector::from_vec(vec![1.0]));
+    let _ = Executor::new(
+        BoothBoxed::<DVector<f64>>::new(
+            DVector::from_vec(vec![-5.0; 2]),
+            DVector::from_vec(vec![5.0; 2]),
+        ),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.3)
+            .with_stds(DVector::from_vec(vec![1.0; 1])),
+        PopulationProgress::from_point(DVector::from_vec(vec![0.0; 2])),
+    )
+    .max_iter(0)
+    .run()
+    .unwrap();
 }
 
 /// Slack bounds: the unconstrained Booth minimum (1, 3) is interior to
@@ -121,8 +130,8 @@ fn slack_bounds_recover_unconstrained_minimum() {
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(400)
     .run()
@@ -148,8 +157,8 @@ fn tight_bounds_converge_to_box_corner() {
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(11),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(11, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -176,8 +185,8 @@ fn infeasible_initial_mean_converges_to_box_corner() {
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(5),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(5, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -203,9 +212,9 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        (BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(11))
+        (BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(11, 0.3))
             .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(2000)
     .run()
@@ -214,11 +223,7 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
-/// `PopulationState` invariants survive iteration on the bounded path:
-/// `candidates` and `costs` stay parallel, length-λ, and
-/// sorted-ascending. The bounded variant uses **penalized** costs in
-/// `state.costs` (so the sort is on the penalized values): same
-/// invariant, different value semantics from the raw cost.
+/// Progress retains matching raw records while model fitness stays sorted.
 #[test]
 fn population_invariants_hold_after_iteration() {
     let lower = DVector::from_vec(vec![-1.0, -1.0]);
@@ -228,9 +233,9 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
-        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(1234)
+        BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(1234, 0.5)
             .with_lambda(lambda),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(10)
     .into_stepper()
@@ -243,7 +248,7 @@ fn population_invariants_hold_after_iteration() {
         let state = stepper.state();
         assert_eq!(state.candidates().len(), lambda);
         assert_eq!(state.costs().len(), lambda);
-        for window in state.costs().windows(2) {
+        for window in stepper.solver().penalized_costs().windows(2) {
             assert!(window[0] <= window[1]);
         }
     }

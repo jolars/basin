@@ -10,8 +10,9 @@
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::{
-    Backtracking, BarrierMethod, BasicState, CostFunction, Executor, Gradient,
-    GradientDescent, LinearInequalityConstraints, TerminationReason,
+    Backtracking, BarrierMethod, CostFunction, Executor, Gradient,
+    GradientDescent, LinearInequalityConstraints, PointState,
+    TerminationReason,
 };
 
 // 1. Define the problem. The objective and its gradient are the usual
@@ -86,7 +87,7 @@ fn barrier_method_tour() {
 
     // 4. The start may be infeasible. Here (2,2) violates x₀+x₁≤2; Phase I
     //    finds a strict point, and Phase II continues to the constrained optimum.
-    let x0 = BasicState::new(DVector::from_vec(vec![2.0, 2.0]));
+    let x0 = PointState::new(DVector::from_vec(vec![2.0, 2.0]));
 
     // 5. Drive it with the usual `Executor`. `max_iter` is only an outer
     //    safety net; convergence comes from the gap test inside the solver.

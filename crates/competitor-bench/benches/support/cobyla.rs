@@ -1,6 +1,9 @@
 //! Compile Basin's actual private driver to guard the layer owning the gap.
 
 #![allow(dead_code, clippy::needless_range_loop)]
+// The included Basin modules have serde gates; this driver-only benchmark
+// crate does not expose Basin's serialization feature.
+#![allow(unexpected_cfgs)]
 
 #[path = "../../../basin/src/solver/cobyla/driver.rs"]
 mod driver;

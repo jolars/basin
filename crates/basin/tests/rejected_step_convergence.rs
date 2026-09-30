@@ -1,11 +1,11 @@
 //! Rejected trials must not look like converged cost or parameter changes.
 
 use basin::{
-    BasicState, BoxConstraints, CostFunction, DenseMatrix, ExactCheckpoint,
-    Executor, Gradient, Hessian, HessianProduct, Jacobian, LevenbergMarquardt,
-    LmDamping, NllsState, Problem, Residual, RobustLeastSquares, RunControl,
-    Solver, SquaredLoss, State, TerminationReason, Trf, TrustRegion,
-    run_loop_with_control,
+    BoxConstraints, CostFunction, DenseMatrix, ExactCheckpoint, Executor,
+    FirstOrderState, Gradient, Hessian, HessianProduct, Jacobian,
+    LevenbergMarquardt, LmDamping, PointState, Problem, Residual,
+    RobustLeastSquares, RunControl, Solver, SquaredLoss, State,
+    TerminationReason, Trf, TrustRegion, run_loop_with_control,
 };
 use std::convert::Infallible;
 
@@ -176,17 +176,17 @@ macro_rules! all_change_checks {
     };
 }
 
-all_change_checks!(trf, NllsState, Trf::new());
+all_change_checks!(trf, PointState, Trf::new());
 all_change_checks!(
     trust_region,
-    BasicState,
+    FirstOrderState,
     TrustRegion::new()
         .with_radius(10.)
         .with_max_inner_attempts(1)
 );
 all_change_checks!(
     matrix_free,
-    BasicState,
+    FirstOrderState,
     TrustRegion::matrix_free()
         .with_radius(10.)
         .with_max_inner_attempts(1)
@@ -194,7 +194,7 @@ all_change_checks!(
 
 macro_rules! lm_checks {
     ($name:ident, $problem:expr, $solver:expr) => {
-        rejection_checks!($name, $problem, NllsState, $solver, [
+        rejection_checks!($name, $problem, PointState, $solver, [
             with_absolute_cost_change_tolerance => CostTolerance,
             with_relative_cost_change_tolerance => RelativeCostTolerance,
             with_absolute_step_tolerance => ParamTolerance,
@@ -231,7 +231,7 @@ lm_checks!(
     LevenbergMarquardt::new().with_pivoted_qr()
 );
 rejection_checks!(robust_trf,
-RobustLeastSquares::new(SquareResidual::new(), SquaredLoss), NllsState, Trf::new(), [
+RobustLeastSquares::new(SquareResidual::new(), SquaredLoss), PointState, Trf::new(), [
     with_absolute_cost_change_tolerance => CostTolerance,
     with_relative_cost_change_tolerance => RelativeCostTolerance,
     with_absolute_step_tolerance => ParamTolerance,
@@ -244,14 +244,18 @@ fn rejection_after_accepted_steps_does_not_establish_convergence() {
 
     fn check<So>(solver: So)
     where
-        So: Solver<SquareResidual, BasicState<Vec<f64>>, Error = Infallible>,
+        So: Solver<
+                SquareResidual,
+                FirstOrderState<Vec<f64>>,
+                Error = Infallible,
+            >,
     {
         let iterates = Rc::new(RefCell::new(Vec::new()));
         let observed = iterates.clone();
         let result = Executor::new(
             SquareResidual::new(),
             solver,
-            BasicState::new(vec![0.1]),
+            FirstOrderState::new(vec![0.1]),
         )
         .max_iter(100)
         .stop_when(move |state| {

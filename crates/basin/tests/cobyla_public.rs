@@ -1,7 +1,7 @@
 //! Public-API integration tests for the COBYLA solver.
 //!
 //! Exercises [`Cobyla`] through the framework: [`Executor`] over a
-//! [`CobylaState`], with framework termination ([`MaxCostEvals`],
+//! [`SelectedState`], with framework termination ([`MaxCostEvals`],
 //! [`RhoTolerance`]) and a problem carrying nonlinear inequality constraints via
 //! [`NonlinearInequalityConstraints`]. These confirm the public wiring:
 //! init/next_iter, the constraint evaluation + folding into the merit, the V↔Vec
@@ -14,8 +14,8 @@
 //! `lincoa_public.rs` does for the linear-constrained family.
 
 use basin::{
-    Cobyla, CobylaState, CostFunction, Executor,
-    NonlinearInequalityConstraints, TerminationReason,
+    Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
+    SelectedState, TerminationReason,
 };
 
 /// `min x0·x1` s.t. `x0² + x1² ≤ 1` on `Vec<f64>` (default features). The
@@ -50,10 +50,10 @@ fn converges_to_disk_optimum() {
         Cobyla::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-6),
-        CobylaState::new(vec![1.0, 1.0]),
+        SelectedState::new(vec![1.0, 1.0]),
     )
     .max_cost_evals(2000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -79,10 +79,10 @@ fn respects_cost_eval_budget() {
         Cobyla::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-12),
-        CobylaState::new(vec![1.0, 1.0]),
+        SelectedState::new(vec![1.0, 1.0]),
     )
     .max_cost_evals(15)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxCostEvals);
@@ -150,7 +150,7 @@ fn callback_errors_abort_immediately_during_initialization_and_steps() {
                 vec![1.0, 1.0],
             )
             .max_iter(1000)
-            .run();
+            .run_with_solver();
             assert!(
                 matches!(result, Err(e) if e == CallbackError(fail_constraint, fail_at))
             );
@@ -212,7 +212,7 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
         )
         .max_iter(1000)
         .max_cost_evals(budget)
-        .run()
+        .run_with_solver()
         .unwrap();
         assert_eq!(calls.get(), budget);
         assert_eq!(result.reason, TerminationReason::MaxCostEvals);
@@ -232,14 +232,18 @@ fn rho_tolerance_stops_early() {
             .with_initial_radius(0.5)
             .with_final_radius(1e-12))
         .with_absolute_radius_tolerance(1e-3),
-        CobylaState::new(vec![1.0, 1.0]),
+        SelectedState::new(vec![1.0, 1.0]),
     )
     .max_cost_evals(5000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::RhoTolerance);
-    assert!(result.state.rho() <= 1e-3, "rho = {}", result.state.rho());
+    assert!(
+        result.solver.rho().unwrap() <= 1e-3,
+        "rho = {}",
+        result.solver.rho().unwrap()
+    );
 }
 
 /// Backend-generic: drive COBYLA on nalgebra `DVector`. Guards the
@@ -279,10 +283,10 @@ fn backend_generic_nalgebra() {
         Cobyla::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-6),
-        CobylaState::new(DVector::from_vec(vec![1.0, 1.0])),
+        SelectedState::new(DVector::from_vec(vec![1.0, 1.0])),
     )
     .max_cost_evals(2000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -331,10 +335,10 @@ fn backend_generic_ndarray() {
         Cobyla::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-6),
-        CobylaState::new(Array1::from_vec(vec![1.0, 1.0])),
+        SelectedState::new(Array1::from_vec(vec![1.0, 1.0])),
     )
     .max_cost_evals(2000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -381,10 +385,10 @@ fn backend_generic_faer() {
         Cobyla::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-6),
-        CobylaState::new(Col::from_fn(2, |_| 1.0)),
+        SelectedState::new(Col::from_fn(2, |_| 1.0)),
     )
     .max_cost_evals(2000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -429,13 +433,13 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
     for (n, m) in [(2, 3), (5, 0), (1, 2), (3, 1)] {
         let mut problem = Problem::new(Sphere(m));
         let mut state = solver
-            .init(&mut problem, CobylaState::new(vec![1.0; n]))
+            .init(&mut problem, SelectedState::new(vec![1.0; n]))
             .unwrap();
         state.update_best();
         let snapshot = state.best_param().clone();
         let snapshot_cost = state.best_cost();
-        // Solver callbacks reuse the current parameter buffer before the
-        // executor mirrors the newly selected incumbent into the best snapshot.
+        // Solver callbacks reuse their own parameter buffer. The selected
+        // snapshot remains unchanged until the executor publishes the boundary.
         let (mut state, _) = solver.next_iter(&mut problem, state).unwrap();
         assert_eq!(state.best_param(), &snapshot);
         assert_eq!(state.best_cost(), snapshot_cost);

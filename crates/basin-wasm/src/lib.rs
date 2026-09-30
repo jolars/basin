@@ -26,11 +26,11 @@ use basin::problems::{
 use basin::problems::{styblinski_tang, styblinski_tang_gradient};
 use basin::solver::lbfgs::{Lbfgs, Unbounded as LbfgsUnbounded};
 use basin::{
-    Backtracking, BasicPopulationState, BasicSimplexState, BasicState,
-    BoxConstraints, CmaEs, CmaEsState, Constant, CostFunction, De, DenseMatrix,
-    Executor, FiniteDiff, Gradient, GradientDescent, LbfgsState, Mads,
-    MadsState, MoreThuente, NelderMead, PopulationState, RandomSearch, Ssga,
-    State, StepOutcome, Stepper, TerminationReason,
+    Backtracking, BoxConstraints, CmaEs, Constant, CostFunction, De,
+    DenseMatrix, Executor, FiniteDiff, FirstOrderState, Gradient,
+    GradientDescent, Mads, NelderMead, PointState, PopulationProgress,
+    RandomSearch, SimplexProgress, Ssga, State, StepOutcome, Stepper,
+    TerminationReason,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -307,21 +307,21 @@ pub fn eval_grid(
 /// `clippy::type_complexity`).
 type LbfgsStepper = Stepper<
     Problem2D,
-    LbfgsState<Vec<f64>>,
-    Lbfgs<LbfgsUnbounded, MoreThuente>,
+    FirstOrderState<Vec<f64>>,
+    Lbfgs<Vec<f64>, f64, LbfgsUnbounded>,
 >;
 /// Concrete population-solver stepper aliases. Same motivation as
 /// [`LbfgsStepper`]: keep the [`Inner`] variants readable.
 type CmaEsStepper = Stepper<
     Problem2D,
-    CmaEsState<Vec<f64>, DenseMatrix>,
+    PopulationProgress<Vec<f64>>,
     CmaEs<Vec<f64>, DenseMatrix>,
 >;
-type DeStepper = Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, De>;
+type DeStepper = Stepper<Problem2DBounded, PopulationProgress<Vec<f64>>, De>;
 type RandomSearchStepper =
-    Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, RandomSearch>;
+    Stepper<Problem2DBounded, PopulationProgress<Vec<f64>>, RandomSearch>;
 type SsgaStepper =
-    Stepper<Problem2DBounded, BasicPopulationState<Vec<f64>>, Ssga>;
+    Stepper<Problem2DBounded, PopulationProgress<Vec<f64>>, Ssga>;
 
 /// Inner enum dispatching by `(state shape, solver type)`. Each variant
 /// is fully concrete so the resulting wasm is tight and no `dyn Solver`
@@ -330,20 +330,22 @@ enum Inner {
     GdConstant(
         Stepper<
             Problem2D,
-            BasicState<Vec<f64>>,
+            FirstOrderState<Vec<f64>>,
             GradientDescent<Constant, Vec<f64>>,
         >,
     ),
     GdBacktracking(
         Stepper<
             Problem2D,
-            BasicState<Vec<f64>>,
+            FirstOrderState<Vec<f64>>,
             GradientDescent<Backtracking, Vec<f64>>,
         >,
     ),
-    NelderMead(Stepper<Problem2D, BasicSimplexState<Vec<f64>>, NelderMead>),
-    Mads(Stepper<Problem2D, MadsState<Vec<f64>>, Mads>),
-    // Boxed: `LbfgsState` carries the limited-memory history buffers, so
+    NelderMead(
+        Stepper<Problem2D, SimplexProgress<Vec<f64>>, NelderMead<Vec<f64>>>,
+    ),
+    Mads(Stepper<Problem2D, PointState<Vec<f64>>, Mads>),
+    // Boxed: `Lbfgs` carries the limited-memory history buffers, so
     // this variant is several times larger than the others, so boxing keeps
     // `Inner` small (clippy::large_enum_variant). Auto-deref means the
     // `step`/`xy`/`cost` match arms need no `*` and read like the rest.
@@ -373,10 +375,8 @@ impl Inner {
     }
 
     fn xy(&self) -> (f64, f64) {
-        // For the population steppers, `state().param()` is defined to
-        // return the best-so-far candidate (see `BasicPopulationState`'s
-        // `State::param` impl), so the trajectory plot reads the same way
-        // it does for the single-iterate solvers.
+        // Plot each solver's current representative, including the CMA mean
+        // and the best member of each elitist population.
         let p: &Vec<f64> = match self {
             Self::GdConstant(s) => s.state().param(),
             Self::GdBacktracking(s) => s.state().param(),
@@ -607,7 +607,7 @@ impl Run {
                 let stepper = Executor::new(
                     p,
                     NelderMead::new(),
-                    BasicSimplexState::<Vec<f64>>::new(initial.clone()),
+                    SimplexProgress::<Vec<f64>>::new(initial.clone()),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -618,7 +618,7 @@ impl Run {
                 let stepper = Executor::new(
                     p,
                     Mads::new(),
-                    MadsState::<Vec<f64>>::new(initial.clone()),
+                    PointState::<Vec<f64>>::new(initial.clone()),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -631,8 +631,8 @@ impl Run {
                 let m = opts.lbfgs_m.max(1);
                 let stepper = Executor::new(
                     p,
-                    Lbfgs::<LbfgsUnbounded>::new().with_m_capacity(m),
-                    LbfgsState::new(initial.clone(), m),
+                    Lbfgs::new().unbounded().with_m_capacity(m),
+                    FirstOrderState::new(initial.clone()),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -652,7 +652,8 @@ impl Run {
                     0.25 * 0.5
                         * ((opts.xmax - opts.xmin) + (opts.ymax - opts.ymin))
                 };
-                let mut solver = CmaEs::<Vec<f64>, DenseMatrix>::new(opts.seed);
+                let mut solver =
+                    CmaEs::<Vec<f64>, DenseMatrix>::new(opts.seed, sigma);
                 // λ < 4 is invalid for CMA-ES recombination weights; treat
                 // small overrides as "auto" and let the solver pick.
                 if opts.cma_lambda >= 4 {
@@ -661,10 +662,7 @@ impl Run {
                 let stepper = Executor::new(
                     p,
                     solver,
-                    CmaEsState::<Vec<f64>, DenseMatrix>::new(
-                        initial.clone(),
-                        sigma,
-                    ),
+                    PopulationProgress::<Vec<f64>>::from_point(initial.clone()),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -677,11 +675,6 @@ impl Run {
                     lower: vec![opts.xmin, opts.ymin],
                     upper: vec![opts.xmax, opts.ymax],
                 };
-                let pop = if opts.de_pop_size >= 4 {
-                    opts.de_pop_size
-                } else {
-                    De::<f64>::default_pop_size(2)
-                };
                 let mut solver = De::<f64>::new(opts.seed)
                     .with_f(opts.de_f)
                     .with_cr(opts.de_cr);
@@ -691,7 +684,7 @@ impl Run {
                 let stepper = Executor::new(
                     pb,
                     solver,
-                    BasicPopulationState::<Vec<f64>>::with_size(pop),
+                    PopulationProgress::<Vec<f64>>::empty(),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -708,7 +701,7 @@ impl Run {
                 let stepper = Executor::new(
                     pb,
                     RandomSearch::new(lambda, opts.seed),
-                    BasicPopulationState::<Vec<f64>>::with_size(lambda),
+                    PopulationProgress::<Vec<f64>>::empty(),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -722,18 +715,13 @@ impl Run {
                     upper: vec![opts.xmax, opts.ymax],
                 };
                 let mut solver = Ssga::<f64>::new(opts.seed);
-                let pop = if opts.ssga_pop_size > 0 {
+                if opts.ssga_pop_size > 0 {
                     solver = solver.with_pop_size(opts.ssga_pop_size);
-                    opts.ssga_pop_size
-                } else {
-                    // SSGA has no public `default_pop_size`; mirror the
-                    // documented default by sizing the state buffer at 20.
-                    20
-                };
+                }
                 let stepper = Executor::new(
                     pb,
                     solver,
-                    BasicPopulationState::<Vec<f64>>::with_size(pop),
+                    PopulationProgress::<Vec<f64>>::empty(),
                 )
                 .max_iter(max_iter as u64)
                 .into_stepper()
@@ -799,12 +787,12 @@ fn make_stepper<L>(
     solver: GradientDescent<L, Vec<f64>>,
     initial: &[f64],
     max_iter: u32,
-) -> Stepper<Problem2D, BasicState<Vec<f64>>, GradientDescent<L, Vec<f64>>>
+) -> Stepper<Problem2D, FirstOrderState<Vec<f64>>, GradientDescent<L, Vec<f64>>>
 where
     GradientDescent<L, Vec<f64>>:
-        basin::Solver<Problem2D, BasicState<Vec<f64>>>,
+        basin::Solver<Problem2D, FirstOrderState<Vec<f64>>>,
 {
-    Executor::new(problem, solver, BasicState::new(initial.to_vec()))
+    Executor::new(problem, solver, FirstOrderState::new(initial.to_vec()))
         .max_iter(max_iter as u64)
         .into_stepper()
         .unwrap_or_else(|_| unreachable!("Problem2D's Error is Infallible"))

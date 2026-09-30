@@ -25,8 +25,8 @@
 
 use basin::problems::{RastriginBoxed, Rosenbrock};
 use basin::{
-    BasicPopulationState, CmaEs, CmaEsState, De, DenseMatrix, Executor,
-    GlobalBestPso, GlobalBestPsoState, OptimizationResult, RandomSearch, State,
+    CmaEs, De, DenseMatrix, Executor, GlobalBestPso, OptimizationResult,
+    PopulationProgress, RandomSearch, State,
 };
 use std::fmt::Debug;
 
@@ -51,8 +51,8 @@ fn cma_es_reproducible_and_counts_match() {
     let run = || {
         Executor::new(
             Rosenbrock::<Vec<f64>>::new(),
-            CmaEs::<Vec<f64>, DenseMatrix>::new(17),
-            CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3),
+            CmaEs::<Vec<f64>, DenseMatrix>::new(17, 0.3),
+            PopulationProgress::<Vec<f64>>::from_point(m0.clone()),
         )
         .max_iter(max_iter)
         .run()
@@ -81,7 +81,7 @@ fn de_reproducible_and_counts_match() {
         Executor::new(
             RastriginBoxed::<Vec<f64>>::with_standard_bounds(4),
             De::<f64>::new(99).with_pop_size(lambda),
-            BasicPopulationState::<Vec<f64>>::with_size(lambda),
+            PopulationProgress::<Vec<f64>>::empty(),
         )
         .max_iter(max_iter)
         .run()
@@ -106,7 +106,7 @@ fn global_best_pso_reproducible_and_counts_match() {
         Executor::new(
             RastriginBoxed::<Vec<f64>>::with_standard_bounds(4),
             GlobalBestPso::new(99).with_swarm_size(swarm_size),
-            GlobalBestPsoState::<Vec<f64>>::new(),
+            PopulationProgress::<Vec<f64>>::empty(),
         )
         .max_iter(max_iter)
         .run()
@@ -131,7 +131,7 @@ fn random_search_reproducible_and_counts_match() {
         Executor::new(
             RastriginBoxed::<Vec<f64>>::with_standard_bounds(3),
             RandomSearch::new(lambda, 2024),
-            BasicPopulationState::<Vec<f64>>::with_size(lambda),
+            PopulationProgress::<Vec<f64>>::empty(),
         )
         .max_iter(max_iter)
         .run()

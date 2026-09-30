@@ -315,15 +315,15 @@ pub use clamp::ClampInPlace;
 pub use dense::DenseMatrix;
 pub use dense_qr::QrFactorization;
 pub use linalg::{
-    AddDiagonalVectorInPlace, DenseMatrixFromFn, FactorizePivotedQr,
-    GramMatrix, LinearSolveError, LinearSolveLstsq, LinearSolveSpd,
-    MatTransposeVec, MatVec, MatrixFromDiagonal, MatrixIdentity, MatrixIndex,
-    MaxDiagonal, QrSolveError, RegularizedQrSolve, ScaleRowsInPlace,
-    SymmetricEigen, SymmetricEigenError,
+    AddDiagonalVectorInPlace, DenseBackend, DenseMatrixFromFn,
+    FactorizePivotedQr, GeneralRankOneUpdate, GramMatrix, LinearSolveError,
+    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
+    MatrixFromDiagonal, MatrixIdentity, MatrixIndex, MaxDiagonal, QrSolveError,
+    RegularizedQrSolve, ScaleRowsInPlace, SymmetricEigen, SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 
 // Remaining per-solver plumbing ops carry no meaning outside one shipped
 // solver's internals, so they stay off the frozen public surface.
 pub(crate) use cl_scaling::BoxAffineScaling;
-pub(crate) use linalg::{GeneralRankOneUpdate, MatDiagonal, RankOneUpdate};
+pub(crate) use linalg::{MatDiagonal, RankOneUpdate};

@@ -59,7 +59,7 @@ then hand the problem, a solver, and an initial state to the `Executor`:
 
 ```rust
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent,
+    FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
 };
 use std::convert::Infallible;
 
@@ -90,7 +90,7 @@ fn main() {
     let result = Executor::new(
         Rosenbrock,
         (GradientDescent::new(1e-3)).with_absolute_gradient_tolerance(1e-6),
-        BasicState::new(vec![-1.2, 1.0]),
+        FirstOrderState::new(vec![-1.2, 1.0]),
     )
     .max_iter(50_000)
     .run()
@@ -153,9 +153,9 @@ implementations for every enabled release. First-order and derivative-free
 solvers run on any backend; linear-algebra-heavy solvers may require a specific one and say so in
 their docs.
 
-The legacy backend-specific quasi-Newton state aliases still select the newest
-enabled version. Use `QuasiNewtonState<V, M, F>` with explicit vector and matrix
-types, or `Executor::from_start`, to select a particular version.
+BFGS uses `FirstOrderState` and owns its inverse-Hessian model. The
+`DenseBackend` association selects the matrix belonging to the starting
+point's backend version, including when Cargo enables several versions.
 
 Every nalgebra feature includes its matching `nalgebra-sparse` release:
 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Exact acceleration features

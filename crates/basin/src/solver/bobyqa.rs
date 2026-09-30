@@ -28,25 +28,25 @@ use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::BobyqaState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 
 use driver::{BobyqaWork, Transition};
 
 /// Type-state marker: box-constrained BOBYQA (the only mode). A marker keeps the
 /// door open for an unconstrained alias later without an API break, matching the
-/// `Lbfgs<Bounded>`/`NelderMead<Projected>` precedent.
+/// `Lbfgs<V, F, Bounded>`/`NelderMead<V, F, Projected>` precedent.
 pub struct Bounded;
 
 /// BOBYQA (Powell 2009): bound-constrained model-based derivative-free
 /// trust-region optimization.
 ///
 /// Configure the trust-region radii and interpolation-set size, then drive it
-/// with an [`Executor`](crate::Executor) over a [`BobyqaState`] on a problem
+/// with an [`Executor`](crate::Executor) over a [`PointState`] on a problem
 /// that implements [`CostFunction`] + [`BoxConstraints`]:
 ///
 /// ```
-/// use basin::{Bobyqa, BobyqaState, BoxConstraints, CostFunction, Executor};
+/// use basin::{Bobyqa, PointState, BoxConstraints, CostFunction, Executor};
 ///
 /// struct Booth {
 ///     lower: Vec<f64>,
@@ -77,7 +77,7 @@ pub struct Bounded;
 /// let solver = Bobyqa::new()
 ///     .with_initial_radius(0.5)
 ///     .with_final_radius(1e-8);
-/// let state = BobyqaState::new(vec![0.0, 0.0]);
+/// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(problem, solver, state)
 ///     .max_cost_evals(500)
 ///     .run()
@@ -112,12 +112,32 @@ pub struct Bounded;
 /// note, it is essentially never invoked on well-behaved problems without heavy
 /// noise on the objective; expect it to stay dormant in normal use.
 ///
+/// # Progress and continuation
+///
+/// Use [`PointState::new`] or [`crate::Executor::from_start`] with an unevaluated
+/// starting point. Fresh initialization clears progress and rebuilds the
+/// interpolation model, even when reusing a populated state or solver. The
+/// shared state retains the current evaluated point, its historical objective
+/// incumbent, and all six raw evaluation categories. It supplies no gradient
+/// or radius capability. The solver owns every model buffer and the radius
+/// schedule; [`rho`](Self::rho) returns `None` before initialization. Inspect
+/// it through [`crate::Executor::run_with_solver`] or [`crate::Stepper::solver`].
+///
+/// Preserve [`crate::ExactCheckpoint`] for continuation without initialization
+/// or reevaluation. With `serde`, the solver and shared state support
+/// serialization, including the complete numerical model. A progress-only
+/// snapshot is a fresh point warm start. Legacy algorithm-specific state
+/// payloads cannot be read as `PointState` or as a new exact checkpoint.
+/// Radius-based convergence remains solver-owned; objective targets and stalls
+/// use the shared state's historical incumbent.
+///
 /// # Backends
 ///
-/// Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-/// faer all work; the parameter type needs only [`Clone`], [`VectorLen`], and
-/// `Index`/`IndexMut` element access. The model algebra is internal pure-Rust
-/// `Vec<f64>` scratch, so no `linalg`-tier op is required. wasm-clean.
+/// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
+/// for every supported backend release and `F = f64` or `f32`. The parameter
+/// type needs only [`Clone`], [`VectorLen`], and `Index`/`IndexMut` element access.
+/// The model uses pure-Rust `Vec<F>` storage, with no BLAS/LAPACK dependency.
+/// Choose radii appropriate to the scalar precision.
 ///
 /// # References
 ///
@@ -126,7 +146,15 @@ pub struct Bounded;
 /// Cross-validated against [PRIMA](https://github.com/libprima/prima) v0.7.2,
 /// the authoritative source for the exact formulas. PRIMA is BSD 3-Clause
 /// licensed; its required notice is retained in the crate's `COPYRIGHT` file.
-pub struct Bobyqa<Mode = Bounded, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "F: serde::Serialize",
+        deserialize = "F: serde::Deserialize<'de>"
+    ))
+)]
+pub struct Bobyqa<Mode = Bounded, F: Scalar = f64> {
     radius_tolerance: Option<F>,
     rho_beg: F,
     rho_end: F,
@@ -138,6 +166,12 @@ pub struct Bobyqa<Mode = Bounded, F = f64> {
 }
 
 impl<F: Scalar> Bobyqa<Bounded, F> {
+    /// Current trust-region resolution, or `None` before initialization.
+    /// Read it through `run_with_solver()` or `Stepper::solver()`.
+    pub fn rho(&self) -> Option<F> {
+        self.work.as_ref().map(|work| work.rho())
+    }
+
     /// Stop when the observed radius or step size is <= the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an
@@ -237,13 +271,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = BobyqaState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        BobyqaState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
-impl<P, V, F> Solver<P, BobyqaState<V, F>> for Bobyqa<Bounded, F>
+impl<P, V, F> Solver<P, PointState<V, F>> for Bobyqa<Bounded, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
@@ -257,16 +291,18 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BobyqaState<V, F>,
-    ) -> Result<BobyqaState<V, F>, Self::Error> {
-        let n = state.param.vec_len();
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.work = None;
+        let n = state.param().vec_len();
         assert!(n >= 1, "Bobyqa requires a non-empty start point");
         let npt = self.npt.unwrap_or(2 * n + 1);
 
-        let x0 = to_vec(&state.param, n);
+        let x0 = to_vec(state.param(), n);
         let lower = to_vec(problem.inner().lower(), n);
         let upper = to_vec(problem.inner().upper(), n);
-        let template = state.param.clone();
+        let template = state.param().clone();
 
         let (work, best_x, best_f) = {
             let mut eval = |slice: &[F]| -> Result<F, P::Error> {
@@ -283,9 +319,7 @@ where
             )?
         };
 
-        state.param = fill_from(&template, &best_x);
-        state.cost = Some(best_f);
-        state.rho = work.rho();
+        state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
         Ok(state)
     }
@@ -293,10 +327,10 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BobyqaState<V, F>,
-    ) -> Result<(BobyqaState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let template = state.param.clone();
+        let template = state.param().clone();
         let work = self
             .work
             .as_mut()
@@ -308,16 +342,14 @@ where
             };
             work.step(&mut eval)?
         };
-        state.rho = work.rho();
 
         // BOBYQA reports the least-F feasible point seen, so param/cost are
         // monotone and coincide with best_param/best_cost.
-        let mut best_f = state.cost.expect("Bobyqa::init seeds the cost");
+        let mut best_f = state.cost();
         for (xabs, f_new) in &out.evaluated {
             if *f_new < best_f {
                 best_f = *f_new;
-                state.param = fill_from(&template, xabs);
-                state.cost = Some(best_f);
+                state.replace(fill_from(&template, xabs), best_f);
             }
         }
 
@@ -330,10 +362,10 @@ where
 
     fn terminate(
         &self,
-        state: &BobyqaState<V, F>,
+        _state: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         let tolerance = self.radius_tolerance?;
-        let metric = crate::RhoState::rho(state);
+        let metric = self.rho()?;
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::RhoTolerance)
     }
@@ -343,7 +375,7 @@ where
 mod tests {
     use crate::core::constraint::BoxConstraints;
     use crate::core::problem::CostFunction;
-    use crate::{Bobyqa, BobyqaState, Executor};
+    use crate::{Bobyqa, Executor, PointState};
 
     struct Quad {
         lower: Vec<f64>,
@@ -378,7 +410,7 @@ mod tests {
             Bobyqa::new()
                 .with_initial_radius(0.5)
                 .with_final_radius(1e-8),
-            BobyqaState::new(vec![0.0, 0.0]),
+            PointState::new(vec![0.0, 0.0]),
         )
         .max_cost_evals(500)
         .run()
@@ -402,7 +434,7 @@ mod tests {
         let result = Executor::new(
             problem,
             Bobyqa::new(),
-            BobyqaState::new(vec![1.0, -2.0]),
+            PointState::new(vec![1.0, -2.0]),
         )
         .max_cost_evals(500)
         .run()
@@ -424,7 +456,7 @@ mod tests {
             Bobyqa::new()
                 .with_initial_radius(0.5)
                 .with_final_radius(1e-8),
-            BobyqaState::new(vec![100.0, -100.0]),
+            PointState::new(vec![100.0, -100.0]),
         )
         .max_cost_evals(500)
         .run()
@@ -470,7 +502,7 @@ mod tests {
             Bobyqa::new()
                 .with_initial_radius(0.5)
                 .with_final_radius(1e-8),
-            BobyqaState::new(vec![0.0, 0.0]),
+            PointState::new(vec![0.0, 0.0]),
         )
         .max_cost_evals(500)
         .run()
@@ -515,7 +547,7 @@ mod tests {
             Bobyqa::new()
                 .with_initial_radius(0.5)
                 .with_final_radius(1e-6),
-            BobyqaState::new(vec![-1.2, 1.0]),
+            PointState::new(vec![-1.2, 1.0]),
         )
         .max_cost_evals(2000)
         .run()

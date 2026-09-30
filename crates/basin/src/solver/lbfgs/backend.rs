@@ -6,20 +6,19 @@
 //! (`Vec<F>`, nalgebra `DVector<F>`, faer `Col<F>`, ndarray
 //! `Array1<F>`), the top-level solver views each vector as a
 //! contiguous `F` slice at iteration boundaries. The two tiny traits
-//! below capture that view; impls are per-backend and `pub(crate)` to
-//! keep them off the public API surface.
+//! below capture that view and allow custom contiguous backends.
 //!
 //! The trait carries an `F = f64` default so existing call sites
 //! resolve unchanged.
 
 /// Read-only view of a parameter vector as a contiguous `&[F]`.
-pub(crate) trait AsFloatSlice<F = f64> {
+pub trait AsFloatSlice<F = f64> {
     /// Borrow the underlying storage as a contiguous slice.
     fn as_float_slice(&self) -> &[F];
 }
 
 /// Mutable companion to [`AsFloatSlice`].
-pub(crate) trait AsFloatSliceMut<F = f64>: AsFloatSlice<F> {
+pub trait AsFloatSliceMut<F = f64>: AsFloatSlice<F> {
     /// Borrow the underlying storage as a contiguous mutable slice.
     fn as_float_slice_mut(&mut self) -> &mut [F];
 }

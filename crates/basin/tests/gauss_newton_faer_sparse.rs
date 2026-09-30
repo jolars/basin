@@ -3,7 +3,7 @@
 use crate::backend_aliases::faer::Col;
 use crate::backend_aliases::faer::sparse::{SparseColMat, Triplet};
 use basin::problems::SparseLeastSquares;
-use basin::{Executor, GaussNewton, NllsState, TerminationReason};
+use basin::{Executor, GaussNewton, PointState, TerminationReason};
 
 type FaerSparseLeastSquares =
     SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>;
@@ -38,7 +38,7 @@ fn fixture() -> (FaerSparseLeastSquares, Col<f64>) {
 fn gauss_newton_converges_on_sparse_linear_regression() {
     let (problem, initial) = fixture();
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(20)
             .run()
             .unwrap();
@@ -69,7 +69,7 @@ fn gauss_newton_single_step_matches_closed_form() {
     // x* = (AᵀA)⁻¹Aᵀb = [1, 2, 3].
     let (problem, initial) = fixture();
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(1)
             .run()
             .unwrap();
@@ -99,7 +99,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
     // solver reports SolverConverged rather than running out of iters.
     let (problem, initial) = fixture();
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(50)
             .run()
             .unwrap();

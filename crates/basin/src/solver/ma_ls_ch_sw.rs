@@ -7,11 +7,11 @@
 //! chains at `ρ = ½ ·` nearest-neighbor distance with the cost slot
 //! primed, resume via a local iter reset, no per-segment
 //! tolerance—segments are purely budget-driven). This module is the
-//! concrete public face: the [`MaLsChSw`]/[`MaLsChSwState`] aliases
-//! plus the constructor.
+//! concrete [`MaLsChSw`] alias and constructor. The outer solver owns the chains
+//! and publishes [`PopulationProgress`](crate::PopulationProgress).
 
-use crate::core::state::SolisWetsState;
-use crate::solver::ma_ls_ch::{MaLsCh, MaLsChGenericState};
+use crate::core::math::{Scalar, ScaleInPlace, VectorLen};
+use crate::solver::ma_ls_ch::MaLsCh;
 use crate::solver::solis_wets::SolisWets;
 
 /// `MA-SW-Chains`: [`MaLsCh`] with Solis-Wets as the chain operator,
@@ -36,10 +36,10 @@ use crate::solver::solis_wets::SolisWets;
 /// # Backends
 ///
 /// The outer SSGA and the Solis-Wets inner need only the vector tier,
-/// so all four backends work—`Vec<f64>`, `nalgebra::DVector<f64>`
-/// (feature `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`),
-/// and `faer::Col<f64>` (feature `faer`)—with **no matrix type and no
-/// `linalg` tier involved**, unlike the CMA variant.
+/// so all four backends work—`Vec<F>`, `nalgebra::DVector<F>`
+/// (feature `nalgebra`), `ndarray::Array1<F>` (feature `ndarray`),
+/// and `faer::Col<F>` (feature `faer`)—with **no matrix type and no
+/// `linalg` tier involved**. Both `f32` and `f64` are supported.
 ///
 /// # References
 ///
@@ -53,7 +53,7 @@ use crate::solver::solis_wets::SolisWets;
 ///
 /// ```
 /// use basin::{
-///     BoxConstraints, CostFunction, Executor, MaLsChSw, MaLsChSwState,
+///     BoxConstraints, CostFunction, Executor, MaLsChSw, PopulationProgress,
 /// };
 ///
 /// struct BoundedSphere {
@@ -84,7 +84,7 @@ use crate::solver::solis_wets::SolisWets;
 /// let result = Executor::new(
 ///     problem,
 ///     MaLsChSw::<Vec<f64>>::new(42).with_pop_size(20),
-///     MaLsChSwState::new(),
+///     PopulationProgress::empty(),
 /// )
 /// .max_iter(u64::MAX)
 /// .max_cost_evals(10_000)
@@ -92,17 +92,12 @@ use crate::solver::solis_wets::SolisWets;
 /// .unwrap();
 /// assert!(result.cost() < 1e-6);
 /// ```
-pub type MaLsChSw<V> = MaLsCh<V, SolisWets>;
+pub type MaLsChSw<V, F = f64> = MaLsCh<V, SolisWets<V, F>, F>;
 
-/// State carried by [`MaLsChSw`]: the [`MaLsChGenericState`] whose
-/// chain slots hold saved `(SolisWets, SolisWetsState)` pairs—the
-/// [`SolisWets`] carries the hyperparameters + RNG stream; the
-/// [`SolisWetsState`] carries the iterate, bias, `ρ`, and streak
-/// counters (the MA-SW-Chains §II.C snapshot).
-pub type MaLsChSwState<V> =
-    MaLsChGenericState<V, (SolisWets, SolisWetsState<V>)>;
-
-impl<V> MaLsCh<V, SolisWets> {
+impl<V, F: Scalar> MaLsCh<V, SolisWets<V, F>, F>
+where
+    V: Clone + VectorLen + ScaleInPlace<F>,
+{
     /// Build a new `MaLsChSw` with the Molina 2010 §4.4.7 framework
     /// defaults, a default [`SolisWets`] prototype (1981 paper
     /// constants), and a PRNG seeded from `seed`.

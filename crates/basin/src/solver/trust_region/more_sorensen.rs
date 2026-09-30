@@ -56,6 +56,7 @@ use crate::core::math::{
 /// *SIAM Journal on Scientific and Statistical Computing*, 4(3), 553–572.
 /// [doi:10.1137/0904038](https://doi.org/10.1137/0904038).
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MoreSorensen {
     max_iter: usize,
 }

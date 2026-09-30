@@ -5,8 +5,8 @@
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
-    AugmentedLagrangianMethod, Backtracking, BasicState, Executor,
-    GradientDescent, GradientState, TerminationReason,
+    AugmentedLagrangianMethod, Backtracking, Executor, GradientDescent,
+    SelectedState, TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. Constrained optimum: the
@@ -31,7 +31,7 @@ fn converges_to_affine_projection() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -63,7 +63,7 @@ fn fully_determined_system() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -89,7 +89,7 @@ fn eval_counts_are_recorded() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -97,7 +97,7 @@ fn eval_counts_are_recorded() {
 
     assert!(result.cost_evals() > 0, "no cost evals recorded");
     assert!(
-        result.state.gradient_evals() > 0,
+        result.state.counts().gradient_evals > 0,
         "no gradient evals recorded"
     );
 }

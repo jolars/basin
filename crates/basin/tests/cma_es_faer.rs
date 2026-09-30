@@ -3,8 +3,7 @@
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    CmaEs, Executor, PopulationProgress, StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory, on the faer backend. Reproducibility
@@ -18,8 +17,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(42),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.3),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0.clone()),
     )
     .max_iter(30)
     .run()
@@ -27,8 +26,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(42),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(30)
     .run()
@@ -51,8 +50,8 @@ fn converges_on_sphere_5d() {
 
     let result = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(7),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
+        CmaEs::<Col<f64>, Mat<f64>>::new(7, 0.5),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(80)
     .run()
@@ -72,8 +71,8 @@ fn converges_on_rosenbrock_2d() {
 
     let result = Executor::new(
         Rosenbrock::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(17),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        CmaEs::<Col<f64>, Mat<f64>>::new(17, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -95,9 +94,9 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         Sphere::<Col<f64>>::new(),
-        (CmaEs::<Col<f64>, Mat<f64>>::new(11))
+        (CmaEs::<Col<f64>, Mat<f64>>::new(11, 0.3))
             .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(2000)
     .run()
@@ -116,8 +115,8 @@ fn with_stds_ones_matches_default() {
 
     let default = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(42),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.3),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0.clone()),
     )
     .max_iter(40)
     .run()
@@ -125,8 +124,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(42),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3).with_stds(ones),
+        CmaEs::<Col<f64>, Mat<f64>>::new(42, 0.3).with_stds(ones),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(40)
     .run()
@@ -149,8 +148,8 @@ fn with_stds_anisotropic_converges_on_sphere() {
 
     let result = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(7),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5).with_stds(stds),
+        CmaEs::<Col<f64>, Mat<f64>>::new(7, 0.5).with_stds(stds),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(120)
     .run()
@@ -163,7 +162,7 @@ fn with_stds_anisotropic_converges_on_sphere() {
     );
 }
 
-/// PopulationState invariants survive iteration on faer.
+/// invariants survive iteration on faer.
 #[test]
 fn population_invariants_hold_after_iteration() {
     let m0 = Col::<f64>::from_fn(2, |i| if i == 0 { 0.3 } else { 0.4 });
@@ -171,8 +170,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(1234).with_lambda(lambda),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
+        CmaEs::<Col<f64>, Mat<f64>>::new(1234, 0.5).with_lambda(lambda),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(10)
     .into_stepper()

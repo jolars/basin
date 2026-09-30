@@ -4,7 +4,7 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gbnm, GbnmState, State,
+    BoxConstraints, CostFunction, Executor, Gbnm, PointState, State,
     TerminationReason,
 };
 
@@ -69,19 +69,22 @@ impl BoxConstraints for FlatBox {
 #[test]
 fn starts_from_the_callers_point_and_builds_a_feasible_regular_simplex() {
     let problem = BoundedRosenbrock::new(vec![0.0, 0.0], vec![20.0, 20.0]);
-    let result =
-        Executor::new(problem, Gbnm::new(42), GbnmState::new(vec![10.0, 10.0]))
-            .max_iter(0)
-            .run()
-            .unwrap();
+    let result = Executor::new(
+        problem,
+        Gbnm::new(42),
+        PointState::new(vec![10.0, 10.0]),
+    )
+    .max_iter(0)
+    .run_with_solver()
+    .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxIter);
-    assert_eq!(result.state.search_starts(), &[vec![10.0, 10.0]]);
-    assert_eq!(result.state.restart_count(), 0);
-    assert_eq!(result.state.vertices().len(), 3);
-    assert_eq!(result.state.costs().len(), 3);
+    assert_eq!(result.solver.search_starts(), &[vec![10.0, 10.0]]);
+    assert_eq!(result.solver.restart_count(), 0);
+    assert_eq!(result.solver.vertices().len(), 3);
+    assert_eq!(result.solver.costs().len(), 3);
     assert_eq!(result.state.cost_evals(), 3);
-    for vertex in result.state.vertices() {
+    for vertex in result.solver.vertices() {
         assert!(vertex.iter().all(|&x| (0.0..=20.0).contains(&x)));
     }
 }
@@ -118,14 +121,14 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
     let initial = Executor::new(
         initial_problem,
         Gbnm::new(5),
-        GbnmState::new(vec![1.0, 0.0]),
+        PointState::new(vec![1.0, 0.0]),
     )
     .max_iter(0)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert!(
         initial
-            .state
+            .solver
             .vertices()
             .iter()
             .any(|vertex| vertex[0] < 1.0)
@@ -136,10 +139,10 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
         upper: vec![1.0, 1.0],
     });
     let result =
-        Executor::new(problem, Gbnm::new(5), GbnmState::new(vec![1.0, 0.0]))
+        Executor::new(problem, Gbnm::new(5), PointState::new(vec![1.0, 0.0]))
             .max_iter(2_000)
             .max_cost_evals(500)
-            .run()
+            .run_with_solver()
             .unwrap();
 
     assert!(result.best_cost() < 1.0e-8, "cost = {}", result.best_cost());
@@ -179,23 +182,23 @@ fn f32_extreme_box_starts_with_a_working_local_simplex() {
     };
     let result = Executor::new(
         problem,
-        Gbnm::<f32>::new(17),
-        GbnmState::new(vec![0.0_f32, 0.0]),
+        Gbnm::<_, f32>::new(17),
+        PointState::new(vec![0.0_f32, 0.0]),
     )
     .max_iter(1)
-    .run()
+    .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.state.restart_count(), 0);
+    assert_eq!(result.solver.restart_count(), 0);
     assert!(
         result
-            .state
+            .solver
             .vertices()
             .iter()
             .flatten()
             .all(|value| value.is_finite())
     );
-    assert!(result.state.costs().iter().all(|cost| cost.is_finite()));
+    assert!(result.solver.costs().iter().all(|cost| cost.is_finite()));
 }
 
 #[test]
@@ -232,18 +235,18 @@ fn f32_extreme_box_supports_probabilistic_restarts() {
     };
     let result = Executor::new(
         problem,
-        Gbnm::<f32>::new(23),
-        GbnmState::new(vec![0.0_f32, 0.0]),
+        Gbnm::<_, f32>::new(23),
+        PointState::new(vec![0.0_f32, 0.0]),
     )
     .max_iter(1)
-    .run()
+    .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.state.restart_count(), 1);
-    assert_eq!(result.state.search_starts().len(), 2);
+    assert_eq!(result.solver.restart_count(), 1);
+    assert_eq!(result.solver.search_starts().len(), 2);
     assert!(
         result
-            .state
+            .solver
             .search_starts()
             .iter()
             .flatten()
@@ -257,16 +260,16 @@ fn f32_extreme_box_supports_probabilistic_restarts() {
 fn paper_rosenbrock_start_reaches_the_global_minimum() {
     let problem = BoundedRosenbrock::new(vec![0.0, 0.0], vec![20.0, 20.0]);
     let result =
-        Executor::new(problem, Gbnm::new(7), GbnmState::new(vec![10.0, 10.0]))
+        Executor::new(problem, Gbnm::new(7), PointState::new(vec![10.0, 10.0]))
             .max_iter(20_000)
             .max_cost_evals(5_000)
-            .run()
+            .run_with_solver()
             .unwrap();
 
     assert!(result.best_cost() < 1e-8, "cost = {}", result.best_cost());
     assert!((result.best_param()[0] - 1.0).abs() < 1e-3);
     assert!((result.best_param()[1] - 1.0).abs() < 1e-3);
-    assert!(!result.state.local_optima().is_empty());
+    assert!(!result.solver.local_optima().is_empty());
 }
 
 #[test]
@@ -279,13 +282,13 @@ fn seeded_restart_history_is_reproducible() {
         let result = Executor::new(
             problem,
             Gbnm::new(seed),
-            GbnmState::new(vec![0.0, 0.0]),
+            PointState::new(vec![0.0, 0.0]),
         )
         .max_iter(12)
-        .run()
+        .run_with_solver()
         .unwrap();
         (
-            result.state.search_starts().to_vec(),
+            result.solver.search_starts().to_vec(),
             result.state.cost_evals(),
         )
     }
@@ -297,29 +300,32 @@ fn seeded_restart_history_is_reproducible() {
 }
 
 #[test]
-fn from_start_uses_the_gbnm_state() {
+fn from_start_uses_shared_point_progress() {
     let problem = BoundedRosenbrock::new(vec![0.0, 0.0], vec![20.0, 20.0]);
     let result = Executor::from_start(problem, Gbnm::new(11), vec![10.0, 10.0])
         .max_iter(0)
-        .run()
+        .run_with_solver()
         .unwrap();
 
-    assert_eq!(result.state.search_starts(), &[vec![10.0, 10.0]]);
+    assert_eq!(result.solver.search_starts(), &[vec![10.0, 10.0]]);
 }
 
 #[test]
 fn pinned_coordinates_are_excluded_from_the_local_simplex() {
     let problem = BoundedRosenbrock::new(vec![-5.0, 2.0], vec![5.0, 2.0]);
-    let result =
-        Executor::new(problem, Gbnm::new(3), GbnmState::new(vec![4.0, -100.0]))
-            .max_iter(0)
-            .run()
-            .unwrap();
+    let result = Executor::new(
+        problem,
+        Gbnm::new(3),
+        PointState::new(vec![4.0, -100.0]),
+    )
+    .max_iter(0)
+    .run_with_solver()
+    .unwrap();
 
-    assert_eq!(result.state.vertices().len(), 2);
+    assert_eq!(result.solver.vertices().len(), 2);
     assert!(
         result
-            .state
+            .solver
             .vertices()
             .iter()
             .all(|vertex| vertex[1] == 2.0)
@@ -334,9 +340,9 @@ fn an_all_pinned_box_is_rejected() {
         upper: vec![1.0, 2.0],
     };
     let _ =
-        Executor::new(problem, Gbnm::new(1), GbnmState::new(vec![1.0, 2.0]))
+        Executor::new(problem, Gbnm::new(1), PointState::new(vec![1.0, 2.0]))
             .max_iter(0)
-            .run();
+            .run_with_solver();
 }
 
 #[test]
@@ -347,15 +353,15 @@ fn reversed_bounds_are_rejected() {
         upper: vec![-1.0, 1.0],
     };
     let _ =
-        Executor::new(problem, Gbnm::new(1), GbnmState::new(vec![0.0, 0.0]))
+        Executor::new(problem, Gbnm::new(1), PointState::new(vec![0.0, 0.0]))
             .max_iter(0)
-            .run();
+            .run_with_solver();
 }
 
 #[test]
 #[should_panic(expected = "GBNM requires at least one restart candidate")]
 fn zero_restart_candidates_are_rejected() {
-    let _ = Gbnm::<f64>::new(1).with_restart_candidates(0);
+    let _ = Gbnm::<Vec<f64>>::new(1).with_restart_candidates(0);
 }
 
 #[test]
@@ -392,14 +398,14 @@ fn nan_costs_sort_after_finite_vertices() {
             upper: vec![1.0, 1.0],
         }),
         Gbnm::new(2),
-        GbnmState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_iter(0)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert!(result.cost().is_finite());
-    assert!(result.state.costs().last().unwrap().is_nan());
+    assert!(result.solver.costs().last().unwrap().is_nan());
 }
 
 #[test]
@@ -437,12 +443,12 @@ fn probabilistic_restarts_escape_the_initial_rastrigin_basin() {
         upper: vec![5.12, 5.12],
     });
     let result =
-        Executor::new(problem, Gbnm::new(7), GbnmState::new(vec![3.0, 3.0]))
+        Executor::new(problem, Gbnm::new(7), PointState::new(vec![3.0, 3.0]))
             .max_iter(20_000)
             .max_cost_evals(5_000)
-            .run()
+            .run_with_solver()
             .unwrap();
 
     assert!(result.best_cost() < 1.0, "cost = {}", result.best_cost());
-    assert!(result.state.restart_count() > 1);
+    assert!(result.solver.restart_count() > 1);
 }

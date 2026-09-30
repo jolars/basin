@@ -5,8 +5,8 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
-    AugmentedLagrangianMethod, Backtracking, BasicState, Bfgs, Executor,
-    GradientDescent, GradientState, Lbfgsb, TerminationReason,
+    AugmentedLagrangianMethod, Backtracking, Bfgs, Executor, GradientDescent,
+    Lbfgsb, SelectedState, TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. The unconstrained min (2,2) is
@@ -34,7 +34,7 @@ fn converges_to_affine_projection() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -67,7 +67,7 @@ fn fully_determined_system() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -93,7 +93,7 @@ fn eval_counts_are_recorded() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -103,15 +103,13 @@ fn eval_counts_are_recorded() {
     // must have accumulated onto the outer state.
     assert!(result.cost_evals() > 0, "no cost evals recorded");
     assert!(
-        result.state.gradient_evals() > 0,
+        result.state.counts().gradient_evals > 0,
         "no gradient evals recorded"
     );
 }
 
-/// A `Bfgs` inner (state `QuasiNewtonState`, not `BasicState`) proves the
-/// augmented-Lagrangian method is no longer locked to `BasicState<V>` /
-/// `GradientDescent`. `L_ρ` is finite everywhere, so the default Wolfe line
-/// search is fine. Converges to the same projection (1,1).
+/// A BFGS inner publishes first-order progress independently of the selected
+/// outer progress. Its default Wolfe search converges to the projection (1,1).
 #[test]
 fn bfgs_inner_converges_to_affine_projection() {
     let problem = single_row_problem();
@@ -122,7 +120,7 @@ fn bfgs_inner_converges_to_affine_projection() {
         AugmentedLagrangianMethod::with_inner_solver(
             Bfgs::new().with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -137,7 +135,7 @@ fn bfgs_inner_converges_to_affine_projection() {
     );
 }
 
-/// An unbounded `Lbfgs` inner (state `LbfgsState`) exercises a third inner
+/// An unbounded `Lbfgs` inner (state `FirstOrderState`) exercises a third inner
 /// state shape. `L_ρ` is finite, so the More–Thuente line search is fine.
 #[test]
 fn lbfgs_inner_converges_to_affine_projection() {
@@ -151,7 +149,7 @@ fn lbfgs_inner_converges_to_affine_projection() {
                 .unbounded()
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()

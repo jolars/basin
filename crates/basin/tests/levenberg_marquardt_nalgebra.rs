@@ -2,7 +2,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
-use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
+use basin::{Executor, LevenbergMarquardt, PointState, TerminationReason};
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -17,7 +17,7 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -51,7 +51,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -81,7 +81,7 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(100)
     .run()
@@ -106,7 +106,7 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(100)
     .run()
@@ -132,7 +132,7 @@ fn levenberg_marquardt_converges_fast_on_poorly_scaled_exponential_fit() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -181,7 +181,7 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
         LevenbergMarquardt::new()
             .with_absolute_gradient_tolerance(None)
             .with_relative_cost_change_tolerance(1e-8),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -215,7 +215,7 @@ fn levenberg_marquardt_converges_via_relative_gradient_tolerance() {
         LevenbergMarquardt::new()
             .with_absolute_gradient_tolerance(None)
             .with_gradient_orthogonality_tolerance(1e-10),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -252,7 +252,7 @@ fn levenberg_marquardt_converges_via_ftol() {
             .with_absolute_gradient_tolerance(None)
             .with_gradient_orthogonality_tolerance(None)
             .with_relative_model_reduction_tolerance(1e-10),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -286,7 +286,7 @@ fn levenberg_marquardt_converges_via_xtol() {
             .with_absolute_gradient_tolerance(None)
             .with_gradient_orthogonality_tolerance(None)
             .with_relative_step_tolerance(1e-10),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -327,7 +327,7 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
             LevenbergMarquardt::new()
                 .with_absolute_gradient_tolerance(None)
                 .with_gradient_orthogonality_tolerance(1e-8),
-            NllsState::new(initial),
+            PointState::new(initial),
         )
         .max_iter(200)
         .run()
@@ -362,7 +362,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     // For K completed iters on Rosenbrock-as-residuals from the
     // classical start, LM's μ-update accepts every step (no rejections),
     // so:
-    //   - cost_evals = 1 (init) + K (one trial per iter)
+    //   - residual_evals = 1 (init) + K (one trial per iter)
     //   - jacobian_evals = K (init's J carries iter 1; each subsequent
     //     iter re-evaluates J because the previous accept cleared the
     //     Gram/gradient cache; the last iter's accept clears it but no
@@ -373,7 +373,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new().with_absolute_gradient_tolerance(None),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(3)
     .run()
@@ -382,17 +382,17 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     assert_eq!(result.reason, TerminationReason::MaxIter);
     assert_eq!(result.iter(), 3);
     assert_eq!(
-        result.cost_evals(),
+        result.state.counts().residual_evals,
         4,
         "expected init (1) + one trial per iter (3) = 4—uncached LM would also \
          re-evaluate the start-of-iter residual and produce 1 + 2·iters = 7"
     );
     assert!(
-        result.state.jacobian_evals() <= 3,
+        result.state.counts().jacobian_evals <= 3,
         "jacobian_evals = {} should be ≤ iters (3): init's J carries iter 1, and \
          rejected steps reuse J at the unchanged iterate. Uncached LM produces \
          1 + iters = 4.",
-        result.state.jacobian_evals()
+        result.state.counts().jacobian_evals
     );
 }
 

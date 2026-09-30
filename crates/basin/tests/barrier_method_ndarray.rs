@@ -6,8 +6,8 @@
 use crate::backend_aliases::ndarray::{Array1, Array2, array};
 use basin::problems::ConstrainedQuadratic;
 use basin::{
-    Backtracking, BarrierMethod, BasicState, Executor, GradientDescent,
-    GradientState, TerminationReason,
+    Backtracking, BarrierMethod, Executor, GradientDescent, PointState,
+    TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`; constrained optimum (1,1).
@@ -26,7 +26,7 @@ fn active_constraint_converges_to_projection() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -52,7 +52,7 @@ fn infeasible_start_runs_phase_one_then_converges() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -78,7 +78,7 @@ fn eval_counts_are_recorded() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -86,7 +86,7 @@ fn eval_counts_are_recorded() {
 
     assert!(result.cost_evals() > 0, "no cost evals recorded");
     assert!(
-        result.state.gradient_evals() > 0,
+        result.state.counts().gradient_evals > 0,
         "no gradient evals recorded"
     );
 }
@@ -108,7 +108,7 @@ fn two_constraints_both_active() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()

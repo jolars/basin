@@ -185,9 +185,9 @@ impl<S: State> OptimizationResult<S> {
 /// implement `Clone` or serialization.
 ///
 /// Convenience readers use the same state semantics as [`OptimizationResult`].
-/// In particular, [`cost_evals`](Self::cost_evals) can fold evaluation
-/// categories according to the state's [`CountsMirror`] implementation. Use
-/// [`counts`](Self::counts) for the authoritative per-category counters.
+/// Shared states report raw cost calls through [`cost_evals`](Self::cost_evals).
+/// Custom states define their own [`CountsMirror`] mapping.
+/// [`counts`](Self::counts) always contains the authoritative per-category counters.
 pub struct OptimizationResultWithSolver<S, So> {
     /// Final solver state at termination.
     pub state: S,
@@ -395,6 +395,14 @@ where
         self.state
             .as_ref()
             .expect("state slot is Some between steps")
+    }
+
+    /// Read the solver's current model and diagnostics between steps.
+    /// This borrows the solver without cloning it or performing evaluations.
+    /// After a hard error its contents are diagnostic only; exact continuation
+    /// requires a successfully published solver-and-state checkpoint.
+    pub fn solver(&self) -> &So {
+        &self.solver
     }
 
     /// Wrapper-side evaluation counters. These are authoritative:
@@ -687,9 +695,25 @@ where
 /// ordering and clock semantics.
 pub fn run_loop_with_control<P, S, So>(
     problem: &mut Problem<P>,
+    state: S,
+    solver: &mut So,
+    control: &mut RunControl<S>,
+) -> Result<OptimizationResult<S>, So::Error>
+where
+    S: State + CountsMirror,
+    So: Solver<P, S>,
+{
+    run_segment_with_control(problem, state, solver, control, false)
+}
+
+// Local-search chains retain algorithm machinery, but deliberately restart
+// controls, convergence history, and per-segment accounting.
+pub(crate) fn run_segment_with_control<P, S, So>(
+    problem: &mut Problem<P>,
     mut state: S,
     solver: &mut So,
     control: &mut RunControl<S>,
+    initialized: bool,
 ) -> Result<OptimizationResult<S>, So::Error>
 where
     S: State + CountsMirror,
@@ -704,7 +728,11 @@ where
     // multiple `run_loop_with_control` calls (e.g. an outer solver re-driving an
     // inner) without best-so-far bleeding from one run into the next.
     state.reset_best();
-    let mut state = solver.init(problem, state)?;
+    let mut state = if initialized {
+        state
+    } else {
+        solver.init(problem, state)?
+    };
     control.validate(&state);
     // Mirror init's work onto the state before any termination check.
     state.mirror(&problem.counts().delta_since(&baseline));
@@ -735,7 +763,7 @@ where
 ///
 /// ```
 /// use basin::{
-///     BasicState, CostFunction, Executor, Gradient, GradientDescent,
+///     FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
 /// };
 ///
 /// struct Sphere;
@@ -760,7 +788,7 @@ where
 /// let result = Executor::new(
 ///     Sphere,
 ///     (GradientDescent::new(0.1)).with_absolute_gradient_tolerance(1e-9),
-///     BasicState::new(vec![3.0, -4.0]),
+///     FirstOrderState::new(vec![3.0, -4.0]),
 /// )
 /// .max_iter(1_000)
 /// .run()
@@ -919,7 +947,7 @@ where
     ///
     /// ```
     /// use basin::{
-    ///     BasicState, CancellationToken, CostFunction, Executor, Gradient,
+    ///     FirstOrderState, CancellationToken, CostFunction, Executor, Gradient,
     ///     GradientDescent, TerminationReason,
     /// };
     ///
@@ -946,7 +974,7 @@ where
     /// let result = Executor::new(
     ///     Sphere,
     ///     GradientDescent::new(0.1),
-    ///     BasicState::new(vec![1.0, 1.0]),
+    ///     FirstOrderState::new(vec![1.0, 1.0]),
     /// )
     /// .with_cancellation_token(token)
     /// .run()

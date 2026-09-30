@@ -2,8 +2,7 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    BasicSimplexState, CostFunction, Executor, NelderMead, SimplexState,
-    TerminationReason,
+    CostFunction, Executor, NelderMead, SimplexProgress, TerminationReason,
 };
 
 #[test]
@@ -14,7 +13,7 @@ fn nelder_mead_standard_minimises_rosenbrock() {
     let result = Executor::new(
         problem,
         NelderMead::new(),
-        BasicSimplexState::new(vec![-1.2, 1.0]),
+        SimplexProgress::new(vec![-1.2, 1.0]),
     )
     .max_iter(2_000)
     .run()
@@ -38,7 +37,7 @@ fn nelder_mead_adaptive_minimises_rosenbrock() {
     let result = Executor::new(
         problem,
         NelderMead::adaptive(),
-        BasicSimplexState::new(vec![-1.2, 1.0]),
+        SimplexProgress::new(vec![-1.2, 1.0]),
     )
     .max_iter(2_000)
     .run()
@@ -55,7 +54,7 @@ fn nelder_mead_hits_max_iter_when_too_few() {
     let result = Executor::new(
         problem,
         NelderMead::new(),
-        BasicSimplexState::new(vec![-1.2, 1.0]),
+        SimplexProgress::new(vec![-1.2, 1.0]),
     )
     .max_iter(5)
     .run()
@@ -72,7 +71,7 @@ fn nelder_mead_keeps_best_first_after_each_iter() {
     let result = Executor::new(
         problem,
         NelderMead::new(),
-        BasicSimplexState::new(vec![-1.2, 1.0]),
+        SimplexProgress::new(vec![-1.2, 1.0]),
     )
     .max_iter(100)
     .run()
@@ -95,7 +94,7 @@ fn nelder_mead_adaptive_sphere_5d() {
     let result = Executor::new(
         problem,
         NelderMead::adaptive(),
-        BasicSimplexState::new(vec![1.0; 5]),
+        SimplexProgress::new(vec![1.0; 5]),
     )
     .max_iter(2_000)
     .run()
@@ -113,7 +112,7 @@ fn simplex_tolerance_fires_when_simplex_collapses() {
         (NelderMead::new())
             .with_absolute_simplex_size_tolerance(1e-8)
             .with_absolute_simplex_cost_tolerance(1e-8),
-        BasicSimplexState::new(vec![-1.2, 1.0]),
+        SimplexProgress::new(vec![-1.2, 1.0]),
     )
     .max_iter(2_000)
     .run()
@@ -148,7 +147,7 @@ fn nelder_mead_from_simplex_accepts_custom_geometry() {
     let result = Executor::new(
         problem,
         NelderMead::new(),
-        BasicSimplexState::from_simplex(simplex),
+        SimplexProgress::from_simplex(simplex),
     )
     .max_iter(2_000)
     .run()

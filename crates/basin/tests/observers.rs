@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent, Observe,
-    ObserverMode, State, StepOutcome, TerminationReason,
+    CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
+    Observe, ObserverMode, State, StepOutcome, TerminationReason,
 };
 
 /// f(x) = ½ ‖x‖²: convex quadratic, gradient = x.
@@ -96,7 +96,7 @@ fn init_then_iter_per_step_then_final_with_reason() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, -2.0, 3.0]),
+        FirstOrderState::new(vec![1.0, -2.0, 3.0]),
     )
     .max_iter(5)
     .observe_with(recorder, ObserverMode::Always)
@@ -126,7 +126,7 @@ fn every_n_gates_iter_only() {
     let _ = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(10)
     .observe_with(recorder, ObserverMode::Every(3))
@@ -153,7 +153,7 @@ fn never_skips_iter_but_init_final_fire() {
     let _ = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(4)
     .observe_with(recorder, ObserverMode::Never)
@@ -179,7 +179,7 @@ fn new_best_fires_on_every_strict_improvement() {
     let _ = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, -2.0, 3.0]),
+        FirstOrderState::new(vec![1.0, -2.0, 3.0]),
     )
     .max_iter(5)
     .observe_with(recorder, ObserverMode::NewBest)
@@ -205,7 +205,7 @@ fn new_best_skips_non_improving_iters() {
     let _ = Executor::new(
         Quadratic,
         GradientDescent::new(0.0),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(4)
     .observe_with(recorder, ObserverMode::NewBest)
@@ -234,7 +234,7 @@ fn multiple_observers_fire_in_registration_order() {
     let _ = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0]),
+        FirstOrderState::new(vec![1.0]),
     )
     .max_iter(2)
     .observe_with(a, ObserverMode::Always)
@@ -262,7 +262,7 @@ fn observer_fires_via_stepper_step_loop() {
     let mut stepper = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(3)
     .observe_with(recorder, ObserverMode::Always)

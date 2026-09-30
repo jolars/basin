@@ -9,10 +9,10 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{CmaEsState, CountsMirror, State};
+use crate::core::state::{CountsMirror, PopulationProgress, State};
 use crate::core::termination::TerminationReason;
 use crate::solver::bounded_cma_es::{BoundedCmaEs, evaluate_with_penalty};
-use crate::solver::cma_es::sort_population_ascending;
+use crate::solver::bounded_cma_es::{publish, sort_bounded_population};
 use crate::solver::cma_inject::{MemeticInner, default_c_y};
 
 /// Memetic [`BoundedCmaEs`] with Hansen (2011) injection. Sibling of
@@ -48,9 +48,15 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 /// candidates back into feasibility through the penalized
 /// re-evaluation below.
 ///
+/// Shared [`PopulationProgress`] contains repaired points and raw objective
+/// costs. The outer solver retains genotypes and penalized ranking values.
+/// Exact checkpoints retain both solvers, progress, and all six raw evaluation
+/// categories. With `serde`, these serialize when their constituent types do;
+/// application hooks cannot be serialized.
+///
 /// # Backends
 ///
-/// Same coverage as [`BoundedCmaEs`]: the default `Vec<f64>` (via
+/// Same coverage as [`BoundedCmaEs`]: the default `Vec<F>` (`F = f32` or `f64`) (via
 /// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The
 /// matrix bound is [`SymmetricEigen`], which every backend satisfies, and the
 /// shipped [`MemeticInner`] inners are
@@ -60,6 +66,14 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 ///
 /// See [`BoundedCmaEs`] for the bounded population-based `Executor`
 /// pattern; `BoundedCmaInject` adds a bound-respecting local-search inner.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "I: serde::Serialize, V: serde::Serialize, M: serde::Serialize, F: serde::Serialize",
+        deserialize = "I: serde::Deserialize<'de>, V: serde::Deserialize<'de>, M: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
+    ))
+)]
 pub struct BoundedCmaInject<I, V, M, F = f64>
 where
     F: Scalar,
@@ -87,6 +101,11 @@ where
             k: 1,
             c_y_override: None,
         }
+    }
+
+    /// Inspect the outer distribution model without transferring its ownership.
+    pub fn cma(&self) -> &BoundedCmaEs<V, M, F> {
+        &self.cma
     }
 
     /// Number of best-ranked candidates to refine and inject each
@@ -163,7 +182,7 @@ where
     }
 }
 
-impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>>
+impl<P, I, V, M, F> Solver<P, PopulationProgress<V, F>>
     for BoundedCmaInject<I, V, M, F>
 where
     F: Scalar,
@@ -190,42 +209,46 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    BoundedCmaEs<V, M, F>: Solver<P, CmaEsState<V, M, F>, Error = P::Error>,
+    BoundedCmaEs<V, M, F>:
+        Solver<P, PopulationProgress<V, F>, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: CmaEsState<V, M, F>,
-    ) -> Result<CmaEsState<V, M, F>, Self::Error> {
+        state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         self.cma.init(problem, state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: CmaEsState<V, M, F>,
-    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error>
-    {
+        state: PopulationProgress<V, F>,
+    ) -> Result<
+        (PopulationProgress<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         // 1. Standard BoundedCmaEs iteration first.
         let (mut state, reason) = self.cma.next_iter(problem, state)?;
         if let Some(r) = reason {
             return Ok((state, Some(r)));
         }
 
-        // Snapshot the post-update distribution from the state for
-        // clipping (it lives on `CmaEsState` now, not the solver).
-        let n = state.m.vec_len();
-        let m = state.m.clone();
-        let sigma = state.sigma;
+        let work = self.cma.work.as_mut().expect("CMA init precedes injection");
+        let n = work.m.vec_len();
+        let m = work.m.clone();
+        let sigma = work.sigma;
         let c_y = self.c_y_override.unwrap_or_else(|| default_c_y::<F>(n));
-        let refine = self.k.min(state.candidates.len());
+        let refine = self.k.min(work.candidates.len());
 
         for i in 0..refine {
             // 2. Seed inner state via the trait.
-            let inner_state =
-                self.inner.solver().seed_scaled(&state.candidates[i], sigma);
+            let inner_state = self
+                .inner
+                .solver_mut()
+                .seed_scaled(&work.candidates[i], sigma);
 
             // 3. Drive the inner solver. Same-problem composition: inner
             //    shares the outer wrapper, so its evals flow into the
@@ -235,6 +258,13 @@ where
 
             // 4. Failure routing: bubble SolverFailed only.
             if inner_result.reason.is_failure() {
+                sort_bounded_population(work);
+                publish(
+                    work,
+                    &mut state,
+                    problem.inner().lower(),
+                    problem.inner().upper(),
+                );
                 return Ok((state, Some(inner_result.reason)));
             }
 
@@ -246,10 +276,10 @@ where
             y.scaled_add(-F::one(), &m);
             y.scale_in_place(F::one() / sigma);
 
-            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖, with B, D⁻¹ from the state.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖, with B, D⁻¹ from the solver.
             let inv_sqrt_norm = {
-                let mut bt_y = state.b.mat_transpose_vec(&y);
-                bt_y.component_mul_assign(&state.d_inv);
+                let mut bt_y = work.b.mat_transpose_vec(&y);
+                bt_y.component_mul_assign(&work.d_inv);
                 bt_y.norm_squared().sqrt()
             };
 
@@ -267,7 +297,7 @@ where
 
             // 10. Re-evaluate using the BoundPenalty so the injected
             //     candidate ranks consistently with regular samples in
-            //     `state.costs`. Raw cost would let an LM or L-BFGS-B
+            //     `work.costs`. Raw cost would let an LM or L-BFGS-B
             //     refinement that landed outside the box skip the
             //     penalty and dominate the population (bug surfaces
             //     dramatically on bound-active problems). Mirrors
@@ -276,33 +306,40 @@ where
             //     `working().gamma`.
             let lo = problem.inner().lower().clone();
             let hi = problem.inner().upper().clone();
-            let gamma = state
+            let gamma = work
                 .penalty
                 .as_ref()
                 .expect("BoundedCmaEs::init installs the penalty")
                 .gamma
                 .clone();
-            let cost_new = {
-                let (_raw, pen) = evaluate_with_penalty(
+            let (raw_new, cost_new) = {
+                let (raw, pen) = evaluate_with_penalty(
                     problem, &x_inj, &lo, &hi, &gamma, n,
                 )?;
-                pen
+                (raw, pen)
             };
 
-            state.candidates[i] = x_inj;
-            state.costs[i] = cost_new;
+            work.candidates[i] = x_inj;
+            work.costs[i] = cost_new;
+            work.objective_costs[i] = raw_new;
         }
 
         if refine > 0 {
-            sort_population_ascending(&mut state.candidates, &mut state.costs);
+            sort_bounded_population(work);
         }
 
+        publish(
+            work,
+            &mut state,
+            problem.inner().lower(),
+            problem.inner().upper(),
+        );
         Ok((state, None))
     }
     fn terminate(
         &self,
-        state: &CmaEsState<V, M, F>,
+        state: &PopulationProgress<V, F>,
     ) -> Option<TerminationReason> {
-        <_ as Solver<P, CmaEsState<V, M, F>>>::terminate(&self.cma, state)
+        <_ as Solver<P, PopulationProgress<V, F>>>::terminate(&self.cma, state)
     }
 }

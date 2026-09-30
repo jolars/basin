@@ -30,8 +30,8 @@ use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
 use basin::{
-    BasicSimplexState, BasicState, Executor, GradientDescent,
-    IntoInitialSimplex, MoreThuente, NelderMead,
+    Executor, FirstOrderState, GradientDescent, IntoInitialSimplex,
+    MoreThuente, NelderMead, SimplexProgress,
 };
 use competitor_bench::ArgminProblem;
 use criterion::{
@@ -62,7 +62,7 @@ fn bench_gd(c: &mut Criterion) {
                             GradientDescent::with_line_search(
                                 MoreThuente::new(),
                             ),
-                            BasicState::new(x0),
+                            FirstOrderState::new(x0),
                         )
                         .max_iter(MAX_ITERS)
                         .run(),
@@ -108,7 +108,7 @@ fn bench_nm(c: &mut Criterion) {
                         Executor::new(
                             Rosenbrock::<Vec<f64>>::default(),
                             NelderMead::new(),
-                            BasicSimplexState::new(x0),
+                            SimplexProgress::new(x0),
                         )
                         .max_iter(MAX_ITERS)
                         .run(),

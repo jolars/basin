@@ -8,8 +8,8 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{
-    BasicSimplexState, CmaEsState, CountsMirror, IntoInitialSimplex,
-    LbfgsState, NllsState, State,
+    CountsMirror, FirstOrderState, IntoInitialSimplex, PointState,
+    PopulationProgress, SimplexProgress, State,
 };
 use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
@@ -24,8 +24,8 @@ use crate::solver::nelder_mead::NelderMead;
 /// associated [`State`](InitialState::State) shape and the σ-free
 /// [`seed`](InitialState::seed). `MemeticInner` adds the step-size-scaled
 /// seed CMA-ES injection needs: given a candidate `x` and the current
-/// CMA step-size `σ`, build a fresh inner state whose default scale
-/// tracks the outer distribution's spread.
+/// CMA step-size `σ`, configure the inner solver and build a fresh progress
+/// seed whose search scale tracks the outer distribution's spread.
 ///
 /// # Implementations
 ///
@@ -38,35 +38,28 @@ use crate::solver::nelder_mead::NelderMead;
 ///
 /// # Why an associated state type
 ///
-/// Each inner has a natural state shape: NM wants a simplex (`n + 1`
-/// vertices), LM wants a single iterate with cached residual and Jacobian,
-/// L-BFGS-B wants the limited-memory history. Tying
+/// Each inner publishes its progress shape: NM uses a simplex (`n + 1`
+/// vertices), LM uses a point and cost, and L-BFGS-B also publishes a gradient.
+/// The inner solver owns its evolving model. Tying
 /// [`State`](InitialState::State) to [`InitialState`] lets the memetic factory
 /// write `BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())`
-/// without the caller having to spell out `LbfgsState<V>` in turbofish;
+/// without the caller having to spell out `FirstOrderState<V>` in turbofish;
 /// `I` determines it.
 ///
 /// # Eval aggregation
 ///
 /// No per-trait hook: same-problem composition shares the outer's
 /// [`Problem`] wrapper, so inner evals flow through automatically.
-/// [`CmaEsState`]'s [`CountsMirror`] folds every kind of work
-/// (`cost + gradient + residual + jacobian + hessian`) into the outer's
-/// `cost_evals` via `delta.total_work()`, so a derivative-based inner
-/// (LM, L-BFGS-B) has its gradient work honestly collapse into the
-/// outer's single `cost_evals` counter. See CONTRIBUTING.md "Solver
-/// composition" rule 1.
+/// [`PopulationProgress`] preserves every raw evaluation category; inner
+/// derivative work remains separate from outer cost calls.
 pub trait MemeticInner<V, F = f64>: WarmStart<V>
 where
     F: Scalar,
 {
-    /// Build a fresh inner state seeded at CMA-ES candidate `x`, scaled
-    /// by the current step-size `sigma`. Called once per refined
-    /// candidate per outer generation.
-    ///
-    /// Defaults to the σ-free [`seed`](InitialState::seed); only inners whose
-    /// state scales with σ (Nelder-Mead's simplex edge) override it.
-    fn seed_scaled(&self, x: &V, _sigma: F) -> Self::State {
+    /// Configure the inner search scale and supply a progress seed at `x`.
+    /// The caller must then initialize a fresh solve with the returned state.
+    /// The default ignores `sigma` and uses [`InitialState::seed`].
+    fn seed_scaled(&mut self, x: &V, _sigma: F) -> Self::State {
         self.seed(x)
     }
 }
@@ -74,9 +67,7 @@ where
 /// Closure type for `ClosureInner`'s state seeder.
 type ClosureSeedFn<V, S, F> = Box<dyn Fn(&V, F) -> S>;
 
-/// Closure-based [`MemeticInner`] wrapper for custom inners that don't
-/// have a native impl. Holds an inner solver plus the seeder closure
-/// `MemeticInner` would otherwise express directly.
+/// Closure-based [`MemeticInner`] wrapper for custom inner solvers.
 ///
 /// Intended use is one-off experiments and contract tests (e.g. the
 /// `AlwaysFails` harness verifying `SolverFailed` bubbling). For
@@ -149,49 +140,40 @@ where
     F: Scalar,
     S: State<Param = V>,
 {
-    fn seed_scaled(&self, x: &V, sigma: F) -> S {
+    fn seed_scaled(&mut self, x: &V, sigma: F) -> S {
         (self.seed_fn)(x, sigma)
     }
 }
 
 // WarmStart + MemeticInner impls for the three shipped inners.
 
-impl<Mode, V, F> InitialState<V> for NelderMead<Mode, F>
+impl<Mode, V, F> InitialState<V> for NelderMead<V, F, Mode>
 where
     F: Scalar,
-    V: VectorLen
-        + Clone
-        + IntoInitialSimplex<V>
-        + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen + Clone + IntoInitialSimplex<V, F>,
 {
-    type State = BasicSimplexState<V, F>;
-    fn seed(&self, x: &V) -> BasicSimplexState<V, F> {
+    type State = SimplexProgress<V, F>;
+    fn seed(&self, x: &V) -> SimplexProgress<V, F> {
         // σ-free seed: Nelder-Mead's own default relative-step simplex
         // (FMINSEARCH and SciPy 5%), used when there is no outer step-size to
         // track (e.g. a barrier or AL inner).
-        BasicSimplexState::new(x.clone())
+        SimplexProgress::new(x.clone())
     }
 }
 
-impl<Mode, V, F> WarmStart<V> for NelderMead<Mode, F>
+impl<Mode, V, F> WarmStart<V> for NelderMead<V, F, Mode>
 where
     F: Scalar,
-    V: VectorLen
-        + Clone
-        + IntoInitialSimplex<V>
-        + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen + Clone + IntoInitialSimplex<V, F>,
 {
 }
 
-impl<Mode, V, F> MemeticInner<V, F> for NelderMead<Mode, F>
+impl<Mode, V, F> MemeticInner<V, F> for NelderMead<V, F, Mode>
 where
     F: Scalar,
-    V: VectorLen
-        + Clone
-        + IntoInitialSimplex<V>
-        + std::ops::IndexMut<usize, Output = F>,
+    V: VectorLen + Clone + IntoInitialSimplex<V, F> + crate::VectorIndex<F>,
 {
-    fn seed_scaled(&self, x: &V, sigma: F) -> BasicSimplexState<V, F> {
+    fn seed_scaled(&mut self, x: &V, sigma: F) -> SimplexProgress<V, F> {
         // σ-scaled axis-aligned simplex: edge = current CMA step-size,
         // so the inner's exploration tracks the outer distribution's
         // spread and shrinks with σ. Hansen 2011 doesn't prescribe a
@@ -202,10 +184,10 @@ where
         vertices.push(x.clone());
         for j in 0..n {
             let mut v = x.clone();
-            v[j] = v[j] + sigma;
+            v.set_scalar(j, v.get_scalar(j) + sigma);
             vertices.push(v);
         }
-        BasicSimplexState::from_simplex(vertices)
+        SimplexProgress::from_simplex(vertices)
     }
 }
 
@@ -214,9 +196,9 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = NllsState<V, F>;
-    fn seed(&self, x: &V) -> NllsState<V, F> {
-        NllsState::new(x.clone())
+    type State = PointState<V, F>;
+    fn seed(&self, x: &V) -> PointState<V, F> {
+        PointState::new(x.clone())
     }
 }
 
@@ -236,28 +218,28 @@ where
 }
 
 // `WarmStart` is generic over the mode marker so both `Lbfgsb` (bounded,
-// used as a CMA inner) and `Lbfgs<Unbounded>` (used as a barrier or AL
-// inner) seed the same `LbfgsState`. `MemeticInner` stays on the bounded
+// used as a CMA inner) and `Lbfgs<V, F, Unbounded>` (used as a barrier or AL
+// inner) seed the same `FirstOrderState`. `MemeticInner` stays on the bounded
 // alias only; CMA injection pairs with the bounded variant.
-impl<Mode, S, V, F> InitialState<V> for Lbfgs<Mode, S, F>
+impl<Mode, S, V, F> InitialState<V> for Lbfgs<V, F, Mode, S>
 where
     F: Scalar,
     V: Clone,
 {
-    type State = LbfgsState<V, F>;
-    fn seed(&self, x: &V) -> LbfgsState<V, F> {
-        LbfgsState::new(x.clone(), self.m_capacity)
+    type State = FirstOrderState<V, F>;
+    fn seed(&self, x: &V) -> FirstOrderState<V, F> {
+        FirstOrderState::new(x.clone())
     }
 }
 
-impl<Mode, S, V, F> WarmStart<V> for Lbfgs<Mode, S, F>
+impl<Mode, S, V, F> WarmStart<V> for Lbfgs<V, F, Mode, S>
 where
     F: Scalar,
     V: Clone,
 {
 }
 
-impl<S, V, F> MemeticInner<V, F> for Lbfgs<Bounded, S, F>
+impl<S, V, F> MemeticInner<V, F> for Lbfgs<V, F, Bounded, S>
 where
     F: Scalar,
     V: Clone,
@@ -304,18 +286,17 @@ where
 /// [`Problem`] wrapper, so every inner cost/gradient/Jacobian/
 /// Hessian call bumps the same
 /// [`EvalCounts`](crate::core::problem::EvalCounts) as the outer's own
-/// evaluations. [`CmaEsState`]'s [`CountsMirror`] folds every
-/// kind of work into the outer's single `cost_evals` via
-/// `delta.total_work()`; CMA-ES outer state has no `gradient_evals`
-/// field, so a derivative-based inner (LM, L-BFGS-B) has its gradient
-/// work honestly collapse into `cost_evals` with no per-trait cross-type
-/// fold. See CONTRIBUTING.md "Solver composition" rule 1.
+/// evaluations. [`PopulationProgress`] preserves all six categories without
+/// folding derivative work into `cost_evals`. Use `counts().total_work()` for
+/// an explicit aggregate. Exact checkpoints retain the outer distribution,
+/// inner solver, progress, and counts together. With `serde`, these serialize
+/// when their constituent types do; application hooks cannot be serialized.
 ///
 /// # Backends
 ///
-/// Same coverage as [`CmaEs`]: the default `Vec<f64>` (via
+/// Same coverage as [`CmaEs`]: `Vec<F>` for `F = f32` or `f64` (via
 /// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The
-/// matrix bound is [`SymmetricEigen`], which every backend satisfies, and the
+/// matrix capabilities are those of [`CmaEs`], and the
 /// shipped [`MemeticInner`] inners are
 /// backend-generic.
 ///
@@ -323,6 +304,14 @@ where
 ///
 /// See [`CmaEs`] for the base population-based `Executor` pattern;
 /// `CmaInject` adds a local-search inner via Hansen-2011 injection.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "I: serde::Serialize, V: serde::Serialize, M: serde::Serialize, F: serde::Serialize",
+        deserialize = "I: serde::Deserialize<'de>, V: serde::Deserialize<'de>, M: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
+    ))
+)]
 pub struct CmaInject<I, V, M, F = f64>
 where
     F: Scalar,
@@ -350,6 +339,11 @@ where
             k: 1,
             c_y_override: None,
         }
+    }
+
+    /// Inspect the outer distribution model without transferring its ownership.
+    pub fn cma(&self) -> &CmaEs<V, M, F> {
+        &self.cma
     }
 
     /// Number of best-ranked candidates to refine and inject each
@@ -434,7 +428,8 @@ pub(crate) fn default_c_y<F: Scalar>(n: usize) -> F {
     n.sqrt() + two * n / (n + two)
 }
 
-impl<P, I, V, M, F> Solver<P, CmaEsState<V, M, F>> for CmaInject<I, V, M, F>
+impl<P, I, V, M, F> Solver<P, PopulationProgress<V, F>>
+    for CmaInject<I, V, M, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -458,15 +453,15 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    CmaEs<V, M, F>: Solver<P, CmaEsState<V, M, F>, Error = P::Error>,
+    CmaEs<V, M, F>: Solver<P, PopulationProgress<V, F>, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: CmaEsState<V, M, F>,
-    ) -> Result<CmaEsState<V, M, F>, Self::Error> {
+        state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         // Hansen's preliminary experiments inject from iter 1 onward,
         // so we delegate the initial population to vanilla CMA-ES.
         self.cma.init(problem, state)
@@ -475,9 +470,11 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: CmaEsState<V, M, F>,
-    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error>
-    {
+        state: PopulationProgress<V, F>,
+    ) -> Result<
+        (PopulationProgress<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
         //    previous generation, sample λ fresh candidates sorted by
         //    cost ascending.
@@ -486,11 +483,10 @@ where
             return Ok((state, Some(r)));
         }
 
-        // Snapshot the post-update distribution from the state for
-        // clipping (it lives on `CmaEsState` now, not the solver).
-        let n = state.m.vec_len();
-        let m = state.m.clone();
-        let sigma = state.sigma;
+        let work = self.cma.work.as_mut().expect("CMA init precedes injection");
+        let n = work.m.vec_len();
+        let m = work.m.clone();
+        let sigma = work.sigma;
         let c_y = self.c_y_override.unwrap_or_else(|| default_c_y::<F>(n));
         let refine = self.k.min(state.candidates.len());
 
@@ -498,19 +494,25 @@ where
             // 2. Seed the inner state via the trait. The σ argument
             //    lets seeders that scale with the CMA distribution
             //    (NM's σ-scaled simplex) track the current spread.
-            let inner_state =
-                self.inner.solver().seed_scaled(&state.candidates[i], sigma);
+            let inner_state = self
+                .inner
+                .solver_mut()
+                .seed_scaled(&state.candidates[i], sigma);
 
             // 3. Drive the inner. Same-problem composition: inner shares
             //    the outer wrapper, so its evals flow into the outer's
-            //    EvalCounts transparently and the CmaEsState mirror picks
-            //    them up via `total_work()`.
+            //    EvalCounts transparently and the PopulationProgress mirror picks
+            //    them up in their original categories.
             let inner_result: OptimizationResult<I::State> =
                 self.inner.run(problem, inner_state)?;
 
             // 4. Failure routing: bubble SolverFailed only (composition
             //    contract).
             if inner_result.reason.is_failure() {
+                sort_population_ascending(
+                    &mut state.candidates,
+                    &mut state.costs,
+                );
                 return Ok((state, Some(inner_result.reason)));
             }
 
@@ -522,10 +524,10 @@ where
             y.scaled_add(-F::one(), &m);
             y.scale_in_place(F::one() / sigma);
 
-            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖, with B, D⁻¹ from the state.
+            // 7. ‖C^{-1/2} y‖ = ‖D^{-1} ⊙ Bᵀ y‖, with B, D⁻¹ from the solver.
             let inv_sqrt_norm = {
-                let mut bt_y = state.b.mat_transpose_vec(&y);
-                bt_y.component_mul_assign(&state.d_inv);
+                let mut bt_y = work.b.mat_transpose_vec(&y);
+                bt_y.component_mul_assign(&work.d_inv);
                 bt_y.norm_squared().sqrt()
             };
 
@@ -558,8 +560,8 @@ where
     }
     fn terminate(
         &self,
-        state: &CmaEsState<V, M, F>,
+        state: &PopulationProgress<V, F>,
     ) -> Option<TerminationReason> {
-        <_ as Solver<P, CmaEsState<V, M, F>>>::terminate(&self.cma, state)
+        <_ as Solver<P, PopulationProgress<V, F>>>::terminate(&self.cma, state)
     }
 }

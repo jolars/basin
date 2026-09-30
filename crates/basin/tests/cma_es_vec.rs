@@ -11,7 +11,7 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CostFunction, DenseMatrix, Executor, PopulationState,
+    CmaEs, CostFunction, DenseMatrix, Executor, PopulationProgress,
     StepOutcome, TerminationReason,
 };
 
@@ -23,8 +23,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0.clone()),
     )
     .max_iter(30)
     .run()
@@ -32,8 +32,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(30)
     .run()
@@ -50,8 +50,8 @@ fn converges_on_sphere_5d() {
 
     let result = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(7),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(80)
     .run()
@@ -72,8 +72,8 @@ fn converges_on_rosenbrock_2d() {
 
     let result = Executor::new(
         Rosenbrock::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(17),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(17, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -96,9 +96,9 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        (CmaEs::<Vec<f64>, DenseMatrix>::new(11))
+        (CmaEs::<Vec<f64>, DenseMatrix>::new(11, 0.3))
             .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(2000)
     .run()
@@ -117,8 +117,8 @@ fn with_stds_ones_matches_default() {
 
     let default = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0.clone()),
     )
     .max_iter(40)
     .run()
@@ -126,8 +126,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3).with_stds(ones),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.3).with_stds(ones),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(40)
     .run()
@@ -148,8 +148,8 @@ fn with_stds_anisotropic_converges_on_sphere() {
 
     let result = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(7),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5).with_stds(stds),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5).with_stds(stds),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(120)
     .run()
@@ -182,8 +182,8 @@ fn with_stds_preconditions_ill_scaled_quadratic() {
 
     let result = Executor::new(
         IllScaledQuadratic,
-        CmaEs::<Vec<f64>, DenseMatrix>::new(7),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5).with_stds(stds),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5).with_stds(stds),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(300)
     .run()
@@ -196,8 +196,7 @@ fn with_stds_preconditions_ill_scaled_quadratic() {
     );
 }
 
-/// `PopulationState` invariants survive iteration on the `Vec<f64>` backend:
-/// `candidates`/`costs` stay parallel, length-λ, and sorted-ascending.
+/// Progress retains matching raw records while model fitness stays sorted.
 #[test]
 fn population_invariants_hold_after_iteration() {
     let m0 = vec![0.3, 0.4];
@@ -205,8 +204,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(1234).with_lambda(lambda),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(1234, 0.5).with_lambda(lambda),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(10)
     .into_stepper()

@@ -82,6 +82,11 @@ pub trait Solver<P, S: State> {
     ///   [`executor`](crate::core::executor) module docs), so an
     ///   already-optimal initial point must be detectable from the state
     ///   `init` returns.
+    /// - **Implementor must:** treat each initialization as a fresh run. Reset
+    ///   evolving model, component, RNG, and convergence history while retaining
+    ///   configured settings. Reset shared progress and reevaluate its seed,
+    ///   including when handed a state from an earlier run. Exact checkpoints
+    ///   skip initialization and preserve solver, state, and counts together.
     /// - **Implementor may:** return `Err` to abort the run before the
     ///   first iteration; the error bubbles out of
     ///   [`Executor::run`](crate::core::executor::Executor::run).

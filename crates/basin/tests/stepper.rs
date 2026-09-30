@@ -4,8 +4,8 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicState, CostFunction, Executor, GradientDescent, State, StepOutcome,
-    TerminationReason,
+    CostFunction, Executor, FirstOrderState, GradientDescent, State,
+    StepOutcome, TerminationReason,
 };
 
 #[test]
@@ -17,7 +17,7 @@ fn stepper_run_to_end_matches_executor_run() {
     let direct = Executor::new(
         problem_a,
         GradientDescent::new(0.001),
-        BasicState::new(initial.clone()),
+        FirstOrderState::new(initial.clone()),
     )
     .max_iter(500)
     .run()
@@ -26,7 +26,7 @@ fn stepper_run_to_end_matches_executor_run() {
     let via_stepper = Executor::new(
         problem_b,
         GradientDescent::new(0.001),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(500)
     .into_stepper()
@@ -50,7 +50,7 @@ fn stepper_advances_one_iter_per_step() {
     let mut stepper = Executor::new(
         problem,
         GradientDescent::new(0.001),
-        BasicState::new(vec![-1.2, 1.0]),
+        FirstOrderState::new(vec![-1.2, 1.0]),
     )
     .max_iter(10)
     .into_stepper()
@@ -70,7 +70,7 @@ fn stepper_stops_on_max_iter_with_correct_reason() {
     let mut stepper = Executor::new(
         problem,
         GradientDescent::new(0.001),
-        BasicState::new(vec![-1.2, 1.0]),
+        FirstOrderState::new(vec![-1.2, 1.0]),
     )
     .max_iter(3)
     .into_stepper()
@@ -92,7 +92,7 @@ fn stepper_is_sticky_after_stop() {
     let mut stepper = Executor::new(
         problem,
         GradientDescent::new(0.001),
-        BasicState::new(vec![-1.2, 1.0]),
+        FirstOrderState::new(vec![-1.2, 1.0]),
     )
     .max_iter(1)
     .into_stepper()
@@ -111,7 +111,7 @@ fn stepper_honors_gradient_tolerance() {
     let stepper = Executor::new(
         problem,
         (GradientDescent::new(0.001)).with_absolute_gradient_tolerance(1e-6),
-        BasicState::new(vec![1.0, 1.0]), // already at the optimum
+        FirstOrderState::new(vec![1.0, 1.0]), // already at the optimum
     )
     .max_iter(100)
     .into_stepper()
@@ -131,7 +131,7 @@ fn stepper_state_is_observable_between_steps() {
     let mut stepper = Executor::new(
         problem,
         GradientDescent::new(0.001),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(50)
     .into_stepper()

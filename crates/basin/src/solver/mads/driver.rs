@@ -34,6 +34,7 @@ pub(crate) struct StepOutcome<F> {
 }
 
 /// Resumable OrthoMADS state carried on the [`Mads`](crate::solver::Mads) solver.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct MadsWork<F> {
     n: usize,
     /// Current incumbent (flat).

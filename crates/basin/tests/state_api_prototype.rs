@@ -373,8 +373,7 @@ fn bfgs_and_lbfgs_match_shipped_solver_evaluations() {
     let expected = original.trace.clone();
     let baseline = basin::Executor::from_start(
         original,
-        basin::Lbfgs::<basin::solver::lbfgs::Unbounded>::new()
-            .with_m_capacity(4),
+        basin::Lbfgs::new().unbounded().with_m_capacity(4),
         vec![-1.2, 1.0],
     )
     .max_iter(12)
@@ -512,7 +511,7 @@ fn nelder_mead_preserves_authoritative_simplex_allocations() {
     let baseline = basin::Executor::new(
         original,
         basin::NelderMead::new(),
-        basin::BasicSimplexState::from_simplex(points.clone()),
+        basin::SimplexProgress::from_simplex(points.clone()),
     )
     .max_iter(10)
     .run()

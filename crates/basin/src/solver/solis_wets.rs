@@ -5,7 +5,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::SolisWetsState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 use crate::solver::cma_inject::MemeticInner;
 
@@ -19,7 +19,7 @@ use crate::solver::cma_inject::MemeticInner;
 ///
 /// # Algorithm
 ///
-/// State: iterate `x`, bias vector `b` (init `0`), step size `ρ`, and
+/// The solver owns the bias vector `b` (init `0`), step size `ρ`, and
 /// successive success/failure counters `#s`/`#f`. Each iteration:
 ///
 /// ```text
@@ -55,10 +55,16 @@ use crate::solver::cma_inject::MemeticInner;
 /// passed to [`new`](Self::new). Same seed → same trajectory, on every
 /// platform basin builds for (including `wasm32-unknown-unknown`). The
 /// RNG advances by exactly `n` standard-normal component draws per
-/// iteration regardless of which branch is taken, and is seeded once at
-/// construction (never re-seeded in [`init`](Solver::init)), so a
-/// paused `(SolisWets, SolisWetsState)` pair resumes its stream
-/// mid-sequence—the property LS-chain persistence relies on.
+/// iteration regardless of which branch is taken. Fresh initialization
+/// restores the configured seed, initial step size, zero bias, and streak
+/// counters, and reevaluates the supplied point. Progress uses [`PointState`].
+/// Exact solver-aware checkpoints preserve the RNG and adaptive model and
+/// skip initialization. State-only snapshots start a fresh run.
+///
+/// Persistent local-search chains likewise retain the solver and state and
+/// skip initialization between segments. Each segment deliberately resets its
+/// budgets, convergence history, and progress metadata. With `serde`, exact
+/// solver-aware serialization is available when `V` and `F` support it.
 ///
 /// # Contract
 ///
@@ -69,9 +75,7 @@ use crate::solver::cma_inject::MemeticInner;
 ///   `Ok(f64::INFINITY)` works naturally: rejected candidates register
 ///   as failures and `ρ` contracts back toward the feasible region.
 /// - **Caller should:** pick the initial `ρ`
-///   ([`SolisWetsState::new`]'s second argument, or
-///   [`with_rho_init`](Self::with_rho_init) when seeding through
-///   [`Executor::from_start`](crate::core::executor::Executor::from_start))
+///   with [`with_initial_step_size`](Self::with_initial_step_size)
 ///   on the scale of the distance to the sought minimum; `ρ` adapts
 ///   quickly in either direction.
 /// - Any real cost stops improving once `ρ` grows past its basin, and
@@ -91,15 +95,18 @@ use crate::solver::cma_inject::MemeticInner;
 /// `None` disables this optional check; zero tests exact collapse.
 /// The reason is [`TerminationReason::RhoTolerance`]. Each iteration spends
 /// one or two evaluations, so an executor cost budget can be exceeded by one.
+/// Optional cost- and step-change checks observe accepted moves; failed
+/// proposals do not turn an unchanged point into convergence. Native step-size
+/// checks remain active after rejection. Retain the solver with
+/// [`Executor::run_with_solver`](crate::Executor::run_with_solver) to inspect
+/// [`step_size`](Self::step_size), [`bias`](Self::bias), and streak counters.
 ///
 /// # Backends
 ///
-/// Backend-generic; works with any `V` implementing
-/// [`SampleStandardNormal`] + [`ScaledAdd`] + [`ScaleInPlace`] +
-/// `Clone`. That covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
-/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
-/// `faer::Col<f64>` (feature `faer`). No matrix type and no `linalg`
-/// tier involved.
+/// `Vec<F>`, `nalgebra::DVector<F>`, `ndarray::Array1<F>`, and `faer::Col<F>`
+/// with `F = f64` (default) or `f32`. Custom vectors need
+/// [`SampleStandardNormal`], [`ScaledAdd<F>`], [`ScaleInPlace<F>`],
+/// [`VectorLen`], and `Clone`. No matrix capability is required.
 ///
 /// # References
 ///
@@ -139,7 +146,8 @@ use crate::solver::cma_inject::MemeticInner;
 /// assert!(result.cost() < 1e-6);
 /// ```
 #[derive(Clone)]
-pub struct SolisWets<F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SolisWets<V, F: Scalar = f64> {
     step_tolerance: Option<F>,
     /// `ρ` used by [`InitialState::seed`] for fresh, unscaled starts.
     rho_init: F,
@@ -157,10 +165,37 @@ pub struct SolisWets<F = f64> {
     expand_factor: F,
     /// `ρ` multiplier on contraction.
     contract_factor: F,
+    seed: u64,
     rng: ChaCha8Rng,
+    bias: Option<V>,
+    rho: F,
+    num_success: u32,
+    num_failure: u32,
+    accepted_iterate: bool,
 }
 
-impl<F: Scalar> SolisWets<F> {
+impl<V, F: Scalar> SolisWets<V, F> {
+    /// Current mutation standard deviation. Before initialization, this is `1`.
+    /// Fresh initialization restores the configured initial step size.
+    pub fn step_size(&self) -> F {
+        self.rho
+    }
+
+    /// Current search bias, or `None` before initialization.
+    pub fn bias(&self) -> Option<&V> {
+        self.bias.as_ref()
+    }
+
+    /// Consecutive successes since the most recent failure or expansion.
+    pub fn success_count(&self) -> u32 {
+        self.num_success
+    }
+
+    /// Consecutive failures since the most recent success or contraction.
+    pub fn failure_count(&self) -> u32 {
+        self.num_failure
+    }
+
     /// Stop when the observed radius or step size is <= the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an
@@ -190,14 +225,18 @@ impl<F: Scalar> SolisWets<F> {
             contract_threshold: 3,
             expand_factor: F::from_f64(2.0).unwrap(),
             contract_factor: F::from_f64(0.5).unwrap(),
+            seed,
             rng: ChaCha8Rng::seed_from_u64(seed),
+            bias: None,
+            rho: F::one(),
+            num_success: 0,
+            num_failure: 0,
+            accepted_iterate: true,
         }
     }
 
-    /// Override the `ρ` that [`InitialState::seed`] (and thus
-    /// [`Executor::from_start`](crate::core::executor::Executor::from_start))
-    /// uses for a fresh start (default `1`). States built directly via
-    /// [`SolisWetsState::new`] carry their own `ρ` and ignore this.
+    /// Configure the initial mutation standard deviation for every fresh run
+    /// (default `1`).
     ///
     /// # Panics
     ///
@@ -209,8 +248,8 @@ impl<F: Scalar> SolisWets<F> {
         self.with_initial_step_size(rho_init)
     }
 
-    /// Configure the initial step size.
-    /// Retains the algorithm's existing formula, validation, and default.
+    /// Configure the initial mutation standard deviation for every fresh run
+    /// (default `1`). Exact checkpoints preserve the current adapted value.
     pub fn with_initial_step_size(mut self, rho_init: F) -> Self {
         assert!(
             rho_init > F::zero(),
@@ -334,79 +373,81 @@ impl<F: Scalar> SolisWets<F> {
     }
 }
 
-impl<P, V, F> Solver<P, SolisWetsState<V, F>> for SolisWets<F>
+impl<P, V, F> Solver<P, PointState<V, F>> for SolisWets<V, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: Clone + SampleStandardNormal + ScaledAdd<F> + ScaleInPlace<F>,
+    V: Clone
+        + VectorLen
+        + SampleStandardNormal
+        + ScaledAdd<F>
+        + ScaleInPlace<F>,
 {
     type Error = P::Error;
 
-    /// Evaluate the start point once. Resume-idempotent: a resumed chain
-    /// state arrives with `cost` already populated and passes through
-    /// untouched (bias, `ρ`, and counters are never reset here).
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SolisWetsState<V, F>,
-    ) -> Result<SolisWetsState<V, F>, Self::Error> {
-        if state.cost.is_none() {
-            state.cost = Some(problem.cost(&state.x)?);
-        }
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.reset_model(state.param(), self.rho_init, self.seed);
+        let cost = problem.cost(state.param())?;
+        state.replace(state.param().clone(), cost);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SolisWetsState<V, F>,
-    ) -> Result<(SolisWetsState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let f_x = state.cost.expect(
-            "SolisWets::next_iter called before init evaluated the start point",
-        );
+        let f_x = state.cost();
+        self.accepted_iterate = false;
+        let bias = self.bias.as_mut().expect("SolisWets must be initialized");
 
         // d ~ N(0, ρ² I). Sampled unconditionally first, so the RNG
         // advances by exactly n draws per iteration whichever branch
         // runs below.
-        let mut d = V::sample_standard_normal(&state.x, &mut self.rng);
-        d.scale_in_place(state.rho);
+        let mut d = V::sample_standard_normal(state.param(), &mut self.rng);
+        d.scale_in_place(self.rho);
 
         // step = b + d; candidates are x + step and x − step (the
         // paper's ξ and 2x − ξ: bias and noise reverse together).
-        let mut step = state.bias.clone();
+        let mut step = bias.clone();
         step.scaled_add(F::one(), &d);
 
-        let mut candidate = state.x.clone();
+        let mut candidate = state.param().clone();
         candidate.scaled_add(F::one(), &step);
         let f_forward = problem.cost(&candidate)?;
 
         if f_forward < f_x {
             // Forward success: b ← bias_memory · b + bias_gain · (b + d).
-            state.x = candidate;
-            state.cost = Some(f_forward);
-            state.bias.scale_in_place(self.bias_memory);
-            state.bias.scaled_add(self.bias_gain, &step);
-            state.num_success += 1;
-            state.num_failure = 0;
+            state.replace(candidate, f_forward);
+            self.accepted_iterate = true;
+            bias.scale_in_place(self.bias_memory);
+            bias.scaled_add(self.bias_gain, &step);
+            self.num_success += 1;
+            self.num_failure = 0;
         } else {
-            let mut reversal = state.x.clone();
+            let mut reversal = state.param().clone();
             reversal.scaled_add(-F::one(), &step);
             let f_reversal = problem.cost(&reversal)?;
 
             if f_reversal < f_x {
                 // Reversal success: b ← b − bias_gain · (b + d).
-                state.x = reversal;
-                state.cost = Some(f_reversal);
-                state.bias.scaled_add(-self.bias_gain, &step);
-                state.num_success += 1;
-                state.num_failure = 0;
+                state.replace(reversal, f_reversal);
+                self.accepted_iterate = true;
+                bias.scaled_add(-self.bias_gain, &step);
+                self.num_success += 1;
+                self.num_failure = 0;
             } else {
-                // Failure (NaN/∞ costs land here too: the comparisons
-                // above are strict and false for non-finite values).
-                state.bias.scale_in_place(self.bias_decay);
-                state.num_failure += 1;
-                state.num_success = 0;
+                // Equal, NaN, and positive-infinite proposals cannot improve
+                // a finite incumbent.
+                bias.scale_in_place(self.bias_decay);
+                self.num_failure += 1;
+                self.num_success = 0;
             }
         }
 
@@ -414,86 +455,78 @@ where
         // counter reset on fire (Rmalschains ordering and semantics; the
         // paper's Step 1 placement is equivalent up to a one-iteration
         // phase shift).
-        if state.num_success >= self.expand_threshold {
-            state.num_success = 0;
-            state.rho = state.rho * self.expand_factor;
-        } else if state.num_failure >= self.contract_threshold {
-            state.num_failure = 0;
-            state.rho = state.rho * self.contract_factor;
+        if self.num_success >= self.expand_threshold {
+            self.num_success = 0;
+            self.rho = self.rho * self.expand_factor;
+        } else if self.num_failure >= self.contract_threshold {
+            self.num_failure = 0;
+            self.rho = self.rho * self.contract_factor;
         }
 
         Ok((state, None))
     }
 
+    fn should_check_iterate_change(&self) -> bool {
+        self.accepted_iterate
+    }
+
     fn terminate(
         &self,
-        state: &SolisWetsState<V, F>,
+        _state: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         let tolerance = self.step_tolerance?;
-        let metric = crate::RhoState::rho(state);
+        let metric = self.rho;
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::RhoTolerance)
     }
 }
 
-// Composition impls: fresh-seed tiers (InitialState → WarmStart →
-// MemeticInner), so SolisWets works with `Executor::from_start` and as a
-// CmaInject/DeInject/BasinHopping inner.
-
-impl<V, F> InitialState<V> for SolisWets<F>
+impl<V, F: Scalar> SolisWets<V, F>
 where
-    F: Scalar,
     V: Clone + VectorLen + ScaleInPlace<F>,
 {
-    type State = SolisWetsState<V, F>;
-
-    fn seed(&self, x: &V) -> SolisWetsState<V, F> {
-        // σ-free seed at the solver's natural default scale
-        // (`with_rho_init`, default 1).
-        SolisWetsState::new(x.clone(), self.rho_init)
+    fn reset_model(&mut self, x: &V, scale: F, seed: u64) {
+        assert!(x.vec_len() >= 1, "SolisWets requires a non-empty x");
+        assert!(scale > F::zero(), "SolisWets requires a positive step size");
+        let mut bias = x.clone();
+        bias.scale_in_place(F::zero());
+        self.bias = Some(bias);
+        self.rho = scale;
+        self.num_success = 0;
+        self.num_failure = 0;
+        self.accepted_iterate = true;
+        self.rng = ChaCha8Rng::seed_from_u64(seed);
     }
 }
 
-impl<V, F> WarmStart<V> for SolisWets<F>
-where
-    F: Scalar,
-    V: Clone + VectorLen + ScaleInPlace<F>,
-{
-}
+impl<V: Clone, F: Scalar> InitialState<V> for SolisWets<V, F> {
+    type State = PointState<V, F>;
 
-impl<V, F> MemeticInner<V, F> for SolisWets<F>
-where
-    F: Scalar,
-    V: Clone + VectorLen + ScaleInPlace<F>,
-{
-    /// σ-scaled seed: `ρ` tracks the outer's step-size, so the walk's
-    /// exploration matches the outer distribution's spread.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `sigma ≤ 0` (via [`SolisWetsState::new`]). All shipped
-    /// callers pass a positive scale: `CmaInject`/`BoundedCmaInject`
-    /// forward the outer CMA step-size (positive by construction: its
-    /// multiplicative update never underflows to zero), and `DeInject`
-    /// passes the constant `1`.
-    fn seed_scaled(&self, x: &V, sigma: F) -> SolisWetsState<V, F> {
-        SolisWetsState::new(x.clone(), sigma)
+    fn seed(&self, x: &V) -> Self::State {
+        PointState::new(x.clone())
     }
 }
 
-impl<V, F> crate::core::inner::ResumableInner<V, F> for SolisWets<F>
+impl<V: Clone, F: Scalar> WarmStart<V> for SolisWets<V, F> {}
+
+impl<V: Clone, F: Scalar> MemeticInner<V, F> for SolisWets<V, F> {
+    /// Configure the next fresh run's initial step size from the outer scale.
+    fn seed_scaled(&mut self, x: &V, sigma: F) -> Self::State {
+        assert!(sigma > F::zero(), "SolisWets requires a positive step size");
+        self.rho_init = sigma;
+        self.seed(x)
+    }
+}
+
+impl<V, F> crate::core::inner::ResumableInner<V, F> for SolisWets<V, F>
 where
     F: Scalar,
     V: Clone + VectorLen + ScaleInPlace<F>,
 {
-    type State = SolisWetsState<V, F>;
+    type State = PointState<V, F>;
 
-    /// Fresh chain: a copy of the prototype's hyperparameters with a
-    /// private RNG stream seeded from `seed` (the prototype's own RNG is
-    /// never drawn), plus a state at `(x, ρ = scale)` with the cost slot
-    /// primed to `fx`—the chain snapshot for Solis-Wets is exactly
-    /// `(#s, #f, bias, ρ)` (MA-SW-Chains §II.C), so a fresh chain spends
-    /// zero budget re-scoring the point the outer already evaluated.
+    /// Build an initialized chain from the supplied evaluated point and scale.
+    /// The prototype's RNG is untouched, and no objective call is needed.
     fn seed_chain(
         &self,
         x: &V,
@@ -501,26 +534,30 @@ where
         scale: F,
         seed: u64,
     ) -> (Self, Self::State) {
-        // Struct-update over a clone so a future hyperparameter can't
-        // be forgotten here; only the RNG stream is replaced.
-        let sw = Self {
-            rng: ChaCha8Rng::seed_from_u64(seed),
-            ..self.clone()
-        };
-        let mut state = SolisWetsState::new(x.clone(), scale);
-        state.cost = Some(fx);
+        let mut sw = self.clone();
+        sw.seed = seed;
+        sw.rho_init = scale;
+        sw.reset_model(x, scale, seed);
+        let mut state = PointState::new(x.clone());
+        state.replace(x.clone(), fx);
         (sw, state)
     }
 
-    /// Reset the local iteration counter so the resumed segment starts
-    /// at iter 0; bias, `ρ`, and the streak counters persist—that's
-    /// the chain.
-    fn prepare_resume(&self, state: &mut Self::State) {
-        state.iter = 0;
+    fn seeded_chain_is_initialized(&self) -> bool {
+        true
     }
 
-    // `configure_segment` stays the default (unchanged): the reference
-    // implementation runs Solis-Wets segments purely budget-driven.
+    fn prepare_resume(&self, state: &mut Self::State) {
+        state.reset_progress();
+    }
+
+    fn configure_segment(
+        &mut self,
+        _state: &Self::State,
+        _control: &mut crate::RunControl<Self::State>,
+    ) {
+        self.accepted_iterate = true;
+    }
 }
 
 #[cfg(test)]
@@ -584,24 +621,25 @@ mod tests {
 
     #[test]
     fn forward_success_updates_bias_and_counters() {
-        let mut solver = SolisWets::<f64>::new(1);
+        let mut solver =
+            SolisWets::<_, f64>::new(1).with_initial_step_size(0.5);
         let mut problem = Problem::new(AlwaysImproving::new());
-        let state = SolisWetsState::new(vec![0.0, 0.0, 0.0], 0.5);
+        let state = PointState::new(vec![0.0, 0.0, 0.0]);
         let state = solver.init(&mut problem, state).unwrap();
 
-        let x_old = state.x.clone();
-        let bias_old = state.bias.clone();
+        let x_old = state.param().clone();
+        let bias_old = solver.bias().unwrap().clone();
         let (state, reason) = solver.next_iter(&mut problem, state).unwrap();
         assert!(reason.is_none());
 
         // Forward success moved to x + step with step = x_new − x_old,
         // so the expected bias is 0.2 b_old + 0.4 (x_new − x_old).
         let expected: Vec<f64> = (0..3)
-            .map(|i| 0.2 * bias_old[i] + 0.4 * (state.x[i] - x_old[i]))
+            .map(|i| 0.2 * bias_old[i] + 0.4 * (state.param()[i] - x_old[i]))
             .collect();
-        approx_eq(&state.bias, &expected, 1e-12);
-        assert_eq!(state.success_count(), 1);
-        assert_eq!(state.failure_count(), 0);
+        approx_eq(solver.bias().unwrap(), &expected, 1e-12);
+        assert_eq!(solver.success_count(), 1);
+        assert_eq!(solver.failure_count(), 0);
     }
 
     #[test]
@@ -613,18 +651,19 @@ mod tests {
         // seeds until the first iteration takes the reversal branch,
         // then assert its algebra. The probe is itself deterministic.
         for seed in 0..64 {
-            let mut solver = SolisWets::<f64>::new(seed);
+            let mut solver =
+                SolisWets::<_, f64>::new(seed).with_initial_step_size(0.4);
             let mut problem = Problem::new(Sphere);
-            let state = SolisWetsState::new(vec![0.3, -0.2], 0.4);
+            let state = PointState::new(vec![0.3, -0.2]);
             let state = solver.init(&mut problem, state).unwrap();
-            let x_old = state.x.clone();
-            let bias_old = state.bias.clone();
-            let f_old = state.cost.unwrap();
+            let x_old = state.param().clone();
+            let bias_old = solver.bias().unwrap().clone();
+            let f_old = state.cost();
 
             let (state, _) = solver.next_iter(&mut problem, state).unwrap();
-            let moved = state.x != x_old;
-            let improved = state.cost.unwrap() < f_old;
-            if moved && improved && state.success_count() == 1 {
+            let moved = state.param() != &x_old;
+            let improved = state.cost() < f_old;
+            if moved && improved && solver.success_count() == 1 {
                 // Distinguish reversal from forward via the bias formula:
                 // reversal ⇒ b_new = b_old + 0.4 (x_new − x_old)
                 // (since x_new − x_old = −step). Forward would give
@@ -635,9 +674,11 @@ mod tests {
                 // init spent 1; forward spends 1 more, reversal 2 more.
                 if evals_this_iter == 3 {
                     let expected: Vec<f64> = (0..2)
-                        .map(|i| bias_old[i] + 0.4 * (state.x[i] - x_old[i]))
+                        .map(|i| {
+                            bias_old[i] + 0.4 * (state.param()[i] - x_old[i])
+                        })
                         .collect();
-                    approx_eq(&state.bias, &expected, 1e-12);
+                    approx_eq(solver.bias().unwrap(), &expected, 1e-12);
                     return;
                 }
             }
@@ -647,100 +688,99 @@ mod tests {
 
     #[test]
     fn failure_decays_bias_and_counts() {
-        let mut solver = SolisWets::<f64>::new(3);
+        let mut solver =
+            SolisWets::<_, f64>::new(3).with_initial_step_size(0.5);
         let mut problem = Problem::new(Constant);
-        let mut state = SolisWetsState::new(vec![1.0, 2.0], 0.5);
-        // Seed a non-zero bias so the decay is observable.
-        state.bias = vec![0.8, -0.4];
+        let state = PointState::new(vec![1.0, 2.0]);
         let state = solver.init(&mut problem, state).unwrap();
+        // Seed a nonzero bias after initialization so the decay is observable.
+        solver.bias = Some(vec![0.8, -0.4]);
 
         let (state, reason) = solver.next_iter(&mut problem, state).unwrap();
         assert!(reason.is_none());
-        approx_eq(&state.bias, &[0.4, -0.2], 1e-12);
-        assert_eq!(state.failure_count(), 1);
-        assert_eq!(state.success_count(), 0);
-        assert_eq!(state.x, vec![1.0, 2.0]); // iterate unmoved
+        approx_eq(solver.bias().unwrap(), &[0.4, -0.2], 1e-12);
+        assert_eq!(solver.failure_count(), 1);
+        assert_eq!(solver.success_count(), 0);
+        assert_eq!(state.param(), &vec![1.0, 2.0]); // iterate unmoved
         // Two evals spent this iteration (forward + reversal) plus init.
         assert_eq!(problem.counts().cost_evals, 3);
     }
 
     #[test]
     fn expansion_fires_at_threshold_and_resets_counter() {
-        let mut solver = SolisWets::<f64>::new(5);
+        let mut solver = SolisWets::<_, f64>::new(5);
         let mut problem = Problem::new(AlwaysImproving::new());
-        let state = SolisWetsState::new(vec![0.0; 4], 1.0);
+        let state = PointState::new(vec![0.0; 4]);
         let mut state = solver.init(&mut problem, state).unwrap();
 
         for i in 1..=5 {
             let (s, _) = solver.next_iter(&mut problem, state).unwrap();
             state = s;
             if i < 5 {
-                assert_eq!(state.success_count(), i);
-                assert!((state.rho() - 1.0).abs() < 1e-15, "rho moved early");
+                assert_eq!(solver.success_count(), i);
+                assert!(
+                    (solver.step_size() - 1.0).abs() < 1e-15,
+                    "rho moved early"
+                );
             }
         }
         // Fifth success fires the expansion and resets the streak.
-        assert!((state.rho() - 2.0).abs() < 1e-15);
-        assert_eq!(state.success_count(), 0);
+        assert!((solver.step_size() - 2.0).abs() < 1e-15);
+        assert_eq!(solver.success_count(), 0);
     }
 
     #[test]
     fn contraction_fires_at_threshold_and_resets_counter() {
-        let mut solver = SolisWets::<f64>::new(7);
+        let mut solver = SolisWets::<_, f64>::new(7);
         let mut problem = Problem::new(Constant);
-        let state = SolisWetsState::new(vec![1.0; 3], 1.0);
+        let state = PointState::new(vec![1.0; 3]);
         let mut state = solver.init(&mut problem, state).unwrap();
 
         for i in 1..=3 {
             let (s, _) = solver.next_iter(&mut problem, state).unwrap();
             state = s;
             if i < 3 {
-                assert_eq!(state.failure_count(), i);
-                assert!((state.rho() - 1.0).abs() < 1e-15, "rho moved early");
+                assert_eq!(solver.failure_count(), i);
+                assert!(
+                    (solver.step_size() - 1.0).abs() < 1e-15,
+                    "rho moved early"
+                );
             }
         }
-        assert!((state.rho() - 0.5).abs() < 1e-15);
-        assert_eq!(state.failure_count(), 0);
+        assert!((solver.step_size() - 0.5).abs() < 1e-15);
+        assert_eq!(solver.failure_count(), 0);
     }
 
     #[test]
-    fn init_is_resume_idempotent() {
-        let mut solver = SolisWets::<f64>::new(11);
+    fn fresh_init_reevaluates_progress_and_resets_adaptation() {
+        let mut solver =
+            SolisWets::<_, f64>::new(11).with_initial_step_size(0.7);
         let mut problem = Problem::new(Sphere);
-        let state = SolisWetsState::new(vec![1.5, -0.5], 0.7);
+        let state = PointState::new(vec![1.5, -0.5]);
         let mut state = solver.init(&mut problem, state).unwrap();
         for _ in 0..10 {
-            let (s, _) = solver.next_iter(&mut problem, state).unwrap();
-            state = s;
+            state = solver.next_iter(&mut problem, state).unwrap().0;
         }
-
-        let x = state.x.clone();
-        let cost = state.cost;
-        let bias = state.bias.clone();
-        let rho = state.rho;
-        let (ns, nf) = (state.num_success, state.num_failure);
-        let evals_before = problem.counts().cost_evals;
-
-        // Re-running init on an advanced state must not touch anything
-        // and must not spend an evaluation: the resume contract.
+        state.replace(state.param().clone(), -1000.0);
         let state = solver.init(&mut problem, state).unwrap();
-        assert_eq!(state.x, x);
-        assert_eq!(state.cost, cost);
-        assert_eq!(state.bias, bias);
-        assert_eq!(state.rho, rho);
-        assert_eq!((state.num_success, state.num_failure), (ns, nf));
-        assert_eq!(problem.counts().cost_evals, evals_before);
+        assert_eq!(state.cost(), problem.inner().cost(state.param()).unwrap());
+        assert_eq!(solver.bias().unwrap(), &vec![0.0; 2]);
+        assert_eq!(solver.step_size(), 0.7);
+        assert_eq!(solver.success_count(), 0);
+        assert_eq!(solver.failure_count(), 0);
     }
 
     #[test]
     fn seed_and_seed_scaled_set_rho() {
-        let solver = SolisWets::<f64>::new(13).with_initial_step_size(0.25);
-        let s: SolisWetsState<Vec<f64>> = solver.seed(&vec![1.0, 2.0]);
-        assert!((s.rho() - 0.25).abs() < 1e-15);
-        assert_eq!(s.x, vec![1.0, 2.0]);
-
-        let s: SolisWetsState<Vec<f64>> =
-            solver.seed_scaled(&vec![1.0, 2.0], 0.05);
-        assert!((s.rho() - 0.05).abs() < 1e-15);
+        let mut solver =
+            SolisWets::<_, f64>::new(13).with_initial_step_size(0.25);
+        let mut p = Problem::new(Sphere);
+        let state = solver.seed(&vec![1.0, 2.0]);
+        let state = solver.init(&mut p, state).unwrap();
+        assert_eq!(solver.step_size(), 0.25);
+        assert_eq!(state.param(), &vec![1.0, 2.0]);
+        let state = solver.seed_scaled(&vec![1.0, 2.0], 0.05);
+        solver.init(&mut p, state).unwrap();
+        assert_eq!(solver.step_size(), 0.05);
     }
 }

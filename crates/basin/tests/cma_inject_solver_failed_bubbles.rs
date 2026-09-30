@@ -14,8 +14,8 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::Sphere;
 use basin::{
-    BasicState, ClosureInner, CmaEs, CmaEsState, CmaInject, Executor, Problem,
-    Solver, State, TerminationReason,
+    ClosureInner, CmaEs, CmaInject, Executor, PointState, PopulationProgress,
+    Problem, Solver, State, TerminationReason,
 };
 
 /// Inner solver that always returns `SolverFailed` on the first
@@ -38,19 +38,19 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
 fn bubbles_inner_failure() {
     let m0 = DVector::from_vec(vec![1.0; 3]);
 
-    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(5);
+    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(5, 0.3);
 
-    // Wrap AlwaysFails in ClosureInner with a BasicState seeder.
+    // Wrap AlwaysFails in ClosureInner with a PointState seeder.
     let inner =
         ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
-            BasicState::new(x.clone())
+            PointState::new(x.clone())
         });
     let solver = CmaInject::with_inner_solver(cma, inner);
 
     let result = Executor::new(
         Sphere::<DVector<f64>>::new(),
         solver,
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(20)
     .run()

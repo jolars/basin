@@ -456,8 +456,8 @@ Argmin vector helper skips draws on zero-length ranges and orders descending
 ranges before sampling. The Basin test therefore supplies the equivalent
 effective `r1`/`r2` coefficients to the standard equation instead of asserting
 RNG-consumption parity, which is not an algorithmic invariant. The driver
-prints rows sorted by current cost because Basin's
-`PopulationState` contract sorts every current generation, while Argmin retains
+prints rows sorted by current cost because Basin's PSO implementation
+sorts every current generation, while Argmin retains
 particle order after a step. Values use 17 significant decimal digits.
 
 To regenerate, create a temporary Cargo binary with these dependencies:

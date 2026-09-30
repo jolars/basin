@@ -64,6 +64,7 @@ pub(crate) struct PbOutcome<F> {
 
 /// Resumable progressive-barrier state carried on the
 /// [`Mads`](crate::solver::Mads) solver in the constrained mode.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct PbWork<F> {
     n: usize,
     /// Mesh index `ℓ` (OrthoMADS eq. (1)).

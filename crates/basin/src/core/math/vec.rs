@@ -300,6 +300,10 @@ impl<F: Scalar> super::DenseMatrixFromFn<F> for Vec<F> {
     }
 }
 
+impl<F: Scalar> super::DenseBackend<F> for Vec<F> {
+    type Matrix = super::DenseMatrix<F>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

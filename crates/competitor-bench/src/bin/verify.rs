@@ -7,7 +7,7 @@
 //! Run: `cargo run -p lm-bench --bin verify --release`.
 
 use basin::problems::{ExponentialFit, PowellSingular};
-use basin::{Executor, LevenbergMarquardt, NllsState};
+use basin::{Executor, LevenbergMarquardt, PointState};
 use competitor_bench::{
     LM_DEFAULT_TOL, LmExponentialFit, LmPowellSingular, LmUnderDet, LmVarDim,
     UnderDet, VarDim, vardim_start,
@@ -50,36 +50,36 @@ fn main() {
     let r = Executor::new(
         ExponentialFit::<BasinDVector<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
         basin_lm(),
-        NllsState::new(BasinDVector::from_vec(vec![5.0e4, -0.3])),
+        PointState::new(BasinDVector::from_vec(vec![5.0e4, -0.3])),
     )
     .max_iter(200)
     .run()
     .unwrap();
     println!(
-        "  basin/nalg  {:>5} iters  cost={:.3e}  a={:.6}  b={:.6}  ({} cost-evals, {:?})",
+        "  basin/nalg  {:>5} iters  cost={:.3e}  a={:.6}  b={:.6}  ({} residual-evals, {:?})",
         r.iter(),
         r.cost(),
         r.param()[0],
         r.param()[1],
-        r.cost_evals(),
+        r.state.counts().residual_evals,
         r.reason
     );
 
     let r = Executor::new(
         ExponentialFit::<Col<f64>>::sampled(1.0e5, -1.0, 10, 0.4),
         basin_lm(),
-        NllsState::new(Col::from_fn(2, |i| if i == 0 { 5.0e4 } else { -0.3 })),
+        PointState::new(Col::from_fn(2, |i| if i == 0 { 5.0e4 } else { -0.3 })),
     )
     .max_iter(200)
     .run()
     .unwrap();
     println!(
-        "  basin/faer  {:>5} iters  cost={:.3e}  a={:.6}  b={:.6}  ({} cost-evals, {:?})",
+        "  basin/faer  {:>5} iters  cost={:.3e}  a={:.6}  b={:.6}  ({} residual-evals, {:?})",
         r.iter(),
         r.cost(),
         r.param()[0],
         r.param()[1],
-        r.cost_evals(),
+        r.state.counts().residual_evals,
         r.reason
     );
 
@@ -103,42 +103,42 @@ fn main() {
     let r = Executor::new(
         PowellSingular::<BasinDVector<f64>>::new(),
         basin_lm(),
-        NllsState::new(BasinDVector::from_vec(vec![3.0, -1.0, 0.0, 1.0])),
+        PointState::new(BasinDVector::from_vec(vec![3.0, -1.0, 0.0, 1.0])),
     )
     .max_iter(200)
     .run()
     .unwrap();
     let p = r.param();
     println!(
-        "  basin/nalg  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} cost-evals, {:?})",
+        "  basin/nalg  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} residual-evals, {:?})",
         r.iter(),
         r.cost(),
         p[0],
         p[1],
         p[2],
         p[3],
-        r.cost_evals(),
+        r.state.counts().residual_evals,
         r.reason
     );
 
     let r = Executor::new(
         PowellSingular::<Col<f64>>::new(),
         basin_lm(),
-        NllsState::new(Col::from_fn(4, |i| [3.0, -1.0, 0.0, 1.0][i])),
+        PointState::new(Col::from_fn(4, |i| [3.0, -1.0, 0.0, 1.0][i])),
     )
     .max_iter(200)
     .run()
     .unwrap();
     let p = r.param();
     println!(
-        "  basin/faer  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} cost-evals, {:?})",
+        "  basin/faer  {:>5} iters  cost={:.3e}  x=[{:.2e}, {:.2e}, {:.2e}, {:.2e}]  ({} residual-evals, {:?})",
         r.iter(),
         r.cost(),
         p[0],
         p[1],
         p[2],
         p[3],
-        r.cost_evals(),
+        r.state.counts().residual_evals,
         r.reason
     );
 
@@ -166,39 +166,39 @@ fn main() {
         let r = Executor::new(
             VarDim::<BasinDVector<f64>>::new(n),
             basin_lm(),
-            NllsState::new(BasinDVector::from_vec(start.clone())),
+            PointState::new(BasinDVector::from_vec(start.clone())),
         )
         .max_iter(500)
         .run()
         .unwrap();
         println!(
-            "  basin/nalg  {:>5} iters  cost={:.3e}  ‖x−1‖∞={:.2e}  ({} cost-evals, {:?})",
+            "  basin/nalg  {:>5} iters  cost={:.3e}  ‖x−1‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
             r.cost(),
             r.param()
                 .iter()
                 .map(|&v| (v - 1.0).abs())
                 .fold(0.0, f64::max),
-            r.cost_evals(),
+            r.state.counts().residual_evals,
             r.reason
         );
 
         let r = Executor::new(
             VarDim::<Col<f64>>::new(n),
             basin_lm(),
-            NllsState::new(Col::from_fn(n, |i| start[i])),
+            PointState::new(Col::from_fn(n, |i| start[i])),
         )
         .max_iter(500)
         .run()
         .unwrap();
         println!(
-            "  basin/faer  {:>5} iters  cost={:.3e}  ‖x−1‖∞={:.2e}  ({} cost-evals, {:?})",
+            "  basin/faer  {:>5} iters  cost={:.3e}  ‖x−1‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
             r.cost(),
             (0..n)
                 .map(|i| (r.param()[i] - 1.0).abs())
                 .fold(0.0, f64::max),
-            r.cost_evals(),
+            r.state.counts().residual_evals,
             r.reason
         );
     }
@@ -224,32 +224,32 @@ fn main() {
 
         let p = UnderDet::<BasinDVector<f64>>::new(m, n);
         let x0 = BasinDVector::from_vec(p.start());
-        let r = Executor::new(p, basin_lm(), NllsState::new(x0))
+        let r = Executor::new(p, basin_lm(), PointState::new(x0))
             .max_iter(500)
             .run()
             .unwrap();
         println!(
-            "  basin/nalg  {:>5} iters  cost={:.6e}  ‖x‖∞={:.2e}  ({} cost-evals, {:?})",
+            "  basin/nalg  {:>5} iters  cost={:.6e}  ‖x‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
             r.cost(),
             r.param().iter().map(|&v| v.abs()).fold(0.0, f64::max),
-            r.cost_evals(),
+            r.state.counts().residual_evals,
             r.reason
         );
 
         let p = UnderDet::<Col<f64>>::new(m, n);
         let start = p.start();
         let x0 = Col::from_fn(n, |i| start[i]);
-        let r = Executor::new(p, basin_lm(), NllsState::new(x0))
+        let r = Executor::new(p, basin_lm(), PointState::new(x0))
             .max_iter(500)
             .run()
             .unwrap();
         println!(
-            "  basin/faer  {:>5} iters  cost={:.6e}  ‖x‖∞={:.2e}  ({} cost-evals, {:?})",
+            "  basin/faer  {:>5} iters  cost={:.6e}  ‖x‖∞={:.2e}  ({} residual-evals, {:?})",
             r.iter(),
             r.cost(),
             (0..n).map(|i| r.param()[i].abs()).fold(0.0, f64::max),
-            r.cost_evals(),
+            r.state.counts().residual_evals,
             r.reason
         );
     }

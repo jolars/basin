@@ -37,6 +37,7 @@ use crate::core::math::Scalar;
 /// factor the `n × nact` matrix of those active normals: column-major `n × n`
 /// `Q` (orthogonal) and `R` (upper-triangular, positive diagonal on the leading
 /// `nact × nact` block), with `Q[:, ..nact] · R[..nact, ..nact] = A[:, iact]`.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct ActiveSetQr<F = f64> {
     /// Number of variables `n`.
     pub(crate) n: usize,

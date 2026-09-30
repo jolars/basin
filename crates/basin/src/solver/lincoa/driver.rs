@@ -42,6 +42,7 @@ pub(crate) struct StepOutcome {
 }
 
 /// The resumable working state of a LINCOA run.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct LincoaWork<F = f64> {
     pub(crate) model: QuadraticModel<F>,
     /// Unit-normalized constraint normals, `n × m` column-major.

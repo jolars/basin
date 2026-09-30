@@ -3,8 +3,8 @@
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Rosenbrock;
 use basin::{
-    Backtracking, BasicState, Bfgs, CostFunction, Executor, Gradient,
-    GradientDescent, HagerZhang, NalgebraQuasiNewtonState, TerminationReason,
+    Backtracking, Bfgs, CostFunction, Executor, FirstOrderState, Gradient,
+    GradientDescent, HagerZhang, TerminationReason,
 };
 
 #[test]
@@ -12,14 +12,11 @@ fn bfgs_converges_on_rosenbrock() {
     let problem = Rosenbrock::<DVector<f64>>::default();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        NalgebraQuasiNewtonState::new(initial),
-    )
-    .max_iter(100)
-    .run()
-    .unwrap();
+    let result =
+        Executor::new(problem, Bfgs::new(), FirstOrderState::new(initial))
+            .max_iter(100)
+            .run()
+            .unwrap();
 
     assert!(
         result.cost() < 1e-8,
@@ -49,7 +46,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
     let result = Executor::new(
         problem,
         (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
-        NalgebraQuasiNewtonState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -67,7 +64,7 @@ fn bfgs_reports_hager_zhang_budget_exhaustion_as_failure() {
     let result = Executor::new(
         Rosenbrock::<DVector<f64>>::default(),
         solver,
-        NalgebraQuasiNewtonState::new(initial.clone()),
+        FirstOrderState::new(initial.clone()),
     )
     .max_iter(10)
     .run()
@@ -84,7 +81,7 @@ fn bfgs_converges_faster_than_gd_with_backtracking() {
     let bfgs_result = Executor::new(
         Rosenbrock::<DVector<f64>>::default(),
         (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
-        NalgebraQuasiNewtonState::new(initial.clone()),
+        FirstOrderState::new(initial.clone()),
     )
     .max_iter(500)
     .run()
@@ -94,7 +91,7 @@ fn bfgs_converges_faster_than_gd_with_backtracking() {
         Rosenbrock::<DVector<f64>>::default(),
         (GradientDescent::with_line_search(Backtracking::new()))
             .with_absolute_gradient_tolerance(1e-6),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(500)
     .run()
@@ -167,7 +164,7 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
     let result = Executor::new(
         problem,
         (Bfgs::new()).with_absolute_gradient_tolerance(1e-8),
-        NalgebraQuasiNewtonState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -206,7 +203,7 @@ fn bfgs_terminates_via_converged_when_at_machine_precision() {
     let result = Executor::new(
         problem,
         (Bfgs::new()).with_absolute_gradient_tolerance(1e-30),
-        NalgebraQuasiNewtonState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(200)
     .run()

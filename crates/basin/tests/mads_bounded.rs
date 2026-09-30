@@ -10,7 +10,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::BoothBoxed;
-use basin::{Executor, Mads, MadsState, State, TerminationReason};
+use basin::{Executor, Mads, PointState, State, TerminationReason};
 
 #[test]
 fn poll_tolerance_can_be_set_after_bounding() {
@@ -55,7 +55,7 @@ fn slack_bounds_recover_unconstrained_minimum() {
             .bounded()
             .with_initial_poll_size(1.0)
             .with_minimum_poll_size(1e-6),
-        MadsState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_iter(50_000)
     .max_cost_evals(20_000)
@@ -90,7 +90,7 @@ fn tight_bounds_converge_to_box_corner() {
             .bounded()
             .with_initial_poll_size(1.0)
             .with_minimum_poll_size(1e-8),
-        MadsState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_iter(50_000)
     .max_cost_evals(20_000)
@@ -120,7 +120,7 @@ fn infeasible_start_clamped_at_init() {
     let result = Executor::new(
         problem,
         Mads::new().bounded(),
-        MadsState::new(vec![10.0, 10.0]),
+        PointState::new(vec![10.0, 10.0]),
     )
     .max_iter(0)
     .run()

@@ -38,7 +38,7 @@ hand the problem, a solver, and an initial state to the `Executor`.
 
 ```rust
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent,
+    FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
 };
 use std::convert::Infallible;
 
@@ -68,7 +68,7 @@ impl Gradient for Rosenbrock {
 fn main() {
     let solver = GradientDescent::new(1e-3)
         .with_absolute_gradient_tolerance(1e-6);
-    let state = BasicState::new(vec![-1.2, 1.0]);
+    let state = FirstOrderState::new(vec![-1.2, 1.0]);
 
     let result = Executor::new(Rosenbrock, solver, state)
         .max_iter(50_000)

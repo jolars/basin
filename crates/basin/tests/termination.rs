@@ -1,7 +1,7 @@
 use basin::{
-    Backtracking, BasicSimplexState, BasicState, CostFunction, Executor,
-    Gradient, GradientDescent, GradientState, NelderMead, Problem, Solver,
-    State, TerminationReason,
+    Backtracking, CostFunction, Executor, FirstOrderState, Gradient,
+    GradientDescent, GradientState, NelderMead, PointState, Problem,
+    SimplexProgress, Solver, State, TerminationReason,
 };
 use std::time::Duration;
 
@@ -68,7 +68,7 @@ fn gradient_tolerance_fires_at_iter_zero_when_starting_at_optimum() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1).with_absolute_gradient_tolerance(1e-8),
-        BasicState::new(vec![0.0, 0.0]),
+        FirstOrderState::new(vec![0.0, 0.0]),
     )
     .run()
     .unwrap();
@@ -82,7 +82,7 @@ fn gradient_tolerance_fires_after_convergence() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5).with_absolute_gradient_tolerance(1e-6),
-        BasicState::new(vec![1.0, -1.0, 0.5]),
+        FirstOrderState::new(vec![1.0, -1.0, 0.5]),
     )
     .max_iter(1_000)
     .run()
@@ -106,7 +106,7 @@ fn relative_gradient_tolerance_fires_after_convergence() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5).with_relative_gradient_tolerance(1e-3),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
     .run()
@@ -127,7 +127,7 @@ fn relative_gradient_tolerance_fires_at_iter_zero_when_starting_at_optimum() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1).with_relative_gradient_tolerance(1e-6),
-        BasicState::new(vec![0.0, 0.0]),
+        FirstOrderState::new(vec![0.0, 0.0]),
     )
     .run()
     .unwrap();
@@ -147,7 +147,7 @@ fn relative_gradient_tolerance_is_scale_invariant() {
         Executor::new(
             Quadratic,
             GradientDescent::new(0.5).with_relative_gradient_tolerance(1e-3),
-            BasicState::new(vec![x0, x0]),
+            FirstOrderState::new(vec![x0, x0]),
         )
         .max_iter(1_000)
         .run()
@@ -172,7 +172,7 @@ fn max_iter_field_default_is_one_thousand() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001), // tiny step → won't converge in 1000
-        BasicState::new(vec![10.0, 10.0]),
+        FirstOrderState::new(vec![10.0, 10.0]),
     )
     .run()
     .unwrap();
@@ -187,7 +187,7 @@ fn explicit_max_iter_replaces_default() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001),
-        BasicState::new(vec![10.0, 10.0]),
+        FirstOrderState::new(vec![10.0, 10.0]),
     )
     .max_iter(5)
     .run()
@@ -202,7 +202,7 @@ fn param_tolerance_fires_when_steps_become_small() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5).with_absolute_step_tolerance(1e-8),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
     .run()
@@ -216,7 +216,7 @@ fn cost_tolerance_fires_when_cost_stagnates() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5).with_absolute_cost_change_tolerance(1e-12),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
     .run()
@@ -235,7 +235,7 @@ fn relative_param_tolerance_fires_when_relative_step_small() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001).with_relative_step_tolerance(1e-2),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
     .run()
@@ -252,7 +252,7 @@ fn relative_cost_tolerance_fires_when_relative_reduction_small() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001).with_relative_cost_change_tolerance(1e-2),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
     .run()
@@ -269,7 +269,7 @@ fn target_cost_fires_at_iter_zero_when_start_is_below_target() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![0.5, 0.5]),
+        FirstOrderState::new(vec![0.5, 0.5]),
     )
     .target_cost(1.0)
     .run()
@@ -287,7 +287,7 @@ fn target_cost_fires_when_cost_drops_to_target() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
     .target_cost(1e-3)
@@ -306,7 +306,7 @@ fn target_cost_does_not_fire_when_target_unreachable() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(10)
     .target_cost(-1.0)
@@ -326,7 +326,7 @@ fn no_improvement_fires_after_patience_stalled_iters() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(100)
     .no_improvement(3, 10.0)
@@ -345,7 +345,7 @@ fn no_improvement_does_not_fire_under_monotone_decrease() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(20)
     .no_improvement(5, 0.0)
@@ -368,7 +368,7 @@ fn no_improvement_resets_counter_on_real_improvement() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.5),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(100)
     .no_improvement(3, 0.1)
@@ -391,7 +391,7 @@ fn relative_cost_tolerance_is_scale_invariant() {
             Quadratic,
             GradientDescent::new(0.001)
                 .with_relative_cost_change_tolerance(1e-2),
-            BasicState::new(vec![x0, x0]),
+            FirstOrderState::new(vec![x0, x0]),
         )
         .max_iter(1_000)
         .run()
@@ -417,7 +417,7 @@ fn solver_step_tolerance_precedes_iteration_budget() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1).with_absolute_step_tolerance(100.0),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
     .run()
@@ -433,7 +433,7 @@ fn max_time_eventually_fires() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001),
-        BasicState::new(vec![1e6, 1e6, 1e6]),
+        FirstOrderState::new(vec![1e6, 1e6, 1e6]),
     )
     .max_iter(u64::MAX)
     .max_time(Duration::from_millis(50))
@@ -448,20 +448,20 @@ fn max_time_eventually_fires() {
 /// checked.
 struct AlwaysConverged;
 
-impl Solver<Quadratic, BasicState<Vec<f64>>> for AlwaysConverged {
+impl Solver<Quadratic, PointState<Vec<f64>>> for AlwaysConverged {
     type Error = std::convert::Infallible;
     fn next_iter(
         &mut self,
         _problem: &mut Problem<Quadratic>,
-        state: BasicState<Vec<f64>>,
-    ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error>
+        state: PointState<Vec<f64>>,
+    ) -> Result<(PointState<Vec<f64>>, Option<TerminationReason>), Self::Error>
     {
         Ok((state, None))
     }
 
     fn terminate(
         &self,
-        _state: &BasicState<Vec<f64>>,
+        _state: &PointState<Vec<f64>>,
     ) -> Option<TerminationReason> {
         Some(TerminationReason::SolverConverged)
     }
@@ -472,7 +472,7 @@ fn solver_terminate_hook_is_honored() {
     let result = Executor::new(
         Quadratic,
         AlwaysConverged,
-        BasicState::new(vec![1.0, 2.0]),
+        PointState::new(vec![1.0, 2.0]),
     )
     .run()
     .unwrap();
@@ -489,13 +489,13 @@ struct FailsOnSecondCall {
     calls: u64,
 }
 
-impl Solver<Quadratic, BasicState<Vec<f64>>> for FailsOnSecondCall {
+impl Solver<Quadratic, PointState<Vec<f64>>> for FailsOnSecondCall {
     type Error = std::convert::Infallible;
     fn next_iter(
         &mut self,
         _problem: &mut Problem<Quadratic>,
-        state: BasicState<Vec<f64>>,
-    ) -> Result<(BasicState<Vec<f64>>, Option<TerminationReason>), Self::Error>
+        state: PointState<Vec<f64>>,
+    ) -> Result<(PointState<Vec<f64>>, Option<TerminationReason>), Self::Error>
     {
         Ok({
             self.calls += 1;
@@ -513,7 +513,7 @@ fn solver_can_signal_termination_mid_iter() {
     let result = Executor::new(
         Quadratic,
         FailsOnSecondCall { calls: 0 },
-        BasicState::new(vec![1.0, 2.0]),
+        PointState::new(vec![1.0, 2.0]),
     )
     .max_iter(100)
     .run()
@@ -532,7 +532,7 @@ fn cost_evals_matches_iter_for_constant_step_gradient_descent() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001),
-        BasicState::new(vec![10.0, 10.0]),
+        FirstOrderState::new(vec![10.0, 10.0]),
     )
     .max_iter(20)
     .run()
@@ -552,7 +552,7 @@ fn cost_evals_exceeds_iter_with_backtracking() {
         GradientDescent::with_line_search(
             Backtracking::new().alpha_init(8.0).rho(0.5),
         ),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(10)
     .run()
@@ -574,7 +574,7 @@ fn cost_evals_exceeds_iter_for_nelder_mead_shrinks() {
     let result = Executor::new(
         Quadratic,
         NelderMead::new(),
-        BasicSimplexState::new(vec![2.0, -3.0]),
+        SimplexProgress::new(vec![2.0, -3.0]),
     )
     .max_iter(50)
     .run()
@@ -588,7 +588,7 @@ fn max_gradient_evals_fires_before_max_iter() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.001),
-        BasicState::new(vec![10.0, 10.0]),
+        FirstOrderState::new(vec![10.0, 10.0]),
     )
     .max_iter(10_000)
     .max_gradient_evals(5)
@@ -604,7 +604,7 @@ fn max_cost_evals_fires_before_max_iter() {
     let result = Executor::new(
         Quadratic,
         NelderMead::new(),
-        BasicSimplexState::new(vec![5.0, -2.0, 4.0]),
+        SimplexProgress::new(vec![5.0, -2.0, 4.0]),
     )
     .max_iter(10_000)
     .max_cost_evals(25)
@@ -624,7 +624,7 @@ fn custom_stop_hook() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![5.0, 5.0]),
+        FirstOrderState::new(vec![5.0, 5.0]),
     )
     .max_iter(1_000)
     .stop_when(|state| {

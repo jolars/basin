@@ -6,8 +6,8 @@
 
 use super::Vector;
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, GradientState,
-    LbfgsState, Lbfgsb, OptimizationResult, Solver, State, Stepper,
+    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
+    GradientState, Lbfgsb, OptimizationResult, Solver, State, Stepper,
     TerminationReason,
 };
 use std::convert::Infallible;
@@ -133,9 +133,10 @@ impl<V: Vector> Short<V> {
     fn executor(
         &self,
         adapter: Adapter,
-    ) -> Executor<&Self, LbfgsState<V>, Lbfgsb>
+    ) -> Executor<&Self, FirstOrderState<V>, Lbfgsb<V>>
     where
-        Lbfgsb: for<'a> Solver<&'a Self, LbfgsState<V>, Error = Infallible>,
+        Lbfgsb<V>:
+            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
     {
         let (history, cost_tolerance) = match self.case {
             Case::Mixed => (5, 0.0),
@@ -143,16 +144,18 @@ impl<V: Vector> Short<V> {
         };
         let gradient_tolerance = self.gradient_tolerance;
         let custom_stop = gradient_tolerance == 0.0;
-        let solver = Lbfgsb::new().with_absolute_projected_gradient_tolerance(
-            Some(gradient_tolerance),
-        );
+        let solver = Lbfgsb::new()
+            .with_m_capacity(history)
+            .with_absolute_projected_gradient_tolerance(Some(
+                gradient_tolerance,
+            ));
         let bounds = matches!(adapter, Adapter::Reference)
             .then(|| (self.lower.clone(), self.upper.clone()));
         let mut previous: Option<f64> = None;
         let executor = Executor::new(
             self,
             solver,
-            LbfgsState::new(self.start.clone(), history),
+            FirstOrderState::new(self.start.clone()),
         )
         .max_iter(2000);
         // A disabled application stop still allocates a closure and dispatches
@@ -163,7 +166,7 @@ impl<V: Vector> Short<V> {
         {
             return executor;
         }
-        executor.stop_when(move |state: &LbfgsState<V>| {
+        executor.stop_when(move |state: &FirstOrderState<V>| {
             // The original adapter computes this even when the solver
             // already owns the projected-gradient convergence test.
             let pg = if let Some((lower, upper)) = &bounds {
@@ -201,16 +204,21 @@ impl<V: Vector> Short<V> {
     pub fn initialize(
         &self,
         adapter: Adapter,
-    ) -> Stepper<&Self, LbfgsState<V>, Lbfgsb>
+    ) -> Stepper<&Self, FirstOrderState<V>, Lbfgsb<V>>
     where
-        Lbfgsb: for<'a> Solver<&'a Self, LbfgsState<V>, Error = Infallible>,
+        Lbfgsb<V>:
+            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
     {
         self.executor(adapter).into_stepper().unwrap()
     }
 
-    pub fn solve(&self, adapter: Adapter) -> OptimizationResult<LbfgsState<V>>
+    pub fn solve(
+        &self,
+        adapter: Adapter,
+    ) -> OptimizationResult<FirstOrderState<V>>
     where
-        Lbfgsb: for<'a> Solver<&'a Self, LbfgsState<V>, Error = Infallible>,
+        Lbfgsb<V>:
+            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
     {
         self.executor(adapter).run().unwrap()
     }
@@ -218,7 +226,7 @@ impl<V: Vector> Short<V> {
     /// Match an adapter that returns an owned point and discards solver state.
     pub fn extract(
         &self,
-        result: &OptimizationResult<LbfgsState<V>>,
+        result: &OptimizationResult<FirstOrderState<V>>,
     ) -> (V, f64, f64) {
         let pg = projected_gradient(
             result.param().as_slice(),
@@ -229,7 +237,7 @@ impl<V: Vector> Short<V> {
         (result.param().clone(), result.cost(), pg)
     }
 
-    pub fn verify(&self, result: &OptimizationResult<LbfgsState<V>>) {
+    pub fn verify(&self, result: &OptimizationResult<FirstOrderState<V>>) {
         let (iterations, evaluations, target, objective): (_, _, &[f64], _) =
             match self.case {
                 Case::Mixed => (2, 3, &[1.0, 2.0, -2.0, 3.0], 0.0),

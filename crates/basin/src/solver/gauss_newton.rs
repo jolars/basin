@@ -6,7 +6,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
-use crate::core::state::NllsState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
@@ -59,7 +59,7 @@ use crate::{
 /// with this test using OR. Execution budgets belong on the executor.
 ///
 /// The least-squares gradient is `Jᵀr`. It is computed inside the solver;
-/// [`NllsState`] does not expose a [`GradientState`](crate::GradientState).
+/// [`PointState`] does not expose a [`GradientState`](crate::GradientState).
 ///
 /// # Backends
 ///
@@ -87,7 +87,7 @@ use crate::{
 /// # Examples
 ///
 /// Identical setup to [`LevenbergMarquardt`](crate::LevenbergMarquardt):
-/// implement `Residual` + `Jacobian`, then drive a `NllsState` through
+/// implement `Residual` + `Jacobian`, then drive a `PointState` through
 /// the `Executor`, swapping `LevenbergMarquardt::new()` for
 /// `GaussNewton::new()`.
 pub struct GaussNewton<V, M, F = f64> {
@@ -158,13 +158,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = NllsState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        NllsState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
-impl<P, V, M, F> Solver<P, NllsState<V, F>> for GaussNewton<V, M, F>
+impl<P, V, M, F> Solver<P, PointState<V, F>> for GaussNewton<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
@@ -175,20 +175,21 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_evaluated(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_evaluated(problem, state)
     }
 }
 
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for GaussNewton<V, M, F>
 where
     F: Scalar,
@@ -203,15 +204,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_evaluated(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_evaluated(problem, state)
     }
 }
@@ -224,8 +226,9 @@ where
     fn init_evaluated<E: Evaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        mut state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, E::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error> {
+        state.reset();
         // Seed cost so iter-0 termination criteria see a populated
         // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
         // `next_iter` doesn't re-evaluate them at the same point.
@@ -233,8 +236,9 @@ where
         self.r_cache = None;
         self.j_cache = None;
         self.model_r_cache = None;
-        let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(
+        let (r, j) = problem.residual_and_jacobian(state.param())?;
+        state.replace(
+            state.param().clone(),
             problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
         );
         let Some((model_r, j)) = problem.model(&r, j) else {
@@ -250,19 +254,19 @@ where
     fn next_evaluated<E: Evaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        mut state: NllsState<V, F>,
+        mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
         if self.failed {
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
-            None => problem.residual(&state.param)?,
+            None => problem.residual(state.param())?,
         };
         let (model_r, j) = match self.j_cache.take() {
             Some(j) => (self.model_r_cache.take(), j),
             None => {
-                let j = problem.jacobian(&state.param)?;
+                let j = problem.jacobian(state.param())?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
                     return Ok((state, Some(TerminationReason::SolverFailed)));
@@ -307,16 +311,18 @@ where
         // post-iteration state is consistent (Solver contract); stash
         // that residual so the next iter reuses it without re-eval.
         // `J(x_new)` is not computed, so `j_cache` stays empty.
-        state.param.scaled_add(F::one(), &delta);
-        let r_new = problem.residual(&state.param)?;
-        state.cost =
-            Some(problem.cost(&r_new, |r| {
-                F::from_f64(0.5).unwrap() * r.norm_squared()
-            }));
+        let mut param = state.param().clone();
+        param.scaled_add(F::one(), &delta);
+        let r_new = problem.residual(&param)?;
+        state.replace(
+            param,
+            problem
+                .cost(&r_new, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
+        );
         self.r_cache = Some(r_new);
         self.j_cache = None;
 
-        let failed = E::ROBUST && !state.cost.unwrap().is_finite();
+        let failed = E::ROBUST && !state.cost().is_finite();
         self.failed = failed;
         Ok((state, failed.then_some(TerminationReason::SolverFailed)))
     }

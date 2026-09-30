@@ -7,7 +7,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::BasicPopulationState;
+use crate::core::state::PopulationProgress;
 use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::sort_population_ascending;
 
@@ -20,9 +20,9 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// # Algorithm
 ///
-/// [`init`](Solver::init) samples `pop_size` candidates uniformly in
-/// the problem box `[lower, upper]`, evaluates each, and sorts the
-/// population ascending by cost.
+/// [`init`](Solver::init) samples `pop_size` candidates uniformly in the
+/// problem box `[lower, upper]` when the state is empty, or projects explicit
+/// members into the box. It evaluates each and sorts the population by cost.
 ///
 /// Each [`next_iter`](Solver::next_iter) produces `offspring_per_step`
 /// children:
@@ -44,7 +44,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///    current population's worst member, take its slot (Molina §4.4.5
 ///    "standard replacement strategy").
 ///
-/// All four parallel arrays in [`BasicPopulationState`] are re-sorted
+/// The member and cost arrays in [`PopulationProgress`] are re-sorted
 /// ascending at the end of each iteration so `state.cost()` always
 /// reports the current best.
 ///
@@ -68,21 +68,23 @@ use crate::solver::cma_es::sort_population_ascending;
 /// platform basin builds for (including `wasm32-unknown-unknown`).
 /// With the `serde` feature, both the live RNG and the configuration are
 /// serialized for solver-aware exact checkpoints; pair the solver with its
-/// serialized [`BasicPopulationState`].
+/// serialized [`PopulationProgress`].
 ///
 /// # Contract
 ///
-/// - **Caller must:** implement [`CostFunction<Param = V, Output = f64>`]
+/// - **Caller must:** implement [`CostFunction<Param = V, Output = F>`]
 ///   *and* [`BoxConstraints<Param = V>`] on the problem. SSGA is a
 ///   bounded-search method by construction.
-/// - **Caller must:** hand in a
-///   [`BasicPopulationState::with_size(pop_size)`](crate::BasicPopulationState::with_size)
-///   matching the solver's `pop_size`.
-/// - **Implementor (this solver) must:** maintain feasibility (every
-///   candidate after `init` and every offspring is clipped to the box)
-///   and the sorted-by-cost invariant on
-///   [`PopulationState`](crate::core::state::PopulationState) at the
-///   start and end of every iteration.
+/// - Supply [`PopulationProgress::empty`] to sample `pop_size` members, or
+///   [`PopulationProgress::from_population`] with exactly `pop_size` finite
+///   vectors matching the bounds' dimension. Bounds must be non-empty, finite,
+///   equal in length, and ordered. Invalid shapes panic at initialization.
+/// - Fresh initialization resets progress and the configured RNG, projects
+///   explicit members into the box, and reevaluates every member. Reusing final
+///   members is a population warm start; an empty state reproduces the original
+///   seeded run. Exact checkpoints retain the population and live RNG together
+///   and skip initialization. A progress-only snapshot cannot continue exactly.
+/// - Members and costs are sorted together after each generation, with NaNs last.
 ///
 /// # Termination
 ///
@@ -94,25 +96,24 @@ use crate::solver::cma_es::sort_population_ascending;
 /// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance), or
 /// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance).
 /// Replace-worst ensures `state.cost()` is non-increasing, so the
-/// cost and param tolerances behave honestly under stochastic dynamics.
+/// change tests compare generation representatives, including unchanged elites.
 ///
 /// # Backends
 ///
 /// Backend-generic; works with any `V` implementing
 /// [`SampleUniformBox`] + [`VectorLen`] + [`ScaledAdd<F>`] +
 /// [`NormSquared<F>`] + `Index<usize, Output = F>` +
-/// `IndexMut<usize, Output = F>` + `Clone`. With the default `F = f64`
-/// that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`). No matrix operations are required.
+/// `IndexMut<usize, Output = F>` + `Clone`. Supports `Vec<F>`, nalgebra
+/// `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>` for all supported
+/// releases with `F = f32` or `f64`. No matrix operations are required.
 ///
 /// # Examples
 ///
 /// See [`RandomSearch`](crate::RandomSearch) for the population-based
-/// `Executor` pattern (a `BasicPopulationState` sized to `pop_size`);
+/// `Executor` pattern with `PopulationProgress::empty()`;
 /// `Ssga` likewise requires `BoxConstraints` on the problem.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Ssga<F = f64> {
+pub struct Ssga<F: Scalar = f64> {
     pop_size: usize,
     blx_alpha: F,
     nam_pool: usize,
@@ -451,7 +452,7 @@ pub(crate) fn replace_worst_if_better<V, F: Scalar>(
     }
 }
 
-impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for Ssga<F>
+impl<P, V, F> Solver<P, PopulationProgress<V, F>> for Ssga<F>
 where
     F: Scalar + SampleUniform,
     P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
@@ -468,24 +469,24 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
-    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
-        // Always reseed the population from the solver's RNG so the
-        // trajectory is reproducible regardless of which
-        // BasicPopulationState constructor the caller used (with_size
-        // vs. from_population). Same pattern as RandomSearch.
-        state.candidates.clear();
-        state.costs.clear();
-        for _ in 0..self.pop_size {
-            let x = V::sample_uniform_box(&lo, &hi, &mut rng);
-            let c = problem.cost(&x)?;
-            state.candidates.push(x);
-            state.costs.push(c);
+        state.reset();
+        super::population::prepare_population(
+            &mut state.candidates,
+            &lo,
+            &hi,
+            self.pop_size,
+            &mut rng,
+        );
+        for member in &state.candidates {
+            state.costs.push(problem.cost(member)?);
         }
         sort_population_ascending(&mut state.candidates, &mut state.costs);
+        state.select_best_member();
         self.rng = Some(rng);
         Ok(state)
     }
@@ -493,9 +494,9 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
+        mut state: PopulationProgress<V, F>,
     ) -> Result<
-        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        (PopulationProgress<V, F>, Option<TerminationReason>),
         Self::Error,
     > {
         let lo = problem.inner().lower().clone();
@@ -533,6 +534,7 @@ where
         }
 
         sort_population_ascending(&mut state.candidates, &mut state.costs);
+        state.select_best_member();
         Ok((state, None))
     }
 }

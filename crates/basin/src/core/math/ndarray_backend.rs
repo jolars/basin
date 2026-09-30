@@ -695,3 +695,7 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for Array2<F> {
         }
     }
 }
+
+impl<F: Scalar> super::DenseBackend<F> for ndarray::Array1<F> {
+    type Matrix = ndarray::Array2<F>;
+}

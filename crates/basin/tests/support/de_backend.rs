@@ -4,9 +4,8 @@ use std::{
 };
 
 use basin::{
-    BasicPopulationState, BoxConstraints, CostFunction, De, Executor,
-    PopulationState, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, State,
-    VectorLen,
+    BoxConstraints, CostFunction, De, Executor, PopulationProgress,
+    SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, State, VectorLen,
 };
 use rand_distr::uniform::SampleUniform;
 
@@ -69,14 +68,11 @@ where
                 .with_mutation(mutation)
                 .with_crossover(crossover)
                 .with_dither(num(0.5), num(1.0));
-            let mut stepper = Executor::new(
-                problem,
-                solver,
-                BasicPopulationState::with_size(1),
-            )
-            .max_iter(200)
-            .into_stepper()
-            .unwrap();
+            let mut stepper =
+                Executor::new(problem, solver, PopulationProgress::empty())
+                    .max_iter(200)
+                    .into_stepper()
+                    .unwrap();
             let mut previous = stepper.state().cost();
             for _ in 0..200 {
                 stepper.step().unwrap();

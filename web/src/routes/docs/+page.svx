@@ -69,8 +69,8 @@ that full path on the Rosenbrock function.
   live here too, not on the solver.
 - **Solver**: the algorithm. Gradient descent, Nelder–Mead, L-BFGS,
   Levenberg–Marquardt, CMA-ES, and more.
-- **State**: the iterate(s) a solver carries: a single point (`BasicState`), a
-  simplex (`BasicSimplexState`), a population, and so on.
+- **State**: the iterate(s) a solver carries: a point and cost (`PointState`),
+  a point with a gradient (`FirstOrderState`), a simplex (`SimplexProgress`), a population, and so on.
 - **Executor**: the driver that runs a solver to termination and hands back an
   `OptimizationResult`.
 - **Convergence and run control**: configure numerical tolerances on the solver;

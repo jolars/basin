@@ -1,7 +1,7 @@
 use basin::{
     BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian,
     LevenbergMarquardt, LevenbergMarquardtQr, LmDamping,
-    NativeConvergenceDiagnostics, NativeConvergenceTest as Test, NllsState,
+    NativeConvergenceDiagnostics, NativeConvergenceTest as Test, PointState,
     Residual, RobustLeastSquares, Solver, SquaredLoss, TerminationReason,
     TrustRegionReflective,
 };
@@ -60,11 +60,11 @@ impl BoxConstraints for Fit {
 
 fn check_lifecycle<So>(make: impl Fn() -> So)
 where
-    So: Solver<Fit, NllsState<Vec<f64>>, Error = Infallible>
+    So: Solver<Fit, PointState<Vec<f64>>, Error = Infallible>
         + NativeConvergenceDiagnostics,
 {
     let uninterrupted =
-        Executor::new(Fit::new(3.), make(), NllsState::new(vec![1.]))
+        Executor::new(Fit::new(3.), make(), PointState::new(vec![1.]))
             .max_iter(100)
             .run_with_solver()
             .unwrap();
@@ -72,7 +72,7 @@ where
     assert!(!uninterrupted.native_convergence_tests().is_empty());
 
     let mut stepper =
-        Executor::new(Fit::new(3.), make(), NllsState::new(vec![1.]))
+        Executor::new(Fit::new(3.), make(), PointState::new(vec![1.]))
             .max_iter(100)
             .into_stepper()
             .unwrap();
@@ -104,7 +104,7 @@ where
     assert!(limited.native_convergence_tests().is_empty());
 
     let fresh =
-        Executor::new(Fit::new(-2.), limited.solver, NllsState::new(vec![1.]))
+        Executor::new(Fit::new(-2.), limited.solver, PointState::new(vec![1.]))
             .max_iter(0)
             .run_with_solver()
             .unwrap();
@@ -117,7 +117,7 @@ where
     .run_with_solver()
     .unwrap();
     let reference =
-        Executor::new(Fit::new(-2.), make(), NllsState::new(vec![1.]))
+        Executor::new(Fit::new(-2.), make(), PointState::new(vec![1.]))
             .max_iter(100)
             .run_with_solver()
             .unwrap();

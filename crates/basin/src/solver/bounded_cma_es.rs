@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
-use std::marker::PhantomData;
 
+use super::cma_es::workspace::{BoundPenalty, Distribution};
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{
     ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec,
@@ -11,12 +11,11 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::CmaEsState;
-use crate::core::state::cma_es::BoundPenalty;
+use crate::core::state::PopulationProgress;
 use crate::core::termination::TerminationReason;
 
 use super::cma_es::{
-    CmaConstants, compute_constants, sort_population_ascending,
+    CmaConstants, apply_permutation, compute_constants, nan_last_cmp,
 };
 
 /// Box-constrained `(µ/µ_W, λ)`-CMA-ES with adaptive quadratic boundary
@@ -75,36 +74,39 @@ use super::cma_es::{
 /// # Contract
 ///
 /// - **Caller must:** implement
-///   [`CostFunction<Param = V, Output = f64>`] **and**
+///   [`CostFunction<Param = V, Output = F>`] **and**
 ///   [`BoxConstraints`] on the same problem type. The bounds live on
 ///   the problem (tenet 4 in `CONTRIBUTING.md`); handing this solver a
 ///   problem without `BoxConstraints` is a compile-time error.
 /// - **Caller must:** ensure `lower[i] ≤ upper[i]` for every component
 ///   ([`f64::clamp`] panics otherwise) and `sigma > 0`.
-/// - **Caller must:** hand in a
-///   [`CmaEsState::new(mean, sigma)`](crate::CmaEsState::new) (optionally
-///   `.with_stds(stds)`). The default `λ = 4 + ⌊3 ln n⌋` is exposed via
-///   [`default_lambda`](Self::default_lambda); the penalty bookkeeping
-///   is installed into the state by [`init`](Solver::init).
-/// - **Implementor (this solver) must:** maintain the
-///   [`PopulationState`](crate::core::state::PopulationState)
-///   sorted-by-cost invariant on `state.candidates`/`state.costs`,
-///   where `state.costs` carries the **penalized** fitness values
-///   (raw fitness is held in `state.penalty` for the γ-update IQR). The
-///   initial mean is projected onto `[lower, upper]` once at iter 0 so
-///   the iter-0 search distribution is centered in feasibility.
+/// - **Caller must:** supply the mean through [`PopulationProgress::from_point`]
+///   or [`Executor::from_start`](crate::Executor::from_start), and configure
+///   the initial scale with [`new`](Self::new). Optional [`with_stds`](Self::with_stds)
+///   configures the initial covariance. A fresh run uses the current progress
+///   point as its new mean and reevaluates a newly sampled population.
+/// - **Implementor (this solver) must:** retain unrepaired genotypes and
+///   penalized fitness in the solver for recombination. Shared progress contains
+///   their clipped points and raw objective costs, in the same rank order.
+///   Initialization projects the mean onto the box before sampling.
 ///
 /// # Result and termination
 ///
-/// As [`CmaEs`](super::cma_es::CmaEs):
-/// [`State::param`](crate::State::param) returns the mean (penalized
-/// `f(m)` for [`State::cost`](crate::State::cost)),
-/// [`State::best_param`](crate::State::best_param) the best evaluated
-/// point. Configure [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance)
-/// for the optional TolX test `σ · max_i d_i < tolerance`, disabled by
-/// default. `None` disables it; zero never satisfies its strict inequality.
-/// All evaluated points are clamped into the box. Execution budgets belong
-/// on the executor and use the normal evaluation counters.
+/// [`PopulationProgress::current`] returns the clipped mean and its raw objective
+/// value. The incumbent compares raw objective values at evaluated, clipped
+/// members and means. These costs need not be sorted: the algorithm ranks by
+/// its adaptive penalty. Inspect [`genotypes`](Self::genotypes) and
+/// [`penalized_costs`](Self::penalized_costs) for model ranking, and
+/// [`mean`](Self::mean) and [`sigma`](Self::sigma) for the live distribution.
+/// Configure [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance)
+/// for TolX (`σ · max_i d_i < tolerance`), disabled by default. `None` disables
+/// the test; zero never satisfies its strict inequality. The test reads the
+/// solver's distribution. Budgets use the six raw evaluation categories.
+///
+/// Fresh runs reset the distribution, penalty history, RNG, progress, and counts.
+/// Exact continuation retains the solver, progress, and counts together and
+/// skips initialization. With `serde`, the entire distribution and penalty history
+/// serialize when `V`, `M`, and `F` do. Legacy CMA state files are incompatible.
 ///
 /// # Reproducibility
 ///
@@ -114,37 +116,35 @@ use super::cma_es::{
 ///
 /// # Backends
 ///
-/// LA-heavy: requires symmetric eigendecomposition, scalar-and-rank-1
-/// matrix updates, matrix-vector and transposed matrix-vector products,
-/// **plus** `MatDiagonal<V>` (extracts `diag(C)` for the σ²·diag(C)
-/// per-axis variances the γ-update reads). Wired and tested for the
-/// default `Vec<f64>` / [`DenseMatrix`](crate::DenseMatrix) backend
-/// (pure-Rust cyclic Jacobi eigensolver: no feature flag, `wasm`-clean),
-/// `nalgebra::DVector<f64>`/`nalgebra::DMatrix<f64>` (feature
-/// `nalgebra`), `ndarray::Array1<f64>`/`ndarray::Array2<f64>` (feature
-/// `ndarray`, also wired to the cyclic Jacobi solver, `wasm`-clean),
-/// and `faer::Col<f64>`/`faer::Mat<f64>` (feature `faer`): same
-/// coverage as [`CmaEs`](super::cma_es::CmaEs).
+/// `Vec<F>` with [`DenseMatrix`](crate::DenseMatrix), nalgebra `DVector<F>`
+/// with `DMatrix<F>`, ndarray `Array1<F>` with `Array2<F>`, and faer `Col<F>`
+/// with `Mat<F>`, for `F = f32` or `f64`. Requires [`CmaEs`](super::cma_es::CmaEs)'s
+/// matrix capabilities plus `MatDiagonal` for boundary-penalty adaptation,
+/// and [`ClampInPlace`] for box repair. All dense implementations use pure Rust.
 ///
 /// # Examples
 ///
 /// See [`CmaEs`](crate::CmaEs) (and [`RandomSearch`](crate::RandomSearch)
 /// for the population `Executor` pattern); `BoundedCmaEs` additionally
 /// requires `BoxConstraints` on the problem.
-pub struct BoundedCmaEs<V, M, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct BoundedCmaEs<V, M, F: Scalar = f64> {
     distribution_tolerance: Option<F>,
     lambda_override: Option<usize>,
-    /// Derived constants (CMA + BoundPenalty), computed once at
-    /// [`Solver::init`]. Config-only, cached on the solver.
+    /// Rebuilt for each fresh distribution, retained across exact continuation.
     constants: Option<BoundedCmaConstants<F>>,
     rng: ChaCha8Rng,
-    _marker: PhantomData<(V, M)>,
+    initial_sigma: F,
+    initial_stds: Option<V>,
+    seed: u64,
+    pub(crate) work: Option<Distribution<V, M, F>>,
 }
 
 /// Derived constants for bounded CMA-ES: the shared CMA constants plus
 /// the three BoundPenalty constants (`damp`, `edist_threshold`,
 /// `hist_cap`). Computed once at [`Solver::init`]; the mutable penalty
-/// bookkeeping lives in the [`CmaEsState`]'s `penalty` field.
+/// bookkeeping lives alongside the distribution on the solver.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct BoundedCmaConstants<F = f64> {
     cma: CmaConstants<F>,
     /// `min(1, mu_eff / (10·n))`. Damping factor on the γ multiplicative
@@ -174,19 +174,58 @@ impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
         self
     }
 
-    /// Build a bounded CMA-ES with the default population size
-    /// `λ = 4 + ⌊3 ln n⌋` (Hansen 2016 eq. 48) and a seeded RNG. The
-    /// initial mean, step-size, and stds are supplied via [`CmaEsState`];
-    /// configure TolX with
-    /// [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance).
-    pub fn new(seed: u64) -> Self {
+    /// Configure a bounded CMA distribution with the given seed and initial scale.
+    /// Supply the mean through [`PopulationProgress::from_point`]. Population
+    /// size defaults to `4 + ⌊3 ln n⌋`; distribution-size convergence is disabled.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `sigma` is finite and strictly positive.
+    pub fn new(seed: u64, sigma: F) -> Self {
+        assert!(
+            sigma.is_finite() && sigma > F::zero(),
+            "initial sigma must be finite and positive"
+        );
         Self {
             lambda_override: None,
             distribution_tolerance: None,
             constants: None,
             rng: ChaCha8Rng::seed_from_u64(seed),
-            _marker: PhantomData,
+            initial_sigma: sigma,
+            initial_stds: None,
+            seed,
+            work: None,
         }
+    }
+
+    /// Set initial per-coordinate standard deviations. `None` restores isotropy.
+    /// Each entry must be finite and positive, and its dimension must match the
+    /// initial mean. Validation runs at fresh initialization.
+    pub fn with_stds(mut self, stds: impl Into<Option<V>>) -> Self {
+        self.initial_stds = stds.into();
+        self
+    }
+
+    /// The current distribution mean, available after initialization.
+    pub fn mean(&self) -> Option<&V> {
+        self.work.as_ref().map(|work| &work.m)
+    }
+
+    /// The current overall step size, available after initialization.
+    pub fn sigma(&self) -> Option<F> {
+        self.work.as_ref().map(|work| work.sigma)
+    }
+
+    /// Unrepaired samples in recombination order, available after initialization.
+    /// These are model coordinates; progress contains their evaluated box repairs.
+    pub fn genotypes(&self) -> &[V] {
+        self.work.as_ref().map_or(&[], |work| &work.candidates)
+    }
+
+    /// Penalized fitness in recombination order, matching [`genotypes`](Self::genotypes).
+    /// Progress costs instead report the objective at each repaired point.
+    pub fn penalized_costs(&self) -> &[F] {
+        self.work.as_ref().map_or(&[], |work| &work.costs)
     }
 
     /// Override the default population size. The default
@@ -291,7 +330,7 @@ where
 /// constants from `k`, and the bounds from `problem`; writes back into
 /// `state.penalty`.
 fn update_gamma<P, V, M, F>(
-    state: &mut CmaEsState<V, M, F>,
+    state: &mut Distribution<V, M, F>,
     k: &BoundedCmaConstants<F>,
     problem: &P,
 ) where
@@ -413,7 +452,7 @@ fn update_gamma<P, V, M, F>(
 /// `state.penalty.raw_costs`. The penalty must already be installed.
 #[allow(clippy::too_many_arguments)]
 fn sample_and_penalize<P, V, M, F>(
-    state: &mut CmaEsState<V, M, F>,
+    state: &mut Distribution<V, M, F>,
     lambda: usize,
     n: usize,
     rng: &mut ChaCha8Rng,
@@ -433,9 +472,10 @@ where
         + std::ops::Index<usize, Output = F>,
     M: MatVec<V>,
 {
-    let CmaEsState {
+    let Distribution {
         candidates,
         costs,
+        objective_costs,
         m,
         d,
         b,
@@ -448,6 +488,7 @@ where
         .expect("BoundedCmaEs::init installs the penalty before sampling");
     candidates.clear();
     costs.clear();
+    objective_costs.clear();
     pen.raw_costs.clear();
     for _ in 0..lambda {
         let z_k = V::sample_standard_normal(m, rng);
@@ -460,12 +501,13 @@ where
             evaluate_with_penalty(problem, &x_k, lo, hi, &pen.gamma, n)?;
         candidates.push(x_k);
         costs.push(p);
+        objective_costs.push(raw);
         pen.raw_costs.push(raw);
     }
     Ok(())
 }
 
-impl<P, V, M, F> Solver<P, CmaEsState<V, M, F>> for BoundedCmaEs<V, M, F>
+impl<P, V, M, F> Solver<P, PopulationProgress<V, F>> for BoundedCmaEs<V, M, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
@@ -494,130 +536,122 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: CmaEsState<V, M, F>,
-    ) -> Result<CmaEsState<V, M, F>, Self::Error> {
-        // Constants compute-once guard (cached on the solver: config
-        // only; persists across `run_loop_with_control` re-entry for chain resumption).
-        if self.constants.is_none() {
-            let n = state.m.vec_len();
-            assert!(n >= 1, "BoundedCmaEs requires a non-empty mean");
-            let lambda = self
-                .lambda_override
-                .unwrap_or_else(|| Self::default_lambda(n));
-            self.constants = Some(compute_bounded_constants::<F>(n, lambda));
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        let mut mean = state
+            .seed()
+            .expect("BoundedCmaEs requires a mean seed")
+            .clone();
+        state.reset();
+        self.rng = ChaCha8Rng::seed_from_u64(self.seed);
+        self.work = None;
+        let n = mean.vec_len();
+        let lambda = self
+            .lambda_override
+            .unwrap_or_else(|| Self::default_lambda(n));
+        self.constants = Some(compute_bounded_constants::<F>(n, lambda));
+        let lo = problem.inner().lower().clone();
+        let hi = problem.inner().upper().clone();
+        assert_eq!(lo.vec_len(), n, "lower bounds must match the mean");
+        assert_eq!(hi.vec_len(), n, "upper bounds must match the mean");
+        mean.clamp_in_place(&lo, &hi);
+        let mut gamma = mean.clone();
+        for i in 0..n {
+            gamma[i] = F::one();
         }
-        let n = self.constants.as_ref().unwrap().cma.n;
-        let lambda = self.constants.as_ref().unwrap().cma.lambda;
-
-        // Install the penalty bookkeeping into the state (the bounded
-        // analog of `Lbfgsb::init` installing `work`). γ starts all-ones
-        // (pycma's scalar-1 default, materialized as a vector).
-        if state.penalty.is_none() {
-            let mut gamma = state.m.clone();
-            for i in 0..n {
-                gamma[i] = F::one();
-            }
-            state.penalty = Some(BoundPenalty {
-                gamma,
-                weights_initialized: false,
-                hist: VecDeque::new(),
-                raw_costs: Vec::with_capacity(lambda),
-            });
+        let mut work = Distribution::new(mean, self.initial_sigma);
+        if let Some(stds) = &self.initial_stds {
+            work = work.with_stds(stds.clone());
         }
-
-        // First generation: an empty population signals a fresh state. A
-        // resumed / chain state keeps its population, distribution, and
-        // penalty bookkeeping untouched.
-        if state.candidates.is_empty() {
-            // Project an infeasible initial mean once at iter 0 so the
-            // iter-0 search distribution is centered in feasibility.
-            // Mirrors ProjectedGradientDescent::init's iter-0 projection.
-            let lo = problem.inner().lower().clone();
-            let hi = problem.inner().upper().clone();
-            state.m.clamp_in_place(&lo, &hi);
-
-            sample_and_penalize(
-                &mut state,
-                lambda,
-                n,
-                &mut self.rng,
-                problem,
-                &lo,
-                &hi,
-            )?;
-            sort_population_ascending(&mut state.candidates, &mut state.costs);
-
-            // Evaluate the mean (penalized, consistent with samples) so
-            // param()/cost() report `m` (xfavorite).
-            let gamma = &state.penalty.as_ref().unwrap().gamma;
-            let (_raw, pen_m) =
-                evaluate_with_penalty(problem, &state.m, &lo, &hi, gamma, n)?;
-            state.m_cost = Some(pen_m);
-        }
+        work.penalty = Some(BoundPenalty {
+            gamma,
+            weights_initialized: false,
+            hist: VecDeque::new(),
+            raw_costs: Vec::with_capacity(lambda),
+        });
+        sample_and_penalize(
+            &mut work,
+            lambda,
+            n,
+            &mut self.rng,
+            problem,
+            &lo,
+            &hi,
+        )?;
+        sort_bounded_population(&mut work);
+        let gamma = &work.penalty.as_ref().unwrap().gamma;
+        let (raw, _) =
+            evaluate_with_penalty(problem, &work.m, &lo, &hi, gamma, n)?;
+        work.m_cost = Some(raw);
+        publish(&work, &mut state, &lo, &hi);
+        self.work = Some(work);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: CmaEsState<V, M, F>,
-    ) -> Result<(CmaEsState<V, M, F>, Option<TerminationReason>), Self::Error>
-    {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<
+        (PopulationProgress<V, F>, Option<TerminationReason>),
+        Self::Error,
+    > {
+        let work = self.work.as_mut().expect("CMA init must precede iteration");
         let k = self
             .constants
             .as_ref()
             .expect("BoundedCmaEs::init must run before next_iter");
         let kc = &k.cma;
 
-        state.generation += 1;
+        work.generation += 1;
 
         let one = F::one();
         let two = F::from_f64(2.0).unwrap();
         let zero = F::zero();
 
         // Recombination uses the un-repaired samples. y_{i:λ} = (x_{i:λ} − m) / σ
-        // for the *previous* m, σ. (state.candidates carries the most recent
+        // for the *previous* m, σ. (work.candidates carries the most recent
         // generation's x's, sorted ascending by *penalized* cost; for
         // recombination only the rank order matters.)
-        let mut y_sorted: Vec<V> = state
+        let mut y_sorted: Vec<V> = work
             .candidates
             .iter()
             .map(|x| {
                 let mut y = x.clone();
-                y.scaled_add(-one, &state.m);
-                y.scale_in_place(one / state.sigma);
+                y.scaled_add(-one, &work.m);
+                y.scale_in_place(one / work.sigma);
                 y
             })
             .collect();
 
         // ⟨y⟩_w = Σ_{i=1..µ} w_i y_{i:λ}.
-        let mut y_w = state.m.clone();
+        let mut y_w = work.m.clone();
         y_w.scale_in_place(zero);
         for (i, y_i) in y_sorted.iter().enumerate().take(kc.mu) {
             y_w.scaled_add(kc.weights[i], y_i);
         }
 
         // m ← m + σ ⟨y⟩_w.
-        state.m.scaled_add(state.sigma, &y_w);
+        work.m.scaled_add(work.sigma, &y_w);
 
         // C^{−1/2} ⟨y⟩_w = B (D^{−1} ⊙ Bᵀ ⟨y⟩_w).
-        let mut bt_y_w = state.b.mat_transpose_vec(&y_w);
-        bt_y_w.component_mul_assign(&state.d_inv);
-        let c_invsqrt_y_w = state.b.matvec(&bt_y_w);
+        let mut bt_y_w = work.b.mat_transpose_vec(&y_w);
+        bt_y_w.component_mul_assign(&work.d_inv);
+        let c_invsqrt_y_w = work.b.matvec(&bt_y_w);
 
         // p_σ ← (1 − c_σ) p_σ + √(c_σ(2 − c_σ) µ_eff) C^{−1/2} ⟨y⟩_w.
-        state.p_sigma.scale_in_place(one - kc.c_sigma);
+        work.p_sigma.scale_in_place(one - kc.c_sigma);
         let coef_sigma = (kc.c_sigma * (two - kc.c_sigma) * kc.mu_eff).sqrt();
-        state.p_sigma.scaled_add(coef_sigma, &c_invsqrt_y_w);
+        work.p_sigma.scaled_add(coef_sigma, &c_invsqrt_y_w);
 
         // σ ← σ exp((c_σ / d_σ) (‖p_σ‖ / E‖N(0,I)‖ − 1)).
-        let p_sigma_norm = state.p_sigma.norm_squared().sqrt();
+        let p_sigma_norm = work.p_sigma.norm_squared().sqrt();
         let log_factor =
             (kc.c_sigma / kc.d_sigma) * (p_sigma_norm / kc.expected_norm - one);
-        state.sigma = state.sigma * log_factor.exp();
+        work.sigma = work.sigma * log_factor.exp();
 
         // h_σ test (Hansen 2016 p. 31, denominator uses 2(g+1)).
-        let g_for_h = (state.generation + 1) as i32;
+        let g_for_h = (work.generation + 1) as i32;
         let exponent = 2 * g_for_h;
         let denom = (one - (one - kc.c_sigma).powi(exponent)).sqrt();
         let h_sigma = if p_sigma_norm / denom < kc.h_sigma_threshold {
@@ -627,23 +661,23 @@ where
         };
 
         // p_c update.
-        state.p_c.scale_in_place(one - kc.c_c);
+        work.p_c.scale_in_place(one - kc.c_c);
         let coef_c = h_sigma * (kc.c_c * (two - kc.c_c) * kc.mu_eff).sqrt();
-        state.p_c.scaled_add(coef_c, &y_w);
+        work.p_c.scaled_add(coef_c, &y_w);
 
         // C update (eq. 47).
         let delta_h = (one - h_sigma) * kc.c_c * (two - kc.c_c);
         let c_scale = one + kc.c_1 * delta_h - kc.c_1 - kc.c_mu * kc.sum_w;
-        state.c.scale_in_place(c_scale);
-        state.c.rank_one_update(kc.c_1, &state.p_c);
+        work.c.scale_in_place(c_scale);
+        work.c.rank_one_update(kc.c_1, &work.p_c);
         let n_f = F::from_usize(kc.n).unwrap();
         for (i, y_i) in y_sorted.iter().enumerate() {
             let w_i = kc.weights[i];
             let w_i_o = if w_i >= zero {
                 w_i
             } else {
-                let mut bt_y = state.b.mat_transpose_vec(y_i);
-                bt_y.component_mul_assign(&state.d_inv);
+                let mut bt_y = work.b.mat_transpose_vec(y_i);
+                bt_y.component_mul_assign(&work.d_inv);
                 let cinv_norm_sq = bt_y.norm_squared();
                 if cinv_norm_sq > zero {
                     w_i * n_f / cinv_norm_sq
@@ -652,65 +686,106 @@ where
                 }
             };
             if w_i_o != zero {
-                state.c.rank_one_update(kc.c_mu * w_i_o, y_i);
+                work.c.rank_one_update(kc.c_mu * w_i_o, y_i);
             }
         }
         drop(std::mem::take(&mut y_sorted));
 
         // Refresh eigendecomposition of the new C.
-        let (b_new, eigs) = match state.c.try_eigh() {
+        let (b_new, eigs) = match work.c.try_eigh() {
             Ok(pair) => pair,
             Err(_) => {
                 return Ok((state, Some(TerminationReason::SolverFailed)));
             }
         };
-        state.b = b_new;
+        work.b = b_new;
         let eig_floor = F::from_f64(1e-30).unwrap();
         for i in 0..kc.n {
             let lam = eigs[i].max(eig_floor);
             let s = lam.sqrt();
-            state.d[i] = s;
-            state.d_inv[i] = one / s;
+            work.d[i] = s;
+            work.d_inv[i] = one / s;
         }
 
         // γ adaptation runs after the m / σ / C update so it sees the
         // post-recombination state, before the new generation is sampled.
-        // Consumes `state.penalty.raw_costs` (previous generation's raw
+        // Consumes `work.penalty.raw_costs` (previous generation's raw
         // fitness, in sample order; γ-update only needs the IQR).
-        update_gamma(&mut state, k, problem.inner());
+        update_gamma(work, k, problem.inner());
 
         // Sample the new generation, evaluate at repaired points.
         let n = kc.n;
         let lambda = kc.lambda;
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
-        sample_and_penalize(
-            &mut state,
-            lambda,
-            n,
-            &mut self.rng,
-            problem,
-            &lo,
-            &hi,
-        )?;
-        sort_population_ascending(&mut state.candidates, &mut state.costs);
+        sample_and_penalize(work, lambda, n, &mut self.rng, problem, &lo, &hi)?;
+        sort_bounded_population(work);
 
         // Evaluate the mean (penalized) so param()/cost() report `m`.
-        let gamma = &state.penalty.as_ref().unwrap().gamma;
-        let (_raw, pen_m) =
-            evaluate_with_penalty(problem, &state.m, &lo, &hi, gamma, n)?;
-        state.m_cost = Some(pen_m);
+        let gamma = &work.penalty.as_ref().unwrap().gamma;
+        let (raw, _pen_m) =
+            evaluate_with_penalty(problem, &work.m, &lo, &hi, gamma, n)?;
+        work.m_cost = Some(raw);
 
+        publish(work, &mut state, &lo, &hi);
         Ok((state, None))
     }
 
     fn terminate(
         &self,
-        state: &CmaEsState<V, M, F>,
+        _state: &PopulationProgress<V, F>,
     ) -> Option<TerminationReason> {
         let tolerance = self.distribution_tolerance?;
-        let metric = state.sigma() * state.max_axis_std();
+        let work = self.work.as_ref()?;
+        let metric = work.sigma * work.max_axis_std();
         (metric.is_finite() && metric < tolerance)
             .then_some(TerminationReason::CmaEsTolerance)
+    }
+}
+
+pub(crate) fn sort_bounded_population<V, M, F: Scalar>(
+    work: &mut Distribution<V, M, F>,
+) {
+    let mut indices: Vec<_> = (0..work.costs.len()).collect();
+    indices.sort_by(|&i, &j| nan_last_cmp(&work.costs[i], &work.costs[j]));
+    apply_permutation(&mut work.candidates, &indices);
+    apply_permutation(&mut work.costs, &indices);
+    apply_permutation(&mut work.objective_costs, &indices);
+}
+
+pub(crate) fn publish<V: VectorLen + Clone + ClampInPlace, M, F: Scalar>(
+    work: &Distribution<V, M, F>,
+    state: &mut PopulationProgress<V, F>,
+    lo: &V,
+    hi: &V,
+) {
+    let candidates = work
+        .candidates
+        .iter()
+        .map(|x| {
+            let mut x = x.clone();
+            x.clamp_in_place(lo, hi);
+            x
+        })
+        .collect();
+    state
+        .replace(candidates, work.objective_costs.clone())
+        .expect("CMA generation has matching shapes");
+    let mut mean = work.m.clone();
+    mean.clamp_in_place(lo, hi);
+    state
+        .publish_representative(
+            mean,
+            work.m_cost.expect("CMA mean is evaluated"),
+        )
+        .expect("CMA mean matches the population");
+}
+
+impl<V: VectorLen + Clone, M, F: Scalar> crate::core::inner::InitialState<V>
+    for BoundedCmaEs<V, M, F>
+{
+    type State = PopulationProgress<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        PopulationProgress::from_point(x.clone())
     }
 }

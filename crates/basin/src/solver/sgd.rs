@@ -5,7 +5,7 @@ use crate::core::math::{Scalar, ScaleInPlace, ScaledAdd};
 use crate::core::problem::{CostFunction, MiniBatchGradient, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 
 /// Vanilla mini-batch stochastic gradient descent (SGD) with a constant
@@ -58,36 +58,26 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Cost tracking
 ///
-/// `state.cost` is seeded at [`Solver::init`] with the full objective at
-/// the starting iterate, then refreshed by a full evaluation every
-/// **epoch boundary** by default (`batches_per_epoch` iters, where
-/// `batches_per_epoch = n_samples / batch_size`). This matches the
-/// standard ML rhythm (full loss reported once per epoch) and keeps
-/// per-iter cost overhead well under 1 % for typical batch sizes.
+/// The shared [`PointState`] publishes the latest fully evaluated point and
+/// its matching objective. The solver evaluates the seed, then refreshes
+/// progress every `n_samples / batch_size` mini-batch steps by default. The
+/// short tail of each epoch is discarded. Use
+/// [`with_cost_eval_every`](Self::with_cost_eval_every) to change this period.
 ///
-/// Two consequences flow from this default:
+/// Between refreshes, the working iterate advances inside the solver while
+/// the published point and cost stay together. Ordinary results and observers
+/// report that evaluated point, which can precede the latest mini-batch step.
+/// Retain the solver with [`Executor::run_with_solver`](crate::Executor::run_with_solver)
+/// to inspect [`working_param`](Self::working_param), or use a period of `1`
+/// to publish every step. Reading either view performs no evaluations.
 ///
-/// - Within an epoch, `state.cost` is *stale*: it still reflects the
-///   cost at the most recent boundary, not the current iterate.
-///   Cost-based termination
-///   ([`target_cost`](crate::Executor::target_cost),
-///   [`no_improvement`](crate::Executor::no_improvement),
-///   [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance)) therefore fires at
-///   epoch granularity, with a worst-case overshoot of one epoch's
-///   worth of work.
-/// - The final `result.cost()` reads the most recent epoch-boundary
-///   cost, which may be one epoch stale relative to the final iterate.
-///   The user can recompute the exact final cost via `problem.cost(x)`
-///   if they need it sharper.
+/// Iteration and batch-gradient budgets still count mini-batch steps. Cost-
+/// and step-change convergence checks observe only objective refreshes;
+/// objective targets and stalls use the retained evaluated incumbent.
+/// Choose stall patience with the refresh period in mind. Batch gradients
+/// are counted in the raw gradient category, but are never advertised as
+/// derivatives of the published point. The state has no gradient capability.
 ///
-/// Use [`with_cost_eval_every`](Self::with_cost_eval_every) to override
-/// the refresh period; pass `1` for per-iter cost (debugging, plotting,
-/// tight termination), or a larger value to amortize even more
-/// aggressively on huge datasets.
-///
-/// The mini-batch gradient is not cached on the state
-/// (`state.gradient` stays `None`), so gradient-based termination
-/// criteria do not fire, by design, since the batch estimate is noisy.
 /// Gradient-tolerance setters are therefore unavailable:
 ///
 /// ```compile_fail,E0599
@@ -118,12 +108,18 @@ use crate::core::termination::TerminationReason;
 ///
 /// # Backends
 ///
-/// Backend-generic; works with any `V` implementing
-/// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
-/// [`ScaleInPlace<F>`] + `Clone`. With the default `F = f64` that covers
-/// `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`).
+/// `Vec<F>`, `nalgebra::DVector<F>`, `ndarray::Array1<F>`, and `faer::Col<F>`
+/// with `F = f64` (default) or `f32`. Custom vectors need [`ScaledAdd<F>`],
+/// [`ScaleInPlace<F>`], and `Clone`.
+///
+/// # Initialization and continuation
+///
+/// Fresh initialization resets progress, momentum, the seeded RNG, batch
+/// order, and refresh phase, then evaluates the supplied point. An exact
+/// solver-aware checkpoint preserves all of these, including the working
+/// iterate between refreshes. A state-only snapshot starts afresh from its
+/// last evaluated point. With `serde`, solver-aware serialization is available
+/// when the parameter and scalar types support it.
 ///
 /// # References
 ///
@@ -147,7 +143,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// ```
 /// use basin::{
-///     BasicState, CostFunction, Executor, MiniBatchGradient,
+///     PointState, CostFunction, Executor, MiniBatchGradient,
 ///     Sgd,
 /// };
 ///
@@ -197,14 +193,16 @@ use crate::core::termination::TerminationReason;
 ///     y:    vec![5.0, 4.0, 11.0, 10.0],
 /// };
 /// let sgd = Sgd::new(0.02, 2, 0xC0FFEE).with_momentum(0.9);
-/// let result = Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
+/// let result = Executor::new(problem, sgd, PointState::new(vec![0.0, 0.0]))
 ///     .max_iter(2_000)
 ///     .run()
 ///     .unwrap();
 /// assert!(result.cost() < 1e-6);
 /// ```
-pub struct Sgd<V, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Sgd<V, F: Scalar = f64> {
     alpha: F,
+    working_param: Option<V>,
     batch_size: usize,
     seed: u64,
     /// Momentum coefficient `β`; `0.0` disables momentum (plain SGD).
@@ -245,6 +243,7 @@ impl<V, F: Scalar> Sgd<V, F> {
         assert!(batch_size > 0, "Sgd: batch_size must be > 0");
         Self {
             alpha,
+            working_param: None,
             batch_size,
             seed,
             beta: F::zero(),
@@ -268,29 +267,30 @@ impl<V, F: Scalar> Sgd<V, F> {
         self
     }
 
-    /// Refresh the cached full cost in `state.cost` every `period` iters
-    /// rather than at every epoch boundary (the default).
+    /// Evaluate and publish the working point every `period` mini-batch steps.
     ///
-    /// - `period = 1`: per-iter refresh. Most accurate per-step cost,
-    ///   but adds one full-data pass per iteration on top of the
-    ///   mini-batch gradient, closer to full-batch GD overhead.
-    ///   Pick this for debugging, plotting per-iter convergence curves,
-    ///   tight cost-based termination (`TargetCost` with small `eps`,
-    ///   `NoImprovement` with short patience), or when the dataset is
-    ///   small enough that the extra cost passes are negligible.
-    /// - `period = batches_per_epoch`: the default if this builder is
-    ///   not called. One full-cost pass per epoch, matching the
-    ///   PyTorch/JAX "report training loss per epoch" rhythm and
-    ///   keeps the cost overhead well under 1 % for typical batch
-    ///   sizes.
-    /// - Larger `period`: even less overhead, at the cost of staler
-    ///   `state.cost` (and later firing of cost-based termination).
+    /// Defaults to `n_samples / batch_size`, with batch size clamped to the
+    /// sample count. A period of `1` publishes every step at the cost of a
+    /// full objective evaluation each time. Larger periods amortize that work
+    /// and leave the reported point and cost at the last refresh until the
+    /// next one. Cost- and step-change checks observe only those refreshes.
+    /// Changing the setting takes effect on the next fresh initialization.
     ///
-    /// `period = 0` panics.
+    /// # Panics
+    ///
+    /// Panics if `period` is zero.
     pub fn with_cost_eval_every(mut self, period: usize) -> Self {
         assert!(period > 0, "Sgd: cost_eval_every period must be > 0");
         self.cost_eval_every = Some(period);
         self
+    }
+
+    /// Latest mini-batch iterate, or `None` before initialization.
+    ///
+    /// Between objective refreshes this point has no reported cost and can
+    /// differ from `state.param()`. Inspection does not evaluate it.
+    pub fn working_param(&self) -> Option<&V> {
+        self.working_param.as_ref()
     }
 }
 
@@ -299,13 +299,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        BasicState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
-impl<P, V, F> Solver<P, BasicState<V, F>> for Sgd<V, F>
+impl<P, V, F> Solver<P, PointState<V, F>> for Sgd<V, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + MiniBatchGradient<Gradient = V>,
@@ -316,8 +316,10 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.working_param = Some(state.param().clone());
         // Start momentum from rest, even if this solver instance is reused
         // across runs (composition): velocity must not leak between runs.
         self.velocity = None;
@@ -343,20 +345,16 @@ where
         self.cost_period = self.cost_eval_every.unwrap_or(batches_per_epoch);
         self.iters_since_cost = 0;
 
-        // Seed cost at the initial param so iter-0 termination checks
-        // (e.g. `TargetCost` on a near-optimal start) and
-        // `OptimizationResult::cost()` see a defined value. The mini-batch
-        // gradient is *not* cached; `state.gradient` stays `None`.
-        let cost = problem.cost(&state.param)?;
-        state.cost = Some(cost);
+        let cost = problem.cost(state.param())?;
+        state.replace(state.param().clone(), cost);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
     {
         let bs = self.effective_batch;
         let n = self.perm.len();
@@ -374,7 +372,10 @@ where
         }
 
         let batch = &self.perm[self.cursor..self.cursor + bs];
-        let grad = problem.batch_gradient(&state.param, batch)?;
+        let working = self.working_param.as_mut().expect(
+            "working iterate not set: Solver::init must run before next_iter",
+        );
+        let grad = problem.batch_gradient(working, batch)?;
         self.cursor += bs;
 
         if self.beta == F::zero() {
@@ -382,7 +383,7 @@ where
             // `scaled_add(-α, &g)`, instead of materializing `direction = −g`
             // and stepping `x ← x + α·direction`; the latter touched the
             // dim-sized buffer twice per step.
-            state.param.scaled_add(-self.alpha, &grad);
+            working.scaled_add(-self.alpha, &grad);
         } else {
             // Heavy ball: v ← β·v − α·g, then x ← x + v.
             // With v₀ = 0 the first step is just −α·g; form it by consuming
@@ -399,22 +400,22 @@ where
                     v
                 }
             };
-            state.param.scaled_add(F::one(), &velocity);
+            working.scaled_add(F::one(), &velocity);
             self.velocity = Some(velocity);
         }
 
-        // Refresh cached full cost every `cost_period` iters (epoch
-        // boundary by default; see the type-level "Cost tracking"
-        // section for the rationale and the `with_cost_eval_every`
-        // builder).
         self.iters_since_cost += 1;
         if self.iters_since_cost >= self.cost_period {
-            let cost = problem.cost(&state.param)?;
-            state.cost = Some(cost);
+            let cost = problem.cost(working)?;
+            state.replace(working.clone(), cost);
             self.iters_since_cost = 0;
         }
 
         Ok((state, None))
+    }
+
+    fn should_check_iterate_change(&self) -> bool {
+        self.iters_since_cost == 0
     }
 }
 
@@ -422,7 +423,7 @@ where
 mod tests {
     use super::*;
     use crate::core::state::State;
-    use crate::{BasicState, Executor};
+    use crate::{Executor, PointState};
 
     /// Finite-sum quadratic `f(x) = (1/n) Σᵢ ‖x − cᵢ‖²` with per-sample
     /// gradient `2·(x − cᵢ)`. The (unique) minimizer is the centroid of
@@ -515,7 +516,7 @@ mod tests {
         let centroid = problem.centroid();
         let sgd = Sgd::new(0.01, 2, 0xABCDEF);
         let result =
-            Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
+            Executor::new(problem, sgd, PointState::new(vec![0.0, 0.0]))
                 .max_iter(3_000)
                 .run()
                 .unwrap();
@@ -538,7 +539,7 @@ mod tests {
         let centroid = problem.centroid();
         let sgd = Sgd::new(0.1, problem.n_samples(), 0);
         let result =
-            Executor::new(problem, sgd, BasicState::new(vec![0.0, 0.0]))
+            Executor::new(problem, sgd, PointState::new(vec![0.0, 0.0]))
                 .max_iter(500)
                 .run()
                 .unwrap();
@@ -554,7 +555,7 @@ mod tests {
         let problem_b = problem_5_centers();
         let run = |p: FiniteSumQuadratic| {
             let sgd = Sgd::new(0.05, 2, 12345);
-            Executor::new(p, sgd, BasicState::new(vec![0.5, -0.5]))
+            Executor::new(p, sgd, PointState::new(vec![0.5, -0.5]))
                 .max_iter(50)
                 .run()
                 .unwrap()
@@ -575,7 +576,7 @@ mod tests {
             Executor::new(
                 problem_5_centers(),
                 sgd,
-                BasicState::new(vec![0.5, -0.5]),
+                PointState::new(vec![0.5, -0.5]),
             )
             .max_iter(20)
             .run()
@@ -602,7 +603,7 @@ mod tests {
         let run_once = |solver: &mut Sgd<Vec<f64>>| {
             let mut p = Problem::new(problem_5_centers());
             let mut state =
-                solver.init(&mut p, BasicState::new(start.clone())).unwrap();
+                solver.init(&mut p, PointState::new(start.clone())).unwrap();
             for _ in 0..15 {
                 let (next, _) = solver.next_iter(&mut p, state).unwrap();
                 state = next;
@@ -634,7 +635,7 @@ mod tests {
         let mut sgd = Sgd::new(0.01, 3, 99);
         let mut p = Problem::new(problem);
         let mut state =
-            sgd.init(&mut p, BasicState::new(vec![0.0, 0.0])).unwrap();
+            sgd.init(&mut p, PointState::new(vec![0.0, 0.0])).unwrap();
         // 3 steps: enough to trigger the reshuffle at step 3 (cursor
         // would be 6, and 6 + 3 > 7).
         for _ in 0..3 {
@@ -658,11 +659,27 @@ mod tests {
         };
         let centroid = problem.centroid();
         let sgd = Sgd::new(0.05, 10, 13);
-        let result = Executor::new(problem, sgd, BasicState::new(vec![0.0]))
+        let result = Executor::new(problem, sgd, PointState::new(vec![0.0]))
             .max_iter(500)
             .run()
             .unwrap();
         assert!((result.param()[0] - centroid[0]).abs() < 1e-3);
+    }
+
+    #[test]
+    fn published_point_matches_its_cost_between_refreshes() {
+        let result = Executor::from_start(
+            problem_5_centers(),
+            Sgd::new(0.05, 2, 42),
+            vec![10.0, 10.0],
+        )
+        .max_iter(1)
+        .run()
+        .unwrap();
+        assert_eq!(
+            result.cost(),
+            problem_5_centers().cost(result.param()).unwrap()
+        );
     }
 
     #[test]
@@ -676,13 +693,13 @@ mod tests {
         let mut sgd = Sgd::new(0.05, 2, 42);
         let mut p = Problem::new(problem);
         let state =
-            sgd.init(&mut p, BasicState::new(vec![10.0, 10.0])).unwrap();
+            sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
         assert_eq!(state.cost(), initial_cost);
         let (state, _) = sgd.next_iter(&mut p, state).unwrap();
         assert_eq!(
             state.cost(),
             initial_cost,
-            "default schedule must hold state.cost stale within an epoch",
+            "default schedule must retain the evaluated record within an epoch",
         );
         let (state, _) = sgd.next_iter(&mut p, state).unwrap();
         assert_ne!(
@@ -701,7 +718,7 @@ mod tests {
         let mut sgd = Sgd::new(0.05, 2, 42).with_cost_eval_every(1);
         let mut p = Problem::new(problem);
         let state =
-            sgd.init(&mut p, BasicState::new(vec![10.0, 10.0])).unwrap();
+            sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
         let (state, _) = sgd.next_iter(&mut p, state).unwrap();
         assert_ne!(
             state.cost(),
@@ -720,7 +737,7 @@ mod tests {
         let centroid = problem.centroid();
         let mut sgd = Sgd::new(0.1, 5, 0).with_momentum(0.0);
         let mut p = Problem::new(problem);
-        let state = sgd.init(&mut p, BasicState::new(vec![1.0, 1.0])).unwrap();
+        let state = sgd.init(&mut p, PointState::new(vec![1.0, 1.0])).unwrap();
         let (state, reason) = sgd.next_iter(&mut p, state).unwrap();
         assert!(reason.is_none());
         // Full batch gradient is 2·(x − centroid), so x₁ = x − α·2·(x − centroid).

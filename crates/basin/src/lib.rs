@@ -26,7 +26,7 @@
 //!
 //! ```
 //! use basin::{
-//!     BasicState, CostFunction, Executor, Gradient, GradientDescent,
+//!     FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
 //! };
 //!
 //! struct Sphere;
@@ -51,7 +51,7 @@
 //! let result = Executor::new(
 //!     Sphere,
 //!     (GradientDescent::new(0.1)).with_absolute_gradient_tolerance(1e-8),
-//!     BasicState::new(vec![1.0, 1.0]),
+//!     FirstOrderState::new(vec![1.0, 1.0]),
 //! )
 //! .max_iter(1_000)
 //! .run()
@@ -92,25 +92,33 @@
 //!
 //! | Solver | State | `from_start` |
 //! | ------ | ----- | ------------ |
-//! | `GradientDescent`, `Sgd` | `BasicState` | ✓ |
+//! | `GradientDescent` | `FirstOrderState` | ✓ |
+//! | `Sgd` | `PointState` | ✓ |
 //! | `NonlinearCg` | `FirstOrderState` | ✓ |
-//! | `ProjectedGradientDescent` | `BasicState` | ✓ (`f64` only) |
-//! | `Bfgs` | `QuasiNewtonState` | ✓ (`Vec`/nalgebra/ndarray/faer) |
-//! | `Lbfgs`, `Lbfgsb` | `LbfgsState` | ✓ |
-//! | `TrustRegion` | `BasicState` | ✓ |
-//! | `GaussNewton`, `LevenbergMarquardt`, `LevenbergMarquardtQr`, `Trf`, `TrustRegionReflective` | `NllsState` | ✓ |
-//! | `NelderMead` | `BasicSimplexState` | ✓ |
-//! | `Gbnm` | `GbnmState` | ✓ |
-//! | `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `NewuoaState`/… | ✓ |
-//! | `Mads` | `MadsState`/`ConstrainedMadsState` | ✓ |
-//! | `SolisWets` | `SolisWetsState` | ✓ |
-//! | `SimulatedAnnealing` | `SimulatedAnnealingState` | ✓ |
-//! | `BarrierMethod`, `AugmentedLagrangianMethod` | `BasicState` | ✓ |
-//! | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject`, `MaLsChCma`, `MaLsChSw` | `CmaEsState`/`MaLsChState`/… | ✗ (needs a step-size σ or samples the box) |
-//! | `GlobalBestPso` | `GlobalBestPsoState` | ✗ (samples a swarm from the box) |
-//! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `BasicPopulationState` | ✗ (sample the box, ignore a point) |
+//! | `ProjectedGradientDescent` | `FirstOrderState` | ✓ |
+//! | `Bfgs` | `FirstOrderState` | ✓ (`Vec`/nalgebra/ndarray/faer) |
+//! | `Lbfgs`, `Lbfgsb` | `FirstOrderState` | ✓ |
+//! | `TrustRegion` | `FirstOrderState` | ✓ |
+//! | `GaussNewton`, `LevenbergMarquardt`, `LevenbergMarquardtQr`, `Trf`, `TrustRegionReflective` | `PointState` | ✓ |
+//! | `NelderMead` | `SimplexProgress` | ✓ |
+//! | `Gbnm` | `PointState` | ✓ |
+//! | `Newuoa`, `Bobyqa`, `Lincoa` | `PointState` | ✓ |
+//! | `Cobyla` | `SelectedState` | ✓ |
+//! | `Mads` | `PointState` or `SelectedState` | ✓ |
+//! | `BasinHopping` | `PointState` | ✓ |
+//! | `SolisWets` | `PointState` | ✓ |
+//! | `SimulatedAnnealing` | `ProposalState` | ✓ |
+//! | `BarrierMethod` | `PointState` | ✓ |
+//! | `Slsqp` | `SelectedFirstOrderState` | ✓ |
+//! | `AugmentedLagrangianMethod` | `SelectedState` | ✓ |
+//! | `CmaEs`, `BoundedCmaEs` | `PopulationProgress` | ✓ (scale is configured on the solver) |
+//! | `CmaInject`, `BoundedCmaInject` | `PopulationProgress` | ✗ (explicit mean seed) |
+//! | `MaLsChCma`, `MaLsChSw` | `PopulationProgress` | ✗ (samples the box) |
+//! | `GlobalBestPso` | `PopulationProgress` | ✗ (samples a swarm from the box) |
+//! | `RandomSearch`, `Ssga`, `De`, `DeInject` | `PopulationProgress` | ✗ (samples the box or accepts explicit members) |
 //! | `Direct` | `PointState` | ✗ (starts at the box midpoint) |
-//! | `Brent`, `BrentDerivative`, `GoldenSection` | `ScalarState` | ✗ (bracket, not a point) |
+//! | `BrentDerivative` | `FirstOrderState<F, F>` | ✗ (bracket, not a point) |
+//! | `Brent`, `GoldenSection` | `PointState<F, F>` | ✗ (bracket, not a point) |
 //!
 //! # Error model
 //!
@@ -179,12 +187,9 @@
 //! If dependency feature unification enables several releases of one backend,
 //! Basin implements every enabled release independently.
 //!
-//! The legacy `NalgebraQuasiNewtonState`, `NdarrayQuasiNewtonState`, and
-//! `FaerQuasiNewtonState` aliases still select the newest enabled version
-//! for Basin 1.x compatibility. Their selected type can change when features
-//! are unified. Use [`QuasiNewtonState<V, M, F>`](QuasiNewtonState) with explicit
-//! vector and matrix types to select a particular version, or let
-//! [`Executor::from_start`] infer the state from the starting vector.
+//! BFGS uses [`FirstOrderState`] with a solver-owned inverse Hessian. Its
+//! [`DenseBackend`] association selects the matrix belonging to the parameter's
+//! backend version, so feature unification cannot change the concrete type.
 //!
 //! Each nalgebra release includes its matching `nalgebra-sparse` release:
 //! 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Versioned acceleration uses
@@ -349,14 +354,15 @@ pub use crate::core::least_squares::{
     RobustLeastSquares, SoftL1Loss, SquaredLoss,
 };
 pub use crate::core::math::{
-    AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseMatrix,
-    DenseMatrixFromFn, Dot, FactorizePivotedQr, GramMatrix, LinearSolveError,
-    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, MatrixIndex, MaxDiagonal, NegInPlace,
-    NormInfinity, NormSquared, QrFactorization, QrSolveError,
-    RegularizedQrSolve, SampleStandardNormal, SampleUniformBox, Scalar,
-    ScaleInPlace, ScaleRowsInPlace, ScaledAdd, SymmetricEigen,
-    SymmetricEigenError, VectorIndex, VectorLen,
+    AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseBackend,
+    DenseMatrix, DenseMatrixFromFn, Dot, FactorizePivotedQr,
+    GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveLstsq,
+    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
+    MatrixIdentity, MatrixIndex, MaxDiagonal, NegInPlace, NormInfinity,
+    NormSquared, QrFactorization, QrSolveError, RegularizedQrSolve,
+    SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace,
+    ScaleRowsInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError,
+    VectorIndex, VectorLen,
 };
 pub use crate::core::numdiff::{
     BoundedFiniteDiff, DerivativeCheckError, DerivativeCheckReport,
@@ -375,24 +381,15 @@ pub use crate::core::problem::{
 };
 pub use crate::core::run_control::RunControl;
 pub use crate::core::solver::Solver;
-#[cfg(feature = "faer_all")]
-pub use crate::core::state::FaerQuasiNewtonState;
-#[cfg(feature = "nalgebra_all")]
-pub use crate::core::state::NalgebraQuasiNewtonState;
-#[cfg(feature = "ndarray_all")]
-pub use crate::core::state::NdarrayQuasiNewtonState;
 pub use crate::core::state::{
-    AcceptanceState, BasicPopulationState, BasicSimplexState, BasicState,
-    BobyqaState, CmaEsState, CobylaState, ConstrainedMadsState, CountsMirror,
-    EvaluatedGradientState, EvaluatedState, ExactResumeState, FirstOrderState,
-    GbnmState, GlobalBestPsoState, GradientDimensionMismatch, GradientState,
-    IncumbentRef, IncumbentState, IntoInitialSimplex, LbfgsState, LincoaState,
-    MadsState, MeshState, NewuoaState, NllsState, ObjectiveIncumbentState,
-    PointState, PopulationState, RawEvaluationState, RhoState,
-    ScalarGradientState, ScalarState, SimplexState, SimulatedAnnealingState,
-    SlsqpState, SolisWetsState, State,
+    AcceptanceState, CountsMirror, EvaluatedGradientState, EvaluatedState,
+    ExactResumeState, FirstOrderState, GradientDimensionMismatch,
+    GradientState, IncumbentRef, IncumbentState, IntoInitialSimplex, MeshState,
+    ObjectiveIncumbentState, PointState, PopulationProgress,
+    PopulationShapeError, PopulationState, ProposalState, RawEvaluationState,
+    RhoState, SelectedFirstOrderState, SelectedState, SimplexProgress,
+    SimplexShapeError, SimplexState, State,
 };
-pub use crate::core::state::{DenseQuasiNewtonState, QuasiNewtonState};
 pub use crate::core::termination::TerminationReason;
 pub use crate::line_search::{
     Backtracking, Constant, HagerZhang, LineSearch, LineSearchBounds,
@@ -415,10 +412,9 @@ pub use crate::solver::{
     ClosureInner, CmaEs, CmaInject, Cobyla, De, DeCrossover, DeInject,
     DeMutation, Direct, GaussNewton, Gbnm, GlobalBestPso, GoldenSection,
     GradientDescent, LevenbergMarquardt, LevenbergMarquardtQr, Lincoa,
-    LmDamping, MaLsCh, MaLsChCma, MaLsChGenericState, MaLsChState, MaLsChSw,
-    MaLsChSwState, Mads, MemeticInner, Metropolis, Neighbor, NelderMead,
-    Newuoa, NonlinearCg, ProjectedGradientDescent, PsoBoundaryHandling,
-    PsoVelocityLimit, RandomDisplacement, RandomSearch, Reannealing, Sgd,
-    SimulatedAnnealing, Slsqp, SlsqpFailure, SolisWets, Ssga, StepTaker,
-    TemperatureSchedule, Trf, TrustRegionReflective,
+    LmDamping, MaLsCh, MaLsChCma, MaLsChSw, Mads, MemeticInner, Metropolis,
+    Neighbor, NelderMead, Newuoa, NonlinearCg, ProjectedGradientDescent,
+    PsoBoundaryHandling, PsoVelocityLimit, RandomDisplacement, RandomSearch,
+    Reannealing, Sgd, SimulatedAnnealing, Slsqp, SlsqpFailure, SolisWets, Ssga,
+    StepTaker, TemperatureSchedule, Trf, TrustRegionReflective,
 };

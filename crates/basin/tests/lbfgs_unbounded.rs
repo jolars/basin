@@ -1,14 +1,11 @@
-//! Unconstrained `Lbfgs<Unbounded>` convergence tests across backends.
+//! Unconstrained `Lbfgs<V, F, Unbounded>` convergence tests across backends.
 //!
 //! The bounded counterpart is `tests/lbfgsb_{vec,nalgebra,faer}.rs`;
 //! this file mirrors the Rosenbrock 2D smoke test but on the
 //! Nocedal–Wright two-loop-recursion path that requires no
 //! [`BoxConstraints`](basin::BoxConstraints) impl.
 
-use basin::solver::lbfgs::{Bounded, Unbounded};
-use basin::{
-    CostFunction, Executor, Gradient, Lbfgs, LbfgsState, Lbfgsb, MoreThuente,
-};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, Lbfgs, Lbfgsb};
 
 /// 2-D Rosenbrock: `f(x) = (1 − x₀)² + 100 (x₁ − x₀²)²`. Used by all
 /// three backend variants below; only the parameter type changes.
@@ -47,10 +44,11 @@ fn rosenbrock_vec() {
         }
     }
 
-    let state = LbfgsState::new(vec![-1.2, 1.0], 5);
+    let state = FirstOrderState::new(vec![-1.2, 1.0]);
     let result = Executor::new(
         Rosen,
-        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        (Lbfgs::new().unbounded().with_m_capacity(5))
+            .with_absolute_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -96,10 +94,11 @@ fn rosenbrock_nalgebra() {
         }
     }
 
-    let state = LbfgsState::new(DVector::from_vec(vec![-1.2, 1.0]), 5);
+    let state = FirstOrderState::new(DVector::from_vec(vec![-1.2, 1.0]));
     let result = Executor::new(
         Rosen,
-        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        (Lbfgs::new().unbounded().with_m_capacity(5))
+            .with_absolute_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -143,10 +142,11 @@ fn rosenbrock_faer() {
     }
 
     let x0 = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
-    let state = LbfgsState::new(x0, 5);
+    let state = FirstOrderState::new(x0);
     let result = Executor::new(
         Rosen,
-        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        (Lbfgs::new().unbounded().with_m_capacity(5))
+            .with_absolute_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -192,10 +192,11 @@ fn rosenbrock_ndarray() {
         }
     }
 
-    let state = LbfgsState::new(array![-1.2, 1.0], 5);
+    let state = FirstOrderState::new(array![-1.2, 1.0]);
     let result = Executor::new(
         Rosen,
-        (Lbfgs::<Unbounded>::new()).with_absolute_gradient_tolerance(1e-8),
+        (Lbfgs::new().unbounded().with_m_capacity(5))
+            .with_absolute_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -211,16 +212,16 @@ fn rosenbrock_ndarray() {
     );
 }
 
-/// `Lbfgsb` must remain a transparent alias for `Lbfgs<Bounded>`. Any
+/// `Lbfgsb` must remain a transparent alias for `Lbfgs<V, F, Bounded>`. Any
 /// drift here would break the iteration-parity test's import and every
 /// other downstream call site that holds an `Lbfgsb<...>` value.
 #[test]
 fn lbfgsb_alias_compiles() {
-    let _: Lbfgsb = Lbfgs::<Bounded>::new();
-    let _: Lbfgs<Bounded, MoreThuente> = Lbfgsb::new();
+    let _: Lbfgsb<Vec<f64>> = Lbfgs::new();
+    let _: Lbfgs<Vec<f64>> = Lbfgsb::new();
     // `Lbfgs::default()` resolves to the default mode (Bounded) and
     // default line search (MoreThuente); same identity as above.
-    let _: Lbfgsb = Lbfgs::default();
+    let _: Lbfgsb<Vec<f64>> = Lbfgs::default();
 }
 
 #[path = "support/backend_aliases.rs"]

@@ -937,6 +937,14 @@ impl<P> Problem<P> {
     }
 }
 
+impl<P: crate::core::constraint::NonlinearInequalityConstraints> Problem<P> {
+    /// Count and evaluate one inequality block as residual work.
+    pub fn constraints(&mut self, x: &P::Param) -> Result<P::Param, P::Error> {
+        self.counts.residual_evals += 1;
+        self.inner.constraints(x)
+    }
+}
+
 impl<P: crate::core::constraint::NonlinearConstraints> Problem<P> {
     /// Count and evaluate one nonlinear inequality block as residual work.
     pub fn nonlinear_constraints(

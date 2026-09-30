@@ -1,5 +1,5 @@
 use basin::{
-    BoxConstraints, CostFunction, Executor, HuberLoss, Jacobian, NllsState,
+    BoxConstraints, CostFunction, Executor, HuberLoss, Jacobian, PointState,
     Residual, RobustLeastSquares, Scalar, Solver, TerminationReason,
     VectorIndex, VectorLen,
 };
@@ -56,7 +56,7 @@ where
     M: Clone,
     S: Solver<
             RobustLeastSquares<Location<V, M, F>, HuberLoss, F>,
-            NllsState<V, F>,
+            PointState<V, F>,
             Error = Infallible,
         >,
 {
@@ -64,7 +64,7 @@ where
     let result = Executor::new(
         RobustLeastSquares::new(fit, HuberLoss),
         solver,
-        NllsState::new(start),
+        PointState::new(start),
     )
     .max_iter(100)
     .run()

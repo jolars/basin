@@ -4,9 +4,9 @@ use std::{cell::Cell, convert::Infallible, ops::Index};
 
 use basin::core::math::{MatVec, VectorLen};
 use basin::{
-    Cobyla, CobylaState, CostFunction, DenseMatrix, Executor,
-    FoldedConstraints, NonlinearConstraints, NonlinearInequalityConstraints,
-    Problem, Solver, State, TerminationReason,
+    Cobyla, CostFunction, DenseMatrix, Executor, FoldedConstraints,
+    NonlinearConstraints, NonlinearInequalityConstraints, Problem,
+    SelectedState, Solver, State, TerminationReason,
 };
 
 #[path = "support/backend_aliases.rs"]
@@ -96,7 +96,7 @@ fn mixed_vec() -> Mixed<Vec<f64>, DenseMatrix<f64>> {
     )
 }
 
-fn solver() -> Cobyla {
+fn solver<V>() -> Cobyla<V> {
     Cobyla::new()
         .with_initial_radius(0.5)
         .with_final_radius(1e-7)
@@ -469,7 +469,7 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
             lower: bounds.then(|| vec![-3.0; n]),
         }));
         let mut state = solver
-            .init(&mut problem, CobylaState::new(vec![1.0; n]))
+            .init(&mut problem, SelectedState::new(vec![1.0; n]))
             .unwrap();
         state.update_best();
         let snapshot = state.best_param().clone();

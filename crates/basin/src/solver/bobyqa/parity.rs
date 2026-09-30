@@ -11,7 +11,7 @@
 //!
 //! Unlike NEWUOA's parity module (which drives a `pub(crate)` `minimize`
 //! because NEWUOA has no public solver), BOBYQA already exposes
-//! [`Bobyqa`](crate::solver::Bobyqa)/[`BobyqaState`](crate::BobyqaState), so
+//! [`Bobyqa`](crate::solver::Bobyqa)/[`PointState`](crate::PointState), so
 //! this drives the *public* surface through an [`Executor`]. The eval trace is
 //! captured by a small [`Tracing`] problem wrapper that records every point its
 //! `cost` is called on. The module lives in-crate (rather than under `tests/`)
@@ -67,7 +67,7 @@ use std::rc::Rc;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::problem::CostFunction;
-use crate::{Bobyqa, BobyqaState, Executor, TerminationReason};
+use crate::{Bobyqa, Executor, PointState, TerminationReason};
 
 /// One PRIMA reference run, parsed from a `bobyqa_*.tsv` fixture.
 struct Fixture {
@@ -287,7 +287,7 @@ fn check_parity(text: &str) {
             .with_initial_radius(fx.rho_beg)
             .with_final_radius(fx.rho_end)
             .with_npt(fx.npt),
-        BobyqaState::new(fx.x0.clone()),
+        PointState::new(fx.x0.clone()),
     )
     .max_cost_evals(fx.max_fun as u64)
     .run()

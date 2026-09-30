@@ -1,8 +1,8 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, GradientState,
-    LbfgsState, Lbfgsb,
+    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
+    GradientState, Lbfgsb,
 };
 
 struct Quadratic {
@@ -52,7 +52,7 @@ fn lbfgs_reuses_the_line_search_evaluation() {
     let result = Executor::new(
         Quadratic::new(),
         Lbfgsb::new().unbounded(),
-        LbfgsState::new(vec![1.0], 10),
+        FirstOrderState::new(vec![1.0]),
     )
     .max_iter(1)
     .run()
@@ -68,7 +68,7 @@ fn lbfgsb_reuses_the_line_search_evaluation() {
     let result = Executor::new(
         Quadratic::new(),
         Lbfgsb::new(),
-        LbfgsState::new(vec![1.0], 10),
+        FirstOrderState::new(vec![1.0]),
     )
     .max_iter(1)
     .run()

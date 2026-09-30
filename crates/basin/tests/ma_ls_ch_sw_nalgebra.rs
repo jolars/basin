@@ -6,7 +6,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{Executor, MaLsChSw, MaLsChSwState, PopulationState, StepOutcome};
+use basin::{Executor, MaLsChSw, PopulationProgress, StepOutcome};
 
 fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {
     SphereBoxed::new(
@@ -19,7 +19,7 @@ fn boxed_sphere(n: usize) -> SphereBoxed<DVector<f64>> {
 fn converges_on_sphere_d10() {
     let problem = boxed_sphere(10);
     let solver = MaLsChSw::<DVector<f64>>::new(7).with_pop_size(20);
-    let result = Executor::new(problem, solver, MaLsChSwState::new())
+    let result = Executor::new(problem, solver, PopulationProgress::empty())
         .max_iter(u64::MAX)
         .max_cost_evals(20_000)
         .run()
@@ -38,7 +38,7 @@ fn same_seed_yields_identical_trajectory() {
         Executor::new(
             boxed_sphere(5),
             MaLsChSw::<DVector<f64>>::new(99).with_pop_size(15),
-            MaLsChSwState::new(),
+            PopulationProgress::empty(),
         )
         .max_iter(20)
         .run()
@@ -56,7 +56,7 @@ fn different_seeds_yield_different_trajectories() {
         Executor::new(
             boxed_sphere(5),
             MaLsChSw::<DVector<f64>>::new(seed).with_pop_size(15),
-            MaLsChSwState::new(),
+            PopulationProgress::empty(),
         )
         .max_iter(10)
         .run()
@@ -67,9 +67,9 @@ fn different_seeds_yield_different_trajectories() {
 
 /// Chain mechanism is actually firing: at least one individual
 /// undergoes ≥2 LS applications over the run, which requires its
-/// `(SolisWets, SolisWetsState)` pair to have been preserved and
+/// `(SolisWets<V>, PointState<V>)` pair to have been preserved and
 /// re-entered between outer iterations (`ResumableInner::prepare_resume`
-/// plus the resume-idempotent `SolisWets::init`). `δ_LS_min = 0` makes
+/// with initialization skipped). `δ_LS_min = 0` makes
 /// the chain store-back unconditional, so a count of 2 cannot be
 /// reached by two independent fresh seeds (a displaced individual
 /// resets to 0): the second application *must* have resumed the stored
@@ -87,7 +87,7 @@ fn chain_resumes_at_least_one_individual_twice() {
             .with_ls_intensity(30)
             .with_nfrec(5)
             .with_ls_improvement_threshold(0.0),
-        MaLsChSwState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(40)
     .into_stepper()
@@ -95,9 +95,8 @@ fn chain_resumes_at_least_one_individual_twice() {
 
     let mut max_ever = 0u32;
     while let StepOutcome::Continue = stepper.step().unwrap() {
-        let s = stepper.state();
         for i in 0..pop_size {
-            max_ever = max_ever.max(s.ls_application_count(i));
+            max_ever = max_ever.max(stepper.solver().ls_application_count(i));
         }
     }
     assert!(
@@ -116,7 +115,7 @@ fn population_stays_sorted_ascending() {
     let mut stepper = Executor::new(
         boxed_sphere(5),
         MaLsChSw::<DVector<f64>>::new(2024).with_pop_size(pop_size),
-        MaLsChSwState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(10)
     .into_stepper()

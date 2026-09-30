@@ -18,7 +18,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::BoothBoxed;
-use basin::{CostFunction, Executor, Gradient, LbfgsState, Lbfgsb};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb};
 
 /// Unbounded Rosenbrock 2D from `(-1.2, 1.0)`. With infinite bounds
 /// L-Bfgs-B reduces to L-Bfgs (Fortran's `cnstnd == false` branch
@@ -64,11 +64,12 @@ fn unbounded_rosenbrock_2d_converges() {
         l: vec![f64::NEG_INFINITY; 2],
         u: vec![f64::INFINITY; 2],
     };
-    let state = LbfgsState::new(vec![-1.2, 1.0], 5);
+    let state = FirstOrderState::new(vec![-1.2, 1.0]);
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -96,11 +97,12 @@ fn unbounded_rosenbrock_2d_converges() {
 #[test]
 fn booth_at_corner_converges() {
     let problem = BoothBoxed::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
-    let state = LbfgsState::new(vec![0.0, 0.0], 5);
+    let state = FirstOrderState::new(vec![0.0, 0.0]);
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(100)
@@ -136,11 +138,12 @@ fn booth_at_corner_converges() {
 #[test]
 fn booth_slack_bounds_recover_unconstrained_minimum() {
     let problem = BoothBoxed::<Vec<f64>>::new(vec![-5.0, -5.0], vec![5.0, 5.0]);
-    let state = LbfgsState::new(vec![0.0, 0.0], 5);
+    let state = FirstOrderState::new(vec![0.0, 0.0]);
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-10),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-10),
         state,
     )
     .max_iter(100)
@@ -216,11 +219,12 @@ fn quadratic_5d_diagonal_converges_quickly() {
         u: vec![2.0; 5],
     };
     let initial = vec![0.0; 5];
-    let state = LbfgsState::new(initial, 5);
+    let state = FirstOrderState::new(initial);
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-10),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-10),
         state,
     )
     .max_iter(50)

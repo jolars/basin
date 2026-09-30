@@ -1,7 +1,7 @@
 //! Opt-in, checked progress interfaces for shared and external states.
 //!
-//! These traits leave the Basin 1.x [`State`] and [`super::GradientState`]
-//! readers unchanged. Implement only the capabilities a state can guarantee.
+//! These traits complement the [`State`] and [`super::GradientState`] readers
+//! with checked records. Implement only the capabilities a state can guarantee.
 //! Record availability describes evaluation, not numerical validity: an
 //! evaluated rejection with infinite cost is still an available record.
 
@@ -50,8 +50,8 @@ pub trait EvaluatedGradientState: EvaluatedState {
 ///
 /// Preserve every category mirrored from the authoritative [`Problem`](crate::Problem).
 /// Fresh and nested runs report per-run deltas; exact continuation reports
-/// cumulative work across the resumed run. These counts need not equal the
-/// folded Basin 1.x [`State::cost_evals`] reader.
+/// cumulative work across the resumed run. Shared states use these same raw
+/// categories for their cost and gradient readers.
 ///
 /// No gradient or evaluated-record capability is required: a derivative-free
 /// outer solver can budget derivative work performed by its inner solvers.

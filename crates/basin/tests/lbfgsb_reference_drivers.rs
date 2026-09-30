@@ -80,9 +80,9 @@ fn reference_driver_allocations_stay_bounded() {
 ))]
 fn check_backend<V: support::Vector>()
 where
-    basin::Lbfgsb: for<'a> basin::Solver<
+    basin::Lbfgsb<V>: for<'a> basin::Solver<
             &'a support::Driver<V>,
-            basin::LbfgsState<V>,
+            basin::FirstOrderState<V>,
             Error = std::convert::Infallible,
         >,
 {
@@ -143,9 +143,9 @@ fn short_cases_preserve_reference_work_and_adapter_results() {
 
 fn check_short_backend<V: support::Vector>()
 where
-    basin::Lbfgsb: for<'a> basin::Solver<
+    basin::Lbfgsb<V>: for<'a> basin::Solver<
             &'a support::short::Short<V>,
-            basin::LbfgsState<V>,
+            basin::FirstOrderState<V>,
             Error = std::convert::Infallible,
         >,
 {

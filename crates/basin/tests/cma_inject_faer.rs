@@ -8,7 +8,7 @@
 
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{Rosenbrock, Sphere};
-use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
+use basin::{CmaEs, CmaInject, Executor, NelderMead, PopulationProgress};
 
 /// Rosenbrock 2-D from `(-1, 1)`: injecting Nelder-Mead refinements
 /// must not break CMA's convergence on the faer backend.
@@ -16,7 +16,7 @@ use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
 fn converges_on_rosenbrock_2d() {
     let m0 = Col::<f64>::from_fn(2, |i| if i == 0 { -1.0 } else { 1.0 });
 
-    let cma = CmaEs::<Col<f64>, Mat<f64>>::new(17);
+    let cma = CmaEs::<Col<f64>, Mat<f64>>::new(17, 0.3);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(1)
         .with_inner_max_iter(30);
@@ -24,7 +24,7 @@ fn converges_on_rosenbrock_2d() {
     let result = Executor::new(
         Rosenbrock::<Col<f64>>::new(),
         solver,
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(200)
     .run()
@@ -53,15 +53,15 @@ fn aggregates_inner_cost_evals_into_outer() {
     // Vanilla CMA-ES baseline.
     let vanilla = Executor::new(
         Sphere::<Col<f64>>::new(),
-        CmaEs::<Col<f64>, Mat<f64>>::new(7),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.3),
+        CmaEs::<Col<f64>, Mat<f64>>::new(7, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0.clone()),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
     // Memetic variant on the same seed and outer budget.
-    let cma = CmaEs::<Col<f64>, Mat<f64>>::new(7);
+    let cma = CmaEs::<Col<f64>, Mat<f64>>::new(7, 0.3);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
@@ -69,7 +69,7 @@ fn aggregates_inner_cost_evals_into_outer() {
     let memetic = Executor::new(
         Sphere::<Col<f64>>::new(),
         solver,
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(outer_iters)
     .run()

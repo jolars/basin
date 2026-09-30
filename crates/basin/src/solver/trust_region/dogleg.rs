@@ -24,6 +24,7 @@ use crate::core::math::{
 ///
 /// [`Steihaug`]: super::Steihaug
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dogleg;
 
 impl<V, M, F> Subproblem<V, M, F> for Dogleg

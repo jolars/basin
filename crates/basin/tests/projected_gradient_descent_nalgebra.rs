@@ -3,7 +3,7 @@
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{
-    Backtracking, BasicState, Executor, ProjectedGradientDescent,
+    Backtracking, Executor, FirstOrderState, ProjectedGradientDescent,
     TerminationReason,
 };
 
@@ -19,7 +19,7 @@ fn slack_bounds_recover_unconstrained_minimum() {
     let result = Executor::new(
         problem,
         ProjectedGradientDescent::with_line_search(Backtracking::new()),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(2000)
     .run()
@@ -48,7 +48,7 @@ fn tight_bounds_converge_to_box_corner() {
     let result = Executor::new(
         problem,
         ProjectedGradientDescent::with_line_search(Backtracking::new()),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(2000)
     .run()
@@ -76,7 +76,7 @@ fn infeasible_initial_param_is_projected_at_init() {
     let result = Executor::new(
         problem,
         ProjectedGradientDescent::new(0.01),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(0)
     .run()
@@ -98,7 +98,7 @@ fn projected_gradient_tolerance_triggers_at_corner_minimum() {
         problem,
         (ProjectedGradientDescent::with_line_search(Backtracking::new()))
             .with_absolute_projected_gradient_tolerance(1e-7),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(2000)
     .run()

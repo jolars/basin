@@ -1,7 +1,7 @@
 use basin::{
     ConstraintJacobian, CostFunction, DenseMatrix, Executor, Gradient,
-    GradientState, NonlinearConstraints, RawEvaluationState, Slsqp, SlsqpState,
-    State, TerminationReason,
+    GradientState, NonlinearConstraints, RawEvaluationState,
+    SelectedFirstOrderState, Slsqp, State, TerminationReason,
 };
 use std::convert::Infallible;
 
@@ -57,11 +57,11 @@ fn analytic_equality_solution_and_records() {
     let result = Executor::new(
         EqualityQuadratic,
         Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
-        SlsqpState::new(vec![3.0, -1.0]),
+        SelectedFirstOrderState::new(vec![3.0, -1.0]),
     )
     .require_evaluated_state()
     .max_iter(100)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     let x = result.state.param();
@@ -72,8 +72,8 @@ fn analytic_equality_solution_and_records() {
         result.state.gradient().unwrap(),
         &EqualityQuadratic.gradient(x).unwrap()
     );
-    assert!(result.state.constraint_violation().unwrap() < 1e-10);
-    assert!(result.state.stationarity().unwrap() < 1e-6);
+    assert!(result.solver.constraint_violation().unwrap() < 1e-10);
+    assert!(result.solver.stationarity().unwrap() < 1e-6);
     assert!(result.state.raw_counts().residual_evals > 0);
     assert!(result.state.raw_counts().jacobian_evals > 0);
 }
@@ -83,10 +83,10 @@ fn optimal_seed_stops_at_iteration_zero() {
     let result = Executor::new(
         EqualityQuadratic,
         Slsqp::new(),
-        SlsqpState::new(vec![0.0, 1.0]),
+        SelectedFirstOrderState::new(vec![0.0, 1.0]),
     )
     .max_iter(10)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert_eq!(result.state.iter(), 0);
@@ -195,7 +195,12 @@ where
     let result = Executor::new(
         p,
         Slsqp::new().with_absolute_accuracy_tolerance(num::<F>(accuracy)),
-        SlsqpState::new(make(&[num(1.), num(5.), num(5.), num(1.)])),
+        SelectedFirstOrderState::new(make(&[
+            num(1.),
+            num(5.),
+            num(5.),
+            num(1.),
+        ])),
     )
     .max_iter(100)
     .run_with_solver()
@@ -204,12 +209,12 @@ where
         result.reason,
         TerminationReason::SolverConverged,
         "failure={:?}, x={:?}, violation={:?}, stationarity={:?}",
-        result.state.failure(),
+        result.solver.failure(),
         (0..4)
             .map(|i| result.state.param().get_scalar(i).to_f64())
             .collect::<Vec<_>>(),
-        result.state.constraint_violation().map(|v| v.to_f64()),
-        result.state.stationarity().map(|v| v.to_f64())
+        result.solver.constraint_violation().map(|v| v.to_f64()),
+        result.solver.stationarity().map(|v| v.to_f64())
     );
     for (i, target) in [
         1.,
@@ -225,9 +230,9 @@ where
                 < num(2e-3)
         );
     }
-    assert!(result.state.constraint_violation().unwrap() < num(accuracy * 2.));
-    assert!(result.state.stationarity().unwrap() < num(2e-3));
-    assert!(result.state.complementarity().unwrap() < num(accuracy * 2.));
+    assert!(result.solver.constraint_violation().unwrap() < num(accuracy * 2.));
+    assert!(result.solver.stationarity().unwrap() < num(2e-3));
+    assert!(result.solver.complementarity().unwrap() < num(accuracy * 2.));
     assert!(result.solver.inequality_multipliers().unwrap()[0] > F::zero());
 }
 #[test]
@@ -268,7 +273,7 @@ fn hs71_reference_accepted_trajectory_and_exact_continuation() {
     let mut stepper = Executor::new(
         p.clone(),
         Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
-        SlsqpState::new(vec![1., 5., 5., 1.]),
+        SelectedFirstOrderState::new(vec![1., 5., 5., 1.]),
     )
     .max_iter(100)
     .into_stepper()
@@ -340,7 +345,7 @@ fn checkpoint_rebuilds_scratch_for_exact_continuation() {
         let checkpoint = stepper.into_checkpoint().unwrap();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
         let (checkpoint, remaining): (
-            basin::ExactCheckpoint<Slsqp, SlsqpState<Vec<f64>>>,
+            basin::ExactCheckpoint<Slsqp, SelectedFirstOrderState<Vec<f64>>>,
             &[u8],
         ) = postcard::take_from_bytes(&bytes).unwrap();
         assert!(remaining.is_empty());
@@ -464,7 +469,7 @@ fn linear_blocks_fixed_coordinates_active_bounds_and_unconstrained() {
         let r = Executor::new(
             p,
             Slsqp::new().with_absolute_accuracy_tolerance(1e-12),
-            SlsqpState::new(vec![-10.; 4]),
+            SelectedFirstOrderState::new(vec![-10.; 4]),
         )
         .max_iter(50)
         .run_with_solver()
@@ -473,7 +478,7 @@ fn linear_blocks_fixed_coordinates_active_bounds_and_unconstrained() {
         for (a, b) in r.state.param().iter().zip(expected) {
             assert!((a - b).abs() < 1e-7, "{:?}", r.state.param());
         }
-        assert!(r.state.stationarity().unwrap() < 1e-7);
+        assert!(r.solver.stationarity().unwrap() < 1e-7);
         assert_eq!(r.state.raw_counts().jacobian_evals, 0);
         assert_eq!(r.state.raw_counts().residual_evals, 0);
         if mode > 0 {
@@ -500,11 +505,11 @@ fn all_fixed_feasible_and_infeasible() {
             let r = Executor::new(
                 p,
                 Slsqp::new().with_absolute_accuracy_tolerance(accuracy),
-                SlsqpState::new(vec![0.]),
+                SelectedFirstOrderState::new(vec![0.]),
             )
             .require_evaluated_state()
             .max_iter(10)
-            .run()
+            .run_with_solver()
             .unwrap();
             assert_eq!(
                 r.reason,
@@ -518,7 +523,7 @@ fn all_fixed_feasible_and_infeasible() {
                 "accuracy={accuracy:?}, feasible={feasible}"
             );
             assert_eq!(
-                r.state.failure(),
+                r.solver.failure(),
                 if feasible {
                     None
                 } else {
@@ -547,19 +552,19 @@ fn all_fixed_bounds_with_disabled_accuracy_reach_iteration_limit() {
     let r = Executor::new(
         p,
         Slsqp::new().with_absolute_accuracy_tolerance(None),
-        SlsqpState::new(vec![0.]),
+        SelectedFirstOrderState::new(vec![0.]),
     )
     .require_evaluated_state()
     .max_iter(10)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(r.reason, TerminationReason::MaxIter);
-    assert_eq!(r.state.failure(), None);
+    assert_eq!(r.solver.failure(), None);
     assert_eq!(r.state.iter(), 10);
     assert_eq!(r.state.param(), &vec![1.]);
     assert_eq!(r.state.cost(), 1.);
     assert_eq!(r.state.gradient(), Some(&vec![2.]));
-    assert_eq!(r.state.constraint_violation(), Some(0.));
+    assert_eq!(r.solver.constraint_violation(), Some(0.));
     assert_eq!(r.state.raw_counts().cost_evals, 1);
     assert_eq!(r.state.raw_counts().gradient_evals, 1);
 }
@@ -576,12 +581,16 @@ fn dependent_and_excess_equalities_fail_cleanly() {
             if j == 0 { (i + 1) as f64 } else { 0. }
         });
         p.eq_rhs = vec![1., 2.];
-        let r = Executor::new(p, Slsqp::new(), SlsqpState::new(vec![0.; n]))
-            .max_iter(20)
-            .run()
-            .unwrap();
+        let r = Executor::new(
+            p,
+            Slsqp::new(),
+            SelectedFirstOrderState::new(vec![0.; n]),
+        )
+        .max_iter(20)
+        .run_with_solver()
+        .unwrap();
         assert_eq!(r.reason, TerminationReason::SolverFailed);
-        assert_eq!(r.state.failure(), Some(expected));
+        assert_eq!(r.solver.failure(), Some(expected));
         assert_eq!(r.state.iter(), 0);
     }
 }
@@ -590,12 +599,16 @@ fn incompatible_inequalities_never_report_convergence() {
     let mut p = LinearQuadratic::new(2);
     p.iq = DenseMatrix::from_row_slice(2, 2, &[1., 0., -1., 0.]);
     p.iq_rhs = vec![0., -1.];
-    let r = Executor::new(p, Slsqp::new(), SlsqpState::new(vec![0.; 2]))
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let r = Executor::new(
+        p,
+        Slsqp::new(),
+        SelectedFirstOrderState::new(vec![0.; 2]),
+    )
+    .max_iter(100)
+    .run_with_solver()
+    .unwrap();
     assert_eq!(r.reason, TerminationReason::SolverFailed);
-    assert!(r.state.constraint_violation().unwrap() > 0.9);
+    assert!(r.solver.constraint_violation().unwrap() > 0.9);
 }
 #[test]
 fn numerical_constraint_derivatives_solve_hs71() {
@@ -604,14 +617,14 @@ fn numerical_constraint_derivatives_solve_hs71() {
     let r = Executor::new(
         p,
         Slsqp::new().with_absolute_accuracy_tolerance(1e-9),
-        SlsqpState::new(vec![1., 5., 5., 1.]),
+        SelectedFirstOrderState::new(vec![1., 5., 5., 1.]),
     )
     .max_iter(100)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(r.reason, TerminationReason::SolverConverged);
     assert!((r.state.cost() - 17.014017289134).abs() < 1e-7);
-    assert!(r.state.constraint_violation().unwrap() < 1e-8);
+    assert!(r.solver.constraint_violation().unwrap() < 1e-8);
 }
 #[test]
 fn scipy_and_nlopt_final_output_agreement() {
@@ -619,10 +632,10 @@ fn scipy_and_nlopt_final_output_agreement() {
     let r = Executor::new(
         p,
         Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
-        SlsqpState::new(vec![1., 5., 5., 1.]),
+        SelectedFirstOrderState::new(vec![1., 5., 5., 1.]),
     )
     .max_iter(100)
-    .run()
+    .run_with_solver()
     .unwrap();
     for line in include_str!("fixtures/slsqp_hs71_libraries.tsv")
         .lines()
@@ -638,7 +651,7 @@ fn scipy_and_nlopt_final_output_agreement() {
             assert!((a - b).abs() < 1e-7);
         }
         assert!(row[5].abs() < 1e-9 && row[6] < 1e-9 && row[7] < 1e-6);
-        assert!(r.state.stationarity().unwrap() < 1e-6);
+        assert!(r.solver.stationarity().unwrap() < 1e-6);
     }
 }
 
@@ -730,10 +743,13 @@ fn callback_errors_propagate_at_initialization_and_during_steps() {
                 after_initial,
                 nonfinite: false,
             };
-            let r =
-                Executor::new(p, Slsqp::new(), SlsqpState::new(vec![3., -1.]))
-                    .max_iter(20)
-                    .run();
+            let r = Executor::new(
+                p,
+                Slsqp::new(),
+                SelectedFirstOrderState::new(vec![3., -1.]),
+            )
+            .max_iter(20)
+            .run_with_solver();
             assert_eq!(r.err().unwrap(), CallbackError(callback));
         }
     }
@@ -746,17 +762,21 @@ fn nonfinite_callbacks_fail_without_publishing_a_partial_trial() {
             after_initial: true,
             nonfinite: true,
         };
-        let r = Executor::new(p, Slsqp::new(), SlsqpState::new(vec![3., -1.]))
-            .max_iter(20)
-            .run()
-            .unwrap();
+        let r = Executor::new(
+            p,
+            Slsqp::new(),
+            SelectedFirstOrderState::new(vec![3., -1.]),
+        )
+        .max_iter(20)
+        .run_with_solver()
+        .unwrap();
         assert_eq!(r.reason, TerminationReason::SolverFailed);
         assert_eq!(r.state.param(), &vec![3., -1.]);
         assert_eq!(r.state.best_param(), &vec![3., -1.]);
         assert_eq!(r.state.cost(), 13.);
         assert_eq!(r.state.gradient(), Some(&vec![4., -6.]));
         assert_eq!(r.state.iter(), 0);
-        assert_eq!(r.state.best_cost_evals(), 2);
+        assert_eq!(r.state.best_cost_evals(), 1);
         assert!(r.state.cost_evals() > r.state.best_cost_evals());
     }
 }
@@ -768,13 +788,17 @@ fn nonfinite_initial_values_report_numerical_failure() {
             after_initial: false,
             nonfinite: true,
         };
-        let r = Executor::new(p, Slsqp::new(), SlsqpState::new(vec![3., -1.]))
-            .max_iter(20)
-            .run()
-            .unwrap();
+        let r = Executor::new(
+            p,
+            Slsqp::new(),
+            SelectedFirstOrderState::new(vec![3., -1.]),
+        )
+        .max_iter(20)
+        .run_with_solver()
+        .unwrap();
         assert_eq!(r.reason, TerminationReason::SolverFailed);
         assert_eq!(
-            r.state.failure(),
+            r.solver.failure(),
             Some(basin::SlsqpFailure::NonFiniteEvaluation)
         );
         assert_eq!(r.state.iter(), 0);
@@ -823,19 +847,19 @@ fn inconsistent_linearization_uses_slack_recovery() {
     let r = Executor::new(
         p,
         Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
-        SlsqpState::new(vec![0.1]),
+        SelectedFirstOrderState::new(vec![0.1]),
     )
     .max_iter(100)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(
         r.reason,
         TerminationReason::SolverConverged,
         "{:?}",
-        r.state.failure()
+        r.solver.failure()
     );
     assert!((r.state.param()[0] - 1.).abs() < 1e-7);
-    assert!(r.state.constraint_violation().unwrap() < 1e-10);
+    assert!(r.solver.constraint_violation().unwrap() < 1e-10);
 }
 #[test]
 fn folded_constraints_include_both_signs_of_nonlinear_equalities() {
@@ -845,7 +869,7 @@ fn folded_constraints_include_both_signs_of_nonlinear_equalities() {
         vec![3., -1.],
     )
     .max_iter(1000)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(r.reason, TerminationReason::SolverConverged);
     assert!((r.state.param()[0] + r.state.param()[1] - 1.).abs() < 1e-5);
@@ -873,11 +897,11 @@ fn nnls_iteration_limit_reports_a_subproblem_failure() {
         vec![-1.; 2],
     )
     .max_iter(10)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(r.reason, TerminationReason::SolverFailed);
     assert_eq!(
-        r.state.failure(),
+        r.solver.failure(),
         Some(basin::SlsqpFailure::SubproblemIterationLimit)
     );
     assert_eq!(r.state.iter(), 0);
@@ -927,7 +951,7 @@ fn nonfinite_trials_can_backtrack_to_a_finite_solution() {
     }
     let r = Executor::from_start(HalfLine, Slsqp::new(), vec![1.])
         .max_iter(10)
-        .run()
+        .run_with_solver()
         .unwrap();
     assert_eq!(r.reason, TerminationReason::SolverConverged);
     assert!((r.state.param()[0] - 0.1).abs() < 1e-12);
@@ -964,13 +988,13 @@ fn unconstrained_rosenbrock_exercises_repeated_bfgs_and_backtracking() {
         vec![-1.2, 1.],
     )
     .max_iter(100)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(
         r.reason,
         TerminationReason::SolverConverged,
         "{:?}",
-        r.state.failure()
+        r.solver.failure()
     );
     assert!(r.state.param().iter().all(|x| (x - 1.).abs() < 1e-5));
     assert!(r.state.cost() < 1e-10);
@@ -984,7 +1008,7 @@ fn disabled_accuracy_leaves_iteration_budget_in_control() {
         vec![3., -1.],
     )
     .max_iter(1)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(r.reason, TerminationReason::MaxIter);
     assert_eq!(r.state.iter(), 1);
@@ -1035,15 +1059,15 @@ fn repeated_zero_step_bfgs_updates_exhaust_the_reset_limit() {
         vec![1e100],
     )
     .max_iter(10)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert_eq!(r.reason, TerminationReason::SolverFailed);
     assert_eq!(
-        r.state.failure(),
+        r.solver.failure(),
         Some(basin::SlsqpFailure::NonDescentDirection)
     );
     assert_eq!(r.state.iter(), 5);
-    assert_eq!(r.state.stationarity(), Some(1.));
+    assert_eq!(r.solver.stationarity(), Some(1.));
 }
 
 #[test]
@@ -1085,11 +1109,11 @@ fn overflowing_directional_model_is_a_numerical_failure() {
     }
     let r = Executor::from_start(HugeLinear, Slsqp::new(), vec![0.])
         .max_iter(10)
-        .run()
+        .run_with_solver()
         .unwrap();
     assert_eq!(r.reason, TerminationReason::SolverFailed);
     assert_eq!(
-        r.state.failure(),
+        r.solver.failure(),
         Some(basin::SlsqpFailure::NonFiniteEvaluation)
     );
     assert_eq!(r.state.raw_counts().cost_evals, 1);

@@ -98,8 +98,8 @@ macro_rules! stopping_checks {
                         TerminationReason::MaxIter
                     });
                     assert!((result.param()[0] - 3.).abs() < 16. * <$scalar>::EPSILON);
-                    assert_eq!(result.cost_evals(), 2);
-                    assert_eq!(result.state.jacobian_evals(), 1);
+                    assert_eq!(result.state.counts().residual_evals, 2);
+                    assert_eq!(result.state.counts().jacobian_evals, 1);
                 }
             }
 
@@ -143,8 +143,8 @@ macro_rules! stopping_checks {
                         &[NativeConvergenceTest::RelativeTrustRadius][..]
                     } else { &[] });
                     assert_eq!(result.param()[0], 0.1);
-                    assert_eq!(result.cost_evals(), 2);
-                    assert_eq!(result.state.jacobian_evals(), 1);
+                    assert_eq!(result.state.counts().residual_evals, 2);
+                    assert_eq!(result.state.counts().jacobian_evals, 1);
                 }
             }
 
@@ -177,8 +177,8 @@ macro_rules! stopping_checks {
                     // Newton iterates are 2.5, 2.05, and about 2.00061.
                     // D grows from 4 to 25, then retains 25 as J shrinks.
                     assert_eq!(result.reason, TerminationReason::SolverConverged);
-                    assert_eq!(result.cost_evals(), evaluations);
-                    assert_eq!(result.state.jacobian_evals(), evaluations - 1);
+                    assert_eq!(result.state.counts().residual_evals, evaluations);
+                    assert_eq!(result.state.counts().jacobian_evals, evaluations - 1);
                 }
             }
 
@@ -230,7 +230,7 @@ macro_rules! stopping_checks {
                         } else {
                             TerminationReason::MaxIter
                         });
-                        assert_eq!(result.cost_evals(), 2);
+                        assert_eq!(result.state.counts().residual_evals, 2);
                     }
                 }
             }
@@ -258,7 +258,7 @@ macro_rules! stopping_checks {
                         } else {
                             TerminationReason::MaxIter
                         });
-                        assert_eq!(result.cost_evals(), 2);
+                        assert_eq!(result.state.counts().residual_evals, 2);
                     }
                 }
             }
@@ -288,7 +288,7 @@ macro_rules! stopping_checks {
                             } else {
                                 TerminationReason::MaxIter
                             }, "scale={scale}, tolerance={tolerance:?}, damping={damping:?}");
-                            assert_eq!(result.cost_evals(), if converged { 1 } else { 2 });
+                            assert_eq!(result.state.counts().residual_evals, if converged { 1 } else { 2 });
                             if !converged {
                                 assert!(result.param()[0] < -0.9);
                             }
@@ -323,7 +323,7 @@ macro_rules! stopping_checks {
                                 TerminationReason::MaxIter
                             }, "scale={scale}, tolerance={tolerance:?}, damping={damping:?}");
                             assert!(result.param()[0] > 0.);
-                            assert_eq!(result.cost_evals(), 2);
+                            assert_eq!(result.state.counts().residual_evals, 2);
                         }
                     }
                 }
@@ -410,8 +410,8 @@ macro_rules! stopping_checks {
                         } else {
                             TerminationReason::MaxIter
                         });
-                        assert_eq!(result.cost_evals(), if enabled { 2 } else { 5 });
-                        assert_eq!(result.state.jacobian_evals(), 1);
+                        assert_eq!(result.state.counts().residual_evals, if enabled { 2 } else { 5 });
+                        assert_eq!(result.state.counts().jacobian_evals, 1);
                         assert_eq!(result.state.iter(), if enabled { 0 } else { 4 });
                         assert_eq!(result.cost(), 0.);
                         assert_eq!(result.param()[0], 1.);
@@ -443,7 +443,7 @@ macro_rules! stopping_checks {
                     assert_eq!(result.cost(), 1.);
                     assert_eq!(result.param()[0], 1.);
                     assert_eq!(result.param()[1], 2.);
-                    assert_eq!(result.cost_evals(), 2);
+                    assert_eq!(result.state.counts().residual_evals, 2);
                 }
             }
 
@@ -486,13 +486,13 @@ macro_rules! stopping_checks {
                     assert!(result.cost() > 0.);
                     assert!(result.cost() <= 4. * <$scalar>::EPSILON.powi(2));
                     assert!((result.param()[0] - root).abs() <= <$scalar>::EPSILON);
-                    assert!(result.cost_evals() < 20);
+                    assert!(result.state.counts().residual_evals < 20);
                 }
             }
 
             #[test]
             fn rejected_distinct_trial_can_retry_and_fresh_run_resets() {
-                use basin::{NllsState, Problem, Solver};
+                use basin::{PointState, Problem, Solver};
 
                 for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
                     let mut solver = ($solver)
@@ -502,7 +502,7 @@ macro_rules! stopping_checks {
                     for _ in 0..2 {
                         let initial = solver.init(
                             &mut problem,
-                            NllsState::new(($vector_new)(&[0.1, 0.1])),
+                            PointState::new(($vector_new)(&[0.1, 0.1])),
                         ).unwrap();
                         let (mut state, reason) = solver.next_iter(&mut problem, initial).unwrap();
                         assert!(reason.is_none());
@@ -539,7 +539,7 @@ macro_rules! stopping_checks {
                             ($vector_new)(&[1., 2.]),
                         ).max_iter(4).run().unwrap();
                         assert_eq!(result.reason, TerminationReason::SolverConverged);
-                        assert_eq!(result.cost_evals(), if check < 2 { 1 } else { 2 });
+                        assert_eq!(result.state.counts().residual_evals, if check < 2 { 1 } else { 2 });
                     }
                 }
             }

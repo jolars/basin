@@ -1,8 +1,8 @@
 use std::convert::Infallible;
 
-use basin::solver::lbfgs::{Lbfgs, Unbounded};
+use basin::solver::lbfgs::Lbfgs;
 use basin::{
-    CostFunction, Executor, Gradient, HagerZhang, LbfgsState, LineSearch,
+    CostFunction, Executor, FirstOrderState, Gradient, HagerZhang, LineSearch,
     LineSearchOutcome, Problem, TerminationReason,
 };
 
@@ -518,12 +518,13 @@ fn global_search_ackley_direction_gets_a_decreasing_step() {
 fn unbounded_lbfgs_with_hager_zhang_progresses_on_ackley() {
     let initial = vec![0.25, -0.4, 0.15];
     let initial_cost = ackley_cost_and_gradient(&initial).0;
-    let solver =
-        Lbfgs::<Unbounded, HagerZhang>::with_line_search(HagerZhang::new());
+    let solver = Lbfgs::with_line_search(HagerZhang::new())
+        .unbounded()
+        .with_m_capacity(5);
     let result = Executor::new(
         DifferentiableAckley,
         solver,
-        LbfgsState::new(initial, 5),
+        FirstOrderState::new(initial),
     )
     .max_iter(5)
     .run()

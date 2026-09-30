@@ -4,11 +4,12 @@ use std::convert::Infallible;
 
 use basin::{
     ConstraintJacobian, CostFunction, DenseMatrix, Executor, Gradient,
-    NonlinearConstraints, OptimizationResult, Slsqp, SlsqpState, State,
-    TerminationReason,
+    NonlinearConstraints, OptimizationResultWithSolver,
+    SelectedFirstOrderState, Slsqp, State, TerminationReason,
 };
 
-pub type Result = OptimizationResult<SlsqpState<Vec<f64>>>;
+pub type Result =
+    OptimizationResultWithSolver<SelectedFirstOrderState<Vec<f64>>, Slsqp>;
 
 struct Hs71 {
     lower: Vec<f64>,
@@ -93,7 +94,7 @@ pub fn hs71() -> Result {
         vec![1.0, 5.0, 5.0, 1.0],
     )
     .max_iter(200)
-    .run()
+    .run_with_solver()
     .unwrap()
 }
 
@@ -106,6 +107,6 @@ pub fn verify_hs71(result: &Result) {
     assert!((cost - 17.014_017_289_156).abs() < 1e-8);
     assert!((x.iter().map(|v| v * v).sum::<f64>() - 40.0).abs() < 1e-9);
     assert!(25.0 - x.iter().product::<f64>() < 1e-9);
-    assert!(result.state.stationarity().unwrap() < 1e-5);
-    assert!(result.state.complementarity().unwrap() < 1e-9);
+    assert!(result.solver.stationarity().unwrap() < 1e-5);
+    assert!(result.solver.complementarity().unwrap() < 1e-9);
 }

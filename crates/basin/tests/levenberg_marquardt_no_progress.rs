@@ -1,7 +1,7 @@
 //! Callback routing and composition of the LM numerical safeguard.
 
 use basin::{
-    DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LmDamping, NllsState,
+    DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LmDamping, PointState,
     Residual, Solver, TerminationReason,
 };
 use std::{cell::Cell, rc::Rc};
@@ -40,7 +40,7 @@ impl Jacobian for TrialProblem {
 
 fn check_callback_routing<S>(solver: S, response: Result<f64, CallbackError>)
 where
-    S: Solver<TrialProblem, NllsState<Vec<f64>>, Error = CallbackError>,
+    S: Solver<TrialProblem, PointState<Vec<f64>>, Error = CallbackError>,
 {
     let calls = Rc::new(Cell::new(0));
     let result = Executor::new(
@@ -49,7 +49,7 @@ where
             response,
         },
         solver,
-        NllsState::new(vec![1.]),
+        PointState::new(vec![1.]),
     )
     .max_iter(1)
     .run();
@@ -61,7 +61,7 @@ where
             assert_eq!(result.reason, TerminationReason::MaxIter);
             assert_eq!(result.param(), &[1.]);
             assert_eq!(result.cost(), if value == 0. { 0. } else { 0.5 });
-            assert_eq!(result.cost_evals(), 2);
+            assert_eq!(result.state.counts().residual_evals, 2);
         }
     }
 }
@@ -94,7 +94,7 @@ fn unchanged_trial_preserves_errors_nonfinite_rejections_and_acceptance() {
 fn observed_step_tolerance_uses_acceptance_even_at_identical_coordinates() {
     fn check<S>(solver: S, response: f64)
     where
-        S: Solver<TrialProblem, NllsState<Vec<f64>>, Error = CallbackError>,
+        S: Solver<TrialProblem, PointState<Vec<f64>>, Error = CallbackError>,
     {
         let result = Executor::new(
             TrialProblem {
@@ -102,7 +102,7 @@ fn observed_step_tolerance_uses_acceptance_even_at_identical_coordinates() {
                 response: Ok(response),
             },
             solver,
-            NllsState::new(vec![1.]),
+            PointState::new(vec![1.]),
         )
         .max_iter(2)
         .run()
@@ -158,7 +158,7 @@ fn trust_radius_preserves_callback_errors_and_nonfinite_rejections() {
 
 fn check_radius_configuration<S>(solver: S)
 where
-    S: Solver<TrialProblem, NllsState<Vec<f64>>, Error = CallbackError>,
+    S: Solver<TrialProblem, PointState<Vec<f64>>, Error = CallbackError>,
 {
     let result = Executor::new(
         TrialProblem {
@@ -166,13 +166,13 @@ where
             response: Ok(-1.),
         },
         solver,
-        NllsState::new(vec![1.]),
+        PointState::new(vec![1.]),
     )
     .max_iter(1)
     .run()
     .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
-    assert_eq!(result.cost_evals(), 2);
+    assert_eq!(result.state.counts().residual_evals, 2);
     assert_eq!(result.param(), &[1.]);
     assert_eq!(result.cost(), 0.5);
 }
@@ -246,7 +246,7 @@ fn trust_radius_does_not_bypass_model_solve_failure() {
     };
     fn check<S>(solver: S)
     where
-        S: Solver<TrialProblem, NllsState<Vec<f64>>, Error = CallbackError>,
+        S: Solver<TrialProblem, PointState<Vec<f64>>, Error = CallbackError>,
     {
         let calls = Rc::new(Cell::new(0));
         let result = Executor::new(
@@ -255,7 +255,7 @@ fn trust_radius_does_not_bypass_model_solve_failure() {
                 response: Err(CallbackError),
             },
             solver,
-            NllsState::new(vec![1.]),
+            PointState::new(vec![1.]),
         )
         .max_iter(1)
         .run()
@@ -269,7 +269,7 @@ fn trust_radius_does_not_bypass_model_solve_failure() {
 
 fn check_disabled<S>(solver: S)
 where
-    S: Solver<TrialProblem, NllsState<Vec<f64>>, Error = CallbackError>,
+    S: Solver<TrialProblem, PointState<Vec<f64>>, Error = CallbackError>,
 {
     let result = Executor::new(
         TrialProblem {
@@ -277,13 +277,13 @@ where
             response: Ok(-1.),
         },
         solver,
-        NllsState::new(vec![1.]),
+        PointState::new(vec![1.]),
     )
     .max_iter(4)
     .run()
     .unwrap();
     assert_eq!(result.reason, TerminationReason::MaxIter);
-    assert_eq!(result.cost_evals(), 5);
+    assert_eq!(result.state.counts().residual_evals, 5);
 }
 
 #[test]
@@ -335,10 +335,10 @@ fn execution_budget_precedes_a_trial_and_its_numerical_stop() {
         LevenbergMarquardt::new().with_absolute_gradient_tolerance(None),
         vec![1.],
     )
-    .max_cost_evals(1)
+    .max_evaluations(basin::EvaluationKind::Residual, 1)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.reason, TerminationReason::MaxEvaluations);
     assert_eq!(calls.get(), 1);
 }
 
@@ -369,6 +369,9 @@ fn rejected_zero_steps_stop_only_on_the_numerical_safeguard_or_budget() {
             }
         );
         assert_eq!(result.iter(), if enabled { 0 } else { 4 });
-        assert_eq!(result.cost_evals(), if enabled { 2 } else { 5 });
+        assert_eq!(
+            result.state.counts().residual_evals,
+            if enabled { 2 } else { 5 }
+        );
     }
 }

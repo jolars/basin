@@ -11,7 +11,7 @@
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{Executor, MaLsChCma, MaLsChState, PopulationState, StepOutcome};
+use basin::{Executor, MaLsChCma, PopulationProgress, StepOutcome};
 
 /// Sphere with a box for SSGA initial sampling: the easy canary that
 /// any working population solver should crush.
@@ -31,7 +31,7 @@ fn converges_on_sphere_d10() {
     let problem = boxed_sphere(10);
     let solver =
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(7).with_pop_size(20);
-    let result = Executor::new(problem, solver, MaLsChState::new())
+    let result = Executor::new(problem, solver, PopulationProgress::empty())
         .max_iter(u64::MAX)
         .max_cost_evals(20_000)
         .run()
@@ -53,7 +53,7 @@ fn converges_on_rastrigin_d10() {
     let problem = RastriginBoxed::<DVector<f64>>::with_standard_bounds(10);
     let solver =
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(42).with_pop_size(30);
-    let result = Executor::new(problem, solver, MaLsChState::new())
+    let result = Executor::new(problem, solver, PopulationProgress::empty())
         .max_iter(u64::MAX)
         .max_cost_evals(50_000)
         .run()
@@ -72,7 +72,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_a = Executor::new(
         boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(99).with_pop_size(15),
-        MaLsChState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(10)
     .run()
@@ -80,7 +80,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_b = Executor::new(
         boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(99).with_pop_size(15),
-        MaLsChState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(10)
     .run()
@@ -96,7 +96,7 @@ fn different_seeds_yield_different_trajectories() {
     let result_a = Executor::new(
         boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(1).with_pop_size(15),
-        MaLsChState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(5)
     .run()
@@ -104,7 +104,7 @@ fn different_seeds_yield_different_trajectories() {
     let result_b = Executor::new(
         boxed_sphere(5),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(2).with_pop_size(15),
-        MaLsChState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(5)
     .run()
@@ -114,7 +114,7 @@ fn different_seeds_yield_different_trajectories() {
 
 /// Chain mechanism is actually firing: at least one individual
 /// undergoes ≥2 LS applications over the run, which is only possible
-/// if its `(CmaEs, CmaEsState)` pair was correctly preserved
+/// if its `(CmaEs, PopulationProgress)` pair was correctly preserved
 /// and re-entered between outer iterations. Without `CmaEs::init`
 /// idempotency the second LS application would lose its evolution
 /// state; the test would still pass (count increments unconditionally)
@@ -144,7 +144,7 @@ fn chain_resumes_at_least_one_individual_twice() {
             .with_ls_intensity(30)
             .with_nfrec(5)
             .with_ls_improvement_threshold(0.0),
-        MaLsChState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(40)
     .into_stepper()
@@ -157,9 +157,8 @@ fn chain_resumes_at_least_one_individual_twice() {
     // re-selected and accumulated ≥2 applications at some point.
     let mut max_ever = 0u32;
     while let StepOutcome::Continue = stepper.step().unwrap() {
-        let s = stepper.state();
         for i in 0..pop_size {
-            max_ever = max_ever.max(s.ls_application_count(i));
+            max_ever = max_ever.max(stepper.solver().ls_application_count(i));
         }
     }
     assert!(
@@ -190,7 +189,7 @@ fn cost_evals_overshoot_is_bounded() {
         .with_ls_intensity(ls_intensity)
         .with_nfrec(nfrec);
 
-    let result = Executor::new(problem, solver, MaLsChState::new())
+    let result = Executor::new(problem, solver, PopulationProgress::empty())
         .max_iter(u64::MAX)
         .max_cost_evals(budget)
         .run()
@@ -223,7 +222,7 @@ fn population_stays_sorted_ascending() {
         problem,
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(2024)
             .with_pop_size(pop_size),
-        MaLsChState::new(),
+        PopulationProgress::empty(),
     )
     .max_iter(10)
     .into_stepper()

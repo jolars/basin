@@ -8,7 +8,7 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::Rosenbrock;
-use basin::{Bfgs, Executor, FaerQuasiNewtonState, TerminationReason};
+use basin::{Bfgs, Executor, FirstOrderState, TerminationReason};
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
@@ -16,7 +16,7 @@ fn bfgs_converges_on_rosenbrock() {
     let initial = Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 });
 
     let result =
-        Executor::new(problem, Bfgs::new(), FaerQuasiNewtonState::new(initial))
+        Executor::new(problem, Bfgs::new(), FirstOrderState::new(initial))
             .max_iter(100)
             .run()
             .unwrap();
@@ -46,7 +46,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
     let result = Executor::new(
         problem,
         (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
-        FaerQuasiNewtonState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(200)
     .run()

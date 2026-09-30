@@ -1,13 +1,13 @@
 //! Public-API integration tests for the NEWUOA solver.
 //!
 //! Exercises [`Newuoa`] through the framework: [`Executor`] over a
-//! [`NewuoaState`], with framework termination ([`MaxCostEvals`],
+//! [`PointState`], with framework termination ([`MaxCostEvals`],
 //! [`RhoTolerance`]). The algorithm itself is validated bit-against-PRIMA by the
 //! in-crate `solver::newuoa::parity` tests; these confirm the public wiring:
 //! init/next_iter, the V↔Vec bridge, count mirroring, and the convergence/
 //! budget/early-stop termination paths.
 
-use basin::{CostFunction, Executor, Newuoa, NewuoaState, TerminationReason};
+use basin::{CostFunction, Executor, Newuoa, PointState, TerminationReason};
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
@@ -32,10 +32,10 @@ fn converges_on_rosenbrock_2d() {
         Newuoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-8),
-        NewuoaState::new(vec![-1.2, 1.0]),
+        PointState::new(vec![-1.2, 1.0]),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     // NEWUOA's natural convergence (ρ reached ρ_end), well within budget.
@@ -67,10 +67,10 @@ fn respects_cost_eval_budget() {
         Newuoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-12),
-        NewuoaState::new(vec![-1.2, 1.0]),
+        PointState::new(vec![-1.2, 1.0]),
     )
     .max_cost_evals(20)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxCostEvals);
@@ -93,14 +93,18 @@ fn rho_tolerance_stops_early() {
                 .with_final_radius(1e-12)
         )
         .with_absolute_radius_tolerance(1e-3),
-        NewuoaState::new(vec![-1.2, 1.0]),
+        PointState::new(vec![-1.2, 1.0]),
     )
     .max_cost_evals(5000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::RhoTolerance);
-    assert!(result.state.rho() <= 1e-3, "rho = {}", result.state.rho());
+    assert!(
+        result.solver.rho().unwrap() <= 1e-3,
+        "rho = {}",
+        result.solver.rho().unwrap()
+    );
 }
 
 /// Backend-generic over the parameter vector: drive NEWUOA on `nalgebra`'s
@@ -133,10 +137,10 @@ fn backend_generic_nalgebra() {
         Newuoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-8),
-        NewuoaState::new(DVector::from_vec(vec![-1.2, 1.0])),
+        PointState::new(DVector::from_vec(vec![-1.2, 1.0])),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);

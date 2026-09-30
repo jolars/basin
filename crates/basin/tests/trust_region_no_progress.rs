@@ -1,9 +1,9 @@
 //! A collapsed trust-region model does not establish stationarity.
 
 use basin::{
-    BasicState, CostFunction, DenseMatrix, Executor, Gradient, GradientState,
-    Hessian, HessianProduct, Solver, State, Steihaug, TerminationReason,
-    TrustRegion,
+    CostFunction, DenseMatrix, Executor, FirstOrderState, Gradient,
+    GradientState, Hessian, HessianProduct, Solver, State, Steihaug,
+    TerminationReason, TrustRegion,
 };
 use std::convert::Infallible;
 
@@ -62,14 +62,14 @@ macro_rules! backend_checks {
             ) where
                 S: Solver<
                         OffsetQuadratic,
-                        BasicState<$vector, $scalar>,
+                        FirstOrderState<$vector, $scalar>,
                         Error = Infallible,
                     >,
             {
                 let result = Executor::new(
                     OffsetQuadratic,
                     solver,
-                    BasicState::new(($vector_new)(start)),
+                    FirstOrderState::new(($vector_new)(start)),
                 )
                 .max_iter(100)
                 .run()

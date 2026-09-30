@@ -10,7 +10,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicPopulationState, CountsMirror, State};
+use crate::core::state::{CountsMirror, PopulationProgress, State};
 use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::sort_population_ascending;
 use crate::solver::cma_inject::MemeticInner;
@@ -57,8 +57,7 @@ use crate::solver::de::De;
 ///      selection rule uses `≤`; here we use `<` because the refined
 ///      point is a polish, not a fresh trial; no-cost-change swaps
 ///      would diversify without improving the elite.
-/// 3. **Re-sort.** Restore the ascending invariant on
-///    [`PopulationState`](crate::core::state::PopulationState).
+/// 3. **Re-sort.** Restore this solver's ascending member order.
 ///
 /// One refinement schedule is supported via
 /// [`with_refine_every`](Self::with_refine_every): refine on outer iters
@@ -84,11 +83,19 @@ use crate::solver::de::De;
 /// [`Problem`] wrapper, so every inner cost / gradient / Jacobian /
 /// Hessian call bumps the same
 /// [`EvalCounts`](crate::core::problem::EvalCounts) as the outer's own
-/// evaluations. [`BasicPopulationState`]'s [`CountsMirror`] folds every
-/// kind of work into the outer's single `cost_evals` via
-/// `delta.total_work()`, so a derivative-based inner (LM, L-BFGS-B) has
-/// its gradient work honestly collapse into `cost_evals`. See
-/// CONTRIBUTING.md "Solver composition" rule 1.
+/// evaluations. [`PopulationProgress`] preserves all six categories. Its
+/// `cost_evals()` reader reports only cost calls, while `counts().total_work()`
+/// provides an explicit sum. Per-category budgets therefore agree with readers.
+///
+/// # Lifecycle
+///
+/// Initialization follows [`De`]: empty progress samples the box; explicit
+/// members are projected and reevaluated. Fresh runs reset progress and the
+/// DE RNG. Each refinement initializes the inner solver from its selected
+/// member and resets the inner's convergence history. Exact checkpoints retain
+/// the outer RNG, population, schedule position, and inner solver together.
+/// With `serde`, this wrapper serializes when the inner solver does. Application
+/// hooks on the inner require an owned checkpoint instead of serialization.
 ///
 /// # Termination
 ///
@@ -120,12 +127,11 @@ use crate::solver::de::De;
 ///
 /// # Backends
 ///
-/// Same vector-tier coverage as [`De`]: `Vec<f64>`,
-/// `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`). No matrix operations required. The effective
-/// coverage is the intersection of [`De`]'s and the chosen inner's:
-/// e.g. an [`Lbfgsb`](crate::Lbfgsb) inner narrows to nalgebra and faer.
+/// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`
+/// for all supported releases, with `F = f32` or `f64`, when the chosen inner
+/// solver supports them. Nelder-Mead and L-BFGS-B support all four. Custom
+/// inner solvers or strategies can narrow this coverage. The outer requires
+/// the vector operations documented for [`De`] and no matrix operations.
 ///
 /// # References
 ///
@@ -152,6 +158,14 @@ use crate::solver::de::De;
 ///   individual genuinely dominates the population. Not implemented:
 ///   would require tracking the historical max and a probabilistic
 ///   schedule; `with_refine_every` is the v1 stand-in.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "I: serde::Serialize, F: serde::Serialize",
+        deserialize = "I: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
+    ))
+)]
 pub struct DeInject<I, V, F = f64>
 where
     F: Scalar,
@@ -270,7 +284,7 @@ where
     }
 }
 
-impl<P, I, V, F> Solver<P, BasicPopulationState<V, F>> for DeInject<I, V, F>
+impl<P, I, V, F> Solver<P, PopulationProgress<V, F>> for DeInject<I, V, F>
 where
     F: Scalar + SampleUniform,
     P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
@@ -284,15 +298,15 @@ where
         + ScaleInPlace<F>
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
-    De<F>: Solver<P, BasicPopulationState<V, F>, Error = P::Error>,
+    De<F>: Solver<P, PopulationProgress<V, F>, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V, F>,
-    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
+        state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         // Delegate the initial population sampling to vanilla DE; the
         // injection layer kicks in from `next_iter` onward.
         self.de.init(problem, state)
@@ -301,9 +315,9 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicPopulationState<V, F>,
+        state: PopulationProgress<V, F>,
     ) -> Result<
-        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        (PopulationProgress<V, F>, Option<TerminationReason>),
         Self::Error,
     > {
         // 1. Vanilla DE generation: mutation, repair, crossover,
@@ -336,12 +350,12 @@ where
             let x_seed = state.candidates[i].clone();
             let c_orig = state.costs[i];
             let inner_state =
-                self.inner.solver().seed_scaled(&x_seed, F::one());
+                self.inner.solver_mut().seed_scaled(&x_seed, F::one());
 
             // 4. Drive the inner. Same-problem composition: inner shares
             //    the outer wrapper, so its evals flow into the outer's
-            //    EvalCounts transparently and the BasicPopulationState
-            //    mirror picks them up via `total_work()`.
+            //    EvalCounts transparently and PopulationProgress
+            //    preserves each category without folding it into cost calls.
             let inner_result: OptimizationResult<I::State> =
                 self.inner.run(problem, inner_state)?;
 
@@ -349,6 +363,11 @@ where
             //    contract 3). MaxIter / tolerances / SolverConverged are
             //    clean stops; consume the inner's final iterate.
             if inner_result.reason.is_failure() {
+                sort_population_ascending(
+                    &mut state.candidates,
+                    &mut state.costs,
+                );
+                state.select_best_member();
                 return Ok((state, Some(inner_result.reason)));
             }
 
@@ -381,6 +400,7 @@ where
         // 8. Re-sort. Cheap; mirrors `CmaInject`.
         if refine > 0 {
             sort_population_ascending(&mut state.candidates, &mut state.costs);
+            state.select_best_member();
         }
 
         Ok((state, None))
@@ -388,9 +408,9 @@ where
 
     fn terminate(
         &self,
-        state: &BasicPopulationState<V, F>,
+        state: &PopulationProgress<V, F>,
     ) -> Option<TerminationReason> {
-        <De<F> as Solver<P, BasicPopulationState<V, F>>>::terminate(
+        <De<F> as Solver<P, PopulationProgress<V, F>>>::terminate(
             &self.de, state,
         )
     }
@@ -404,22 +424,22 @@ mod tests {
     #[test]
     #[should_panic(expected = "DeInject requires k >= 1")]
     fn with_k_zero_panics() {
-        let _ = DeInject::<
-            NelderMead<crate::solver::nelder_mead::Unbounded, f64>,
-            Vec<f64>,
-            f64,
-        >::with_inner_solver(De::new(0), NelderMead::new())
-        .with_k(0);
+        let _ =
+            DeInject::<NelderMead<Vec<f64>>, Vec<f64>, f64>::with_inner_solver(
+                De::new(0),
+                NelderMead::new(),
+            )
+            .with_k(0);
     }
 
     #[test]
     #[should_panic(expected = "DeInject requires refine_every >= 1")]
     fn with_refine_every_zero_panics() {
-        let _ = DeInject::<
-            NelderMead<crate::solver::nelder_mead::Unbounded, f64>,
-            Vec<f64>,
-            f64,
-        >::with_inner_solver(De::new(0), NelderMead::new())
-        .with_refine_every(0);
+        let _ =
+            DeInject::<NelderMead<Vec<f64>>, Vec<f64>, f64>::with_inner_solver(
+                De::new(0),
+                NelderMead::new(),
+            )
+            .with_refine_every(0);
     }
 }

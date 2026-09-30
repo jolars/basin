@@ -11,7 +11,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::{BoothBoxed, RastriginBoxed};
-use basin::{BasicSimplexState, Executor, NelderMead, TerminationReason};
+use basin::{Executor, NelderMead, SimplexProgress, TerminationReason};
 
 /// Slack bounds: the unconstrained Booth minimum `(1, 3)` lies inside
 /// `[-5, 5]²`, so the projection step should be a no-op for any vertex
@@ -27,7 +27,7 @@ fn slack_bounds_recover_unconstrained_minimum() {
         (NelderMead::new().projected())
             .with_absolute_simplex_size_tolerance(1e-8)
             .with_absolute_simplex_cost_tolerance(1e-8),
-        BasicSimplexState::new(initial),
+        SimplexProgress::new(initial),
     )
     .max_iter(2_000)
     .run()
@@ -62,7 +62,7 @@ fn tight_bounds_converge_to_box_corner() {
         (NelderMead::new().projected())
             .with_absolute_simplex_size_tolerance(1e-10)
             .with_absolute_simplex_cost_tolerance(1e-10),
-        BasicSimplexState::new(initial),
+        SimplexProgress::new(initial),
     )
     .max_iter(2_000)
     .run()
@@ -87,7 +87,6 @@ fn tight_bounds_converge_to_box_corner() {
 /// contract.
 #[test]
 fn infeasible_initial_simplex_is_projected_at_init() {
-    use basin::SimplexState;
     let problem = BoothBoxed::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
     // Two of three vertices live outside the box; init() must clamp them.
     let simplex = vec![vec![0.0, 0.0], vec![10.0, 10.0], vec![-5.0, 0.5]];
@@ -95,7 +94,7 @@ fn infeasible_initial_simplex_is_projected_at_init() {
     let result = Executor::new(
         problem,
         NelderMead::new().projected(),
-        BasicSimplexState::from_simplex(simplex),
+        SimplexProgress::from_simplex(simplex),
     )
     .max_iter(0)
     .run()
@@ -143,7 +142,7 @@ fn adaptive_projected_on_rastrigin_3d() {
         (NelderMead::adaptive().projected())
             .with_absolute_simplex_size_tolerance(1e-8)
             .with_absolute_simplex_cost_tolerance(1e-8),
-        BasicSimplexState::new(initial),
+        SimplexProgress::new(initial),
     )
     .max_iter(2_000)
     .run()

@@ -1,7 +1,7 @@
 use basin::{
     ArctanLoss, CauchyLoss, CostFunction, DenseMatrix, Executor, GaussNewton,
     Gradient, HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    LossFunction, NllsState, Residual, RobustLeastSquares, SoftL1Loss,
+    LossFunction, PointState, Residual, RobustLeastSquares, SoftL1Loss,
     SquaredLoss, TerminationReason,
 };
 
@@ -76,7 +76,7 @@ macro_rules! location_solver {
             let result = Executor::new(
                 RobustLeastSquares::new(Location, HuberLoss),
                 $solver,
-                NllsState::new(vec![0.0]),
+                PointState::new(vec![0.0]),
             )
             .max_iter(100)
             .run()
@@ -136,7 +136,7 @@ fn bounds_and_fixed_coordinates_use_the_robust_objective() {
                 < 1e-12
         );
         if fixed {
-            assert_eq!(result.state.jacobian_evals(), 0);
+            assert_eq!(result.state.counts().jacobian_evals, 0);
         }
     }
     let problem = RobustLeastSquares::new(bounded(-1.0, 0.2), HuberLoss);
@@ -193,19 +193,19 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
                     robust_backend::Location<Vec<f64>, DenseMatrix, f64>,
                     HuberLoss,
                 >,
-                NllsState<Vec<f64>>,
+                PointState<Vec<f64>>,
                 Error = std::convert::Infallible,
             >,
     {
         let objective =
             || RobustLeastSquares::new(bounded(-10.0, 10.0), HuberLoss);
         let reference =
-            Executor::new(objective(), solver(), NllsState::new(vec![0.0]))
+            Executor::new(objective(), solver(), PointState::new(vec![0.0]))
                 .max_iter(100)
                 .run_with_solver()
                 .unwrap();
         let partial =
-            Executor::new(objective(), solver(), NllsState::new(vec![0.0]))
+            Executor::new(objective(), solver(), PointState::new(vec![0.0]))
                 .max_iter(1)
                 .run_with_solver()
                 .unwrap();
@@ -222,7 +222,7 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
         let fresh = Executor::new(
             objective(),
             resumed.solver,
-            NllsState::new(vec![0.0]),
+            PointState::new(vec![0.0]),
         )
         .max_iter(100)
         .run_with_solver()

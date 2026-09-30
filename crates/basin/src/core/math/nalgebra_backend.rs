@@ -825,6 +825,11 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for DMatrix<F> {
     }
 }
 
+
+impl<F: Scalar> super::DenseBackend<F> for nalgebra::DVector<F> {
+    type Matrix = nalgebra::DMatrix<F>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

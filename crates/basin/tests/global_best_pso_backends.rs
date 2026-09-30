@@ -7,7 +7,7 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, GlobalBestPso, GlobalBestPsoState,
+    BoxConstraints, CostFunction, Executor, GlobalBestPso, PopulationProgress,
 };
 
 #[cfg(feature = "nalgebra_all")]
@@ -43,7 +43,7 @@ fn nalgebra_parameter_runs() {
             upper: DVector::from_element(2, 5.0),
         },
         GlobalBestPso::new(7),
-        GlobalBestPsoState::<DVector<f64>>::new(),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(80)
     .run()
@@ -84,7 +84,7 @@ fn ndarray_parameter_runs() {
             upper: Array1::from_elem(2, 5.0),
         },
         GlobalBestPso::new(7),
-        GlobalBestPsoState::<Array1<f64>>::new(),
+        PopulationProgress::<Array1<f64>>::empty(),
     )
     .max_iter(80)
     .run()
@@ -125,7 +125,7 @@ fn faer_parameter_runs() {
             upper: Col::from_fn(2, |_| 5.0),
         },
         GlobalBestPso::new(7),
-        GlobalBestPsoState::<Col<f64>>::new(),
+        PopulationProgress::<Col<f64>>::empty(),
     )
     .max_iter(80)
     .run()

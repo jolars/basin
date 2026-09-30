@@ -4,8 +4,8 @@
 //! budgets and final radii do not imply equal trajectories or numerical work.
 
 use basin::{
-    Cobyla, CobylaState, CostFunction, Executor,
-    NonlinearInequalityConstraints, TerminationReason,
+    Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
+    SelectedState, TerminationReason,
 };
 use std::{cell::Cell, convert::Infallible};
 
@@ -118,7 +118,7 @@ impl Case {
             Cobyla::new()
                 .with_initial_radius(0.5)
                 .with_final_radius(FINAL_RADIUS),
-            CobylaState::new(self.start()),
+            SelectedState::new(self.start()),
         )
         .max_cost_evals(self.budget() as u64)
         .run()

@@ -7,8 +7,9 @@
 pub mod short;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, GradientState,
-    LbfgsState, Lbfgsb, OptimizationResult, Solver, State, TerminationReason,
+    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
+    GradientState, Lbfgsb, OptimizationResult, Solver, State,
+    TerminationReason,
 };
 use std::convert::Infallible;
 
@@ -134,14 +135,16 @@ impl<V: Vector> Driver<V> {
             .fold(0.0, f64::max)
     }
 
-    pub fn solve(&self) -> OptimizationResult<LbfgsState<V>>
+    pub fn solve(&self) -> OptimizationResult<FirstOrderState<V>>
     where
-        Lbfgsb: for<'a> Solver<&'a Self, LbfgsState<V>, Error = Infallible>,
+        Lbfgsb<V>:
+            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
     {
         let first = self.number == 1;
         let evaluation_limit = if self.number == 3 { 900 } else { 99 };
         let history = if self.number == 3 { 10 } else { 5 };
         let solver = Lbfgsb::new()
+            .with_m_capacity(history)
             .with_absolute_projected_gradient_tolerance(first.then_some(1e-5));
         let mut previous: Option<f64> = None;
         let lower = self.lower.clone();
@@ -149,10 +152,10 @@ impl<V: Vector> Driver<V> {
         Executor::new(
             self,
             solver,
-            LbfgsState::new(V::filled(lower.as_slice().len(), 3.0), history),
+            FirstOrderState::new(V::filled(lower.as_slice().len(), 3.0)),
         )
         .max_iter(2000)
-        .stop_when(move |state: &LbfgsState<V>| {
+        .stop_when(move |state: &FirstOrderState<V>| {
             let value = state.cost();
             let old = previous.replace(value);
             let pg = state
@@ -192,7 +195,7 @@ impl<V: Vector> Driver<V> {
         .unwrap()
     }
 
-    pub fn verify(&self, result: &OptimizationResult<LbfgsState<V>>) {
+    pub fn verify(&self, result: &OptimizationResult<FirstOrderState<V>>) {
         let (iterations, evaluations, objective, objective_tolerance, pg_limit) =
             match self.number {
                 1 => (23, 28, 1.08349008e-9, 1e-16, 1.8e-4),

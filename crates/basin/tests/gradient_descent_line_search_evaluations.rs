@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
 
 use basin::{
-    BasicState, CostFunction, Dot, Executor, Gradient, GradientDescent,
+    CostFunction, Dot, Executor, FirstOrderState, Gradient, GradientDescent,
     GradientState, LineSearch, LineSearchOutcome, MoreThuente, NegInPlace,
     NormSquared, Problem, Scalar, ScaleInPlace, ScaledAdd, TerminationReason,
 };
@@ -104,13 +104,14 @@ where
         + Dot<F>
         + ScaledAdd<F>
         + NegInPlace
-        + ScaleInPlace<F>,
+        + ScaleInPlace<F>
+        + basin::VectorLen,
 {
     let calls = Calls::default();
     let result = Executor::new(
         Sphere::<_, F>::new(&calls),
         GradientDescent::with_line_search(MoreThuente::new()),
-        BasicState::new(start.clone()),
+        FirstOrderState::new(start.clone()),
     )
     .max_iter(2)
     .run()
@@ -119,7 +120,7 @@ where
     let old = Executor::new(
         Sphere::<_, F>::new(&old_calls),
         GradientDescent::with_line_search(StepOnly(MoreThuente::new())),
-        BasicState::new(start.clone()),
+        FirstOrderState::new(start.clone()),
     )
     .max_iter(2)
     .run()
@@ -191,7 +192,7 @@ fn sphere_target_interrupt_uses_five_cost_and_four_gradient_calls() {
     let result = Executor::new(
         problem,
         GradientDescent::with_line_search(MoreThuente::new()),
-        BasicState::new(vec![1.0; 20]),
+        FirstOrderState::new(vec![1.0; 20]),
     )
     .max_iter(10)
     .run();
@@ -209,7 +210,7 @@ fn momentum_evaluates_the_actual_point() {
         Sphere::new(&calls),
         GradientDescent::with_line_search(MoreThuente::new().alpha_init(0.25))
             .with_momentum(0.5),
-        BasicState::new(vec![1.0, 2.0]),
+        FirstOrderState::new(vec![1.0, 2.0]),
     )
     .max_iter(2)
     .run()
@@ -231,7 +232,7 @@ fn zero_step_without_an_evaluation_keeps_a_complete_state() {
     let result = Executor::new(
         Sphere::new(&calls),
         GradientDescent::with_line_search(MoreThuente::new()),
-        BasicState::new(vec![0.0, 0.0]),
+        FirstOrderState::new(vec![0.0, 0.0]),
     )
     .max_iter(1)
     .run()
@@ -279,7 +280,7 @@ fn legacy_soft_failure_restores_cost_and_gradient() {
         let result = Executor::new(
             Sphere::new(&calls),
             GradientDescent::with_line_search(FailedSearch).with_momentum(beta),
-            BasicState::new(vec![1.0, 2.0]),
+            FirstOrderState::new(vec![1.0, 2.0]),
         )
         .max_iter(1)
         .run()
@@ -302,7 +303,7 @@ fn gradient_error_in_line_search_propagates() {
     let result = Executor::new(
         problem,
         GradientDescent::with_line_search(MoreThuente::new()),
-        BasicState::new(vec![1.0, 2.0]),
+        FirstOrderState::new(vec![1.0, 2.0]),
     )
     .max_iter(1)
     .run();

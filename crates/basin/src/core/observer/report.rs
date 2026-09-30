@@ -22,7 +22,7 @@ use crate::core::termination::TerminationReason;
 /// # Example
 ///
 /// ```
-/// # use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
+/// # use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 /// use basin::{Report, ObserverMode};
 /// # struct Quadratic;
 /// # impl CostFunction for Quadratic {
@@ -37,7 +37,7 @@ use crate::core::termination::TerminationReason;
 /// #     type Gradient = Vec<f64>;
 /// #     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> { Ok(x.clone()) }
 /// # }
-/// let result = Executor::new(Quadratic, GradientDescent::new(0.1), BasicState::new(vec![1.0, 1.0]))
+/// let result = Executor::new(Quadratic, GradientDescent::new(0.1), FirstOrderState::new(vec![1.0, 1.0]))
 ///     .max_iter(10)
 ///     .observe_with(Report::with_prefix("gd"), ObserverMode::Every(2))
 ///     .run()

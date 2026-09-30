@@ -72,21 +72,20 @@ pub trait InitialState<V> {
 /// [`InitialState`] → [`WarmStart`] →
 /// [`MemeticInner`](crate::solver::MemeticInner)—but deliberately
 /// **not** a subtrait of [`InitialState`]: [`seed_chain`](Self::seed_chain)
-/// takes an explicit scale hint precisely because a resumable operator
-/// ([`CmaEs`](crate::solver::CmaEs)) may have no natural σ-free default
-/// seed (that's why
-/// [`Executor::from_start`](crate::core::executor::Executor::from_start)
-/// is a compile error for CMA-ES). A solver may implement both tiers
-/// ([`SolisWets`](crate::solver::SolisWets) does).
+/// takes an explicit scale hint so a fresh local chain can use the outer
+/// population's spacing. [`CmaEs`](crate::CmaEs) and [`SolisWets`](crate::SolisWets)
+/// implement both tiers: ordinary point seeds use their configured initial
+/// scale, while chain seeds use the supplied scale hint.
 ///
 /// # Contract
 ///
-/// - **Implementor must:** make [`Solver::init`]
-///   *resume-idempotent*: calling `init` on an already-advanced
-///   [`State`](Self::State) must not reset evolution state
-///   (CMA-ES's constants cache + non-empty-population skip and
-///   Solis-Wets's `cost: Option<_>` sentinel are the reference
-///   behaviors).
+/// - **Caller must:** initialize a newly seeded chain once unless
+///   [`seeded_chain_is_initialized`](Self::seeded_chain_is_initialized) returns
+///   `true`. Resume stored chains without calling [`Solver::init`], so fresh
+///   initialization can reset all evolving machinery consistently.
+/// - **Caller must:** restart controls, convergence history, and per-segment
+///   accounting for each segment. This is an explicit local-search contract;
+///   exact checkpoint continuation instead retains convergence and counts.
 /// - **Implementor must:** make [`seed_chain`](Self::seed_chain) a pure
 ///   function of `(self-as-config, x, fx, scale, seed)`. The
 ///   prototype's own RNG must not be consumed: chains derive their
@@ -124,6 +123,16 @@ where
         scale: F,
         seed: u64,
     ) -> (Self, Self::State);
+
+    /// Whether [`seed_chain`](Self::seed_chain) produces an initialized pair.
+    ///
+    /// The default requires `Solver::init` on the first segment only. Return
+    /// `true` only if the seeded solver's machinery and every advertised state
+    /// record are ready for iteration. This supports operators that can reuse
+    /// the supplied objective `fx` without further problem evaluations.
+    fn seeded_chain_is_initialized(&self) -> bool {
+        false
+    }
 
     /// Prepare a stored snapshot for its next run segment: reset the
     /// local iteration counter and any per-segment bookkeeping. Must
@@ -311,11 +320,15 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
 
     /// Read-only access to the inner solver. Lets composed outer
     /// solvers dispatch on the inner before [`run`](Self::run), e.g. to
-    /// build an inner state via [`InitialState::seed`] or
-    /// `MemeticInner::seed_scaled`. Mutable access goes through
-    /// [`run`](Self::run), which already takes `&mut self`.
+    /// build an inner state via [`InitialState::seed`].
     pub fn solver(&self) -> &So {
         &self.solver
+    }
+
+    /// Configure the inner solver before a fresh run, including scaled
+    /// initialization through [`MemeticInner::seed_scaled`](crate::MemeticInner::seed_scaled).
+    pub fn solver_mut(&mut self) -> &mut So {
+        &mut self.solver
     }
 
     /// Drive the inner solver against `problem` from `state`, returning

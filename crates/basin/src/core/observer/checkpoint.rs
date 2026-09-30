@@ -33,13 +33,13 @@ const FORMAT_VERSION: u32 = 1;
 /// [`NewBest`](super::ObserverMode::NewBest) to snapshot only on improvement).
 /// The writer always snapshots on `observe_final` as well.
 ///
-/// The state type must be [`Serialize`]; the shipped checkpointable states are
-/// [`BasicState`](crate::core::state::BasicState),
-/// [`QuasiNewtonState`](crate::core::state::QuasiNewtonState) (with `Vec<f64>`
-/// or nalgebra backends—faer has no serde support), and
-/// [`SimulatedAnnealingState`](crate::SimulatedAnnealingState) when its
-/// parameter, neighbor, and RNG are serializable. Handing a non-serializable
-/// state is a compile error.
+/// The state type must be [`Serialize`]. Shared progress types such as
+/// [`PointState`](crate::PointState), [`FirstOrderState`](crate::FirstOrderState),
+/// and [`ProposalState`](crate::ProposalState) support serialization when their
+/// parameter and scalar types do. Solver-owned models, neighbors, and RNGs are
+/// absent from these snapshots; use [`ExactCheckpointWriter`](crate::ExactCheckpointWriter)
+/// to retain them.
+/// Handing a non-serializable state is a compile error.
 ///
 /// # Resume
 ///
@@ -48,7 +48,7 @@ const FORMAT_VERSION: u32 = 1;
 /// normal `init` path and begins a new run from the restored iterate.
 ///
 /// ```no_run
-/// # use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
+/// # use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 /// use basin::{CheckpointWriter, ObserverMode, read_checkpoint};
 /// # struct Quadratic;
 /// # impl CostFunction for Quadratic {
@@ -64,14 +64,14 @@ const FORMAT_VERSION: u32 = 1;
 /// #     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> { Ok(x.clone()) }
 /// # }
 /// // First run: checkpoint every 10 iterations.
-/// Executor::new(Quadratic, GradientDescent::new(0.1), BasicState::new(vec![5.0, 5.0]))
+/// Executor::new(Quadratic, GradientDescent::new(0.1), FirstOrderState::new(vec![5.0, 5.0]))
 ///     .max_iter(50)
 ///     .observe_with(CheckpointWriter::new("run.ckpt"), ObserverMode::Every(10))
 ///     .run()
 ///     .unwrap();
 ///
 /// // Later: reload and continue from where it stopped.
-/// let state: BasicState<Vec<f64>> = read_checkpoint("run.ckpt").unwrap();
+/// let state: FirstOrderState<Vec<f64>> = read_checkpoint("run.ckpt").unwrap();
 /// Executor::new(Quadratic, GradientDescent::new(0.1), state)
 ///     .max_iter(50)
 ///     .run()

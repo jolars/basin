@@ -24,32 +24,38 @@ impl<CG, CX, CC, CT, So, F: Scalar>
     forward_setting!(BarrierMethod, with_inner_max_iter, inner_max_iter: u64);
 }
 
-impl<CG, CX, CC, CT, S, F: Scalar>
-    ConfiguredSolver<Bfgs<S, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V: crate::DenseBackend<F>, M, S, F: Scalar>
+    ConfiguredSolver<Bfgs<V, F, M, S>, CG, CX, CC, CT>
 {
     forward_setting!(Bfgs, with_relative_curvature_tolerance, epsilon: F);
 }
 
-impl<CG, CX, CC, CT, F: Scalar>
-    ConfiguredSolver<NelderMead<Unbounded, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V, F: Scalar>
+    ConfiguredSolver<NelderMead<V, F, Unbounded>, CG, CX, CC, CT>
 {
     /// Configure [`projected`](NelderMead::projected) while retaining convergence settings.
     pub fn projected(
         self,
-    ) -> ConfiguredSolver<NelderMead<Projected, F>, CG, CX, CC, CT> {
+    ) -> ConfiguredSolver<NelderMead<V, F, Projected>, CG, CX, CC, CT> {
         self.map_solver(|solver| solver.projected())
     }
 }
 
-impl<CG, CX, CC, CT, S, F: Scalar>
-    ConfiguredSolver<Lbfgs<crate::solver::lbfgs::Bounded, S, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V, S, F: Scalar>
+    ConfiguredSolver<
+        Lbfgs<V, F, crate::solver::lbfgs::Bounded, S>,
+        CG,
+        CX,
+        CC,
+        CT,
+    >
 {
     forward_setting!(Lbfgs, with_absolute_projected_gradient_tolerance, value: impl Into<Option<F>>);
     /// Configure [`unbounded`](Lbfgs::unbounded) while retaining convergence settings.
     pub fn unbounded(
         self,
     ) -> ConfiguredSolver<
-        Lbfgs<crate::solver::lbfgs::Unbounded, S, F>,
+        Lbfgs<V, F, crate::solver::lbfgs::Unbounded, S>,
         CG,
         CX,
         CC,
@@ -59,9 +65,9 @@ impl<CG, CX, CC, CT, S, F: Scalar>
     }
 }
 
-impl<CG, CX, CC, CT, S, F: Scalar>
+impl<CG, CX, CC, CT, V, S, F: Scalar>
     ConfiguredSolver<
-        Lbfgs<crate::solver::lbfgs::Unbounded, S, F>,
+        Lbfgs<V, F, crate::solver::lbfgs::Unbounded, S>,
         CG,
         CX,
         CC,
@@ -72,7 +78,7 @@ impl<CG, CX, CC, CT, S, F: Scalar>
     pub fn bounded(
         self,
     ) -> ConfiguredSolver<
-        Lbfgs<crate::solver::lbfgs::Bounded, S, F>,
+        Lbfgs<V, F, crate::solver::lbfgs::Bounded, S>,
         CG,
         CX,
         CC,
@@ -82,8 +88,8 @@ impl<CG, CX, CC, CT, S, F: Scalar>
     }
 }
 
-impl<CG, CX, CC, CT, Mode, S, F: Scalar>
-    ConfiguredSolver<Lbfgs<Mode, S, F>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V, Mode, S, F: Scalar>
+    ConfiguredSolver<Lbfgs<V, F, Mode, S>, CG, CX, CC, CT>
 {
     forward_setting!(Lbfgs, with_relative_curvature_tolerance, epsilon: F);
     forward_setting!(Lbfgs, with_m_capacity, m_capacity: usize);
@@ -135,16 +141,20 @@ where
     forward_setting!(DeInject, with_ls_intensity, evals: u64);
 }
 
-impl<CG, CX, CC, CT, V, LS> ConfiguredSolver<MaLsCh<V, LS>, CG, CX, CC, CT> {
+impl<CG, CX, CC, CT, V, LS, F: Scalar>
+    ConfiguredSolver<MaLsCh<V, LS, F>, CG, CX, CC, CT>
+where
+    LS: crate::ResumableInner<V, F>,
+{
     forward_setting!(MaLsCh, with_pop_size, pop_size: usize);
-    forward_setting!(MaLsCh, with_blx_alpha, alpha: f64);
+    forward_setting!(MaLsCh, with_blx_alpha, alpha: F);
     forward_setting!(MaLsCh, with_nam_pool, pool: usize);
-    forward_setting!(MaLsCh, with_mutation_prob, p: f64);
-    forward_setting!(MaLsCh, with_bga_range_fraction, f: f64);
+    forward_setting!(MaLsCh, with_mutation_prob, p: F);
+    forward_setting!(MaLsCh, with_bga_range_fraction, f: F);
     forward_setting!(MaLsCh, with_ls_intensity, istr: u64);
-    forward_setting!(MaLsCh, with_ls_improvement_threshold, delta: f64);
+    forward_setting!(MaLsCh, with_ls_improvement_threshold, delta: F);
     forward_setting!(MaLsCh, with_nfrec, n: u64);
-    forward_setting!(MaLsCh, with_initial_scale_fallback, scale: f64);
+    forward_setting!(MaLsCh, with_initial_scale_fallback, scale: F);
 }
 
 impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<De<F>, CG, CX, CC, CT> {
@@ -194,7 +204,9 @@ impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<Brent<F>, CG, CX, CC, CT> {
     forward_setting!(Brent, with_relative_position_tolerance, value: F);
 }
 
-impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<Gbnm<F>, CG, CX, CC, CT> {
+impl<CG, CX, CC, CT, V, F: Scalar>
+    ConfiguredSolver<Gbnm<V, F>, CG, CX, CC, CT>
+{
     /// Configure [`with_nm_params`](Gbnm::with_nm_params) while retaining convergence settings.
     pub fn with_nm_params(self, alpha: F, beta: F, gamma: F, delta: F) -> Self {
         self.map_solver(|solver| {
@@ -233,7 +245,9 @@ where
     forward_setting!(SimulatedAnnealing, with_reannealing_best, iterations: u64);
 }
 
-impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<SolisWets<F>, CG, CX, CC, CT> {
+impl<CG, CX, CC, CT, V, F: Scalar>
+    ConfiguredSolver<SolisWets<V, F>, CG, CX, CC, CT>
+{
     forward_setting!(SolisWets, with_absolute_step_size_tolerance, value: impl Into<Option<F>>);
     forward_setting!(SolisWets, with_initial_step_size, rho_init: F);
     forward_setting!(SolisWets, with_bias_gain, bias_gain: F);
@@ -360,10 +374,11 @@ impl<CG, CX, CC, CT, F: Scalar>
     forward_setting!(GoldenSection, with_relative_position_tolerance, value: F);
 }
 
-impl<CG, CX, CC, CT, F: Scalar, R>
-    ConfiguredSolver<GlobalBestPso<F, R>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V, F: Scalar, R>
+    ConfiguredSolver<GlobalBestPso<V, F, R>, CG, CX, CC, CT>
 {
     forward_setting!(GlobalBestPso, with_swarm_size, swarm_size: usize);
+    forward_setting!(GlobalBestPso, with_initial_velocities, velocities: Option<Vec<V>>);
     forward_setting!(GlobalBestPso, with_inertia, inertia: F);
     forward_setting!(GlobalBestPso, with_cognitive, cognitive: F);
     forward_setting!(GlobalBestPso, with_social, social: F);
@@ -392,7 +407,9 @@ where
     }
 }
 
-impl<CG, CX, CC, CT, F: Scalar> ConfiguredSolver<Cobyla<F>, CG, CX, CC, CT> {
+impl<CG, CX, CC, CT, V, F: Scalar>
+    ConfiguredSolver<Cobyla<V, F>, CG, CX, CC, CT>
+{
     forward_setting!(Cobyla, with_absolute_radius_tolerance, value: impl Into<Option<F>>);
     forward_setting!(Cobyla, with_initial_radius, rho_beg: F);
     forward_setting!(Cobyla, with_final_radius, rho_end: F);

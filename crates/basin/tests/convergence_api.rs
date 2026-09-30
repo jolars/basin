@@ -1,6 +1,6 @@
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent, NelderMead,
-    TerminationReason,
+    CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
+    NelderMead, TerminationReason,
 };
 
 struct Sphere;
@@ -110,10 +110,15 @@ fn step_checks_reject_nonfinite_steps() {
 
 #[test]
 fn simplex_cost_check_does_not_require_vector_norms() {
-    use basin::{BasicSimplexState, ScaleInPlace, ScaledAdd};
+    use basin::{ScaleInPlace, ScaledAdd, SimplexProgress};
 
     #[derive(Clone)]
     struct Minimal(f64);
+    impl basin::VectorLen for Minimal {
+        fn vec_len(&self) -> usize {
+            1
+        }
+    }
     impl ScaleInPlace for Minimal {
         fn scale_in_place(&mut self, scale: f64) {
             self.0 *= scale;
@@ -149,7 +154,7 @@ fn simplex_cost_check_does_not_require_vector_norms() {
             let result = Executor::new(
                 MinimalSphere,
                 solver,
-                BasicSimplexState::from_simplex(vec![
+                SimplexProgress::from_simplex(vec![
                     Minimal(-1.0),
                     Minimal(1.0),
                 ]),
@@ -164,7 +169,7 @@ fn simplex_cost_check_does_not_require_vector_norms() {
 
 #[test]
 fn simplex_group_preserves_settings_in_both_setter_orders() {
-    use basin::BasicSimplexState;
+    use basin::SimplexProgress;
 
     for (size, cost, vertices, expected) in [
         (
@@ -206,7 +211,7 @@ fn simplex_group_preserves_settings_in_both_setter_orders() {
             let result = Executor::new(
                 Sphere,
                 solver,
-                BasicSimplexState::from_simplex(
+                SimplexProgress::from_simplex(
                     vertices.map(|x| vec![x]).to_vec(),
                 ),
             )
@@ -259,7 +264,7 @@ fn direct_budget_observes_initialization() {
 fn custom_stop_sees_initialized_state() {
     let result =
         Executor::from_start(Sphere, GradientDescent::new(0.1), vec![1.0])
-            .stop_when(|state: &BasicState<Vec<f64>>| {
+            .stop_when(|state: &FirstOrderState<Vec<f64>>| {
                 (basin::State::cost(state) == 1.0)
                     .then_some(TerminationReason::UserRequested)
             })
@@ -291,7 +296,7 @@ fn relative_gradient_history_resets_for_fresh_borrowed_runs() {
     for start in [1.0, 100.0, 0.001] {
         let result = run_loop_with_control(
             &mut problem,
-            BasicState::new(vec![start]),
+            FirstOrderState::new(vec![start]),
             &mut solver,
             &mut control,
         )
@@ -310,7 +315,7 @@ fn exact_resume_preserves_relative_gradient_anchor() {
     let mut problem = Problem::new(Sphere);
     let first = run_loop_with_control(
         &mut problem,
-        BasicState::new(vec![1.0]),
+        FirstOrderState::new(vec![1.0]),
         &mut solver,
         &mut RunControl::new().max_iter(3),
     )
@@ -336,7 +341,7 @@ fn repeated_boundary_checks_do_not_create_zero_changes() {
     let mut problem = Problem::new(Sphere);
     let first = run_loop_with_control(
         &mut problem,
-        BasicState::new(vec![1.0]),
+        FirstOrderState::new(vec![1.0]),
         &mut solver,
         &mut RunControl::new().max_iter(1),
     )
@@ -359,15 +364,16 @@ fn inner_stop_factory_restarts_history_and_counts() {
         .max_gradient_evals(100)
         .stop_when_factory(|| {
             let mut calls = 0;
-            move |_: &BasicState<Vec<f64>>| {
+            move |_: &FirstOrderState<Vec<f64>>| {
                 calls += 1;
                 (calls == 3).then_some(TerminationReason::UserRequested)
             }
         });
     let mut problem = Problem::new(Sphere);
     for _ in 0..2 {
-        let result =
-            inner.run(&mut problem, BasicState::new(vec![1.0])).unwrap();
+        let result = inner
+            .run(&mut problem, FirstOrderState::new(vec![1.0]))
+            .unwrap();
         assert_eq!(result.reason, TerminationReason::UserRequested);
         assert_eq!(result.state.iter(), 2);
         assert_eq!(result.cost_evals(), 3);
@@ -390,14 +396,14 @@ fn direct_budgets_take_precedence_over_convergence_and_hooks() {
 
 #[test]
 fn simplex_size_and_cost_are_an_and_group() {
-    use basin::BasicSimplexState;
+    use basin::SimplexProgress;
     let solver = NelderMead::new()
         .with_absolute_simplex_size_tolerance(100.0)
         .with_absolute_simplex_cost_tolerance(0.0);
     let result = Executor::new(
         Sphere,
         solver,
-        BasicSimplexState::from_simplex(vec![vec![1.0], vec![2.0]]),
+        SimplexProgress::from_simplex(vec![vec![1.0], vec![2.0]]),
     )
     .max_iter(1)
     .run()
@@ -480,6 +486,11 @@ fn cost_check_does_not_require_vector_norms() {
             self.0 += scale * other.0;
         }
     }
+    impl basin::VectorLen for Minimal {
+        fn vec_len(&self) -> usize {
+            1
+        }
+    }
     impl ScaleInPlace for Minimal {
         fn scale_in_place(&mut self, scale: f64) {
             self.0 *= scale;
@@ -516,7 +527,7 @@ fn cost_check_does_not_require_vector_norms() {
 #[cfg(feature = "serde")]
 #[test]
 fn configured_solver_and_inner_budgets_round_trip() {
-    use basin::{BasicSimplexState, InnerExecutor, Problem};
+    use basin::{InnerExecutor, Problem, SimplexProgress};
     let mut inner = InnerExecutor::new(
         NelderMead::new()
             .with_absolute_simplex_size_tolerance(1e-8)
@@ -524,14 +535,14 @@ fn configured_solver_and_inner_budgets_round_trip() {
     )
     .max_cost_evals(50);
     let encoded = postcard::to_allocvec(&inner).unwrap();
-    let (mut decoded, _): (InnerExecutor<BasicSimplexState<Vec<f64>>, _>, _) =
+    let (mut decoded, _): (InnerExecutor<SimplexProgress<Vec<f64>>, _>, _) =
         postcard::take_from_bytes(&encoded).unwrap();
     std::mem::swap(&mut inner, &mut decoded);
     let expected = inner
-        .run(&mut Problem::new(Sphere), BasicSimplexState::new(vec![1.0]))
+        .run(&mut Problem::new(Sphere), SimplexProgress::new(vec![1.0]))
         .unwrap();
     let result = decoded
-        .run(&mut Problem::new(Sphere), BasicSimplexState::new(vec![1.0]))
+        .run(&mut Problem::new(Sphere), SimplexProgress::new(vec![1.0]))
         .unwrap();
     assert_eq!(result.iter(), expected.iter());
     assert_eq!(result.reason, expected.reason);
@@ -585,7 +596,7 @@ fn projected_check_uses_each_inner_problems_bounds() {
         });
         let result = run_loop_with_control(
             &mut problem,
-            BasicState::new(vec![1.0]),
+            FirstOrderState::new(vec![1.0]),
             &mut solver,
             &mut control,
         )
@@ -598,7 +609,7 @@ fn projected_check_uses_each_inner_problems_bounds() {
 #[test]
 fn serialized_checkpoint_preserves_observed_convergence_history() {
     use basin::{
-        BasicSimplexState, ExactCheckpoint, Problem, RunControl,
+        ExactCheckpoint, Problem, RunControl, SimplexProgress,
         run_loop_with_control,
     };
     fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(
@@ -613,7 +624,7 @@ fn serialized_checkpoint_preserves_observed_convergence_history() {
     let mut problem = Problem::new(Sphere);
     let first = run_loop_with_control(
         &mut problem,
-        BasicSimplexState::new(vec![1.0, 2.0]),
+        SimplexProgress::new(vec![1.0, 2.0]),
         &mut solver,
         &mut RunControl::new().max_iter(4),
     )

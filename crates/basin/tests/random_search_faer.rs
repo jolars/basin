@@ -2,10 +2,7 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxed;
-use basin::{
-    BasicPopulationState, Executor, PopulationState, RandomSearch, State,
-    StepOutcome,
-};
+use basin::{Executor, PopulationProgress, RandomSearch, State, StepOutcome};
 
 fn col2(a: f64, b: f64) -> Col<f64> {
     Col::<f64>::from_fn(2, |i| if i == 0 { a } else { b })
@@ -16,7 +13,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_a = Executor::new(
         BoothBoxed::<Col<f64>>::new(col2(-1.0, -1.0), col2(1.0, 1.0)),
         RandomSearch::new(16, 42),
-        BasicPopulationState::<Col<f64>>::with_size(16),
+        PopulationProgress::<Col<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -25,7 +22,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_b = Executor::new(
         BoothBoxed::<Col<f64>>::new(col2(-1.0, -1.0), col2(1.0, 1.0)),
         RandomSearch::new(16, 42),
-        BasicPopulationState::<Col<f64>>::with_size(16),
+        PopulationProgress::<Col<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -45,7 +42,7 @@ fn converges_to_box_corner_on_tight_booth() {
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(col2(-1.0, -1.0), col2(1.0, 1.0)),
         RandomSearch::new(64, 7),
-        BasicPopulationState::<Col<f64>>::with_size(64),
+        PopulationProgress::<Col<f64>>::empty(),
     )
     .max_iter(200)
     .run()
@@ -61,7 +58,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
     let mut stepper = Executor::new(
         BoothBoxed::<Col<f64>>::new(col2(-3.0, -3.0), col2(3.0, 3.0)),
         RandomSearch::new(8, 99),
-        BasicPopulationState::<Col<f64>>::with_size(8),
+        PopulationProgress::<Col<f64>>::empty(),
     )
     .max_iter(50)
     .into_stepper()
@@ -82,7 +79,7 @@ fn population_invariants_hold_after_iteration() {
     let mut stepper = Executor::new(
         BoothBoxed::<Col<f64>>::new(col2(-2.0, -2.0), col2(2.0, 2.0)),
         RandomSearch::new(lambda, 1234),
-        BasicPopulationState::<Col<f64>>::with_size(lambda),
+        PopulationProgress::<Col<f64>>::empty(),
     )
     .max_iter(10)
     .into_stepper()

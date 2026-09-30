@@ -9,7 +9,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicState, CountsMirror, GradientState, State};
+use crate::core::state::{CountsMirror, GradientState, SelectedState, State};
 use crate::core::termination::TerminationReason;
 
 /// Augmented-Lagrangian method for `min f(x) s.t. A x = b`, the
@@ -30,11 +30,12 @@ use crate::core::termination::TerminationReason;
 /// solver that implements [`WarmStart`] and
 /// iterates over its own [`GradientState`], seeded at the current iterate via
 /// [`InitialState::seed`]. That covers
-/// [`GradientDescent`](crate::solver::GradientDescent) ([`BasicState`]),
+/// [`GradientDescent`](crate::solver::GradientDescent)
+/// ([`FirstOrderState`](crate::FirstOrderState)),
 /// [`Bfgs`](crate::solver::Bfgs)
-/// ([`QuasiNewtonState`](crate::core::state::QuasiNewtonState)), and unbounded
+/// ([`FirstOrderState`](crate::core::state::FirstOrderState)), and unbounded
 /// [`Lbfgs`](crate::solver::lbfgs::Lbfgs)
-/// ([`LbfgsState`](crate::core::state::LbfgsState)). A least-squares inner
+/// ([`FirstOrderState`](crate::core::state::FirstOrderState)). A least-squares inner
 /// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)) does not fit:
 /// `L_ρ` is not a sum of squares and the [`AugmentedLagrangian`] adapter
 /// exposes only `CostFunction + Gradient`, and a derivative-free inner
@@ -74,21 +75,46 @@ use crate::core::termination::TerminationReason;
 /// feasible and the inner solve has converged, the KKT conditions hold. Pair
 /// with the executor's [`max_iter`](crate::Executor::max_iter) as a safety net.
 ///
-/// **Do not attach a gradient-norm criterion to the outer executor.** As with
-/// the barrier, at a constrained optimum the *true* objective gradient `∇f`
-/// does not vanish (it is balanced by `Aᵀλ*`), so a framework
-/// gradient-norm check on the outer loop would fire on the wrong point or never. (The outer state's
-/// gradient is the true `∇f`, seeded only so the state is well-formed; it is
-/// not a convergence signal.)
+/// The outer [`SelectedState`] reports the original objective and the residual
+/// norm `‖A x − b‖`, without advertising a gradient. The true objective gradient
+/// generally does not vanish at a constrained optimum; the inner solver tests
+/// the surrogate's gradient. Optional outer cost- and step-change checks run
+/// only once the residual meets the feasibility tolerance (exact zero when
+/// that tolerance is disabled).
+///
+/// Incumbent selection first prefers feasible points, using the configured
+/// tolerance, and then lower objectives among feasible points. Before finding
+/// one, it prefers smaller residual norms, breaking exact ties by objective.
+/// A better-feasibility incumbent can therefore have a higher objective. NaN
+/// objectives, positive-infinite objectives, and non-finite residual norms
+/// cannot establish an incumbent. Use `state.best()` for checked access.
+/// Objective-only [`Executor::target_objective`](crate::Executor::target_objective)
+/// and [`no_objective_improvement`](crate::Executor::no_objective_improvement)
+/// controls are unavailable for this state; constrained application stops
+/// must check feasibility as well as objective value.
+///
+/// # Initialization and continuation
+///
+/// Use `SelectedState::new(x)` or [`Executor::from_start`](crate::Executor::from_start).
+/// Fresh initialization resets progress, penalty history, and multipliers,
+/// then reevaluates the objective and constraint residual. Each inner solve
+/// also starts fresh. Exact solver-aware checkpoints retain the outer model,
+/// selected incumbent, and all six raw evaluation categories. State-only
+/// snapshots start a new solve. The outer no longer evaluates an unused true
+/// objective gradient; inner gradient calls remain charged separately in
+/// `state.counts().gradient_evals`. Adapter work is merged even on hard errors.
+/// With `serde`, solver-aware serialization is available when the inner solver,
+/// parameter, and scalar types support it.
 ///
 /// # Backends
 ///
 /// Requires the constraint matrix to implement [`MatVec`] (`A x`) and
 /// [`MatTransposeVec`] (`Aᵀ v`), never a linear solve. All backends supply
-/// those two ops, so the method runs on every backend: `Vec<f64>` (via
-/// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
-/// (`DMatrix`/`DVector`), faer (`Mat`/`Col`), and `ndarray`
-/// (`Array2`/`Array1`).
+/// those two ops: `Vec<F>` with [`DenseMatrix`](crate::DenseMatrix),
+/// nalgebra `DVector<F>`/`DMatrix<F>`, ndarray `Array1<F>`/`Array2<F>`, and
+/// faer `Col<F>`/`Mat<F>`, with `F = f64` (default) or `f32`. Vectors need
+/// [`ScaledAdd<F>`], [`ScaleInPlace<F>`], [`Dot<F>`], [`NormSquared<F>`], and
+/// `Clone`. The chosen inner solver can impose additional capabilities.
 ///
 /// # Composition
 ///
@@ -106,7 +132,8 @@ use crate::core::termination::TerminationReason;
 /// `LinearEqualityConstraints`, and tolerates infeasible starts. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
-pub struct AugmentedLagrangianMethod<So, V, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AugmentedLagrangianMethod<So, V, F: Scalar = f64> {
     inner_solver: So,
     inner_max_iter: u64,
     inner_grad_tol: Option<F>,
@@ -125,7 +152,7 @@ pub struct AugmentedLagrangianMethod<So, V, F = f64> {
     c_norm_prev: F,
 }
 
-impl<So, V> AugmentedLagrangianMethod<So, V> {
+impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// Build an augmented-Lagrangian method around an unconstrained inner
     /// solver.
     ///
@@ -152,15 +179,15 @@ impl<So, V> AugmentedLagrangianMethod<So, V> {
         Self {
             inner_solver,
             inner_max_iter: 50,
-            inner_grad_tol: Some(1e-8),
-            rho0: 10.0,
-            rho: 10.0,
-            rho_increase: 10.0,
-            feasibility_decrease: 0.25,
-            tol: Some(1e-8),
+            inner_grad_tol: Some(F::from_f64(1e-8).unwrap()),
+            rho0: F::from_f64(10.0).unwrap(),
+            rho: F::from_f64(10.0).unwrap(),
+            rho_increase: F::from_f64(10.0).unwrap(),
+            feasibility_decrease: F::from_f64(0.25).unwrap(),
+            tol: Some(F::from_f64(1e-8).unwrap()),
             lambda: None,
-            c_norm: f64::INFINITY,
-            c_norm_prev: f64::INFINITY,
+            c_norm: F::infinity(),
+            c_norm_prev: F::infinity(),
         }
     }
 }
@@ -269,18 +296,45 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     }
 }
 
+impl<So, V: Clone, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
+    fn select_incumbent(&self, state: &mut SelectedState<V, F>) {
+        let (_, cost, violation) =
+            state.current().expect("evaluated outer point");
+        if cost.is_nan() || cost == F::infinity() || !violation.is_finite() {
+            return;
+        }
+        let threshold = self.tol.unwrap_or(F::zero());
+        let feasible = violation <= threshold;
+        let improved =
+            state.best().is_none_or(|(_, best_cost, best_violation)| {
+                let best_feasible = best_violation <= threshold;
+                if feasible != best_feasible {
+                    feasible
+                } else if feasible {
+                    cost < best_cost
+                } else {
+                    violation < best_violation
+                        || (violation == best_violation && cost < best_cost)
+                }
+            });
+        if improved {
+            state.select_current();
+        }
+    }
+}
+
 impl<So, V, F> InitialState<V> for AugmentedLagrangianMethod<So, V, F>
 where
     F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V, F>;
+    type State = SelectedState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        BasicState::new(x.clone())
+        SelectedState::new(x.clone())
     }
 }
 
-impl<P, V, M, So, F> Solver<P, BasicState<V, F>>
+impl<P, V, M, So, F> Solver<P, SelectedState<V, F>>
     for AugmentedLagrangianMethod<So, V, F>
 where
     F: Scalar,
@@ -302,8 +356,9 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: SelectedState<V, F>,
+    ) -> Result<SelectedState<V, F>, Self::Error> {
+        state.reset();
         self.rho = self.rho0;
         self.c_norm = F::infinity();
         self.c_norm_prev = F::infinity();
@@ -316,19 +371,20 @@ where
         lambda.scale_in_place(F::zero());
         self.lambda = Some(lambda);
 
-        // Seed the *true* objective so framework criteria and the public
-        // result read f, not the augmented-Lagrangian value.
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        let cost = problem.cost(state.param())?;
+        let mut residual = problem.inner().a().matvec(state.param());
+        residual.scaled_add(-F::one(), problem.inner().b());
+        let violation = residual.norm_squared().sqrt();
+        state.replace(state.param().clone(), cost, violation);
+        self.select_incumbent(&mut state);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: SelectedState<V, F>,
+    ) -> Result<(SelectedState<V, F>, Option<TerminationReason>), Self::Error>
     {
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
         // *separate* inner state seeded (warm-started) at the current
@@ -350,7 +406,7 @@ where
             inner_state,
             &mut self.inner_solver,
             &mut control,
-        )?;
+        );
 
         // Eval aggregation (adapter-problem composition): fold the inner
         // wrapper's per-call counts back into the outer's wrapper. Copy out
@@ -359,23 +415,22 @@ where
         // `counts_mut` reborrow.
         let inner_counts = *al_wrapper.counts();
         problem.counts_mut().add(&inner_counts);
+        let result = result?;
 
         if result.reason.is_failure() {
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
 
-        // Adopt the inner's iterate, then evaluate the *true* f / ∇f there
-        // (the inner left cost and gradient at the augmented-Lagrangian value).
-        state.param = result.state.param().clone();
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
-
-        // Constraint residual c = A x − b at the new iterate.
-        let mut c = problem.inner().a().matvec(&state.param);
+        // The outer record reports the original objective and feasibility;
+        // gradients used by the surrogate remain inner-solver work.
+        let candidate = result.state.param();
+        let cost = problem.cost(candidate)?;
+        let mut c = problem.inner().a().matvec(candidate);
         c.scaled_add(-F::one(), problem.inner().b());
         self.c_norm_prev = self.c_norm;
         self.c_norm = c.norm_squared().sqrt();
+        state.replace(candidate.clone(), cost, self.c_norm);
+        self.select_incumbent(&mut state);
 
         // Multiplier update vs. penalty increase. The first solve
         // (c_norm_prev = +∞) always takes the update branch.
@@ -392,9 +447,13 @@ where
         Ok((state, None))
     }
 
+    fn should_check_iterate_change(&self) -> bool {
+        self.c_norm.is_finite() && self.c_norm <= self.tol.unwrap_or(F::zero())
+    }
+
     fn terminate(
         &self,
-        _state: &BasicState<V, F>,
+        _state: &SelectedState<V, F>,
     ) -> Option<TerminationReason> {
         // Feasibility bound ‖A x − b‖ from the most recent solve. Optimality
         // is handled by the inner solve driving ‖∇L_ρ‖ down.

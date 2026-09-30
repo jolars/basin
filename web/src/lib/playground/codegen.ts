@@ -144,7 +144,7 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
     const startVec = `vec![${rustFloat(cfg.start[0])}, ${rustFloat(cfg.start[1])}]`;
 
     return [
-        "use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};",
+        "use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};",
         "",
         "struct Rosenbrock;",
         "",
@@ -154,7 +154,7 @@ export function generateSnippet(cfg: PlaygroundConfig): string {
         "",
         "fn main() {",
         `    let solver = ${solverExpr};`,
-        `    let state = BasicState::new(${startVec});`,
+        `    let state = FirstOrderState::new(${startVec});`,
         "",
         `    let result = Executor::new(Rosenbrock, solver, state)`,
         `        .max_iter(${rustInt(cfg.maxIter)})`,

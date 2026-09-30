@@ -4,11 +4,11 @@ use super::{LossFunction, RobustLeastSquares};
 use crate::BoxConstraints;
 use crate::core::math::{Scalar, ScaleRowsInPlace, VectorIndex, VectorLen};
 use crate::core::problem::{Jacobian, Problem, Residual};
-use crate::core::state::NllsState;
+use crate::core::state::PointState;
 use crate::core::termination::TerminationReason;
 
 pub(crate) type NllsStep<V, F, E> =
-    Result<(NllsState<V, F>, Option<TerminationReason>), E>;
+    Result<(PointState<V, F>, Option<TerminationReason>), E>;
 
 // Separate implementations keep additional robust math capabilities off the
 // existing solver bounds, including downstream minimal Jacobian types.

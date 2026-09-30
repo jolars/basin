@@ -2,7 +2,7 @@ use crate::core::constraint::BoxConstraints;
 use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::ScalarGradientState;
+use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::TerminationReason;
 
 /// Brent's method using first derivatives ("dbrent") for 1D minimization on a
@@ -16,7 +16,7 @@ use crate::core::termination::TerminationReason;
 /// This is the gradient-using sibling of [`Brent`](crate::solver::Brent):
 /// same bracketing robustness, but a cheap first derivative lets it converge
 /// faster and enables a natural stopping test. It runs on
-/// [`ScalarGradientState`], which carries the scalar `f'(x)` and *does* impl
+/// [`FirstOrderState`], which carries the scalar `f'(x)` and *does* impl
 /// [`GradientState`](crate::core::state::GradientState), so
 /// [`with_absolute_gradient_tolerance`](crate::BrentDerivative::with_absolute_gradient_tolerance) ("stop
 /// when `|f'(x)| ≤ tol`") works here, unlike on the derivative-free
@@ -46,6 +46,7 @@ use crate::core::termination::TerminationReason;
 /// Brent, R. P. (1973). *Algorithms for Minimization without Derivatives*,
 /// chapter on the derivative form. Transcribed (the `dbrent` routine) in
 /// Numerical Recipes §10.3.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BrentDerivative<F = f64> {
     tol_rel: F,
     tol_abs: F,
@@ -53,6 +54,7 @@ pub struct BrentDerivative<F = f64> {
 }
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Inner<F> {
     a: F,
     b: F,
@@ -131,9 +133,9 @@ impl<F: Scalar> BrentDerivative<F> {
     }
 }
 
-impl<P, F> Solver<P, ScalarGradientState<F>> for BrentDerivative<F>
+impl<P, F> Solver<P, FirstOrderState<F, F>> for BrentDerivative<F>
 where
-    F: Scalar,
+    F: Scalar + crate::core::math::VectorLen,
     P: CostFunction<Param = F, Output = F>
         + Gradient<Gradient = F>
         + BoxConstraints,
@@ -143,8 +145,9 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ScalarGradientState<F>,
-    ) -> Result<ScalarGradientState<F>, Self::Error> {
+        mut state: FirstOrderState<F, F>,
+    ) -> Result<FirstOrderState<F, F>, Self::Error> {
+        state.reset();
         let a = *problem.inner().lower();
         let b = *problem.inner().upper();
         assert!(
@@ -155,7 +158,7 @@ where
         // bound, nudge to a golden-section interior point so the first
         // iteration has somewhere to step. (`Float` has no `clamp`; on a
         // well-ordered finite bracket `.max(a).min(b)` matches `f64::clamp`.)
-        let mut x = state.param.max(a).min(b);
+        let mut x = state.param().max(a).min(b);
         if x == a || x == b {
             x = a + golden_c::<F>() * (b - a);
         }
@@ -175,17 +178,15 @@ where
             d: F::zero(),
             e: F::zero(),
         });
-        state.param = x;
-        state.cost = Some(fx);
-        state.gradient = Some(dx);
+        state.replace(x, fx, dx).expect("scalar dimensions agree");
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ScalarGradientState<F>,
-    ) -> Result<(ScalarGradientState<F>, Option<TerminationReason>), Self::Error>
+        mut state: FirstOrderState<F, F>,
+    ) -> Result<(FirstOrderState<F, F>, Option<TerminationReason>), Self::Error>
     {
         let s = self
             .inner
@@ -317,7 +318,7 @@ where
         }
 
         // Post the just-probed (u, fu, du) into the state, not the retained
-        // best (s.x, ...). This honors `ScalarGradientState`'s "current
+        // best (s.x, ...). This honors `FirstOrderState`'s "current
         // iterate" semantics, so one-step change tests like `CostTolerance`
         // see real Δf signals instead of firing on an unchanged cost after a
         // non-improving probe (issue #36), and `GradientTolerance` reads the
@@ -325,15 +326,13 @@ where
         // tracking captures the true optimum independently, and the
         // bracket-collapse `terminate` only fires once the bracket has shrunk
         // below tolerance, so the two coincide at convergence.
-        state.param = u;
-        state.cost = Some(fu);
-        state.gradient = Some(du);
+        state.replace(u, fu, du).expect("scalar dimensions agree");
         Ok((state, None))
     }
 
     fn terminate(
         &self,
-        _state: &ScalarGradientState<F>,
+        _state: &FirstOrderState<F, F>,
     ) -> Option<TerminationReason> {
         let s = self.inner.as_ref()?;
         let half = F::from_f64(0.5).unwrap();
@@ -387,7 +386,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 0.0, hi: 5.0 },
             BrentDerivative::new(),
-            ScalarGradientState::new(2.5),
+            FirstOrderState::new(2.5),
         )
         .max_iter(100)
         .run()
@@ -404,7 +403,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 3.0, hi: 5.0 },
             BrentDerivative::new(),
-            ScalarGradientState::new(4.0),
+            FirstOrderState::new(4.0),
         )
         .max_iter(200)
         .run()
@@ -445,7 +444,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             BrentDerivative::new(),
-            ScalarGradientState::new(0.5),
+            FirstOrderState::new(0.5),
         )
         .max_iter(100)
         .run()
@@ -475,7 +474,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             (BrentDerivative::new()).with_absolute_gradient_tolerance(1e-4),
-            ScalarGradientState::new(0.5),
+            FirstOrderState::new(0.5),
         )
         .max_iter(200)
         .run()
@@ -499,7 +498,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             (BrentDerivative::new()).with_absolute_cost_change_tolerance(1e-12),
-            ScalarGradientState::new(0.5),
+            FirstOrderState::new(0.5),
         )
         .max_iter(200)
         .run()

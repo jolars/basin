@@ -3,7 +3,7 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CostFunction, Executor, PopulationState, StepOutcome,
+    CmaEs, CostFunction, Executor, PopulationProgress, StepOutcome,
     TerminationReason,
 };
 
@@ -16,8 +16,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.3),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0.clone()),
     )
     .max_iter(30)
     .run()
@@ -25,8 +25,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(30)
     .run()
@@ -44,8 +44,8 @@ fn different_seeds_yield_different_trajectories() {
 
     let result_a = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(1),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.3),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(1, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0.clone()),
     )
     .max_iter(5)
     .run()
@@ -53,8 +53,8 @@ fn different_seeds_yield_different_trajectories() {
 
     let result_b = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(2),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(2, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(5)
     .run()
@@ -73,8 +73,8 @@ fn converges_on_sphere_5d() {
 
     let result = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(80)
     .run()
@@ -97,8 +97,8 @@ fn converges_on_rosenbrock_2d() {
 
     let result = Executor::new(
         Rosenbrock::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(17),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(17, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -122,9 +122,9 @@ fn sphere_terminates_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        (CmaEs::<DVector<f64>, DMatrix<f64>>::new(11))
+        (CmaEs::<DVector<f64>, DMatrix<f64>>::new(11, 0.3))
             .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(2000)
     .run()
@@ -145,8 +145,8 @@ fn with_stds_ones_matches_default() {
 
     let default = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.3),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.3),
+        PopulationProgress::<DVector<f64>>::from_point(m0.clone()),
     )
     .max_iter(40)
     .run()
@@ -154,8 +154,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3).with_stds(ones),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.3).with_stds(ones),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(40)
     .run()
@@ -176,8 +176,8 @@ fn with_stds_anisotropic_converges_on_sphere() {
 
     let result = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5).with_stds(stds),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.5).with_stds(stds),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(120)
     .run()
@@ -214,8 +214,8 @@ fn with_stds_preconditions_ill_scaled_quadratic() {
 
     let result = Executor::new(
         IllScaledQuadratic,
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5).with_stds(stds),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.5).with_stds(stds),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(300)
     .run()
@@ -232,9 +232,15 @@ fn with_stds_preconditions_ill_scaled_quadratic() {
 #[test]
 #[should_panic(expected = "stds.len() == mean.len()")]
 fn with_stds_panics_on_length_mismatch() {
-    let m0 = DVector::from_vec(vec![0.0, 0.0, 0.0]);
-    let _ = CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3)
-        .with_stds(DVector::from_vec(vec![1.0, 1.0]));
+    let _ = Executor::new(
+        Sphere::<DVector<f64>>::new(),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.3)
+            .with_stds(DVector::from_vec(vec![1.0; 2])),
+        PopulationProgress::from_point(DVector::from_vec(vec![0.0; 3])),
+    )
+    .max_iter(0)
+    .run()
+    .unwrap();
 }
 
 /// `with_stds` panics on a non-positive std (would make `1/std` non-finite
@@ -242,12 +248,18 @@ fn with_stds_panics_on_length_mismatch() {
 #[test]
 #[should_panic(expected = "every std > 0")]
 fn with_stds_panics_on_nonpositive() {
-    let m0 = DVector::from_vec(vec![0.0, 0.0]);
-    let _ = CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3)
-        .with_stds(DVector::from_vec(vec![1.0, 0.0]));
+    let _ = Executor::new(
+        Sphere::<DVector<f64>>::new(),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(7, 0.3)
+            .with_stds(DVector::from_vec(vec![1.0, 0.0])),
+        PopulationProgress::from_point(DVector::from_vec(vec![0.0; 2])),
+    )
+    .max_iter(0)
+    .run()
+    .unwrap();
 }
 
-/// Sort + length invariants survive iteration. PopulationState's
+/// Sort + length invariants survive iteration. 's
 /// contract requires `candidates`/`costs` to remain in parallel,
 /// length-`λ`, sorted-ascending.
 #[test]
@@ -257,8 +269,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         Sphere::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(1234).with_lambda(lambda),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(1234, 0.5).with_lambda(lambda),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(10)
     .into_stepper()

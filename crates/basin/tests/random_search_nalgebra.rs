@@ -2,10 +2,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
-use basin::{
-    BasicPopulationState, Executor, PopulationState, RandomSearch, State,
-    StepOutcome,
-};
+use basin::{Executor, PopulationProgress, RandomSearch, State, StepOutcome};
 
 /// Same seed → same trajectory, on the nalgebra backend. Sample
 /// reproducibility is platform- and backend-independent.
@@ -17,7 +14,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_a = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower.clone(), upper.clone()),
         RandomSearch::new(16, 42),
-        BasicPopulationState::<DVector<f64>>::with_size(16),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -26,7 +23,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_b = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
         RandomSearch::new(16, 42),
-        BasicPopulationState::<DVector<f64>>::with_size(16),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -47,7 +44,7 @@ fn converges_to_box_corner_on_tight_booth() {
     let result = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
         RandomSearch::new(64, 7),
-        BasicPopulationState::<DVector<f64>>::with_size(64),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(200)
     .run()
@@ -74,7 +71,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
     let mut stepper = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
         RandomSearch::new(8, 99),
-        BasicPopulationState::<DVector<f64>>::with_size(8),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(50)
     .into_stepper()
@@ -99,7 +96,7 @@ fn population_invariants_hold_after_iteration() {
     let mut stepper = Executor::new(
         BoothBoxed::<DVector<f64>>::new(lower, upper),
         RandomSearch::new(lambda, 1234),
-        BasicPopulationState::<DVector<f64>>::with_size(lambda),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(10)
     .into_stepper()

@@ -1,27 +1,23 @@
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{SampleUniformBox, Scalar};
+use crate::core::math::{SampleUniformBox, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::BasicPopulationState;
+use crate::core::state::PopulationProgress;
 use crate::core::termination::TerminationReason;
 // Joint ascending-by-cost sort shared with the population solvers.
 use crate::solver::cma_es::sort_population_ascending;
 
 /// Elitist (1+λ) random search over a feasible box.
 ///
-/// The first stochastic solver in basin and the smallest vehicle for the
-/// new [`BasicPopulationState`]/[`PopulationState`](crate::PopulationState) story:
-/// a derivative-free, population-based method that exercises the
-/// reproducible RNG infrastructure (see [`crate::core::rng`]) without
-/// pulling in any covariance and distribution machinery (those land in
-/// S8 alongside CMA-ES).
+/// Samples independent candidates and retains the best member between
+/// generations. Publishes [`PopulationProgress`] while owning its RNG.
 ///
 /// # Algorithm
 ///
-/// At [`init`](Solver::init) the solver fills `state.candidates` with
-/// `λ` candidates drawn component-wise uniformly from the problem's
-/// box `[lower, upper]`, evaluates each, and sorts by ascending cost.
+/// At [`init`](Solver::init) an empty state receives `λ` candidates drawn
+/// uniformly from the problem's box `[lower, upper]`; explicit members are
+/// projected into that box. The solver evaluates each and sorts by cost.
 ///
 /// Each [`next_iter`](Solver::next_iter):
 ///
@@ -33,13 +29,9 @@ use crate::solver::cma_es::sort_population_ascending;
 /// truncate back to λ                            # drops the worst
 /// ```
 ///
-/// The elite carry-over keeps `state.cost()` non-increasing across
-/// generations, so the framework's
-/// [`with_absolute_cost_change_tolerance`](Self::with_absolute_cost_change_tolerance) and
-/// [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance) work
-/// honestly without redesign. (CMA-ES is genuinely non-monotone, and
-/// the "no monotone cost" termination story will be designed alongside
-/// it in S8 / S9.)
+/// Elite carry-over keeps the current best cost non-increasing for finite
+/// objectives. Optional cost-change and step tests compare generation
+/// representatives, including generations that retain the same elite.
 ///
 /// # Reproducibility
 ///
@@ -53,18 +45,17 @@ use crate::solver::cma_es::sort_population_ascending;
 /// - **Caller must:** implement [`BoxConstraints`] on the problem with
 ///   `lower[i] ≤ upper[i]` for every component. Equal bounds are
 ///   allowed (the corresponding component is pinned).
-/// - **Caller must:** hand in a [`BasicPopulationState`] sized to match
-///   the solver's `lambda`. The two natural constructors are
-///   [`BasicPopulationState::with_size(lambda)`](BasicPopulationState::with_size)
-///   (solver fills the population in `init`) or
-///   [`from_population`](BasicPopulationState::from_population) (caller
-///   supplies a custom initial distribution). `with_size` is the
-///   common case.
-/// - **Implementor (this solver) must:** maintain feasibility (every
-///   candidate after `init` is in the box) and the sorted-by-cost
-///   invariant on
-///   [`PopulationState`](crate::core::state::PopulationState) at the
-///   start and end of each iteration.
+/// - Supply [`PopulationProgress::empty`] to sample `lambda` members, or
+///   [`PopulationProgress::from_population`] with exactly `lambda` finite
+///   vectors whose dimension matches the bounds. Bounds must be non-empty,
+///   finite, equal in length, and ordered. Invalid shapes panic at initialization.
+/// - Fresh initialization resets progress and the configured RNG, projects
+///   explicit members into the box, reevaluates every member, and sorts by cost.
+///   Reusing a final population is a population warm start. Supply an empty
+///   state to reproduce the original seeded run.
+/// - Solver-aware exact checkpoints retain the population, RNG, and raw
+///   evaluation counts and skip initialization. With `serde`, both the solver
+///   and progress serialize. A progress-only snapshot cannot continue exactly.
 ///
 /// # Termination
 ///
@@ -80,21 +71,21 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// # Backends
 ///
-/// Backend-generic; works with any `V` implementing
-/// [`SampleUniformBox`] + `Clone`. That covers `Vec<f64>`,
-/// `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`). The problem must implement [`BoxConstraints`].
+/// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
+/// for all supported releases with `F = f32` or `f64`. Requires
+/// [`SampleUniformBox`], [`VectorLen`], `Index<usize, Output = F>`,
+/// `IndexMut<usize, Output = F>`, and `Clone`. No matrix operations are needed.
+/// The problem must implement [`BoxConstraints`].
 ///
 /// # Examples
 ///
 /// Elitist random search over a feasible box. The problem implements
 /// [`CostFunction`] and [`BoxConstraints`]; the
-/// population state is sized to the offspring count λ via
-/// [`BasicPopulationState::with_size`](crate::BasicPopulationState::with_size):
+/// initial population is generated from an empty state via
+/// [`PopulationProgress::empty`](crate::PopulationProgress::empty):
 ///
 /// ```
-/// use basin::{BasicPopulationState, BoxConstraints, CostFunction, Executor, RandomSearch};
+/// use basin::{PopulationProgress, BoxConstraints, CostFunction, Executor, RandomSearch};
 ///
 /// struct BoundedSphere {
 ///     lower: Vec<f64>,
@@ -117,15 +108,17 @@ use crate::solver::cma_es::sort_population_ascending;
 /// let result = Executor::new(
 ///     problem,
 ///     RandomSearch::new(16, 42),
-///     BasicPopulationState::<Vec<f64>>::with_size(16),
+///     PopulationProgress::<Vec<f64>>::empty(),
 /// )
 /// .max_iter(500)
 /// .run()
 /// .unwrap();
 /// assert!(result.cost() < 1.0);
 /// ```
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RandomSearch {
     lambda: usize,
+    seed: u64,
     rng: ChaCha8Rng,
 }
 
@@ -142,56 +135,56 @@ impl RandomSearch {
         assert!(lambda >= 1, "RandomSearch requires lambda >= 1");
         Self {
             lambda,
+            seed,
             rng: ChaCha8Rng::seed_from_u64(seed),
         }
     }
 }
 
-impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for RandomSearch
+impl<P, V, F> Solver<P, PopulationProgress<V, F>> for RandomSearch
 where
     F: Scalar + crate::core::parallel::MaybeSend,
     P: CostFunction<Param = V, Output = F>
         + BoxConstraints<Param = V>
         + crate::core::parallel::MaybeSync,
     P::Error: crate::core::parallel::MaybeSend,
-    V: SampleUniformBox + Clone + crate::core::parallel::MaybeSync,
+    V: SampleUniformBox
+        + Clone
+        + VectorLen
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>
+        + crate::core::parallel::MaybeSync,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
-    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
-        // The state can arrive with a caller-supplied initial population
-        // (`from_population`) or empty (`with_size`). The solver always
-        // owns the *first* generation here: clear and resample so the
-        // RNG-determined trajectory is reproducible regardless of which
-        // constructor was used. Callers who genuinely want a custom
-        // initial population should call `from_population` and skip
-        // `init` by stepping the solver themselves; `init` is the
-        // place where the solver's seeded RNG seeds the run.
-        state.candidates.clear();
-        state.costs.clear();
-        // Sample (sequential RNG), then evaluate the independent draws in one
-        // batch (parallel under the `parallel` feature).
-        for _ in 0..self.lambda {
-            let x = V::sample_uniform_box(&lo, &hi, &mut self.rng);
-            state.candidates.push(x);
-        }
+        state.reset();
+        self.rng = ChaCha8Rng::seed_from_u64(self.seed);
+        super::population::prepare_population(
+            &mut state.candidates,
+            &lo,
+            &hi,
+            self.lambda,
+            &mut self.rng,
+        );
         state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
+        state.select_best_member();
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
+        mut state: PopulationProgress<V, F>,
     ) -> Result<
-        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        (PopulationProgress<V, F>, Option<TerminationReason>),
         Self::Error,
     > {
         // Snapshot the elite before resampling; this is what makes
@@ -222,6 +215,7 @@ where
         // when it's still the best, so truncation never drops it.
         state.candidates.truncate(self.lambda);
         state.costs.truncate(self.lambda);
+        state.select_best_member();
         Ok((state, None))
     }
 }

@@ -4,14 +4,16 @@
 //! Covers convergence on `RosenbrockResiduals` 2-D (CMA's global
 //! stage hands a near-basin start to LM, which polishes to high
 //! precision) and work-unit aggregation (LM `cost_evals` +
-//! `gradient_evals` roll into the outer's `cost_evals`), and continuation
+//! each evaluation category remains distinct), and continuation
 //! after inner numerical no-progress stops.
 
 #![cfg(all(feature = "nalgebra_all", feature = "problems"))]
 
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::RosenbrockResiduals;
-use basin::{CmaEs, CmaEsState, CmaInject, Executor, LevenbergMarquardt};
+use basin::{
+    CmaEs, CmaInject, Executor, LevenbergMarquardt, PopulationProgress,
+};
 
 /// CMA-ES + LM on 2-D Rosenbrock-as-residuals. CMA from a wide-σ start
 /// gets near `(1, 1)`; the inner LM (Nielsen damping, default tolerances)
@@ -22,7 +24,7 @@ use basin::{CmaEs, CmaEsState, CmaInject, Executor, LevenbergMarquardt};
 fn converges_on_rosenbrock_residuals_2d() {
     let m0 = DVector::from_vec(vec![-1.2, 1.0]);
 
-    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(11);
+    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(11, 0.5);
     let solver = CmaInject::with_inner_solver(cma, LevenbergMarquardt::new())
         .with_k(1)
         .with_inner_max_iter(50);
@@ -30,7 +32,7 @@ fn converges_on_rosenbrock_residuals_2d() {
     let result = Executor::new(
         RosenbrockResiduals::<DVector<f64>>::new(),
         solver,
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(100)
     .run()
@@ -47,19 +49,8 @@ fn converges_on_rosenbrock_residuals_2d() {
     );
 }
 
-/// CmaInject's work-unit closure for LM rolls both `cost_evals`
-/// (residual calls) and `gradient_evals` (Jacobian calls) into the
-/// outer state's `cost_evals` (CONTRIBUTING.md "Solver composition" rule 1;
-/// CMA-ES has no `gradient_evals` field, so derivative-eval counts
-/// collapse honestly).
-///
-/// Lower-bound assertion: each outer iter (after iter 0; CmaInject
-/// skips iter-0 injection) runs LM init (1 residual + 1 jacobian eval),
-/// at least one LM next_iter (1 residual + 1 jacobian), plus the
-/// outer's re-evaluation after clipping (1 cost). So `≥ outer_iters · k
-/// · (4 + 1)` extra work units over vanilla, using a slightly weaker
-/// lower bound to absorb the iter-0 skip and any LM early-termination
-/// via the gradient-norm test.
+/// Inner residual and Jacobian calls retain their own categories. Injection
+/// contributes one extra outer cost call per refined member.
 #[test]
 fn aggregates_lm_work_into_outer() {
     let m0 = DVector::from_vec(vec![-1.2, 1.0]);
@@ -70,15 +61,15 @@ fn aggregates_lm_work_into_outer() {
     // Vanilla CMA-ES baseline.
     let vanilla = Executor::new(
         RosenbrockResiduals::<DVector<f64>>::new(),
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(23),
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0.clone(), 0.5),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(23, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0.clone()),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
     // Memetic variant on the same seed and outer budget.
-    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(23);
+    let cma = CmaEs::<DVector<f64>, DMatrix<f64>>::new(23, 0.5);
     let solver = CmaInject::with_inner_solver(cma, LevenbergMarquardt::new())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
@@ -86,24 +77,17 @@ fn aggregates_lm_work_into_outer() {
     let memetic = Executor::new(
         RosenbrockResiduals::<DVector<f64>>::new(),
         solver,
-        CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.5),
+        PopulationProgress::<DVector<f64>>::from_point(m0),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
-    // Per outer iter (after iter 0), CmaInject does at minimum:
-    // LM init (1 residual + 1 jacobian) + 1 re-eval = 3 work units.
-    // Across (outer_iters − 1) iters with k = 1 that's a weak floor.
-    let min_extra = (outer_iters.saturating_sub(1)) * (k as u64) * 3;
-    assert!(
-        memetic.cost_evals() >= vanilla.cost_evals() + min_extra,
-        "memetic cost_evals = {} should exceed vanilla {} by at least \
-         {} (outer iters × k × (LM init residual + jacobian + re-eval))",
-        memetic.cost_evals(),
-        vanilla.cost_evals(),
-        min_extra
-    );
+    let injections = outer_iters * k as u64;
+    assert_eq!(memetic.cost_evals(), vanilla.cost_evals() + injections);
+    assert!(memetic.state.counts().residual_evals >= injections);
+    assert!(memetic.state.counts().jacobian_evals >= injections);
+    assert_eq!(memetic.state.counts().gradient_evals, 0);
 }
 
 #[path = "support/backend_aliases.rs"]
@@ -160,7 +144,7 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
 
     let counts = Affine::default();
     let solver = CmaInject::with_inner_solver(
-        CmaEs::<DVector<f64>, DMatrix<f64>>::new(11),
+        CmaEs::<DVector<f64>, DMatrix<f64>>::new(11, 0.1),
         LevenbergMarquardt::new()
             .with_tau(1e20)
             .with_absolute_gradient_tolerance(0.),
@@ -170,7 +154,7 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
     let result = Executor::new(
         counts.clone(),
         solver,
-        CmaEsState::new(DVector::from_vec(vec![1., 1.]), 0.1),
+        PopulationProgress::from_point(DVector::from_vec(vec![1., 1.])),
     )
     .max_iter(4)
     .run()
@@ -181,14 +165,13 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
     assert!(result.cost().is_finite());
     // Each of the four inner runs exits after its first unchanged trial,
     // despite having a budget of fifty iterations.
+    assert_eq!(result.state.counts().residual_evals, 8);
+    assert_eq!(result.state.counts().jacobian_evals, 4);
     let trials = counts.trials.lock().unwrap();
     assert_eq!(trials.len(), 8);
     assert_eq!(counts.jacobians.load(Ordering::Relaxed), 4);
     for pair in trials.chunks_exact(2) {
         assert_eq!(pair[0], pair[1]);
     }
-    assert_eq!(
-        result.cost_evals(),
-        counts.costs.load(Ordering::Relaxed) + 8 + 4
-    );
+    assert_eq!(result.cost_evals(), counts.costs.load(Ordering::Relaxed));
 }

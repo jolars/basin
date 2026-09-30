@@ -9,7 +9,9 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::{Rosenbrock, Sphere};
-use basin::{CmaEs, CmaEsState, CmaInject, DenseMatrix, Executor, NelderMead};
+use basin::{
+    CmaEs, CmaInject, DenseMatrix, Executor, NelderMead, PopulationProgress,
+};
 
 /// Rosenbrock 2-D from `(-1, 1)`: injecting Nelder-Mead refinements
 /// must not break CMA's convergence on the `Vec<f64>` backend.
@@ -17,7 +19,7 @@ use basin::{CmaEs, CmaEsState, CmaInject, DenseMatrix, Executor, NelderMead};
 fn converges_on_rosenbrock_2d() {
     let m0 = vec![-1.0, 1.0];
 
-    let cma = CmaEs::<Vec<f64>, DenseMatrix>::new(17);
+    let cma = CmaEs::<Vec<f64>, DenseMatrix>::new(17, 0.3);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(1)
         .with_inner_max_iter(30);
@@ -25,7 +27,7 @@ fn converges_on_rosenbrock_2d() {
     let result = Executor::new(
         Rosenbrock::<Vec<f64>>::new(),
         solver,
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(200)
     .run()
@@ -54,15 +56,15 @@ fn aggregates_inner_cost_evals_into_outer() {
     // Vanilla CMA-ES baseline.
     let vanilla = Executor::new(
         Sphere::<Vec<f64>>::new(),
-        CmaEs::<Vec<f64>, DenseMatrix>::new(7),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.3),
+        CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0.clone()),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
     // Memetic variant on the same seed and outer budget.
-    let cma = CmaEs::<Vec<f64>, DenseMatrix>::new(7);
+    let cma = CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.3);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
@@ -70,7 +72,7 @@ fn aggregates_inner_cost_evals_into_outer() {
     let memetic = Executor::new(
         Sphere::<Vec<f64>>::new(),
         solver,
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(outer_iters)
     .run()

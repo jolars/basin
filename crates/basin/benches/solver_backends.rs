@@ -42,10 +42,10 @@ use basin::problems::{
     Ackley, Levy, Rastrigin, Rosenbrock, SparseLeastSquares, StyblinskiTang,
 };
 use basin::{
-    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, DenseMatrix,
-    DenseQuasiNewtonState, Executor, FaerQuasiNewtonState, GaussNewton,
-    GradientDescent, LbfgsState, Lbfgsb, LevenbergMarquardt, MoreThuente,
-    NalgebraQuasiNewtonState, NelderMead, NllsState, Slsqp, SlsqpState,
+    Bfgs, CmaEs, DenseMatrix, Executor, FirstOrderState, GaussNewton,
+    GradientDescent, Lbfgsb, LevenbergMarquardt, MoreThuente, NelderMead,
+    PointState, PopulationProgress, SelectedFirstOrderState, SimplexProgress,
+    Slsqp,
 };
 use criterion::{
     BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
@@ -154,7 +154,7 @@ fn bench_slsqp(c: &mut Criterion) {
             rosenbrock_start(n),
             n,
             Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
-            SlsqpState::new,
+            SelectedFirstOrderState::new,
         );
         g.finish();
     }
@@ -220,7 +220,7 @@ fn bench_gd(c: &mut Criterion) {
             rosenbrock_start(n),
             n,
             GradientDescent::with_line_search(MoreThuente::new()),
-            BasicState::new,
+            FirstOrderState::new,
         );
         g.finish();
     }
@@ -237,7 +237,7 @@ fn bench_nm(c: &mut Criterion) {
             vec![2.0; n],
             n,
             NelderMead::new(),
-            BasicSimplexState::new,
+            SimplexProgress::new,
         );
         g.finish();
     }
@@ -254,7 +254,7 @@ fn bench_lbfgs(c: &mut Criterion) {
             vec![0.0; n],
             n,
             Lbfgsb::new().unbounded(),
-            |x0| LbfgsState::new(x0, 10),
+            FirstOrderState::new,
         );
         g.finish();
     }
@@ -274,7 +274,7 @@ fn bench_bfgs(c: &mut Criterion) {
             || start.clone(),
             Levy<Vec<f64>>,
             Bfgs::new(),
-            DenseQuasiNewtonState::new,
+            FirstOrderState::new,
         );
         contestant!(
             g,
@@ -282,7 +282,7 @@ fn bench_bfgs(c: &mut Criterion) {
             || DVector::from_vec(start.clone()),
             Levy<DVector<f64>>,
             Bfgs::new(),
-            NalgebraQuasiNewtonState::new,
+            FirstOrderState::new,
         );
         contestant!(
             g,
@@ -290,7 +290,7 @@ fn bench_bfgs(c: &mut Criterion) {
             || Col::<f64>::from_fn(n, |i| start[i]),
             Levy<Col<f64>>,
             Bfgs::new(),
-            FaerQuasiNewtonState::new,
+            FirstOrderState::new,
         );
         g.finish();
     }
@@ -306,7 +306,7 @@ fn bench_cmaes(c: &mut Criterion) {
         let mut g = c.benchmark_group(format!("cmaes_rastrigin_n{n}"));
         // In-domain start away from the global optimum at the origin.
         let m0 = vec![3.0; n];
-        // The mean and σ live on `CmaEsState`; the state builder seeds it from the
+        // Progress supplies the mean; the solver supplies the initial scale. Seed from the
         // per-batch start vector and the solver derives λ internally.
 
         contestant!(
@@ -314,8 +314,8 @@ fn bench_cmaes(c: &mut Criterion) {
             "vec",
             || m0.clone(),
             Rastrigin<Vec<f64>>,
-            CmaEs::<Vec<f64>, DenseMatrix>::new(42),
-            |x0| CmaEsState::<Vec<f64>, DenseMatrix>::new(x0, 0.3),
+            CmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.3),
+            PopulationProgress::<Vec<f64>>::from_point,
         );
 
         let m0n = DVector::from_vec(m0.clone());
@@ -324,8 +324,8 @@ fn bench_cmaes(c: &mut Criterion) {
             "nalgebra",
             || m0n.clone(),
             Rastrigin<DVector<f64>>,
-            CmaEs::<DVector<f64>, DMatrix<f64>>::new(42),
-            |x0| CmaEsState::<DVector<f64>, DMatrix<f64>>::new(x0, 0.3),
+            CmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.3),
+            PopulationProgress::<DVector<f64>>::from_point,
         );
 
         let m0f = Col::<f64>::from_fn(n, |i| m0[i]);
@@ -334,8 +334,8 @@ fn bench_cmaes(c: &mut Criterion) {
             "faer",
             || m0f.clone(),
             Rastrigin<Col<f64>>,
-            CmaEs::<Col<f64>, Mat<f64>>::new(42),
-            |x0| CmaEsState::<Col<f64>, Mat<f64>>::new(x0, 0.3),
+            CmaEs::<Col<f64>, Mat<f64>>::new(42, 0.3),
+            PopulationProgress::<Col<f64>>::from_point,
         );
         g.finish();
     }
@@ -356,7 +356,7 @@ fn bench_lm(c: &mut Criterion) {
                         Executor::new(
                             p,
                             LevenbergMarquardt::new(),
-                            NllsState::new(x0),
+                            PointState::new(x0),
                         )
                         .max_iter(MAX_ITERS)
                         .run(),
@@ -373,7 +373,7 @@ fn bench_lm(c: &mut Criterion) {
                         Executor::new(
                             p,
                             LevenbergMarquardt::new(),
-                            NllsState::new(x0),
+                            PointState::new(x0),
                         )
                         .max_iter(MAX_ITERS)
                         .run(),
@@ -400,7 +400,7 @@ fn bench_gn(c: &mut Criterion) {
                         Executor::new(
                             p,
                             GaussNewton::new(),
-                            NllsState::new(x0),
+                            PointState::new(x0),
                         )
                         .max_iter(MAX_ITERS)
                         .run(),
@@ -417,7 +417,7 @@ fn bench_gn(c: &mut Criterion) {
                         Executor::new(
                             p,
                             GaussNewton::new(),
-                            NllsState::new(x0),
+                            PointState::new(x0),
                         )
                         .max_iter(MAX_ITERS)
                         .run(),

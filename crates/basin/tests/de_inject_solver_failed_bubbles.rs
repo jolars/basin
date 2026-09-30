@@ -10,7 +10,7 @@
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::RastriginBoxed;
 use basin::{
-    BasicPopulationState, BasicState, ClosureInner, De, DeInject, Executor,
+    ClosureInner, De, DeInject, Executor, PointState, PopulationProgress,
     Problem, Solver, State, TerminationReason,
 };
 
@@ -37,14 +37,14 @@ fn bubbles_inner_failure() {
     let de = De::new(5).with_pop_size(8);
     let inner =
         ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
-            BasicState::new(x.clone())
+            PointState::new(x.clone())
         });
     let solver = DeInject::with_inner_solver(de, inner);
 
     let result = Executor::new(
         problem,
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(1),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(20)
     .run()

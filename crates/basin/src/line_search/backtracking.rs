@@ -7,6 +7,7 @@ use crate::line_search::{
 /// Backtracking line search satisfying the Armijo condition only
 /// (Nocedal & Wright §3.1). Halves the trial step until
 /// `f(x + α d) ≤ f(x) + c · α · ∇f(x)ᵀd`.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Backtracking<F = f64> {
     /// Initial trial step. Default `1.0`.
     pub alpha_init: F,

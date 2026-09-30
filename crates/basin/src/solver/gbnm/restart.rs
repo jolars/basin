@@ -1,4 +1,4 @@
-use crate::core::state::gbnm::GbnmRestart;
+use super::GbnmRestart;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum OptimumAction {
@@ -48,8 +48,8 @@ pub(super) fn select_restart(
 
 #[cfg(test)]
 mod tests {
+    use super::super::GbnmRestart;
     use super::{OptimumAction, select_restart};
-    use crate::core::state::gbnm::GbnmRestart;
 
     #[test]
     fn selector_covers_the_paper_flowchart() {

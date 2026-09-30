@@ -2,7 +2,7 @@ use crate::core::constraint::BoxConstraints;
 use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::ScalarState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 
 /// Brent's method for 1D minimization on a closed interval `[lower, upper]`
@@ -16,7 +16,7 @@ use crate::core::termination::TerminationReason;
 /// `tol = tol_rel·|x| + tol_abs`. NR-style defaults: `tol_rel = √ε`,
 /// `tol_abs = 1e-12`.
 ///
-/// Brent runs on [`ScalarState`], the
+/// Brent runs on [`PointState`], the
 /// cost-only single-iterate state. It does **not** impl
 /// [`GradientState`](crate::core::state::GradientState) (a 1-D minimizer has
 /// no gradient), so gradient convergence settings are absent from its API.
@@ -34,6 +34,7 @@ use crate::core::termination::TerminationReason;
 /// implements `CostFunction` *and* `BoxConstraints` with scalar (`F`)
 /// bounds. See [`NelderMead`](crate::NelderMead) for the general
 /// derivative-free `Executor` pattern.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Brent<F = f64> {
     tol_rel: F,
     tol_abs: F,
@@ -47,6 +48,7 @@ fn golden_c<F: Scalar>() -> F {
 }
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Inner<F> {
     a: F,
     b: F,
@@ -116,7 +118,7 @@ impl<F: Scalar> Brent<F> {
     }
 }
 
-impl<P, F> Solver<P, ScalarState<F>> for Brent<F>
+impl<P, F> Solver<P, PointState<F, F>> for Brent<F>
 where
     F: Scalar,
     P: CostFunction<Param = F, Output = F> + BoxConstraints,
@@ -126,8 +128,9 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ScalarState<F>,
-    ) -> Result<ScalarState<F>, Self::Error> {
+        mut state: PointState<F, F>,
+    ) -> Result<PointState<F, F>, Self::Error> {
+        state.reset();
         let a = *problem.inner().lower();
         let b = *problem.inner().upper();
         assert!(
@@ -139,7 +142,7 @@ where
         // iteration has somewhere to step. `Float` has no `clamp`, so use
         // `.max(a).min(b)`, the same output as `f64::clamp` on a well-ordered
         // finite bracket (which the assert above guarantees).
-        let mut x = state.param.max(a).min(b);
+        let mut x = state.param().max(a).min(b);
         if x == a || x == b {
             x = a + golden_c::<F>() * (b - a);
         }
@@ -156,16 +159,16 @@ where
             d: F::zero(),
             e: F::zero(),
         });
-        state.param = x;
-        state.cost = Some(fx);
+        state.replace(x, fx);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ScalarState<F>,
-    ) -> Result<(ScalarState<F>, Option<TerminationReason>), Self::Error> {
+        mut state: PointState<F, F>,
+    ) -> Result<(PointState<F, F>, Option<TerminationReason>), Self::Error>
+    {
         let s = self.inner.as_mut().expect("Brent::init must run first");
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();
@@ -249,7 +252,7 @@ where
         }
 
         // Post the just-probed point (u, fu) into the state, not the
-        // retained best (s.x, s.fx). This honors `ScalarState`'s
+        // retained best (s.x, s.fx). This honors `PointState`'s
         // documented "current iterate" semantics, so one-step change
         // tests like `CostTolerance` see real Δf signals instead of
         // firing on the unchanged s.fx after a non-improving probe
@@ -258,12 +261,14 @@ where
         // true optimum independently of what's reported here, and
         // Brent's bracket-collapse `terminate` only fires once
         // `|u - x| < 2·tol`, so the two coincide at convergence.
-        state.param = u;
-        state.cost = Some(fu);
+        state.replace(u, fu);
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &ScalarState<F>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &PointState<F, F>,
+    ) -> Option<TerminationReason> {
         let s = self.inner.as_ref()?;
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();
@@ -310,7 +315,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 0.0, hi: 5.0 },
             Brent::new(),
-            ScalarState::new(2.5),
+            PointState::new(2.5),
         )
         .max_iter(100)
         .run()
@@ -326,7 +331,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 0.0, hi: 5.0 },
             Brent::new(),
-            ScalarState::new(42.0),
+            PointState::new(42.0),
         )
         .max_iter(100)
         .run()
@@ -341,7 +346,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 3.0, hi: 5.0 },
             Brent::new(),
-            ScalarState::new(4.0),
+            PointState::new(4.0),
         )
         .max_iter(200)
         .run()
@@ -376,7 +381,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             Brent::new(),
-            ScalarState::new(0.5),
+            PointState::new(0.5),
         )
         .max_iter(100)
         .run()
@@ -406,7 +411,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             (Brent::new()).with_absolute_cost_change_tolerance(1e-12),
-            ScalarState::new(0.5),
+            PointState::new(0.5),
         )
         .max_iter(200)
         .run()

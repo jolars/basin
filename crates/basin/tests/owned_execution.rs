@@ -629,7 +629,7 @@ fn seeded_annealing_preserves_rng_neighbor_and_reannealing_history() {
         || RuggedCost,
     );
     assert_eq!(result.counts.cost_evals, 81);
-    assert!(result.state.reannealings() > 0);
+    assert!(result.solver.reannealings() > 0);
     assert!(result.state.accepted_moves() > 0);
     assert!(result.state.rejected_moves() > 0);
 }

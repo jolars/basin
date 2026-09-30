@@ -47,6 +47,7 @@ use crate::line_search::{
 /// guaranteed descent and an efficient line search,” *SIAM Journal on
 /// Optimization* 16(1), 2005, pp. 170–192.
 /// [doi:10.1137/030601880](https://doi.org/10.1137/030601880).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HagerZhang<F = f64> {
     /// Sufficient-decrease coefficient in `(0, 0.5)`. Default `0.1`.
     pub delta: F,

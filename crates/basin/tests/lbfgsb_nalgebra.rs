@@ -9,8 +9,8 @@
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{
-    Bfgs, BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
-    MoreThuente, NalgebraQuasiNewtonState,
+    Bfgs, BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
+    Lbfgsb, MoreThuente,
 };
 
 struct Rosen {
@@ -54,11 +54,12 @@ fn unbounded_rosenbrock_2d_converges() {
         l: DVector::from_element(2, f64::NEG_INFINITY),
         u: DVector::from_element(2, f64::INFINITY),
     };
-    let state = LbfgsState::new(DVector::from_vec(vec![-1.2, 1.0]), 5);
+    let state = FirstOrderState::new(DVector::from_vec(vec![-1.2, 1.0]));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -81,11 +82,12 @@ fn booth_at_corner_converges() {
         DVector::from_vec(vec![-1.0, -1.0]),
         DVector::from_vec(vec![1.0, 1.0]),
     );
-    let state = LbfgsState::new(DVector::from_vec(vec![0.0, 0.0]), 5);
+    let state = FirstOrderState::new(DVector::from_vec(vec![0.0, 0.0]));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(100)
@@ -112,11 +114,12 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
         DVector::from_vec(vec![-5.0, -5.0]),
         DVector::from_vec(vec![5.0, 5.0]),
     );
-    let state = LbfgsState::new(DVector::from_vec(vec![0.0, 0.0]), 5);
+    let state = FirstOrderState::new(DVector::from_vec(vec![0.0, 0.0]));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-10),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-10),
         state,
     )
     .max_iter(100)
@@ -147,7 +150,7 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
         basin::problems::Rosenbrock::<DVector<f64>>::default(),
         (Bfgs::with_line_search(MoreThuente::new()))
             .with_absolute_gradient_tolerance(1e-8),
-        NalgebraQuasiNewtonState::new(initial.clone()),
+        FirstOrderState::new(initial.clone()),
     )
     .max_iter(200)
     .run()
@@ -158,8 +161,9 @@ fn lbfgsb_matches_bfgs_more_thuente_on_unbounded_rosenbrock() {
             l: l.clone(),
             u: u.clone(),
         },
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
-        LbfgsState::new(initial, 10),
+        (Lbfgsb::new().with_m_capacity(10))
+            .with_absolute_projected_gradient_tolerance(1e-8),
+        FirstOrderState::new(initial),
     )
     .max_iter(200)
     .run()

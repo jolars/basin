@@ -3,7 +3,7 @@
 //! Mirrors the Fortran subroutines in `references/lbfgsb-v3.0/lbfgsb.f`:
 //!
 //! - [`formt`]: build `T = θ SᵀS + L D⁻¹ Lᵀ` from the Gram blocks
-//!   stored on [`LbfgsState`][s], then Cholesky-factorize it in place
+//!   stored on [`History`][s], then Cholesky-factorize it in place
 //!   so the upper triangle of `wt` holds `J` such that `T = Jᵀ J`
 //!   (Fortran `formt`, `lbfgsb.f:2173`).
 //! - [`bmv`]: apply the 2k × 2k middle-matrix inverse `M` to a vector,
@@ -17,9 +17,9 @@
 //!
 //! All routines operate on `&[F]`/`&mut [F]` for `F: Scalar`; the
 //! surrounding solver is responsible for sourcing those slices from
-//! whichever backend [`LbfgsState`][s] is parameterized on.
+//! whichever backend [`History`][s] is parameterized on.
 //!
-//! [s]: crate::core::state::LbfgsState
+//! [s]: super::workspace::History
 
 use crate::core::math::Scalar;
 
@@ -363,7 +363,7 @@ mod tests {
         // and bmv computes M v.
         //
         // Picking d = sy[0,0] = 11, ss[0,0] = 5, θ = 25/11 (so the
-        // theta from the (1, 2)/(3, 4) pair in the LbfgsState test).
+        // theta from the (1, 2)/(3, 4) pair in the FirstOrderState test).
         let m = 2;
         let mut sy = vec![0.0_f64; m * m];
         let mut ss = vec![0.0_f64; m * m];

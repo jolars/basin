@@ -206,12 +206,12 @@ fn fixed_interval_reannealing_restarts_the_schedule_for_the_next_move() {
         .max_iter(3)
         .into_stepper()
         .unwrap();
-    assert_eq!(stepper.state().temperature(), 8.0);
+    assert_eq!(stepper.solver().temperature(), 8.0);
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
-    assert_eq!(stepper.state().temperature(), 4.0);
+    assert_eq!(stepper.solver().temperature(), 4.0);
     assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
-    assert_eq!(stepper.state().temperature(), 8.0);
-    assert_eq!(stepper.state().reannealings(), 1);
+    assert_eq!(stepper.solver().temperature(), 8.0);
+    assert_eq!(stepper.solver().reannealings(), 1);
 }
 
 #[test]
@@ -225,10 +225,10 @@ fn rejection_and_no_best_reannealing_use_distinct_progress() {
     .with_reannealing(Reannealing::after_rejections(2));
     let rejected = Executor::from_start(IdentityCost, rejected, 0)
         .max_iter(2)
-        .run()
+        .run_with_solver()
         .unwrap();
-    assert_eq!(rejected.state.reannealings(), 1);
-    assert_eq!(rejected.state.temperature(), 8.0);
+    assert_eq!(rejected.solver.reannealings(), 1);
+    assert_eq!(rejected.solver.temperature(), 8.0);
 
     let no_best = SimulatedAnnealing::new_with_rng(
         |x: &i32, _: f64, _: &mut ConstantRng| *x,
@@ -239,10 +239,10 @@ fn rejection_and_no_best_reannealing_use_distinct_progress() {
     .with_reannealing(Reannealing::after_no_best(2));
     let no_best = Executor::from_start(IdentityCost, no_best, 0)
         .max_iter(2)
-        .run()
+        .run_with_solver()
         .unwrap();
     assert_eq!(no_best.state.accepted_moves(), 2);
-    assert_eq!(no_best.state.reannealings(), 1);
+    assert_eq!(no_best.solver.reannealings(), 1);
 }
 
 #[test]
@@ -306,9 +306,9 @@ fn composable_reannealing_uses_any_trigger_and_resets_all_progress() {
 
     for expected in expected_reannealings {
         assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
-        assert_eq!(stepper.state().reannealings(), expected);
+        assert_eq!(stepper.solver().reannealings(), expected);
     }
-    assert_eq!(stepper.state().temperature(), 8.0);
+    assert_eq!(stepper.solver().temperature(), 8.0);
 }
 
 #[test]
@@ -324,11 +324,11 @@ fn coincident_reannealing_triggers_restart_the_schedule_once() {
     .with_reannealing_best(2);
     let result = Executor::from_start(IdentityCost, solver, 0)
         .max_iter(2)
-        .run()
+        .run_with_solver()
         .unwrap();
 
-    assert_eq!(result.state.reannealings(), 1);
-    assert_eq!(result.state.temperature(), 8.0);
+    assert_eq!(result.solver.reannealings(), 1);
+    assert_eq!(result.solver.temperature(), 8.0);
 }
 
 #[test]
@@ -344,10 +344,10 @@ fn repeated_reannealing_builder_replaces_only_its_threshold() {
     .with_reannealing_fixed(2);
     let result = Executor::from_start(IdentityCost, solver, 0)
         .max_iter(2)
-        .run()
+        .run_with_solver()
         .unwrap();
 
-    assert_eq!(result.state.reannealings(), 1);
+    assert_eq!(result.solver.reannealings(), 1);
 }
 
 struct NonFiniteCost;

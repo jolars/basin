@@ -4,9 +4,8 @@ use std::convert::Infallible;
 mod backend;
 
 use basin::{
-    BasicPopulationState, BoxConstraints, CostFunction, De, DeCrossover,
-    DeInject, DeMutation, ExactCheckpoint, Executor, NelderMead,
-    PopulationState, State,
+    BoxConstraints, CostFunction, De, DeCrossover, DeInject, DeMutation,
+    ExactCheckpoint, Executor, NelderMead, PopulationProgress, State,
 };
 
 #[derive(Clone)]
@@ -42,10 +41,10 @@ fn configured(
     }
 }
 
-type Checkpoint = ExactCheckpoint<De, BasicPopulationState<Vec<f64>>>;
+type Checkpoint = ExactCheckpoint<De, PopulationProgress<Vec<f64>>>;
 
 fn solve(solver: De, generations: u64) -> Checkpoint {
-    Executor::new(Quadratic::new(), solver, BasicPopulationState::with_size(1))
+    Executor::new(Quadratic::new(), solver, PopulationProgress::empty())
         .max_iter(generations)
         .run_with_solver()
         .unwrap()
@@ -53,8 +52,8 @@ fn solve(solver: De, generations: u64) -> Checkpoint {
 }
 
 fn assert_same_population(
-    a: &BasicPopulationState<Vec<f64>>,
-    b: &BasicPopulationState<Vec<f64>>,
+    a: &PopulationProgress<Vec<f64>>,
+    b: &PopulationProgress<Vec<f64>>,
 ) {
     assert_eq!(a.candidates(), b.candidates());
     assert_eq!(a.costs(), b.costs());
@@ -147,7 +146,7 @@ fn dithering_builder_precedence_and_convergence_forwarding() {
             .with_crossover(DeCrossover::Exponential)
             .with_pop_size(24)
             .with_dither(0.5, 1.0),
-        BasicPopulationState::with_size(1),
+        PopulationProgress::empty(),
     )
     .max_iter(10)
     .run()
@@ -221,7 +220,7 @@ fn invalid_configuration_and_empty_bounds_panic() {
                 upper: vec![]
             },
             De::new(1),
-            BasicPopulationState::with_size(1),
+            PopulationProgress::empty(),
         )
         .max_iter(0)
         .run())
@@ -242,7 +241,7 @@ fn fixed_coordinates_one_dimension_and_large_scales_remain_feasible() {
                 let mut stepper = Executor::new(
                     problem.clone(),
                     configured(mutation, crossover, false).with_f(f64::MAX),
-                    BasicPopulationState::with_size(1),
+                    PopulationProgress::empty(),
                 )
                 .max_iter(4)
                 .into_stepper()
@@ -277,7 +276,7 @@ fn configured_de_composes_with_local_search() {
             let result = Executor::new(
                 Quadratic::new(),
                 solver,
-                BasicPopulationState::with_size(1),
+                PopulationProgress::empty(),
             )
             .max_iter(12)
             .run()
@@ -329,7 +328,7 @@ fn serial_reference_is_feature_independent() {
                     upper: vec![3.0, 4.0, 5.0],
                 },
                 configured(mutation, crossover, true),
-                BasicPopulationState::with_size(1),
+                PopulationProgress::empty(),
             )
             .max_iter(20)
             .run()
@@ -374,7 +373,7 @@ impl BoxConstraints for Quadratic {
     }
 }
 
-fn population_fingerprint(state: &BasicPopulationState<Vec<f64>>) -> u64 {
+fn population_fingerprint(state: &PopulationProgress<Vec<f64>>) -> u64 {
     state
         .candidates()
         .iter()
@@ -399,7 +398,7 @@ fn legacy_default_trajectory() {
     let mut stepper = Executor::new(
         Quadratic::new(),
         De::new(0xdecade).with_pop_size(6),
-        BasicPopulationState::with_size(1),
+        PopulationProgress::empty(),
     )
     .max_iter(5)
     .into_stepper()

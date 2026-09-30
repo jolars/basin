@@ -20,7 +20,7 @@ use crate::core::state::State;
 /// stepper) if you need to reach the records after `run()`:
 ///
 /// ```
-/// # use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
+/// # use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 /// use std::cell::RefCell;
 /// use std::rc::Rc;
 /// use basin::{History, Observe, ObserverMode, State};
@@ -46,7 +46,7 @@ use crate::core::state::State;
 /// }
 ///
 /// let history = Shared::default();
-/// Executor::new(Quadratic, GradientDescent::new(0.1), BasicState::new(vec![1.0, 1.0]))
+/// Executor::new(Quadratic, GradientDescent::new(0.1), FirstOrderState::new(vec![1.0, 1.0]))
 ///     .max_iter(5)
 ///     .observe_with(history.clone(), ObserverMode::Always)
 ///     .run()

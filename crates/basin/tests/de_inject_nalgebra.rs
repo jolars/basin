@@ -13,7 +13,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{AckleyBoxed, RastriginBoxed};
-use basin::{BasicPopulationState, De, DeInject, Executor, NelderMead};
+use basin::{De, DeInject, Executor, NelderMead, PopulationProgress};
 
 /// Ackley D=3 within the standard `[-32.768, 32.768]³` box. Ackley's
 /// exponential-decay global basin is friendly to Nelder-Mead polish:
@@ -38,7 +38,7 @@ fn converges_on_ackley_d3_with_nm_inner() {
     let result = Executor::new(
         problem,
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(1),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(u64::MAX)
     .max_cost_evals(12_000)
@@ -72,7 +72,7 @@ fn aggregates_inner_cost_evals_into_outer() {
     let vanilla = Executor::new(
         RastriginBoxed::<DVector<f64>>::with_standard_bounds(n),
         De::new(7).with_pop_size(pop_size),
-        BasicPopulationState::<DVector<f64>>::with_size(1),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(outer_iters)
     .run()
@@ -87,7 +87,7 @@ fn aggregates_inner_cost_evals_into_outer() {
     let memetic = Executor::new(
         RastriginBoxed::<DVector<f64>>::with_standard_bounds(n),
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(1),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(outer_iters)
     .run()
@@ -123,7 +123,7 @@ fn same_seed_yields_identical_trajectory() {
         )
         .with_k(1)
         .with_inner_max_iter(20),
-        BasicPopulationState::<DVector<f64>>::with_size(1),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(15)
     .run()
@@ -137,7 +137,7 @@ fn same_seed_yields_identical_trajectory() {
         )
         .with_k(1)
         .with_inner_max_iter(20),
-        BasicPopulationState::<DVector<f64>>::with_size(1),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(15)
     .run()

@@ -43,6 +43,7 @@ pub(crate) enum Transition {
 
 /// The penalty search may repole several times. Keep its trial simplex separate
 /// from the live one so intermediate roundoff cannot alter the driver path.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct PenaltyWork<F> {
     conmat: Vec<F>,
     cval: Vec<F>,
@@ -86,6 +87,7 @@ impl<F: Scalar> PenaltyWork<F> {
 }
 
 /// Resumable COBYLA working state.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct CobylaWork<F = f64> {
     n: usize,
     m: usize,
@@ -267,6 +269,11 @@ impl<F: Scalar> CobylaWork<F> {
 
     /// Borrow the incumbent so the public solver can reuse its parameter buffer.
     pub(crate) fn best_ref(&self) -> (&[F], F) {
+        let (x, f, _) = self.best_record_ref();
+        (x, f)
+    }
+
+    pub(crate) fn best_record_ref(&self) -> (&[F], F, F) {
         let kopt = selectx(
             &self.ffilt[..self.nfilt],
             &self.cfilt[..self.nfilt],
@@ -274,7 +281,7 @@ impl<F: Scalar> CobylaWork<F> {
             self.ctol,
         );
         let x = &self.xfilt[kopt * self.n..(kopt + 1) * self.n];
-        (x, self.ffilt[kopt])
+        (x, self.ffilt[kopt], self.cfilt[kopt])
     }
 
     /// Evaluate `(f, constr, cstrv)` at `x`, moderated.

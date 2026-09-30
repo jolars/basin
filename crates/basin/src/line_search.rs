@@ -151,6 +151,13 @@ impl<F: Scalar> LineSearchBounds<F> {
 /// gradient-based solvers (still f64-only pending the linalg-tier
 /// migration) keep resolving unchanged.
 pub trait LineSearch<P, V, F = f64> {
+    /// Reset evolving history for a fresh solve while preserving settings.
+    ///
+    /// Stateless strategies can use the default. Stateful strategies must
+    /// restore their configured starting state. Exact continuation skips this
+    /// hook and preserves the strategy together with its owning solver.
+    fn reset(&mut self) {}
+
     /// Hard-abort error type, mirroring the underlying problem's `Error`.
     type Error;
 
@@ -241,6 +248,7 @@ pub trait LineSearch<P, V, F = f64> {
 /// Useful when the caller already knows a good fixed step. With
 /// [`LineSearch::next_with_bounds`], the fixed step is capped at the supplied
 /// maximum; the supplied initial step is unused.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Constant<F = f64>(pub F);
 
 impl<F: Scalar> Constant<F> {

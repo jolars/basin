@@ -3,8 +3,7 @@
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, Executor, PopulationState, StepOutcome,
-    TerminationReason,
+    BoundedCmaEs, Executor, PopulationProgress, StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory on the faer backend's bounded variant.
@@ -19,8 +18,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(42),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0.clone(), 0.5),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(42, 0.5),
+        PopulationProgress::<Col<f64>>::from_point(m0.clone()),
     )
     .max_iter(30)
     .run()
@@ -28,8 +27,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(42),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(42, 0.5),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(30)
     .run()
@@ -53,8 +52,8 @@ fn slack_bounds_recover_unconstrained_minimum() {
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(7),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(7, 0.5),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(400)
     .run()
@@ -78,8 +77,8 @@ fn tight_bounds_converge_to_box_corner() {
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -104,8 +103,8 @@ fn infeasible_initial_mean_converges_to_box_corner() {
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(5),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(5, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -130,9 +129,9 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        (BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11))
+        (BoundedCmaEs::<Col<f64>, Mat<f64>>::new(11, 0.3))
             .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.3),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(2000)
     .run()
@@ -141,7 +140,7 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
-/// `PopulationState` invariants survive iteration on faer.
+/// Progress retains matching raw records while model fitness stays sorted.
 #[test]
 fn population_invariants_hold_after_iteration() {
     let lower = Col::<f64>::from_fn(2, |_| -1.0);
@@ -151,8 +150,8 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<Col<f64>>::new(lower, upper),
-        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(1234).with_lambda(lambda),
-        CmaEsState::<Col<f64>, Mat<f64>>::new(m0, 0.5),
+        BoundedCmaEs::<Col<f64>, Mat<f64>>::new(1234, 0.5).with_lambda(lambda),
+        PopulationProgress::<Col<f64>>::from_point(m0),
     )
     .max_iter(10)
     .into_stepper()
@@ -165,7 +164,7 @@ fn population_invariants_hold_after_iteration() {
         let state = stepper.state();
         assert_eq!(state.candidates().len(), lambda);
         assert_eq!(state.costs().len(), lambda);
-        for window in state.costs().windows(2) {
+        for window in stepper.solver().penalized_costs().windows(2) {
             assert!(window[0] <= window[1]);
         }
     }

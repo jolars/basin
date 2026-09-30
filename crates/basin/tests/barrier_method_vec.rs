@@ -8,9 +8,9 @@
 
 use basin::problems::ConstrainedQuadratic;
 use basin::{
-    Backtracking, BarrierMethod, BasicState, CostFunction, DenseMatrix,
-    Executor, Gradient, GradientDescent, GradientState,
-    LinearInequalityConstraints, TerminationReason,
+    Backtracking, BarrierMethod, CostFunction, DenseMatrix, Executor, Gradient,
+    GradientDescent, LinearInequalityConstraints, PointState,
+    TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`. The unconstrained min (2,2) is
@@ -34,7 +34,7 @@ fn active_constraint_converges_to_projection() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -66,7 +66,7 @@ fn inactive_constraint_recovers_unconstrained_minimum() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -93,7 +93,7 @@ fn infeasible_start_runs_phase_one_then_converges() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -116,7 +116,7 @@ fn target_cost_does_not_bypass_phase_one() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(vec![2.0, 2.0]),
+        PointState::new(vec![2.0, 2.0]),
     )
     .max_iter(50)
     .target_cost(0.1)
@@ -170,7 +170,7 @@ fn run_probe(problem: LinearProbe, initial: Vec<f64>) -> TerminationReason {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -186,7 +186,7 @@ fn boundary_start_runs_phase_one_then_phase_two() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(vec![1.0, 1.0]),
+        PointState::new(vec![1.0, 1.0]),
     )
     .max_iter(50)
     .run()
@@ -224,7 +224,7 @@ fn distant_feasible_system_is_not_reported_infeasible() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(vec![1000.0]),
+        PointState::new(vec![1000.0]),
     )
     .max_iter(50)
     .run()
@@ -253,7 +253,7 @@ fn empty_strict_interior_reports_failure() {
         ),
         // At the feasible singleton the Phase I gradient is exactly zero, so
         // each auxiliary subproblem is demonstrably centered.
-        BasicState::new(vec![0.0]),
+        PointState::new(vec![0.0]),
     )
     .max_iter(50)
     .run()
@@ -297,7 +297,7 @@ fn eval_counts_are_recorded() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -307,7 +307,7 @@ fn eval_counts_are_recorded() {
     // have accumulated onto the outer state.
     assert!(result.cost_evals() > 0, "no cost evals recorded");
     assert!(
-        result.state.gradient_evals() > 0,
+        result.state.counts().gradient_evals > 0,
         "no gradient evals recorded"
     );
 }
@@ -331,7 +331,7 @@ fn two_constraints_both_active() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()

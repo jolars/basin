@@ -79,13 +79,18 @@ bracketing routines.
 - **[`GradientDescent`](https://docs.rs/basin/latest/basin/solver/gradient_descent/struct.GradientDescent.html)**:
   steepest descent with a pluggable step rule (`Constant`, `Backtracking`,
   `MoreThuente`, `Wolfe`, or `HagerZhang` line searches) and optional
-  heavy-ball momentum (Polyak, 1964).
+  heavy-ball momentum (Polyak, 1964). Supports all four dense backends with
+  `f32` or `f64` and publishes `FirstOrderState`.
 - **[`Sgd`](https://docs.rs/basin/latest/basin/solver/sgd/struct.Sgd.html)**:
   mini-batch stochastic gradient descent with a constant learning rate and
-  optional Polyak (1964) heavy-ball momentum.
+  optional Polyak (1964) heavy-ball momentum. Supports all four dense backends
+  with `f32` or `f64` and publishes the last fully evaluated point in
+  `PointState`; the solver retains the working iterate between objective
+  refreshes.
 - **[`ProjectedGradientDescent`](https://docs.rs/basin/latest/basin/solver/projected_gradient_descent/struct.ProjectedGradientDescent.html)**:
   gradient descent for box-constrained problems, projecting each step back onto
-  the feasible box.
+  the feasible box. Supports all four dense backends with `f32` or `f64` and
+  publishes `FirstOrderState`.
 - **[`BrentDerivative`](https://docs.rs/basin/latest/basin/solver/brent_derivative/struct.BrentDerivative.html)**:
   Brent's method using first derivatives ("dbrent"): 1-D minimization on a
   bracketed interval, the gradient-using sibling of `Brent`/`GoldenSection`
@@ -99,7 +104,10 @@ bracketing routines.
   `CostFunction`. Implements Lagarias et al. (1998); `NelderMead::adaptive()`
   uses the dimension-aware coefficients of Gao & Han (2012). Its projected
   variant clamps trial points into box bounds; use `Gbnm` for the full
-  Luersen–Le Riche restart algorithm.
+  Luersen–Le Riche restart algorithm. Publishes `SimplexProgress`, with
+  observable vertices and an independent historical incumbent; scratch belongs
+  to the solver. Both variants support all four dense backends with `f32` or
+  `f64`.
 - **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
   mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
   positive spanning set of `2n` directions on a shrinking mesh, generated from
@@ -109,26 +117,36 @@ bracketing routines.
   nonlinearly-constrained variant (`Mads::constrained()`) handling `c(x) ≤ 0`
   via the progressive barrier (which tolerates an infeasible start). Needs only
   a `CostFunction` (plus `NonlinearInequalityConstraints` for the constrained
-  mode). Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
+  mode). All modes support `f32` and `f64` on every dense backend release.
+  Unbounded and box-bounded runs use `PointState`; progressive-barrier runs use
+  `SelectedState` with the squared-sum violation. Mesh and poll diagnostics
+  belong to the solver. Implements Audet & Dennis (2006), OrthoMADS (Abramson, Audet, Dennis &
   Le Digabel 2009), and the progressive barrier (Audet & Dennis 2009).
 - **[`Newuoa`](https://docs.rs/basin/latest/basin/solver/newuoa/struct.Newuoa.html)**:
   Powell's model-based trust-region method: maintains a quadratic surrogate
   interpolating the objective on `2n+1` points and updates it by the
   least-Frobenius-norm rule, so each iteration needs only one new value. Needs
-  only a `CostFunction`. Implements Powell (2006), cross-validated against PRIMA
+  only a `CostFunction`. Uses `PointState` with `f32` and `f64` on every
+  supported dense backend release; model and radius diagnostics live on the
+  solver. Implements Powell (2006), cross-validated against PRIMA
   v0.7.2.
 - **[`Bobyqa`](https://docs.rs/basin/latest/basin/solver/bobyqa/struct.Bobyqa.html)**:
   the bound-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a box-aware trust-region step (TRSBOX) and geometry step
   (ALTMOV), plus the RESCUE restoration procedure. Needs a `CostFunction` and
-  `BoxConstraints`. Implements Powell (2009), cross-validated against PRIMA
+  `BoxConstraints`. Uses `PointState` with `f32` and `f64` on every supported
+  dense backend release; the solver owns the model and radius schedule.
+  Implements Powell (2009), cross-validated against PRIMA
   v0.7.2.
 - **[`Lincoa`](https://docs.rs/basin/latest/basin/solver/lincoa/struct.Lincoa.html)**:
   the linearly-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a projected truncated-CG trust-region step (TRSTEP) and
   active-set QR (GETACT) that keep every iterate feasible under `A x ≤ b`. Needs
   a `CostFunction` and `LinearConstraints` (the general linear form: box bounds,
-  equalities, and inequalities, all folded into `A x ≤ b`). Implements Powell
+  equalities, and inequalities, all folded into `A x ≤ b`). Uses `PointState`
+  with `f32` and `f64` on every supported dense backend release; constraint
+  matrices require `MatTransposeVec`. Infeasible starts relax the constraints.
+  Implements Powell
   (2015), ported from PRIMA v0.7.2.
 - **[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**:
   Powell's nonlinearly-constrained solver: it builds **linear** models by
@@ -143,14 +161,20 @@ bracketing routines.
   to the executor with `Cobyla::new()`. The adapter folds the full feasible set
   into inequalities while retaining Basin's interpolation algorithm. Bound
   constraints do not guarantee feasible callbacks, and radius convergence does
-  not certify feasibility. Implements Powell (1994), ported from PRIMA.
+  not certify feasibility. Uses `SelectedState` for the filter-selected point
+  and violation; the solver owns its model and radius. Both paths support
+  `f32` and `f64` on every supported dense backend release; folded constraint
+  matrices require `MatVec`. Constraint callbacks count as residual evaluations.
+  Implements Powell (1994), ported from PRIMA.
 - **[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
   adaptive random local search: a randomized hill-climber testing `x + b + d`
   and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a step
   size `ρ` that expands after 5 successive successes and contracts after 3
   failures. The cheapest local search in the library (O(n) memory and time, cost
   evaluations only) and the classic memetic LS operator. Needs only a
-  `CostFunction`. Implements Solis & Wets (1981).
+  `CostFunction`. Supports all four dense backends with `f32` or `f64` and
+  publishes `PointState`; the solver owns its bias and adaptive step size.
+  Implements Solis & Wets (1981).
 - **[`Brent`](https://docs.rs/basin/latest/basin/solver/brent/struct.Brent.html)**:
   robust 1-D minimization on a bracketed interval (Brent, 1973, as transcribed
   in *Numerical Recipes* §10.2); also used inside line searches.
@@ -165,11 +189,14 @@ bracketing routines.
   dense quasi-Newton with a full approximate Hessian (Nocedal & Wright, 2006).
 - **[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
   limited-memory BFGS for larger problems (two-loop recursion, Nocedal & Wright
-  Alg. 7.4).
+  Alg. 7.4). Supports all four dense backends with `f32` or `f64`; parameter
+  storage must be contiguous (including ndarray).
 - **[`Lbfgsb`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
   L-BFGS with box bounds; a faithful port of the Nocedal–Zhu L-BFGS-B v3.0
   Fortran source (Byrd, Lu & Nocedal, 1995; Zhu, Byrd, Lu & Nocedal, 1997, ACM
-  TOMS Alg. 778).
+  TOMS Alg. 778; Nocedal & Morales, 2011). Supports all four dense backends
+  with `f32` or `f64` and contiguous parameter storage. A custom line search
+  must implement bounded steps.
 
 ## Trust Region
 
@@ -188,7 +215,8 @@ analytic, or synthesized by `FiniteDiff`):
   `MoreSorensen` need the matrix).
   With ndarray, exact-Hessian mode requires a supplied `Array2` Hessian because
   `FiniteDiff` cannot construct one. Its matrix-free Hessian-vector products
-  work on every backend.
+  work on every backend. Both modes publish `FirstOrderState` and support
+  `f32` and `f64`.
 
 ## Nonlinear Least Squares
 
@@ -261,14 +289,19 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   local simplex searches with Parzen-density probabilistic restarts and the
   small-, flat-, and degenerate-simplex restart state machine. It retains the
   possible local optima found along the way and supports exact solver-aware
-  resume. Implements M. A. Luersen and R. Le Riche, “Globalized Nelder–Mead
+  resume. Publishes `PointState` while the solver owns local geometry and
+  restart history. Supports all four dense backends with `f32` or `f64`.
+  Implements M. A. Luersen and R. Le Riche, “Globalized Nelder–Mead
   method for engineering optimization,” _Computers & Structures_ 82 (2004),
   2251–2260
   ([doi:10.1016/j.compstruc.2004.03.072](https://doi.org/10.1016/j.compstruc.2004.03.072)).
 - **[`SimulatedAnnealing`](https://docs.rs/basin/latest/basin/solver/simulated_annealing/struct.SimulatedAnnealing.html)**:
   classical single-proposal simulated annealing with a user-supplied `Neighbor`,
   explicit geometric, reciprocal, or normalized-log cooling, and optional
-  independently composable schedule restart triggers. It accepts arbitrary
+  independently composable schedule restart triggers. `ProposalState` retains
+  accepted progress and acceptance history; the solver owns its neighbor, RNG,
+  and cooling history. Supports all four dense backends with `f32` or `f64`.
+  It accepts arbitrary
   cloneable parameter types, including discrete structures, and supports exact
   solver-aware resume.
   Uses Metropolis et al. (1953; DOI 10.1063/1.1699114), implements Kirkpatrick,
@@ -277,7 +310,10 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
 - **[`CmaEs`](https://docs.rs/basin/latest/basin/solver/cma_es/struct.CmaEs.html)**/**[`BoundedCmaEs`](https://docs.rs/basin/latest/basin/solver/bounded_cma_es/struct.BoundedCmaEs.html)**:
   covariance-matrix adaptation evolution strategy (Hansen, 2016), unconstrained
   and box-bounded; the bounded variant uses Hansen's adaptive `BoundPenalty`
-  (the `pycma` default).
+  (the `pycma` default). Publishes `PopulationProgress` with an evaluated mean;
+  distributions and penalty history live on the solver. The bounded variant
+  publishes repaired points and raw costs, retaining penalized rankings in its
+  model. All four dense backends support `f32` and `f64`.
 - **[`De`](https://docs.rs/basin/latest/basin/solver/de/struct.De.html)**:
   differential evolution over a feasible box, with six mutation rules,
   independently selected binomial or exponential crossover, and optional
@@ -288,7 +324,8 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   Spaces,” _Journal of Global Optimization_ 11 (1997), 341–359. Mutation
   formulas, crossover, and dithering follow
   [SciPy 1.16.2 differential evolution](https://docs.scipy.org/doc/scipy-1.16.2/reference/generated/scipy.optimize.differential_evolution.html),
-  which also supplies the donor and solution references.
+  which also supplies the donor and solution references. Publishes
+  `PopulationProgress` and supports all four dense backends with `f32` or `f64`.
 - **[`GlobalBestPso`](https://docs.rs/basin/latest/basin/solver/global_best_pso/struct.GlobalBestPso.html)**:
   synchronous inertia-weight global-best particle swarm optimization over a
   feasible box, with independent boundary-response and velocity-limit policies.
@@ -299,19 +336,26 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
   cross-validated against Argmin 0.11.0 commit
   `c94c32adefd6c2525ce05806092ca868ec85fba4`. It remains distinct from
   SPSO-2011 (Zambrano-Bigiarini, Clerc & Rojas, 2013; DOI
-  10.1109/CEC.2013.6557848).
+  10.1109/CEC.2013.6557848). Publishes `PopulationProgress`; the solver owns
+  particle velocities, personal bests, and RNG state. Supports all four dense
+  backends with `f32` or `f64` and requires solver-aware exact checkpoints.
 - **[`RandomSearch`](https://docs.rs/basin/latest/basin/solver/random_search/struct.RandomSearch.html)**:
-  elitist (1+λ) uniform sampling over a box.
+  elitist (1+λ) uniform sampling over a box. Publishes `PopulationProgress`,
+  accepts explicit initial members, and supports all four dense backends with
+  `f32` or `f64`.
 - **[`Ssga`](https://docs.rs/basin/latest/basin/solver/ssga/struct.Ssga.html)**:
   steady-state real-coded genetic algorithm (replace-worst) with BLX-α crossover
   (Eshelman & Schaffer, 1993), negative assortative mating (Fernandes & Rosa,
   2001), and BGA mutation (Mühlenbein & Schlierkamp-Voosen, 1993); the SSGA
-  component of Molina et al. (2010), §4.4.
+  component of Molina et al. (2010), §4.4. Publishes `PopulationProgress` and
+  supports all four dense backends with `f32` or `f64`.
 - **[`BasinHopping`](https://docs.rs/basin/latest/basin/solver/basin_hopping/struct.BasinHopping.html)**:
   basin-hopping (Wales & Doye, 1997): a Metropolis Monte-Carlo walk over the
   `Ẽ(x) = min{f(x)}` transform, wrapping any local solver with a pluggable step
-  taker and acceptance test; adaptive step size on by default.
-  Custom step takers or inner solvers can narrow backend support.
+  taker and acceptance test; adaptive step size on by default. Publishes
+  `PointState` and supports all four dense backends with `f32` or `f64` when
+  the chosen inner solver does. Custom step takers or inner solvers can narrow
+  backend support.
 
 ## Memetic (Composed)
 
@@ -321,20 +365,35 @@ support.
 
 - **[`CmaInject`](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)**/**[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/bounded_cma_inject/struct.BoundedCmaInject.html)**:
   CMA-ES with per-generation local polishing of the best individuals,
-  re-injected via Hansen's (2011) injection mechanism.
+  re-injected via Hansen's (2011) injection mechanism. Publishes
+  `PopulationProgress` and preserves all six evaluation categories. All four
+  dense backends support `f32` and `f64` with a compatible inner solver;
+  custom inners can narrow that support.
 - **[`DeInject`](https://docs.rs/basin/latest/basin/solver/de_inject/struct.DeInject.html)**:
-  the DE-flavored sibling of `CmaInject`: differential evolution (Storn & Price, 1997)
-  with per-generation top-*k* local refinement and Hansen-style (2011)
-  injection.
-- **[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
-  a memetic algorithm with persistent local-search chains and a CMA-ES inner
-  (Molina et al., 2010).
+  differential evolution with per-generation top-*k* local refinement and
+  conditional write-back. References: Noman & Iba, *Accelerating Differential
+  Evolution Using an Adaptive Local Search* (IEEE TEC, 2008); Neri & Tirronen,
+  *Recent advances in differential evolution: a survey and experimental analysis*
+  (Artificial Intelligence Review, 2010); and Caponio, Neri & Tirronen, *Super-fit
+  control adaptation in memetic differential evolution frameworks* (Soft
+  Computing, 2009). Publishes `PopulationProgress` and supports all four dense
+  backends with `f32` or `f64` when the chosen inner solver does. Nelder-Mead
+  and L-BFGS-B cover all four; custom inners or strategies can narrow support.
+- **[`MaLsCh`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**/**[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
+  a memetic framework with persistent local-search chains and its CMA-ES
+  configuration. Molina, Lozano, García-Martínez, and Herrera (2010),
+  *Memetic algorithms for continuous optimisation based on local search chains*,
+  Evolutionary Computation 18(1), 27–63 (DOI 10.1162/evco.2010.18.1.18102). Publishes `PopulationProgress`; the solver owns
+  retained chains, their eligibility history, and RNG. Supports all four dense
+  backends with `f32` and `f64`, using CMA-ES's matrix capabilities.
 - **[`MaLsChSw`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   the high-dimensional sibling of `MaLsChCma`: the same local-search-chain
   framework with a Solis-Wets inner, whose O(n) chain snapshots keep
   chain-memetic search viable when the dimension grows (MA-SW-Chains: Molina,
   Lozano, and Herrera, 2010, winner of the CEC'2010 large-scale competition).
-  Both are type aliases of the generic `MaLsCh<V, LS>`, which accepts any
+  Publishes `PopulationProgress` and supports all four dense backends with
+  `f32` and `f64` using only vector operations.
+  Both are type aliases of the generic `MaLsCh<V, LS, F>`, which accepts any
   local-search operator implementing the `ResumableInner` (seed + snapshot +
   resume) trait.
 
@@ -346,8 +405,11 @@ support.
   Supports box bounds, linear and nonlinear equalities, and linear and nonlinear
   inequalities through `NonlinearConstraints` and `ConstraintJacobian`, with
   analytic or finite-difference derivatives. Reports feasibility, projected
-  Lagrangian stationarity, and complementarity alongside Kraft's native
-  convergence tests. Kraft, D. (1988), *A software package for sequential
+  Lagrangian stationarity, and complementarity on the solver alongside Kraft's
+  native convergence tests. Uses `SelectedFirstOrderState` with a matching
+  objective gradient and constraint violation. Supports `f32` and `f64` on
+  every dense backend release; vectors need indexing and matrices need shape
+  and entry access. Kraft, D. (1988), *A software package for sequential
   quadratic programming*, Technical Report DFVLR-FB 88-28, Institut für Dynamik
   der Flugsysteme, Oberpfaffenhofen, §§2.2 and 3.2
   ([report](https://degenerateconic.com/uploads/2018/03/DFVLR_FB_88_28.pdf)).
@@ -361,10 +423,17 @@ constraints:
   two-phase log-barrier interior-point continuation for linear inequality
   constraints (`A x ≤ b`); automatically finds a strictly feasible start when
   one exists (Boyd & Vandenberghe, *Convex Optimization*, §§11.3–11.4.1).
+  Publishes `PointState` with the original objective inside the strict feasible
+  domain and a rejection cost of positive infinity outside it. Incumbents
+  contain only strictly feasible points. Supports all four dense backends
+  with `f32` or `f64`; custom inner solvers can require additional capabilities.
 - **[`AugmentedLagrangianMethod`](https://docs.rs/basin/latest/basin/solver/augmented_lagrangian_method/struct.AugmentedLagrangianMethod.html)**:
   quadratic penalty plus multiplier updates for linear equality constraints
   (`A x = b`); tolerates an infeasible start (Nocedal & Wright, §17.3, Alg.
-  17.4, LANCELOT-style).
+  17.4, LANCELOT-style). Publishes `SelectedState` with the objective and
+  constraint residual norm, retaining an incumbent chosen by feasibility
+  before objective. Supports all four dense backends with `f32` or `f64`;
+  custom inner solvers can require additional capabilities.
 
 The pluggable line searches are documented alongside the first-order solvers:
 [`Backtracking`](https://docs.rs/basin/latest/basin/line_search/backtracking/struct.Backtracking.html)

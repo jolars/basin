@@ -18,7 +18,8 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::BoothBoxedResiduals;
 use basin::{
-    BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, LevenbergMarquardt,
+    BoundedCmaEs, BoundedCmaInject, Executor, LevenbergMarquardt,
+    PopulationProgress,
 };
 
 #[test]
@@ -38,7 +39,7 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     //    box; σ = 0.3 keeps the initial distribution inside.
     // -----------------------------------------------------------------
     let m0 = DVector::from_vec(vec![-0.5, -0.5]);
-    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42);
+    let cma = BoundedCmaEs::<DVector<f64>, DMatrix<f64>>::new(42, 0.3);
 
     // -----------------------------------------------------------------
     // 3. Memetic wrapper: top `k = 1` candidate per generation gets
@@ -53,7 +54,7 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     // -----------------------------------------------------------------
     // 4. Drive.
     // -----------------------------------------------------------------
-    let state = CmaEsState::<DVector<f64>, DMatrix<f64>>::new(m0, 0.3);
+    let state = PopulationProgress::<DVector<f64>>::from_point(m0);
     let result = Executor::new(problem, solver, state)
         .max_iter(100)
         .run()

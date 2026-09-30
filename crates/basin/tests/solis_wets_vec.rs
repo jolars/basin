@@ -7,8 +7,8 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, CmaEsState, CmaInject, DenseMatrix, Executor, SolisWets,
-    SolisWetsState, State, StepOutcome, TerminationReason,
+    CmaEs, CmaInject, DenseMatrix, Executor, PointState, PopulationProgress,
+    SolisWets, State, StepOutcome, TerminationReason,
 };
 
 /// Same seed → same trajectory. Load-bearing reproducibility check for
@@ -131,7 +131,7 @@ fn from_start_matches_explicit_state() {
     let via_state = Executor::new(
         Sphere::<Vec<f64>>::new(),
         SolisWets::new(5),
-        SolisWetsState::new(vec![1.0, 2.0], 1.0),
+        PointState::new(vec![1.0, 2.0]),
     )
     .max_iter(100)
     .run()
@@ -146,7 +146,7 @@ fn from_start_matches_explicit_state() {
 /// seed keeps the walk on the outer distribution's scale).
 #[test]
 fn works_as_cma_inject_inner() {
-    let cma = CmaEs::<Vec<f64>, DenseMatrix>::new(17);
+    let cma = CmaEs::<Vec<f64>, DenseMatrix>::new(17, 0.5);
     let solver = CmaInject::with_inner_solver(cma, SolisWets::new(23))
         .with_k(1)
         .with_inner_max_iter(30);
@@ -154,7 +154,7 @@ fn works_as_cma_inject_inner() {
     let result = Executor::new(
         Sphere::<Vec<f64>>::new(),
         solver,
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(vec![2.0, -1.5], 0.5),
+        PopulationProgress::<Vec<f64>>::from_point(vec![2.0, -1.5]),
     )
     .max_iter(100)
     .run()

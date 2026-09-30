@@ -13,7 +13,7 @@ use crate::core::math::{SampleUniformBox, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicState, CountsMirror, State};
+use crate::core::state::{CountsMirror, PointState, State};
 use crate::core::termination::TerminationReason;
 use core::ops::{Index, IndexMut};
 
@@ -34,6 +34,11 @@ use core::ops::{Index, IndexMut};
 /// defaults to a no-op so structured or discrete moves that have no scalar
 /// magnitude opt out cleanly (they simply ignore adaptive control).
 pub trait StepTaker<V, F = f64> {
+    /// Restore configured starting behavior before a fresh solve. Stateful
+    /// strategies must reset their adaptation and other evolving data here.
+    /// Exact checkpoint continuation skips this hook.
+    fn reset(&mut self) {}
+
     /// Propose a perturbed point starting from `x`, consuming randomness
     /// from `rng`. Returns a fresh value; `x` is not mutated.
     fn take_step<R: Rng + ?Sized>(&mut self, x: &V, rng: &mut R) -> V;
@@ -51,6 +56,10 @@ pub trait StepTaker<V, F = f64> {
 /// [`BasinHopping::with_acceptance_test`] (e.g. a greedy "accept only if
 /// strictly lower" test, or a bounds-aware rejection).
 pub trait AcceptanceTest<F = f64> {
+    /// Restore configured starting behavior before a fresh solve. The default
+    /// is sufficient for stateless rules. Exact continuation skips this hook.
+    fn reset(&mut self) {}
+
     /// Return `true` to accept the candidate cost `f_new` over the current
     /// `f_old`. `rng` supplies any randomness the rule needs.
     fn accept<R: Rng + ?Sized>(&self, f_new: F, f_old: F, rng: &mut R) -> bool;
@@ -65,7 +74,8 @@ pub trait AcceptanceTest<F = f64> {
 /// multiplies the step size, so adaptive control widens or narrows the cube.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RandomDisplacement<F = f64> {
+pub struct RandomDisplacement<F: Scalar = f64> {
+    initial_stepsize: F,
     stepsize: F,
 }
 
@@ -80,7 +90,10 @@ impl<F: Scalar> RandomDisplacement<F> {
             stepsize > F::zero(),
             "RandomDisplacement requires stepsize > 0, got {stepsize:?}"
         );
-        Self { stepsize }
+        Self {
+            initial_stepsize: stepsize,
+            stepsize,
+        }
     }
 
     /// Current step half-width.
@@ -98,6 +111,10 @@ where
         + IndexMut<usize, Output = F>
         + SampleUniformBox,
 {
+    fn reset(&mut self) {
+        self.stepsize = self.initial_stepsize;
+    }
+
     fn take_step<R: Rng + ?Sized>(&mut self, x: &V, rng: &mut R) -> V {
         // Build the cube [x − s, x + s] and reuse the tested uniform-box
         // sampler: U(xᵢ − s, xᵢ + s) ≡ xᵢ + U(−s, s).
@@ -124,7 +141,7 @@ where
 /// with `β = 1/T`).
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Metropolis<F = f64> {
+pub struct Metropolis<F: Scalar = f64> {
     beta: F,
 }
 
@@ -199,7 +216,9 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// Set the inner budget with [`with_inner_max_iter`](Self::with_inner_max_iter)
 /// and configure convergence on the supplied inner solver. A loose simplex
 /// tolerance can keep Nelder–Mead refinements inexpensive. Application stops
-/// use [`inner_stop_when_factory`](Self::inner_stop_when_factory).
+/// use [`inner_stop_when_factory`](Self::inner_stop_when_factory). Optional
+/// cost- and step-change checks observe accepted hops; a rejected proposal
+/// does not turn an unchanged point into convergence.
 ///
 /// # Defaults
 ///
@@ -207,7 +226,20 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// `interval = 50`, `target_accept_rate = 0.5`, `stepwise_factor = 0.9`,
 /// adaptive step control on.
 ///
-/// # Exact checkpoints
+/// # Initialization and continuation
+///
+/// Progress uses [`PointState`]. Fresh initialization resets progress, the
+/// seeded RNG, the adaptive counters, and both custom strategies, then runs
+/// the initial local minimization. The default displacement restores its
+/// configured starting step size. Custom evolving strategies must implement
+/// [`StepTaker::reset`] and [`AcceptanceTest::reset`].
+///
+/// Exact solver-aware checkpoints retain the adapted scale, RNG, counters,
+/// and inner solver and skip initialization. State-only snapshots start a
+/// fresh run from the reported point. Use [`Executor::from_start`](crate::Executor::from_start)
+/// or construct `PointState::new(x)` explicitly. Retain the solver with
+/// [`Executor::run_with_solver`](crate::Executor::run_with_solver) and inspect
+/// [`step_taker`](Self::step_taker) for its current perturbation scale.
 ///
 /// With the `serde` feature, the inner solver, step taker, acceptance test,
 /// adaptive counters, and live RNG can be captured in a solver-aware exact
@@ -231,18 +263,21 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// Same-problem composition: the inner shares the outer's [`Problem`]
 /// wrapper, so every inner cost evaluation bumps the same
 /// [`EvalCounts`](crate::core::problem::EvalCounts) as the outer's, and
-/// [`BasicState`]'s [`CountsMirror`] folds the per-hop delta into
-/// `cost_evals`. No manual roll-up; `MaxCostEvals` budgets and
-/// `result.cost_evals()` count the local minimizations honestly. See
-/// CONTRIBUTING.md "Solver composition" rule 1.
+/// [`PointState`] preserves all six raw categories, including the initial
+/// local minimization. `cost_evals()` counts cost calls alone; derivative or
+/// least-squares work remains separate in `state.counts()`. Use
+/// `max_evaluations(EvaluationKind::TotalWork, n)` to budget all inner work.
+/// No manual roll-up is needed for a shared problem wrapper.
 ///
 /// # Backends
 ///
 /// `BasinHopping` itself is backend-generic; the supported param types are
 /// the intersection of what the chosen [`StepTaker`] and inner solver
 /// support. The default [`RandomDisplacement`] works on every backend that
-/// implements [`SampleUniformBox`] (`Vec<f64>`, nalgebra, ndarray, faer), so
-/// effective coverage is set by the inner solver. **wasm:** clean—the seeded
+/// implements [`SampleUniformBox`]: `Vec<F>`, `nalgebra::DVector<F>`,
+/// `ndarray::Array1<F>`, and `faer::Col<F>`, with `F = f64` (default) or `f32`.
+/// It also requires `Clone`, [`VectorLen`], [`Index`], and [`IndexMut`].
+/// Effective coverage is set by the inner solver. **wasm:** clean—the seeded
 /// [`ChaCha8Rng`] needs no entropy source and there is no time dependency—
 /// provided the inner solver is itself wasm-clean.
 ///
@@ -267,7 +302,7 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// # #[cfg(feature = "problems")]
 /// # {
 /// use basin::problems::Ackley;
-/// use basin::{BasicState, BasinHopping, Executor, NelderMead};
+/// use basin::{PointState, BasinHopping, Executor, NelderMead};
 ///
 /// let inner = NelderMead::adaptive()
 ///     .with_absolute_simplex_size_tolerance(1e-8)
@@ -277,7 +312,7 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// let result = Executor::new(
 ///     Ackley::<Vec<f64>>::new(),
 ///     solver,
-///     BasicState::new(vec![2.0, 2.0]),
+///     PointState::new(vec![2.0, 2.0]),
 /// )
 /// .max_iter(200)
 /// .run()
@@ -306,14 +341,15 @@ pub struct BasinHopping<
     inner: InnerExecutor<<I as InitialState<V>>::State, I>,
     step: S,
     accept: A,
+    seed: u64,
     rng: ChaCha8Rng,
+    accepted_iterate: bool,
     adaptive: bool,
     interval: u64,
     target_accept_rate: F,
     stepwise_factor: F,
-    // Cumulative hop and acceptance counts (never reset). The adaptive
-    // control uses the lifetime rate `naccept/nstep`, matching SciPy's
-    // AdaptiveStepsize.
+    // Adaptation uses the cumulative acceptance rate within this fresh run.
+    // Exact continuation preserves these counts and the adjustment schedule.
     nstep: u64,
     naccept: u64,
     // Whether the current incumbent was reached by a successful inner solve.
@@ -344,7 +380,9 @@ where
             inner: InnerExecutor::new(inner),
             step: RandomDisplacement::new(half),
             accept: Metropolis::new(F::one()),
+            seed,
             rng: ChaCha8Rng::seed_from_u64(seed),
+            accepted_iterate: true,
             adaptive: true,
             interval: 50,
             target_accept_rate: half,
@@ -385,6 +423,11 @@ where
     I: WarmStart<V>,
     <I as InitialState<V>>::State: State + CountsMirror,
 {
+    /// Inspect the perturbation strategy, including its current adapted scale.
+    pub fn step_taker(&self) -> &S {
+        &self.step
+    }
+
     /// Replace the step taker (perturbation strategy). Changes the `S` type
     /// parameter; configure your custom step taker before passing it.
     pub fn with_step_taker<S2>(self, step: S2) -> BasinHopping<I, V, F, S2, A> {
@@ -392,7 +435,9 @@ where
             inner: self.inner,
             step,
             accept: self.accept,
+            seed: self.seed,
             rng: self.rng,
+            accepted_iterate: self.accepted_iterate,
             adaptive: self.adaptive,
             interval: self.interval,
             target_accept_rate: self.target_accept_rate,
@@ -412,7 +457,9 @@ where
             inner: self.inner,
             step: self.step,
             accept,
+            seed: self.seed,
             rng: self.rng,
+            accepted_iterate: self.accepted_iterate,
             adaptive: self.adaptive,
             interval: self.interval,
             target_accept_rate: self.target_accept_rate,
@@ -500,7 +547,18 @@ where
     }
 }
 
-impl<P, I, V, F, S, A> Solver<P, BasicState<V, F>>
+impl<I, V: Clone, F: Scalar, S, A> InitialState<V>
+    for BasinHopping<I, V, F, S, A>
+where
+    I: WarmStart<V>,
+{
+    type State = PointState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        PointState::new(x.clone())
+    }
+}
+
+impl<P, I, V, F, S, A> Solver<P, PointState<V, F>>
     for BasinHopping<I, V, F, S, A>
 where
     F: Scalar,
@@ -517,15 +575,21 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.rng = ChaCha8Rng::seed_from_u64(self.seed);
+        self.step.reset();
+        self.accept.reset();
+        self.nstep = 0;
+        self.naccept = 0;
+        self.accepted_iterate = true;
         // Relax the starting point once so the Metropolis walk begins from a
         // local minimum (the `Ẽ` value of x0). Same-problem composition, so
         // the inner's evals flow into the outer wrapper transparently.
-        let seeded = self.inner.solver().seed(&state.param);
+        let seeded = self.inner.solver().seed(state.param());
         let result = self.inner.run(problem, seeded)?;
-        state.param = result.state.param().clone();
-        state.cost = Some(result.state.cost());
+        state.replace(result.state.param().clone(), result.state.cost());
         // Record whether the initial relaxation succeeded so the first hop's
         // acceptance guard has a faithful incumbent-success flag (a hard `Err`
         // still bubbles via `?`; only soft `SolverFailed` reasons fold in here).
@@ -536,13 +600,13 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
     {
         let f_old = state.cost();
 
         // 1. Perturb the current iterate.
-        let x_trial = self.step.take_step(&state.param, &mut self.rng);
+        let x_trial = self.step.take_step(state.param(), &mut self.rng);
 
         // 2. Local minimization from the perturbed point (the `Ẽ` transform).
         // A hard `Err` bubbles via `?`; a soft `SolverFailed` reason does not
@@ -564,17 +628,17 @@ where
         self.nstep += 1;
         let accepted = self.accept.accept(f_new, f_old, &mut self.rng)
             && accept_guard(new_success, self.incumbent_success);
+        self.accepted_iterate = accepted;
         if accepted {
-            state.param = x_new;
-            state.cost = Some(f_new);
+            state.replace(x_new, f_new);
             self.incumbent_success = new_success;
             self.naccept += 1;
         }
 
         // 4. Adaptive step control. Every `interval` hops, nudge the step
         // size toward the target acceptance rate. SciPy's AdaptiveStepsize
-        // uses the *cumulative* (lifetime) acceptance rate — `naccept`/`nstep`
-        // are never reset — and fires when `nstep % interval == 0`.
+        // uses the cumulative acceptance rate within the run and fires when
+        // `nstep % interval == 0`.
         if self.adaptive && self.nstep % self.interval == 0 {
             let rate = F::from_u64(self.naccept).unwrap()
                 / F::from_u64(self.nstep).unwrap();
@@ -589,6 +653,10 @@ where
         }
 
         Ok((state, None))
+    }
+
+    fn should_check_iterate_change(&self) -> bool {
+        self.accepted_iterate
     }
 }
 

@@ -8,7 +8,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
-use crate::core::state::NllsState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
@@ -129,7 +129,7 @@ use crate::{
 /// when additional observed checks are appropriate. These checks do not
 /// replace the gradient test or establish stationarity when progress stalls.
 /// Execution budgets belong on the executor. The gradient is computed inside
-/// TRF; [`NllsState`] does not expose a [`GradientState`](crate::GradientState).
+/// TRF; [`PointState`] does not expose a [`GradientState`](crate::GradientState).
 ///
 /// # Backends
 ///
@@ -297,13 +297,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = NllsState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        NllsState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
-impl<P, V, M, F> Solver<P, NllsState<V, F>> for Trf<V, M, F>
+impl<P, V, M, F> Solver<P, PointState<V, F>> for Trf<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V>
@@ -329,20 +329,21 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_evaluated(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_evaluated(problem, state)
     }
 }
 
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for Trf<V, M, F>
 where
     F: Scalar,
@@ -372,15 +373,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_evaluated(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_evaluated(problem, state)
     }
 }
@@ -403,12 +405,14 @@ where
     fn init_evaluated<E: BoundedEvaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        mut state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, E::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error> {
+        state.reset();
         // Project the starting iterate strictly into (lower, upper).
         // D is undefined where v_i = 0 (a finite face), so an
         // on-boundary or infeasible start is silently corrected.
-        state.param.project_strictly_inside(
+        let mut param = state.param().clone();
+        param.project_strictly_inside(
             problem.lower(),
             problem.upper(),
             self.rstep,
@@ -419,8 +423,11 @@ where
         self.r_cache = None;
         self.j_cache = None;
         self.model_r_cache = None;
-        let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(
+        self.mu = None;
+        self.nu = F::from_f64(2.0).unwrap();
+        let (r, j) = problem.residual_and_jacobian(&param)?;
+        state.replace(
+            param,
             problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
         );
         let Some((model_r, j)) = problem.model(&r, j) else {
@@ -436,9 +443,9 @@ where
             self.failed = true;
             return Ok(state);
         }
-        let mut d_sq = state.param.clone();
-        let mut c_diag = state.param.clone();
-        state.param.compute_cl_scaling(
+        let mut d_sq = state.param().clone();
+        let mut c_diag = state.param().clone();
+        state.param().compute_cl_scaling(
             &g,
             problem.lower(),
             problem.upper(),
@@ -460,7 +467,7 @@ where
     fn next_evaluated<E: BoundedEvaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        mut state: NllsState<V, F>,
+        mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
         // Use cached `r`/`J` when available (set by init or by the
         // previous accept-or-reject branch). Only count an eval when the
@@ -470,12 +477,12 @@ where
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
-            None => problem.residual(&state.param)?,
+            None => problem.residual(state.param())?,
         };
         let (model_r, j) = match self.j_cache.take() {
             Some(j) => (self.model_r_cache.take(), j),
             None => {
-                let j = problem.jacobian(&state.param)?;
+                let j = problem.jacobian(state.param())?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
                     return Ok((state, Some(TerminationReason::SolverFailed)));
@@ -493,9 +500,9 @@ where
         // Compute the Coleman-Li affine scaling diagonals at the
         // current iterate. d_sq[i] = 1/|v_i|, c_diag[i] = |g_i|/|v_i|
         // (or 0 for infinite bounds).
-        let mut d_sq = state.param.clone();
-        let mut c_diag = state.param.clone();
-        state.param.compute_cl_scaling(
+        let mut d_sq = state.param().clone();
+        let mut c_diag = state.param().clone();
+        state.param().compute_cl_scaling(
             &g,
             problem.lower(),
             problem.upper(),
@@ -573,10 +580,11 @@ where
         // Step-back to the open feasible region. The unconstrained
         // Newton step h might land on or beyond a face; scale it down
         // by min(1, θ · τ_max) so the iterate stays strictly inside.
-        let tau_max =
-            state
-                .param
-                .max_feasible_step(&h, problem.lower(), problem.upper());
+        let tau_max = state.param().max_feasible_step(
+            &h,
+            problem.lower(),
+            problem.upper(),
+        );
         let alpha = if tau_max >= F::one() {
             F::one()
         } else {
@@ -584,14 +592,12 @@ where
         };
 
         // Trial step.
-        let mut x_trial = state.param.clone();
+        let mut x_trial = state.param().clone();
         x_trial.scaled_add(alpha, &h);
         let r_trial = problem.residual(&x_trial)?;
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
-        let prev_cost = state
-            .cost
-            .expect("cost not set: Solver::init must run before next_iter");
+        let prev_cost = state.cost();
 
         // BCL gain ratio with the C-correction (eq. ψ_k from
         // `source.marker.md:138`). Numerator is "actual reduction in
@@ -623,8 +629,7 @@ where
             // cubic with β=2, γ=3, p=3 (matches LevenbergMarquardt).
             // Stash the trial residual (now at the new iterate); clear
             // the Jacobian cache since J(x_trial) was not computed.
-            state.param = x_trial;
-            state.cost = Some(f_trial);
+            state.replace(x_trial, f_trial);
             let factor = F::one() - (two * rho - F::one()).powi(3);
             mu = mu * factor.max(one_third);
             nu = two;

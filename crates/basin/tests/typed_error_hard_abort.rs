@@ -8,7 +8,9 @@ use std::cell::Cell;
 use std::convert::Infallible;
 use std::mem::size_of;
 
-use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
+use basin::{
+    CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
+};
 
 /// `Result<f64, Infallible>` must be the same size as `f64`: the entire
 /// rationale for choosing `Infallible` as the default error in the
@@ -70,7 +72,7 @@ fn cost_err_bubbles_out_of_executor_run_with_same_error() {
     let result = Executor::new(
         problem,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.5, -2.0]),
+        FirstOrderState::new(vec![1.5, -2.0]),
     )
     .max_iter(100)
     .run();
@@ -93,7 +95,7 @@ fn cost_err_at_init_bubbles_out_of_executor_run() {
     let result = Executor::new(
         problem,
         GradientDescent::new(0.1),
-        BasicState::new(vec![0.0]),
+        FirstOrderState::new(vec![0.0]),
     )
     .max_iter(10)
     .run();
@@ -133,7 +135,7 @@ fn soft_reject_via_infinity_does_not_abort() {
     let result = Executor::new(
         InfiniteBeyondUnit,
         GradientDescent::with_line_search(basin::Backtracking::new()),
-        BasicState::new(vec![0.5, 0.5]),
+        FirstOrderState::new(vec![0.5, 0.5]),
     )
     .max_iter(200)
     .run()

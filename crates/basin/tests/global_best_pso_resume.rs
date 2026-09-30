@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use basin::{
     BoxConstraints, CostFunction, ExactCheckpoint, ExactCheckpointWriter,
-    Executor, GlobalBestPso, GlobalBestPsoState, ObserverMode, State,
+    Executor, GlobalBestPso, ObserverMode, PopulationProgress, State,
     read_exact_checkpoint,
 };
 
@@ -38,8 +38,8 @@ impl BoxConstraints for Landscape {
     }
 }
 
-type TestSolver = GlobalBestPso;
-type TestState = GlobalBestPsoState<Vec<f64>>;
+type TestSolver = GlobalBestPso<Vec<f64>>;
+type TestState = PopulationProgress<Vec<f64>>;
 
 fn problem() -> Landscape {
     Landscape {
@@ -71,29 +71,29 @@ fn remove_checkpoint(path: &PathBuf) {
 }
 
 #[test]
-fn serialized_state_only_resume_is_bit_identical() {
-    let reference = Executor::new(problem(), solver(), TestState::new())
-        .max_iter(55)
-        .run()
-        .unwrap();
-    let split = Executor::new(problem(), solver(), TestState::new())
+fn serialized_progress_only_restarts_with_reevaluation() {
+    let prior = Executor::new(problem(), solver(), TestState::empty())
         .max_iter(19)
         .run()
         .unwrap()
         .into_state();
-    let bytes = encoded(&split);
+    let bytes = encoded(&prior);
     let (restored, remaining): (TestState, &[u8]) =
         postcard::take_from_bytes(&bytes).unwrap();
     assert!(remaining.is_empty());
-
-    let resumed = Executor::resume(problem(), solver(), restored)
-        .max_iter(55)
-        .run()
+    let fresh = Executor::new(problem(), solver(), restored)
+        .require_evaluated_state()
+        .max_iter(0)
+        .run_with_solver()
         .unwrap();
-
-    assert_eq!(resumed.state.iter(), 55);
-    assert_eq!(resumed.cost_evals(), 14 * 56);
-    assert_eq!(encoded(&resumed.state), encoded(&reference.state));
+    assert_eq!(fresh.iter(), 0);
+    assert_eq!(fresh.cost_evals(), 14);
+    assert_eq!(fresh.state.candidates(), prior.candidates());
+    assert_eq!(
+        fresh.solver.personal_best_positions(),
+        fresh.state.candidates()
+    );
+    assert_eq!(fresh.solver.personal_best_costs(), fresh.state.costs());
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn solver_aware_checkpoint_resume_is_bit_identical() {
         remove_checkpoint(path);
     }
 
-    let reference = Executor::new(problem(), solver(), TestState::new())
+    let reference = Executor::new(problem(), solver(), TestState::empty())
         .max_iter(55)
         .checkpoint_with(
             ExactCheckpointWriter::new(&reference_path),
@@ -113,7 +113,7 @@ fn solver_aware_checkpoint_resume_is_bit_identical() {
         )
         .run()
         .unwrap();
-    Executor::new(problem(), solver(), TestState::new())
+    Executor::new(problem(), solver(), TestState::empty())
         .max_iter(19)
         .checkpoint_with(
             ExactCheckpointWriter::new(&split_path),

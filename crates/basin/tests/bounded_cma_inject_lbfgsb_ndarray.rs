@@ -9,7 +9,9 @@
 
 use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::BoothBoxed;
-use basin::{BoundedCmaEs, BoundedCmaInject, CmaEsState, Executor, Lbfgsb};
+use basin::{
+    BoundedCmaEs, BoundedCmaInject, Executor, Lbfgsb, PopulationProgress,
+};
 
 /// BoundedCmaEs + L-Bfgs-B on Booth with slack bounds `[-5, 5]²`; the
 /// global min `(1, 3)` is strictly interior, so the inner polish must
@@ -22,7 +24,7 @@ fn converges_on_booth_boxed_slack() {
 
     let m0 = Array1::from_vec(vec![0.0, 2.0]);
 
-    let cma = BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(19);
+    let cma = BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(19, 0.5);
     let solver = BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())
         .with_k(1)
         .with_inner_max_iter(50);
@@ -30,7 +32,7 @@ fn converges_on_booth_boxed_slack() {
     let result = Executor::new(
         problem,
         solver,
-        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5),
+        PopulationProgress::<Array1<f64>>::from_point(m0),
     )
     .max_iter(200)
     .run()
@@ -47,9 +49,7 @@ fn converges_on_booth_boxed_slack() {
     );
 }
 
-/// L-Bfgs-B work units (cost + gradient evals) roll into the outer
-/// state's `cost_evals` (CONTRIBUTING.md "Solver composition" rule 1);
-/// same lower bound as the nalgebra mirror.
+/// Inner cost and gradient calls retain their own categories in outer progress.
 #[test]
 fn aggregates_lbfgsb_work_into_outer() {
     let lower = Array1::from_elem(2, -5.0);
@@ -64,15 +64,15 @@ fn aggregates_lbfgsb_work_into_outer() {
     // runs the full budget.
     let vanilla = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(29),
-        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0.clone(), 0.5),
+        BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(29, 0.5),
+        PopulationProgress::<Array1<f64>>::from_point(m0.clone()),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
     // Memetic variant on the same seed and outer budget.
-    let cma = BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(29);
+    let cma = BoundedCmaEs::<Array1<f64>, Array2<f64>>::new(29, 0.5);
     let solver = BoundedCmaInject::with_inner_solver(cma, Lbfgsb::new())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
@@ -80,21 +80,16 @@ fn aggregates_lbfgsb_work_into_outer() {
     let memetic = Executor::new(
         BoothBoxed::<Array1<f64>>::new(lower, upper),
         solver,
-        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.5),
+        PopulationProgress::<Array1<f64>>::from_point(m0),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
-    let min_extra = (outer_iters.saturating_sub(1)) * (k as u64) * 3;
-    assert!(
-        memetic.cost_evals() >= vanilla.cost_evals() + min_extra,
-        "memetic cost_evals = {} should exceed vanilla {} by at least \
-         {} (outer iters × k × (L-Bfgs-B init cost + gradient + re-eval))",
-        memetic.cost_evals(),
-        vanilla.cost_evals(),
-        min_extra
-    );
+    let injections = outer_iters * k as u64;
+    assert!(memetic.cost_evals() >= vanilla.cost_evals() + 2 * injections);
+    assert!(memetic.state.counts().gradient_evals >= injections);
+    assert_eq!(memetic.state.counts().residual_evals, 0);
 }
 
 #[path = "support/backend_aliases.rs"]

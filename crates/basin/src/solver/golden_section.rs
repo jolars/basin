@@ -2,7 +2,7 @@ use crate::core::constraint::BoxConstraints;
 use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::ScalarState;
+use crate::core::state::PointState;
 use crate::core::termination::TerminationReason;
 
 /// Golden-section search for 1D minimization on a closed interval
@@ -26,10 +26,10 @@ use crate::core::termination::TerminationReason;
 ///
 /// Unlike Brent, golden section ignores the starting point: the bracket
 /// `[lower, upper]` fully determines the two interior points, so the value
-/// passed to [`ScalarState::new`](crate::core::state::ScalarState::new) does
+/// passed to [`PointState::new`](crate::core::state::PointState::new) does
 /// not affect the search.
 ///
-/// `GoldenSection` runs on [`ScalarState`], the cost-only single-iterate
+/// `GoldenSection` runs on [`PointState`], the cost-only single-iterate
 /// state. It does **not** impl
 /// [`GradientState`](crate::core::state::GradientState) (a 1-D minimizer has
 /// no gradient), so gradient convergence settings are absent from its API.
@@ -55,6 +55,7 @@ use crate::core::termination::TerminationReason;
 /// *Proceedings of the American Mathematical Society* 4(3): 502–506.
 /// Transcribed (golden-section search in one dimension) in Numerical
 /// Recipes §10.1.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GoldenSection<F = f64> {
     tol_rel: F,
     tol_abs: F,
@@ -68,6 +69,7 @@ fn golden_r<F: Scalar>() -> F {
 }
 
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Inner<F> {
     a: F,
     b: F,
@@ -133,7 +135,7 @@ impl<F: Scalar> GoldenSection<F> {
     }
 }
 
-impl<P, F> Solver<P, ScalarState<F>> for GoldenSection<F>
+impl<P, F> Solver<P, PointState<F, F>> for GoldenSection<F>
 where
     F: Scalar,
     P: CostFunction<Param = F, Output = F> + BoxConstraints,
@@ -143,8 +145,9 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ScalarState<F>,
-    ) -> Result<ScalarState<F>, Self::Error> {
+        mut state: PointState<F, F>,
+    ) -> Result<PointState<F, F>, Self::Error> {
+        state.reset();
         let a = *problem.inner().lower();
         let b = *problem.inner().upper();
         assert!(
@@ -172,11 +175,9 @@ where
         // Post the better of the two interior points so iter-0 termination
         // criteria read a valid cost.
         if f1 <= f2 {
-            state.param = c1;
-            state.cost = Some(f1);
+            state.replace(c1, f1);
         } else {
-            state.param = c2;
-            state.cost = Some(f2);
+            state.replace(c2, f2);
         }
         Ok(state)
     }
@@ -184,8 +185,9 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ScalarState<F>,
-    ) -> Result<(ScalarState<F>, Option<TerminationReason>), Self::Error> {
+        mut state: PointState<F, F>,
+    ) -> Result<(PointState<F, F>, Option<TerminationReason>), Self::Error>
+    {
         let s = self
             .inner
             .as_mut()
@@ -224,12 +226,14 @@ where
         // independently, and the bracket-collapse `terminate` only fires once
         // the bracket has shrunk below tolerance, so the two coincide at
         // convergence.
-        state.param = u;
-        state.cost = Some(fu);
+        state.replace(u, fu);
         Ok((state, None))
     }
 
-    fn terminate(&self, _state: &ScalarState<F>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &PointState<F, F>,
+    ) -> Option<TerminationReason> {
         let s = self.inner.as_ref()?;
         let two = F::from_f64(2.0).unwrap();
         // Relative term anchored on the current best interior point.
@@ -276,7 +280,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 0.0, hi: 5.0 },
             GoldenSection::new(),
-            ScalarState::new(2.5),
+            PointState::new(2.5),
         )
         .max_iter(100)
         .run()
@@ -293,7 +297,7 @@ mod tests {
         let r = Executor::new(
             Quadratic { lo: 3.0, hi: 5.0 },
             GoldenSection::new(),
-            ScalarState::new(4.0),
+            PointState::new(4.0),
         )
         .max_iter(200)
         .run()
@@ -328,7 +332,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             GoldenSection::new(),
-            ScalarState::new(0.5),
+            PointState::new(0.5),
         )
         .max_iter(100)
         .run()
@@ -359,7 +363,7 @@ mod tests {
             Executor::new(
                 Quadratic { lo: 0.0, hi: 5.0 },
                 GoldenSection::new(),
-                ScalarState::new(seed),
+                PointState::new(seed),
             )
             .max_iter(100)
             .run()
@@ -384,7 +388,7 @@ mod tests {
         let r = Executor::new(
             Cubic { lo: 0.0, hi: 2.0 },
             (GoldenSection::new()).with_absolute_cost_change_tolerance(1e-12),
-            ScalarState::new(0.5),
+            PointState::new(0.5),
         )
         .max_iter(200)
         .run()

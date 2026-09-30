@@ -1,13 +1,13 @@
 //! Public-API integration tests for the MADS (OrthoMADS) solver.
 //!
-//! Exercises [`Mads`] through the framework: [`Executor`] over a [`MadsState`],
+//! Exercises [`Mads`] through the framework: [`Executor`] over a [`PointState`],
 //! with framework termination ([`MaxCostEvals`], [`MeshTolerance`]). The
 //! direction machinery is validated against the OrthoMADS paper by the in-crate
 //! `solver::mads` golden tests; these confirm the public wiring (init/next_iter,
 //! the V↔Vec bridge, count mirroring, convergence/budget/early-stop paths)
 //! and convergence on smooth problems across backends.
 
-use basin::{CostFunction, Executor, Mads, MadsState, TerminationReason};
+use basin::{CostFunction, Executor, Mads, PointState, TerminationReason};
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
@@ -44,10 +44,10 @@ fn converges_on_sphere() {
         Mads::new()
             .with_initial_poll_size(1.0)
             .with_minimum_poll_size(1e-8),
-        MadsState::new(vec![2.0, -3.0, 1.5]),
+        PointState::new(vec![2.0, -3.0, 1.5]),
     )
     .max_cost_evals(10_000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -67,13 +67,13 @@ fn converges_on_rosenbrock_2d() {
         Mads::new()
             .with_initial_poll_size(0.5)
             .with_minimum_poll_size(1e-7),
-        MadsState::new(vec![-1.2, 1.0]),
+        PointState::new(vec![-1.2, 1.0]),
     )
     // MADS is a poll-only direct search, so it needs many iterations on the
     // Rosenbrock valley; let convergence or the eval budget govern, not max_iter.
     .max_iter(100_000)
     .max_cost_evals(20_000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -101,17 +101,17 @@ fn mesh_tolerance_stops_early() {
                 .with_minimum_poll_size(1e-12)
         )
         .with_absolute_poll_size_tolerance(1e-3),
-        MadsState::new(vec![-1.2, 1.0]),
+        PointState::new(vec![-1.2, 1.0]),
     )
     .max_cost_evals(50_000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MeshTolerance);
     assert!(
-        result.state.poll_size() <= 1e-3,
+        result.solver.poll_size().unwrap() <= 1e-3,
         "poll_size = {}",
-        result.state.poll_size()
+        result.solver.poll_size().unwrap()
     );
 }
 
@@ -122,10 +122,10 @@ fn respects_cost_eval_budget() {
         Mads::new()
             .with_initial_poll_size(0.5)
             .with_minimum_poll_size(1e-12),
-        MadsState::new(vec![-1.2, 1.0]),
+        PointState::new(vec![-1.2, 1.0]),
     )
     .max_cost_evals(50)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxCostEvals);
@@ -146,7 +146,7 @@ fn respects_cost_eval_budget() {
 #[cfg(feature = "problems")]
 fn outperforms_nelder_mead_on_discontinuous_step() {
     use basin::problems::Step;
-    use basin::{BasicSimplexState, NelderMead};
+    use basin::{NelderMead, SimplexProgress};
 
     let start = vec![4.2, -3.2];
     let budget = 5_000;
@@ -156,11 +156,11 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
         Mads::new()
             .with_initial_poll_size(1.0)
             .with_minimum_poll_size(1e-6),
-        MadsState::new(start.clone()),
+        PointState::new(start.clone()),
     )
     .max_iter(100_000)
     .max_cost_evals(budget)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     let nm = Executor::new(
@@ -168,11 +168,11 @@ fn outperforms_nelder_mead_on_discontinuous_step() {
         (NelderMead::new())
             .with_absolute_simplex_size_tolerance(1e-12)
             .with_absolute_simplex_cost_tolerance(1e-12),
-        BasicSimplexState::new(start.clone()),
+        SimplexProgress::new(start.clone()),
     )
     .max_iter(100_000)
     .max_cost_evals(budget)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     // MADS reaches the global-minimum plateau (value 0).
@@ -214,10 +214,10 @@ fn backend_generic_nalgebra() {
     let result = Executor::new(
         SphereN,
         Mads::new().with_minimum_poll_size(1e-8),
-        MadsState::new(DVector::from_vec(vec![2.0, -3.0, 1.5])),
+        PointState::new(DVector::from_vec(vec![2.0, -3.0, 1.5])),
     )
     .max_cost_evals(10_000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -250,10 +250,10 @@ fn backend_generic_ndarray() {
     let result = Executor::new(
         SphereA,
         Mads::new().with_minimum_poll_size(1e-8),
-        MadsState::new(Array1::from_vec(vec![2.0, -3.0, 1.5])),
+        PointState::new(Array1::from_vec(vec![2.0, -3.0, 1.5])),
     )
     .max_cost_evals(10_000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -283,10 +283,10 @@ fn backend_generic_faer() {
     let result = Executor::new(
         SphereF,
         Mads::new().with_minimum_poll_size(1e-8),
-        MadsState::new(Col::<f64>::from_fn(3, |i| [2.0, -3.0, 1.5][i])),
+        PointState::new(Col::<f64>::from_fn(3, |i| [2.0, -3.0, 1.5][i])),
     )
     .max_cost_evals(10_000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);

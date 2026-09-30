@@ -1,5 +1,5 @@
 use basin::{
-    BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian, NllsState,
+    BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian, PointState,
     Residual, State, TerminationReason, TrustRegionReflective,
 };
 
@@ -176,8 +176,8 @@ fn interior_active_and_fixed_solutions() {
             (result.cost() - cost).abs() <= 4.0 * f64::EPSILON * cost.max(1.0)
         );
         if lower == upper {
-            assert_eq!(result.state.residual_evals(), 1);
-            assert_eq!(result.state.jacobian_evals(), 0);
+            assert_eq!(result.state.counts().residual_evals, 1);
+            assert_eq!(result.state.counts().jacobian_evals, 0);
         }
     }
 }
@@ -242,7 +242,7 @@ fn narrow_interval_and_no_representable_interior() {
             .run()
             .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverFailed);
-    assert_eq!(result.state.residual_evals(), 0);
+    assert_eq!(result.state.counts().residual_evals, 0);
 }
 
 #[test]
@@ -255,8 +255,8 @@ fn initialization_counts_and_stationarity() {
             .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.state.residual_evals(), 1);
-    assert_eq!(result.state.jacobian_evals(), 1);
+    assert_eq!(result.state.counts().residual_evals, 1);
+    assert_eq!(result.state.counts().jacobian_evals, 1);
 }
 
 #[test]
@@ -285,17 +285,23 @@ fn exact_continuation_and_fresh_reuse() {
     .run_with_solver()
     .unwrap();
     assert_eq!(full.param(), resumed.state.param());
-    assert_eq!(full.state.residual_evals(), resumed.state.residual_evals());
+    assert_eq!(
+        full.state.counts().residual_evals,
+        resumed.state.counts().residual_evals
+    );
     let fresh = Executor::new(
         Model::rosenbrock(),
         resumed.solver,
-        NllsState::new(vec![2.0, 2.0]),
+        PointState::new(vec![2.0, 2.0]),
     )
     .max_iter(200)
     .run()
     .unwrap();
     assert_eq!(fresh.param(), full.param());
-    assert_eq!(fresh.state.residual_evals(), full.state.residual_evals());
+    assert_eq!(
+        fresh.state.counts().residual_evals,
+        full.state.counts().residual_evals
+    );
 }
 
 #[test]
@@ -354,11 +360,14 @@ fn check_cost_floor<P>(
     for (x, target) in result.param().iter().zip([0.3, 0.7]) {
         assert!((x - target).abs() < 1e-8);
     }
-    assert_eq!(result.state.jacobian_evals(), result.iter() + 1);
+    assert_eq!(result.state.counts().jacobian_evals, result.iter() + 1);
     if expected == TerminationReason::NumericalNoProgress {
         assert_eq!(result.cost(), 2.0);
         assert_eq!(result.iter(), 4);
-        assert!(result.state.residual_evals() > result.state.jacobian_evals());
+        assert!(
+            result.state.counts().residual_evals
+                > result.state.counts().jacobian_evals
+        );
         let x = result.param();
         let scaled_gradient =
             ((1.0 - x[0]) * (x[0] - 0.3).abs()).max(x[1] * (x[1] - 0.7).abs());
@@ -427,13 +436,13 @@ fn cost_floor_checkpoint_preserves_the_numerical_stop() {
     .run_with_solver()
     .unwrap();
     assert_eq!(stopped.reason, TerminationReason::NumericalNoProgress);
-    let snapshot = |state: &NllsState<Vec<f64>>| {
+    let snapshot = |state: &PointState<Vec<f64>>| {
         (
             state.param().clone(),
             state.cost(),
             state.iter(),
-            state.residual_evals(),
-            state.jacobian_evals(),
+            state.counts().residual_evals,
+            state.counts().jacobian_evals,
         )
     };
     let state = snapshot(&stopped.state);
@@ -458,7 +467,7 @@ fn cost_floor_checkpoint_preserves_the_numerical_stop() {
     // existing failure behavior, without inheriting the earlier rejection.
     assert_eq!(fresh.reason, TerminationReason::SolverFailed);
     assert_eq!(fresh.iter(), 0);
-    assert_eq!(fresh.state.residual_evals(), 1);
+    assert_eq!(fresh.state.counts().residual_evals, 1);
 }
 
 #[test]
@@ -603,8 +612,11 @@ fn nonfinite_trials_shrink_radius_and_reuse_jacobian() {
     .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!((result.param()[0] - 2.0_f64.ln()).abs() < 1e-8);
-    assert!(result.state.residual_evals() > result.state.jacobian_evals());
-    assert_eq!(result.state.jacobian_evals(), result.iter() + 1);
+    assert!(
+        result.state.counts().residual_evals
+            > result.state.counts().jacobian_evals
+    );
+    assert_eq!(result.state.counts().jacobian_evals, result.iter() + 1);
 }
 
 #[test]
@@ -622,8 +634,8 @@ fn retry_exhaustion_preserves_the_current_state() {
     assert_eq!(result.reason, TerminationReason::SolverFailed);
     assert_eq!(result.param(), &vec![-1.0]);
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.state.residual_evals(), 2);
-    assert_eq!(result.state.jacobian_evals(), 1);
+    assert_eq!(result.state.counts().residual_evals, 2);
+    assert_eq!(result.state.counts().jacobian_evals, 1);
     assert!(
         (result.cost() - 0.5 * guarded_exp(-1.0).unwrap().powi(2)).abs()
             < 1e-15
@@ -645,8 +657,8 @@ fn equal_cost_alone_does_not_establish_numerical_no_progress() {
     assert_eq!(result.reason, TerminationReason::SolverFailed);
     assert_eq!(result.iter(), 4);
     assert_eq!(result.cost(), 2.0);
-    assert_eq!(result.state.residual_evals(), 6);
-    assert_eq!(result.state.jacobian_evals(), 5);
+    assert_eq!(result.state.counts().residual_evals, 6);
+    assert_eq!(result.state.counts().jacobian_evals, 5);
 }
 
 #[test]
@@ -675,8 +687,8 @@ fn collapsed_trials_after_invalid_or_worse_costs_remain_failures() {
         assert_eq!(result.param(), &[1.0]);
         assert_eq!(result.cost(), 0.5);
         assert_eq!(result.iter(), 0);
-        assert_eq!(result.state.jacobian_evals(), 1);
-        assert!(result.state.residual_evals() > 10);
+        assert_eq!(result.state.counts().jacobian_evals, 1);
+        assert!(result.state.counts().residual_evals > 10);
     }
 }
 

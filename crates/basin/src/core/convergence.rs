@@ -539,7 +539,7 @@ impl<V, So: WarmStart<V>, G, X, C, T> WarmStart<V>
 impl<V, F: Scalar, So: crate::solver::MemeticInner<V, F>, G, X, C, T>
     crate::solver::MemeticInner<V, F> for ConfiguredSolver<So, G, X, C, T>
 {
-    fn seed_scaled(&self, x: &V, sigma: F) -> Self::State {
+    fn seed_scaled(&mut self, x: &V, sigma: F) -> Self::State {
         self.solver.seed_scaled(x, sigma)
     }
 }
@@ -575,6 +575,9 @@ where
             },
             state,
         )
+    }
+    fn seeded_chain_is_initialized(&self) -> bool {
+        self.solver.seeded_chain_is_initialized()
     }
     fn prepare_resume(&self, state: &mut Self::State) {
         self.solver.prepare_resume(state);
@@ -813,7 +816,7 @@ mod forward;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BasicSimplexState, BasicState};
+    use crate::{PointState, SimplexProgress};
 
     #[test]
     fn step_history_recovers_after_nonfinite_observations() {
@@ -826,12 +829,12 @@ mod tests {
             };
             for x in [0.0, nonfinite, nonfinite, 0.0] {
                 assert_eq!(
-                    checks.check(&problem, &BasicState::new(vec![x])),
+                    checks.check(&problem, &PointState::new(vec![x])),
                     None
                 );
             }
             assert_eq!(
-                checks.check(&problem, &BasicState::new(vec![0.0])),
+                checks.check(&problem, &PointState::new(vec![0.0])),
                 Some(TerminationReason::ParamTolerance),
             );
         }
@@ -845,7 +848,7 @@ mod tests {
             last: Some(vec![-1e200]),
         };
         assert_eq!(
-            checks.check(&Problem::new(()), &BasicState::new(vec![1e200])),
+            checks.check(&Problem::new(()), &PointState::new(vec![1e200])),
             None,
         );
     }
@@ -856,8 +859,8 @@ mod tests {
         for nonfinite in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             for costs in [vec![0.0, nonfinite], vec![nonfinite, 0.0]] {
                 let mut state =
-                    BasicSimplexState::from_simplex(vec![vec![0.0]; 2]);
-                state.costs = costs;
+                    SimplexProgress::from_simplex(vec![vec![0.0]; 2]);
+                state.replace(vec![vec![0.0]; 2], costs).unwrap();
                 let mut cost_only = SimplexChecks {
                     size: (),
                     cost: Some(0.0),

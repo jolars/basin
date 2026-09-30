@@ -571,7 +571,7 @@ pub trait RankOneUpdate<V, F = f64> {
 
 /// In-place *general* rank-one update `self ← self + α · u · vᵀ` with two
 /// distinct vectors (BLAS `ger`). The asymmetric generalization of
-/// [`RankOneUpdate`] (which is the `u == v` special case). BFGS needs the
+/// a symmetric update (the `u == v` special case). BFGS needs the
 /// asymmetric form: its inverse-Hessian update carries the cross terms
 /// `−ρ · s · (Hy)ᵀ` and `−ρ · (Hy) · sᵀ`, where `s ≠ Hy` in general.
 ///
@@ -590,12 +590,11 @@ pub trait RankOneUpdate<V, F = f64> {
 ///
 /// # Backends
 ///
-/// Implemented for `nalgebra::DMatrix<f64>` (with `V = DVector<f64>`) via
-/// `ger`, for `faer::Mat<f64>` (with `V = faer::Col<f64>`) via the `matmul`
-/// accumulator, and for [`DenseMatrix`](super::DenseMatrix) (with
-/// `V = Vec<f64>`) via a direct double loop, so BFGS runs on `Vec<f64>`,
-/// nalgebra, and faer. Sparse backends do *not* implement this, matching
-/// [`RankOneUpdate`].
+/// Implemented for [`DenseMatrix`](super::DenseMatrix) with `Vec<F>`,
+/// `nalgebra::DMatrix<F>` with `DVector<F>`, `ndarray::Array2<F>` with
+/// `Array1<F>`, and `faer::Mat<F>` with `Col<F>`, for `f32` and `f64`.
+/// Every enabled backend version provides its own implementation.
+/// Sparse backends do not implement this operation.
 pub trait GeneralRankOneUpdate<V, F = f64> {
     /// Compute `self ← self + α · u · vᵀ` in place.
     fn general_rank_one_update(&mut self, alpha: F, u: &V, v: &V);
@@ -630,3 +629,16 @@ impl core::fmt::Display for LinearSolveError {
 }
 
 impl core::error::Error for LinearSolveError {}
+
+/// The default dense matrix paired with a vector backend.
+///
+/// Solvers such as [`crate::Bfgs`] use this association to infer their model
+/// storage from the starting point. Every enabled backend version has its own
+/// implementation. The association selects a default, not an extra numerical
+/// capability: algorithms still require only the matrix operations they use.
+/// Custom vector backends can implement this trait; callers can override the
+/// solver's matrix type explicitly.
+pub trait DenseBackend<F: super::Scalar = f64> {
+    /// Dense matrix used for solver-owned models by default.
+    type Matrix;
+}

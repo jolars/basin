@@ -13,19 +13,17 @@
 //!      outer's mid-iter return).
 //!
 //! Booth (2D, convex quadratic, optimum `(1, 3)`) is the test problem.
-//! The outer state is a custom `MultiStartState` rather than
-//! `BasicSimplexState` because `BasicSimplexState`'s vertex and cost fields
-//! are `pub(crate)`: the integration test is outside the crate, so we
-//! show that composition works through the public `State`, `Solver`, and
-//! `CountsMirror` traits alone.
+//! A custom `MultiStartState` exercises composition through the public
+//! `State`, `Solver`, and `CountsMirror` traits without depending on a shipped
+//! progress representation. External solvers can also reuse shared storage.
 
 #![cfg(feature = "problems")]
 
 use basin::problems::Booth;
 use basin::{
-    Backtracking, BasicState, CostFunction, CountsMirror, EvalCounts, Executor,
-    Gradient, GradientDescent, InnerExecutor, Problem, Solver, State,
-    TerminationReason,
+    Backtracking, CostFunction, CountsMirror, EvalCounts, Executor,
+    FirstOrderState, Gradient, GradientDescent, InnerExecutor, Problem, Solver,
+    State, TerminationReason,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -131,11 +129,11 @@ fn sort_by_cost(iterates: &mut [Vec<f64>], costs: &mut [f64]) {
 /// param. This is intentionally simple (it isn't real Nelder-Mead) but
 /// exercises the full composition contract.
 struct PerVertexRefine<G> {
-    inner: InnerExecutor<BasicState<Vec<f64>>, G>,
+    inner: InnerExecutor<FirstOrderState<Vec<f64>>, G>,
 }
 
 impl<G> PerVertexRefine<G> {
-    fn new(inner: InnerExecutor<BasicState<Vec<f64>>, G>) -> Self {
+    fn new(inner: InnerExecutor<FirstOrderState<Vec<f64>>, G>) -> Self {
         Self { inner }
     }
 }
@@ -144,7 +142,7 @@ impl<P, G> Solver<P, MultiStartState> for PerVertexRefine<G>
 where
     P: CostFunction<Param = Vec<f64>, Output = f64>
         + Gradient<Param = Vec<f64>, Gradient = Vec<f64>>,
-    G: Solver<P, BasicState<Vec<f64>>, Error = P::Error>,
+    G: Solver<P, FirstOrderState<Vec<f64>>, Error = P::Error>,
 {
     type Error = P::Error;
     fn init(
@@ -172,7 +170,7 @@ where
         for v in prev_iterates {
             // Same-problem composition: the inner shares the outer's
             // wrapper, so inner evals are accounted for automatically.
-            let result = self.inner.run(problem, BasicState::new(v))?;
+            let result = self.inner.run(problem, FirstOrderState::new(v))?;
 
             // Failure routing (contract 3): bubble `SolverFailed` via
             // the outer's mid-iter return; consume everything else.

@@ -26,6 +26,9 @@ use crate::core::{
 /// applied. This preserves the full feasible set, while COBYLA retains its
 /// existing interpolation algorithm. Bounds do not guarantee feasible callback
 /// points, and radius convergence does not certify constraint feasibility.
+/// COBYLA counts each nonlinear inequality and equality callback as a residual
+/// evaluation, including empty blocks and failing attempts. Linear and bound
+/// arithmetic adds no callback count.
 /// Callback errors propagate unchanged, and non-finite evaluated residuals
 /// retain COBYLA's existing handling.
 ///
@@ -138,9 +141,18 @@ where
         count
     }
 
+    #[cfg(test)]
     pub(crate) fn evaluate_constraints(
         &self,
         x: &P::Param,
+    ) -> Result<Vec<P::Output>, P::Error> {
+        self.evaluate_constraints_counted(x, &mut crate::EvalCounts::default())
+    }
+
+    pub(crate) fn evaluate_constraints_counted(
+        &self,
+        x: &P::Param,
+        counts: &mut crate::EvalCounts,
     ) -> Result<Vec<P::Output>, P::Error> {
         let n = x.vec_len();
         let mut constraints = Vec::with_capacity(self.constraint_count(n));
@@ -177,6 +189,7 @@ where
             );
             constraints.extend((0..b.vec_len()).map(|i| ax[i] - b[i]));
         }
+        counts.residual_evals += 1;
         let nonlinear = self.problem.nonlinear_constraints(x)?;
         assert_eq!(
             nonlinear.vec_len(),
@@ -184,6 +197,7 @@ where
             "FoldedConstraints: nonlinear output must match declared count"
         );
         constraints.extend((0..nonlinear.vec_len()).map(|i| nonlinear[i]));
+        counts.residual_evals += 1;
         let equalities = self.problem.nonlinear_equalities(x)?;
         assert_eq!(
             equalities.as_ref().map_or(0, VectorLen::vec_len),

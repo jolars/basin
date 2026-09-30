@@ -79,9 +79,8 @@ fn driver_allocations_stay_bounded_without_changing_numerical_results() {
 #[test]
 fn public_quadratic_iterations_reuse_trial_buffers() {
     use basin::{
-        Cobyla, CobylaState, CostFunction, Executor,
-        NonlinearInequalityConstraints, Observe, ObserverMode,
-        TerminationReason,
+        Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
+        Observe, ObserverMode, SelectedState, TerminationReason,
     };
     use std::{convert::Infallible, rc::Rc};
 
@@ -117,14 +116,14 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
         }
     }
     struct AllocationObserver(Rc<Counts>);
-    impl Observe<CobylaState<Vec<f64>>> for AllocationObserver {
-        fn observe_init(&mut self, _: &CobylaState<Vec<f64>>) {
+    impl Observe<SelectedState<Vec<f64>>> for AllocationObserver {
+        fn observe_init(&mut self, _: &SelectedState<Vec<f64>>) {
             self.0.initial_callbacks.set(self.0.callbacks.get());
             self.0.start.set(REQUESTS.get());
         }
         fn observe_final(
             &mut self,
-            _: &CobylaState<Vec<f64>>,
+            _: &SelectedState<Vec<f64>>,
             _: &TerminationReason,
         ) {
             self.0.end.set(REQUESTS.get());

@@ -5,14 +5,14 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::SphereBoxed;
-use basin::{Executor, MaLsChSw, MaLsChSwState};
+use basin::{Executor, MaLsChSw, PopulationProgress};
 
 #[test]
 fn converges_on_sphere_d10() {
     let problem =
         SphereBoxed::new(Col::from_fn(10, |_| -5.0), Col::from_fn(10, |_| 5.0));
     let solver = MaLsChSw::<Col<f64>>::new(7).with_pop_size(20);
-    let result = Executor::new(problem, solver, MaLsChSwState::new())
+    let result = Executor::new(problem, solver, PopulationProgress::empty())
         .max_iter(u64::MAX)
         .max_cost_evals(20_000)
         .run()

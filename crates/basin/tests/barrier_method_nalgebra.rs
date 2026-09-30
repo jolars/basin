@@ -5,8 +5,8 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::ConstrainedQuadratic;
 use basin::{
-    Backtracking, BarrierMethod, BasicState, Bfgs, Executor, GradientDescent,
-    GradientState, TerminationReason,
+    Backtracking, BarrierMethod, Bfgs, Executor, GradientDescent, PointState,
+    TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`. The unconstrained min (2,2) is
@@ -30,7 +30,7 @@ fn active_constraint_converges_to_projection() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -62,7 +62,7 @@ fn inactive_constraint_recovers_unconstrained_minimum() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -89,7 +89,7 @@ fn infeasible_start_runs_phase_one_then_converges() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -115,7 +115,7 @@ fn eval_counts_are_recorded() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -125,7 +125,7 @@ fn eval_counts_are_recorded() {
     // have accumulated onto the outer state.
     assert!(result.cost_evals() > 0, "no cost evals recorded");
     assert!(
-        result.state.gradient_evals() > 0,
+        result.state.counts().gradient_evals > 0,
         "no gradient evals recorded"
     );
 }
@@ -148,7 +148,7 @@ fn two_constraints_both_active() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -163,8 +163,7 @@ fn two_constraints_both_active() {
     );
 }
 
-/// A `Bfgs` inner (state `QuasiNewtonState`, not `BasicState`) proves the
-/// barrier method is no longer locked to `BasicState<V>`/`GradientDescent`.
+/// A BFGS inner uses the same shared first-order state as gradient descent.
 /// `Bfgs` is paired with an Armijo `Backtracking` line search so it respects
 /// the barrier's `+∞` wall (a Wolfe or More-Thuente search could step into the
 /// infeasible region). It converges to the same projection (1,1) as the
@@ -180,7 +179,7 @@ fn bfgs_inner_converges_to_projection() {
             Bfgs::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()

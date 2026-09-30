@@ -1,9 +1,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::RastriginBoxed;
-use basin::{
-    BasicPopulationState, Executor, PopulationState, Ssga, State, StepOutcome,
-};
+use basin::{Executor, PopulationProgress, Ssga, State, StepOutcome};
 
 /// Convergence on Rastrigin(D=5) within the [-5.12, 5.12] standard box.
 /// SSGA is a global optimizer and Rastrigin is its canonical multimodal
@@ -14,15 +12,12 @@ use basin::{
 fn converges_on_low_dim_rastrigin() {
     let problem = RastriginBoxed::<Vec<f64>>::with_standard_bounds(5);
     let solver = Ssga::new(42).with_pop_size(30);
-    let result = Executor::new(
-        problem,
-        solver,
-        BasicPopulationState::<Vec<f64>>::with_size(30),
-    )
-    .max_iter(u64::MAX)
-    .max_cost_evals(4000)
-    .run()
-    .unwrap();
+    let result =
+        Executor::new(problem, solver, PopulationProgress::<Vec<f64>>::empty())
+            .max_iter(u64::MAX)
+            .max_cost_evals(4000)
+            .run()
+            .unwrap();
 
     assert!(
         result.cost() < 5.0,
@@ -41,7 +36,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_a = Executor::new(
         problem_a,
         Ssga::new(7).with_pop_size(10),
-        BasicPopulationState::<Vec<f64>>::with_size(10),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(30)
     .run()
@@ -49,7 +44,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_b = Executor::new(
         problem_b,
         Ssga::new(7).with_pop_size(10),
-        BasicPopulationState::<Vec<f64>>::with_size(10),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(30)
     .run()
@@ -65,7 +60,7 @@ fn different_seeds_yield_different_trajectories() {
     let result_a = Executor::new(
         RastriginBoxed::<Vec<f64>>::with_standard_bounds(3),
         Ssga::new(1).with_pop_size(10),
-        BasicPopulationState::<Vec<f64>>::with_size(10),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -73,7 +68,7 @@ fn different_seeds_yield_different_trajectories() {
     let result_b = Executor::new(
         RastriginBoxed::<Vec<f64>>::with_standard_bounds(3),
         Ssga::new(2).with_pop_size(10),
-        BasicPopulationState::<Vec<f64>>::with_size(10),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -91,7 +86,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
     let mut stepper = Executor::new(
         RastriginBoxed::<Vec<f64>>::with_standard_bounds(4),
         Ssga::new(99).with_pop_size(20),
-        BasicPopulationState::<Vec<f64>>::with_size(20),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(40)
     .into_stepper()
@@ -116,7 +111,7 @@ fn population_invariants_hold_after_iteration() {
     let mut stepper = Executor::new(
         RastriginBoxed::<Vec<f64>>::with_standard_bounds(3),
         Ssga::new(1234).with_pop_size(pop_size),
-        BasicPopulationState::<Vec<f64>>::with_size(pop_size),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(20)
     .into_stepper()
@@ -146,7 +141,7 @@ fn population_stays_feasible() {
     let mut stepper = Executor::new(
         RastriginBoxed::<Vec<f64>>::with_standard_bounds(n),
         Ssga::new(2024).with_pop_size(15),
-        BasicPopulationState::<Vec<f64>>::with_size(15),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(30)
     .into_stepper()

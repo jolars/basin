@@ -1,7 +1,7 @@
 use basin::{
     ArctanLoss, BoxConstraints, CauchyLoss, CostFunction, DenseMatrix,
     Executor, GaussNewton, HuberLoss, Jacobian, LevenbergMarquardt,
-    LevenbergMarquardtQr, LmDamping, LossFunction, NllsState, Residual,
+    LevenbergMarquardtQr, LmDamping, LossFunction, PointState, Residual,
     RobustLeastSquares, SoftL1Loss, Solver, SquaredLoss, Trf,
     TrustRegionReflective,
 };
@@ -94,13 +94,13 @@ fn check<'a, S>(
 ) where
     S: Solver<
             RobustLeastSquares<Fit, &'a dyn LossFunction>,
-            NllsState<Vec<f64>>,
+            PointState<Vec<f64>>,
             Error = std::convert::Infallible,
         >,
 {
     let objective = RobustLeastSquares::new(fit, loss).with_scale(scale);
     let result =
-        Executor::new(objective.clone(), solver, NllsState::new(start))
+        Executor::new(objective.clone(), solver, PointState::new(start))
             .max_iter(1000)
             .run()
             .unwrap();

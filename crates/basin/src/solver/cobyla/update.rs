@@ -21,6 +21,7 @@ use super::linalg::{col, inv};
 pub(crate) const NO_DROP: usize = usize::MAX;
 
 /// Rollback and product storage reused across simplex updates.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct UpdateWork<F> {
     sim_old: Vec<F>,
     simi_old: Vec<F>,

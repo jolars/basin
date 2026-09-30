@@ -39,6 +39,7 @@ use crate::core::math::{
 /// `Vec<F>`, nalgebra, ndarray, and faer, in both exact-Hessian and
 /// matrix-free trust-region modes.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Steihaug {
     /// CG iteration cap; `None` uses the problem dimension `n` (CG's natural
     /// bound for exact arithmetic).
@@ -311,6 +312,7 @@ where
 /// The same as [`Steihaug`]: `Vec<F>`, nalgebra, ndarray, and faer, in
 /// both exact-Hessian and matrix-free trust-region modes.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SteihaugWithForcing<F: Scalar = f64> {
     inner: Steihaug,
     kappa: F,
@@ -677,7 +679,8 @@ mod tests {
     #[test]
     fn tighter_model_solve_reduces_outer_derivative_work() {
         use crate::{
-            BasicState, CostFunction, Executor, Gradient, Hessian, TrustRegion,
+            CostFunction, Executor, FirstOrderState, Gradient, Hessian,
+            TrustRegion,
         };
         struct Quadratic;
         fn diagonal(i: usize) -> f64 {
@@ -718,7 +721,7 @@ mod tests {
                     .with_forcing_parameters(1e-9, 0.0)
                     .with_max_iter(40),
             ),
-            BasicState::new(vec![1.0; 20]),
+            FirstOrderState::new(vec![1.0; 20]),
         )
         .max_iter(100)
         .target_cost(1e-6)

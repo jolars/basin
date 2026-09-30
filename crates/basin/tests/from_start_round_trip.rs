@@ -8,22 +8,14 @@
 //! settings and asserts bit-identical final iterate and cost, covering one
 //! solver per state family.
 //!
-//! Solvers whose natural initialization needs more than a point, namely CMA-ES
-//! (σ), the population GA, DE, and random search (they sample the box), and the
-//! bracketing scalar solvers (Brent, golden-section), deliberately do **not**
-//! implement [`InitialState`](basin::InitialState), so `from_start` with one
-//! is a compile error. That exclusion is enforced by the type system; e.g.
-//! `Executor::from_start(problem, CmaEs::new(...), x0)` does not compile
-//! because `CmaEs: InitialState<_>` is unimplemented.
+//! CMA-ES accepts point starts because its initial scale belongs to the solver.
+//! Population solvers that sample the box still require population progress.
 
-use basin::MoreThuente;
 use basin::core::math::DenseMatrix;
-use basin::solver::lbfgs::Unbounded;
 use basin::{
-    BasicSimplexState, BasicState, Bfgs, CostFunction, Executor, Gradient,
-    GradientDescent, Hessian, Jacobian, Lbfgs, LbfgsState, LevenbergMarquardt,
-    Mads, MadsState, NelderMead, Newuoa, NewuoaState, NllsState,
-    QuasiNewtonState, Residual, Steihaug, TrustRegion,
+    Bfgs, CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
+    Hessian, Jacobian, Lbfgs, LevenbergMarquardt, Mads, NelderMead, Newuoa,
+    PointState, Residual, SimplexProgress, Steihaug, TrustRegion,
 };
 
 /// f(x) = Σ (xᵢ − cᵢ)², minimum 0 at x = c. Smooth, with an exact gradient
@@ -112,7 +104,7 @@ fn gradient_descent_basic_state() {
     let b = Executor::new(
         problem(),
         GradientDescent::new(0.01),
-        BasicState::new(x0()),
+        FirstOrderState::new(x0()),
     )
     .max_iter(50)
     .run()
@@ -134,7 +126,7 @@ fn trust_region_basic_state_second_order() {
     let b = Executor::new(
         problem(),
         TrustRegion::with_subproblem(Steihaug::new()),
-        BasicState::new(x0()),
+        FirstOrderState::new(x0()),
     )
     .max_iter(50)
     .run()
@@ -151,32 +143,25 @@ fn nelder_mead_simplex_state() {
         .max_iter(50)
         .run()
         .unwrap();
-    let b = Executor::new(
-        problem(),
-        NelderMead::new(),
-        BasicSimplexState::new(x0()),
-    )
-    .max_iter(50)
-    .run()
-    .unwrap();
+    let b =
+        Executor::new(problem(), NelderMead::new(), SimplexProgress::new(x0()))
+            .max_iter(50)
+            .run()
+            .unwrap();
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
 }
 
 #[test]
 fn lbfgs_unbounded_history_state() {
-    let a = Executor::from_start(
-        problem(),
-        Lbfgs::<Unbounded, MoreThuente>::new(),
-        x0(),
-    )
-    .max_iter(50)
-    .run()
-    .unwrap();
+    let a = Executor::from_start(problem(), Lbfgs::new().unbounded(), x0())
+        .max_iter(50)
+        .run()
+        .unwrap();
     let b = Executor::new(
         problem(),
-        Lbfgs::<Unbounded, MoreThuente>::new(),
-        LbfgsState::new(x0(), 10),
+        Lbfgs::new().unbounded(),
+        FirstOrderState::new(x0()),
     )
     .max_iter(50)
     .run()
@@ -196,7 +181,7 @@ fn bfgs_quasi_newton_state_vec_backend() {
     let b = Executor::new(
         problem(),
         Bfgs::new(),
-        QuasiNewtonState::<Vec<f64>, DenseMatrix<f64>, f64>::new(x0()),
+        FirstOrderState::<Vec<f64>, f64>::new(x0()),
     )
     .max_iter(50)
     .run()
@@ -215,7 +200,7 @@ fn levenberg_marquardt_nlls_state() {
         .run()
         .unwrap();
     let b =
-        Executor::new(prob(), LevenbergMarquardt::new(), NllsState::new(x0()))
+        Executor::new(prob(), LevenbergMarquardt::new(), PointState::new(x0()))
             .max_iter(50)
             .run()
             .unwrap();
@@ -229,7 +214,7 @@ fn newuoa_state() {
         .max_iter(50)
         .run()
         .unwrap();
-    let b = Executor::new(problem(), Newuoa::new(), NewuoaState::new(x0()))
+    let b = Executor::new(problem(), Newuoa::new(), PointState::new(x0()))
         .max_iter(50)
         .run()
         .unwrap();
@@ -243,7 +228,7 @@ fn mads_state() {
         .max_iter(50)
         .run()
         .unwrap();
-    let b = Executor::new(problem(), Mads::new(), MadsState::new(x0()))
+    let b = Executor::new(problem(), Mads::new(), PointState::new(x0()))
         .max_iter(50)
         .run()
         .unwrap();
@@ -289,14 +274,11 @@ fn bfgs_from_start_nalgebra_backend() {
         .max_iter(50)
         .run()
         .unwrap();
-    let b = Executor::new(
-        QuadN,
-        Bfgs::new(),
-        basin::NalgebraQuasiNewtonState::new(x0()),
-    )
-    .max_iter(50)
-    .run()
-    .unwrap();
+    let b =
+        Executor::new(QuadN, Bfgs::new(), basin::FirstOrderState::new(x0()))
+            .max_iter(50)
+            .run()
+            .unwrap();
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
     assert!(a.cost() < 1e-12);
@@ -330,14 +312,11 @@ fn bfgs_from_start_faer_backend() {
         .max_iter(50)
         .run()
         .unwrap();
-    let b = Executor::new(
-        QuadF,
-        Bfgs::new(),
-        basin::FaerQuasiNewtonState::new(x0()),
-    )
-    .max_iter(50)
-    .run()
-    .unwrap();
+    let b =
+        Executor::new(QuadF, Bfgs::new(), basin::FirstOrderState::new(x0()))
+            .max_iter(50)
+            .run()
+            .unwrap();
     assert_eq!(a.param(), b.param());
     assert_eq!(a.cost(), b.cost());
     assert!(a.cost() < 1e-12);
@@ -383,7 +362,7 @@ fn from_start_round_trips_at_f32() {
     let b = Executor::new(
         prob(),
         GradientDescent::new(0.01_f32),
-        BasicState::<Vec<f32>, f32>::new(x0()),
+        FirstOrderState::<Vec<f32>, f32>::new(x0()),
     )
     .max_iter(50)
     .run()

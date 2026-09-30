@@ -14,8 +14,8 @@ use std::time::Instant;
 
 use basin::problems::{rosenbrock, rosenbrock_gradient};
 use basin::{
-    CostFunction, CountsMirror, Executor, Gradient, Problem, Slsqp, SlsqpState,
-    Solver, State, TerminationReason,
+    CostFunction, CountsMirror, Executor, Gradient, Problem,
+    SelectedFirstOrderState, Slsqp, Solver, State, TerminationReason,
 };
 
 use crate::unconstrained::Unconstrained;
@@ -126,11 +126,13 @@ impl Objective {
     }
 }
 
-fn manual(obj: Objective) -> (SlsqpState<Vec<f64>>, TerminationReason) {
+fn manual(
+    obj: Objective,
+) -> (SelectedFirstOrderState<Vec<f64>>, TerminationReason) {
     let mut problem = Problem::new(Unconstrained(obj));
     let mut solver = Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY);
     let mut state = solver
-        .init(&mut problem, SlsqpState::new(START.to_vec()))
+        .init(&mut problem, SelectedFirstOrderState::new(START.to_vec()))
         .unwrap();
     state.mirror(problem.counts());
     state.update_best();
@@ -172,7 +174,7 @@ pub fn run(library: Library) -> Run {
                 let result = Executor::new(
                     Unconstrained(obj),
                     Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY),
-                    SlsqpState::new(START.to_vec()),
+                    SelectedFirstOrderState::new(START.to_vec()),
                 )
                 .max_iter(BUDGET as u64)
                 .run()

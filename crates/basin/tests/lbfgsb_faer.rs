@@ -7,7 +7,7 @@
 use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxed;
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
+    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb,
 };
 
 struct Rosen {
@@ -51,14 +51,16 @@ fn unbounded_rosenbrock_2d_converges() {
         l: Col::from_fn(2, |_| f64::NEG_INFINITY),
         u: Col::from_fn(2, |_| f64::INFINITY),
     };
-    let state = LbfgsState::new(
-        Col::from_fn(2, |i| if i == 0 { -1.2 } else { 1.0 }),
-        5,
-    );
+    let state =
+        FirstOrderState::new(Col::from_fn(
+            2,
+            |i| if i == 0 { -1.2 } else { 1.0 },
+        ));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -81,11 +83,12 @@ fn booth_at_corner_converges() {
         Col::from_fn(2, |_| -1.0),
         Col::from_fn(2, |_| 1.0),
     );
-    let state = LbfgsState::new(Col::from_fn(2, |_| 0.0), 5);
+    let state = FirstOrderState::new(Col::from_fn(2, |_| 0.0));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(100)
@@ -112,11 +115,12 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
         Col::from_fn(2, |_| -5.0),
         Col::from_fn(2, |_| 5.0),
     );
-    let state = LbfgsState::new(Col::from_fn(2, |_| 0.0), 5);
+    let state = FirstOrderState::new(Col::from_fn(2, |_| 0.0));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-10),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-10),
         state,
     )
     .max_iter(100)

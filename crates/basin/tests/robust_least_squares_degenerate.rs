@@ -1,6 +1,6 @@
 use basin::{
     BoxConstraints, CostFunction, DenseMatrix, Executor, GaussNewton, Gradient,
-    HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, NllsState,
+    HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, PointState,
     Residual, RobustLeastSquares, Scalar, Solver, SquaredLoss,
     TerminationReason, Trf, TrustRegionReflective,
 };
@@ -76,7 +76,7 @@ fn check_initial<S>(solver: impl Fn() -> S)
 where
     S: Solver<
             RobustLeastSquares<Fit, HuberLoss>,
-            NllsState<Vec<f64>>,
+            PointState<Vec<f64>>,
             Error = Infallible,
         >,
 {
@@ -87,7 +87,7 @@ where
         let result = Executor::new(
             RobustLeastSquares::new(fit, HuberLoss),
             solver(),
-            NllsState::new(vec![0.0; 2]),
+            PointState::new(vec![0.0; 2]),
         )
         .max_iter(10)
         .run_with_solver()
@@ -121,14 +121,14 @@ fn check_rank_deficient<S>(solver: S)
 where
     S: Solver<
             RobustLeastSquares<Fit, HuberLoss>,
-            NllsState<Vec<f64>>,
+            PointState<Vec<f64>>,
             Error = Infallible,
         >,
 {
     let result = Executor::new(
         RobustLeastSquares::new(Fit::new(true), HuberLoss),
         solver,
-        NllsState::new(vec![0.0; 2]),
+        PointState::new(vec![0.0; 2]),
     )
     .max_iter(100)
     .run()

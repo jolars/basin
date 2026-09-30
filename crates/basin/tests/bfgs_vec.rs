@@ -8,8 +8,7 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient,
-    TerminationReason,
+    Bfgs, CostFunction, Executor, FirstOrderState, Gradient, TerminationReason,
 };
 
 #[test]
@@ -17,14 +16,11 @@ fn bfgs_converges_on_rosenbrock() {
     let problem = Rosenbrock::<Vec<f64>>::default();
     let initial = vec![-1.2, 1.0];
 
-    let result = Executor::new(
-        problem,
-        Bfgs::new(),
-        DenseQuasiNewtonState::new(initial),
-    )
-    .max_iter(100)
-    .run()
-    .unwrap();
+    let result =
+        Executor::new(problem, Bfgs::new(), FirstOrderState::new(initial))
+            .max_iter(100)
+            .run()
+            .unwrap();
 
     assert!(
         result.cost() < 1e-8,
@@ -51,7 +47,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
     let result = Executor::new(
         problem,
         (Bfgs::new()).with_absolute_gradient_tolerance(1e-6),
-        DenseQuasiNewtonState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -108,7 +104,7 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
     let result = Executor::new(
         problem,
         (Bfgs::new()).with_absolute_gradient_tolerance(1e-8),
-        DenseQuasiNewtonState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(50)
     .run()

@@ -41,6 +41,7 @@ use crate::line_search::{
 /// (`dcsrch` and `dcstep`). MINPACK-1 1983, MINPACK-2 1993; J. J. Moré
 /// and D. J. Thuente, *Line search algorithms with guaranteed
 /// sufficient decrease*, ACM TOMS 20(3), 1994.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MoreThuente<F = f64> {
     /// Sufficient-decrease (Armijo) coefficient. Default `1e-3`
     /// (Fortran `lnsrlb` constant). Strong-Wolfe `c1` analog.

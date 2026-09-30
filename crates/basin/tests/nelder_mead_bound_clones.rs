@@ -1,7 +1,6 @@
 //! Projected steps must borrow box bounds instead of allocating copies.
 use basin::{
-    BasicSimplexState, BoxConstraints, CostFunction, NelderMead, Problem,
-    Solver,
+    BoxConstraints, CostFunction, NelderMead, Problem, SimplexProgress, Solver,
 };
 use basin::{ClampInPlace, ScaleInPlace, ScaledAdd};
 use std::{cell::Cell, convert::Infallible, rc::Rc};
@@ -11,6 +10,11 @@ impl Clone for Vector {
     fn clone(&self) -> Self {
         self.1.set(self.1.get() + 1);
         Self(self.0.clone(), self.1.clone())
+    }
+}
+impl basin::VectorLen for Vector {
+    fn vec_len(&self) -> usize {
+        self.0.len()
     }
 }
 impl ScaleInPlace for Vector {
@@ -67,7 +71,7 @@ fn projected_iterations_do_not_clone_bounds() {
         lower: vector(vec![0.0; 2]),
         upper: vector(vec![1.0; 2]),
     });
-    let state = BasicSimplexState::from_simplex(vec![
+    let state = SimplexProgress::from_simplex(vec![
         vector(vec![0.5, 0.5]),
         vector(vec![0.7, 0.5]),
         vector(vec![0.5, 0.7]),

@@ -1,11 +1,11 @@
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
-    Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity, NegInPlace, NormSquared,
-    Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+    DenseBackend, Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity,
+    NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::QuasiNewtonState;
+use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::TerminationReason;
 use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 
@@ -40,16 +40,14 @@ use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 /// # Examples
 ///
 /// BFGS on the 2-D Rosenbrock function over the dependency-free
-/// `Vec<f64>` backend. Quasi-Newton solvers iterate a
-/// [`QuasiNewtonState`], parameterised by the
-/// param vector and the dense matrix type, here `Vec<f64>` and
-/// [`DenseMatrix`](crate::DenseMatrix), bundled by the
-/// [`DenseQuasiNewtonState`](crate::DenseQuasiNewtonState) alias so the
-/// matrix type needn't be spelled:
+/// `Vec<f64>` backend. Progress uses [`FirstOrderState`]; the solver owns
+/// its inverse Hessian and infers the matrix through [`DenseBackend`].
+/// Fresh solves reset both the model and line-search history. Exact
+/// solver-and-state checkpoints retain them.
 ///
 /// ```
 /// use basin::{
-///     Bfgs, CostFunction, DenseQuasiNewtonState, Executor, Gradient,
+///     Bfgs, CostFunction, FirstOrderState, Executor, Gradient,
 /// };
 ///
 /// struct Rosenbrock;
@@ -74,42 +72,67 @@ use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 /// let result = Executor::new(
 ///     Rosenbrock,
 ///     Bfgs::new(),
-///     DenseQuasiNewtonState::new(vec![-1.2, 1.0]),
+///     FirstOrderState::new(vec![-1.2, 1.0]),
 /// )
 /// .max_iter(100)
 /// .run()
 /// .unwrap();
 /// assert!(result.cost() < 1e-8);
 /// ```
-pub struct Bfgs<S = Wolfe, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Bfgs<
+    V: DenseBackend<F>,
+    F: Scalar = f64,
+    M = <V as DenseBackend<F>>::Matrix,
+    S = Wolfe<F>,
+> {
     line_search: S,
     epsilon: F,
+    inverse_hessian: Option<M>,
+    initial_scaling_done: bool,
+    param: std::marker::PhantomData<V>,
 }
 
-impl Default for Bfgs<Wolfe> {
+impl<V: DenseBackend<F>, F: Scalar> Default for Bfgs<V, F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Bfgs<Wolfe> {
-    /// BFGS with the strong-Wolfe line search (Nocedal & Wright defaults)
-    /// and `ε = 1e-10` for the curvature-condition guard.
+impl<V: DenseBackend<F>, F: Scalar> Bfgs<V, F> {
+    /// BFGS with a strong-Wolfe line search and the backend's default matrix.
+    /// The model is initialized from the seed's dimension during each fresh run.
     pub fn new() -> Self {
-        Self {
-            line_search: Wolfe::new(),
-            epsilon: 1e-10,
-        }
+        Self::with_line_search(Wolfe::new())
     }
 }
 
-impl<S, F: Scalar> Bfgs<S, F> {
-    /// BFGS with an explicit line-search strategy.
+impl<V: DenseBackend<F>, F: Scalar, S>
+    Bfgs<V, F, <V as DenseBackend<F>>::Matrix, S>
+{
+    /// BFGS with a configured line search and the backend's default matrix.
     pub fn with_line_search(line_search: S) -> Self {
+        Self::with_matrix_and_line_search(line_search)
+    }
+}
+
+impl<V: DenseBackend<F>, F: Scalar, M, S> Bfgs<V, F, M, S> {
+    /// Construct with an explicit matrix type and a configured line search.
+    /// The line search resets its evolving history on each fresh initialization.
+    pub fn with_matrix_and_line_search(line_search: S) -> Self {
         Self {
             line_search,
             epsilon: F::from_f64(1e-10).unwrap(),
+            inverse_hessian: None,
+            initial_scaling_done: false,
+            param: std::marker::PhantomData,
         }
+    }
+
+    /// Current inverse-Hessian model, available after initialization.
+    /// Use [`crate::Executor::run_with_solver`] to retain it after a solve.
+    pub fn inverse_hessian(&self) -> Option<&M> {
+        self.inverse_hessian.as_ref()
     }
 
     /// Relative threshold for the curvature condition `yᵀs > ε · |y| · |s|`.
@@ -131,12 +154,13 @@ impl<S, F: Scalar> Bfgs<S, F> {
     }
 }
 
-impl<P, S, V, M, F> Solver<P, QuasiNewtonState<V, M, F>> for Bfgs<S, F>
+impl<P, S, V, M, F> Solver<P, FirstOrderState<V, F>> for Bfgs<V, F, M, S>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     S: LineSearch<P, V, F, Error = P::Error>,
-    V: Clone
+    V: DenseBackend<F>
+        + Clone
         + Dot<F>
         + NormSquared<F>
         + ScaledAdd<F>
@@ -153,46 +177,45 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: QuasiNewtonState<V, M, F>,
-    ) -> Result<QuasiNewtonState<V, M, F>, Self::Error> {
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state.reset();
+        self.line_search.reset();
+        self.inverse_hessian = Some(M::identity(state.param().vec_len()));
+        self.initial_scaling_done = false;
+        let param = state.param().clone();
+        let (cost, grad) = problem.cost_and_gradient(&param)?;
+        state
+            .replace(param, cost, grad)
+            .expect("gradient dimension differs from parameter");
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: QuasiNewtonState<V, M, F>,
-    ) -> Result<
-        (QuasiNewtonState<V, M, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
-        let g = state
-            .gradient
-            .take()
-            .expect("gradient not set: Solver::init must run before next_iter");
-        let cost_old = state
-            .cost
-            .expect("cost not set: Solver::init must run before next_iter");
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
+    {
+        let (param, cost_old, g) =
+            state.current().expect("BFGS requires initialized progress");
+        let mut param = param.clone();
+        let h = self
+            .inverse_hessian
+            .as_mut()
+            .expect("BFGS model is not initialized");
 
         // Quasi-Newton direction: d = −H g. With H positive definite this
         // is automatically a descent direction (gᵀd = −gᵀHg < 0).
-        let mut direction = state.inverse_hessian.matvec(&g);
+        let mut direction = (*h).matvec(g);
         direction.neg_in_place();
 
-        let alpha = match self.line_search.next_with_outcome(
-            problem,
-            &state.param,
-            cost_old,
-            &g,
-            &direction,
-        )? {
+        let alpha = match self
+            .line_search
+            .next_with_outcome(problem, &param, cost_old, g, &direction)?
+        {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
-                state.gradient = Some(g);
-                state.cost = Some(cost_old);
                 return Ok((state, Some(TerminationReason::SolverFailed)));
             }
         };
@@ -203,24 +226,22 @@ where
         // executor halts immediately. NaN routes here too
         // (`NaN > 0.0` is false).
         if !(alpha.is_finite() && alpha > F::zero()) {
-            state.gradient = Some(g);
-            state.cost = Some(cost_old);
             return Ok((state, Some(TerminationReason::SolverConverged)));
         }
 
         // s = α d, x ← x + s.
         let mut s = direction;
         s.scale_in_place(alpha);
-        state.param.scaled_add(F::one(), &s);
+        param.scaled_add(F::one(), &s);
 
         // Fused cost+grad at the new iterate: one fused call gives both
         // values consumed below (BFGS update reads g_new; state caches
         // cost_new at the bottom of the iter).
-        let (cost_new, g_new) = problem.cost_and_gradient(&state.param)?;
+        let (cost_new, g_new) = problem.cost_and_gradient(&param)?;
 
         // y = g_new − g.
         let mut y = g_new.clone();
-        y.scaled_add(-F::one(), &g);
+        y.scaled_add(-F::one(), g);
         let sy = s.dot(&y);
         let s_norm = s.norm_squared().sqrt();
         let y_norm = y.norm_squared().sqrt();
@@ -230,122 +251,51 @@ where
             // before applying the first BFGS update. Without this, the
             // identity-initialized H produces a unit step that's far too
             // large or small on poorly scaled problems.
-            if !state.initial_scaling_done {
+            if !self.initial_scaling_done {
                 let yy = y.dot(&y);
                 if yy > F::zero() {
                     let scale = sy / yy;
-                    let n = state.param.vec_len();
+                    let n = param.vec_len();
                     let mut h0 = M::identity(n);
                     h0.scale_in_place(scale);
-                    state.inverse_hessian = h0;
+                    (*h) = h0;
                 }
-                state.initial_scaling_done = true;
+                self.initial_scaling_done = true;
             }
 
             let rho = F::one() / sy;
-            let hy = state.inverse_hessian.matvec(&y);
+            let hy = (*h).matvec(&y);
             let yhy = y.dot(&hy);
             let coef = rho * (F::one() + rho * yhy);
 
             // H ← H + coef · s sᵀ − ρ · (s (Hy)ᵀ + (Hy) sᵀ).
             // Three rank-1 updates, all in place.
-            state.inverse_hessian.general_rank_one_update(coef, &s, &s);
-            state.inverse_hessian.general_rank_one_update(-rho, &s, &hy);
-            state.inverse_hessian.general_rank_one_update(-rho, &hy, &s);
+            (*h).general_rank_one_update(coef, &s, &s);
+            (*h).general_rank_one_update(-rho, &s, &hy);
+            (*h).general_rank_one_update(-rho, &hy, &s);
         }
         // else: curvature failure (very rare with strong Wolfe). Skip the
         // H update; the line search still produced a descent step, so we
         // continue. If this persists, max_iter or GradientTolerance halt.
 
-        state.cost = Some(cost_new);
-        state.gradient = Some(g_new);
+        state
+            .replace(param, cost_new, g_new)
+            .expect("gradient dimension differs from parameter");
         Ok((state, None))
     }
 }
 
-/// Lets [`Bfgs`] serve as the inner of a composed solver
-/// (e.g. [`BarrierMethod`](crate::solver::BarrierMethod) /
-/// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)),
-/// seeding a fresh [`QuasiNewtonState`] (identity inverse-Hessian) at the
-/// warm-start point.
-///
-/// Implemented for every backend BFGS itself runs on: `Vec<f64>` (via the
-/// hand-rolled [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra,
-/// ndarray, and faer, so
-/// [`Executor::from_start`](crate::Executor::from_start) and the composed
-/// (barrier and AL) inners seed uniformly regardless of backend.
-impl<S, F> InitialState<Vec<F>> for Bfgs<S, F>
-where
-    F: Scalar,
+/// A point warm start reevaluates the point and creates a fresh identity model.
+impl<V: DenseBackend<F> + Clone, F: Scalar, M, S> InitialState<V>
+    for Bfgs<V, F, M, S>
 {
-    type State = QuasiNewtonState<Vec<F>, crate::core::math::DenseMatrix<F>, F>;
-    fn seed(&self, x: &Vec<F>) -> Self::State {
-        QuasiNewtonState::<Vec<F>, crate::core::math::DenseMatrix<F>, F>::new(
-            x.clone(),
-        )
+    type State = FirstOrderState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        FirstOrderState::new(x.clone())
     }
 }
 
-impl<S, F> WarmStart<Vec<F>> for Bfgs<S, F> where F: Scalar {}
-
-#[cfg(feature = "nalgebra_all")]
-crate::backend_macros::nalgebra_versions! {
-    nalgebra_initial_state(nalgebra, nalgebra_sparse, nalgebra_lapack);
-    use super::*;
-    impl<S, F> InitialState<nalgebra::DVector<F>> for Bfgs<S, F>
-    where
-        F: Scalar + nalgebra::Scalar + num_traits::Zero,
-    {
-        type State =
-            QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
-        fn seed(&self, x: &nalgebra::DVector<F>) -> Self::State {
-            QuasiNewtonState::<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>::new(
-                x.clone(),
-            )
-        }
-    }
-
-    impl<S, F> WarmStart<nalgebra::DVector<F>> for Bfgs<S, F> where
-        F: Scalar + nalgebra::Scalar + num_traits::Zero
-    {
-    }
-}
-
-#[cfg(feature = "faer_all")]
-crate::backend_macros::faer_versions! {
-    faer_initial_state(faer, faer_traits);
-    use super::*;
-    impl<S, F> InitialState<faer::Col<F>> for Bfgs<S, F>
-    where
-        F: Scalar + faer_traits::ComplexField,
-    {
-        type State = QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
-        fn seed(&self, x: &faer::Col<F>) -> Self::State {
-            QuasiNewtonState::<faer::Col<F>, faer::Mat<F>, F>::new(x.clone())
-        }
-    }
-
-    impl<S, F> WarmStart<faer::Col<F>> for Bfgs<S, F> where
-        F: Scalar + faer_traits::ComplexField
-    {
-    }
-}
-
-#[cfg(feature = "ndarray_all")]
-crate::backend_macros::ndarray_versions! {
-    ndarray_initial_state(ndarray);
-    use super::*;
-    impl<S, F> InitialState<ndarray::Array1<F>> for Bfgs<S, F>
-    where
-        F: Scalar,
-    {
-        type State = QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
-        fn seed(&self, x: &ndarray::Array1<F>) -> Self::State {
-            QuasiNewtonState::<ndarray::Array1<F>, ndarray::Array2<F>, F>::new(
-                x.clone(),
-            )
-        }
-    }
-
-    impl<S, F> WarmStart<ndarray::Array1<F>> for Bfgs<S, F> where F: Scalar {}
+impl<V: DenseBackend<F> + Clone, F: Scalar, M, S> WarmStart<V>
+    for Bfgs<V, F, M, S>
+{
 }

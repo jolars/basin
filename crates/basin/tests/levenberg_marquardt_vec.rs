@@ -11,7 +11,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::{PowellSingular, RosenbrockResiduals};
-use basin::{Executor, LevenbergMarquardt, NllsState, TerminationReason};
+use basin::{Executor, LevenbergMarquardt, PointState, TerminationReason};
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -25,7 +25,7 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -59,7 +59,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(200)
     .run()
@@ -88,7 +88,7 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(100)
     .run()
@@ -112,7 +112,7 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(100)
     .run()

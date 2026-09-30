@@ -4,7 +4,7 @@ use crate::backend_aliases::nalgebra::DVector;
 use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquares;
 use basin::{
-    Executor, LevenbergMarquardt, LmDamping, NllsState, TerminationReason,
+    Executor, LevenbergMarquardt, LmDamping, PointState, TerminationReason,
 };
 
 /// Mirror of the GN sparse fixture: 6×3 design with `b = A·[1,2,3]` so
@@ -40,7 +40,7 @@ fn levenberg_marquardt_converges_on_sparse_linear_regression() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -75,7 +75,7 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new().with_absolute_gradient_tolerance(1e-12),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(100)
     .run()
@@ -95,7 +95,7 @@ fn trust_region_limits_sparse_steps_and_converges() {
                 .with_damping(LmDamping::TrustRegion)
                 .with_initial_step_bound(0.1)
                 .with_absolute_gradient_tolerance(1e-12),
-            NllsState::new(initial),
+            PointState::new(initial),
         )
         .max_iter(max_iter)
         .run()
@@ -105,8 +105,8 @@ fn trust_region_limits_sparse_steps_and_converges() {
             // D = 3I and x0 = 0 make the initial scaled radius exactly 0.1.
             let scaled_step_norm = (3.0 * result.param().norm_squared()).sqrt();
             assert!((0.089..=0.111).contains(&scaled_step_norm));
-            assert_eq!(result.cost_evals(), 2);
-            assert_eq!(result.state.jacobian_evals(), 1);
+            assert_eq!(result.state.counts().residual_evals, 2);
+            assert_eq!(result.state.counts().jacobian_evals, 1);
         } else {
             assert_eq!(result.reason, TerminationReason::SolverConverged);
             assert!(result.cost() < 1e-20, "cost = {}", result.cost());
@@ -123,7 +123,7 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     let result = Executor::new(
         problem,
         LevenbergMarquardt::new(),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(50)
     .run()

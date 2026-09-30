@@ -17,9 +17,10 @@ their own objectives need no changes for this feature switch. Basin 1.x keeps
 
 When working in this repository, use `cargo test -p basin --features problems`
 to include corpus-dependent tests. Enable the same feature for corpus
-benchmarks, for example `cargo bench -p basin --features problems --bench
-rosenbrock`. The WASM visualizer and competitor benchmark crate enable it
-explicitly in their dependencies.
+benchmarks, for example
+`cargo bench -p basin --features problems --bench rosenbrock`. The WASM
+visualizer and competitor benchmark crate enable it explicitly in their
+dependencies.
 
 ## Checkpoint files
 
@@ -65,7 +66,612 @@ with that application, export parameters from `checkpoint.state()`, and start a
 fresh 2.0 run from those parameters. Reattach the problem and execution controls
 in the new application.
 
+## Shared progress states
+
+The migration replaces algorithm-specific progress with shared states. The
+following replacements are implemented on `main`:
+
+  | Basin 1.x state                                               | Basin 2.0 state                 | Solver                                                                  |
+  | ------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------- |
+  | `BasicSimplexState<V, F>`                                     | `SimplexProgress<V, F>`         | `NelderMead`, both modes                                                |
+  | `MaLsChGenericState<V, C>`, `MaLsChState<V, M>`, `MaLsChSwState<V>` | `PopulationProgress<V, F>` | `MaLsCh`, `MaLsChCma`, `MaLsChSw` |
+  | `CmaEsState<V, M, F>` | `PopulationProgress<V, F>` | `CmaEs`, `BoundedCmaEs`, `CmaInject`, `BoundedCmaInject` |
+  | `BasicPopulationState<V, F>`                                  | `PopulationProgress<V, F>`      | `RandomSearch`, `De`, `Ssga`, `DeInject`                                |
+  | `SlsqpState<V, F>`                                            | `SelectedFirstOrderState<V, F>` | `Slsqp`                                                                 |
+  | `MadsState<V, F>`                                             | `PointState<V, F>`              | `Mads`, unbounded and box-bounded modes                                 |
+  | `ConstrainedMadsState<V, F>`                                  | `SelectedState<V, F>`           | `Mads`, progressive-barrier mode                                        |
+  | `CobylaState<V, F>`                                           | `SelectedState<V, F>`           | `Cobyla`                                                                |
+  | `NewuoaState<V, F>`, `BobyqaState<V, F>`, `LincoaState<V, F>` | `PointState<V, F>`              | `Newuoa`, `Bobyqa`, `Lincoa`                                            |
+  | `GbnmState<V, F>`                                             | `PointState<V, F>`              | `Gbnm`                                                                  |
+  | `GlobalBestPsoState<V, F, R>`                                 | `PopulationProgress<V, F>`      | `GlobalBestPso`                                                         |
+  | `QuasiNewtonState<V, M, F>` and its backend aliases           | `FirstOrderState<V, F>`         | `Bfgs`                                                                  |
+  | `LbfgsState<V, F>`                                            | `FirstOrderState<V, F>`         | `Lbfgs`, `Lbfgsb`                                                       |
+  | `BasicState<V, F>`                                            | `FirstOrderState<V, F>`         | `GradientDescent`, `ProjectedGradientDescent`, both `TrustRegion` modes |
+  | `BasicState<V, F>`                                            | `PointState<V, F>`              | `Sgd`, `BasinHopping`, `BarrierMethod`                                  |
+  | `BasicState<V, F>`                                            | `SelectedState<V, F>`           | `AugmentedLagrangianMethod`                                             |
+  | `NllsState<V, F>`                                             | `PointState<V, F>`              | `GaussNewton`, both LM variants, `Trf`, `TrustRegionReflective`         |
+  | `SimulatedAnnealingState<V, N, F, R>`                         | `ProposalState<V, F>`           | `SimulatedAnnealing`                                                    |
+  | `SolisWetsState<V, F>`                                        | `PointState<V, F>`              | `SolisWets`                                                             |
+  | `ScalarState<F>`                                              | `PointState<F, F>`              | `Brent`, `GoldenSection`                                                |
+  | `ScalarGradientState<F>`                                      | `FirstOrderState<F, F>`         | `BrentDerivative`                                                       |
+
+Construct shared states with `PointState::new(x)` or `FirstOrderState::new(x)`.
+Construction supplies a seed, not an evaluated record. `current()` and `best()`
+return `None` until those records become available. First-order
+`replace(x, cost, gradient)` requires matching dimensions and preserves the
+previous record on a dimension error. Scalar `f32` and `f64` parameters each
+have one coordinate. Scalar solver bounds remain problem-side through
+`BoxConstraints`.
+
+NEWUOA, BOBYQA, and LINCOA now publish `PointState<V, F>`. Replace their
+algorithm-specific `*State::new(x)` constructors with `PointState::new(x)`;
+`Executor::from_start` still constructs the appropriate state. The solver types
+remain `Newuoa<F = f64>`, `Bobyqa<Mode = Bounded, F = f64>`, and
+`Lincoa<F = f64>`, with an explicit `F: Scalar` bound. Vectors still require
+`Clone`, `VectorLen`, and `Index`/`IndexMut`; LINCOA constraint matrices still
+require `MatTransposeVec`. Every supported dense backend release works with both
+`f32` and `f64`.
+
+Read the radius through `result.solver.rho()` after `run_with_solver()`, or
+through `stepper.solver().rho()`. This returns `None` before initialization.
+`PointState` supplies no `RhoState` capability. Native final-radius stopping and
+`with_absolute_radius_tolerance` continue to read the solver's schedule. The
+shared state preserves coherent evaluated points and historical objective
+incumbents with all six raw counts. LINCOA publishes only its model's feasible
+incumbent, excluding infeasible geometry probes; an infeasible start still
+relaxes the constraints as documented in its solver API.
+
+Fresh runs reevaluate the interpolation set and rebuild every model, even if the
+supplied solver or state has already run. Radius schedules, shifted bounds, and
+LINCOA's active-set QR live on the solver. Keep an `ExactCheckpoint` for exact
+continuation, including through `serde`; a serialized `PointState` alone
+provides a fresh point warm start. The removed state types and their layouts
+have no compatibility reader.
+
+COBYLA uses `SelectedState<V, F>` and has the type `Cobyla<V, F = f64>`. Replace
+`CobylaState::new(x)` with `SelectedState::new(x)` or keep using
+`Executor::from_start`. An explicit `Cobyla<f32>` annotation becomes
+`Cobyla<V, f32>`. Its backend requirements remain `Clone`, `VectorLen`, and
+indexing, plus `MatVec` for a `FoldedConstraints` matrix. Both constraint paths
+support every dense backend release with `f32` and `f64`.
+
+`current()` and `best()` expose the filter-selected point, objective, and
+maximum positive constraint violation. COBYLA can prefer a higher-cost point as
+feasibility improves. It does not implement `ObjectiveIncumbentState`;
+objective-only targets and stalls cannot assume its selection is an objective
+minimum. An unchanged selection keeps its original iteration and evaluation
+metadata. The driver still moderates extreme and non-finite values according to
+PRIMA's rules, including in published objective and violation records.
+
+The solver owns its callback buffer, simplex models, filter, and radius
+schedule. Read `rho()` on the retained solver; the shared state has no radius
+capability. Fresh runs rebuild these structures and reevaluate their seed. Exact
+checkpoints retain them, and `serde` supports the complete solver and shared
+state. Old `CobylaState` payloads have no compatibility reader.
+
+COBYLA now counts inequality callbacks in `residual_evals`. With
+`FoldedConstraints`, its nonlinear inequality and equality callbacks each count
+once, including empty blocks and failing attempts; arithmetic for bounds and
+linear constraints adds no callback count. `cost_evals()` reports only objective
+calls. Constraint budgets use `max_evaluations(EvaluationKind::Residual, n)`,
+and `state.counts()` preserves all six categories. The constraint traits and
+`FoldedConstraints` adapter remain problem-side.
+
+MADS keeps its `Mads<Mode = Unbounded, F = f64>` type, now explicitly bounded by
+`F: Scalar`. Unbounded and box-bounded modes use `PointState::new(x)`;
+progressive-barrier mode uses `SelectedState::new(x)`. `Executor::from_start`
+chooses the matching state. `Clone`, `VectorLen`, and indexing remain the only
+vector requirements, and all dense backend versions support both scalar types.
+
+Read `poll_size()` and `mesh_index()` on the retained solver, where both return
+`Option` values that are absent before initialization. The shared states have no
+`MeshState` capability. In constrained mode, read the squared-sum violation from
+`state.current()` or `state.best()` instead of `constraint_violation()`. The
+progressive barrier still selects a feasible incumbent when available; its
+objective can increase while feasibility improves. Unchanged selections keep
+their original metadata. Constraint calls now count as residual work, while
+rejected box probes consume no objective call.
+
+Every fresh run rebuilds the mesh schedule, Halton history, and progressive
+barrier, and reevaluates the starting point. Native poll-size stopping and
+`with_absolute_poll_size_tolerance` remain solver-owned. All modes support owned
+and serialized exact checkpoints; old MADS state types and payloads have no
+compatibility reader.
+
+SLSQP keeps the type `Slsqp<F = f64>` and now publishes
+`SelectedFirstOrderState<V, F>`. Replace `SlsqpState::new(x)` with the shared
+constructor or use `Executor::from_start`. `current()` returns a point,
+objective, matching objective gradient, and sum of constraint violations;
+`best()` returns the selected point, objective, and violation. The state
+implements `GradientState` and `EvaluatedGradientState`, but not
+`ObjectiveIncumbentState`. Each accepted iterate is an explicit selection,
+including when its objective increases as feasibility improves. Failed trials
+preserve the previous accepted record and its selection metadata.
+
+Move `stationarity()`, `complementarity()`, and `failure()` calls from state to
+the solver retained by `run_with_solver()` or `stepper.solver()`. The solver's
+`constraint_violation()` mirrors the violation in the current shared record.
+These diagnostics return `Option` values until available. Native accuracy and
+safeguard behavior are unchanged. Cost and gradient readers now count only their
+named categories; constraint and constraint-Jacobian calls remain separate in
+`state.counts()` and in category-specific execution budgets.
+
+Fresh runs rebuild the model and reevaluate their clipped seed. Owned and
+serialized exact checkpoints retain accepted progress, models, and diagnostic
+history, while numerical scratch is rebuilt as needed. The removed SLSQP state
+and its serialized layout have no compatibility reader. Vector indexing and
+`VectorLen`, along with matrix shape and entry access, remain the backend
+requirements. Every supported dense backend release supports `f32` and `f64`.
+
+External constrained first-order solvers can also use
+`SelectedFirstOrderState::replace(x, cost, gradient, violation)`, which rejects
+mismatched dimensions without changing progress, followed by `select_current()`
+when they select an incumbent. The executor supplies publication counts and
+iteration metadata. The state preserves a pending selection even if another
+current record replaces it before that boundary.
+
+Nelder-Mead now has the type `NelderMead<V, F = f64, Mode = Unbounded>` and uses
+`SimplexProgress<V, F>`. Replace `BasicSimplexState::new(x)` and
+`from_simplex(vertices)` with the corresponding `SimplexProgress` constructors,
+or keep using `Executor::from_start`. An explicit scalar annotation becomes
+`NelderMead::<V, f32>`; `.projected()` selects the third type parameter. The
+solver owns its three scratch vectors and adaptive coefficients. The state owns
+the authoritative simplex, a separate historical incumbent, and all raw counts.
+Current vertices can change without overwriting an older best point; NaN and
+positive infinity do not establish incumbents.
+
+`SimplexProgress::replace(vertices, costs)` validates the complete record before
+mutation and returns `SimplexShapeError` on a structural mismatch. It sorts
+matching pairs with NaNs last and preserves the order of ties. `take_vertices()`
+transfers the arrays for in-place work without copying them; restore them with
+`replace` before publication. Checked `current()` and `evaluated_vertices()`
+return `None` for an unevaluated seed or drained state. Initial simplex
+construction rejects malformed shapes. A simplex has at least two same-length
+vertices and at most `n + 1` vertices in `n` coordinates; embedded subspace
+simplexes remain supported. Degenerate geometry is allowed.
+
+Nelder-Mead's vector bounds now include `VectorLen`, in addition to `Clone`,
+`ScaleInPlace<F>`, and `ScaledAdd<F>`; projection also requires `ClampInPlace`.
+`IntoInitialSimplex<V, F = f64>` now takes a relative step of type `F` and has a
+blanket implementation for `Clone + VectorLen + VectorIndex<F>`. It supports all
+backend versions and both scalar types. Remove custom implementations that
+overlap that blanket, and pass custom geometry through `from_simplex`. Fresh
+runs reevaluate all vertices, reset progress, and rebuild the workspace and
+coefficients, including after dimension changes. Exact checkpoints retain solver
+and progress together; old state payloads containing scratch cannot be read as
+the new state. Simplex-collapse convergence retains its existing semantics and
+does not treat an unchanged best vertex as a collapsed simplex.
+
+GBNM now has the type `Gbnm<V, F = f64>` because it owns a projected
+`NelderMead<V, F, Projected>`. Replace explicit `Gbnm::<f32>` annotations with
+`Gbnm::<V, f32>`; ordinary `Gbnm::new(seed)` calls still infer the vector. Its
+outer state is now `PointState<V, F>`; replace `GbnmState::new(x)` with
+`PointState::new(x)`, or use `Executor::from_start`. The solver owns its active
+local simplex, workspace, search starts, retained local optima, and restart RNG.
+Move `vertices()`, `costs()`, `search_starts()`, `local_optima()`, and
+`restart_count()` calls from state to solver. Obtain the solver through
+`run_with_solver()` or `Stepper::solver()`.
+
+GBNM's current record is the best vertex of its active search and can worsen
+after a restart. Its shared state retains a matching historical incumbent. Fresh
+initialization resets the RNG and restart history and evaluates a regular
+simplex around the current seed, including after dimension changes. Local
+simplex collapse still triggers a restart, not convergence of the global
+algorithm; `PointState` does not implement `SimplexState`. Raw counts retain
+their categories, and NaN or positive infinity cannot establish an incumbent.
+Exact checkpoints retain all local geometry and history with the solver. Old
+`GbnmState` payloads are incompatible; a shared state alone is a warm-start
+seed, not an exact continuation snapshot.
+
+Replace `BasicPopulationState::with_size(n)` with `PopulationProgress::empty()`.
+Population size has one owner: `RandomSearch::new(lambda, seed)`, or the
+`with_pop_size(n)` setting on `De` and `Ssga`.
+`PopulationProgress::from_population` supplies explicit members, which these
+solvers now honor. Members must be finite, match the bounds' dimension, and have
+the configured population size. Fresh initialization projects them into the
+finite box and reevaluates every member. It resets iterations, incumbents,
+counts, and the solver's configured RNG. Reusing a final population therefore
+starts a fresh search from those members; supply an empty state to reproduce the
+original seeded run. Exact continuation skips this reset and requires the
+solver, population, and counts together.
+
+`PopulationProgress::replace(members, costs)` validates the complete record
+before mutation and preserves member order. It returns `PopulationShapeError`
+for empty or inconsistent shapes. `take_members()` transfers storage without
+copying; restore the arrays with `replace` before publication. The current
+record is the lowest-cost member, or another evaluated point supplied by
+`publish_representative`, such as a distribution mean or a swarm's global best.
+Incumbent selection considers both samples and this representative and retains
+matching historical records even when the whole population is replaced. Checked
+`current()`, `best()`, and `evaluated_members()` report missing records
+explicitly.
+
+The `PopulationState` trait no longer requires ascending costs: generic readers
+must inspect the costs instead of assuming member zero is best. Random search,
+DE, SSGA, and DE injection still sort their records by cost. Their optional
+cost-change and step tests compare generation representatives, including
+generations whose elite remains unchanged. The shared state stores no gradient,
+even when a DE-injection inner solver uses one. All six raw evaluation
+categories survive composition, and `cost_evals()` counts only cost calls.
+
+`RandomSearch` now requires `VectorLen`, `Index<usize, Output = F>`, and
+`IndexMut<usize, Output = F>` in addition to `SampleUniformBox` and `Clone` so
+it can validate and project explicit seeds. All four dense backends support
+these bounds for both scalar types. `De<F>` and `Ssga<F>` now require
+`F: Scalar` on the types themselves. Their constructor signatures and
+DE-injection generics remain unchanged. With `serde`, all four solvers serialize
+their live RNGs and settings; DE injection also requires a serializable inner
+solver without application hooks. Old population state payloads are incompatible
+with `PopulationProgress`.
+
+`GlobalBestPso` now has the type `GlobalBestPso<V, F = f64, R = ChaCha8Rng>`.
+Replace scalar annotations such as `GlobalBestPso::<f32>` with
+`GlobalBestPso::<V, f32>` and custom-RNG annotations with
+`GlobalBestPso<V, F, R>`. The vector bounds remain `Clone`, `VectorLen`,
+`SampleUniformBox`, `Index<usize, Output = F>`, and
+`IndexMut<usize, Output = F>`; the RNG still requires `Rng + Clone`. Its
+boundary and velocity policy enums now require `F: Scalar` on their public
+types.
+
+Replace `GlobalBestPsoState::new()` with `PopulationProgress::empty()` and
+`from_positions(xs)` with `PopulationProgress::from_population(xs)`. Replace
+`from_positions_and_velocities(xs, vs)` with that population constructor and
+`solver.with_initial_velocities(Some(vs))`. Velocities correspond to the input
+member order and must match its count and dimensions. `None` restores sampled
+half-displacement velocities. Fresh initialization repairs positions and
+velocities according to the selected boundary policy, evaluates every member,
+and resets personal bests, global best, RNG, counts, and working buffers.
+Reusing final progress starts from its current members; it does not resume the
+previous particle motions. Configured initial velocities are reapplied to the
+new input order on every fresh run.
+
+Move `velocities()`, `personal_best_positions()`, and `personal_best_costs()`
+from state to the solver obtained through `run_with_solver()` or
+`Stepper::solver()`. The solver's `global_best()` returns a checked point/cost
+pair. Progress still reports the historical global best as its current
+representative, while `candidates()` and `costs()` expose the current swarm. Its
+cost-change and step checks therefore retain their global-best semantics. NaN
+and positive infinity cannot establish a progress incumbent; an all-rejected
+initial swarm still stops with `SolverFailed`, and negative infinity still
+triggers the solver's native `SolverConverged` stop.
+
+Use `ExactCheckpoint<GlobalBestPso<V, F, R>, PopulationProgress<V, F>>` to
+continue particle motions and RNG draws exactly. `Executor::resume` with a
+state-only snapshot is no longer supported. With `serde`, solver-aware
+checkpoints include both the configured and live RNGs and all particle models.
+Old state payloads are incompatible with the new progress type; deserialize them
+with Basin 1.x and export positions and, if needed, velocities for an explicit
+fresh initialization.
+
+Replace `CmaEsState::<V, M, F>::new(mean, sigma).with_stds(stds)` with
+`PopulationProgress::<V, F>::from_point(mean)` and
+`CmaEs::<V, M, F>::new(seed, sigma).with_stds(stds)`. Apply the same change to
+`BoundedCmaEs`; both injection wrappers accept the configured base solver and
+shared population progress. Solver generic order remains `V, M, F`, with
+`F: Scalar = f64`; progress no longer carries `M`. Specify the covariance
+matrix type on the solver when inference previously obtained it from state.
+The dense vector and matrix capability bounds remain unchanged, with all four
+backends supporting `f32` and `f64`. Base CMA solvers also support
+`Executor::from_start` because their initial scale is now configured explicitly.
+
+CMA solvers own the distribution mean, covariance, paths, eigenpairs, step size,
+derived constants, RNG, and boundary-penalty history. Move `mean()` and `sigma()`
+from state to the solver returned by `run_with_solver()` or `Stepper::solver()`;
+they return `None` before initialization. Progress holds the evaluated members
+and an evaluated mean as its current representative. A fresh run reconstructs
+all distribution machinery around the current progress point, reapplies the
+configured scale and standard deviations, restarts the original RNG seed, and
+reevaluates the first generation and mean. Empty progress cannot seed CMA.
+Use `from_point` to supply a mean; explicit unevaluated populations use their
+first member as the seed. Resetting shared progress preserves its representative
+as an unevaluated seed and clears all evaluated records and counts.
+
+Bounded CMA now publishes clipped points with their **raw objective costs**.
+Previously, its state paired unrepaired genotypes with penalized fitness.
+The solver retains genotypes and penalized ranking for the unchanged adaptation
+rules; inspect `genotypes()` and `penalized_costs()` there. Published members
+retain the model's rank order, so their raw costs need not be sorted. The current
+record is the clipped mean, and the historical incumbent compares raw objective
+costs at published feasible points. Injection uses the same distinction.
+`cost_evals()` reports only cost calls; inner derivatives remain in their own
+categories through `counts()`. Distribution-size convergence still checks
+`σ * max_axis_std` on the solver, with the same strict threshold and stop reason.
+
+Exact CMA continuation requires the complete solver, `PopulationProgress`, and
+counts. All four CMA variants support owned checkpoints and, with `serde`,
+serialize their models and RNGs when the vector, matrix, scalar, and chosen inner
+solver do. Application hooks remain unserializable. Legacy CMA state files
+cannot resume these solvers. Load them in Basin 1.x and export a point plus any
+initialization settings needed for a fresh 2.0 run.
+
+Replace `MaLsChState::new()`, `MaLsChSwState::new()`, and
+`MaLsChGenericState::new()` with `PopulationProgress::empty()`. The solver
+now owns every persistent `(inner solver, inner progress)` chain and its
+eligibility history. Move `ls_application_count(i)` to the retained solver;
+`chain(i)` also exposes a saved pair for inspection. The generic solver is
+`MaLsCh<V, LS, F = f64>` with `LS: ResumableInner<V, F>` on the type itself.
+The concrete aliases are `MaLsChCma<V, M, F = f64>` and
+`MaLsChSw<V, F = f64>`. Scalar settings use `F`; both aliases support all four
+dense backends with `f32` and `f64`. Custom operators keep the same resumable
+chain contract and can impose narrower capabilities.
+
+`PopulationProgress::from_population(members)` now supplies explicit MA-LS
+seeds. Their count must match `with_pop_size`; fresh initialization projects
+them into the finite sampling box, reevaluates every member, drops all chains,
+and resets the RNG and progress bookkeeping. Reusing a populated result starts
+from its members rather than sampling replacements. Use `empty()` to resample.
+The unbounded local chain may still move outside the sampling box. MA-LS
+reports those actual evaluated points and retains the historical objective
+incumbent. Category readers no longer fold inner derivatives into cost calls.
+`with_ls_intensity` and `with_nfrec` continue to budget raw cost evaluations;
+outer objective and step checks observe the published best member.
+
+MA-LS now supports exact owned checkpoints and `serde` checkpoints containing
+the outer RNG, retained chains, eligibility history, population, and all counts.
+Serialization requires the inner solver and its associated state to serialize.
+Stored chains resume without initialization, while each local segment restarts
+its own budgets and convergence controls. Legacy state payloads cannot preserve
+that ownership layout: export their population using Basin 1.x and start a fresh
+2.0 run, or finish exact continuation in the matching 1.x application.
+
+BFGS now has the type `Bfgs<V, F, M, L>`, with defaults for the scalar, matrix,
+and line search. `Bfgs::new()` and `Bfgs::with_line_search(search)` infer the
+matrix from `V: DenseBackend<F>`. Every enabled backend version has its own
+association. To override the matrix, use
+`Bfgs::<V, F, M, L>::with_matrix_and_line_search(search)`. Custom vector
+backends implement `DenseBackend`, and the selected matrix must implement
+`MatVec`, `MatrixIdentity`, `ScaleInPlace`, and `GeneralRankOneUpdate`.
+`Executor::from_start(problem, Bfgs::new(), x)` still infers both solver and
+state. The inverse Hessian belongs to the solver; retain it with
+`run_with_solver()` and read `result.solver.inverse_hessian()`.
+
+L-BFGS now has the type `Lbfgs<V, F, Mode, L>`, with `Bounded` and
+`MoreThuente<F>` defaults. `Lbfgsb<V, F, L>` aliases the bounded mode. Replace
+`LbfgsState::new(x, m)` with `FirstOrderState::new(x)` and configure
+`Lbfgs::new().with_m_capacity(m)`. This setting now controls every fresh solve,
+including standalone execution. Replace `Lbfgs::<Unbounded>::new()` with
+`Lbfgs::new().unbounded()` and the unbounded `with_line_search` constructor with
+`Lbfgs::with_line_search(search).unbounded()`. Both modes require `VectorLen`,
+`Clone`, `Dot`, `ScaledAdd`, and the public
+`solver::lbfgs::{AsFloatSlice, AsFloatSliceMut}` traits. All four dense backends
+support both scalar types; ndarray storage must be contiguous. Bounded mode
+still requires problem-side `BoxConstraints` and a line search implementing
+`next_with_bounds`. History and compact work buffers belong to the solver;
+retain it with `run_with_solver()` and inspect `history_len()` and
+`history_capacity()`. Mode transitions discard the initialized model and require
+a fresh run. Changing capacity takes effect on fresh initialization; a
+checkpoint retains the capacity with which its model was built. The
+projected-gradient and line-search stopping rules are unchanged.
+
+Gradient descent retains the type `GradientDescent<L, V, F>`, and trust regions
+retain `TrustRegion<Sub, F, Mode>`. Replace their `BasicState::new(x)` arguments
+with `FirstOrderState::new(x)`. All three migrated drivers now require
+`V: VectorLen` to validate point/gradient dimensions. Projected gradient descent
+has the type `ProjectedGradientDescent<L, F = f64>`; its constructors infer the
+scalar from the step or problem, so `Executor::from_start` works with both `f32`
+and `f64`. Projection, momentum updates, trust-region acceptance, and rejection
+stopping semantics are unchanged. Fresh gradient-descent runs clear momentum,
+fresh trust-region runs restore the configured radius, and fresh nonlinear-CG
+runs reset conjugacy and line-search history. Exact checkpoints retain these
+components. `TrustRegion::radius()` exposes the current radius when the solver
+is retained.
+
+Trust-region `gradient_evals()` now counts gradient calls alone. Budget
+second-order work explicitly with separate `Gradient`, `Hessian`, and
+`HessianProduct` limits, or use `max_evaluations(EvaluationKind::TotalWork, n)`
+for the whole solve. Total work also includes objective calls, so adjust the
+limit when replacing a budget that formerly folded derivatives together.
+
+SGD retains `Sgd<V, F = f64>` and its batch sampling, momentum, and objective
+refresh schedule, but uses `PointState<V, F>` without a gradient capability. A
+periodic refresh now publishes the evaluated point and cost together. For
+example, with seven samples and batches of two, iteration four reports the point
+evaluated at iteration three; it no longer pairs iteration four's working point
+with iteration three's cost. Use `with_cost_eval_every(1)` to report every
+iterate, or retain the solver with `run_with_solver()` and read
+`working_param()` to inspect the latest mini-batch iterate without evaluating
+it. Ordinary results retain the last evaluated point. Cost- and step-change
+checks run only at refreshes. Replace SGD's `max_gradient_evals(n)` with
+`max_evaluations(EvaluationKind::Gradient, n)`, since `PointState` does not
+implement `GradientState`. Iteration and raw gradient budgets still count every
+mini-batch step; objective stall patience counts those steps too, so choose it
+with the refresh period in mind. Exact checkpoints retain the working iterate,
+refresh phase, momentum, batch order, and RNG. Fresh state-only runs restart
+from the reported evaluated point. Custom vectors keep the existing
+`Clone + ScaledAdd<F> + ScaleInPlace<F>` bounds.
+
+Solis-Wets now has the type `SolisWets<V, F = f64>`. Replace
+`SolisWetsState::new(x, rho)` with `PointState::new(x)` and configure
+`SolisWets::new(seed).with_initial_step_size(rho)`. Replace explicit
+`SolisWets::<F>` annotations with `SolisWets::<V, F>` or let the parameter type
+infer `V`. The solver owns bias, adaptive step size, success/failure streaks,
+and the RNG; retain it with `run_with_solver()` and use `bias()`, `step_size()`,
+`success_count()`, and `failure_count()`. The state no longer implements
+`RhoState`. Native step-size stopping reads the solver's current value, and
+cost- and step-change checks now ignore rejected proposals. Custom vectors need
+`Clone`, `VectorLen`, `SampleStandardNormal`, `ScaledAdd<F>`, and
+`ScaleInPlace<F>`. Fresh initialization always reevaluates the point and resets
+the model and RNG, even when the state already contains a cost. Resume the exact
+trajectory with a solver-aware checkpoint.
+
+Simulated annealing retains `SimulatedAnnealing<N, F = f64, R = ChaCha8Rng>` and
+now uses `ProposalState<V, F>`. `TemperatureSchedule<F = f64>` and the solver
+explicitly bound their scalar by `Scalar`. `Executor::from_start` remains the
+usual entry point; explicit callers can use `ProposalState::new(x)`. The solver
+owns the neighbor, RNG, cooling age, and reannealing progress. The state retains
+the accepted point and its objective, objective-ordered best record, all raw
+counts, and `AcceptanceState` counters for `no_acceptance`. Rejected proposals
+cannot trigger cost- or step-change convergence. The existing non-finite
+acceptance and native stopping rules remain in effect; NaN and positive infinity
+do not establish incumbents.
+
+Fresh annealing runs reevaluate the point and copy the configured neighbor and
+RNG into fresh working components. The existing `Clone` requirements on these
+components move from state seeding to the solver implementation; cloning must
+produce independent evolution state. Arbitrary cloneable parameters, including
+discrete structures, remain supported without vector math. `seed_chain(seed)`
+creates an independent chain from the configured components, without consuming
+live randomness. Read `temperature()`, `reannealings()`, and `neighbor()` from
+the retained solver after `run_with_solver()`, or through `Stepper::solver()`
+between steps. The latter is a read-only borrow available for every solver.
+
+State-only annealing snapshots no longer implement `ExactResumeState` or work
+with `Executor::resume`. Pass them to `Executor::new` for a fresh chain, or
+retain solver and state together with `run_with_solver().into_checkpoint()` and
+continue with `Executor::resume_from_checkpoint`. Exact serialization includes
+configured and live neighbor/RNG components and cooling history; old 1.x solver
+and state payloads are incompatible.
+
+External proposal-based solvers can reuse `ProposalState`. Initialize its record
+with `replace(x, cost)`, publish accepted moves with `accept_proposal(x, cost)`,
+and record rejections with `reject_proposal()`. The executor stamps acceptances
+at the completed publication boundary, including mid-step stops; repeated
+publication does not refresh their age.
+
+Basin-hopping retains `BasinHopping<I, V, F, S, A>` and now uses
+`PointState<V, F>`. Replace `BasicState::new(x)` with `PointState::new(x)`, or
+use `Executor::from_start`. Fresh initialization restarts the RNG, hop counters,
+perturbation strategy, and acceptance rule, then runs the initial local solve.
+Stateful custom strategies implement the new default-bodied `StepTaker::reset`
+and `AcceptanceTest::reset` hooks; they need not implement `Clone`. Exact
+checkpoints preserve the adapted walk. With `run_with_solver()`, inspect
+`solver.step_taker()` and the default strategy's `stepsize()`. Rejected hops no
+longer trigger cost- or step-change convergence. The outer state has no gradient
+capability; use raw category budgets for derivative work and
+`EvaluationKind::TotalWork` for all inner work. `RandomDisplacement`
+serialization now includes its configured initial scale as well as its current
+adapted scale, so old strategy payloads must also be reconstructed.
+
+Scaled and persistent composition follows the same ownership change.
+`MemeticInner::seed_scaled` now takes `&mut self`, allowing the inner solver to
+configure its initial model scale before a fresh run. Update custom
+implementations and use `InnerExecutor::solver_mut()` at call sites. Solis-Wets
+sets its configured initial step size to the supplied scale. Persistent
+`ResumableInner` chains initialize once, then skip `Solver::init` on subsequent
+segments. Implement `seeded_chain_is_initialized()` only when `seed_chain`
+already constructs a complete model and evaluated progress, as Solis-Wets does
+from the supplied `fx`. Its default remains `false`. Local-search segments
+explicitly restart budgets, convergence history, and progress metadata while
+retaining the model; this differs from exact checkpoint continuation, which
+retains convergence history and cumulative counts. Shared states provide
+`reset_progress()` for segment bookkeeping while preserving the evaluated
+record. `MaLsChSwState<V>` now stores `(SolisWets<V>, PointState<V>)` chain
+pairs.
+
+The augmented-Lagrangian outer method now publishes `SelectedState<V, F>`. Its
+public type remains `AugmentedLagrangianMethod<So, V, F = f64>`, and its
+constructors now support both scalar types. Replace `BasicState::new(x)` with
+`SelectedState::new(x)` or use `Executor::from_start`. `current()` and `best()`
+return checked `(point, objective, constraint_norm)` records. Selection prefers
+feasible points, then lower objectives among them; before feasibility, it
+prefers lower constraint norms, breaking exact ties by objective. The configured
+feasibility tolerance defines eligibility, with exact zero when disabled. The
+selected objective can increase as feasibility improves. Cost- and step-change
+tests observe only feasible outer iterates.
+
+`SelectedState` provides `replace(x, cost, violation)` and the explicit
+`select_current()` operation for external solvers. Call the latter only when
+selection changes. The executor records the final charged counts and completed
+iteration number at publication, including mid-step stops; repeated observation
+does not refresh the incumbent's age. It has no gradient capability or
+`ObjectiveIncumbentState` guarantee. Use a `stop_when` hook that checks both
+violation and objective for constrained targets. `target_objective` and
+`no_objective_improvement` deliberately reject this state; legacy `target_cost`
+and `no_improvement` do not check feasibility and must not be used for these
+selections. Budget gradients with
+`max_evaluations(EvaluationKind::Gradient, n)`. The outer no longer computes an
+unused original-objective gradient; surrogate gradients remain charged inner
+work. Fresh runs reset multipliers and penalty history, and exact checkpoints
+preserve them. Adapter work now merges into the outer counts before propagating
+a hard callback error. The vector and matrix capabilities are unchanged; custom
+inner solvers can require additional ones.
+
+`BarrierMethod<So, F = f64>` now uses `PointState<V, F>` and supports both
+scalar types through its constructors. Replace `BasicState::new(x)` with
+`PointState::new(x)` or use `Executor::from_start`. Its current record contains
+the original objective inside the strict domain `A x < b`, and `+∞` outside it.
+Phase I computes this rejection value without calling the original objective or
+gradient. Only strictly feasible points with eligible objectives can become
+incumbents, so objective-based controls remain compatible. Cost- and step-change
+convergence runs only at accepted Phase II boundaries. The outer state no longer
+advertises a gradient, and the outer loop no longer computes one. Inner gradient
+calls remain charged in their own category; use
+`max_evaluations(EvaluationKind::Gradient, n)` to budget them. Adapter counts
+survive hard callback errors in either phase. Fresh runs reset the phase and
+barrier schedule and reevaluate the seed; exact checkpoints retain both, along
+with the inner solver. The vector and matrix bounds are unchanged, and custom
+inner solvers can impose additional capabilities.
+
+`BasicState` has been removed now that all of its shipped solvers use shared
+progress. External solvers should choose `PointState`, `FirstOrderState`, or
+`SelectedState` according to the records and selection policy they publish, and
+populate them through their public coherent-update methods.
+
+Fresh runs clear progress counters and incumbents, reevaluate the seed, and
+reset the solver's evolving machinery. Reusing BFGS after a dimension change
+creates an identity matrix of the new size. Stateful custom line searches must
+implement `LineSearch::reset` to restore their configured starting history.
+Exact solver-and-state checkpoints skip initialization and retain model,
+line-search, and convergence history. Ordinary results retain progress; progress
+alone cannot resume the exact trajectory.
+
+A state-only snapshot at iteration 12 starts at iteration zero when passed to
+`Executor::new`; `max_iter(8)` then runs eight more steps. Exact checkpoint
+resumption retains iteration 12, so `max_iter(20)` allows eight more steps.
+
+Shared-state `cost_evals()` now means cost calls only, and `gradient_evals()`
+means gradient calls only. Residual, Jacobian, Hessian, and Hessian-product work
+remains available separately in `counts()`. `best_counts()` records all
+categories at the publication boundary that selected the incumbent. Use
+`max_evaluations(EvaluationKind::TotalWork, limit)` to budget an explicit sum
+instead of relying on a state-specific fold. Category-specific budgets and
+readers count the same work. Least-squares runs typically make zero cost calls;
+replace `max_cost_evals(n)` with `max_evaluations(EvaluationKind::Residual, n)`
+and read `state.counts().residual_evals` and `state.counts().jacobian_evals`.
+Their objective remains one-half the squared residual norm, or the configured
+robust objective. Native first-order checks still use the solver's `Jᵀr`;
+`PointState` does not advertise an unevaluated gradient.
+
+Scalar solvers still expose their latest evaluated probe, which can be worse
+than their retained incumbent. Cost-change convergence tests read that current
+probe. Shared-state incumbents retain strict objective improvements; ties
+preserve their original metadata, and NaN or positive infinity cannot establish
+an incumbent. Negative infinity does not by itself establish unboundedness. Use
+checked `best()` access when every published cost can be rejected.
+
+With `serde`, the shared progress types, random search, DE, SSGA, DE injection,
+global-best PSO, all CMA variants, MA-LS chains, Nelder-Mead, GBNM, NEWUOA,
+BOBYQA, LINCOA, COBYLA, MADS, SLSQP,
+BFGS and L-BFGS models (including bounded work buffers), gradient descent
+(including momentum), projected gradient descent, SGD (including its RNG and
+unpublished working iterate), nonlinear CG, Solis-Wets, simulated annealing,
+basin-hopping, the barrier and augmented-Lagrangian methods, trust regions and
+their built-in subproblem strategies, built-in line searches, and scalar solvers
+support serialization. Least-squares solver serialization remains subject to
+each solver's and backend's existing support. Their layouts replace the old
+state layouts; a 1.x state payload is not a 2.0 shared-state payload, even when
+both use postcard. Export parameters with the matching 1.x application and
+create a fresh shared state. Exact checkpoints require matching concrete types
+and Basin versions, as described under [checkpoint files](#checkpoint-files).
+
 ## Stopping conditions
+
+`target_cost` and `no_improvement` now alias `target_objective` and
+`no_objective_improvement`. All four require `ObjectiveIncumbentState` rather
+than `State` alone. `SelectedState` and `SelectedFirstOrderState` deliberately
+do not implement that capability: their solvers can prefer feasibility over a
+lower objective. Use an application stop that checks both the selected
+constraint violation and objective when that is the intended stopping rule.
+Custom states must implement the checked incumbent and objective-selection
+capabilities to use these helpers.
+
+Targets wait for an eligible incumbent. Stall checks count completed iterations,
+not repeated observations; they require positive patience and wait until an
+incumbent exists. Zero-delta checks retain stall age through the incumbent's
+publication iteration on exact continuation. Positive-delta checks start a new
+anchor when controls are reattached. Negative infinity can be an incumbent and
+does not by itself establish unboundedness. Execution controls remain separate
+from solver convergence settings.
 
 Basin 2.0 removes `TerminationCriterion`, every shipped criterion type, and all
 criterion re-exports. `Executor::terminate_on`, `InnerExecutor::terminate_on`,

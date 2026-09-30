@@ -6,18 +6,18 @@
 //! [`ResumableInner`](crate::core::inner::ResumableInner) impl (fresh
 //! chains at `σ = ½ ·` nearest-neighbor distance, resume via a local
 //! iter reset, per-segment TolX at `1e-12 ·` the starting σ). This
-//! module is the concrete public face: the [`MaLsChCma`]/[`MaLsChState`]
-//! aliases plus the CMA-specific constructor and builder.
+//! module provides the [`MaLsChCma`] alias, constructor, and builder.
+//! The outer solver owns the saved chains and publishes [`PopulationProgress`](crate::PopulationProgress).
 
-use crate::core::state::CmaEsState;
+use crate::core::math::{MatrixIdentity, Scalar, ScaleInPlace, VectorLen};
 use crate::solver::cma_es::CmaEs;
-use crate::solver::ma_ls_ch::{MaLsCh, MaLsChGenericState};
+use crate::solver::ma_ls_ch::MaLsCh;
 
 /// `MA-LSCh-CMA`: [`MaLsCh`] with CMA-ES as the chain operator, per
 /// Molina et al. 2010 §4.4.
 ///
-/// Each individual that has undergone LS keeps the *full CMA-ES
-/// evolution state* (`m`, `σ`, `C`, `p_σ`, `p_c`, eigendecomposition
+/// The outer solver retains each individual's complete CMA-ES
+/// distribution (`m`, `σ`, `C`, `p_σ`, `p_c`, eigendecomposition
 /// `B/D`) in its chain slot, so re-selecting it resumes the same CMA-ES
 /// run. CMA-ES adapts a per-basin search distribution; the chain
 /// mechanism rewards basins that keep improving by extending their LS
@@ -26,38 +26,35 @@ use crate::solver::ma_ls_ch::{MaLsCh, MaLsChGenericState};
 ///
 /// # Backends
 ///
-/// Same coverage as [`CmaEs`]: the default `Vec<f64>` (via
-/// [`DenseMatrix`](crate::DenseMatrix)), nalgebra, ndarray, and faer. The only
-/// linear-algebra requirement is the matrix bound
-/// [`SymmetricEigen`](crate::core::math::SymmetricEigen), which
-/// every backend satisfies.
+/// Same dense coverage and matrix capabilities as [`CmaEs`]: `Vec<F>` with
+/// [`DenseMatrix`](crate::DenseMatrix), nalgebra `DVector<F>`, ndarray `Array1<F>`,
+/// and faer `Col<F>`, for `F = f32` or `f64`. Publishes shared
+/// [`PopulationProgress`](crate::PopulationProgress); chains live on the solver.
 ///
 /// # Examples
 ///
 /// A memetic algorithm pairing a steady-state GA with CMA-ES local-search
 /// chains. See [`RandomSearch`](crate::RandomSearch) for the population-
 /// based `Executor` pattern.
-pub type MaLsChCma<V, M> = MaLsCh<V, CmaEs<V, M>>;
+pub type MaLsChCma<V, M, F = f64> = MaLsCh<V, CmaEs<V, M, F>, F>;
 
-/// State carried by [`MaLsChCma`]: the [`MaLsChGenericState`] whose
-/// chain slots hold saved `(CmaEs, CmaEsState)` pairs—the [`CmaEs`]
-/// carries the derived constants + RNG; the [`CmaEsState`] carries the
-/// evolution state (mean, sigma, covariance, paths) and the previous
-/// generation's λ candidates the next CMA `next_iter` needs as the
-/// recombination basis.
-pub type MaLsChState<V, M> =
-    MaLsChGenericState<V, (CmaEs<V, M>, CmaEsState<V, M>)>;
-
-impl<V, M> MaLsCh<V, CmaEs<V, M>> {
+impl<V, M, F: Scalar> MaLsCh<V, CmaEs<V, M, F>, F>
+where
+    V: VectorLen
+        + Clone
+        + ScaleInPlace<F>
+        + std::ops::IndexMut<usize, Output = F>,
+    M: MatrixIdentity,
+{
     /// Build a new `MaLsChCma` with the Molina 2010 §4.4.7 defaults
     /// and a PRNG seeded from `seed`.
     ///
-    /// The CMA prototype held internally is `CmaEs::new(0)`; its RNG is
+    /// The CMA prototype held internally is `CmaEs::new(0, F::one())`; its RNG is
     /// never drawn (each fresh chain reseeds from the outer RNG per the
     /// [`ResumableInner`](crate::core::inner::ResumableInner) purity
     /// contract), so the dummy seed is inert.
     pub fn new(seed: u64) -> Self {
-        Self::with_inner(seed, CmaEs::new(0))
+        Self::with_inner(seed, CmaEs::new(0, F::one()))
     }
 
     /// Override the inner CMA-ES population size `λ_inner` (default is
@@ -81,7 +78,7 @@ impl<V, M> MaLsCh<V, CmaEs<V, M>> {
         since = "1.5.0",
         note = "renamed to `with_initial_scale_fallback`"
     )]
-    pub fn with_initial_sigma_fallback(self, sigma: f64) -> Self {
+    pub fn with_initial_sigma_fallback(self, sigma: F) -> Self {
         self.with_initial_scale_fallback(sigma)
     }
 }

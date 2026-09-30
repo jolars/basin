@@ -9,7 +9,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::BoothBoxedResiduals;
-use basin::{Executor, NllsState, TerminationReason, Trf};
+use basin::{Executor, PointState, TerminationReason, Trf};
 
 #[test]
 fn trf_with_slack_bounds_reaches_unconstrained_min() {
@@ -20,7 +20,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
         BoothBoxedResiduals::<Vec<f64>>::new(vec![-5.0, -5.0], vec![5.0, 5.0]);
     let initial = vec![0.0, 0.0];
 
-    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
+    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
         .max_iter(50)
         .run()
         .unwrap();
@@ -49,7 +49,7 @@ fn trf_with_tight_bounds_converges_to_box_corner() {
         BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
     let initial = vec![0.0, 0.0];
 
-    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
+    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -83,7 +83,7 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
     let initial = vec![10.0, 10.0];
 
     let mut executor =
-        Executor::new(problem, Trf::new(), NllsState::new(initial));
+        Executor::new(problem, Trf::new(), PointState::new(initial));
     executor = executor.max_iter(0);
     let result = executor.run().unwrap();
 
@@ -115,7 +115,7 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         BoothBoxedResiduals::<Vec<f64>>::new(vec![-1.0, -1.0], vec![1.0, 1.0]);
     let initial = vec![0.0, 0.0];
 
-    let result = Executor::new(problem, Trf::new(), NllsState::new(initial))
+    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
         .max_iter(200)
         .run()
         .unwrap();
@@ -143,7 +143,7 @@ fn trf_caches_residual_and_jacobian_across_iterations() {
     let result = Executor::new(
         problem,
         Trf::new().with_absolute_scaled_gradient_tolerance(None),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(3)
     .run()
@@ -152,16 +152,16 @@ fn trf_caches_residual_and_jacobian_across_iterations() {
     assert_eq!(result.reason, TerminationReason::MaxIter);
     assert_eq!(result.iter(), 3);
     assert_eq!(
-        result.cost_evals(),
+        result.state.counts().residual_evals,
         4,
         "expected init (1) + one trial per iter (3) = 4—uncached TRF would also \
          re-evaluate the start-of-iter residual and produce 1 + 2·iters = 7"
     );
     assert!(
-        result.state.jacobian_evals() <= 3,
+        result.state.counts().jacobian_evals <= 3,
         "jacobian_evals = {} should be ≤ iters (3): init's J carries iter 1, and \
          rejected steps reuse J at the unchanged iterate. Uncached TRF produces \
          1 + iters = 4.",
-        result.state.jacobian_evals()
+        result.state.counts().jacobian_evals
     );
 }

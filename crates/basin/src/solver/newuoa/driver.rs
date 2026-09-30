@@ -131,6 +131,7 @@ pub(crate) struct StepOutcome<F = f64> {
 ///
 /// Shared by the standalone [`minimize`] driver and the public
 /// [`Newuoa`](crate::solver::Newuoa) solver; see the module docs.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct NewuoaWork<F = f64> {
     model: QuadraticModel<F>,
     /// Final radius `ρ_end`: drives the eq-7.6 schedule and the convergence

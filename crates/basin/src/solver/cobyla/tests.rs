@@ -5,7 +5,7 @@
 use crate::NonlinearInequalityConstraints;
 use crate::core::executor::Executor;
 use crate::core::problem::CostFunction;
-use crate::core::state::CobylaState;
+use crate::core::state::SelectedState;
 use crate::core::termination::TerminationReason;
 use crate::solver::Cobyla;
 
@@ -46,7 +46,7 @@ fn problem_b_disk_min_product() {
     let solver = Cobyla::new()
         .with_initial_radius(0.5)
         .with_final_radius(1e-4);
-    let state = CobylaState::new(vec![1.0, 1.0]);
+    let state = SelectedState::new(vec![1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
         .max_cost_evals(2000)
         .run()
@@ -70,7 +70,7 @@ fn problem_c_ellipsoid_min_product3() {
     let solver = Cobyla::new()
         .with_initial_radius(0.5)
         .with_final_radius(1e-5);
-    let state = CobylaState::new(vec![1.0, 1.0, 1.0]);
+    let state = SelectedState::new(vec![1.0, 1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
         .max_cost_evals(3000)
         .run()
@@ -93,7 +93,7 @@ fn problem_f_fletcher() {
     let solver = Cobyla::new()
         .with_initial_radius(0.5)
         .with_final_radius(1e-5);
-    let state = CobylaState::new(vec![1.0, 1.0]);
+    let state = SelectedState::new(vec![1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
         .max_cost_evals(3000)
         .run()
@@ -129,7 +129,7 @@ fn problem_g_fletcher() {
     let solver = Cobyla::new()
         .with_initial_radius(0.5)
         .with_final_radius(1e-5);
-    let state = CobylaState::new(vec![1.0, 1.0, 1.0]);
+    let state = SelectedState::new(vec![1.0, 1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
         .max_cost_evals(3000)
         .run()
@@ -152,7 +152,7 @@ fn unconstrained_rosenbrock_like() {
     let solver = Cobyla::new()
         .with_initial_radius(0.5)
         .with_final_radius(1e-6);
-    let state = CobylaState::new(vec![-1.0, 1.0]);
+    let state = SelectedState::new(vec![-1.0, 1.0]);
     let result = Executor::new(prob, solver, state)
         .max_cost_evals(5000)
         .run()

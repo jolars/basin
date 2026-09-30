@@ -264,7 +264,7 @@ fn all_counts() -> EvalCounts {
 }
 
 #[test]
-fn counts_keep_all_categories_and_legacy_folds() {
+fn counts_preserve_categories_without_folding() {
     let counts = all_counts();
     let mut point = PointState::new(vec![1.0]);
     point.replace(vec![1.0], 1.0);
@@ -272,8 +272,8 @@ fn counts_keep_all_categories_and_legacy_folds() {
     point.update_best();
     assert_eq!(point.counts(), &counts);
     assert_eq!(point.best_counts(), Some(&counts));
-    assert_eq!(point.cost_evals(), 41);
-    assert_eq!(point.best_cost_evals(), 41);
+    assert_eq!(point.cost_evals(), 2);
+    assert_eq!(point.best_cost_evals(), 2);
 
     let mut first = FirstOrderState::new(vec![1.0]);
     first.replace(vec![1.0], 1.0, vec![2.0]).unwrap();
@@ -281,10 +281,10 @@ fn counts_keep_all_categories_and_legacy_folds() {
     first.update_best();
     assert_eq!(first.counts(), &counts);
     assert_eq!(first.best_counts(), Some(&counts));
-    assert_eq!(first.cost_evals(), 7);
-    assert_eq!(first.gradient_evals(), 34);
-    assert_eq!(first.best_cost_evals(), 7);
-    assert_eq!(first.best_gradient_evals(), 34);
+    assert_eq!(first.cost_evals(), 2);
+    assert_eq!(first.gradient_evals(), 3);
+    assert_eq!(first.best_cost_evals(), 2);
+    assert_eq!(first.best_gradient_evals(), 3);
 }
 
 #[test]
@@ -521,4 +521,42 @@ fn serde_preserves_seeds_records_and_raw_history_for_both_scalars() {
     }
     check::<f64>();
     check::<f32>();
+}
+
+#[test]
+fn segment_reset_retains_complete_records_and_clears_bookkeeping() {
+    let counts = EvalCounts {
+        cost_evals: 3,
+        gradient_evals: 5,
+        residual_evals: 7,
+        jacobian_evals: 11,
+        hessian_evals: 13,
+        hessian_product_evals: 17,
+    };
+    let mut point = PointState::new(vec![2.0]);
+    point.replace(vec![2.0], 4.0);
+    point.increment_iter();
+    point.mirror(&counts);
+    point.update_best();
+    point.reset_progress();
+    assert_eq!(point.current(), Some((&vec![2.0], 4.0)));
+    assert_eq!(point.iter(), 0);
+    assert_eq!(point.counts(), &EvalCounts::default());
+    assert!(point.best().is_none());
+    assert!(point.best_counts().is_none());
+    point.update_best();
+    assert_eq!(point.best_iter(), 0);
+    assert_eq!(point.best_counts(), Some(&EvalCounts::default()));
+
+    let mut first_order = FirstOrderState::new(vec![2.0]);
+    first_order.replace(vec![2.0], 4.0, vec![4.0]).unwrap();
+    first_order.increment_iter();
+    first_order.mirror(&counts);
+    first_order.update_best();
+    first_order.reset_progress();
+    assert_eq!(first_order.current(), Some((&vec![2.0], 4.0, &vec![4.0])));
+    assert_eq!(first_order.iter(), 0);
+    assert_eq!(first_order.counts(), &EvalCounts::default());
+    assert!(first_order.best().is_none());
+    assert!(first_order.best_counts().is_none());
 }

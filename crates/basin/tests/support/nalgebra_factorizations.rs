@@ -60,12 +60,12 @@ fn gauss_newton_converges_through_lapack_cholesky() {
     // through `LinearSolveSpd` on the nalgebra backend, i.e. the LAPACK
     // Cholesky impl under this feature. Mirrors `gauss_newton_nalgebra.rs`.
     use basin::problems::RosenbrockResiduals;
-    use basin::{Executor, GaussNewton, NllsState, TerminationReason};
+    use basin::{Executor, GaussNewton, PointState, TerminationReason};
 
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(20)
             .run()
             .unwrap();

@@ -43,12 +43,11 @@ because they cannot silently change the backend release at the next Basin
 upgrade. If dependency feature unification enables several versions of one
 backend, Basin implements every enabled version independently.
 
-The legacy `NalgebraQuasiNewtonState`, `NdarrayQuasiNewtonState`, and
-`FaerQuasiNewtonState` aliases still select the newest enabled version for
-Basin 1.x compatibility. For explicit version selection, use
-[`QuasiNewtonState<V, M, F>`](https://docs.rs/basin/latest/basin/core/state/struct.QuasiNewtonState.html)
-with your dependency's vector and matrix types, or use `Executor::from_start`
-to infer the state from the starting vector.
+Basin 2.0 replaces the backend-specific quasi-Newton state aliases with
+[`FirstOrderState<V, F>`](https://docs.rs/basin/latest/basin/core/state/progress/struct.FirstOrderState.html).
+BFGS owns its inverse Hessian and infers the matrix through the vector's
+`DenseBackend` association. Each enabled backend version has its own
+association; `Executor::from_start` infers the state from the starting vector.
 
 ## The Basic Executor Migration
 
@@ -127,7 +126,7 @@ fn main() {
 ```
 
 Use `Executor::new` when you need a custom simplex or another fully constructed
-state. For example, pass `BasicSimplexState::from_simplex(vertices)` as the
+state. For example, pass `SimplexProgress::from_simplex(vertices)` as the
 third argument. `from_start` is intentionally unavailable for solvers whose
 initialization needs more than one point, such as CMA-ES and population solvers.
 
@@ -137,10 +136,10 @@ initialization needs more than one point, such as CMA-ES and population solvers.
 | --- | --- |
 | `Executor::new(problem, solver).configure(|state| state.param(x).max_iters(n))` | `Executor::from_start(problem, solver, x).max_iter(n)` |
 | `NelderMead::new(simplex).with_sd_tolerance(tol)` | `NelderMead::new().with_absolute_simplex_size_tolerance(tol_x).with_absolute_simplex_cost_tolerance(tol_f)` |
-| `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::<Unbounded>::new().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
+| `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::new().unbounded().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
 | `HagerZhangLineSearch::new()` | `HagerZhang::new()` |
 | `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
-| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `BoxConstraints` and `GlobalBestPsoState::new()` |
+| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `BoxConstraints` and `PopulationProgress::empty()` |
 | `BrentRoot::new(lower, upper, tol)` | `BrentRoot::new(lower, upper).with_relative_position_tolerance(tol_rel).with_absolute_position_tolerance(tol_abs).solve(function)`; no `Executor` is needed |
 | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
 | Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
@@ -185,13 +184,12 @@ same-sign brackets, non-finite values, and callback errors are distinct
 ## L-BFGS and L-BFGS-B
 
 Argmin's `LBFGS` is unconstrained. Basin exposes both algorithms through one
-type-state API: `Lbfgs<Unbounded>` is unconstrained, while `Lbfgsb` (and the
+type-state API: `Lbfgs<V, F, Unbounded>` is unconstrained, while `Lbfgsb` (and the
 default `Lbfgs`) requires `BoxConstraints`. Moré–Thuente is Basin's default line
 search for both modes.
 
 <!-- compile: basin-lbfgs -->
 ```rust
-use basin::solver::lbfgs::Unbounded;
 use basin::{CostFunction, Executor, Gradient, Lbfgs};
 use std::convert::Infallible;
 
@@ -219,7 +217,7 @@ impl Gradient for Sphere {
 }
 
 fn main() {
-    let solver = Lbfgs::<Unbounded>::new().with_m_capacity(7);
+    let solver = Lbfgs::new().unbounded().with_m_capacity(7);
     let result = Executor::from_start(
         Sphere,
         (solver).with_absolute_gradient_tolerance(1e-12),
@@ -234,7 +232,7 @@ fn main() {
 ```
 
 For a nondefault line search, use
-`Lbfgs::<Unbounded, HagerZhang>::with_line_search(HagerZhang::new())`. The
+`Lbfgs::with_line_search(HagerZhang::new()).unbounded()`. The
 `delta`, `sigma`, `epsilon`, `theta`, `gamma`, initial step, step bounds, and
 evaluation budget have direct Basin counterparts. Argmin also exposes an `eta`
 setting on its Hager–Zhang line search, but does not use it there; the parameter
@@ -474,7 +472,8 @@ Move the box from Argmin's solver constructor to the problem's
 Argmin's clamp-position/retain-velocity behavior; Basin defaults to absorbing a
 boundary crossing. Basin's default initialization follows the Standard PSO 2006
 profile, `v=(u-x)/2`, rather than Argmin's `v~U(-span, span)`, so use a warm
-state with explicit positions and velocities when testing a migrated setup.
+population with explicit positions and set
+`with_initial_velocities(Some(velocities))` on the solver when testing a migrated setup.
 Even then, compare numerical outcomes rather than requiring seeded trajectory
 identity: the two crates use different RNG versions and vector-sampling
 semantics.
@@ -483,7 +482,7 @@ semantics.
 ```rust
 use basin::{
     BoxConstraints, CostFunction, Executor, GlobalBestPso,
-    GlobalBestPsoState, PsoBoundaryHandling,
+    PopulationProgress, PsoBoundaryHandling,
 };
 use std::convert::Infallible;
 
@@ -523,7 +522,7 @@ fn main() {
     let result = Executor::new(
         problem,
         solver,
-        GlobalBestPsoState::<Vec<f64>>::new(),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(500)
     .run()
@@ -533,10 +532,12 @@ fn main() {
 }
 ```
 
-For exact continuation, the initialized `GlobalBestPsoState` owns the live RNG,
-velocities, and personal/global bests. With `serde`, serialize that state and
-pass it with the same problem and solver configuration to `Executor::resume`,
-or use a solver-aware `ExactCheckpointWriter`.
+The solver owns the live RNG, velocities, and personal and global bests.
+`PopulationProgress` owns the observable members, costs, and incumbent metadata.
+For exact continuation, retain both through `run_with_solver().into_checkpoint()`
+and use `Executor::resume_from_checkpoint`, or serialize them together through
+`ExactCheckpointWriter`. A progress-only snapshot starts a fresh run that
+reevaluates its members and resets particle histories.
 
 ## Simulated Annealing Is Deliberately Basin-Native
 
@@ -575,8 +576,10 @@ evaluation counters together. `read_exact_checkpoint` validates the format,
 Basin version, and concrete types; pass the result to
 `Executor::resume_from_checkpoint`, which restores the iteration boundary
 without rerunning solver initialization. Simulated annealing retains its
-stateful neighbor, RNG, and chain progress in `SimulatedAnnealingState`, while
-the exact checkpoint captures the solver and state together. Reattach
+stateful neighbor, RNG, and cooling history in the solver. `ProposalState`
+records its accepted point, cost, incumbent, counts, and acceptance history.
+The exact checkpoint captures both. State-only snapshots start a fresh chain
+through `Executor::new`. Reattach
 execution controls, observers, cancellation, and the checkpoint writer when
 resuming.
 

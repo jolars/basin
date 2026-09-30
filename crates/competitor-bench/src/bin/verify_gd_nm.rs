@@ -18,8 +18,8 @@ use argmin::solver::linesearch::MoreThuenteLineSearch;
 use argmin::solver::neldermead::NelderMead as ArgminNelderMead;
 use basin::problems::{Rosenbrock, rosenbrock, rosenbrock_gradient};
 use basin::{
-    BasicSimplexState, BasicState, Executor, GradientDescent,
-    IntoInitialSimplex, MoreThuente, NelderMead,
+    Executor, FirstOrderState, GradientDescent, IntoInitialSimplex,
+    MoreThuente, NelderMead, SimplexProgress,
 };
 use competitor_bench::ArgminProblem;
 
@@ -37,7 +37,7 @@ fn main() {
     let r = Executor::new(
         Rosenbrock::<Vec<f64>>::default(),
         GradientDescent::with_line_search(MoreThuente::new()),
-        BasicState::new(start.clone()),
+        FirstOrderState::new(start.clone()),
     )
     .max_iter(MAX_ITERS)
     .run()
@@ -65,7 +65,7 @@ fn main() {
     let r = Executor::new(
         Rosenbrock::<Vec<f64>>::default(),
         NelderMead::new(),
-        BasicSimplexState::new(start.clone()),
+        SimplexProgress::new(start.clone()),
     )
     .max_iter(MAX_ITERS)
     .run()

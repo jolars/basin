@@ -10,7 +10,7 @@
 
 use crate::backend_aliases::ndarray::Array1;
 use basin::problems::{PowellSingular, RosenbrockResiduals};
-use basin::{Executor, GaussNewton, NllsState, TerminationReason};
+use basin::{Executor, GaussNewton, PointState, TerminationReason};
 
 #[test]
 fn gauss_newton_converges_on_rosenbrock_residuals() {
@@ -21,7 +21,7 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
     let initial = Array1::from_vec(vec![-1.2, 1.0]);
 
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(20)
             .run()
             .unwrap();
@@ -52,7 +52,7 @@ fn gauss_newton_single_step_matches_normal_equation_solution() {
     let initial = Array1::from_vec(vec![-1.2, 1.0]);
 
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(1)
             .run()
             .unwrap();
@@ -82,7 +82,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
     let initial = Array1::from_vec(vec![-1.2, 1.0]);
 
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(50)
             .run()
             .unwrap();
@@ -102,7 +102,7 @@ fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
     let initial = Array1::from_vec(vec![1.0, 2.0, 1.0, 1.0]);
 
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(100)
             .run()
             .unwrap();
@@ -121,7 +121,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
     // For K completed iters with the run terminating on MaxIter
     // (avoiding the in-`next_iter` convergence check that also evaluates
     // J on the early-exit path):
-    //   - cost_evals = 1 + K
+    //   - residual_evals = 1 + K
     //   - jacobian_evals = K
     // Disable the internal tol_grad check so termination is purely by
     // MaxIter; keeps the assertion deterministic regardless of how
@@ -132,7 +132,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
     let result = Executor::new(
         problem,
         GaussNewton::new().with_absolute_gradient_tolerance(None),
-        NllsState::new(initial),
+        PointState::new(initial),
     )
     .max_iter(3)
     .run()
@@ -141,12 +141,12 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
     assert_eq!(result.reason, TerminationReason::MaxIter);
     assert_eq!(result.iter(), 3);
     assert_eq!(
-        result.cost_evals(),
+        result.state.counts().residual_evals,
         4,
         "expected init (1) + one post-step residual per iter (3) = 4"
     );
     assert_eq!(
-        result.state.jacobian_evals(),
+        result.state.counts().jacobian_evals,
         3,
         "expected init's J reused for iter 1, then one J recompute per subsequent iter \
          (3 total)"

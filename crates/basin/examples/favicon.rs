@@ -37,7 +37,8 @@
 use std::fmt::Write as _;
 
 use basin::{
-    BasicState, CostFunction, Gradient, GradientDescent, Problem, Solver, State,
+    CostFunction, FirstOrderState, Gradient, GradientDescent, Problem, Solver,
+    State,
 };
 
 // ---------------------------------------------------------------------------
@@ -318,7 +319,7 @@ fn trace_river() -> Vec<[f64; 2]> {
         GradientDescent::new(RIVER_ALPHA).with_momentum(RIVER_BETA);
     let mut problem = Problem::new(Bowl);
     let mut state = solver
-        .init(&mut problem, BasicState::new(RIVER_START.to_vec()))
+        .init(&mut problem, FirstOrderState::new(RIVER_START.to_vec()))
         .unwrap();
     let mut full = vec![[state.param()[0], state.param()[1]]];
     for _ in 0..RIVER_ITERS {

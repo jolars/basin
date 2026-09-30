@@ -1,5 +1,5 @@
 use basin::problems::Rosenbrock;
-use basin::{BasicState, Executor, GradientDescent, Problem, Solver};
+use basin::{Executor, FirstOrderState, GradientDescent, Problem, Solver};
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
@@ -34,7 +34,7 @@ fn main() {
             // matching the contract `next_iter` expects (gradient cached
             // from the previous iter or from init).
             let state = solver
-                .init(&mut problem, BasicState::new(vec![-1.2, 1.0]))
+                .init(&mut problem, FirstOrderState::new(vec![-1.2, 1.0]))
                 .unwrap();
             (solver, problem, state)
         },
@@ -51,7 +51,7 @@ fn main() {
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
                 GradientDescent::new(0.001),
-                BasicState::new(vec![-1.2, 1.0]),
+                FirstOrderState::new(vec![-1.2, 1.0]),
             )
             .max_iter(10_000)
             .run()

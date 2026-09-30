@@ -15,7 +15,7 @@
 //! algorithmic divergence.
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
+    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb,
 };
 use std::fs;
 
@@ -115,14 +115,16 @@ fn rosenbrock_5d_matches_fortran_trajectory() {
     // Start matching the Fortran driver: infeasible initial point gets
     // projected during `Lbfgsb::init`.
     let initial = vec![-1.0, 2.0, -1.0, 2.0, -1.0];
-    let state = LbfgsState::new(initial, 5);
+    let state = FirstOrderState::new(initial);
 
     // Match Fortran driver: `factr = 0`, `pgtol = 0`, disabling both
     // convergence tolerances so the parity comparator runs all 30
     // iterations regardless of how small the projected gradient gets.
     let mut stepper = Executor::new(
         problem,
-        Lbfgsb::new().with_absolute_projected_gradient_tolerance(0.0),
+        Lbfgsb::new()
+            .with_m_capacity(5)
+            .with_absolute_projected_gradient_tolerance(0.0),
         state,
     )
     .max_iter(30)
@@ -158,7 +160,7 @@ fn rosenbrock_5d_matches_fortran_trajectory() {
 
 fn check_iterate(
     k: u64,
-    state: &LbfgsState<Vec<f64>>,
+    state: &FirstOrderState<Vec<f64>>,
     expected: &FortranIterate,
     x_tol: f64,
     f_tol: f64,

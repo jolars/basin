@@ -10,7 +10,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
-use basin::{BasicPopulationState, De, DeInject, Executor, Lbfgsb};
+use basin::{De, DeInject, Executor, Lbfgsb, PopulationProgress};
 
 #[test]
 fn converges_on_booth_boxed_to_lbfgsb_precision() {
@@ -26,7 +26,7 @@ fn converges_on_booth_boxed_to_lbfgsb_precision() {
     let result = Executor::new(
         problem,
         solver,
-        BasicPopulationState::<DVector<f64>>::with_size(1),
+        PopulationProgress::<DVector<f64>>::empty(),
     )
     .max_iter(40)
     .run()

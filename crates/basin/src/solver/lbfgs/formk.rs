@@ -378,7 +378,7 @@ mod tests {
         let n = 17;
         for m in [1, 3, 5, 8] {
             let mut state =
-                crate::LbfgsState::<Vec<F>, F>::new(vec![F::zero(); n], m);
+                super::super::workspace::History::<Vec<F>, F>::new(m);
             let mut wn = vec![F::zero(); 4 * m * m];
             let mut wn1 = wn.clone();
             let mut previous_free = vec![false; n];

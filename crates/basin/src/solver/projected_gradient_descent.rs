@@ -1,9 +1,11 @@
 use crate::core::constraint::BoxConstraints;
 use crate::core::inner::InitialState;
-use crate::core::math::{ClampInPlace, NegInPlace, Scalar, ScaledAdd};
+use crate::core::math::{
+    ClampInPlace, NegInPlace, Scalar, ScaledAdd, VectorLen,
+};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::TerminationReason;
 use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 
@@ -57,14 +59,21 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// checks are also opt-in and combine using OR. Execution budgets belong on
 /// the executor.
 ///
+/// Progress uses [`FirstOrderState<V, F>`]. Fresh initialization clears
+/// counters and incumbents, resets the line search, and reevaluates the seed.
+/// It projects the seed into the box before evaluation. Exact checkpoints
+/// retain line-search history. The scalar parameter on
+/// `ProjectedGradientDescent<S, F>` lets [`crate::Executor::from_start`] infer
+/// first-order progress for either scalar type.
+///
 /// # Backends
 ///
 /// Backend-generic; works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
-/// [`NegInPlace`] + [`ClampInPlace`] + `Clone`. With the default
-/// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
-/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
-/// `faer::Col<f64>` (feature `faer`). The problem must implement
+/// [`NegInPlace`] + [`ClampInPlace`] + [`VectorLen`] + `Clone`. Supports
+/// `Vec<F>`, `nalgebra::DVector<F>` (feature `nalgebra`),
+/// `ndarray::Array1<F>` (feature `ndarray`), and `faer::Col<F>` (feature
+/// `faer`) for both `f32` and `f64`. The problem must implement
 /// [`BoxConstraints`].
 ///
 /// # Examples
@@ -75,7 +84,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// box caps it at `(1, 1)`:
 ///
 /// ```
-/// use basin::{BasicState, BoxConstraints, CostFunction, Executor, Gradient, ProjectedGradientDescent};
+/// use basin::{FirstOrderState, BoxConstraints, CostFunction, Executor, Gradient, ProjectedGradientDescent};
 ///
 /// struct ShiftedSphere {
 ///     lower: Vec<f64>,
@@ -104,7 +113,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// let result = Executor::new(
 ///     problem,
 ///     ProjectedGradientDescent::new(0.1),
-///     BasicState::new(vec![0.0, 0.0]),
+///     FirstOrderState::new(vec![0.0, 0.0]),
 /// )
 /// .max_iter(1_000)
 /// .run()
@@ -112,11 +121,13 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// assert!((result.param()[0] - 1.0).abs() < 1e-6);
 /// assert!((result.param()[1] - 1.0).abs() < 1e-6);
 /// ```
-pub struct ProjectedGradientDescent<S> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ProjectedGradientDescent<S, F: Scalar = f64> {
+    scalar: core::marker::PhantomData<F>,
     line_search: S,
 }
 
-impl<F: Scalar> ProjectedGradientDescent<Constant<F>> {
+impl<F: Scalar> ProjectedGradientDescent<Constant<F>, F> {
     /// Projected gradient descent with a fixed step size `alpha`.
     /// Equivalent to `with_line_search(Constant(alpha))`. Recommended
     /// default; the line search variant has the caveat documented on
@@ -124,11 +135,12 @@ impl<F: Scalar> ProjectedGradientDescent<Constant<F>> {
     pub fn new(alpha: F) -> Self {
         Self {
             line_search: Constant(alpha),
+            scalar: core::marker::PhantomData,
         }
     }
 }
 
-impl<S> ProjectedGradientDescent<S> {
+impl<S, F: Scalar> ProjectedGradientDescent<S, F> {
     /// Projected gradient descent with an explicit line-search strategy.
     ///
     /// Note: the line search runs against the *unconstrained* trial
@@ -136,32 +148,31 @@ impl<S> ProjectedGradientDescent<S> {
     /// while the projection isn't active; consider a fixed step in
     /// regimes where many components hit their bounds.
     pub fn with_line_search(line_search: S) -> Self {
-        Self { line_search }
+        Self {
+            line_search,
+            scalar: core::marker::PhantomData,
+        }
     }
 }
 
-// `ProjectedGradientDescent<S>` carries neither the param type `V` nor the
-// scalar `F` on the struct (unlike `GradientDescent<L, V, F>`), so a fully
-// scalar-generic `InitialState` impl would leave `F` unconstrained (E0207).
-// Pin the seed to the crate's `f64` default, the common case; `f32` users
-// build the `BasicState` explicitly via `Executor::new`.
-impl<S, V> InitialState<V> for ProjectedGradientDescent<S>
+impl<S, V, F: Scalar> InitialState<V> for ProjectedGradientDescent<S, F>
 where
     V: Clone,
 {
-    type State = BasicState<V, f64>;
+    type State = FirstOrderState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        BasicState::new(x.clone())
+        FirstOrderState::new(x.clone())
     }
 }
 
-impl<P, V, F, S> Solver<P, BasicState<V, F>> for ProjectedGradientDescent<S>
+impl<P, V, F, S> Solver<P, FirstOrderState<V, F>>
+    for ProjectedGradientDescent<S, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + BoxConstraints,
-    V: ScaledAdd<F> + NegInPlace + ClampInPlace + Clone,
+    V: ScaledAdd<F> + NegInPlace + ClampInPlace + Clone + VectorLen,
     S: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
@@ -169,56 +180,57 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state.reset();
+        self.line_search.reset();
         // Project an infeasible start once so iter-0 termination checks
         // see a feasible iterate. Subsequent iterations preserve
         // feasibility by construction.
         state
-            .param
+            .seed_param_mut()
             .clamp_in_place(problem.inner().lower(), problem.inner().upper());
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        state
+            .set_evaluation(cost, grad)
+            .expect("gradient dimension differs from parameter");
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let grad = state
-            .gradient
-            .take()
-            .expect("gradient not set: Solver::init must run before next_iter");
-        let prev_cost = state
-            .cost
-            .expect("cost not set: Solver::init must run before next_iter");
+        let (prev_cost, grad) = state
+            .take_evaluation()
+            .expect("solver requires initialized progress");
         let mut direction = grad.clone();
         direction.neg_in_place();
         let alpha = match self.line_search.next_with_outcome(
             problem,
-            &state.param,
+            state.param(),
             prev_cost,
             &grad,
             &direction,
         )? {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
-                state.gradient = Some(grad);
-                state.cost = Some(prev_cost);
+                state
+                    .set_evaluation(prev_cost, grad)
+                    .expect("gradient dimension differs from parameter");
                 return Ok((state, Some(TerminationReason::SolverFailed)));
             }
         };
-        state.param.scaled_add(alpha, &direction);
+        state.seed_param_mut().scaled_add(alpha, &direction);
         state
-            .param
+            .seed_param_mut()
             .clamp_in_place(problem.inner().lower(), problem.inner().upper());
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        state
+            .set_evaluation(cost, grad)
+            .expect("gradient dimension differs from parameter");
         Ok((state, None))
     }
 }

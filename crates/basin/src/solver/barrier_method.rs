@@ -11,7 +11,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{BasicState, CountsMirror, GradientState, State};
+use crate::core::state::{CountsMirror, GradientState, PointState, State};
 use crate::core::termination::TerminationReason;
 
 /// Two-phase log-barrier method for `min f(x) s.t. A x ≤ b`, layering a
@@ -30,10 +30,10 @@ use crate::core::termination::TerminationReason;
 /// iterates over its own [`GradientState`]. The inner state is seeded at the
 /// current iterate via [`InitialState::seed`],
 /// so each of [`GradientDescent`](crate::solver::GradientDescent)
-/// ([`BasicState`]), [`Bfgs`](crate::solver::Bfgs)
-/// ([`QuasiNewtonState`](crate::core::state::QuasiNewtonState)), and unbounded
+/// ([`FirstOrderState`](crate::FirstOrderState)), [`Bfgs`](crate::solver::Bfgs)
+/// ([`FirstOrderState`](crate::core::state::FirstOrderState)), and unbounded
 /// [`Lbfgs`](crate::solver::lbfgs::Lbfgs)
-/// ([`LbfgsState`](crate::core::state::LbfgsState)) is usable. Two inner kinds
+/// ([`FirstOrderState`](crate::core::state::FirstOrderState)) is usable. Two inner kinds
 /// are deliberately excluded: a least-squares solver
 /// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)), because the
 /// barrier objective is not a sum of squares and the [`LogBarrier`] adapter
@@ -109,24 +109,40 @@ use crate::core::termination::TerminationReason;
 /// (≈ 9 for the defaults), so an outer `max_iter` of 30–50 is a practical
 /// safety budget for both phases.
 ///
-/// **Do not attach a gradient-norm criterion to the outer executor.** The
-/// gap test is the correct optimality measure here. At a constrained
-/// optimum the true objective gradient `∇f` does *not* vanish (it points
-/// into the active constraint face), so a framework
-/// gradient-norm check on the outer loop would either never fire or fire on
-/// the wrong point.
-/// (The outer state's gradient is the true `∇f`, seeded only so the state
-/// is well-formed; it is not a convergence signal.)
+/// Cost- and step-change tests observe only accepted Phase II iterates.
+/// The outer [`PointState`] has no gradient capability: the original
+/// objective gradient need not vanish at a constrained optimum. Configure
+/// gradient convergence on the inner solver.
+///
+/// # Progress and lifecycle
+///
+/// The outer state reports the original objective inside the strict domain
+/// `A x < b`, and `+∞` elsewhere. Phase I computes this rejection value
+/// without calling the original objective or gradient. Its current record is
+/// available, but it cannot establish an incumbent until a strictly feasible
+/// point with an eligible objective is published. Incumbents retain strict
+/// objective improvements among these feasible points.
+///
+/// Fresh initialization clears progress, reevaluates the seed's domain and
+/// objective, and restarts the phase and barrier schedule. Each inner solve
+/// starts fresh. Exact continuation retains the phase, schedule, inner solver,
+/// progress, and all six raw evaluation categories, and skips initialization.
+/// The outer loop does not compute an unused original-objective gradient.
+/// Inner adapter evaluations remain charged even when a callback aborts.
+///
+/// With `serde`, solver-aware checkpoints can serialize the outer method
+/// whenever the inner solver supports serialization. Old `BasicState`
+/// checkpoint payloads are incompatible with this progress representation.
 ///
 /// # Backends
 ///
-/// Requires the constraint matrix to implement
-/// [`MatVec`] (`A x`) and [`MatTransposeVec`] (`Aᵀ v`), never a linear
-/// solve. All backends supply those two ops, so the method runs on every
-/// backend: `Vec<f64>` (via
-/// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
-/// (`DMatrix`/`DVector`), faer (`Mat`/`Col`), and `ndarray`
-/// (`Array2`/`Array1`).
+/// Supports `Vec<f32>` and `Vec<f64>` with
+/// [`DenseMatrix`](crate::core::math::DenseMatrix), nalgebra `DVector`/`DMatrix`,
+/// ndarray `Array1`/`Array2`, and faer `Col`/`Mat`, with either scalar type.
+/// The outer method needs [`MatVec`] and [`MatTransposeVec`], with no linear
+/// solve. Its vector bounds are [`ScaledAdd`], [`NegInPlace`], [`VectorIndex`],
+/// [`VectorLen`], [`NormSquared`], and [`Clone`]. A custom inner solver can
+/// impose additional capabilities.
 ///
 /// # Composition
 ///
@@ -134,7 +150,7 @@ use crate::core::termination::TerminationReason;
 /// its own convergence settings. Each outer iteration starts a fresh inner
 /// solve through [`run_loop_with_control`],
 /// against the current surrogate problem. Convergence history resets and
-/// inner evaluation counts are folded into the outer wrapper.
+/// inner evaluation counts are added to their corresponding outer categories.
 /// The deprecated `new` constructor additionally applies an inner gradient
 /// threshold, default `1e-8`, for Basin 1.x compatibility.
 ///
@@ -144,7 +160,8 @@ use crate::core::termination::TerminationReason;
 /// `Backtracking`) to handle `LinearInequalityConstraints`. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
-pub struct BarrierMethod<So, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct BarrierMethod<So, F: Scalar = f64> {
     inner_solver: So,
     inner_max_iter: u64,
     inner_grad_tol: Option<F>,
@@ -157,9 +174,11 @@ pub struct BarrierMethod<So, F = f64> {
     /// so [`terminate`](Solver::terminate) cannot fire at iter 0.
     gap: F,
     phase: BarrierPhase,
+    accepted_iterate: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum BarrierPhase {
     PhaseOne,
     PhaseTwo,
@@ -227,7 +246,7 @@ where
     }
 }
 
-impl<So> BarrierMethod<So> {
+impl<So, F: Scalar> BarrierMethod<So, F> {
     /// Build a barrier method around an unconstrained inner solver.
     ///
     /// Defaults: `mu0 = 1.0`, `reduction = 10.0`, `tol = 1e-8`,
@@ -259,14 +278,15 @@ impl<So> BarrierMethod<So> {
         Self {
             inner_solver,
             inner_max_iter: 50,
-            inner_grad_tol: Some(1e-8),
-            mu0: 1.0,
-            mu: 1.0,
-            reduction: 10.0,
-            tol: Some(1e-8),
-            phase_one_tol: 1e-8,
-            gap: f64::INFINITY,
+            inner_grad_tol: Some(F::from_f64(1e-8).unwrap()),
+            mu0: F::one(),
+            mu: F::one(),
+            reduction: F::from_f64(10.0).unwrap(),
+            tol: Some(F::from_f64(1e-8).unwrap()),
+            phase_one_tol: F::from_f64(1e-8).unwrap(),
+            gap: F::infinity(),
             phase: BarrierPhase::PhaseTwo,
+            accepted_iterate: false,
         }
     }
 }
@@ -400,13 +420,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        BasicState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
-impl<P, V, M, So, F> Solver<P, BasicState<V, F>> for BarrierMethod<So, F>
+impl<P, V, M, So, F> Solver<P, PointState<V, F>> for BarrierMethod<So, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
@@ -432,8 +452,10 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.accepted_iterate = false;
         self.mu = self.mu0;
         self.gap = F::infinity();
 
@@ -446,8 +468,7 @@ where
         if self.phase == BarrierPhase::Failed {
             // Keep cost-based convergence dormant until `next_iter` can
             // report the solver failure through the normal soft-stop path.
-            state.cost = Some(F::infinity());
-            state.gradient = None;
+            state.replace(state.param().clone(), F::infinity());
             return Ok(state);
         }
 
@@ -456,24 +477,24 @@ where
             // The infeasible point is not a candidate for the original
             // problem, so exposing its true objective or gradient could let a
             // target or stationarity test bypass Phase I entirely.
-            state.cost = Some(F::infinity());
-            state.gradient = None;
+            state.replace(state.param().clone(), F::infinity());
             return Ok(state);
         }
 
         // A feasible start is a valid candidate for the original problem.
-        let (cost, grad) = problem.cost_and_gradient(state.param())?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        let cost = problem.cost(state.param())?;
+        state.replace(state.param().clone(), cost);
+        self.accepted_iterate = true;
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
     {
+        self.accepted_iterate = false;
         if self.phase == BarrierPhase::Failed {
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
@@ -495,10 +516,11 @@ where
                 inner_state,
                 &mut phase_one_solver,
                 &mut control,
-            )?;
+            );
 
             let inner_counts = *barrier_wrapper.counts();
             problem.counts_mut().add(&inner_counts);
+            let result = result?;
 
             if result.reason.is_failure() {
                 self.phase = BarrierPhase::Failed;
@@ -526,19 +548,19 @@ where
                 return Ok((state, Some(TerminationReason::SolverFailed)));
             };
 
-            state.param = candidate.clone();
-
             if is_strictly_feasible {
-                let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-                state.cost = Some(cost);
-                state.gradient = Some(grad);
+                let cost = problem.cost(candidate)?;
+                state.replace(candidate.clone(), cost);
                 // Phase II starts a fresh continuation schedule; Phase I's μ
                 // controls feasibility accuracy, not objective optimality.
                 self.phase = BarrierPhase::PhaseTwo;
                 self.mu = self.mu0;
                 self.gap = F::infinity();
+                self.accepted_iterate = true;
                 return Ok((state, None));
             }
+
+            state.replace(candidate.clone(), F::infinity());
 
             // An unfinished solve supplies neither a Phase I optimum nor the
             // associated m·μ bound. Preserve its progress, but retry this μ
@@ -556,8 +578,6 @@ where
                 self.mu = self.mu / self.reduction;
             }
 
-            state.cost = Some(F::infinity());
-            state.gradient = None;
             return Ok((state, None));
         }
 
@@ -578,7 +598,7 @@ where
             inner_state,
             &mut self.inner_solver,
             &mut control,
-        )?;
+        );
 
         // Eval aggregation (adapter-problem composition): fold the inner
         // wrapper's per-call counts back into the outer's wrapper. Copy out
@@ -587,23 +607,22 @@ where
         // `counts_mut` reborrow.
         let inner_counts = *barrier_wrapper.counts();
         problem.counts_mut().add(&inner_counts);
+        let result = result?;
 
         if result.reason.is_failure() {
             self.phase = BarrierPhase::Failed;
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
 
-        // Adopt the inner's iterate, then evaluate the *true* f/∇f there
-        // (the inner left cost and gradient at the barrier objective).
+        // Publish the original objective only after verifying the barrier domain.
         let candidate = result.state.param();
         if strict_feasibility(problem.inner(), candidate) != Some(true) {
             self.phase = BarrierPhase::Failed;
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
-        state.param = candidate.clone();
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        let cost = problem.cost(candidate)?;
+        state.replace(candidate.clone(), cost);
+        self.accepted_iterate = true;
 
         // Record the duality gap for this μ, then shrink for the next solve.
         self.gap =
@@ -612,9 +631,13 @@ where
         Ok((state, None))
     }
 
+    fn should_check_iterate_change(&self) -> bool {
+        self.accepted_iterate
+    }
+
     fn terminate(
         &self,
-        _state: &BasicState<V, F>,
+        _state: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         // Log-barrier duality-gap bound m·μ from the most recent solve.
         if self.phase == BarrierPhase::PhaseTwo
@@ -663,7 +686,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "inner_max_iter must be ≥ 1")]
     fn rejects_zero_inner_max_iter() {
-        let _ = BarrierMethod::new(()).with_inner_max_iter(0);
+        let _ = BarrierMethod::<_, f64>::new(()).with_inner_max_iter(0);
     }
 
     #[test]

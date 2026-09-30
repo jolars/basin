@@ -19,6 +19,7 @@ use crate::line_search::{
 /// Algorithms 3.5 (bracketing) and 3.6 (zoom) from Nocedal & Wright. The
 /// zoom phase uses bisection (always-progress, no interpolation pitfalls);
 /// cubic-interpolation in zoom is a possible future perf improvement.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Wolfe<F = f64> {
     /// Armijo slope coefficient in `(0, 1)`. Default `1e-4` (N&W §3.5).
     pub c1: F,

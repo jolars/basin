@@ -12,7 +12,7 @@
 //! otherwise. Scaled norms use independently tracked monotone column norms.
 
 use basin::{
-    Executor, Jacobian, LevenbergMarquardt, LmDamping, NllsState, Problem,
+    Executor, Jacobian, LevenbergMarquardt, LmDamping, PointState, Problem,
     Residual, Solver, State, TerminationReason,
 };
 use nalgebra::{DMatrix, DVector};
@@ -233,26 +233,26 @@ struct Recorder<'a, S> {
     rows: &'a RefCell<Vec<Row>>,
 }
 
-impl<'a, S> Solver<Probe<'a>, NllsState<BasinVector<f64>>> for Recorder<'a, S>
+impl<'a, S> Solver<Probe<'a>, PointState<BasinVector<f64>>> for Recorder<'a, S>
 where
-    S: Solver<Probe<'a>, NllsState<BasinVector<f64>>, Error = Infallible>,
+    S: Solver<Probe<'a>, PointState<BasinVector<f64>>, Error = Infallible>,
 {
     type Error = Infallible;
 
     fn init(
         &mut self,
         problem: &mut Problem<Probe<'a>>,
-        state: NllsState<BasinVector<f64>>,
-    ) -> Result<NllsState<BasinVector<f64>>, Infallible> {
+        state: PointState<BasinVector<f64>>,
+    ) -> Result<PointState<BasinVector<f64>>, Infallible> {
         self.inner.init(problem, state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<Probe<'a>>,
-        state: NllsState<BasinVector<f64>>,
+        state: PointState<BasinVector<f64>>,
     ) -> Result<
-        (NllsState<BasinVector<f64>>, Option<TerminationReason>),
+        (PointState<BasinVector<f64>>, Option<TerminationReason>),
         Infallible,
     > {
         let base = DVector::from_column_slice(state.param().as_slice());
@@ -328,14 +328,14 @@ where
     fn check_convergence(
         &mut self,
         problem: &Problem<Probe<'a>>,
-        state: &NllsState<BasinVector<f64>>,
+        state: &PointState<BasinVector<f64>>,
     ) -> Option<TerminationReason> {
         self.inner.check_convergence(problem, state)
     }
 
     fn terminate(
         &self,
-        state: &NllsState<BasinVector<f64>>,
+        state: &PointState<BasinVector<f64>>,
     ) -> Option<TerminationReason> {
         self.inner.terminate(state)
     }
@@ -345,7 +345,7 @@ fn run<S>(case: &Case, route: &str, profile: &str, solver: S)
 where
     S: for<'a> Solver<
             Probe<'a>,
-            NllsState<BasinVector<f64>>,
+            PointState<BasinVector<f64>>,
             Error = Infallible,
         >,
 {
@@ -372,13 +372,21 @@ where
             budget,
         },
         recorder,
-        NllsState::new(BasinVector::from_column_slice(case.initial.as_slice())),
+        PointState::new(BasinVector::from_column_slice(
+            case.initial.as_slice(),
+        )),
     )
     .max_iter((budget - 1) as u64)
     .run()
     .unwrap();
-    assert_eq!(result.cost_evals() as usize, calls.residual.get());
-    assert_eq!(result.state.jacobian_evals() as usize, calls.jacobian.get());
+    assert_eq!(
+        result.state.counts().residual_evals as usize,
+        calls.residual.get()
+    );
+    assert_eq!(
+        result.state.counts().jacobian_evals as usize,
+        calls.jacobian.get()
+    );
     assert!(calls.residual.get() <= budget);
     assert!(result.param().iter().all(|x| x.is_finite()));
     let rows = rows.borrow();

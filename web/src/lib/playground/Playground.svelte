@@ -140,7 +140,7 @@
     });
 
     // Clicking the contour moves the start point (rounded for a clean code
-    // literal), which re-runs the solve and rewrites `BasicState::new(...)`.
+    // literal), which re-runs the solve and rewrites `FirstOrderState::new(...)`.
     function handlePick(p: { x: number; y: number }) {
         cfg.start = [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100];
     }

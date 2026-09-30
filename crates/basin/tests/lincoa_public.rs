@@ -1,7 +1,7 @@
 //! Public-API integration tests for the LINCOA solver.
 //!
 //! Exercises [`Lincoa`] through the framework: [`Executor`] over a
-//! [`LincoaState`], with framework termination ([`MaxCostEvals`],
+//! [`PointState`], with framework termination ([`MaxCostEvals`],
 //! [`RhoTolerance`]) and a problem carrying linear constraints. These confirm
 //! the public wiring: init/next_iter, the constraint extraction + folding (all
 //! of inequalities, box bounds, and equalities through the general-form
@@ -11,7 +11,7 @@
 
 use basin::core::constraint::LinearConstraints;
 use basin::{
-    CostFunction, DenseMatrix, Executor, Lincoa, LincoaState, TerminationReason,
+    CostFunction, DenseMatrix, Executor, Lincoa, PointState, TerminationReason,
 };
 
 /// `min ‖x − c‖²` subject to `A x ≤ b`, on `Vec<f64>` with the pure-Rust
@@ -52,10 +52,10 @@ fn converges_to_projection() {
         Lincoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-7),
-        LincoaState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -92,10 +92,10 @@ fn converges_with_two_active_constraints() {
         Lincoa::new()
             .with_initial_radius(0.3)
             .with_final_radius(1e-7),
-        LincoaState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     let x = result.best_param();
@@ -148,10 +148,10 @@ fn box_bounds_fold_and_converge_to_corner() {
         Lincoa::new()
             .with_initial_radius(0.3)
             .with_final_radius(1e-7),
-        LincoaState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     let x = result.best_param();
@@ -201,10 +201,10 @@ fn equality_folds_and_converges_to_projection() {
         Lincoa::new()
             .with_initial_radius(0.3)
             .with_final_radius(1e-8),
-        LincoaState::new(vec![0.0, 2.0]),
+        PointState::new(vec![0.0, 2.0]),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     let x = result.best_param();
@@ -228,10 +228,10 @@ fn respects_cost_eval_budget() {
         Lincoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-12),
-        LincoaState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_cost_evals(15)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::MaxCostEvals);
@@ -255,14 +255,18 @@ fn rho_tolerance_stops_early() {
             .with_initial_radius(0.5)
             .with_final_radius(1e-12))
         .with_absolute_radius_tolerance(1e-3),
-        LincoaState::new(vec![0.0, 0.0]),
+        PointState::new(vec![0.0, 0.0]),
     )
     .max_cost_evals(5000)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::RhoTolerance);
-    assert!(result.state.rho() <= 1e-3, "rho = {}", result.state.rho());
+    assert!(
+        result.solver.rho().unwrap() <= 1e-3,
+        "rho = {}",
+        result.solver.rho().unwrap()
+    );
 }
 
 /// Backend-generic: drive LINCOA on nalgebra `DMatrix`/`DVector`.
@@ -302,10 +306,10 @@ fn backend_generic_nalgebra() {
         Lincoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-7),
-        LincoaState::new(DVector::from_vec(vec![0.0, 0.0])),
+        PointState::new(DVector::from_vec(vec![0.0, 0.0])),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -355,10 +359,10 @@ fn backend_generic_ndarray() {
         Lincoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-7),
-        LincoaState::new(Array1::from_vec(vec![0.0, 0.0])),
+        PointState::new(Array1::from_vec(vec![0.0, 0.0])),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
@@ -404,10 +408,10 @@ fn backend_generic_faer() {
         Lincoa::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-7),
-        LincoaState::new(Col::from_fn(2, |_| 0.0)),
+        PointState::new(Col::from_fn(2, |_| 0.0)),
     )
     .max_cost_evals(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);

@@ -7,13 +7,13 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::{RastriginBoxed, SphereBoxed};
-use basin::{DenseMatrix, Executor, MaLsChCma, MaLsChState};
+use basin::{DenseMatrix, Executor, MaLsChCma, PopulationProgress};
 
 #[test]
 fn converges_on_sphere_d10() {
     let problem = SphereBoxed::new(vec![-5.0; 10], vec![5.0; 10]);
     let solver = MaLsChCma::<Vec<f64>, DenseMatrix>::new(7).with_pop_size(20);
-    let result = Executor::new(problem, solver, MaLsChState::new())
+    let result = Executor::new(problem, solver, PopulationProgress::empty())
         .max_iter(u64::MAX)
         .max_cost_evals(20_000)
         .run()
@@ -30,7 +30,7 @@ fn converges_on_sphere_d10() {
 fn converges_on_rastrigin_d10() {
     let problem = RastriginBoxed::<Vec<f64>>::with_standard_bounds(10);
     let solver = MaLsChCma::<Vec<f64>, DenseMatrix>::new(42).with_pop_size(30);
-    let result = Executor::new(problem, solver, MaLsChState::new())
+    let result = Executor::new(problem, solver, PopulationProgress::empty())
         .max_iter(u64::MAX)
         .max_cost_evals(50_000)
         .run()

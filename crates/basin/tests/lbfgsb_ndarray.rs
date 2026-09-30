@@ -7,7 +7,7 @@
 use crate::backend_aliases::ndarray::{Array1, array};
 use basin::problems::BoothBoxed;
 use basin::{
-    BoxConstraints, CostFunction, Executor, Gradient, LbfgsState, Lbfgsb,
+    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb,
 };
 
 struct Rosen {
@@ -51,11 +51,12 @@ fn unbounded_rosenbrock_2d_converges() {
         l: Array1::from_elem(2, f64::NEG_INFINITY),
         u: Array1::from_elem(2, f64::INFINITY),
     };
-    let state = LbfgsState::new(array![-1.2, 1.0], 5);
+    let state = FirstOrderState::new(array![-1.2, 1.0]);
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(200)
@@ -78,11 +79,12 @@ fn booth_at_corner_converges() {
         Array1::from_elem(2, -1.0),
         Array1::from_elem(2, 1.0),
     );
-    let state = LbfgsState::new(Array1::from_elem(2, 0.0), 5);
+    let state = FirstOrderState::new(Array1::from_elem(2, 0.0));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-8),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-8),
         state,
     )
     .max_iter(100)
@@ -109,11 +111,12 @@ fn booth_slack_bounds_recover_unconstrained_minimum() {
         Array1::from_elem(2, -5.0),
         Array1::from_elem(2, 5.0),
     );
-    let state = LbfgsState::new(Array1::from_elem(2, 0.0), 5);
+    let state = FirstOrderState::new(Array1::from_elem(2, 0.0));
 
     let result = Executor::new(
         problem,
-        (Lbfgsb::new()).with_absolute_projected_gradient_tolerance(1e-10),
+        (Lbfgsb::new().with_m_capacity(5))
+            .with_absolute_projected_gradient_tolerance(1e-10),
         state,
     )
     .max_iter(100)

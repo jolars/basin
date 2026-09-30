@@ -27,18 +27,17 @@
 //! in Powell 2004a, `references/frobenius-update/`). The Figure-1 driver loop adds
 //! the ρ/Δ schedule (§7), the BIGLAG/BIGDEN geometry steps (§6), origin shifts
 //! (§7), and the Qint robustness modification (§8). These pieces are
-//! crate-internal; only [`Newuoa`] and [`NewuoaState`](crate::NewuoaState) are
+//! crate-internal; only [`Newuoa`] and [`PointState`](crate::PointState) are
 //! public.
 //!
 //! # State and solver split
 //!
-//! The iterate and the trust-region radius `ρ` live on
-//! [`NewuoaState`](crate::NewuoaState); the quadratic model, the factored `H`,
-//! and the ρ/Δ schedule are solver-internal scratch the solver carries: the same
-//! split Levenberg-Marquardt uses for its μ/ν/diag working state. This is why
-//! [`NewuoaState`](crate::NewuoaState) is generic over the parameter vector `V`
-//! only, not the backend matrix `M`: NEWUOA's model algebra is internal `Vec<F>`
-//! scratch and needs no `linalg`-tier ops from `V`.
+//! [`PointState`](crate::PointState) publishes the evaluated iterate and its
+//! historical incumbent. The solver owns the quadratic model, factored `H`,
+//! and trust-region radii. Read the current resolution through [`Newuoa::rho`].
+//! The model uses internal `Vec<F>` storage and needs no matrix capability from
+//! the parameter backend. Fresh initialization rebuilds it; exact continuation
+//! retains the solver and progress together.
 //!
 //! # Termination
 //!
@@ -50,8 +49,8 @@
 //!
 //! # Backends
 //!
-//! Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-//! faer all work (the parameter type needs only element access and length:
+//! `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`
+//! all work with `F = f64` or `f32` (the parameter type needs only element access and length:
 //! [`Clone`], [`VectorLen`](crate::core::math::VectorLen), and indexing). wasm-
 //! clean: the model algebra is pure-Rust `Vec<F>` with no BLAS/LAPACK.
 //!
@@ -71,7 +70,7 @@ use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::NewuoaState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 
 use driver::{NewuoaWork, Transition};
@@ -79,10 +78,10 @@ use driver::{NewuoaWork, Transition};
 /// NEWUOA (Powell 2006): model-based derivative-free trust-region optimization.
 ///
 /// Configure the trust-region radii and interpolation-set size, then drive it
-/// with an [`Executor`](crate::Executor) over a [`NewuoaState`]:
+/// with an [`Executor`](crate::Executor) over a [`PointState`]:
 ///
 /// ```
-/// use basin::{CostFunction, Executor, Newuoa, NewuoaState};
+/// use basin::{CostFunction, Executor, Newuoa, PointState};
 ///
 /// struct Quadratic;
 /// impl CostFunction for Quadratic {
@@ -97,7 +96,7 @@ use driver::{NewuoaWork, Transition};
 /// let solver = Newuoa::new()
 ///     .with_initial_radius(0.5)
 ///     .with_final_radius(1e-8);
-/// let state = NewuoaState::new(vec![0.0, 0.0]);
+/// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(Quadratic, solver, state)
 ///     .max_cost_evals(500)
 ///     .run()
@@ -117,13 +116,32 @@ use driver::{NewuoaWork, Transition};
 /// - [`with_npt`](Self::with_npt): interpolation-set size `npt`, in
 ///   `[n+2, ½(n+1)(n+2)]` (default `2n+1`, Powell's recommendation).
 ///
+/// # Progress and continuation
+///
+/// Use [`PointState::new`] or [`crate::Executor::from_start`] with an unevaluated
+/// starting point. Fresh initialization clears progress and rebuilds the
+/// interpolation model, even when reusing a populated state or solver. The
+/// shared state retains the current evaluated point, its historical objective
+/// incumbent, and all six raw evaluation categories. It supplies no gradient
+/// or radius capability. The solver owns every model buffer and the radius
+/// schedule; [`rho`](Self::rho) returns `None` before initialization. Inspect
+/// it through [`crate::Executor::run_with_solver`] or [`crate::Stepper::solver`].
+///
+/// Preserve [`crate::ExactCheckpoint`] for continuation without initialization
+/// or reevaluation. With `serde`, the solver and shared state support
+/// serialization, including the complete numerical model. A progress-only
+/// snapshot is a fresh point warm start. Legacy algorithm-specific state
+/// payloads cannot be read as `PointState` or as a new exact checkpoint.
+/// Radius-based convergence remains solver-owned; objective targets and stalls
+/// use the shared state's historical incumbent.
+///
 /// # Backends
 ///
-/// Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-/// faer all work. The model algebra is internal pure-Rust `Vec<f64>` scratch, so
-/// the parameter type needs only [`Clone`], [`VectorLen`], and `Index`/`IndexMut`
-/// element access, never any `linalg`-tier matrix op. wasm-clean (no
-/// BLAS/LAPACK).
+/// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
+/// for every supported backend release and `F = f64` or `f32`. The parameter
+/// type needs only [`Clone`], [`VectorLen`], and `Index`/`IndexMut` element access.
+/// The model uses pure-Rust `Vec<F>` storage, with no BLAS/LAPACK dependency.
+/// Choose radii appropriate to the scalar precision.
 ///
 /// # References
 ///
@@ -132,7 +150,8 @@ use driver::{NewuoaWork, Transition};
 /// Cross-validated against [PRIMA](https://github.com/libprima/prima) v0.7.2,
 /// the authoritative source for the exact formulas. PRIMA is BSD 3-Clause
 /// licensed; its required notice is retained in the crate's `COPYRIGHT` file.
-pub struct Newuoa<F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Newuoa<F: Scalar = f64> {
     radius_tolerance: Option<F>,
     rho_beg: F,
     rho_end: F,
@@ -142,6 +161,12 @@ pub struct Newuoa<F = f64> {
 }
 
 impl<F: Scalar> Newuoa<F> {
+    /// Current trust-region resolution, or `None` before initialization.
+    /// Read it through `run_with_solver()` or `Stepper::solver()`.
+    pub fn rho(&self) -> Option<F> {
+        self.work.as_ref().map(|work| work.rho())
+    }
+
     /// Stop when the observed radius or step size is <= the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an
@@ -233,13 +258,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = NewuoaState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        NewuoaState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
-impl<P, V, F> Solver<P, NewuoaState<V, F>> for Newuoa<F>
+impl<P, V, F> Solver<P, PointState<V, F>> for Newuoa<F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -253,14 +278,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: NewuoaState<V, F>,
-    ) -> Result<NewuoaState<V, F>, Self::Error> {
-        let n = state.param.vec_len();
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.work = None;
+        let n = state.param().vec_len();
         assert!(n >= 1, "Newuoa requires a non-empty start point");
         let npt = self.npt.unwrap_or(2 * n + 1);
 
-        let x0: Vec<F> = (0..n).map(|i| state.param[i]).collect();
-        let template = state.param.clone();
+        let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
+        let template = state.param().clone();
 
         let (work, best_x, best_f) = {
             let mut eval = |slice: &[F]| -> Result<F, P::Error> {
@@ -275,9 +302,7 @@ where
             )?
         };
 
-        state.param = fill_from(&template, &best_x);
-        state.cost = Some(best_f);
-        state.rho = work.rho();
+        state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
         Ok(state)
     }
@@ -285,10 +310,10 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: NewuoaState<V, F>,
-    ) -> Result<(NewuoaState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let template = state.param.clone();
+        let template = state.param().clone();
         let work = self
             .work
             .as_mut()
@@ -300,17 +325,15 @@ where
             };
             work.step(&mut eval)?
         };
-        state.rho = work.rho();
 
         // Fold the step's evaluations into the running best (the reported
         // iterate). NEWUOA's reported point is the least-F seen, so param/cost
         // are monotone and coincide with best_param/best_cost.
-        let mut best_f = state.cost.expect("Newuoa::init seeds the cost");
+        let mut best_f = state.cost();
         for (xabs, f_new) in &out.evaluated {
             if *f_new < best_f {
                 best_f = *f_new;
-                state.param = fill_from(&template, xabs);
-                state.cost = Some(best_f);
+                state.replace(fill_from(&template, xabs), best_f);
             }
         }
 
@@ -325,10 +348,10 @@ where
 
     fn terminate(
         &self,
-        state: &NewuoaState<V, F>,
+        _state: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         let tolerance = self.radius_tolerance?;
-        let metric = crate::RhoState::rho(state);
+        let metric = self.rho()?;
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::RhoTolerance)
     }

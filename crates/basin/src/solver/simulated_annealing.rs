@@ -5,7 +5,7 @@ use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::{SimulatedAnnealingState, State};
+use crate::core::state::{ProposalState, State};
 use crate::core::termination::TerminationReason;
 
 /// Generate one candidate from the current simulated-annealing state.
@@ -50,7 +50,7 @@ where
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug)]
-enum Cooling<F> {
+enum Cooling<F: Scalar> {
     Geometric { alpha: F },
     Reciprocal,
     Logarithmic,
@@ -66,7 +66,7 @@ enum Cooling<F> {
 /// proposal.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug)]
-pub struct TemperatureSchedule<F = f64> {
+pub struct TemperatureSchedule<F: Scalar = f64> {
     cooling: Cooling<F>,
     steps_per_temperature: u64,
 }
@@ -288,14 +288,32 @@ pub(crate) struct ReannealingProgress {
 /// enabled together. A restart occurs when any enabled trigger reaches its
 /// threshold and resets the progress of every trigger.
 ///
-/// [`SimulatedAnnealingState`] owns the evolving neighbor and RNG. This makes
-/// stateful proposals reproducible and permits exact serialized continuation
-/// through [`Executor::resume`](crate::Executor::resume). Solver-aware
-/// [`ExactCheckpoint`](crate::ExactCheckpoint) snapshots can instead be
-/// restored with
+/// Progress uses [`ProposalState`]: the accepted point, matching cost,
+/// objective-ordered incumbent, raw counts, and acceptance history. The solver
+/// owns the evolving neighbor, RNG, cooling age, and reannealing triggers.
+/// Rejected proposals do not trigger cost- or step-change convergence.
+/// `no_acceptance` controls continue to read the published acceptance history.
+///
+/// Fresh runs reset progress, reevaluate the starting point, and clone the
+/// configured neighbor and RNG into fresh working components. `N: Clone` and
+/// `R: Clone` must produce independent evolution state, including for captured
+/// closure state. These bounds previously applied to `InitialState::seed`;
+/// they now apply to the solver implementation. Parameter types require only
+/// `Clone`. Use [`seed_chain`](Self::seed_chain) with an explicit seed to make
+/// an independent default-RNG chain without consuming this chain's live RNG.
+///
+/// Exact continuation retains the live components and uses a solver-aware
+/// [`ExactCheckpoint`](crate::ExactCheckpoint) with
 /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
-/// A restored run must use the same deterministic problem, scalar type, code,
-/// and resume-safe termination criteria.
+/// State-only snapshots start a fresh chain through `Executor::new`; they no
+/// longer support `Executor::resume`. With `serde`, exact checkpoints include
+/// both configured and live components. Old solver and state payloads must be
+/// reconstructed with the matching Basin version.
+///
+/// Retain the solver with `run_with_solver()` to inspect [`temperature`](Self::temperature),
+/// [`reannealings`](Self::reannealings), and [`neighbor`](Self::neighbor).
+/// [`Stepper::solver`](crate::Stepper::solver) exposes these diagnostics
+/// between steps without cloning or evaluating anything.
 ///
 /// # Non-finite costs
 ///
@@ -314,10 +332,11 @@ pub(crate) struct ReannealingProgress {
 /// # Backends
 ///
 /// `SimulatedAnnealing` imposes no vector operations. It supports arbitrary
-/// cloneable parameter types, including discrete structures, `Vec<f32/f64>`,
-/// nalgebra vectors, ndarray arrays, and faer columns. The seeded `ChaCha8Rng`
-/// default is wasm-safe. Each iteration has one dependent proposal, so the
-/// solver does not use the `parallel` feature.
+/// cloneable parameter types, including discrete structures, `Vec<F>`,
+/// `nalgebra::DVector<F>`, `ndarray::Array1<F>`, and `faer::Col<F>`, with
+/// `F = f32` or `f64`. The seeded `ChaCha8Rng` default is wasm-safe.
+/// Each iteration has one dependent proposal, so the solver does not use the
+/// `parallel` feature.
 ///
 /// # References
 ///
@@ -370,12 +389,18 @@ pub(crate) struct ReannealingProgress {
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct SimulatedAnnealing<N, F = f64, R = ChaCha8Rng> {
+pub struct SimulatedAnnealing<N, F: Scalar = f64, R = ChaCha8Rng> {
     neighbor: N,
     initial_temperature: F,
     schedule: TemperatureSchedule<F>,
     reannealing: Option<Reannealing>,
     rng: R,
+    live_neighbor: Option<N>,
+    live_rng: Option<R>,
+    cooling_age: u64,
+    reannealing_progress: ReannealingProgress,
+    reannealings: u64,
+    accepted_iterate: bool,
 }
 
 fn uphill_acceptance_probability<F: Scalar>(delta: F, temperature: F) -> F {
@@ -431,7 +456,29 @@ where
             schedule,
             reannealing: None,
             rng,
+            live_neighbor: None,
+            live_rng: None,
+            cooling_age: 0,
+            reannealing_progress: ReannealingProgress::default(),
+            reannealings: 0,
+            accepted_iterate: true,
         }
+    }
+
+    /// Temperature that will be used for the next proposal.
+    pub fn temperature(&self) -> F {
+        self.schedule
+            .temperature(self.initial_temperature, self.cooling_age)
+    }
+
+    /// Number of completed temperature-schedule restarts in this run.
+    pub fn reannealings(&self) -> u64 {
+        self.reannealings
+    }
+
+    /// Read the evolving neighbor after initialization.
+    pub fn neighbor(&self) -> Option<&N> {
+        self.live_neighbor.as_ref()
     }
 
     /// Replace the complete schedule-restart configuration.
@@ -492,72 +539,78 @@ where
     }
 }
 
-impl<V, N, F, R> InitialState<V> for SimulatedAnnealing<N, F, R>
-where
-    V: Clone,
-    N: Clone,
-    F: Scalar,
-    R: Clone,
-{
-    type State = SimulatedAnnealingState<V, N, F, R>;
-
-    fn seed(&self, x: &V) -> Self::State {
-        SimulatedAnnealingState::new(
-            x.clone(),
+impl<N: Clone, F: Scalar> SimulatedAnnealing<N, F, ChaCha8Rng> {
+    /// Create an independent chain from configured settings and an explicit
+    /// seed. This does not inspect or consume the current chain's live RNG
+    /// or neighbor history.
+    pub fn seed_chain(&self, seed: u64) -> Self {
+        let mut chain = Self::new(
             self.neighbor.clone(),
-            self.rng.clone(),
             self.initial_temperature,
             self.schedule,
-            self.reannealing,
-        )
+            seed,
+        );
+        chain.reannealing = self.reannealing;
+        chain
     }
 }
 
-impl<P, V, N, F, R> Solver<P, SimulatedAnnealingState<V, N, F, R>>
+impl<V: Clone, N, F: Scalar, R> InitialState<V>
+    for SimulatedAnnealing<N, F, R>
+{
+    type State = ProposalState<V, F>;
+    fn seed(&self, x: &V) -> Self::State {
+        ProposalState::new(x.clone())
+    }
+}
+
+impl<P, V, N, F, R> Solver<P, ProposalState<V, F>>
     for SimulatedAnnealing<N, F, R>
 where
     P: CostFunction<Param = V, Output = F>,
     V: Clone,
-    N: Neighbor<V, F, R, Error = P::Error>,
+    N: Neighbor<V, F, R, Error = P::Error> + Clone,
     F: Scalar,
-    R: Rng,
+    R: Rng + Clone,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SimulatedAnnealingState<V, N, F, R>,
-    ) -> Result<SimulatedAnnealingState<V, N, F, R>, Self::Error> {
-        if state.cost.is_none() {
-            state.cost = Some(problem.cost(&state.param)?);
-        }
+        mut state: ProposalState<V, F>,
+    ) -> Result<ProposalState<V, F>, Self::Error> {
+        state.reset();
+        self.live_neighbor = Some(self.neighbor.clone());
+        self.live_rng = Some(self.rng.clone());
+        self.cooling_age = 0;
+        self.reannealing_progress = ReannealingProgress::default();
+        self.reannealings = 0;
+        self.accepted_iterate = true;
+        let cost = problem.cost(state.param())?;
+        state.replace(state.param().clone(), cost);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SimulatedAnnealingState<V, N, F, R>,
-    ) -> Result<
-        (
-            SimulatedAnnealingState<V, N, F, R>,
-            Option<TerminationReason>,
-        ),
-        Self::Error,
-    > {
-        let incumbent_cost = state.cost.expect(
-            "SimulatedAnnealing::next_iter called before init evaluated the start point",
-        );
-        let temperature = state.temperature();
-        let candidate = state.neighbor.propose(
-            &state.param,
-            temperature,
-            &mut state.rng,
-        )?;
+        mut state: ProposalState<V, F>,
+    ) -> Result<(ProposalState<V, F>, Option<TerminationReason>), Self::Error>
+    {
+        let incumbent_cost = state.cost();
+        let temperature = self.temperature();
+        let rng = self
+            .live_rng
+            .as_mut()
+            .expect("annealing must be initialized");
+        let candidate = self
+            .live_neighbor
+            .as_mut()
+            .expect("annealing must be initialized")
+            .propose(state.param(), temperature, rng)?;
         let candidate_cost = problem.cost(&candidate)?;
-        let new_best = candidate_cost < state.best_cost;
-
+        let new_best = candidate_cost < state.best_cost();
         let accepted =
             if candidate_cost.is_nan() || candidate_cost == F::infinity() {
                 false
@@ -568,38 +621,38 @@ where
                     candidate_cost - incumbent_cost,
                     temperature,
                 );
-                let draw = F::from_f64(state.rng.random::<f64>()).unwrap();
+                let draw = F::from_f64(rng.random::<f64>()).unwrap();
                 draw < probability
             };
-
+        self.accepted_iterate = accepted;
         if accepted {
-            state.param = candidate;
-            state.cost = Some(candidate_cost);
-            state.accepted_moves = state.accepted_moves.saturating_add(1);
-            state.last_accepted_iter = state.iter.saturating_add(1);
+            state.accept_proposal(candidate, candidate_cost);
         } else {
-            state.rejected_moves = state.rejected_moves.saturating_add(1);
+            state.reject_proposal();
         }
-
-        state.cooling_age = state.cooling_age.saturating_add(1);
-        if let Some(reannealing) = state.reannealing {
+        self.cooling_age = self.cooling_age.saturating_add(1);
+        if let Some(reannealing) = self.reannealing {
             reannealing.update_progress(
-                &mut state.reannealing_progress,
+                &mut self.reannealing_progress,
                 accepted,
                 new_best,
             );
-            if reannealing.should_restart(state.reannealing_progress) {
-                state.cooling_age = 0;
-                state.reannealing_progress = ReannealingProgress::default();
-                state.reannealings = state.reannealings.saturating_add(1);
+            if reannealing.should_restart(self.reannealing_progress) {
+                self.cooling_age = 0;
+                self.reannealing_progress = ReannealingProgress::default();
+                self.reannealings = self.reannealings.saturating_add(1);
             }
         }
         Ok((state, None))
     }
 
+    fn should_check_iterate_change(&self) -> bool {
+        self.accepted_iterate
+    }
+
     fn terminate(
         &self,
-        state: &SimulatedAnnealingState<V, N, F, R>,
+        state: &ProposalState<V, F>,
     ) -> Option<TerminationReason> {
         let cost = state.cost();
         if cost.is_nan() {

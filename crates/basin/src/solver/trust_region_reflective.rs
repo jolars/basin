@@ -12,7 +12,7 @@ use crate::core::math::dense_svd::{DenseSvd, norm};
 use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
-use crate::core::state::NllsState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 use crate::{LossFunction, RobustLeastSquares, ScaleRowsInPlace};
 use step::{Model, interior, number, update_radius};
@@ -100,7 +100,7 @@ use step::{Model, interior, number, update_radius};
 /// [`OptimizationResultWithSolver::native_convergence_tests`](crate::OptimizationResultWithSolver::native_convergence_tests)
 /// to distinguish scaled-gradient convergence from an all-fixed problem.
 ///
-/// [`NllsState`] publishes matching parameters and cost. Residuals, derivatives,
+/// [`PointState`] publishes matching parameters and cost. Residuals, derivatives,
 /// and the radius are solver-owned. Fresh runs reset them; exact solver/state
 /// continuation retains them. Rejected trials reuse the current Jacobian, and
 /// every accepted point has a freshly evaluated Jacobian before publication.
@@ -262,9 +262,9 @@ impl<F: Scalar> TrustRegionReflective<F> {
 }
 
 impl<V: Clone, F: Scalar> InitialState<V> for TrustRegionReflective<F> {
-    type State = NllsState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        NllsState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
@@ -378,7 +378,7 @@ impl<F: Scalar> Work<F> {
     }
 }
 
-impl<P, V, F> Solver<P, NllsState<V, F>> for TrustRegionReflective<F>
+impl<P, V, F> Solver<P, PointState<V, F>> for TrustRegionReflective<F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian + BoxConstraints<Param = V>,
@@ -392,30 +392,31 @@ where
     fn check_convergence(
         &mut self,
         _problem: &Problem<P>,
-        _state: &NllsState<V, F>,
+        _state: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         self.check_native_convergence()
     }
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_evaluated(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_evaluated(problem, state)
     }
-    fn terminate(&self, state: &NllsState<V, F>) -> Option<TerminationReason> {
+    fn terminate(&self, state: &PointState<V, F>) -> Option<TerminationReason> {
         self.terminate_evaluated(state)
     }
 }
 
-impl<P, L, V, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+impl<P, L, V, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for TrustRegionReflective<F>
 where
     F: Scalar,
@@ -432,25 +433,26 @@ where
     fn check_convergence(
         &mut self,
         _problem: &Problem<RobustLeastSquares<P, L, F>>,
-        _state: &NllsState<V, F>,
+        _state: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         self.check_native_convergence()
     }
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_evaluated(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_evaluated(problem, state)
     }
-    fn terminate(&self, state: &NllsState<V, F>) -> Option<TerminationReason> {
+    fn terminate(&self, state: &PointState<V, F>) -> Option<TerminationReason> {
         self.terminate_evaluated(state)
     }
 }
@@ -459,8 +461,8 @@ impl<F: Scalar> TrustRegionReflective<F> {
     fn init_evaluated<V, M, E>(
         &mut self,
         problem: &mut E,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, E::Error>
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
@@ -468,8 +470,10 @@ impl<F: Scalar> TrustRegionReflective<F> {
     {
         self.native_convergence.clear();
         self.work = None;
-        let mut state = NllsState::new(state.param);
-        let n = state.param.vec_len();
+        let mut state = state;
+        state.reset();
+        let mut param = state.param().clone();
+        let n = param.vec_len();
         assert!(n > 0, "TRF requires at least one parameter");
         let (lo, hi) = (problem.lower(), problem.upper());
         assert_eq!(lo.vec_len(), n, "lower bound shape mismatch");
@@ -487,11 +491,8 @@ impl<F: Scalar> TrustRegionReflective<F> {
             failed: false,
         };
         for i in 0..n {
-            let (x, l, u) = (
-                state.param.get_scalar(i),
-                lo.get_scalar(i),
-                hi.get_scalar(i),
-            );
+            let (x, l, u) =
+                (param.get_scalar(i), lo.get_scalar(i), hi.get_scalar(i));
             assert!(x.is_finite(), "initial parameters must be finite");
             assert!(
                 !l.is_nan()
@@ -502,7 +503,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 "invalid box bounds"
             );
             if let Some(x) = interior(x, l, u, true) {
-                state.param.set_scalar(i, x);
+                param.set_scalar(i, x);
             } else {
                 work.failed = true;
             }
@@ -512,17 +513,17 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 work.upper.push(u);
             }
         }
-        state.cost = Some(F::infinity());
+        let mut value = F::infinity();
         if !work.failed {
             if work.free.is_empty() {
-                let r = problem.residual(&state.param)?;
+                let r = problem.residual(&param)?;
                 work.residual = vector(&r);
-                state.cost = Some(problem.cost(&r, |_| cost(&work.residual)));
+                value = problem.cost(&r, |_| cost(&work.residual));
                 work.optimality = F::zero();
             } else {
-                let (r, j) = problem.residual_and_jacobian(&state.param)?;
+                let (r, j) = problem.residual_and_jacobian(&param)?;
                 work.residual = vector(&r);
-                state.cost = Some(problem.cost(&r, |_| cost(&work.residual)));
+                value = problem.cost(&r, |_| cost(&work.residual));
                 if let Some((model_r, j)) = problem.model(&r, j) {
                     if let Some(model_r) = model_r {
                         work.residual = vector(&model_r);
@@ -542,19 +543,19 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 !work.residual.is_empty(),
                 "TRF requires at least one residual"
             );
-            let f = state.cost.expect("evaluated cost");
-            state.cost = Some(if f.is_finite() { f } else { F::infinity() });
+            let f = value;
+            value = if f.is_finite() { f } else { F::infinity() };
             work.failed |=
                 !f.is_finite() || work.residual.iter().any(|x| !x.is_finite());
             if !work.failed && !work.free.is_empty() {
                 work.failed = !work.update_gradient();
                 if !work.failed {
-                    if let Some(model) = work.model(&state.param) {
+                    if let Some(model) = work.model(&param) {
                         let scaled: Vec<F> = work
                             .free
                             .iter()
                             .zip(&model.d)
-                            .map(|(&i, &d)| state.param.get_scalar(i) / d)
+                            .map(|(&i, &d)| param.get_scalar(i) / d)
                             .collect();
                         let auto = norm(&scaled);
                         work.radius = self.initial_radius.unwrap_or(
@@ -568,13 +569,14 @@ impl<F: Scalar> TrustRegionReflective<F> {
             }
         }
         self.work = Some(work);
+        state.replace(param, value);
         Ok(state)
     }
 
     fn next_evaluated<V, M, E>(
         &mut self,
         problem: &mut E,
-        mut state: NllsState<V, F>,
+        mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
@@ -587,7 +589,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
         if work.failed {
             return Ok((state, failed));
         }
-        let Some(model) = work.model(&state.param) else {
+        let Some(model) = work.model(state.param()) else {
             work.failed = true;
             return Ok((state, failed));
         };
@@ -607,10 +609,10 @@ impl<F: Scalar> TrustRegionReflective<F> {
         let x: Vec<F> = work
             .free
             .iter()
-            .map(|&i| state.param.get_scalar(i))
+            .map(|&i| state.param().get_scalar(i))
             .collect();
         let theta = number::<F>(0.995).max(F::one() - work.optimality);
-        let old_cost = state.cost.expect("TRF must be initialized");
+        let old_cost = state.cost();
         for _ in 0..self.max_inner_attempts {
             let Some(p) = svd.trust_step(
                 &rhs,
@@ -628,7 +630,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 work.radius,
                 theta,
             );
-            let mut trial = state.param.clone();
+            let mut trial = state.param().clone();
             let mut feasible = true;
             let mut roundoff = F::zero();
             for i in 0..n {
@@ -703,16 +705,15 @@ impl<F: Scalar> TrustRegionReflective<F> {
                     break;
                 };
                 let Some(j) =
-                    jacobian(&j, m, state.param.vec_len(), &work.free)
+                    jacobian(&j, m, state.param().vec_len(), &work.free)
                 else {
                     break;
                 };
                 work.residual = model_r.map_or(r, |r| vector(&r));
                 work.jacobian = j;
-                state.param = trial;
-                state.cost = Some(new_cost);
+                state.replace(trial, new_cost);
                 work.failed = !work.update_gradient()
-                    || work.model(&state.param).is_none();
+                    || work.model(state.param()).is_none();
                 return Ok((state, if work.failed { failed } else { None }));
             }
         }
@@ -722,7 +723,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
 
     fn terminate_evaluated<V>(
         &self,
-        _: &NllsState<V, F>,
+        _: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         self.convergence_test()
             .map(|_| TerminationReason::SolverConverged)

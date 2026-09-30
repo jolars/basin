@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use basin::{
     BoxConstraints, CostFunction, ExactCheckpoint, ExactCheckpointWriter,
-    Executor, Gbnm, GbnmState, ObserverMode, State, read_exact_checkpoint,
+    Executor, Gbnm, ObserverMode, PointState, State, read_exact_checkpoint,
 };
 
 #[derive(Clone)]
@@ -34,8 +34,8 @@ impl BoxConstraints for FlatBox {
     }
 }
 
-type TestSolver = Gbnm;
-type TestState = GbnmState<Vec<f64>>;
+type TestSolver = Gbnm<Vec<f64>>;
+type TestState = PointState<Vec<f64>>;
 
 fn problem() -> FlatBox {
     FlatBox {
@@ -76,7 +76,7 @@ fn solver_aware_checkpoint_resume_is_bit_identical() {
     }
 
     let reference =
-        Executor::new(problem(), solver(), GbnmState::new(vec![0.0, 0.0]))
+        Executor::new(problem(), solver(), PointState::new(vec![0.0, 0.0]))
             .max_iter(30)
             .checkpoint_with(
                 ExactCheckpointWriter::new(&reference_path),
@@ -84,7 +84,7 @@ fn solver_aware_checkpoint_resume_is_bit_identical() {
             )
             .run()
             .unwrap();
-    Executor::new(problem(), solver(), GbnmState::new(vec![0.0, 0.0]))
+    Executor::new(problem(), solver(), PointState::new(vec![0.0, 0.0]))
         .max_iter(11)
         .checkpoint_with(
             ExactCheckpointWriter::new(&split_path),

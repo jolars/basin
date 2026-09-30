@@ -1,4 +1,6 @@
-use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
+use basin::{
+    CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
+};
 
 struct Rosenbrock;
 
@@ -39,7 +41,7 @@ fn main() {
     println!("initial cost:  {}", initial_cost);
 
     let solver = GradientDescent::new(0.001);
-    let state = BasicState::new(initial);
+    let state = FirstOrderState::new(initial);
     let result = Executor::new(problem, solver, state)
         .max_iter(50_000)
         .run()

@@ -30,11 +30,12 @@
 //!
 //! # State and solver split
 //!
-//! The incumbent and the poll size `Δᵖ` live on [`MadsState`](crate::MadsState);
-//! the mesh index, Halton-index schedule, and flat-scratch incumbent live on the
-//! solver (`Mads`'s `MadsWork`): the same split the Powell-family DFO solvers
-//! use. So [`MadsState`](crate::MadsState) is generic over the parameter vector
-//! `V` only; the direction algebra is internal `Vec<f64>`/`Vec<i64>` scratch.
+//! Shared progress retains the evaluated incumbent and its publication metadata.
+//! Unbounded and box-bounded modes use [`PointState`](crate::PointState);
+//! progressive-barrier mode uses [`SelectedState`](crate::SelectedState) with
+//! the matching constraint violation. The solver owns its mesh, Halton schedule,
+//! poll size, and feasible/infeasible search history. Read diagnostics through
+//! [`Mads::poll_size`] and [`Mads::mesh_index`].
 //!
 //! # Termination
 //!
@@ -46,8 +47,8 @@
 //!
 //! # Backends
 //!
-//! Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-//! faer all work (the parameter type needs only [`Clone`], [`VectorLen`], and
+//! `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`
+//! work with `F = f64` or `f32` (the parameter type needs only [`Clone`], [`VectorLen`], and
 //! `Index`/`IndexMut`). The poll geometry is pure-Rust integer/`f64` scratch with
 //! no RNG, no `linalg`-tier ops, and no time: fully deterministic and wasm-clean.
 //!
@@ -67,7 +68,7 @@ use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{ConstrainedMadsState, MadsState};
+use crate::core::state::{PointState, SelectedState, State};
 use crate::core::termination::TerminationReason;
 use crate::solver::nelder_mead::Unbounded;
 
@@ -94,10 +95,10 @@ pub struct Constrained;
 /// non-continuous objectives.
 ///
 /// Configure the poll-size schedule, then drive it with an
-/// [`Executor`](crate::Executor) over a [`MadsState`]:
+/// [`Executor`](crate::Executor) over a [`PointState`]:
 ///
 /// ```
-/// use basin::{CostFunction, Executor, Mads, MadsState};
+/// use basin::{CostFunction, Executor, Mads, PointState};
 ///
 /// // A nonsmooth objective (an L1 "valley") with minimizer (1, 2).
 /// struct AbsValley;
@@ -113,7 +114,7 @@ pub struct Constrained;
 /// let solver = Mads::new()
 ///     .with_initial_poll_size(1.0)
 ///     .with_minimum_poll_size(1e-9);
-/// let state = MadsState::new(vec![0.0, 0.0]);
+/// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(AbsValley, solver, state)
 ///     .max_cost_evals(5_000)
 ///     .run()
@@ -143,14 +144,38 @@ pub struct Constrained;
 ///   `h(x) = Σⱼ max(cⱼ, 0)²` and drives a barrier threshold down to zero,
 ///   exploring around both a feasible and an infeasible incumbent. Needs a
 ///   problem implementing [`NonlinearInequalityConstraints`] and a
-///   [`ConstrainedMadsState`]; an **infeasible start is allowed**.
+///   [`SelectedState`]; an **infeasible start is allowed**.
+///
+/// # Progress and continuation
+///
+/// Use [`PointState::new`] for unbounded and box-bounded runs, and
+/// [`SelectedState::new`] for progressive-barrier runs. [`crate::Executor::from_start`]
+/// chooses the matching state. Shared progress preserves every raw evaluation
+/// category. Constraint callbacks count as residual evaluations, including
+/// failures; box-rejected probes make no objective call. The constrained
+/// state's `current()` and `best()` return the selected point, objective, and
+/// squared-sum violation. Selection can increase the objective as feasibility
+/// improves; unchanged records retain their publication metadata.
+///
+/// The solver owns every mesh and Halton counter and the progressive barrier's
+/// history. [`poll_size`](Self::poll_size) and [`mesh_index`](Self::mesh_index)
+/// return `None` before initialization; read them via
+/// [`crate::Executor::run_with_solver`] or [`crate::Stepper::solver`]. Fresh
+/// runs reset progress and rebuild those histories, reevaluating the seed.
+/// Exact continuation retains a [`crate::ExactCheckpoint`] and skips init.
+/// With `serde`, every mode serializes its model and matching shared state.
+/// Legacy `MadsState` and `ConstrainedMadsState` payloads are incompatible.
+/// Native and configured poll-size stopping still read the solver's schedule;
+/// shared progress states do not expose [`crate::MeshState`].
 ///
 /// # Backends
 ///
-/// Backend-generic over the parameter vector: `Vec<f64>`, nalgebra, ndarray, and
-/// faer all work. The poll geometry is internal pure-Rust integer/`f64` scratch,
-/// so the parameter type needs only [`Clone`], [`VectorLen`], and `Index`/`IndexMut`,
-/// never any `linalg`-tier op. Deterministic (no RNG) and wasm-clean.
+/// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
+/// for every supported release and `F = f64` or `f32`, in every mode. Vectors
+/// need only [`Clone`], [`VectorLen`], and `Index`/`IndexMut`. Poll geometry
+/// uses internal integer and floating-point buffers, with no matrix capability
+/// or BLAS/LAPACK dependency. The method is deterministic and works on WASM.
+/// Choose poll-size limits appropriate to the scalar precision.
 ///
 /// # References
 ///
@@ -161,7 +186,15 @@ pub struct Constrained;
 /// J. Optim. 20 (2009), pp. 948–966. C. Audet & J. E. Dennis, Jr., *A
 /// progressive barrier for derivative-free nonlinear programming*, SIAM J.
 /// Optim. 20 (2009), pp. 445–472 (the constrained mode).
-pub struct Mads<Mode = Unbounded, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "F: serde::Serialize",
+        deserialize = "F: serde::Deserialize<'de>"
+    ))
+)]
+pub struct Mads<Mode = Unbounded, F: Scalar = f64> {
     poll_tolerance: Option<F>,
     poll_size_init: F,
     poll_size_min: F,
@@ -175,6 +208,22 @@ pub struct Mads<Mode = Unbounded, F = f64> {
 }
 
 impl<Mode, F: Scalar> Mads<Mode, F> {
+    /// Current poll size, or `None` before initialization.
+    pub fn poll_size(&self) -> Option<F> {
+        self.work
+            .as_ref()
+            .map(MadsWork::poll_size)
+            .or_else(|| self.pb_work.as_ref().map(PbWork::poll_size))
+    }
+
+    /// Current mesh index, or `None` before initialization.
+    pub fn mesh_index(&self) -> Option<i32> {
+        self.work
+            .as_ref()
+            .map(MadsWork::mesh_index)
+            .or_else(|| self.pb_work.as_ref().map(PbWork::mesh_index))
+    }
+
     /// Stop when the observed radius or step size is <= the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an
@@ -251,7 +300,7 @@ impl<F: Scalar> Mads<Unbounded, F> {
     /// resulting `Mads<Constrained>` requires a problem implementing
     /// [`NonlinearInequalityConstraints`] (`c(x) ≤ 0`) and handles the
     /// constraints by the **progressive barrier**, so an **infeasible start is
-    /// allowed**. Drive it with a [`ConstrainedMadsState`].
+    /// allowed**. Drive it with a [`SelectedState`].
     pub fn constrained(self) -> Mads<Constrained, F> {
         Mads {
             poll_size_init: self.poll_size_init,
@@ -305,9 +354,9 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = MadsState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        MadsState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
@@ -316,9 +365,9 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = MadsState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        MadsState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
@@ -327,13 +376,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = ConstrainedMadsState<V, F>;
+    type State = SelectedState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        ConstrainedMadsState::new(x.clone())
+        SelectedState::new(x.clone())
     }
 }
 
-impl<P, V, F> Solver<P, MadsState<V, F>> for Mads<Unbounded, F>
+impl<P, V, F> Solver<P, PointState<V, F>> for Mads<Unbounded, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -347,13 +396,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MadsState<V, F>,
-    ) -> Result<MadsState<V, F>, Self::Error> {
-        let n = state.param.vec_len();
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.work = None;
+        self.pb_work = None;
+        let n = state.param().vec_len();
         assert!(n >= 1, "Mads requires a non-empty start point");
 
-        let x0: Vec<F> = (0..n).map(|i| state.param[i]).collect();
-        let template = state.param.clone();
+        let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
+        let template = state.param().clone();
 
         let (work, best_x, best_f) = {
             let mut eval = |slice: &[F]| -> Result<F, P::Error> {
@@ -367,10 +419,7 @@ where
             )?
         };
 
-        state.param = fill_from(&template, &best_x);
-        state.cost = Some(best_f);
-        state.poll_size = work.poll_size();
-        state.mesh_index = work.mesh_index();
+        state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
         Ok(state)
     }
@@ -378,9 +427,10 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MadsState<V, F>,
-    ) -> Result<(MadsState<V, F>, Option<TerminationReason>), Self::Error> {
-        let template = state.param.clone();
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
+        let template = state.param().clone();
         let work = self
             .work
             .as_mut()
@@ -392,18 +442,15 @@ where
             };
             work.step(&mut eval)?
         };
-        state.poll_size = work.poll_size();
-        state.mesh_index = work.mesh_index();
 
         // Fold the step's improving evaluation into the running best (the
         // reported iterate). MADS accepts only improving mesh points, so
         // param/cost are monotone and coincide with best_param/best_cost.
-        let mut best_f = state.cost.expect("Mads::init seeds the cost");
+        let mut best_f = state.cost();
         for (xabs, f_new) in &out.evaluated {
             if *f_new < best_f {
                 best_f = *f_new;
-                state.param = fill_from(&template, xabs);
-                state.cost = Some(best_f);
+                state.replace(fill_from(&template, xabs), best_f);
             }
         }
 
@@ -415,9 +462,12 @@ where
         Ok((state, reason))
     }
 
-    fn terminate(&self, state: &MadsState<V, F>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &PointState<V, F>,
+    ) -> Option<TerminationReason> {
         let tolerance = self.poll_tolerance?;
-        let metric = crate::MeshState::poll_size(state);
+        let metric = self.poll_size()?;
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::MeshTolerance)
     }
@@ -440,7 +490,7 @@ where
     h
 }
 
-impl<P, V, F> Solver<P, ConstrainedMadsState<V, F>> for Mads<Constrained, F>
+impl<P, V, F> Solver<P, SelectedState<V, F>> for Mads<Constrained, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + NonlinearInequalityConstraints,
@@ -454,20 +504,23 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ConstrainedMadsState<V, F>,
-    ) -> Result<ConstrainedMadsState<V, F>, Self::Error> {
-        let n = state.param.vec_len();
+        mut state: SelectedState<V, F>,
+    ) -> Result<SelectedState<V, F>, Self::Error> {
+        state.reset();
+        self.work = None;
+        self.pb_work = None;
+        let n = state.param().vec_len();
         assert!(n >= 1, "Mads requires a non-empty start point");
 
         let m = problem.inner().num_constraints();
-        let x0: Vec<F> = (0..n).map(|i| state.param[i]).collect();
-        let template = state.param.clone();
+        let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
+        let template = state.param().clone();
 
         let (work, best_x, best_f, best_h) = {
             let mut eval = |slice: &[F]| -> Result<(F, F), P::Error> {
                 let xv = fill_from(&template, slice);
                 let f = problem.cost(&xv)?;
-                let c = problem.inner().constraints(&xv)?;
+                let c = problem.constraints(&xv)?;
                 Ok((f, violation(&c, m)))
             };
             PbWork::try_init(
@@ -478,11 +531,8 @@ where
             )?
         };
 
-        state.param = fill_from(&template, &best_x);
-        state.cost = Some(best_f);
-        state.constraint_violation = best_h;
-        state.poll_size = work.poll_size();
-        state.mesh_index = work.mesh_index();
+        state.replace(fill_from(&template, &best_x), best_f, best_h);
+        state.select_current();
         self.pb_work = Some(work);
         Ok(state)
     }
@@ -490,13 +540,11 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ConstrainedMadsState<V, F>,
-    ) -> Result<
-        (ConstrainedMadsState<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+        mut state: SelectedState<V, F>,
+    ) -> Result<(SelectedState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let m = problem.inner().num_constraints();
-        let template = state.param.clone();
+        let template = state.param().clone();
         let work = self
             .pb_work
             .as_mut()
@@ -506,20 +554,24 @@ where
             let mut eval = |slice: &[F]| -> Result<(F, F), P::Error> {
                 let xv = fill_from(&template, slice);
                 let f = problem.cost(&xv)?;
-                let c = problem.inner().constraints(&xv)?;
+                let c = problem.constraints(&xv)?;
                 Ok((f, violation(&c, m)))
             };
             work.step(&mut eval)?
         };
-        state.poll_size = work.poll_size();
-        state.mesh_index = work.mesh_index();
 
         // The progressive-barrier driver owns incumbent selection; adopt its
         // reported incumbent (feasible if found, else best infeasible).
         let (x_star, f_star, h_star) = out.incumbent;
-        state.param = fill_from(&template, &x_star);
-        state.cost = Some(f_star);
-        state.constraint_violation = h_star;
+        let changed = state.current().is_none_or(|(x, f, h)| {
+            f != f_star
+                || h != h_star
+                || (0..x_star.len()).any(|i| x[i] != x_star[i])
+        });
+        state.replace(fill_from(&template, &x_star), f_star, h_star);
+        if changed {
+            state.select_current();
+        }
 
         let reason = match out.transition {
             Transition::Converged => Some(TerminationReason::SolverConverged),
@@ -530,16 +582,16 @@ where
 
     fn terminate(
         &self,
-        state: &ConstrainedMadsState<V, F>,
+        _state: &SelectedState<V, F>,
     ) -> Option<TerminationReason> {
         let tolerance = self.poll_tolerance?;
-        let metric = crate::MeshState::poll_size(state);
+        let metric = self.poll_size()?;
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::MeshTolerance)
     }
 }
 
-impl<P, V, F> Solver<P, MadsState<V, F>> for Mads<Bounded, F>
+impl<P, V, F> Solver<P, PointState<V, F>> for Mads<Bounded, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
@@ -553,9 +605,12 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MadsState<V, F>,
-    ) -> Result<MadsState<V, F>, Self::Error> {
-        let n = state.param.vec_len();
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.work = None;
+        self.pb_work = None;
+        let n = state.param().vec_len();
         assert!(n >= 1, "Mads requires a non-empty start point");
 
         let lower = to_vec(problem.inner().lower(), n);
@@ -564,7 +619,7 @@ where
         // feasible incumbent to descend from.
         let x0: Vec<F> = (0..n)
             .map(|i| {
-                let xi = state.param[i];
+                let xi = state.param()[i];
                 if xi < lower[i] {
                     lower[i]
                 } else if xi > upper[i] {
@@ -574,7 +629,7 @@ where
                 }
             })
             .collect();
-        let template = state.param.clone();
+        let template = state.param().clone();
 
         let (work, best_x, best_f) = {
             let mut eval = |slice: &[F]| -> Result<F, P::Error> {
@@ -592,10 +647,7 @@ where
             )?
         };
 
-        state.param = fill_from(&template, &best_x);
-        state.cost = Some(best_f);
-        state.poll_size = work.poll_size();
-        state.mesh_index = work.mesh_index();
+        state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
         Ok(state)
     }
@@ -603,12 +655,13 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MadsState<V, F>,
-    ) -> Result<(MadsState<V, F>, Option<TerminationReason>), Self::Error> {
-        let n = state.param.vec_len();
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
+        let n = state.param().vec_len();
         let lower = to_vec(problem.inner().lower(), n);
         let upper = to_vec(problem.inner().upper(), n);
-        let template = state.param.clone();
+        let template = state.param().clone();
         let work = self
             .work
             .as_mut()
@@ -624,15 +677,12 @@ where
             };
             work.step(&mut eval)?
         };
-        state.poll_size = work.poll_size();
-        state.mesh_index = work.mesh_index();
 
-        let mut best_f = state.cost.expect("Mads::init seeds the cost");
+        let mut best_f = state.cost();
         for (xabs, f_new) in &out.evaluated {
             if *f_new < best_f {
                 best_f = *f_new;
-                state.param = fill_from(&template, xabs);
-                state.cost = Some(best_f);
+                state.replace(fill_from(&template, xabs), best_f);
             }
         }
 
@@ -643,9 +693,12 @@ where
         Ok((state, reason))
     }
 
-    fn terminate(&self, state: &MadsState<V, F>) -> Option<TerminationReason> {
+    fn terminate(
+        &self,
+        _state: &PointState<V, F>,
+    ) -> Option<TerminationReason> {
         let tolerance = self.poll_tolerance?;
-        let metric = crate::MeshState::poll_size(state);
+        let metric = self.poll_size()?;
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::MeshTolerance)
     }

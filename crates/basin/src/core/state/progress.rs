@@ -4,17 +4,21 @@
 //! carries its gradient. Solvers publish complete records with `replace`;
 //! the executor mirrors counts, advances completed iterations, and retains
 //! strict objective improvements. Algorithm settings, models, history, RNGs,
-//! and scratch buffers belong in the solver.
+//! and scratch buffers belong in the solver. [`ProposalState`] adds acceptance
+//! bookkeeping for proposal-based methods. [`SelectedState`] adds a
+//! constraint-violation measure and explicit incumbent selection for methods
+//! that prioritize feasibility. It preserves raw counts and checked records,
+//! but does not promise objective-ordered selection.
 //!
-//! These are additive state types. Existing solvers keep their existing
-//! state types and constructors. Both shared states preserve all six raw
-//! [`EvalCounts`] categories through their `counts` and `best_counts` readers.
-//! Their [`State`] and [`GradientState`] readers use the existing Basin 1.x
-//! folded accounting described by [`CountsMirror`].
+//! All shared states preserve all six raw [`EvalCounts`] categories through
+//! their `counts` and `best_counts` readers. Cost and gradient readers report
+//! only their named categories. Use [`EvalCounts::total_work`] for an explicit
+//! aggregate, or a category-specific [`crate::EvaluationKind`] budget.
 //!
-//! Both states implement [`EvaluatedState`], [`RawEvaluationState`],
-//! [`IncumbentState`], and [`ObjectiveIncumbentState`]; [`FirstOrderState`]
-//! additionally implements [`EvaluatedGradientState`]. These unsealed traits
+//! All implement [`EvaluatedState`], [`RawEvaluationState`], and
+//! [`IncumbentState`]. [`PointState`], [`FirstOrderState`], and [`ProposalState`] implement
+//! [`ObjectiveIncumbentState`]; [`FirstOrderState`] additionally implements
+//! [`EvaluatedGradientState`], and [`ProposalState`] implements [`AcceptanceState`]. These unsealed traits
 //! also support external states. Use `require_evaluated_state` to validate
 //! publication, `max_evaluations` for raw budgets, and `target_objective` or
 //! `no_objective_improvement` for controls requiring objective ordering.
@@ -99,20 +103,49 @@
 //! ```
 
 use super::{
-    CountsMirror, EvaluatedGradientState, EvaluatedState, GradientState,
-    IncumbentRef, IncumbentState, ObjectiveIncumbentState, RawEvaluationState,
-    State,
+    AcceptanceState, CountsMirror, EvaluatedGradientState, EvaluatedState,
+    GradientState, IncumbentRef, IncumbentState, ObjectiveIncumbentState,
+    RawEvaluationState, State,
 };
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::EvalCounts;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-struct Incumbent<V, F: Scalar> {
-    param: V,
-    cost: F,
-    iter: u64,
-    counts: EvalCounts,
+pub(super) struct Incumbent<V, F: Scalar> {
+    pub(super) param: V,
+    pub(super) cost: F,
+    pub(super) iter: u64,
+    pub(super) counts: EvalCounts,
+}
+
+impl<V: Clone, F: Scalar> Incumbent<V, F> {
+    pub(super) fn consider(
+        best: &mut Option<Self>,
+        param: &V,
+        cost: F,
+        iter: u64,
+        counts: EvalCounts,
+    ) {
+        if !cost.is_nan()
+            && cost != F::infinity()
+            && best.as_ref().is_none_or(|best| cost < best.cost)
+        {
+            if let Some(best) = best.as_mut() {
+                best.param.clone_from(param);
+                best.cost = cost;
+                best.iter = iter;
+                best.counts = counts;
+            } else {
+                *best = Some(Self {
+                    param: param.clone(),
+                    cost,
+                    iter,
+                    counts,
+                });
+            }
+        }
+    }
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -155,17 +188,13 @@ impl<V: Clone, D, F: Scalar> Progress<V, D, F> {
         let Some((cost, _)) = self.evaluated.as_ref() else {
             return;
         };
-        if !cost.is_nan()
-            && *cost != F::infinity()
-            && self.best.as_ref().is_none_or(|best| *cost < best.cost)
-        {
-            self.best = Some(Incumbent {
-                param: self.param.clone(),
-                cost: *cost,
-                iter: self.iter,
-                counts: self.counts,
-            });
-        }
+        Incumbent::consider(
+            &mut self.best,
+            &self.param,
+            *cost,
+            self.iter,
+            self.counts,
+        );
     }
 }
 
@@ -214,6 +243,125 @@ impl<V, F: Scalar> PointState<V, F> {
     pub fn replace(&mut self, param: V, cost: F) {
         self.progress.replace(param, cost, ());
     }
+
+    pub(crate) fn replace_from(&mut self, param: &V, cost: F)
+    where
+        V: Clone,
+    {
+        // Reuse the observable point's allocation when publishing a solver-owned model.
+        self.progress.param.clone_from(param);
+        self.progress.evaluated = Some((cost, ()));
+    }
+}
+
+/// Shared point-and-cost progress with proposal acceptance bookkeeping.
+///
+/// This extends the observable shape of [`PointState`] for algorithms that
+/// accept or reject proposals. It contains no RNG, temperature, proposal
+/// strategy, or other algorithm machinery. Incumbent selection and checked
+/// record availability follow `PointState`.
+///
+/// Use [`replace`](Self::replace) to publish an initialized record without
+/// recording a proposal, [`accept_proposal`](Self::accept_proposal) to publish
+/// an accepted record, and [`reject_proposal`](Self::reject_proposal) to retain
+/// the current record after rejection. The executor stamps the latest
+/// acceptance with the publication iteration, including a clean mid-step stop.
+/// Repeated publication does not refresh that timestamp.
+///
+/// This state implements [`AcceptanceState`] for `no_acceptance` controls.
+/// Fresh [`reset`](Self::reset) clears acceptance history as well as progress.
+/// Exact continuation requires a solver-aware checkpoint; this state alone
+/// cannot reconstruct the proposal stream. With `serde`, serialization is
+/// available when `V` and `F` support it.
+///
+/// Progress alone cannot provide exact continuation:
+///
+/// ```compile_fail
+/// use basin::{ExactResumeState, ProposalState};
+/// fn exact<S: ExactResumeState>(_: S) {}
+/// exact(ProposalState::<i32>::new(0));
+/// ```
+///
+/// # Backends
+///
+/// All four dense backends, scalars, and arbitrary `Clone` parameter types.
+/// The scalar `F` may be `f32` or `f64`; no vector operations are required.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProposalState<V, F: Scalar = f64> {
+    progress: Progress<V, (), F>,
+    accepted_moves: u64,
+    rejected_moves: u64,
+    last_accepted_iter: u64,
+    accepted_pending: bool,
+}
+
+impl<V, F: Scalar> ProposalState<V, F> {
+    /// Read the evaluated current point and cost, or `None` for a seed.
+    pub fn current(&self) -> Option<(&V, F)> {
+        let (cost, ()) = self.progress.evaluated.as_ref()?;
+        Some((&self.progress.param, *cost))
+    }
+
+    /// Replace the current record without recording a proposal or changing
+    /// the incumbent. Use this during initialization or when preparing a seed.
+    pub fn replace(&mut self, param: V, cost: F) {
+        self.progress.replace(param, cost, ());
+    }
+
+    /// Replace the current record and record one accepted proposal.
+    /// The executor supplies the acceptance timestamp when it publishes this
+    /// state. The solver is responsible for evaluating and accepting the point.
+    pub fn accept_proposal(&mut self, param: V, cost: F) {
+        self.replace(param, cost);
+        self.accepted_moves = self.accepted_moves.saturating_add(1);
+        self.accepted_pending = true;
+    }
+
+    /// Record one rejected proposal while retaining the current record.
+    pub fn reject_proposal(&mut self) {
+        self.rejected_moves = self.rejected_moves.saturating_add(1);
+    }
+
+    /// Number of accepted proposals since the last fresh initialization.
+    pub fn accepted_moves(&self) -> u64 {
+        self.accepted_moves
+    }
+
+    /// Number of rejected proposals since the last fresh initialization.
+    pub fn rejected_moves(&self) -> u64 {
+        self.rejected_moves
+    }
+
+    /// Publication iteration of the most recent acceptance, or zero if none.
+    pub fn last_accepted_iter(&self) -> u64 {
+        self.last_accepted_iter
+    }
+
+    fn stamp_acceptance(&mut self) {
+        if self.accepted_pending {
+            self.last_accepted_iter = self.progress.iter;
+            self.accepted_pending = false;
+        }
+    }
+}
+
+impl<V: Clone, F: Scalar> AcceptanceState for ProposalState<V, F> {
+    fn last_accepted_iter(&self) -> u64 {
+        self.last_accepted_iter
+    }
+    fn accepted_moves(&self) -> u64 {
+        self.accepted_moves
+    }
+    fn rejected_moves(&self) -> u64 {
+        self.rejected_moves
+    }
+}
+
+impl<V: Clone, F: Scalar> EvaluatedState for ProposalState<V, F> {
+    fn current_record(&self) -> Option<(&V, F)> {
+        self.current()
+    }
 }
 
 /// Shared first-order progress with a matching point, cost, and gradient.
@@ -248,6 +396,18 @@ pub struct FirstOrderState<V, F: Scalar = f64> {
 }
 
 impl<V, F: Scalar> FirstOrderState<V, F> {
+    /// Move evaluated storage into solver workspace without cloning a gradient.
+    /// The solver must restore or replace the record before publishing progress.
+    pub(crate) fn take_evaluation(&mut self) -> Option<(F, V)> {
+        self.progress.evaluated.take()
+    }
+
+    /// Allow an unevaluated point to be updated in place between publications.
+    pub(crate) fn seed_param_mut(&mut self) -> &mut V {
+        assert!(self.progress.evaluated.is_none());
+        &mut self.progress.param
+    }
+
     /// Read the evaluated current point, cost, and gradient, or `None` for a seed.
     pub fn current(&self) -> Option<(&V, F, &V)> {
         let (cost, gradient) = self.progress.evaluated.as_ref()?;
@@ -256,6 +416,33 @@ impl<V, F: Scalar> FirstOrderState<V, F> {
 }
 
 impl<V: VectorLen, F: Scalar> FirstOrderState<V, F> {
+    /// Publish or restore an evaluation of the retained parameter without
+    /// allocating another copy of that parameter.
+    pub(crate) fn set_evaluation(
+        &mut self,
+        cost: F,
+        gradient: V,
+    ) -> Result<(), GradientDimensionMismatch> {
+        Self::check_dimensions(&self.progress.param, &gradient)?;
+        self.progress.evaluated = Some((cost, gradient));
+        Ok(())
+    }
+
+    fn check_dimensions(
+        param: &V,
+        gradient: &V,
+    ) -> Result<(), GradientDimensionMismatch> {
+        let param_len = param.vec_len();
+        let gradient_len = gradient.vec_len();
+        if param_len != gradient_len {
+            return Err(GradientDimensionMismatch {
+                param_len,
+                gradient_len,
+            });
+        }
+        Ok(())
+    }
+
     /// Replace the current point, cost, and gradient as one record.
     ///
     /// The point and gradient must have equal lengths; on error the entire
@@ -271,20 +458,13 @@ impl<V: VectorLen, F: Scalar> FirstOrderState<V, F> {
         cost: F,
         gradient: V,
     ) -> Result<(), GradientDimensionMismatch> {
-        let param_len = param.vec_len();
-        let gradient_len = gradient.vec_len();
-        if param_len != gradient_len {
-            return Err(GradientDimensionMismatch {
-                param_len,
-                gradient_len,
-            });
-        }
+        Self::check_dimensions(&param, &gradient)?;
         self.progress.replace(param, cost, gradient);
         Ok(())
     }
 }
 
-/// A point and gradient passed to [`FirstOrderState::replace`] differ in length.
+/// A point and gradient passed to a shared first-order state differ in length.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GradientDimensionMismatch {
     /// Number of coordinates in the proposed point.
@@ -306,23 +486,21 @@ impl std::fmt::Display for GradientDimensionMismatch {
 impl std::error::Error for GradientDimensionMismatch {}
 
 fn cost_work(counts: &EvalCounts) -> u64 {
-    counts.cost_evals + counts.residual_evals
+    counts.cost_evals
 }
 
 fn gradient_work(counts: &EvalCounts) -> u64 {
     counts.gradient_evals
-        + counts.jacobian_evals
-        + counts.hessian_evals
-        + counts.hessian_product_evals
 }
 
 macro_rules! impl_progress_state {
-    ($state:ident, $cost_work:path) => {
+    ($state:ident, $cost_work:path, [$($extra:ident),*] $(, $publish:ident)?) => {
         impl<V, F: Scalar> $state<V, F> {
             /// Construct an unevaluated seed with zero counters and no incumbent.
             pub fn new(param: V) -> Self {
                 Self {
                     progress: Progress::new(param),
+                    $($extra: Default::default(),)*
                 }
             }
 
@@ -332,6 +510,23 @@ macro_rules! impl_progress_state {
             /// the seed. Exact checkpoint resumes skip initialization.
             pub fn reset(&mut self) {
                 self.progress.reset();
+                $(self.$extra = Default::default();)*
+            }
+
+            /// Begin a new local-search segment while retaining the evaluated
+            /// current record. Clear iteration counts, evaluation counts, and
+            /// the incumbent; the driver records the current point again at
+            /// the segment's first publication boundary.
+            ///
+            /// This does not initialize a fresh solve or restore solver
+            /// machinery. Fresh solvers must use [`reset`](Self::reset) and
+            /// reevaluate their seed. Exact continuation preserves bookkeeping
+            /// and does not call either reset method.
+            pub fn reset_progress(&mut self) {
+                self.progress.best = None;
+                self.progress.iter = 0;
+                self.progress.counts = EvalCounts::default();
+                $(self.$extra = Default::default();)*
             }
 
             /// Read the retained incumbent point and cost, if one exists.
@@ -405,6 +600,7 @@ macro_rules! impl_progress_state {
             }
             fn update_best(&mut self) {
                 self.progress.update_best();
+                $(self.$publish();)?
             }
             fn reset_best(&mut self) {
                 self.progress.best = None;
@@ -439,8 +635,19 @@ macro_rules! impl_progress_state {
     };
 }
 
-impl_progress_state!(PointState, EvalCounts::total_work);
-impl_progress_state!(FirstOrderState, cost_work);
+impl_progress_state!(PointState, cost_work, []);
+impl_progress_state!(FirstOrderState, cost_work, []);
+impl_progress_state!(
+    ProposalState,
+    cost_work,
+    [
+        accepted_moves,
+        rejected_moves,
+        last_accepted_iter,
+        accepted_pending
+    ],
+    stamp_acceptance
+);
 
 impl<V: Clone, F: Scalar> EvaluatedState for PointState<V, F> {
     fn current_record(&self) -> Option<(&V, F)> {
@@ -474,5 +681,240 @@ impl<V: Clone, F: Scalar> GradientState for FirstOrderState<V, F> {
 
     fn best_gradient_evals(&self) -> u64 {
         self.best_counts().map_or(0, gradient_work)
+    }
+}
+
+/// Shared constrained progress with an explicitly selected incumbent.
+///
+/// [`replace`](Self::replace) publishes a matching point, objective, and
+/// constraint violation without selecting it. Call [`select_current`](Self::select_current)
+/// once when the solver changes its selection. The executor stamps that
+/// selection at the next publication boundary, including a clean mid-step
+/// stop. Repeated observation and ordinary replacement preserve the selected
+/// record and its metadata. A selection can increase the objective while
+/// improving feasibility; this state does not implement [`ObjectiveIncumbentState`].
+///
+/// The solver defines its violation measure and selection policy. This type
+/// neither compares objectives nor infers selection changes from iteration
+/// numbers. Numerical values, including NaN and infinity, are recorded as
+/// supplied. Solvers must decide which evaluated records are eligible.
+///
+/// Construction supplies an unevaluated seed. Fresh initialization calls
+/// [`reset`](Self::reset), reevaluates the point, and explicitly selects an
+/// incumbent if one is available. Checked `current()` and `best()` readers
+/// distinguish missing records. Unchecked [`State`] readers follow
+/// [`PointState`]'s unavailable-record behavior. No gradient capability is
+/// advertised. Exact continuation retains the solver and state together.
+///
+/// With `serde`, serialization is available when `V` and `F` support it.
+///
+/// # Backends
+///
+/// `Vec<F>`, `nalgebra::DVector<F>`, `ndarray::Array1<F>`, and `faer::Col<F>`,
+/// with `F = f64` (default) or `f32`. Only `V: Clone` is needed, so scalar and
+/// external parameter types also work.
+///
+/// Objective-only controls cannot assume that an infeasible selection is an
+/// objective target:
+///
+/// ```compile_fail
+/// use basin::{RunControl, SelectedState};
+/// let _ = RunControl::<SelectedState<Vec<f64>>>::new().target_objective(0.0);
+/// ```
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelectedState<V, F: Scalar = f64> {
+    progress: Progress<V, F, F>,
+    selected_violation: Option<F>,
+    pending: Option<Selection<V, F>>,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
+enum Selection<V, F> {
+    Current,
+    Snapshot(V, F, F),
+}
+
+impl<V, F: Scalar> SelectedState<V, F> {
+    /// Construct an unevaluated seed with zero counters and no selection.
+    pub fn new(param: V) -> Self {
+        Self {
+            progress: Progress::new(param),
+            selected_violation: None,
+            pending: None,
+        }
+    }
+
+    /// Clear evaluations, selections, and bookkeeping, retaining the parameter
+    /// as the next fresh run's seed.
+    pub fn reset(&mut self) {
+        self.progress.reset();
+        self.selected_violation = None;
+        self.pending = None;
+    }
+
+    /// Current evaluated point, objective, and violation, or `None` for a seed.
+    pub fn current(&self) -> Option<(&V, F, F)> {
+        let (cost, violation) = self.progress.evaluated?;
+        Some((&self.progress.param, cost, violation))
+    }
+
+    /// Publish a complete current record without changing the selection.
+    /// A pending selection retains its own record if the current point changes
+    /// again before the executor publishes the boundary.
+    pub fn replace(&mut self, param: V, cost: F, violation: F) {
+        let previous = std::mem::replace(&mut self.progress.param, param);
+        if matches!(self.pending, Some(Selection::Current)) {
+            let (cost, violation) = self.progress.evaluated.unwrap();
+            self.pending = Some(Selection::Snapshot(previous, cost, violation));
+        }
+        self.progress.evaluated = Some((cost, violation));
+    }
+
+    /// Selected point, objective, and violation at the latest publication.
+    pub fn best(&self) -> Option<(&V, F, F)> {
+        let best = self.progress.best.as_ref()?;
+        Some((&best.param, best.cost, self.selected_violation.unwrap()))
+    }
+
+    /// All six raw categories at the current publication boundary.
+    pub fn counts(&self) -> &EvalCounts {
+        &self.progress.counts
+    }
+
+    /// Raw counts at the boundary that published the selected incumbent.
+    pub fn best_counts(&self) -> Option<&EvalCounts> {
+        self.progress.best.as_ref().map(|best| &best.counts)
+    }
+}
+
+impl<V: Clone, F: Scalar> SelectedState<V, F> {
+    pub(crate) fn replace_from(&mut self, param: &V, cost: F, violation: F) {
+        if matches!(self.pending, Some(Selection::Current)) {
+            // Preserve an earlier selection if another record is published
+            // before the executor stamps the iteration boundary.
+            self.replace(param.clone(), cost, violation);
+        } else {
+            self.progress.param.clone_from(param);
+            self.progress.evaluated = Some((cost, violation));
+        }
+    }
+
+    /// Record an explicit selection event for the current evaluated record.
+    ///
+    /// Returns `false` for an unevaluated seed without changing anything.
+    /// Otherwise, the next executor publication replaces the incumbent and
+    /// stamps fresh metadata even if its objective increases. Call only when
+    /// the solver chooses a new incumbent, not when it merely reports the same
+    /// selection again. Multiple events before publication retain the last.
+    pub fn select_current(&mut self) -> bool {
+        let Some(_) = self.progress.evaluated else {
+            return false;
+        };
+        self.pending = Some(Selection::Current);
+        true
+    }
+}
+
+impl<V: Clone, F: Scalar> State for SelectedState<V, F> {
+    type Param = V;
+    type Float = F;
+    fn iter(&self) -> u64 {
+        self.progress.iter
+    }
+    fn increment_iter(&mut self) {
+        self.progress.iter += 1;
+    }
+    fn cost_evals(&self) -> u64 {
+        self.progress.counts.cost_evals
+    }
+    fn param(&self) -> &V {
+        &self.progress.param
+    }
+    fn cost(&self) -> F {
+        self.progress
+            .evaluated
+            .expect("current point has not been evaluated")
+            .0
+    }
+    fn best_param(&self) -> &V {
+        &self
+            .progress
+            .best
+            .as_ref()
+            .expect("no incumbent has been selected")
+            .param
+    }
+    fn best_cost(&self) -> F {
+        self.progress
+            .best
+            .as_ref()
+            .map_or(F::infinity(), |best| best.cost)
+    }
+    fn best_iter(&self) -> u64 {
+        self.progress.best.as_ref().map_or(0, |best| best.iter)
+    }
+    fn best_cost_evals(&self) -> u64 {
+        self.best_counts().map_or(0, |counts| counts.cost_evals)
+    }
+    fn update_best(&mut self) {
+        let Some(selection) = self.pending.take() else {
+            return;
+        };
+        let (param, cost, violation) = match &selection {
+            Selection::Current => {
+                let (cost, violation) = self.progress.evaluated.unwrap();
+                (&self.progress.param, cost, violation)
+            }
+            Selection::Snapshot(param, cost, violation) => {
+                (param, *cost, *violation)
+            }
+        };
+        if let Some(best) = &mut self.progress.best {
+            best.param.clone_from(param);
+            best.cost = cost;
+            best.iter = self.progress.iter;
+            best.counts = self.progress.counts;
+        } else {
+            self.progress.best = Some(Incumbent {
+                param: param.clone(),
+                cost,
+                iter: self.progress.iter,
+                counts: self.progress.counts,
+            });
+        }
+        self.selected_violation = Some(violation);
+    }
+    fn reset_best(&mut self) {
+        self.progress.best = None;
+        self.selected_violation = None;
+        self.pending = None;
+    }
+}
+impl<V: Clone, F: Scalar> CountsMirror for SelectedState<V, F> {
+    fn mirror(&mut self, counts: &EvalCounts) {
+        self.progress.counts = *counts;
+    }
+}
+impl<V: Clone, F: Scalar> RawEvaluationState for SelectedState<V, F> {
+    fn raw_counts(&self) -> &EvalCounts {
+        self.counts()
+    }
+}
+impl<V: Clone, F: Scalar> EvaluatedState for SelectedState<V, F> {
+    fn current_record(&self) -> Option<(&V, F)> {
+        self.current().map(|(x, cost, _)| (x, cost))
+    }
+}
+impl<V: Clone, F: Scalar> IncumbentState for SelectedState<V, F> {
+    fn incumbent_record(&self) -> Option<IncumbentRef<'_, V, F>> {
+        let best = self.progress.best.as_ref()?;
+        Some(IncumbentRef {
+            param: &best.param,
+            cost: best.cost,
+            iter: best.iter,
+            counts: &best.counts,
+        })
     }
 }

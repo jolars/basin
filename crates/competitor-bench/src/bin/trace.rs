@@ -75,9 +75,9 @@ use basin::problems::{
     styblinski_tang,
 };
 use basin::{
-    BasicSimplexState, BasicState, CountsMirror, Executor, GradientDescent,
-    IntoInitialSimplex, LbfgsState, Lbfgsb, MoreThuente, NelderMead, Newuoa,
-    NewuoaState, Solver, State as BasinState, StepOutcome,
+    CountsMirror, Executor, FirstOrderState, GradientDescent,
+    IntoInitialSimplex, Lbfgsb, MoreThuente, NelderMead, Newuoa, PointState,
+    SimplexProgress, Solver, State as BasinState, StepOutcome,
 };
 use competitor_bench::{ArgminProblem, GomezProblem, slsqp};
 use gomez::OptimizerDriver;
@@ -451,7 +451,7 @@ fn main() {
                     Executor::new(
                         Rosenbrock::<Vec<f64>>::default(),
                         GradientDescent::with_line_search(MoreThuente::new()),
-                        BasicState::new(start()),
+                        FirstOrderState::new(start()),
                     ),
                     MAX_ITERS,
                 )
@@ -493,7 +493,7 @@ fn main() {
                     Executor::new(
                         Rosenbrock::<Vec<f64>>::default(),
                         NelderMead::new(),
-                        BasicSimplexState::new(start()),
+                        SimplexProgress::new(start()),
                     ),
                     MAX_ITERS,
                 )
@@ -561,7 +561,7 @@ fn main() {
                     Executor::new(
                         Rosenbrock::<Vec<f64>>::default(),
                         Lbfgsb::new().unbounded(),
-                        LbfgsState::new(start(), 10),
+                        FirstOrderState::new(start()),
                     ),
                     MAX_ITERS,
                 )
@@ -629,7 +629,7 @@ fn main() {
                         Newuoa::new()
                             .with_initial_radius(ST_RHO_BEG)
                             .with_final_radius(ST_RHO_END),
-                        NewuoaState::new(st_start()),
+                        PointState::new(st_start()),
                     ),
                     ST_BUDGET,
                 )

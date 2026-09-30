@@ -1,6 +1,6 @@
-//! Limited-memory BFGS/L-BFGS-B state.
+//! Solver-owned limited-memory BFGS history and bounded working storage.
 //!
-//! Carries the current iterate plus the limited-memory history
+//! Carries the limited-memory history
 //! `(s_k, y_k)` capped at `m_capacity` pairs, and the compact-form
 //! Gram matrices `SᵀY` and `SᵀS`. Mirrors the Fortran v3.0 storage
 //! (`ws`, `wy`, `sy`, `ss`, `theta` in `references/lbfgsb-v3.0/`)
@@ -11,25 +11,11 @@
 //! index modulo `m_capacity`.
 
 use crate::core::math::{Dot, Scalar};
-use crate::core::problem::EvalCounts;
-use crate::core::state::{CountsMirror, GradientState, State};
 use crate::solver::lbfgs::{backend::AsFloatSlice, history::newest_products};
 
-/// Solver state for L-BFGS-B and the unbounded L-BFGS solver.
-///
-/// `theta` initializes to `1`; after the first accepted update
-/// it becomes `(y · y) / (s · y)`, matching the Fortran convention
-/// at `mainlb`'s `matupd` call site.
-///
-/// The scalar `F` defaults to `f64` so existing `LbfgsState<V>` call
-/// sites resolve unchanged. Both the bounded and unbounded paths now
-/// run F-generic; the L-BFGS-B-specific `work` buffer
-/// (`LbfgsbWork<F>`, private) carries the same scalar.
-pub struct LbfgsState<V, F = f64> {
-    pub(crate) param: V,
-    pub(crate) cost: Option<F>,
-    pub(crate) gradient: Option<V>,
-
+/// Limited-memory model shared by the bounded and unbounded solvers.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub(super) struct History<V, F: Scalar = f64> {
     /// History capacity. Fortran's `m`; recommended `[3, 20]`.
     pub(crate) m_capacity: usize,
     /// `s_k = x_{k+1} − x_k`, chronological, oldest first.
@@ -45,40 +31,13 @@ pub struct LbfgsState<V, F = f64> {
     /// thereafter `(y · y) / (s · y)`.
     pub(crate) theta: F,
 
-    pub(crate) iter: u64,
-    pub(crate) cost_evals: u64,
-    pub(crate) gradient_evals: u64,
-
-    pub(crate) best_param: Option<V>,
-    pub(crate) best_cost: F,
-    pub(crate) best_iter: u64,
-    pub(crate) best_cost_evals: u64,
-    pub(crate) best_gradient_evals: u64,
-
-    /// Working buffers and persistent solver-side scalars for the
-    /// L-BFGS-B iteration (Fortran's `mainlb` scratch arrays plus the
-    /// pieces of `isave`/`dsave` that survive across iterations).
-    /// Initialized lazily by `LBFGSB::init`; absent when [`LbfgsState`]
-    /// is used by other solvers (e.g. the unbounded L-BFGS path).
-    // Indirection keeps workspace headers out of the state moved through
-    // the executor on every iteration.
+    /// Bounded-mode scratch arrays and scalars retained across iterations.
     pub(crate) work: Option<Box<LbfgsbWork<F>>>,
 }
 
-/// Mutable working storage threaded through the L-BFGS-B iteration.
-///
-/// Allocates once in [`crate::solver::LBFGSB::init`] and is reused
-/// across every [`crate::core::solver::Solver::next_iter`] call.
-/// Mirrors the layout Fortran `mainlb` carves out of the user-
-/// supplied scratch arrays (`ws`, `wy`, `sy`, `ss`, `wt`, `wn`, `snd`,
-/// `z`, `r`, `d`, `t`, `xp`, `wa`, `index`, `iwhere`, `indx2`) plus
-/// the iteration-persistent scalars that live in `isave`/`dsave`
-/// between coroutine returns.
-///
-/// Stored on [`LbfgsState`] rather than the solver struct so that
-/// [`crate::core::solver::Solver`] implementations stay
-/// configuration-only (mirroring [`crate::solver::BFGS`]).
-pub(crate) struct LbfgsbWork<F = f64> {
+/// Scratch arrays and scalars retained by the bounded solver.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub(super) struct LbfgsbWork<F: Scalar = f64> {
     // ---- Compact-form matrices ----
     /// `2m × 2m` row-major; stores the `L·E·Lᵀ` factor of the
     /// indefinite middle matrix `K`. Output of `formk`, consumed by
@@ -187,42 +146,23 @@ impl<F: Scalar> LbfgsbWork<F> {
     }
 }
 
-impl<V, F: Scalar> LbfgsState<V, F> {
-    /// Build state at the given starting point with capacity for
-    /// `m_capacity` history pairs. Use `m_capacity = 10` as a
-    /// reasonable default; Fortran recommends `[3, 20]`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `m_capacity == 0`.
-    pub fn new(param: V, m_capacity: usize) -> Self {
+impl<V, F: Scalar> History<V, F> {
+    /// Allocate a model with room for `m_capacity` curvature pairs.
+    pub(super) fn new(m_capacity: usize) -> Self {
         assert!(m_capacity >= 1, "m_capacity must be ≥ 1");
         let mm = m_capacity * m_capacity;
         Self {
-            param,
-            cost: None,
-            gradient: None,
             m_capacity,
             ws: Vec::with_capacity(m_capacity),
             wy: Vec::with_capacity(m_capacity),
             sy: vec![F::zero(); mm],
             ss: vec![F::zero(); mm],
             theta: F::one(),
-            iter: 0,
-            cost_evals: 0,
-            gradient_evals: 0,
-            best_param: None,
-            best_cost: F::infinity(),
-            best_iter: 0,
-            best_cost_evals: 0,
-            best_gradient_evals: 0,
             work: None,
         }
     }
 
     /// Current history length (`col` in Fortran). In `[0, m_capacity]`.
-    /// Used by tests; the solver inlines `state.ws.len()` directly.
-    #[allow(dead_code)]
     pub(crate) fn col(&self) -> usize {
         self.ws.len()
     }
@@ -298,99 +238,6 @@ impl<V, F: Scalar> LbfgsState<V, F> {
     }
 }
 
-impl<V: Clone, F: Scalar> State for LbfgsState<V, F> {
-    type Param = V;
-    type Float = F;
-
-    fn iter(&self) -> u64 {
-        self.iter
-    }
-    fn increment_iter(&mut self) {
-        self.iter += 1;
-    }
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-    fn param(&self) -> &V {
-        &self.param
-    }
-    /// # Panics
-    ///
-    /// Panics if read before [`Solver::init`](crate::core::solver::Solver::init)
-    /// has populated the cached cost; see [`BasicState::cost`] for
-    /// the full safety argument; same contract.
-    ///
-    /// [`BasicState::cost`]: crate::core::state::BasicState::cost
-    fn cost(&self) -> F {
-        self.cost
-            .expect("LbfgsState::cost read before Solver::init populated it")
-    }
-
-    fn best_param(&self) -> &V {
-        self.best_param.as_ref().expect(
-            "LbfgsState::best_param read before Solver::init populated it",
-        )
-    }
-
-    fn best_cost(&self) -> F {
-        self.best_cost
-    }
-
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
-    }
-
-    fn update_best(&mut self) {
-        if let Some(curr) = self.cost {
-            if self.best_param.is_none() || curr < self.best_cost {
-                if let Some(best) = self.best_param.as_mut() {
-                    best.clone_from(&self.param);
-                } else {
-                    self.best_param = Some(self.param.clone());
-                }
-                self.best_cost = curr;
-                self.best_iter = self.iter;
-                self.best_cost_evals = self.cost_evals;
-                self.best_gradient_evals = self.gradient_evals;
-            }
-        }
-    }
-
-    fn reset_best(&mut self) {
-        self.best_param = None;
-        self.best_cost = F::infinity();
-        self.best_iter = 0;
-        self.best_cost_evals = 0;
-        self.best_gradient_evals = 0;
-    }
-}
-
-impl<V: Clone, F: Scalar> GradientState for LbfgsState<V, F> {
-    fn gradient(&self) -> Option<&V> {
-        self.gradient.as_ref()
-    }
-    fn gradient_evals(&self) -> u64 {
-        self.gradient_evals
-    }
-    fn best_gradient_evals(&self) -> u64 {
-        self.best_gradient_evals
-    }
-}
-
-impl<V: Clone, F: Scalar> CountsMirror for LbfgsState<V, F> {
-    fn mirror(&mut self, delta: &EvalCounts) {
-        self.cost_evals = delta.cost_evals + delta.residual_evals;
-        self.gradient_evals = delta.gradient_evals
-            + delta.jacobian_evals
-            + delta.hessian_evals
-            + delta.hessian_product_evals;
-    }
-}
-
 #[cfg(test)]
 // Explicit `i * m + j` indexing (including `0 * m + 0`) mirrors the
 // Fortran source's 2-D layout for `sy`/`ss`: load-bearing for
@@ -403,7 +250,7 @@ mod tests {
         for &scale in scales {
             for n in [1, 3, 25, 180, 1000] {
                 for m in [1, 2, 3, 5, 10] {
-                    let mut state = LbfgsState::new(vec![F::zero(); n], m);
+                    let mut state = History::new(m);
                     for step in 0..2 * m + 3 {
                         let s: Vec<_> = (0..n)
                             .map(|i| {
@@ -463,7 +310,7 @@ mod tests {
 
     #[test]
     fn invalid_pair_preserves_existing_history() {
-        let mut state = LbfgsState::new(vec![0.0; 2], 2);
+        let mut state = History::new(2);
         assert!(state.append_pair(vec![1.0, 2.0], vec![3.0, 4.0]));
         assert!(state.append_pair(vec![2.0, -1.0], vec![4.0, -3.0]));
         let before = (
@@ -515,7 +362,7 @@ mod tests {
                 values,
                 calls: calls.clone(),
             };
-            let mut state = LbfgsState::new(vector(vec![0.0; 4]), m);
+            let mut state = History::new(m);
             for step in 1..=2 * m + 1 {
                 let a = step as f64;
                 let s = vector(vec![a, -1.0, 0.5, 2.0]);
@@ -550,12 +397,10 @@ mod tests {
 
     #[test]
     fn new_state_is_empty() {
-        let s = LbfgsState::<Vec<f64>>::new(vec![0.0; 4], 5);
+        let s = History::<Vec<f64>>::new(5);
         assert_eq!(s.col(), 0);
         assert_eq!(s.m_capacity, 5);
         assert_eq!(s.theta, 1.0);
-        assert!(s.cost.is_none());
-        assert!(s.gradient.is_none());
         assert_eq!(s.ws.len(), 0);
         assert_eq!(s.wy.len(), 0);
         assert_eq!(s.sy.len(), 25);
@@ -564,7 +409,7 @@ mod tests {
 
     #[test]
     fn first_append_sets_theta_and_diagonal() {
-        let mut state = LbfgsState::<Vec<f64>>::new(vec![0.0, 0.0], 3);
+        let mut state = History::<Vec<f64>>::new(3);
         let s = vec![1.0, 2.0]; // ‖s‖² = 5
         let y = vec![3.0, 4.0]; // ‖y‖² = 25, s·y = 1·3 + 2·4 = 11
         let ok = state.append_pair(s, y);
@@ -577,7 +422,7 @@ mod tests {
 
     #[test]
     fn second_append_fills_off_diagonal_gram_blocks() {
-        let mut state = LbfgsState::<Vec<f64>>::new(vec![0.0; 2], 3);
+        let mut state = History::<Vec<f64>>::new(3);
         let s1 = vec![1.0, 0.0];
         let y1 = vec![2.0, 0.0];
         let s2 = vec![0.0, 3.0];
@@ -603,7 +448,7 @@ mod tests {
 
     #[test]
     fn appending_beyond_capacity_drops_oldest() {
-        let mut state = LbfgsState::<Vec<f64>>::new(vec![0.0], 2);
+        let mut state = History::<Vec<f64>>::new(2);
         // Three appends with distinct identifiable pairs; m_capacity=2
         // means the third should evict the first.
         let s1 = vec![1.0];
@@ -634,7 +479,7 @@ mod tests {
 
     #[test]
     fn curvature_failure_leaves_state_untouched() {
-        let mut state = LbfgsState::<Vec<f64>>::new(vec![0.0, 0.0], 3);
+        let mut state = History::<Vec<f64>>::new(3);
         // s · y = -1 (negative curvature): must be rejected.
         let s = vec![1.0, 0.0];
         let y = vec![-1.0, 0.0];
@@ -642,20 +487,5 @@ mod tests {
         assert!(!ok);
         assert_eq!(state.col(), 0);
         assert_eq!(state.theta, 1.0);
-    }
-
-    #[test]
-    fn state_implements_state_and_gradient_state_traits() {
-        // Sanity check that the trait impls are reachable through the
-        // generic State/GradientState bounds.
-        let s: LbfgsState<Vec<f64>> = LbfgsState::new(vec![1.0, 2.0], 5);
-        // Param round-trip via the State trait.
-        let p: &Vec<f64> = State::param(&s);
-        assert_eq!(p, &vec![1.0, 2.0]);
-        // GradientState exposes the None gradient pre-init.
-        assert!(GradientState::gradient(&s).is_none());
-        assert_eq!(GradientState::gradient_evals(&s), 0);
-        assert_eq!(State::iter(&s), 0);
-        assert_eq!(State::cost_evals(&s), 0);
     }
 }

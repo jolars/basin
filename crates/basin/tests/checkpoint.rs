@@ -7,7 +7,7 @@
 mod backend_aliases;
 
 use basin::{
-    BasicState, CheckpointWriter, CostFunction, Executor, Gradient,
+    CheckpointWriter, CostFunction, Executor, FirstOrderState, Gradient,
     GradientDescent, ObserverMode, State, read_checkpoint,
 };
 
@@ -48,7 +48,7 @@ fn checkpoint_warm_start_matches_uninterrupted_run() {
     let reference = Executor::new(
         Quadratic,
         GradientDescent::new(step),
-        BasicState::new(start.clone()),
+        FirstOrderState::new(start.clone()),
     )
     .max_iter(20)
     .run()
@@ -59,14 +59,14 @@ fn checkpoint_warm_start_matches_uninterrupted_run() {
     Executor::new(
         Quadratic,
         GradientDescent::new(step),
-        BasicState::new(start),
+        FirstOrderState::new(start),
     )
     .max_iter(12)
     .observe_with(CheckpointWriter::new(&path), ObserverMode::Every(4))
     .run()
     .unwrap();
 
-    let reloaded: BasicState<Vec<f64>> = read_checkpoint(&path).unwrap();
+    let reloaded: FirstOrderState<Vec<f64>> = read_checkpoint(&path).unwrap();
     let bytes = std::fs::read(&path).unwrap();
     assert_eq!(&bytes[..8], b"BASINST\0");
     assert_eq!(&bytes[8..12], &1_u32.to_le_bytes());
@@ -74,16 +74,18 @@ fn checkpoint_warm_start_matches_uninterrupted_run() {
     // The checkpoint captured the 12th iterate.
     assert_eq!(reloaded.iter(), 12);
 
-    // `max_iter` is checked against the absolute `state.iter()`, and the
-    // reloaded state already stands at iter 12, so 20 means "8 more".
+    // A state-only snapshot starts a fresh run: its point is reevaluated,
+    // and iteration and evaluation counters restart at zero.
     let resumed =
         Executor::new(Quadratic, GradientDescent::new(step), reloaded)
-            .max_iter(20)
+            .max_iter(8)
             .run()
             .unwrap();
 
     // Same optimum, reached identically.
-    assert_eq!(resumed.iter(), 20);
+    assert_eq!(resumed.iter(), 8);
+    assert_eq!(resumed.state.counts().cost_evals, 9);
+    assert_eq!(resumed.state.counts().gradient_evals, 9);
     for (a, b) in resumed.param().iter().zip(reference.param()) {
         assert!((a - b).abs() < 1e-12, "resumed {a} vs reference {b}");
     }
@@ -157,7 +159,7 @@ macro_rules! check_float_bits {
             nan,
             -nan,
         ];
-        let state = BasicState::<_, $float>::new(($vector)(values));
+        let state = FirstOrderState::<_, $float>::new(($vector)(values));
         let restored = round_trip(&state);
         let expected = values
             .iter()

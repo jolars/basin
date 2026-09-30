@@ -5,7 +5,7 @@
 
 use basin::problems::Sphere;
 use basin::{
-    BasicState, Executor, FiniteDiff, GradientDescent, TerminationReason,
+    Executor, FiniteDiff, FirstOrderState, GradientDescent, TerminationReason,
 };
 
 #[test]
@@ -21,7 +21,7 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
     let result = Executor::new(
         problem,
         GradientDescent::new(0.2).with_absolute_gradient_tolerance(1e-9),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(500)
     .run()
@@ -39,8 +39,8 @@ mod nalgebra {
     use crate::backend_aliases::nalgebra::DVector;
     use basin::problems::{Rosenbrock, RosenbrockResiduals};
     use basin::{
-        BasicState, Executor, FiniteDiff, LevenbergMarquardt, Method,
-        NllsState, TerminationReason, TrustRegion,
+        Executor, FiniteDiff, FirstOrderState, LevenbergMarquardt, Method,
+        PointState, TerminationReason, TrustRegion,
     };
 
     #[test]
@@ -55,7 +55,7 @@ mod nalgebra {
         let result = Executor::new(
             problem,
             TrustRegion::new().with_absolute_gradient_tolerance(1e-6),
-            BasicState::new(DVector::from_vec(vec![-1.2, 1.0])),
+            FirstOrderState::new(DVector::from_vec(vec![-1.2, 1.0])),
         )
         .max_iter(300)
         .run()
@@ -76,7 +76,7 @@ mod nalgebra {
         let analytic = Executor::new(
             RosenbrockResiduals::<DVector<f64>>::new(),
             LevenbergMarquardt::new(),
-            NllsState::new(initial.clone()),
+            PointState::new(initial.clone()),
         )
         .max_iter(100)
         .run()
@@ -85,7 +85,7 @@ mod nalgebra {
         let fd = Executor::new(
             FiniteDiff::new(RosenbrockResiduals::<DVector<f64>>::new()),
             LevenbergMarquardt::new(),
-            NllsState::new(initial),
+            PointState::new(initial),
         )
         .max_iter(100)
         .run()
@@ -116,7 +116,7 @@ mod faer {
     use crate::backend_aliases::faer::Col;
     use basin::problems::RosenbrockResiduals;
     use basin::{
-        Executor, FiniteDiff, LevenbergMarquardt, NllsState, TerminationReason,
+        Executor, FiniteDiff, LevenbergMarquardt, PointState, TerminationReason,
     };
 
     #[test]
@@ -126,7 +126,7 @@ mod faer {
         let fd = Executor::new(
             FiniteDiff::new(RosenbrockResiduals::<Col<f64>>::new()),
             LevenbergMarquardt::new(),
-            NllsState::new(initial),
+            PointState::new(initial),
         )
         .max_iter(100)
         .run()

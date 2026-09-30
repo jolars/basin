@@ -36,6 +36,7 @@ use crate::core::math::{DenseMatrix, Scalar};
 /// This is solver-internal scratch, not a `State`; see the module docs for why
 /// it is bounded on `F: Scalar` and stores its matrices as
 /// [`DenseMatrix`]/`Vec<F>` rather than the generic backend matrix.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct QuadraticModel<F = f64> {
     /// Number of variables.
     pub(crate) n: usize,

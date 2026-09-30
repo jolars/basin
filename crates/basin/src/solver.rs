@@ -46,10 +46,10 @@ pub mod golden_section;
 /// Steepest-descent solver with a pluggable line search and optional
 /// heavy-ball momentum.
 pub mod gradient_descent;
-/// L-BFGS family: unconstrained `Lbfgs<Unbounded>` (two-loop
-/// recursion) and box-constrained `Lbfgs<Bounded>` (faithful port of
+/// L-BFGS family: unconstrained `Lbfgs<V, F, Unbounded>` (two-loop
+/// recursion) and box-constrained `Lbfgs<V, F, Bounded>` (faithful port of
 /// Nocedal's L-BFGS-B v3.0). `Lbfgsb` is a type alias for
-/// `Lbfgs<Bounded>`.
+/// `Lbfgs<V, F, Bounded>`.
 pub mod lbfgs;
 /// Levenberg-Marquardt solver for nonlinear least squares with
 /// Nielsen 1999 damping update.
@@ -71,6 +71,7 @@ pub mod nelder_mead;
 pub mod newuoa;
 /// Nonlinear conjugate gradient with selectable updates and a pluggable line search.
 pub mod nonlinear_cg;
+mod population;
 /// Shared core of the Powell-family DFO solvers (NEWUOA, BOBYQA, …): the
 /// least-Frobenius-norm [`QuadraticModel`](powell::QuadraticModel), its `H`
 /// update and origin shift, and the swappable
@@ -145,9 +146,9 @@ pub use levenberg_marquardt::{
     LevenbergMarquardt, LevenbergMarquardtQr, LmDamping,
 };
 pub use lincoa::Lincoa;
-pub use ma_ls_ch::{MaLsCh, MaLsChGenericState};
-pub use ma_ls_ch_cma::{MaLsChCma, MaLsChState};
-pub use ma_ls_ch_sw::{MaLsChSw, MaLsChSwState};
+pub use ma_ls_ch::MaLsCh;
+pub use ma_ls_ch_cma::MaLsChCma;
+pub use ma_ls_ch_sw::MaLsChSw;
 pub use mads::{Bounded, Constrained, Mads};
 pub use nelder_mead::{NelderMead, Projected, Unbounded};
 pub use newuoa::Newuoa;

@@ -38,3 +38,16 @@ impl NegInPlace for f64 {
         *self = -*self;
     }
 }
+
+// Scalar first-order records have one coordinate for dimension validation.
+impl super::VectorLen for f64 {
+    fn vec_len(&self) -> usize {
+        1
+    }
+}
+
+impl super::VectorLen for f32 {
+    fn vec_len(&self) -> usize {
+        1
+    }
+}

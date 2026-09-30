@@ -31,8 +31,8 @@
 //! Backend-generic over the parameter vector; the constraint matrix `A` is read
 //! through [`MatTransposeVec`](crate::core::math::MatTransposeVec) only (each
 //! constraint normal is `Aᵀ eⱼ`), which every backend's matrix type provides
-//! (`DenseMatrix` for `Vec<f64>`, `Array2`, `DMatrix`, `Mat`), so all four work.
-//! The model algebra is internal pure-Rust `Vec<f64>` scratch; wasm-clean.
+//! (`DenseMatrix` for `Vec<F>`, `Array2`, `DMatrix`, `Mat`), with `F = f64`
+//! or `f32`. Model algebra uses pure-Rust `Vec<F>` storage; wasm-clean.
 //!
 //! # References
 //!
@@ -54,7 +54,7 @@ use crate::core::inner::InitialState;
 use crate::core::math::{MatTransposeVec, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::LincoaState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 
 use driver::{LincoaWork, Transition};
@@ -70,13 +70,13 @@ use init::fold_constraints;
 /// [`Bobyqa`](crate::Bobyqa), and keeps every trust-region iterate feasible via a
 /// projected truncated-CG subproblem with an active-set QR.
 ///
-/// Drive it with an [`Executor`](crate::Executor) over a [`LincoaState`] on a
+/// Drive it with an [`Executor`](crate::Executor) over a [`PointState`] on a
 /// problem implementing [`CostFunction`] and
 /// [`LinearConstraints`] (here only the inequality block is present):
 ///
 /// ```
 /// use basin::core::constraint::LinearConstraints;
-/// use basin::{CostFunction, DenseMatrix, Executor, Lincoa, LincoaState};
+/// use basin::{CostFunction, DenseMatrix, Executor, Lincoa, PointState};
 ///
 /// // min ‖x − (2, 2)‖²  s.t.  x0 + x1 ≤ 2   (optimum: the projection (1, 1)).
 /// // The pure-Rust `DenseMatrix`/`Vec<f64>` carriers need no backend feature.
@@ -106,7 +106,7 @@ use init::fold_constraints;
 /// let solver = Lincoa::new()
 ///     .with_initial_radius(0.5)
 ///     .with_final_radius(1e-7);
-/// let state = LincoaState::new(vec![0.0, 0.0]);
+/// let state = PointState::new(vec![0.0, 0.0]);
 /// let result = Executor::new(problem, solver, state)
 ///     .max_cost_evals(500)
 ///     .run()
@@ -142,13 +142,33 @@ use init::fold_constraints;
 /// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget or
 /// [`with_absolute_radius_tolerance`](crate::Lincoa::with_absolute_radius_tolerance) to stop at a coarser `ρ`.
 ///
+/// # Progress and continuation
+///
+/// Use [`PointState::new`] or [`crate::Executor::from_start`] with an unevaluated
+/// starting point. Fresh initialization clears progress and rebuilds the
+/// interpolation model, even when reusing a populated state or solver. The
+/// shared state retains the current evaluated point, its historical objective
+/// incumbent, and all six raw evaluation categories. It supplies no gradient
+/// or radius capability. The solver owns every model buffer and the radius
+/// schedule; [`rho`](Self::rho) returns `None` before initialization. Inspect
+/// it through [`crate::Executor::run_with_solver`] or [`crate::Stepper::solver`].
+///
+/// Preserve [`crate::ExactCheckpoint`] for continuation without initialization
+/// or reevaluation. With `serde`, the solver and shared state support
+/// serialization, including the complete numerical model. A progress-only
+/// snapshot is a fresh point warm start. Legacy algorithm-specific state
+/// payloads cannot be read as `PointState` or as a new exact checkpoint.
+/// Radius-based convergence remains solver-owned; objective targets and stalls
+/// use the shared state's historical incumbent.
+///
 /// # Backends
 ///
-/// Backend-generic: the parameter vector needs only [`Clone`], [`VectorLen`], and
-/// indexing, and the constraint matrix is read via
-/// [`MatTransposeVec`] (`Aᵀ eⱼ`), which every
-/// backend's matrix type implements, so `Vec<f64>`, nalgebra, ndarray, and faer
-/// all work. wasm-clean (the model algebra is pure-Rust `Vec<f64>` scratch).
+/// `Vec<F>`/`DenseMatrix<F>`, nalgebra `DVector<F>`/`DMatrix<F>`, ndarray
+/// `Array1<F>`/`Array2<F>`, and faer `Col<F>`/`Mat<F>`, for every supported
+/// backend release and `F = f64` or `f32`. Vectors need [`Clone`], [`VectorLen`],
+/// and indexing; constraint matrices need [`MatTransposeVec`]. Model algebra
+/// uses pure-Rust `Vec<F>` storage, with no BLAS/LAPACK dependency. Choose radii
+/// appropriate to the scalar precision.
 ///
 /// # References
 ///
@@ -160,7 +180,8 @@ use init::fold_constraints;
 ///
 /// [`CostFunction`]: crate::core::problem::CostFunction
 /// [`TerminationReason::SolverConverged`]: crate::TerminationReason::SolverConverged
-pub struct Lincoa<F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Lincoa<F: Scalar = f64> {
     radius_tolerance: Option<F>,
     rho_beg: F,
     rho_end: F,
@@ -170,6 +191,12 @@ pub struct Lincoa<F = f64> {
 }
 
 impl<F: Scalar> Lincoa<F> {
+    /// Current trust-region resolution, or `None` before initialization.
+    /// Read it through `run_with_solver()` or `Stepper::solver()`.
+    pub fn rho(&self) -> Option<F> {
+        self.work.as_ref().map(|work| work.rho())
+    }
+
     /// Stop when the observed radius or step size is <= the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an
@@ -259,13 +286,13 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = LincoaState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        LincoaState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
-impl<P, V, F> Solver<P, LincoaState<V, F>> for Lincoa<F>
+impl<P, V, F> Solver<P, PointState<V, F>> for Lincoa<F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + LinearConstraints,
@@ -280,14 +307,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LincoaState<V, F>,
-    ) -> Result<LincoaState<V, F>, Self::Error> {
-        let n = state.param.vec_len();
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
+        state.reset();
+        self.work = None;
+        let n = state.param().vec_len();
         assert!(n >= 1, "Lincoa requires a non-empty start point");
         let npt = self.npt.unwrap_or(2 * n + 1);
 
-        let x0: Vec<F> = (0..n).map(|i| state.param[i]).collect();
-        let template = state.param.clone();
+        let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
+        let template = state.param().clone();
 
         // Extract each linear block into `(normal, rhs)` rows. A constraint
         // normal is row `j` of `A` = `Aᵀ eⱼ` (one `mat_transpose_vec` per row);
@@ -346,9 +375,7 @@ where
             )?
         };
 
-        state.param = fill_from(&template, &best_x);
-        state.cost = Some(best_f);
-        state.rho = work.rho();
+        state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
         Ok(state)
     }
@@ -356,10 +383,10 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LincoaState<V, F>,
-    ) -> Result<(LincoaState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let template = state.param.clone();
+        let template = state.param().clone();
         let work = self
             .work
             .as_mut()
@@ -371,14 +398,12 @@ where
             };
             work.step(&mut eval)?
         };
-        state.rho = work.rho();
 
         // The reported iterate is the model's best *feasible* point (x_opt); the
         // step also evaluates possibly-infeasible geometry points, which must not
         // be reported. Eval counting is automatic through the `Problem` wrapper.
         let (best_x, best_f) = work.best();
-        state.param = fill_from(&template, &best_x);
-        state.cost = Some(best_f);
+        state.replace(fill_from(&template, &best_x), best_f);
 
         let reason = match out.transition {
             Transition::Converged => Some(TerminationReason::SolverConverged),
@@ -389,10 +414,10 @@ where
 
     fn terminate(
         &self,
-        state: &LincoaState<V, F>,
+        _state: &PointState<V, F>,
     ) -> Option<TerminationReason> {
         let tolerance = self.radius_tolerance?;
-        let metric = crate::RhoState::rho(state);
+        let metric = self.rho()?;
         (metric.is_finite() && metric <= tolerance)
             .then_some(TerminationReason::RhoTolerance)
     }

@@ -193,9 +193,9 @@ impl<S> RunControl<S> {
     /// limits to identify exhausted budgets. Capability controls on an
     /// [`InnerExecutor`](crate::InnerExecutor) cannot be serialized.
     ///
-    /// ```compile_fail
-    /// use basin::{BasicState, EvaluationKind, RunControl};
-    /// let _ = RunControl::<BasicState<Vec<f64>>>::new()
+    /// ```
+    /// use basin::{PointState, EvaluationKind, RunControl};
+    /// let _ = RunControl::<PointState<Vec<f64>>>::new()
     ///     .max_evaluations(EvaluationKind::Cost, 10);
     /// ```
     pub fn max_evaluations(mut self, kind: EvaluationKind, limit: u64) -> Self
@@ -220,8 +220,8 @@ impl<S> RunControl<S> {
     /// Panics if `target` is not finite.
     ///
     /// ```compile_fail
-    /// use basin::{CobylaState, RunControl};
-    /// let _ = RunControl::<CobylaState<Vec<f64>>>::new().target_objective(0.0);
+    /// use basin::{SelectedState, RunControl};
+    /// let _ = RunControl::<SelectedState<Vec<f64>>>::new().target_objective(0.0);
     /// ```
     pub fn target_objective<F: Scalar + 'static>(mut self, target: F) -> Self
     where
@@ -284,66 +284,37 @@ impl<S> RunControl<S> {
         self
     }
 
-    /// Stop when the state's best objective value is at most `target`.
-    pub fn target_cost<F: Scalar + 'static>(mut self, target: F) -> Self
+    /// Alias of [`target_objective`](Self::target_objective), with the same
+    /// objective-selection capability and checked incumbent requirement.
+    ///
+    /// ```compile_fail
+    /// use basin::{RunControl, SelectedState};
+    /// let _ = RunControl::<SelectedState<Vec<f64>>>::new().target_cost(0.0);
+    /// ```
+    pub fn target_cost<F: Scalar + 'static>(self, target: F) -> Self
     where
-        S: State<Float = F>,
+        S: ObjectiveIncumbentState<Float = F>,
     {
-        assert!(target.is_finite(), "target cost must be finite");
-        self.target = Some(Box::new(move |state| {
-            (state.best_cost() <= target)
-                .then_some(TerminationReason::TargetCost)
-        }));
-        self
+        self.target_objective(target)
     }
 
-    /// Stop after `patience` checks without a best-cost decrease greater
-    /// than `min_delta`. Zero delta preserves state-carried stall history.
+    /// Alias of [`no_objective_improvement`](Self::no_objective_improvement).
+    /// Counts completed iterations, requires a positive patience, and waits
+    /// for an objective-compatible incumbent before tracking stalls.
+    ///
+    /// ```compile_fail
+    /// use basin::{RunControl, SelectedFirstOrderState};
+    /// let _ = RunControl::<SelectedFirstOrderState<Vec<f64>>>::new().no_improvement(5, 0.0);
+    /// ```
     pub fn no_improvement<F: Scalar + 'static>(
-        mut self,
+        self,
         patience: u64,
         min_delta: F,
     ) -> Self
     where
-        S: State<Float = F>,
+        S: ObjectiveIncumbentState<Float = F>,
     {
-        assert!(
-            min_delta.is_finite() && min_delta >= F::zero(),
-            "minimum improvement must be finite and nonnegative"
-        );
-        self.improvement = Some(Entry::Factory {
-            make: Box::new(move || {
-                let mut anchor = None;
-                let mut stalled = 0;
-                Box::new(move |state: &S| {
-                    let current = state.best_cost();
-                    if min_delta == F::zero()
-                        && anchor.is_none()
-                        && current.is_finite()
-                    {
-                        anchor = Some(current);
-                        stalled =
-                            state.iter().saturating_sub(state.best_iter());
-                        return (stalled >= patience)
-                            .then_some(TerminationReason::NoImprovement);
-                    }
-                    let improved = current.is_finite()
-                        && anchor
-                            .is_none_or(|value| current < value - min_delta);
-                    if improved {
-                        anchor = Some(current);
-                        stalled = 0;
-                        None
-                    } else {
-                        stalled += 1;
-                        (stalled >= patience)
-                            .then_some(TerminationReason::NoImprovement)
-                    }
-                })
-            }),
-            current: None,
-        });
-        self
+        self.no_objective_improvement(patience, min_delta)
     }
 
     /// Stop after `patience` completed iterations without an accepted move.
@@ -559,26 +530,28 @@ macro_rules! control_methods {
             self.control = std::mem::take(&mut self.control).max_time(limit);
             self
         }
-        /// Stop when the state's best cost reaches the finite target.
+        /// Alias of [`target_objective`](Self::target_objective); requires
+        /// an objective-compatible incumbent.
         pub fn target_cost<F: crate::core::math::Scalar + 'static>(
             mut self,
             target: F,
         ) -> Self
         where
-            S: crate::core::state::State<Float = F>,
+            S: crate::core::state::ObjectiveIncumbentState<Float = F>,
         {
             self.control =
                 std::mem::take(&mut self.control).target_cost(target);
             self
         }
-        /// Stop after `patience` checks without improvement greater than `min_delta`.
+        /// Alias of [`no_objective_improvement`](Self::no_objective_improvement);
+        /// counts completed iterations and requires an objective-compatible incumbent.
         pub fn no_improvement<F: crate::core::math::Scalar + 'static>(
             mut self,
             patience: u64,
             min_delta: F,
         ) -> Self
         where
-            S: crate::core::state::State<Float = F>,
+            S: crate::core::state::ObjectiveIncumbentState<Float = F>,
         {
             self.control = std::mem::take(&mut self.control)
                 .no_improvement(patience, min_delta);

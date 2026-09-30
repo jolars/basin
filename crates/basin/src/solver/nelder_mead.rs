@@ -1,10 +1,12 @@
 use core::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{ClampInPlace, Scalar, ScaleInPlace, ScaledAdd};
+use crate::core::math::{
+    ClampInPlace, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::BasicSimplexState;
+use crate::core::state::SimplexProgress;
 use crate::core::termination::TerminationReason;
 
 /// Nelder-Mead simplex method (derivative-free).
@@ -43,24 +45,40 @@ use crate::core::termination::TerminationReason;
 /// and `V: ClampInPlace`, so handing a non-bounded problem to a projected
 /// `NelderMead` is a compile-time error per CONTRIBUTING.md tenet 4.
 ///
+/// # Progress and lifecycle
+///
+/// [`SimplexProgress<V, F>`] owns the observable vertices and matching costs,
+/// while this solver owns the three scratch vectors and resolved coefficients.
+/// Progress preserves all six evaluation categories and an independent
+/// historical incumbent. Observe the simplex through `vertices()`, `costs()`,
+/// or the checked `evaluated_vertices()` reader without copying it.
+///
+/// Fresh initialization clears counters and incumbent metadata, rebuilds
+/// scratch for the current dimension, resolves adaptive coefficients, and
+/// reevaluates every supplied vertex. Use `Executor::from_start` to build the
+/// default simplex around a point, or pass explicit `SimplexProgress` vertices
+/// to `Executor::new`. Exact continuation uses a solver-aware checkpoint and
+/// skips initialization. With `serde`, the solver and progress can be stored
+/// together whenever the vector type supports serialization. Old
+/// `BasicSimplexState` payloads, which included scratch, are incompatible.
+///
 /// # Backends
 ///
-/// Backend-generic; works with any `V` implementing
-/// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) + `Clone`, paired
-/// with a [`BasicSimplexState<V, F>`]. With the default `F = f64` that
-/// covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature `nalgebra`),
-/// `ndarray::Array1<f64>` (feature `ndarray`), and `faer::Col<f64>`
-/// (feature `faer`). The projected variant additionally requires
-/// [`ClampInPlace`] on `V`, which every shipped backend implements.
+/// Supports `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer
+/// `Col<F>`, with `F = f32` or `f64`. Requires [`Clone`], [`VectorLen`],
+/// [`ScaleInPlace`], and [`ScaledAdd`]. The projected variant also requires
+/// [`ClampInPlace`]. Default point seeding uses
+/// [`IntoInitialSimplex`](crate::IntoInitialSimplex), implemented for vectors
+/// with coordinate access. Explicit simplex seeding does not need it.
 ///
 /// # Examples
 ///
 /// Derivative-free minimization of Rosenbrock: Nelder–Mead needs only
-/// [`CostFunction`] and iterates a [`BasicSimplexState`] seeded from a
+/// [`CostFunction`] and iterates a [`SimplexProgress`] seeded from a
 /// single point (the initial simplex is built automatically):
 ///
 /// ```
-/// use basin::{BasicSimplexState, CostFunction, Executor, NelderMead};
+/// use basin::{SimplexProgress, CostFunction, Executor, NelderMead};
 ///
 /// struct Rosenbrock;
 /// impl CostFunction for Rosenbrock {
@@ -77,7 +95,7 @@ use crate::core::termination::TerminationReason;
 ///     NelderMead::new()
 ///         .with_absolute_simplex_size_tolerance(1e-10)
 ///         .with_absolute_simplex_cost_tolerance(1e-10),
-///     BasicSimplexState::new(vec![-1.2, 1.0]),
+///     SimplexProgress::new(vec![-1.2, 1.0]),
 /// )
 /// .max_iter(1_000)
 /// .run()
@@ -85,7 +103,8 @@ use crate::core::termination::TerminationReason;
 /// assert!(result.cost() < 1e-6);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct NelderMead<Mode = Unbounded, F = f64> {
+pub struct NelderMead<V, F: Scalar = f64, Mode = Unbounded> {
+    scratch: Vec<V>,
     config: ParamConfig<F>,
     /// Resolved parameters; populated by `init` once the dimension is known.
     params: Option<Params<F>>,
@@ -94,7 +113,7 @@ pub struct NelderMead<Mode = Unbounded, F = f64> {
 }
 
 /// Type-state marker for unconstrained Nelder-Mead (the default).
-/// Constructors live on `NelderMead<Unbounded>`; the `Solver` impl
+/// Constructors live on `NelderMead<V, F, Unbounded>`; the `Solver` impl
 /// makes no constraint requirements on the problem.
 pub struct Unbounded;
 
@@ -146,13 +165,13 @@ enum ParamConfig<F> {
     Fixed(Params<F>),
 }
 
-impl<F: Scalar> Default for NelderMead<Unbounded, F> {
+impl<V, F: Scalar> Default for NelderMead<V, F, Unbounded> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: Scalar> NelderMead<Unbounded, F> {
+impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
     /// Nelder-Mead with the standard parameters (Nelder & Mead 1965):
     /// α=1, β=2, γ=0.5, δ=0.5. These coefficients *are* the default, so
     /// this is the canonical entry point; [`adaptive`](Self::adaptive)
@@ -162,6 +181,7 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
         Self {
             config: ParamConfig::Standard,
             params: None,
+            scratch: Vec::new(),
             _mode: PhantomData,
         }
     }
@@ -174,6 +194,7 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
         Self {
             config: ParamConfig::Adaptive,
             params: None,
+            scratch: Vec::new(),
             _mode: PhantomData,
         }
     }
@@ -194,6 +215,7 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
                 delta,
             }),
             params: None,
+            scratch: Vec::new(),
             _mode: PhantomData,
         }
     }
@@ -204,16 +226,17 @@ impl<F: Scalar> NelderMead<Unbounded, F> {
     /// to implement [`BoxConstraints`] and projects every trial vertex
     /// element-wise into `[lower, upper]`. See the type-level rustdoc on
     /// [`Projected`] for the algorithm contract and limitations.
-    pub fn projected(self) -> NelderMead<Projected, F> {
+    pub fn projected(self) -> NelderMead<V, F, Projected> {
         NelderMead {
             config: self.config,
             params: self.params,
+            scratch: self.scratch,
             _mode: PhantomData,
         }
     }
 }
 
-impl<Mode, F: Scalar> NelderMead<Mode, F> {
+impl<V, Mode, F: Scalar> NelderMead<V, F, Mode> {
     fn resolve(config: ParamConfig<F>, n: usize) -> Params<F> {
         assert!(n >= 1, "NelderMead requires at least a 1-D problem");
         match config {
@@ -270,67 +293,22 @@ where
     }
 }
 
-/// In-place insertion sort over `vertices`/`costs` ascending by cost.
-/// NaN costs sort last, so a bad evaluation cannot become the simplex's
-/// reported best point.
-///
-/// Called from `next_iter` where the simplex is already sorted except
-/// for the one slot Nelder-Mead just rewrote (or the four slots after a
-/// shrink), so each call does only a handful of swaps in the steady
-/// state, and crucially, allocates nothing.
-fn insertion_sort_simplex<V, F: PartialOrd>(
-    vertices: &mut [V],
-    costs: &mut [F],
-) {
-    for i in 1..vertices.len() {
-        let mut j = i;
-        while j > 0 && cost_precedes(&costs[j], &costs[j - 1]) {
-            vertices.swap(j, j - 1);
-            costs.swap(j, j - 1);
-            j -= 1;
-        }
-    }
-}
-
-fn cost_precedes<F: PartialOrd>(left: &F, right: &F) -> bool {
-    match left.partial_cmp(right) {
-        Some(std::cmp::Ordering::Less) => true,
-        Some(_) => false,
-        None => {
-            left.partial_cmp(left).is_some()
-                && right.partial_cmp(right).is_none()
-        }
-    }
-}
-
 /// Evaluate every vertex's cost and sort the simplex ascending. Shared
 /// between the `Unbounded` and `Projected` `Solver::init` paths after
 /// any projection of the initial vertices.
 fn init_costs_and_sort<P, V, F>(
     problem: &mut Problem<P>,
-    state: &mut BasicSimplexState<V, F>,
+    state: &mut SimplexProgress<V, F>,
 ) -> Result<(), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
 {
-    for (v, c) in state.vertices.iter().zip(state.costs.iter_mut()) {
-        *c = problem.cost(v)?;
+    for v in &state.vertices {
+        state.costs.push(problem.cost(v)?);
     }
-    insertion_sort_simplex(&mut state.vertices, &mut state.costs);
+    state.sort();
     Ok(())
-}
-
-/// Pre-allocate Nelder-Mead's three scratch slots (centroid + two trial
-/// vertices) on `state.scratch` if it isn't sized yet. Idempotent: a
-/// re-`init` reuses the existing storage.
-fn ensure_scratch<V, F>(state: &mut BasicSimplexState<V, F>)
-where
-    V: Clone,
-{
-    if state.scratch.len() < 3 {
-        state.scratch = vec![state.vertices[0].clone(); 3];
-    }
 }
 
 /// One Nelder-Mead iteration, parameterised by a projection closure.
@@ -341,16 +319,17 @@ where
 /// returning. The simplex has `n + 1` vertices in `n`-D.
 ///
 /// The three trial points (centroid, reflection, expansion-or-contraction)
-/// are computed in `state.scratch` slots `[0]`, `[1]`, `[2]` so the hot
+/// are computed in solver-owned scratch slots `[0]`, `[1]`, `[2]` so the hot
 /// path performs no heap allocation. `Solver::init` pre-sizes the
 /// scratch.
 #[allow(clippy::type_complexity)]
 fn next_iter_inner<P, V, F, Proj>(
     problem: &mut Problem<P>,
-    mut state: BasicSimplexState<V, F>,
+    mut state: SimplexProgress<V, F>,
     p: Params<F>,
+    scratch: &mut [V],
     project: &Proj,
-) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), P::Error>
+) -> Result<(SimplexProgress<V, F>, Option<TerminationReason>), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -368,7 +347,7 @@ where
     // Split scratch into three independent mutable slots: x_bar, x_r,
     // and x_alt (expansion or contraction, depending on branch). Then
     // borrow the worst vertex immutably for the affine builds.
-    let (xbar_slice, rest) = state.scratch.split_at_mut(1);
+    let (xbar_slice, rest) = scratch.split_at_mut(1);
     let (xr_slice, alt_slice) = rest.split_at_mut(1);
     let x_bar = &mut xbar_slice[0];
     let x_r = &mut xr_slice[0];
@@ -423,13 +402,13 @@ where
         }
     }
 
-    insertion_sort_simplex(&mut state.vertices, &mut state.costs);
+    state.sort();
     Ok((state, None))
 }
 
 fn shrink_inner<P, V, F, Proj>(
     problem: &mut Problem<P>,
-    state: &mut BasicSimplexState<V, F>,
+    state: &mut SimplexProgress<V, F>,
     delta: F,
     project: &Proj,
 ) -> Result<(), P::Error>
@@ -457,22 +436,23 @@ where
     Ok(())
 }
 
-impl<P, V, F> Solver<P, BasicSimplexState<V, F>> for NelderMead<Unbounded, F>
+impl<P, V, F> Solver<P, SimplexProgress<V, F>> for NelderMead<V, F, Unbounded>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
+    V: Clone + VectorLen + ScaleInPlace<F> + ScaledAdd<F>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicSimplexState<V, F>,
-    ) -> Result<BasicSimplexState<V, F>, Self::Error> {
+        mut state: SimplexProgress<V, F>,
+    ) -> Result<SimplexProgress<V, F>, Self::Error> {
+        state.reset();
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
-        ensure_scratch(&mut state);
+        self.scratch = vec![state.vertices[0].clone(); 3];
         init_costs_and_sort(problem, &mut state)?;
         Ok(state)
     }
@@ -480,29 +460,36 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicSimplexState<V, F>,
-    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error>
+        state: SimplexProgress<V, F>,
+    ) -> Result<(SimplexProgress<V, F>, Option<TerminationReason>), Self::Error>
     {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
-        next_iter_inner(problem, state, p, &|_: &P, _: &mut V| {})
+        next_iter_inner(
+            problem,
+            state,
+            p,
+            &mut self.scratch,
+            &|_: &P, _: &mut V| {},
+        )
     }
 }
 
-impl<P, V, F> Solver<P, BasicSimplexState<V, F>> for NelderMead<Projected, F>
+impl<P, V, F> Solver<P, SimplexProgress<V, F>> for NelderMead<V, F, Projected>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
-    V: Clone + ScaleInPlace<F> + ScaledAdd<F> + ClampInPlace,
+    V: Clone + VectorLen + ScaleInPlace<F> + ScaledAdd<F> + ClampInPlace,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicSimplexState<V, F>,
-    ) -> Result<BasicSimplexState<V, F>, Self::Error> {
+        mut state: SimplexProgress<V, F>,
+    ) -> Result<SimplexProgress<V, F>, Self::Error> {
+        state.reset();
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
         // Project every initial vertex once so iter-0 termination
@@ -512,7 +499,7 @@ where
         for v in state.vertices.iter_mut() {
             v.clamp_in_place(problem.inner().lower(), problem.inner().upper());
         }
-        ensure_scratch(&mut state);
+        self.scratch = vec![state.vertices[0].clone(); 3];
         init_costs_and_sort(problem, &mut state)?;
         Ok(state)
     }
@@ -520,16 +507,22 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicSimplexState<V, F>,
-    ) -> Result<(BasicSimplexState<V, F>, Option<TerminationReason>), Self::Error>
+        state: SimplexProgress<V, F>,
+    ) -> Result<(SimplexProgress<V, F>, Option<TerminationReason>), Self::Error>
     {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
         // Borrow the problem only for projection. The borrow ends before
         // the counted cost call, so no bound-vector copies are needed.
-        next_iter_inner(problem, state, p, &|problem: &P, v: &mut V| {
-            v.clamp_in_place(problem.lower(), problem.upper())
-        })
+        next_iter_inner(
+            problem,
+            state,
+            p,
+            &mut self.scratch,
+            &|problem: &P, v: &mut V| {
+                v.clamp_in_place(problem.lower(), problem.upper())
+            },
+        )
     }
 }

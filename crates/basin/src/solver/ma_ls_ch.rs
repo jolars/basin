@@ -9,18 +9,21 @@
 //! [`MaLsChCma`](crate::solver::MaLsChCma) (CMA-ES chains, Molina et
 //! al. 2010) is the type alias `MaLsCh<V, CmaEs<V, M>>`;
 //! [`MaLsChSw`](crate::solver::MaLsChSw) (Solis-Wets chains,
-//! MA-SW-Chains, CEC 2010) is `MaLsCh<V, SolisWets>`.
+//! MA-SW-Chains, CEC 2010) is `MaLsCh<V, SolisWets<V>>`.
 
 use std::marker::PhantomData;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::inner::ResumableInner;
-use crate::core::math::{NormSquared, SampleUniformBox, ScaledAdd, VectorLen};
-use crate::core::problem::{CostFunction, EvalCounts, Problem};
+use crate::core::math::{
+    NormSquared, SampleUniformBox, Scalar, ScaledAdd, VectorLen,
+};
+use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::{CountsMirror, PopulationState, State};
+use crate::core::state::PopulationProgress;
 use crate::core::termination::TerminationReason;
+use rand::distr::uniform::SampleUniform;
 // Cycle-following in-place permutation: after the call,
 // `slice[i] = original[idx[i]]`.
 use crate::solver::cma_es::{apply_permutation, nan_last_cmp};
@@ -29,139 +32,19 @@ use crate::solver::ssga::{
     replace_worst_if_better,
 };
 
-/// State carried by [`MaLsCh`]: a steady-state population plus
-/// per-individual local-search chain data.
-///
-/// `C` is the chain-slot payload—`(LS, LS::State)` for a concrete
-/// chain operator `LS:` [`ResumableInner`]—kept as a bare type
-/// parameter so the struct definition carries no trait bounds (bounds
-/// live on the [`Solver`] impl). Each occupied slot is the saved
-/// `(solver, state)` pair the operator needs for a resumed run: the
-/// solver carries its derived constants and RNG stream, the state the
-/// full evolution state.
-///
-/// Use through the concrete aliases
-/// ([`MaLsChState`](crate::solver::MaLsChState) for the CMA-ES chains)
-/// or directly for a custom operator.
-pub struct MaLsChGenericState<V, C> {
-    pub(crate) candidates: Vec<V>,
-    pub(crate) costs: Vec<f64>,
-    pub(crate) chains: Vec<Option<C>>,
-    /// Cost of `candidates[i]` when its last LS segment *started*, or
-    /// `+∞` if never LS'd. `last_ls_cost − current_cost` is thus the
-    /// improvement the last LS application obtained, which the S_LS
-    /// eligibility rule compares against `δ_LS_min` (Molina 2010 §4.3
-    /// step 1).
-    pub(crate) last_ls_cost: Vec<f64>,
-    pub(crate) ls_application_count: Vec<u32>,
-    iter: u64,
-    cost_evals: u64,
-    best_cost: f64,
-    best_iter: u64,
-    best_cost_evals: u64,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct ChainHistory<LS, S, F> {
+    chains: Vec<Option<(LS, S)>>,
+    last_ls_cost: Vec<F>,
+    ls_application_count: Vec<u32>,
 }
-
-impl<V, C> MaLsChGenericState<V, C> {
-    /// Number of LS applications that have completed on
-    /// `candidates[i]` so far. Exposed for tests that need to verify
-    /// the chain machinery is firing (e.g. a single individual being
-    /// re-selected and resumed).
-    pub fn ls_application_count(&self, i: usize) -> u32 {
-        self.ls_application_count[i]
-    }
-}
-
-impl<V, C> State for MaLsChGenericState<V, C> {
-    type Param = V;
-    type Float = f64;
-
-    fn iter(&self) -> u64 {
-        self.iter
-    }
-    fn increment_iter(&mut self) {
-        self.iter += 1;
-    }
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-    fn param(&self) -> &V {
-        &self.candidates[0]
-    }
-    fn cost(&self) -> f64 {
-        self.costs[0]
-    }
-
-    fn best_param(&self) -> &V {
-        // costs[0] is monotone non-increasing across iters (sort
-        // invariant), so the best candidate IS candidates[0].
-        &self.candidates[0]
-    }
-    fn best_cost(&self) -> f64 {
-        self.best_cost
-    }
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
-    }
-    fn update_best(&mut self) {
-        let curr = self.costs[0];
-        if curr < self.best_cost {
-            self.best_cost = curr;
-            self.best_iter = self.iter;
-            self.best_cost_evals = self.cost_evals;
-        }
-    }
-    fn reset_best(&mut self) {
-        self.best_cost = f64::INFINITY;
-        self.best_iter = 0;
-        self.best_cost_evals = 0;
-    }
-}
-
-impl<V, C> CountsMirror for MaLsChGenericState<V, C> {
-    fn mirror(&mut self, delta: &EvalCounts) {
-        // Same derivative-free convention as `BasicPopulationState`:
-        // total work folds into `cost_evals` so a gradient-based inner
-        // (a future LM or L-BFGS chain operator) bumps the same counter
-        // as the SSGA phase's `cost` calls.
-        self.cost_evals = delta.total_work();
-    }
-}
-
-impl<V, C> PopulationState for MaLsChGenericState<V, C> {
-    fn candidates(&self) -> &[V] {
-        &self.candidates
-    }
-    fn costs(&self) -> &[f64] {
-        &self.costs
-    }
-}
-
-impl<V, C> MaLsChGenericState<V, C> {
-    /// Build an empty state for `MaLsCh::init` to fill. Use as the
-    /// initial state passed to
-    /// [`Executor`](crate::core::executor::Executor::new).
-    pub fn new() -> Self {
+impl<LS, S, F> Default for ChainHistory<LS, S, F> {
+    fn default() -> Self {
         Self {
-            candidates: Vec::new(),
-            costs: Vec::new(),
             chains: Vec::new(),
             last_ls_cost: Vec::new(),
             ls_application_count: Vec::new(),
-            iter: 0,
-            cost_evals: 0,
-            best_cost: f64::INFINITY,
-            best_iter: 0,
-            best_cost_evals: 0,
         }
-    }
-}
-
-impl<V, C> Default for MaLsChGenericState<V, C> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -183,7 +66,7 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 /// Shipped configurations: [`MaLsChCma`](crate::solver::MaLsChCma)
 /// (CMA-ES chains, `MaLsCh<V, CmaEs<V, M>>`) and
 /// [`MaLsChSw`](crate::solver::MaLsChSw) (Solis-Wets chains,
-/// `MaLsCh<V, SolisWets>`). Both specialized aliases have a `new(seed)`
+/// `MaLsCh<V, SolisWets<V>>`). Both specialized aliases have a `new(seed)`
 /// constructor; a hand-configured operator prototype goes through
 /// [`with_inner`](Self::with_inner).
 ///
@@ -211,16 +94,15 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///      RNG.
 ///    - Otherwise: take the saved pair out of the chain slot and
 ///      [`prepare_resume`](ResumableInner::prepare_resume) it.
-/// 5. **Drive the inner.** `run_loop_with_control(problem, state, &mut ls,
-///    &mut control)` uses a per-segment `max_cost_evals(ls_intensity)`
-///    budget and the settings supplied by [`ResumableInner::configure_segment`]. The
-///    operator's [`Solver::init`] is resume-idempotent (the
-///    [`ResumableInner`] contract), so resumed runs keep their
-///    evolution state across calls.
+/// 5. **Drive the inner.** Each segment uses a fresh
+///    `max_cost_evals(ls_intensity)` budget and the settings supplied by
+///    [`ResumableInner::configure_segment`]. New chains initialize once unless
+///    their seeder supplied an initialized pair. Stored chains skip
+///    [`Solver::init`] and retain their evolving model across segments.
 /// 6. **Aggregate, route failures, write back.** Per CONTRIBUTING.md
 ///    "Solver composition" rules:
-///    - Roll `inner_result.state.cost_evals()` into outer
-///      `cost_evals` (rule 1: eval aggregation).
+///    - The shared problem wrapper counts every inner call in its original
+///      category; progress preserves all six categories.
 ///    - Bubble `SolverFailed` (rule 3: failure routing); other
 ///      reasons (`MaxCostEvals`, operator tolerances) are clean stops.
 ///    - If `inner_result.best_cost() < costs[c_LS]`, write the improved
@@ -259,17 +141,32 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///
 /// # Contract
 ///
-/// - **Caller must:** implement [`CostFunction<Param = V, Output = f64>`]
+/// - **Caller must:** implement [`CostFunction<Param = V, Output = F>`]
 ///   *and* [`BoxConstraints<Param = V>`] on the problem. The SSGA needs
 ///   the box for initial sampling, BLX clipping, and BGA range; the
 ///   per-individual LS inner does not see the box (so the inner is
 ///   *unbounded*: chain individuals can drift outside the box and be
 ///   discarded only via the SSGA replace-worst feedback loop). This
 ///   matches Molina 2010 §4.4.6.
-/// - **Caller must:** hand in a [`MaLsChGenericState::new()`] (or the
-///   concrete alias's `new()`).
-/// - **Implementor must:** maintain the [`PopulationState`]
-///   sorted-by-cost invariant at the start and end of every iteration.
+/// - **Caller must:** supply [`PopulationProgress::empty`] for a sampled
+///   population, or [`PopulationProgress::from_population`] with the configured
+///   member count and dimension. Fresh initialization projects explicit seeds
+///   into the finite, ordered box before evaluation.
+/// - **Implementor must:** keep population records sorted and each solver-owned
+///   chain aligned with its member at every publication boundary.
+///
+/// # Ownership and continuation
+///
+/// Shared progress owns the population and historical objective incumbent.
+/// The solver owns the outer RNG, local-search prototype, retained solver/state
+/// pairs, and eligibility history. [`ls_application_count`](Self::ls_application_count)
+/// and [`chain`](Self::chain) inspect these per-member diagnostics without
+/// transferring ownership. A fresh run reevaluates its members, discards every
+/// chain, and restarts the configured RNG. Exact continuation retains solver,
+/// progress, and counts together and skips initialization. With `serde`, the
+/// complete chain store serializes when `LS`, `LS::State`, and `F` do; the outer
+/// progress additionally requires serializable parameters. Legacy MA-LS state
+/// payloads are incompatible with this layout.
 ///
 /// # Termination
 ///
@@ -286,11 +183,11 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///
 /// The outer SSGA needs only the vector tier
 /// ([`SampleUniformBox`] + [`ScaledAdd`] + [`NormSquared`] + indexing),
-/// so effective coverage is set by the chain operator: all four backends
-/// for both shipped configurations (CMA-ES additionally requires the
-/// matrix bound
-/// [`SymmetricEigen`](crate::core::math::SymmetricEigen), which every
-/// backend satisfies; Solis-Wets requires no matrix type at all).
+/// so effective coverage is set by the chain operator. Both shipped configurations
+/// support `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`,
+/// for `F = f32` or `f64`. CMA chains additionally need the matrix capabilities
+/// of [`CmaEs`](crate::CmaEs); Solis-Wets chains need no matrix type. Custom
+/// chain operators can narrow backend support.
 ///
 /// # References
 ///
@@ -298,26 +195,41 @@ impl<V, C> Default for MaLsChGenericState<V, C> {
 ///   (2010). "Memetic algorithms for continuous optimisation based on
 ///   local search chains." *Evolutionary Computation*, 18(1), 27-63.
 ///   <https://doi.org/10.1162/evco.2010.18.1.18102>
-pub struct MaLsCh<V, LS> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "LS: serde::Serialize, LS::State: serde::Serialize, F: serde::Serialize",
+        deserialize = "LS: serde::Deserialize<'de>, LS::State: serde::Deserialize<'de>, F: serde::Deserialize<'de>"
+    ))
+)]
+pub struct MaLsCh<V, LS, F: Scalar = f64>
+where
+    LS: ResumableInner<V, F>,
+{
     pop_size: usize,
-    blx_alpha: f64,
+    blx_alpha: F,
     nam_pool: usize,
-    mutation_prob: f64,
-    bga_range_fraction: f64,
+    mutation_prob: F,
+    bga_range_fraction: F,
     ls_intensity: u64,
-    ls_improvement_threshold: f64,
+    ls_improvement_threshold: F,
     nfrec: Option<u64>,
-    initial_scale_fallback: f64,
+    initial_scale_fallback: F,
     seed: u64,
     rng: Option<ChaCha8Rng>,
     /// LS-operator configuration prototype: hyperparameters are copied
     /// into each fresh chain via
     /// [`ResumableInner::seed_chain`]; its own RNG is never drawn.
     pub(crate) ls: LS,
+    history: ChainHistory<LS, LS::State, F>,
     _phantom: PhantomData<V>,
 }
 
-impl<V, LS> MaLsCh<V, LS> {
+impl<V, LS, F: Scalar> MaLsCh<V, LS, F>
+where
+    LS: ResumableInner<V, F>,
+{
     /// Build an `MaLsCh` around an explicit LS-operator prototype, with
     /// the Molina 2010 §4.4.7 defaults and a PRNG seeded from `seed`.
     ///
@@ -331,19 +243,36 @@ impl<V, LS> MaLsCh<V, LS> {
     pub fn with_inner(seed: u64, ls: LS) -> Self {
         Self {
             pop_size: 60,
-            blx_alpha: 0.5,
+            blx_alpha: F::from_f64(0.5).unwrap(),
             nam_pool: 4,
-            mutation_prob: 0.125,
-            bga_range_fraction: 0.1,
+            mutation_prob: F::from_f64(0.125).unwrap(),
+            bga_range_fraction: F::from_f64(0.1).unwrap(),
             ls_intensity: 300,
-            ls_improvement_threshold: 1e-8,
+            ls_improvement_threshold: F::from_f64(1e-8).unwrap(),
             nfrec: None,
-            initial_scale_fallback: 1.0,
+            initial_scale_fallback: F::one(),
             seed,
             rng: None,
             ls,
+            history: ChainHistory::default(),
             _phantom: PhantomData,
         }
+    }
+
+    /// Number of completed local-search applications for the current member at `i`.
+    /// Indices follow the published population order. Panics for an invalid index.
+    pub fn ls_application_count(&self, i: usize) -> u32 {
+        self.history.ls_application_count[i]
+    }
+
+    /// Borrow the retained solver and progress for a member's resumable chain.
+    /// `None` means no chain is retained at that index.
+    pub fn chain(&self, i: usize) -> Option<(&LS, &LS::State)> {
+        self.history
+            .chains
+            .get(i)?
+            .as_ref()
+            .map(|(solver, state)| (solver, state))
     }
 
     /// Override the SSGA population size (default `60`).
@@ -368,8 +297,12 @@ impl<V, LS> MaLsCh<V, LS> {
     /// # Panics
     ///
     /// Panics if `alpha < 0`.
-    pub fn with_blx_alpha(mut self, alpha: f64) -> Self {
-        assert!(alpha >= 0.0, "blx_alpha must be >= 0, got {}", alpha);
+    pub fn with_blx_alpha(mut self, alpha: F) -> Self {
+        assert!(
+            alpha >= F::zero(),
+            "blx_alpha must be >= 0, got {:?}",
+            alpha
+        );
         self.blx_alpha = alpha;
         self
     }
@@ -381,7 +314,7 @@ impl<V, LS> MaLsCh<V, LS> {
     /// Panics if `pool < 2` or `pool > pop_size`; the invariant is
     /// checked in both builders so it holds regardless of call order.
     pub fn with_nam_pool(mut self, pool: usize) -> Self {
-        assert!(pool >= 2, "nam_pool must be >= 2, got {}", pool);
+        assert!(pool >= 2, "nam_pool must be >= 2, got {:?}", pool);
         assert!(
             pool <= self.pop_size,
             "MaLsCh requires nam_pool <= pop_size (got nam_pool={}, pop_size={})",
@@ -397,10 +330,10 @@ impl<V, LS> MaLsCh<V, LS> {
     /// # Panics
     ///
     /// Panics if `p` is not in `[0, 1]`.
-    pub fn with_mutation_prob(mut self, p: f64) -> Self {
+    pub fn with_mutation_prob(mut self, p: F) -> Self {
         assert!(
-            (0.0..=1.0).contains(&p),
-            "mutation_prob must be in [0, 1], got {}",
+            (F::zero()..=F::one()).contains(&p),
+            "mutation_prob must be in [0, 1], got {:?}",
             p
         );
         self.mutation_prob = p;
@@ -412,8 +345,8 @@ impl<V, LS> MaLsCh<V, LS> {
     /// # Panics
     ///
     /// Panics if `f <= 0`.
-    pub fn with_bga_range_fraction(mut self, f: f64) -> Self {
-        assert!(f > 0.0, "bga_range_fraction must be > 0, got {}", f);
+    pub fn with_bga_range_fraction(mut self, f: F) -> Self {
+        assert!(f > F::zero(), "bga_range_fraction must be > 0, got {:?}", f);
         self.bga_range_fraction = f;
         self
     }
@@ -428,7 +361,7 @@ impl<V, LS> MaLsCh<V, LS> {
     ///
     /// Panics if `istr == 0`.
     pub fn with_ls_intensity(mut self, istr: u64) -> Self {
-        assert!(istr >= 1, "ls_intensity must be >= 1, got {}", istr);
+        assert!(istr >= 1, "ls_intensity must be >= 1, got {:?}", istr);
         self.ls_intensity = istr;
         self
     }
@@ -440,10 +373,10 @@ impl<V, LS> MaLsCh<V, LS> {
     /// # Panics
     ///
     /// Panics if `delta < 0`.
-    pub fn with_ls_improvement_threshold(mut self, delta: f64) -> Self {
+    pub fn with_ls_improvement_threshold(mut self, delta: F) -> Self {
         assert!(
-            delta >= 0.0,
-            "ls_improvement_threshold must be >= 0, got {}",
+            delta >= F::zero(),
+            "ls_improvement_threshold must be >= 0, got {:?}",
             delta
         );
         self.ls_improvement_threshold = delta;
@@ -459,7 +392,7 @@ impl<V, LS> MaLsCh<V, LS> {
     ///
     /// Panics if `n == 0`.
     pub fn with_nfrec(mut self, n: u64) -> Self {
-        assert!(n >= 1, "nfrec must be >= 1, got {}", n);
+        assert!(n >= 1, "nfrec must be >= 1, got {:?}", n);
         self.nfrec = Some(n);
         self
     }
@@ -473,10 +406,10 @@ impl<V, LS> MaLsCh<V, LS> {
     /// # Panics
     ///
     /// Panics if `scale <= 0`.
-    pub fn with_initial_scale_fallback(mut self, scale: f64) -> Self {
+    pub fn with_initial_scale_fallback(mut self, scale: F) -> Self {
         assert!(
-            scale > 0.0,
-            "initial_scale_fallback must be > 0, got {}",
+            scale > F::zero(),
+            "initial_scale_fallback must be > 0, got {:?}",
             scale
         );
         self.initial_scale_fallback = scale;
@@ -487,76 +420,69 @@ impl<V, LS> MaLsCh<V, LS> {
 /// Compute `0.5 · min_{j ≠ i} ‖candidates[i] − candidates[j]‖₂`, the
 /// per-individual scale-init formula from Molina 2010 §4.4.6. Returns
 /// `None` if there's no other individual (singleton population).
-fn sigma_init_for<V>(candidates: &[V], i: usize) -> Option<f64>
+fn sigma_init_for<V, F: Scalar>(candidates: &[V], i: usize) -> Option<F>
 where
-    V: Clone + ScaledAdd<f64> + NormSquared,
+    V: Clone + ScaledAdd<F> + NormSquared<F>,
 {
     if candidates.len() < 2 {
         return None;
     }
-    let mut best_sq = f64::INFINITY;
+    let mut best_sq = F::infinity();
     for (j, x) in candidates.iter().enumerate() {
         if j == i {
             continue;
         }
         let mut diff = candidates[i].clone();
-        diff.scaled_add(-1.0, x);
+        diff.scaled_add(-F::one(), x);
         let d_sq = diff.norm_squared();
         if d_sq < best_sq {
             best_sq = d_sq;
         }
     }
-    Some(0.5 * best_sq.sqrt())
+    Some(F::from_f64(0.5).unwrap() * best_sq.sqrt())
 }
 
-impl<P, V, LS>
-    Solver<P, MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>>
-    for MaLsCh<V, LS>
+impl<P, V, LS, F> Solver<P, PopulationProgress<V, F>> for MaLsCh<V, LS, F>
 where
-    P: CostFunction<Param = V, Output = f64> + BoxConstraints<Param = V>,
+    F: Scalar + SampleUniform,
+    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
     V: VectorLen
         + Clone
         + SampleUniformBox
-        + ScaledAdd<f64>
-        + NormSquared
-        + std::ops::Index<usize, Output = f64>
-        + std::ops::IndexMut<usize, Output = f64>,
-    LS: ResumableInner<V>
-        + Solver<P, <LS as ResumableInner<V>>::State, Error = P::Error>,
+        + ScaledAdd<F>
+        + NormSquared<F>
+        + std::ops::Index<usize, Output = F>
+        + std::ops::IndexMut<usize, Output = F>,
+    LS: ResumableInner<V, F>
+        + Solver<P, <LS as ResumableInner<V, F>>::State, Error = P::Error>,
 {
     type Error = P::Error;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MaLsChGenericState<
-            V,
-            (LS, <LS as ResumableInner<V>>::State),
-        >,
-    ) -> Result<
-        MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>,
-        Self::Error,
-    > {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
 
-        // Sample the initial population uniformly in the box.
-        state.candidates.clear();
-        state.costs.clear();
-        state.chains.clear();
-        state.last_ls_cost.clear();
-        state.ls_application_count.clear();
-        for _ in 0..self.pop_size {
-            let x = V::sample_uniform_box(&lo, &hi, &mut rng);
-            let c = problem.cost(&x)?;
-            state.candidates.push(x);
-            state.costs.push(c);
-            state.chains.push(None);
-            state.last_ls_cost.push(f64::INFINITY);
-            state.ls_application_count.push(0);
+        state.reset();
+        self.history = ChainHistory::default();
+        super::population::prepare_population(
+            &mut state.candidates,
+            &lo,
+            &hi,
+            self.pop_size,
+            &mut rng,
+        );
+        for x in &state.candidates {
+            state.costs.push(problem.cost(x)?);
+            self.history.chains.push(None);
+            self.history.last_ls_cost.push(F::infinity());
+            self.history.ls_application_count.push(0);
         }
-        sort_parallel_arrays(&mut state);
+        sort_parallel_arrays(&mut state, &mut self.history);
 
         self.rng = Some(rng);
         Ok(state)
@@ -565,17 +491,12 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: MaLsChGenericState<
-            V,
-            (LS, <LS as ResumableInner<V>>::State),
-        >,
+        mut state: PopulationProgress<V, F>,
     ) -> Result<
-        (
-            MaLsChGenericState<V, (LS, <LS as ResumableInner<V>>::State)>,
-            Option<TerminationReason>,
-        ),
+        (PopulationProgress<V, F>, Option<TerminationReason>),
         Self::Error,
     > {
+        let history = &mut self.history;
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -605,7 +526,7 @@ where
                 &mut child,
                 &lo,
                 &hi,
-                self.mutation_prob,
+                self.mutation_prob.to_f64().unwrap(),
                 self.bga_range_fraction,
                 rng,
             );
@@ -619,12 +540,12 @@ where
                 // The displaced individual's chain (if any) is orphaned:
                 // the new genome is a fresh point that should start its
                 // own chain on first LS pick.
-                state.chains[replaced_idx] = None;
-                state.last_ls_cost[replaced_idx] = f64::INFINITY;
-                state.ls_application_count[replaced_idx] = 0;
+                history.chains[replaced_idx] = None;
+                history.last_ls_cost[replaced_idx] = F::infinity();
+                history.ls_application_count[replaced_idx] = 0;
             }
         }
-        sort_parallel_arrays(&mut state);
+        sort_parallel_arrays(&mut state, history);
 
         // -- Phase 2: pick the LS target c_LS. --
         // S_LS membership (Molina §4.3 step 1): never LS'd, or the last
@@ -636,10 +557,10 @@ where
         // drops the chain, so `chains[i].is_none()` can't stand in for
         // "never LS'd" here.
         let mut c_ls: Option<usize> = None;
-        let mut best_cost_in_s_ls = f64::INFINITY;
+        let mut best_cost_in_s_ls = F::infinity();
         for i in 0..state.candidates.len() {
-            let eligible = state.ls_application_count[i] == 0
-                || (state.last_ls_cost[i] - state.costs[i]
+            let eligible = history.ls_application_count[i] == 0
+                || (history.last_ls_cost[i] - state.costs[i]
                     >= self.ls_improvement_threshold);
             if eligible && state.costs[i] < best_cost_in_s_ls {
                 best_cost_in_s_ls = state.costs[i];
@@ -651,36 +572,39 @@ where
         let c_ls = c_ls.unwrap_or(0);
 
         // -- Phase 3: resume or construct the inner operator. --
-        let (mut ls, inner_state) = match state.chains[c_ls].take() {
-            Some((ls, mut s)) => {
-                // Local budget reset. `run_loop_with_control` already snapshots the
-                // wrapper at entry so the inner state's `cost_evals`
-                // measures per-segment work, but the iteration counter
-                // is the inner's responsibility and the `MaxCostEvals`
-                // criterion in Phase 4 reads `state.cost_evals()`,
-                // which is the wrapper-mirrored per-run value.
-                // `prepare_resume` resets `iter` so the chain restarts
-                // at iter 0; the `run_loop_with_control` baseline takes care of the
-                // eval counter.
-                ls.prepare_resume(&mut s);
-                (ls, s)
-            }
-            None => {
-                // Non-finite scales happen when every pairwise distance
-                // overflows (astronomically wide boxes); fall back the
-                // same way as for a duplicated point.
-                let scale = sigma_init_for(&state.candidates, c_ls)
-                    .filter(|s| s.is_finite() && *s > 0.0)
-                    .unwrap_or(self.initial_scale_fallback);
-                let derived_seed = rng.random::<u64>();
-                self.ls.seed_chain(
-                    &state.candidates[c_ls],
-                    state.costs[c_ls],
-                    scale,
-                    derived_seed,
-                )
-            }
-        };
+        let (mut ls, inner_state, initialized) =
+            match history.chains[c_ls].take() {
+                Some((ls, mut s)) => {
+                    // Local budget reset. `run_loop_with_control` already snapshots the
+                    // wrapper at entry so the inner state's `cost_evals`
+                    // measures per-segment work, but the iteration counter
+                    // is the inner's responsibility and the `MaxCostEvals`
+                    // criterion in Phase 4 reads `state.cost_evals()`,
+                    // which is the wrapper-mirrored per-run value.
+                    // `prepare_resume` resets `iter` so the chain restarts
+                    // at iter 0; the `run_loop_with_control` baseline takes care of the
+                    // eval counter.
+                    ls.prepare_resume(&mut s);
+                    (ls, s, true)
+                }
+                None => {
+                    // Non-finite scales happen when every pairwise distance
+                    // overflows (astronomically wide boxes); fall back the
+                    // same way as for a duplicated point.
+                    let scale = sigma_init_for(&state.candidates, c_ls)
+                        .filter(|s| s.is_finite() && *s > F::zero())
+                        .unwrap_or(self.initial_scale_fallback);
+                    let derived_seed = rng.random::<u64>();
+                    let (ls, state) = self.ls.seed_chain(
+                        &state.candidates[c_ls],
+                        state.costs[c_ls],
+                        scale,
+                        derived_seed,
+                    );
+                    let initialized = ls.seeded_chain_is_initialized();
+                    (ls, state, initialized)
+                }
+            };
 
         // -- Phase 4: drive the inner. --
         // Build per-call criteria so `MaxCostEvals` doesn't leak state
@@ -695,17 +619,17 @@ where
             .max_iter(u64::MAX)
             .max_cost_evals(self.ls_intensity);
         ls.configure_segment(&inner_state, &mut control);
-        let inner_result = crate::run_loop_with_control(
+        let inner_result = crate::core::executor::run_segment_with_control(
             problem,
             inner_state,
             &mut ls,
             &mut control,
+            initialized,
         )?;
 
         // -- Phase 5: route failures, write back. --
         // Same-problem composition: inner evals already flowed through the
-        // outer wrapper, so the `MaLsChGenericState` mirror sees them via
-        // `delta.total_work()`. `SolverFailed` is the only failure
+        // outer wrapper, so shared progress preserves their raw categories. `SolverFailed` is the only failure
         // reason; other reasons (`MaxCostEvals` from our budget, the
         // operator's own tolerances) are clean stops the outer consumes.
         if inner_result.reason.is_failure() {
@@ -716,25 +640,27 @@ where
         // Adopt the chain's best *evaluated* point (xbest), not
         // whatever `param()`/`cost()` now report (CMA-ES reports the
         // distribution mean); the memetic algorithm wants the best
-        // feasible refinement found.
+        // refinement found. The configured chain may search outside the box.
         let new_cost = inner_result.best_cost();
-        let new_param = inner_result.best_param().clone();
         // Conditional write-back: only adopt the LS result if it
         // improves on the current cost. Strict Molina §4.3 step 10 is
         // unconditional, but a conditional update is safer (CMA-ES is
         // genuinely non-monotone over a chain segment) and matches the
         // Rmalschains R package's behavior.
         let pre_segment_cost = state.costs[c_ls];
-        if new_cost < state.costs[c_ls] {
-            state.candidates[c_ls] = new_param;
+        if !new_cost.is_nan()
+            && new_cost < F::infinity()
+            && (state.costs[c_ls].is_nan() || new_cost < state.costs[c_ls])
+        {
+            state.candidates[c_ls] = inner_result.best_param().clone();
             state.costs[c_ls] = new_cost;
         }
         // Record the cost this segment started from: eligibility (Phase
         // 2) reads `last_ls_cost - costs`, the improvement obtained by
         // the previous LS application (Molina §4.3 step 1b).
-        state.last_ls_cost[c_ls] = pre_segment_cost;
-        state.ls_application_count[c_ls] =
-            state.ls_application_count[c_ls].saturating_add(1);
+        history.last_ls_cost[c_ls] = pre_segment_cost;
+        history.ls_application_count[c_ls] =
+            history.ls_application_count[c_ls].saturating_add(1);
         // Keep the chain only when the segment cleared δ_LS_min.
         // Rmalschains removes exhausted chains (`m_memory->remove`), so
         // a future pick reseeds at a fresh scale instead of resuming a
@@ -742,33 +668,32 @@ where
         // making no progress.
         if pre_segment_cost - state.costs[c_ls] >= self.ls_improvement_threshold
         {
-            state.chains[c_ls] = Some((ls, inner_result.state));
+            history.chains[c_ls] = Some((ls, inner_result.state));
         }
 
         // -- Phase 6: resort all parallel arrays jointly. --
-        sort_parallel_arrays(&mut state);
+        sort_parallel_arrays(&mut state, history);
 
         Ok((state, None))
     }
 }
 
-/// Joint ascending-by-cost sort over the five parallel arrays in
-/// [`MaLsChGenericState`]. The chain pointer travels with its individual
-/// through the permutation; that's why the chain belongs in the
-/// state, not in a side index.
-fn sort_parallel_arrays<V, C>(state: &mut MaLsChGenericState<V, C>) {
+/// Keep each chain and its eligibility history aligned with its published member.
+fn sort_parallel_arrays<V, LS, S, F: Scalar>(
+    state: &mut PopulationProgress<V, F>,
+    history: &mut ChainHistory<LS, S, F>,
+) {
     let n = state.candidates.len();
     debug_assert_eq!(n, state.costs.len());
-    debug_assert_eq!(n, state.chains.len());
-    debug_assert_eq!(n, state.last_ls_cost.len());
-    debug_assert_eq!(n, state.ls_application_count.len());
-
+    debug_assert_eq!(n, history.chains.len());
+    debug_assert_eq!(n, history.last_ls_cost.len());
+    debug_assert_eq!(n, history.ls_application_count.len());
     let mut idx: Vec<usize> = (0..n).collect();
     idx.sort_by(|&i, &j| nan_last_cmp(&state.costs[i], &state.costs[j]));
-
-    apply_permutation::<V>(&mut state.candidates, &idx);
-    apply_permutation::<f64>(&mut state.costs, &idx);
-    apply_permutation::<Option<C>>(&mut state.chains, &idx);
-    apply_permutation::<f64>(&mut state.last_ls_cost, &idx);
-    apply_permutation::<u32>(&mut state.ls_application_count, &idx);
+    apply_permutation(&mut state.candidates, &idx);
+    apply_permutation(&mut state.costs, &idx);
+    apply_permutation(&mut history.chains, &idx);
+    apply_permutation(&mut history.last_ls_cost, &idx);
+    apply_permutation(&mut history.ls_application_count, &idx);
+    state.select_best_member();
 }

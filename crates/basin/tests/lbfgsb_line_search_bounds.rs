@@ -1,8 +1,8 @@
 use std::{cell::RefCell, convert::Infallible, rc::Rc};
 
 use basin::{
-    Backtracking, BoxConstraints, Constant, CostFunction, Executor, Gradient,
-    GradientState, HagerZhang, LbfgsState, Lbfgsb, LineSearch,
+    Backtracking, BoxConstraints, Constant, CostFunction, Executor,
+    FirstOrderState, Gradient, GradientState, HagerZhang, Lbfgsb, LineSearch,
     LineSearchBounds, LineSearchOutcome, LineSearchResult, MoreThuente,
     Problem, State, TerminationReason, Wolfe,
 };
@@ -95,8 +95,9 @@ fn distant_optima_keep_every_evaluation_and_cached_value_feasible() {
             let result = Executor::new(
                 problem.clone(),
                 Lbfgsb::default(),
-                LbfgsState::new(vec![0.5; 2], 10),
+                FirstOrderState::new(vec![0.5; 2]),
             )
+            .require_evaluated_state()
             .max_iter(100)
             .run()
             .unwrap();
@@ -125,7 +126,7 @@ fn one_sided_bounds_use_the_normalized_initial_step() {
     Executor::new(
         problem,
         Lbfgsb::default(),
-        LbfgsState::new(vec![0.0; 2], 10),
+        FirstOrderState::new(vec![0.0; 2]),
     )
     .max_iter(1)
     .run()
@@ -153,8 +154,9 @@ fn rounded_endpoints_are_feasible_before_evaluation() {
         let result = Executor::new(
             problem.clone(),
             Lbfgsb::default(),
-            LbfgsState::new(vec![-sign * 9.269342184833151], 10),
+            FirstOrderState::new(vec![-sign * 9.269342184833151]),
         )
+        .require_evaluated_state()
         .max_iter(100)
         .run()
         .unwrap();
@@ -181,8 +183,9 @@ fn one_sided_and_fixed_bounds_keep_evaluations_feasible() {
         let result = Executor::new(
             problem,
             Lbfgsb::default(),
-            LbfgsState::new(vec![0.5; 2], 10),
+            FirstOrderState::new(vec![0.5; 2]),
         )
+        .require_evaluated_state()
         .max_iter(100)
         .run()
         .unwrap();
@@ -199,8 +202,9 @@ fn check_builtin<S: LineSearch<Quadratic, Vec<f64>, Error = Infallible>>(
     let result = Executor::new(
         problem.clone(),
         Lbfgsb::with_line_search(search),
-        LbfgsState::new(vec![0.5; 2], 10),
+        FirstOrderState::new(vec![0.5; 2]),
     )
+    .require_evaluated_state()
     .max_iter(100)
     .run()
     .unwrap();
@@ -248,8 +252,9 @@ fn unsupported_custom_search_fails_without_evaluating_or_changing_state() {
     let result = Executor::new(
         problem,
         Lbfgsb::with_line_search(LegacySearch),
-        LbfgsState::new(vec![0.5; 2], 10),
+        FirstOrderState::new(vec![0.5; 2]),
     )
+    .require_evaluated_state()
     .max_iter(100)
     .run()
     .unwrap();
@@ -306,8 +311,9 @@ fn invalid_selected_steps_and_cached_points_leave_a_feasible_best() {
         let result = Executor::new(
             problem.clone(),
             Lbfgsb::with_line_search(InvalidSearch(search_result)),
-            LbfgsState::new(vec![0.5; 2], 10),
+            FirstOrderState::new(vec![0.5; 2]),
         )
+        .require_evaluated_state()
         .max_iter(100)
         .run()
         .unwrap();
@@ -397,18 +403,17 @@ macro_rules! backend_regression {
                     lower: ($make)(vec![0.0; 2]),
                     upper: ($make)(vec![1.0; 2]),
                 };
-                let solver = basin::Lbfgs::<
-                    basin::solver::lbfgs::Bounded,
-                    _,
-                    Float,
-                >::with_line_search(
-                    MoreThuente::<Float>::new()
-                );
+                let solver =
+                    basin::Lbfgs::<_, Float>::with_line_search(MoreThuente::<
+                        Float,
+                    >::new(
+                    ));
                 let result = Executor::new(
                     problem,
                     solver,
-                    LbfgsState::new(($make)(vec![0.5; 2]), 10),
+                    FirstOrderState::new(($make)(vec![0.5; 2])),
                 )
+                .require_evaluated_state()
                 .max_iter(100)
                 .run()
                 .unwrap();

@@ -90,12 +90,12 @@ numerical work against analytic cases and reference implementations.
   composition. All dense backends support `f32` and `f64`; mutation formulas
   and solutions are checked against [SciPy 1.16.2 differential
   evolution](https://docs.scipy.org/doc/scipy-1.16.2/reference/generated/scipy.optimize.differential_evolution.html).
-- [ ] **Add differential-evolution initialization policies.** Start with
-  supplied populations and Latin hypercube sampling. Make initialization an
-  explicit opt-in: `De` currently clears even a supplied population on a
-  fresh run, so silently changing that behavior would break Basin 1.x.
-  Then assess Sobol or Halton sampling, including sequence quality,
-  population-size requirements, and dependency costs.
+- [ ] **Add differential-evolution sampling policies.** Basin 2.0 now honors
+  explicit members supplied through `PopulationProgress::from_population`.
+  Add Latin hypercube sampling, then assess Sobol or Halton sampling,
+  including sequence quality, population-size requirements, and dependency
+  costs. Backports need explicit opt-ins: Basin 1.x clears supplied members
+  on fresh initialization, and its default behavior must remain compatible.
 - [ ] **Add nonlinear constraints to differential evolution.** Reuse the
   problem-side constraint interfaces and assess Lampinen's feasibility-based
   selection. This needs population feasibility records and selection-aware
@@ -330,13 +330,13 @@ desired backend features.
   document [checkpoint migration requirements](MIGRATING.md#checkpoint-files)
   for users upgrading from 1.x.
 
-- [ ] **Migrate existing solvers to shared progress states.** Build on the
+- [x] **Migrate existing solvers to shared progress states.** Build on the
   validated [prototype](#state-api-prototype) and [1.x
   additions](#state-api-additions-for-basin-1x). Replace legacy public
   solver/state types and apply uniform evaluation categories and the
   accepted initialization and continuation contracts. Document replacement
   constructors, public types, trait bounds, stopping semantics, and
-  serialized-format compatibility.
+  serialized-format compatibility. See the [migration guide](MIGRATING.md#shared-progress-states).
 
 - [ ] **Simplify and strengthen the full-form constraint API (tenet 4).**
   Consider having COBYLA consume `NonlinearConstraints` directly, removing
@@ -389,10 +389,10 @@ desired backend features.
 ## Deferred design
 
 - [ ] **Define shared constraint-violation reporting (tenet 3).**
-  `ConstrainedMadsState` reports the sum of squared positive violations, and
-  `SlsqpState` reports the sum of absolute equality residuals and positive
-  inequality violations. COBYLA retains its maximum positive violation
-  internally. Define a shared state capability with explicit semantics for
+  Constrained MADS publishes the sum of squared positive violations in
+  `SelectedState`, and SLSQP publishes the sum of absolute equality residuals
+  and positive inequality violations in `SelectedFirstOrderState`. COBYLA
+  publishes its maximum positive violation in `SelectedState`. Define a shared state capability with explicit semantics for
   the measure, scaling, associated iterate, and availability before
   initialization. Preserve each solver's numerical convergence semantics:
   SLSQP already combines feasibility with other convergence tests. Do not

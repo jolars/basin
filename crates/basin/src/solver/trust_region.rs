@@ -49,12 +49,13 @@ use std::marker::PhantomData;
 use crate::core::inner::InitialState;
 use crate::core::math::{
     Dot, MatVec, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+    VectorLen,
 };
 use crate::core::problem::{
     CostFunction, Gradient, Hessian, HessianProduct, Problem,
 };
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::TerminationReason;
 
 /// The outcome of an (approximate) trust-region subproblem solve: the step
@@ -165,6 +166,7 @@ where
 /// as a baseline, and as [`Dogleg`]'s fallback when the Hessian is not
 /// positive definite.
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CauchyPoint;
 
 impl<V, M, F> Subproblem<V, M, F> for CauchyPoint
@@ -285,6 +287,14 @@ where
 /// are checked before each iteration and can establish approximate
 /// convergence before this safeguard is reached.
 ///
+/// Progress uses [`FirstOrderState<V, F>`]. Fresh initialization clears
+/// counters and incumbents, restores the configured radius, and reevaluates
+/// the seed. Exact checkpoints preserve the current radius and rejection
+/// history. Retain the solver with [`crate::Executor::run_with_solver`] and
+/// read [`Self::radius`] for the final radius. Hessian and Hessian-product
+/// evaluations retain their own categories in `state.counts()`; they do not
+/// increment `state.gradient_evals()`.
+///
 /// # Matrix-free mode
 ///
 /// [`matrix_free`](Self::matrix_free) /
@@ -308,7 +318,7 @@ where
 ///
 /// # Backends
 ///
-/// The solver itself needs only `Clone`, [`ScaledAdd`], and
+/// The solver itself needs `Clone`, [`VectorLen`], [`ScaledAdd`], and
 /// [`NormSquared`] on the parameter vector, plus a [`Hessian`] impl in the
 /// default [`ExactHessian`] mode. There, the effective backend coverage is
 /// set by the chosen subproblem:
@@ -320,7 +330,8 @@ where
 /// [`MoreSorensen`] needs that Cholesky solve plus
 /// [`SymmetricEigen`](crate::core::math::SymmetricEigen). Those operations are
 /// available on all four dense backends. In [`MatrixFree`] mode no matrix type
-/// is bound at all, so every vector backend works. All shipped strategies are
+/// is bound at all, so every vector backend works. Both scalar types, `f32`
+/// and `f64`, are supported on all four dense backends. All shipped strategies are
 /// wasm-clean in their pure-Rust configurations; the optional nalgebra LAPACK
 /// acceleration remains non-WASM as documented by that feature.
 ///
@@ -386,7 +397,7 @@ where
 ///     }
 /// }
 ///
-/// let result = Executor::new(Rosenbrock, (TrustRegion::new()).with_absolute_gradient_tolerance(1e-8), basin::BasicState::new(DVector::from_vec(vec![-1.2, 1.0])))
+/// let result = Executor::new(Rosenbrock, (TrustRegion::new()).with_absolute_gradient_tolerance(1e-8), basin::FirstOrderState::new(DVector::from_vec(vec![-1.2, 1.0])))
 ///     .max_iter(100)
 ///
 ///     .run()
@@ -402,7 +413,7 @@ where
 ///
 /// ```
 /// use basin::{
-///     BasicState, CostFunction, Executor, Gradient, HessianProduct,
+///     FirstOrderState, CostFunction, Executor, Gradient, HessianProduct,
 ///     TrustRegion,
 /// };
 ///
@@ -434,14 +445,15 @@ where
 /// let result = Executor::new(
 ///     IllQuadratic,
 ///     TrustRegion::matrix_free().with_absolute_gradient_tolerance(1e-10),
-///     BasicState::new(vec![5.0, 1.0]),
+///     FirstOrderState::new(vec![5.0, 1.0]),
 /// )
 /// .max_iter(100)
 /// .run()
 /// .unwrap();
 /// assert!(result.cost() < 1e-16);
 /// ```
-pub struct TrustRegion<Sub = Steihaug, F = f64, Mode = ExactHessian> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TrustRegion<Sub = Steihaug, F: Scalar = f64, Mode = ExactHessian> {
     subproblem: Sub,
     /// Current trust radius `Δ`, mutated across iterations. Reset to
     /// `initial_radius` by [`Solver::init`].
@@ -459,6 +471,7 @@ pub struct TrustRegion<Sub = Steihaug, F = f64, Mode = ExactHessian> {
 /// [`Hessian`] impl and reused across inner
 /// radius reductions.
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExactHessian;
 
 /// Marker for [`TrustRegion`]'s matrix-free mode: `B` is never formed; the
@@ -466,6 +479,7 @@ pub struct ExactHessian;
 /// [`HessianProduct`] impl. See
 /// [`TrustRegion::matrix_free`].
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MatrixFree;
 
 impl Default for TrustRegion<Steihaug> {
@@ -532,6 +546,11 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F> {
 }
 
 impl<Sub, F: Scalar, Mode> TrustRegion<Sub, F, Mode> {
+    /// Current trust radius, retained by solver-aware results and checkpoints.
+    pub fn radius(&self) -> F {
+        self.radius
+    }
+
     /// Initial trust radius `Δ₀` (default `1.0`). Must be positive. A good
     /// `Δ₀` is the order of magnitude of the expected step to the minimum.
     pub fn with_radius(mut self, radius: F) -> Self {
@@ -578,9 +597,9 @@ where
     F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V, F>;
+    type State = FirstOrderState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        BasicState::new(x.clone())
+        FirstOrderState::new(x.clone())
     }
 }
 
@@ -592,17 +611,20 @@ fn tr_init<P, V, F>(
     radius: &mut F,
     initial_radius: F,
     problem: &mut Problem<P>,
-    mut state: BasicState<V, F>,
-) -> Result<BasicState<V, F>, P::Error>
+    mut state: FirstOrderState<V, F>,
+) -> Result<FirstOrderState<V, F>, P::Error>
 where
     F: Scalar,
+    V: Clone + VectorLen,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
 {
+    state.reset();
     // A reused solver instance must restart from the configured radius.
     *radius = initial_radius;
-    let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-    state.cost = Some(cost);
-    state.gradient = Some(grad);
+    let (cost, grad) = problem.cost_and_gradient(state.param())?;
+    state
+        .set_evaluation(cost, grad)
+        .expect("gradient dimension differs from parameter");
     Ok(state)
 }
 
@@ -619,38 +641,36 @@ fn tr_next_iter<P, V, F>(
     eta: F,
     max_inner: u32,
     problem: &mut Problem<P>,
-    mut state: BasicState<V, F>,
+    mut state: FirstOrderState<V, F>,
     mut attempt: impl FnMut(
         &mut Problem<P>,
         &V,
         &V,
         F,
     ) -> Result<Step<V, F>, P::Error>,
-) -> Result<(BasicState<V, F>, Option<TerminationReason>, bool), P::Error>
+) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>, bool), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
-    V: Clone + ScaledAdd<F> + NormSquared<F>,
+    V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
 {
-    let g = state
-        .gradient
-        .take()
-        .expect("gradient not set: Solver::init must run before next_iter");
-    let cost_old = state
-        .cost
-        .expect("cost not set: Solver::init must run before next_iter");
+    let (cost_old, g) = state
+        .take_evaluation()
+        .expect("trust region requires initialized progress");
 
     let quarter = F::from_f64(0.25).unwrap();
     let three_quarters = F::from_f64(0.75).unwrap();
     let two = F::from_f64(2.0).unwrap();
 
     for _ in 0..max_inner {
-        let step = attempt(problem, &state.param, &g, *radius)?;
+        let step = attempt(problem, state.param(), &g, *radius)?;
 
         // Non-finite model data or subproblem arithmetic makes the step
         // untrustworthy, regardless of the gradient norm.
         if !step.predicted_reduction.is_finite() {
-            state.gradient = Some(g);
+            state
+                .set_evaluation(cost_old, g)
+                .expect("gradient dimension differs from parameter");
             return Ok((state, Some(TerminationReason::SolverFailed), false));
         }
 
@@ -664,11 +684,13 @@ where
             } else {
                 TerminationReason::NumericalNoProgress
             };
-            state.gradient = Some(g);
+            state
+                .set_evaluation(cost_old, g)
+                .expect("gradient dimension differs from parameter");
             return Ok((state, Some(reason), false));
         }
 
-        let mut trial = state.param.clone();
+        let mut trial = state.param().clone();
         trial.scaled_add(F::one(), &step.d);
         let cost_trial = problem.cost(&trial)?;
 
@@ -701,10 +723,10 @@ where
             // Accept: move to the trial point and refresh the gradient
             // there (second-order information is recomputed by the next
             // iteration).
-            state.param = trial;
-            state.cost = Some(cost_trial);
-            let g_new = problem.gradient(&state.param)?;
-            state.gradient = Some(g_new);
+            let g_new = problem.gradient(&trial)?;
+            state
+                .replace(trial, cost_trial, g_new)
+                .expect("gradient dimension differs from parameter");
             return Ok((state, None, true));
         }
         // Reject: radius has shrunk; retry at the same iterate.
@@ -714,18 +736,20 @@ where
     // shrunken radius and the current iterate; restore the gradient so
     // the state stays consistent and let the next outer iteration retry
     // (or a termination criterion fire).
-    state.gradient = Some(g);
+    state
+        .set_evaluation(cost_old, g)
+        .expect("gradient dimension differs from parameter");
     Ok((state, None, false))
 }
 
-impl<P, Sub, V, M, F> Solver<P, BasicState<V, F>>
+impl<P, Sub, V, M, F> Solver<P, FirstOrderState<V, F>>
     for TrustRegion<Sub, F, ExactHessian>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + Hessian<Hessian = M>,
-    V: Clone + ScaledAdd<F> + NormSquared<F>,
+    V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
     Sub: Subproblem<V, M, F>,
 {
     type Error = P::Error;
@@ -737,8 +761,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
         self.rejected_step = false;
         tr_init(&mut self.radius, self.initial_radius, problem, state)
     }
@@ -746,13 +770,13 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        state: FirstOrderState<V, F>,
+    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
     {
         // One Hessian per outer iteration, reused across all inner radius
         // reductions at zero extra derivative evaluations (the gradient is
         // likewise fixed while x is).
-        let b = problem.hessian(&state.param)?;
+        let b = problem.hessian(state.param())?;
         let subproblem = &self.subproblem;
         let (state, reason, accepted) = tr_next_iter(
             &mut self.radius,
@@ -768,14 +792,14 @@ where
     }
 }
 
-impl<P, Sub, V, F> Solver<P, BasicState<V, F>>
+impl<P, Sub, V, F> Solver<P, FirstOrderState<V, F>>
     for TrustRegion<Sub, F, MatrixFree>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + HessianProduct,
-    V: Clone + ScaledAdd<F> + NormSquared<F>,
+    V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
     Sub: SubproblemHvp<V, F>,
 {
     type Error = P::Error;
@@ -787,8 +811,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
         self.rejected_step = false;
         tr_init(&mut self.radius, self.initial_radius, problem, state)
     }
@@ -796,8 +820,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        state: FirstOrderState<V, F>,
+    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
     {
         // No Hessian is formed: every product goes through the problem's
         // counted `hessian_product`. Unlike exact mode, an inner radius
@@ -825,7 +849,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BasicState, Executor};
+    use crate::{Executor, FirstOrderState};
 
     /// Ill-conditioned quadratic `f(x) = ½ xᵀ A x` with `A = diag(1, 100)`,
     /// gradient `A x`, constant Hessian `A`. A single Newton step solves it
@@ -900,7 +924,7 @@ mod tests {
             Quadratic,
             (TrustRegion::with_subproblem(CauchyPoint))
                 .with_absolute_gradient_tolerance(1e-8),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(500)
         .run()
@@ -918,7 +942,7 @@ mod tests {
             Quadratic,
             (TrustRegion::with_subproblem(Steihaug::new()))
                 .with_absolute_gradient_tolerance(1e-10),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
         .run()
@@ -932,7 +956,7 @@ mod tests {
             Quadratic,
             (TrustRegion::with_subproblem(Dogleg))
                 .with_absolute_gradient_tolerance(1e-10),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
         .run()
@@ -974,7 +998,7 @@ mod tests {
         let result = Executor::new(
             NonFiniteGradient,
             TrustRegion::with_subproblem(MoreSorensen::new()),
-            BasicState::new(vec![3.0, 3.0]),
+            FirstOrderState::new(vec![3.0, 3.0]),
         )
         .max_iter(10)
         .run()
@@ -999,7 +1023,7 @@ mod tests {
                 &mut radius,
                 1.0,
                 &mut problem,
-                BasicState::new(vec![1.0, 0.0]),
+                FirstOrderState::new(vec![1.0, 0.0]),
             )
             .unwrap();
             let counts = *problem.counts();
@@ -1021,9 +1045,9 @@ mod tests {
             .unwrap();
 
             assert_eq!(reason, Some(expected_reason));
-            assert_eq!(state.param, vec![1.0, 0.0]);
-            assert_eq!(state.gradient, Some(vec![1.0, 0.0]));
-            assert_eq!(state.cost, Some(0.5));
+            assert_eq!(state.param(), &vec![1.0, 0.0]);
+            assert_eq!(state.current().unwrap().2, &vec![1.0, 0.0]);
+            assert_eq!(state.cost(), 0.5);
             assert_eq!(*problem.counts(), counts);
         }
     }
@@ -1034,7 +1058,7 @@ mod tests {
             Quadratic,
             (TrustRegion::with_subproblem(MoreSorensen::new()))
                 .with_absolute_gradient_tolerance(1e-10),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
         .run()
@@ -1050,7 +1074,7 @@ mod tests {
         let result = Executor::new(
             Rosenbrock,
             (TrustRegion::new()).with_absolute_gradient_tolerance(1e-8),
-            BasicState::new(vec![-1.2, 1.0]),
+            FirstOrderState::new(vec![-1.2, 1.0]),
         )
         .max_iter(200)
         .run()
@@ -1066,7 +1090,7 @@ mod tests {
             Rosenbrock,
             (TrustRegion::with_subproblem(Dogleg))
                 .with_absolute_gradient_tolerance(1e-8),
-            BasicState::new(vec![-1.2, 1.0]),
+            FirstOrderState::new(vec![-1.2, 1.0]),
         )
         .max_iter(500)
         .run()
@@ -1080,7 +1104,7 @@ mod tests {
             Rosenbrock,
             (TrustRegion::with_subproblem(MoreSorensen::new()))
                 .with_absolute_gradient_tolerance(1e-8),
-            BasicState::new(vec![-1.2, 1.0]),
+            FirstOrderState::new(vec![-1.2, 1.0]),
         )
         .max_iter(200)
         .run()
@@ -1153,7 +1177,7 @@ mod tests {
             QuadraticHvOnly,
             (TrustRegion::matrix_free())
                 .with_absolute_gradient_tolerance(1e-10),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
         .run()
@@ -1166,7 +1190,7 @@ mod tests {
         let result = Executor::new(
             RosenbrockHvOnly,
             (TrustRegion::matrix_free()).with_absolute_gradient_tolerance(1e-8),
-            BasicState::new(vec![-1.2, 1.0]),
+            FirstOrderState::new(vec![-1.2, 1.0]),
         )
         .max_iter(200)
         .run()
@@ -1180,7 +1204,7 @@ mod tests {
             QuadraticHvOnly,
             (TrustRegion::matrix_free_with(CauchyPoint))
                 .with_absolute_gradient_tolerance(1e-8),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(500)
         .run()
@@ -1197,7 +1221,7 @@ mod tests {
         let exact = Executor::new(
             Quadratic,
             (TrustRegion::new()).with_absolute_gradient_tolerance(1e-10),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
         .run()
@@ -1206,12 +1230,12 @@ mod tests {
             QuadraticHvOnly,
             (TrustRegion::matrix_free())
                 .with_absolute_gradient_tolerance(1e-10),
-            BasicState::new(vec![5.0, 1.0]),
+            FirstOrderState::new(vec![5.0, 1.0]),
         )
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(exact.state.iter, free.state.iter);
+        assert_eq!(exact.state.iter(), free.state.iter());
         assert!((exact.cost() - free.cost()).abs() < 1e-15);
     }
 
@@ -1222,7 +1246,7 @@ mod tests {
         let mut problem = Problem::new(RosenbrockHvOnly);
         let mut solver = TrustRegion::matrix_free();
         let mut state = solver
-            .init(&mut problem, BasicState::new(vec![-1.2, 1.0]))
+            .init(&mut problem, FirstOrderState::new(vec![-1.2, 1.0]))
             .unwrap();
         for _ in 0..3 {
             let (next, _) = solver.next_iter(&mut problem, state).unwrap();
@@ -1232,9 +1256,10 @@ mod tests {
         assert!(counts.hessian_product_evals > 0);
         assert_eq!(counts.hessian_evals, 0);
 
-        // The state mirror folds products into the gradient slot.
-        use crate::core::state::CountsMirror as _;
+        // Product calls retain their category when the executor publishes progress.
+        use crate::core::state::{CountsMirror as _, GradientState as _};
         state.mirror(counts);
-        assert!(state.gradient_evals >= counts.hessian_product_evals);
+        assert_eq!(state.counts(), counts);
+        assert_eq!(state.gradient_evals(), counts.gradient_evals);
     }
 }

@@ -10,7 +10,7 @@ use crate::core::inner::InitialState;
 use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::SlsqpState;
+use crate::core::state::{SelectedFirstOrderState, State};
 use crate::core::termination::TerminationReason;
 use factor::Factor;
 use least_squares::{Lsei, Matrix, dot, norm, number};
@@ -63,7 +63,7 @@ pub enum SlsqpFailure {
 /// As in [`NonlinearConstraints`], non-finite bounds mean an unbounded side.
 /// Numerical differentiation respects the box only when explicitly configured
 /// with the bounded adapter. Every accepted point has a matching cost and
-/// objective gradient, even at termination. [`SlsqpState`] publishes the latest
+/// objective gradient, even at termination. [`SelectedFirstOrderState`] publishes the latest
 /// accepted point; its `best_*` readers do not select by objective alone.
 ///
 /// # Convergence and safeguards
@@ -74,7 +74,7 @@ pub enum SlsqpFailure {
 /// measure, absolute objective change, or Euclidean step norm. After five
 /// Hessian resets the reference permits the objective/step test at ten times
 /// this accuracy. These tests are not a strict KKT certificate; inspect the
-/// state's feasibility, projected Lagrangian-gradient, and complementarity
+/// solver's feasibility, projected Lagrangian-gradient, and complementarity
 /// diagnostics. `None` disables convergence tests; zero requests exact zero.
 /// Executor controls own iteration/evaluation/time budgets and cancellation.
 ///
@@ -83,15 +83,39 @@ pub enum SlsqpFailure {
 /// overrides it. The inexact line search permits eleven trials, as in the
 /// reference, but never accepts non-finite values. Failed subproblems, exhausted
 /// recovery, and invalid derivatives return `SolverFailed` with details on the
-/// state. Typed callback errors abort immediately without promising rollback.
+/// solver. Typed callback errors abort immediately without promising rollback.
 /// Constraint blocks count as residual evaluations and their Jacobians count
 /// as Jacobian evaluations through [`Problem`].
+///
+/// # Lifecycle and diagnostics
+///
+/// Construct [`SelectedFirstOrderState::new`] or use [`crate::Executor::from_start`].
+/// `current()` provides the matching point, objective, objective gradient, and
+/// constraint violation. Each accepted iterate is an explicit selection event;
+/// failed trials preserve the previous record and its publication metadata.
+/// The violation is the sum of absolute equality residuals and positive
+/// inequality violations. Category readers report raw objective and gradient
+/// calls; residual and Jacobian work remain distinct in `state.counts()`.
+///
+/// Fresh initialization reevaluates the clipped seed and rebuilds the Hessian
+/// approximation, constraint layout, and line-search history. Exact continuation
+/// retains a [`crate::ExactCheckpoint`] and skips initialization. With `serde`,
+/// the solver and shared state support serialization; disposable numerical
+/// scratch is rebuilt on demand. Legacy `SlsqpState` payloads are incompatible.
+///
+/// Read [`stationarity`](Self::stationarity), [`complementarity`](Self::complementarity),
+/// [`failure`](Self::failure), and multiplier estimates through the retained
+/// solver after [`crate::Executor::run_with_solver`] or between steps through
+/// [`crate::Stepper::solver`]. They return `None` until available. Native accuracy
+/// tests retain their composite constrained meaning; an objective gradient alone
+/// does not certify constrained optimality. The shared state's selection does
+/// not implement [`crate::ObjectiveIncumbentState`].
 ///
 /// # Backends
 ///
 /// `Vec<F>`/[`crate::DenseMatrix<F>`], nalgebra `DVector<F>`/`DMatrix<F>`,
 /// ndarray `Array1<F>`/`Array2<F>`, and faer `Col<F>`/`Mat<F>`, with `F = f64`
-/// or `f32`. Choose an accuracy appropriate to the scalar precision and
+/// or `f32`, for every supported backend release. Choose an accuracy appropriate to the scalar precision and
 /// constraint scales; `f32` generally needs a looser accuracy. Only vector indexing and dense matrix shape/entry access are
 /// required from the backend. All factorizations are pure Rust and work on
 /// WASM without BLAS/LAPACK. The reference fixtures use `f64`.
@@ -111,7 +135,7 @@ pub enum SlsqpFailure {
 /// Minimize `x²` with the nonlinear equality `x - 1 = 0`:
 /// ```
 /// use basin::{CostFunction, DenseMatrix, Executor, FiniteDiff,
-///     NonlinearConstraints, Slsqp, SlsqpState, State};
+///     NonlinearConstraints, Slsqp, SelectedFirstOrderState, State};
 /// struct Example;
 /// impl CostFunction for Example {
 ///     type Param = Vec<f64>;
@@ -129,7 +153,7 @@ pub enum SlsqpFailure {
 ///     }
 /// }
 /// let result = Executor::new(FiniteDiff::new(Example), Slsqp::new(),
-///     SlsqpState::new(vec![0.0])).max_iter(100).run().unwrap();
+///     SelectedFirstOrderState::new(vec![0.0])).max_iter(100).run().unwrap();
 /// assert!((result.state.param()[0]-1.0).abs() < 1e-6);
 /// ```
 #[derive(Clone, Debug)]
@@ -172,6 +196,25 @@ impl<F: Scalar> Slsqp<F> {
         self.max_subproblem_iterations = Some(limit);
         self
     }
+    /// Sum of absolute equality residuals and positive inequality violations.
+    /// Includes box violations, which are zero at accepted clipped points.
+    pub fn constraint_violation(&self) -> Option<F> {
+        self.work.as_ref().map(Work::reported_violation)
+    }
+    /// Infinity norm of the projected Lagrangian gradient, using QP multipliers.
+    pub fn stationarity(&self) -> Option<F> {
+        self.work.as_ref()?.stationarity
+    }
+    /// Maximum absolute inequality multiplier times its constraint residual.
+    /// Bound multipliers are excluded; stationarity accounts for box bounds.
+    pub fn complementarity(&self) -> Option<F> {
+        self.work.as_ref()?.complementarity
+    }
+    /// Numerical failure detail when the solver reports `SolverFailed`.
+    pub fn failure(&self) -> Option<SlsqpFailure> {
+        self.work.as_ref()?.failure
+    }
+
     /// Latest QP equality multipliers, linear rows before nonlinear rows.
     /// Signs use `L = f + λᵀh + μᵀc` with public `c ≤ 0` inequalities.
     pub fn equality_multipliers(&self) -> Option<&[F]> {
@@ -191,9 +234,9 @@ impl<F: Scalar> Slsqp<F> {
 }
 
 impl<V: Clone, F: Scalar> InitialState<V> for Slsqp<F> {
-    type State = SlsqpState<V, F>;
+    type State = SelectedFirstOrderState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        SlsqpState::new(x.clone())
+        SelectedFirstOrderState::new(x.clone())
     }
 }
 
@@ -225,6 +268,8 @@ struct Work<F> {
     last_step: Option<F>,
     converged: bool,
     failure: Option<SlsqpFailure>,
+    stationarity: Option<F>,
+    complementarity: Option<F>,
     // Scratch is overwritten before use, so checkpoints need only the model.
     #[cfg_attr(feature = "serde", serde(skip))]
     scratch: Scratch<F>,
@@ -655,13 +700,14 @@ impl<F: Scalar> Work<F> {
         }
         Ok(a)
     }
-    fn diagnostics<V: VectorIndex<F>>(&self, state: &mut SlsqpState<V, F>) {
-        state.violation = Some(if self.c.iter().all(|v| v.is_finite()) {
+    fn reported_violation(&self) -> F {
+        if self.c.iter().all(|v| v.is_finite()) {
             self.violation()
         } else {
             F::infinity()
-        });
-        state.failure = self.failure;
+        }
+    }
+    fn diagnostics<V: VectorIndex<F>>(&mut self, param: &V) {
         if self.have_multipliers {
             let mut stationarity = F::zero();
             for (j, &i) in self.free.iter().enumerate() {
@@ -670,15 +716,15 @@ impl<F: Scalar> Work<F> {
                     stationarity = F::infinity();
                     break;
                 }
-                let x = state.param.get_scalar(i);
+                let x = param.get_scalar(i);
                 // Clip the displacement directly so x - (x - g) cannot
                 // cancel a small gradient at a large-magnitude parameter.
                 let projected =
                     lag.max(x - self.upper[i]).min(x - self.lower[i]);
                 stationarity = stationarity.max(projected.abs());
             }
-            state.stationarity = Some(stationarity);
-            state.complementarity = Some(
+            self.stationarity = Some(stationarity);
+            self.complementarity = Some(
                 (self.meq()..self.c.len())
                     .map(|i| (self.c[i] * self.multipliers[i]).abs())
                     .fold(F::zero(), F::max),
@@ -687,7 +733,7 @@ impl<F: Scalar> Work<F> {
     }
 }
 
-impl<P, V, F> Solver<P, SlsqpState<V, F>> for Slsqp<F>
+impl<P, V, F> Solver<P, SelectedFirstOrderState<V, F>> for Slsqp<F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
@@ -700,11 +746,13 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: SlsqpState<V, F>,
-    ) -> Result<SlsqpState<V, F>, P::Error> {
+        state: SelectedFirstOrderState<V, F>,
+    ) -> Result<SelectedFirstOrderState<V, F>, P::Error> {
         self.work = None;
-        let mut state = SlsqpState::new(state.param);
-        let n = state.param.vec_len();
+        let mut param = state.param().clone();
+        let mut state = state;
+        state.reset();
+        let n = param.vec_len();
         assert!(n > 0, "SLSQP requires at least one parameter");
         let mut lower = vec![F::neg_infinity(); n];
         let mut upper = vec![F::infinity(); n];
@@ -728,13 +776,11 @@ where
                 "SLSQP lower bound exceeds upper bound"
             );
             assert!(
-                state.param.get_scalar(i).is_finite(),
+                param.get_scalar(i).is_finite(),
                 "SLSQP initial parameters must be finite"
             );
-            state.param.set_scalar(
-                i,
-                state.param.get_scalar(i).max(lower[i]).min(upper[i]),
-            );
+            param
+                .set_scalar(i, param.get_scalar(i).max(lower[i]).min(upper[i]));
         }
         let free: Vec<_> = (0..n).filter(|&i| lower[i] != upper[i]).collect();
         let nf = free.len();
@@ -771,17 +817,19 @@ where
             last_step: None,
             converged: false,
             failure: None,
+            stationarity: None,
+            complementarity: None,
             scratch: Scratch::default(),
         };
-        let (cost, gradient) = problem.cost_and_gradient(&state.param)?;
+        let (cost, gradient) = problem.cost_and_gradient(&param)?;
         assert_eq!(
             gradient.vec_len(),
             n,
             "SLSQP objective gradient length mismatch"
         );
         work.g = work.free.iter().map(|&i| gradient.get_scalar(i)).collect();
-        work.c = work.values(problem, &state.param)?;
-        work.a = work.jacobian(problem, &state.param)?;
+        work.c = work.values(problem, &param)?;
+        work.a = work.jacobian(problem, &param)?;
         if work.failure.is_some()
             || !cost.is_finite()
             || (0..gradient.vec_len())
@@ -789,26 +837,27 @@ where
         {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
         } else {
-            work.prepare(
-                &state.param,
-                self.accuracy,
-                self.max_subproblem_iterations,
-            );
+            work.prepare(&param, self.accuracy, self.max_subproblem_iterations);
         }
-        state.record = Some((cost, gradient));
-        state.pending_publication = true;
-        work.diagnostics(&mut state);
+        work.diagnostics(&param);
+        state
+            .replace(param, cost, gradient, work.reported_violation())
+            .expect("SLSQP gradient dimensions were checked");
+        state.select_current();
         self.work = Some(work);
         Ok(state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SlsqpState<V, F>,
-    ) -> Result<(SlsqpState<V, F>, Option<TerminationReason>), P::Error> {
+        mut state: SelectedFirstOrderState<V, F>,
+    ) -> Result<
+        (SelectedFirstOrderState<V, F>, Option<TerminationReason>),
+        P::Error,
+    > {
         let work = self.work.as_mut().expect("SLSQP must be initialized");
         if work.failure.is_some() {
-            work.diagnostics(&mut state);
+            work.diagnostics(state.param());
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
         if work.free.is_empty() {
@@ -816,21 +865,21 @@ where
             // to executor controls without attempting empty BFGS updates.
             return Ok((state, None));
         }
-        let old_cost = state.record.as_ref().unwrap().0;
+        let old_cost = state.cost();
         let merit = old_cost + work.weighted_violation();
         if !merit.is_finite() {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
-            work.diagnostics(&mut state);
+            work.diagnostics(state.param());
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
         let mut alpha = F::one();
         let mut accepted = None;
-        let mut param = state.param.clone();
+        let mut param = state.param().clone();
         for trial in 0..11 {
             for (j, &i) in work.free.iter().enumerate() {
                 param.set_scalar(
                     i,
-                    (state.param.get_scalar(i) + alpha * work.direction[j])
+                    (state.param().get_scalar(i) + alpha * work.direction[j])
                         .max(work.lower[i])
                         .min(work.upper[i]),
                 );
@@ -872,13 +921,13 @@ where
         }
         let Some((param, cost, c)) = accepted else {
             work.failure = Some(SlsqpFailure::LineSearchFailed);
-            work.diagnostics(&mut state);
+            work.diagnostics(state.param());
             return Ok((state, Some(TerminationReason::SolverFailed)));
         };
         let gradient = problem.gradient(&param)?;
         assert_eq!(
             gradient.vec_len(),
-            state.param.vec_len(),
+            state.param().vec_len(),
             "SLSQP objective gradient length mismatch"
         );
         let a = work.jacobian(problem, &param)?;
@@ -888,7 +937,7 @@ where
             || a.data.iter().any(|v| !v.is_finite())
         {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
-            work.diagnostics(&mut state);
+            work.diagnostics(state.param());
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
         work.scratch.y.resize(work.free.len(), F::zero());
@@ -898,7 +947,8 @@ where
                 - work.lagrangian_component(work.g[j], &work.a, j);
             work.g[j] = g;
             // The accepted displacement replaces the exhausted search direction.
-            work.direction[j] = param.get_scalar(i) - state.param.get_scalar(i);
+            work.direction[j] =
+                param.get_scalar(i) - state.param().get_scalar(i);
         }
         work.c = c;
         work.a = a;
@@ -918,15 +968,16 @@ where
         {
             work.prepare(&param, self.accuracy, self.max_subproblem_iterations);
         }
-        state.param = param;
-        state.record = Some((cost, gradient));
-        state.pending_publication = true;
-        work.diagnostics(&mut state);
+        work.diagnostics(&param);
+        state
+            .replace(param, cost, gradient, work.reported_violation())
+            .expect("SLSQP gradient dimensions were checked");
+        state.select_current();
         Ok((state, None))
     }
     fn terminate(
         &self,
-        _state: &SlsqpState<V, F>,
+        _state: &SelectedFirstOrderState<V, F>,
     ) -> Option<TerminationReason> {
         self.work
             .as_ref()

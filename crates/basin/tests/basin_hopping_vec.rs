@@ -18,7 +18,7 @@ use std::rc::Rc;
 use basin::core::rng::Rng;
 use basin::problems::{Ackley, Rastrigin};
 use basin::{
-    BasicState, BasinHopping, Executor, InitialState, NelderMead, Problem,
+    BasinHopping, Executor, InitialState, NelderMead, PointState, Problem,
     Solver, State, StepTaker, TerminationReason, WarmStart,
 };
 
@@ -35,7 +35,7 @@ fn same_seed_yields_identical_trajectory() {
                     .with_absolute_simplex_cost_tolerance(1e-8),
                 seed,
             ),
-            BasicState::new(vec![2.0, 2.0]),
+            PointState::new(vec![2.0, 2.0]),
         )
         .max_iter(40)
         .run()
@@ -64,7 +64,7 @@ fn different_seeds_yield_different_trajectories() {
                 seed,
             )
             .with_stepsize(1.5),
-            BasicState::new(vec![3.0, 3.0]),
+            PointState::new(vec![3.0, 3.0]),
         )
         .max_iter(20)
         .run()
@@ -93,7 +93,7 @@ fn converges_on_ackley_2d() {
             7,
         )
         .with_stepsize(1.0),
-        BasicState::new(vec![2.5, -2.5]),
+        PointState::new(vec![2.5, -2.5]),
     )
     .max_iter(200)
     .run()
@@ -125,7 +125,7 @@ fn success_rate_over_seeds_on_rastrigin_2d() {
                     seed,
                 )
                 .with_stepsize(1.5),
-                BasicState::new(vec![2.0, 3.0]),
+                PointState::new(vec![2.0, 3.0]),
             )
             .max_iter(150)
             .run()
@@ -158,7 +158,7 @@ fn aggregates_inner_cost_evals() {
                 .with_absolute_simplex_cost_tolerance(1e-8),
             3,
         ),
-        BasicState::new(vec![1.0, 1.0]),
+        PointState::new(vec![1.0, 1.0]),
     )
     .max_iter(hops)
     .run()
@@ -223,7 +223,7 @@ fn adaptive_step_fires_on_cumulative_interval_schedule() {
         )
         .with_step_taker(step)
         .with_adaptive_interval(10),
-        BasicState::new(vec![0.5, 0.5]),
+        PointState::new(vec![0.5, 0.5]),
     )
     .max_iter(hops)
     .run()
@@ -294,7 +294,7 @@ fn failed_inner_solve_does_not_terminate_the_walk() {
             ),
             3,
         ),
-        BasicState::new(vec![2.0, 2.0]),
+        PointState::new(vec![2.0, 2.0]),
     )
     .max_iter(hops)
     .run()

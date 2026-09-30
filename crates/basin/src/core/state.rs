@@ -7,12 +7,9 @@
 //! simplex-based solvers like Nelder-Mead) so termination criteria can
 //! bound on the minimum capability they need (tenet 3 in `CONTRIBUTING.md`).
 //!
-//! `State::Float` is generic across the trait. The vector-tier-only states
-//! ([`BasicState`], [`BasicSimplexState`], [`BasicPopulationState`]) and the
-//! linalg-tier-using [`QuasiNewtonState`]/[`LbfgsState`] and stochastic
-//! [`GbnmState`]/[`GlobalBestPsoState`] take an `F: Scalar` parameter that
-//! defaults to `f64`, so existing call sites resolve unchanged while opening
-//! the door to `f32`. Solvers (`GradientDescent`, `Bfgs`,
+//! `State::Float` is generic across the trait. Every shared progress shape
+//! takes an `F: Scalar` parameter that defaults to `f64` and supports `f32`.
+//! Solvers (`GradientDescent`, `Bfgs`,
 //! both `Lbfgs` modes, the NLLS family, CMA-ES, barrier/AL, etc.) and the
 //! shipped termination criteria all carry the same `F = f64` default. See
 //! `tests/f32_round_trip.rs` for an end-to-end demonstration that the full
@@ -26,61 +23,26 @@
 //! shared progress storage with public, coherent record updates. See
 //! [`progress`] for their lifecycle and an external-solver example.
 //! Their opt-in [`capabilities`] expose checked current and incumbent records,
-//! raw evaluation counts, and objective-selection guarantees. Existing state
-//! shapes and Basin 1.x readers retain their current contracts.
+//! raw evaluation counts, and objective-selection guarantees. [`SelectedState`]
+//! supplies shared progress for solver-selected constrained incumbents;
+//! [`SelectedFirstOrderState`] adds matching objective gradients. Every shared
+//! state preserves the six raw evaluation categories.
+//! [`ProposalState`] adds acceptance bookkeeping while leaving proposal
+//! strategies and their evolving machinery in the solver.
 
-/// BOBYQA solver state (`BobyqaState`).
-pub mod bobyqa;
 pub mod capabilities;
-/// CMA-ES distribution state (`CmaEsState`).
-pub mod cma_es;
-/// COBYLA solver state (`CobylaState`).
-pub mod cobyla;
-/// Globalized Bounded Nelder-Mead state (`GbnmState`).
-pub mod gbnm;
-/// Global-best particle-swarm state (`GlobalBestPsoState`).
-pub mod global_best_pso;
-/// Limited-memory BFGS/L-BFGS-B state (`LbfgsState`).
-pub mod lbfgs;
-/// LINCOA solver state (`LincoaState`).
-pub mod lincoa;
-/// MADS solver state (`MadsState`).
-pub mod mads;
-/// NEWUOA solver state (`NewuoaState`).
-pub mod newuoa;
-/// Nonlinear least-squares state (`NllsState`).
-pub mod nlls;
 pub mod progress;
-/// One-dimensional solver state (`ScalarState`).
-pub mod scalar;
-/// One-dimensional gradient-carrying solver state (`ScalarGradientState`).
-pub mod scalar_gradient;
-/// Simulated-annealing Markov-chain state (`SimulatedAnnealingState`).
-pub mod simulated_annealing;
-/// Solis-Wets adaptive random-walk state (`SolisWetsState`).
-pub mod solis_wets;
 
-pub use bobyqa::BobyqaState;
 pub use capabilities::{
     EvaluatedGradientState, EvaluatedState, IncumbentRef, IncumbentState,
     ObjectiveIncumbentState, RawEvaluationState,
 };
-pub use cma_es::CmaEsState;
-pub use cobyla::CobylaState;
-pub use gbnm::GbnmState;
-pub use global_best_pso::GlobalBestPsoState;
-pub use lbfgs::LbfgsState;
-pub use lincoa::LincoaState;
-pub use mads::{ConstrainedMadsState, MadsState};
-pub use newuoa::NewuoaState;
-pub use nlls::NllsState;
-pub use progress::{FirstOrderState, GradientDimensionMismatch, PointState};
-pub use scalar::ScalarState;
-pub use scalar_gradient::ScalarGradientState;
-pub use simulated_annealing::SimulatedAnnealingState;
-pub use solis_wets::SolisWetsState;
+pub use progress::{
+    FirstOrderState, GradientDimensionMismatch, PointState, ProposalState,
+    SelectedState,
+};
 
-use crate::core::math::{MatrixIdentity, Scalar, VectorLen};
+use crate::core::math::Scalar;
 use crate::core::problem::EvalCounts;
 
 /// Minimum information the executor and generic termination criteria
@@ -89,7 +51,7 @@ use crate::core::problem::EvalCounts;
 /// # Contract
 ///
 /// - **Caller must:** construct via the appropriate concrete state
-///   constructor (e.g. [`BasicState::new`]) before handing the state to
+///   constructor (e.g. [`PointState::new`]) before handing the state to
 ///   [`Executor`](crate::core::executor::Executor). The executor's `init`
 ///   call populates derived fields (cost, gradient) before any termination
 ///   check sees the state.
@@ -116,7 +78,7 @@ use crate::core::problem::EvalCounts;
 ///   [`best_cost_evals`](Self::best_cost_evals)): the retained point and
 ///   the iter/eval counts recorded by the state's selection rule.
 ///   Most states retain the lowest-cost published point. Constrained
-///   states such as [`CobylaState`] and [`ConstrainedMadsState`] instead
+///   states such as [`SelectedState`] instead
 ///   mirror a solver-selected incumbent whose objective may increase
 ///   as feasibility improves. The executor calls
 ///   [`update_best`](Self::update_best) after every
@@ -125,19 +87,17 @@ use crate::core::problem::EvalCounts;
 ///   Execution controls like
 ///   [`no_improvement`](crate::Executor::no_improvement) and
 ///   [`target_cost`](crate::Executor::target_cost) bind on
-///   `best_cost()`; solver-owned cost-change tests bind on `cost()`.
+///   a checked incumbent and require [`ObjectiveIncumbentState`]; solver-owned
+///   cost-change tests bind on `cost()`.
 ///
 /// Best tracking sees published state, not every problem evaluation.
-/// For example, [`CmaEsState`] considers its mean and sampled population.
+/// For example, [`PopulationProgress`] considers its mean and sampled population.
 /// An unreported line-search probe is not automatically considered.
 /// Evaluation metadata records the count at publication, which can include
 /// evaluations made after the selected point was found.
 ///
-/// [`BasicSimplexState`] and [`BasicPopulationState`] return their current
-/// first member as `best_param()`. Their solvers must retain the historical
-/// best member to keep that point paired with `best_cost()`; sorting alone
-/// does not establish this invariant. Single-iterate shapes can retain a
-/// historical point separately from a worse current iterate.
+/// Shared states, including [`PopulationProgress`] and [`SimplexProgress`],
+/// retain historical points independently of current members or vertices.
 pub trait State {
     /// The parameter type the solver iterates over (e.g. `Vec<f64>`,
     /// `nalgebra::DVector<f64>`).
@@ -155,8 +115,8 @@ pub trait State {
     /// after a successful [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
     fn increment_iter(&mut self);
     /// Cumulative evaluation work under the state's [`CountsMirror`] mapping.
-    /// In Basin 1.x this can include residual or derivative work as well as
-    /// cost-function calls; it is not uniformly the raw cost-call count.
+    /// Every shipped shared state reports only raw cost-function calls.
+    /// Custom states define their mapping through [`CountsMirror`].
     /// Diverges from `iter()` whenever a single iteration evaluates the
     /// cost more than once (line searches, Nelder-Mead shrinks, etc.);
     /// this is what users actually budget against.
@@ -175,42 +135,27 @@ pub trait State {
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
     /// calls; available after successful initialization, including iter 0.
     /// Some constructors supply it immediately, while an empty population
-    /// such as [`BasicPopulationState::with_size`] must first be initialized.
+    /// such as [`PopulationProgress::empty`] must first be initialized.
     fn param(&self) -> &Self::Param;
     /// Cost at the current [`param`](Self::param).
     ///
     /// # Panics
     ///
-    /// States that cache cost lazily ([`BasicState`], `QuasiNewtonState`,
-    /// [`LbfgsState`], [`CmaEsState`], [`PointState`], and [`FirstOrderState`])
-    /// panic if `cost()` is read before
+    /// Shared states panic if `cost()` is read before
     /// [`Solver::init`](crate::core::solver::Solver::init) has populated
     /// the cached cost. By contract the executor calls `init` before any
     /// termination criterion check, so reads from criteria and from
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
-    /// are safe after successful initialization. Simplex and population
-    /// constructors may leave placeholder costs or empty storage, so their
-    /// pre-initialization reads are not a uniform evaluated-cost interface.
+    /// are safe after successful initialization. Constructors supply no
+    /// evaluated records; use [`EvaluatedState::current_record`] or an inherent
+    /// checked reader to query availability.
     fn cost(&self) -> Self::Float;
 
     /// Selected incumbent under this state's best-tracking rule.
     ///
-    /// For [`BasicSimplexState`] and [`BasicPopulationState`], coincides
-    /// with [`param`](Self::param); their solvers must preserve the
-    /// historical best member. See the trait's current-vs-best contract.
-    ///
-    /// # Panics
-    ///
-    /// Single-iterate states panic if read before
-    /// [`Solver::init`](crate::core::solver::Solver::init) has populated
-    /// the cached cost; the first
-    /// [`update_best`](Self::update_best) call (after init) seeds the
-    /// best slot. Reads from termination criteria and from
-    /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
-    /// are safe.
-    /// [`PointState`] and [`FirstOrderState`] can also lack an incumbent after
-    /// initialization if all published costs are NaN or positive infinity;
-    /// use their checked `best()` readers in that case.
+    /// Shared progress states retain this point independently of the current
+    /// record, including when all current population members change. Panics on
+    /// shared states until an eligible incumbent has been selected.
     fn best_param(&self) -> &Self::Param;
     /// Cost of the selected incumbent. This is the historical minimum for
     /// objective-ordered states, but can increase under constrained
@@ -295,33 +240,16 @@ pub trait GradientState: State {
 /// Public (rather than crate-private) so user-defined state types can
 /// be plugged into the [`Executor`](crate::core::executor::Executor):
 /// the trait must be impl'able outside basin. Most users won't need
-/// this: the shipped state types (`BasicState`, `QuasiNewtonState`,
-/// `LbfgsState`, `BasicSimplexState`, `BasicPopulationState`,
-/// `GlobalBestPsoState`) already
+/// this: the shipped state types (`PointState`,
+/// `FirstOrderState`, `SimplexProgress`, and `PopulationProgress`) already
 /// implement it.
 ///
 /// # Per-state mapping
 ///
-/// - **[`PointState`]/[`FirstOrderState`]** preserve every raw category in
-///   their inherent `counts()` and `best_counts()` readers. For compatibility
-///   with Basin 1.x accounting, `PointState` folds all work into `cost_evals`,
-///   while `FirstOrderState` uses the cost/gradient folds of `BasicState` below.
-/// - **[`BasicState`]/[`QuasiNewtonState`]/[`LbfgsState`]** (carry
-///   both cost and gradient counters):
-///   `cost_evals = cost + residual`,
-///   `gradient_evals = gradient + jacobian + hessian + hessian_product`.
-///   The residual/Jacobian/Hessian/Hessian-product counters fold into
-///   the cost/gradient slots, preserving today's NLLS convention where
-///   residual calls counted against `cost_evals` and Jacobian calls
-///   against `gradient_evals` on `BasicState`. One Hessian-vector
-///   product costs roughly one gradient, so the fold keeps
-///   `MaxGradientEvals` an honest cap on matrix-free work.
-/// - **[`BasicSimplexState`]/[`BasicPopulationState`]/[`GbnmState`]/[`GlobalBestPsoState`]/`MaLsChState`**
-///   (derivative-free outer, no `gradient_evals` field):
-///   `cost_evals = total_work` (every kind folded in). Lets a CMA-ES
-///   outer running e.g. an L-BFGS inner have `state.cost_evals`
-///   reflect total computational work without a per-trait cross-type
-///   fold.
+/// - **[`PointState`]/[`FirstOrderState`]/[`ProposalState`]/[`SelectedState`]/[`SelectedFirstOrderState`]/[`SimplexProgress`]/[`PopulationProgress`]** preserve every raw category in
+///   their inherent `counts()` and `best_counts()` readers. The cost reader
+///   and first-order states' gradient readers report only the named category.
+///   Use `total_work()` on the raw counts for an explicit aggregate.
 pub trait CountsMirror: State {
     /// Overwrite the state's counters from the per-run wrapper delta.
     /// Called by the executor after every successful
@@ -337,7 +265,10 @@ pub trait CountsMirror: State {
 /// represented by the snapshot. [`Executor::resume`](crate::Executor::resume)
 /// restores those counters, preserves best-so-far history and absolute
 /// iteration numbers, and calls the solver's resume-idempotent `init` method.
-/// Solver-specific evolution data—including RNG and adaptive machinery—must
+/// No shipped shared state implements this marker: built-in solvers require
+/// [`ExactCheckpoint`](crate::ExactCheckpoint) for exact continuation. For a
+/// custom state-only resume contract, solver-specific evolution data—including
+/// RNG and adaptive machinery—must
 /// live in the state itself. Exact continuation additionally assumes the same
 /// deterministic problem, solver configuration, scalar type, and code;
 /// executor-owned termination criteria are not part of the snapshot.
@@ -388,61 +319,43 @@ pub trait SimplexState: State {
     fn costs(&self) -> &[Self::Float];
 }
 
-/// States built around a population of `λ` candidate parameters and
-/// parallel costs.
+/// A population of candidate parameters and matching costs.
 ///
-/// Mirrors [`SimplexState`]: the trait exists so termination criteria
-/// that need to inspect the whole population (diversity, generation
-/// spread, stall counters) can bound on a richer view than
-/// [`State::param`]/[`State::cost`], which only see the best
-/// candidate. The vehicle for stochastic solvers
-/// ([`RandomSearch`](crate::solver::RandomSearch),
-/// [`GlobalBestPso`](crate::solver::GlobalBestPso), and CMA-ES).
+/// Generic consumers can inspect the whole population while
+/// [`State::param`]/[`State::cost`] expose one representative record.
 ///
 /// # Contract
 ///
-/// - **Implementor must:** keep [`candidates`](Self::candidates) and
-///   [`costs`](Self::costs) sorted by **ascending cost** at the start
-///   and end of every
-///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter)
-///   call (and at the end of [`Solver::init`](crate::core::solver::Solver::init)),
-///   so `candidates[0]`/`costs[0]` are always the best sampled
-///   candidate.
-/// - **Implementor must:** sort `NaN` costs *last*, so a single bad
-///   evaluation can't drag itself to the front and become the
-///   "best" candidate.
-/// - **Implementor must:** keep the two slices the same length and in
-///   parallel order: `costs[i]` is the cost at `candidates[i]`.
-/// - What [`State::param`]/[`State::cost`] return is the [`State`]
-///   impl's responsibility and need *not* equal `candidates[0]`. Most
-///   population states (e.g. [`BasicPopulationState`]) return the best
-///   candidate; distribution-based states like
-///   [`CmaEsState`] return the distribution mean
-///   (`xfavorite`) while the population stays the sampled candidates.
+/// Keep the two slices the same length and in parallel order at evaluated
+/// boundaries: `costs[i]` is the cost at `candidates[i]`. Unevaluated seed
+/// storage may have no costs. Member order belongs to the solver; generic
+/// consumers must not assume ascending costs or that member zero is best.
+/// Solvers may sort complete records, or preserve order to align per-member
+/// models and histories. [`PopulationProgress::replace`] retains member order.
+///
+/// The current record need not be a member. Distribution-based solvers may
+/// publish an evaluated mean while retaining their sampled population.
 pub trait PopulationState: State {
-    /// All `λ` candidates, sorted by ascending cost.
+    /// All candidates in the solver's stored order.
     fn candidates(&self) -> &[Self::Param];
-    /// Costs in parallel with [`candidates`](Self::candidates), sorted
-    /// ascending.
+    /// Costs in parallel with [`candidates`](Self::candidates).
     fn costs(&self) -> &[Self::Float];
 }
 
-/// State that carries a trust-region radius or step size `ρ`, the minimum
-/// shape radius and step-size convergence checks bind on (tenet 3). Implemented by the Powell-family DFO states
-/// ([`NewuoaState`], [`BobyqaState`], [`LincoaState`], [`CobylaState`]), whose
-/// trust-region `ρ` shrinks from `ρ_beg` toward `ρ_end` on Powell's schedule,
-/// and by [`SolisWetsState`], whose `ρ` is the adaptive mutation standard
-/// deviation. Either way the criterion fires once `ρ` reaches the configured
-/// floor.
+/// State that exposes a trust-region radius or step size `ρ`.
+///
+/// External states may expose this capability. Built-in shared progress states
+/// leave algorithm radii on their solvers, which own the update schedules and
+/// numerical convergence checks.
 pub trait RhoState: State {
     /// The current trust-region radius or step size `ρ`.
     fn rho(&self) -> Self::Float;
 }
 
-/// State that carries a mesh adaptive direct search **poll size** `Δᵖ` and mesh
-/// index `ℓ`, the minimum shape poll-size convergence checks bind on (tenet 3). Implemented by [`MadsState`]; the poll size shrinks
-/// (≈ halving on unsuccessful iterations) toward a configured floor, and the
-/// criterion fires once it reaches that floor.
+/// State that exposes a mesh adaptive direct search poll size.
+///
+/// External states may expose this capability. Built-in MADS solvers own their
+/// mesh and poll diagnostics; shared progress states contain evaluated records.
 pub trait MeshState: State {
     /// The current poll size `Δᵖ` (bounds the distance from the incumbent to the
     /// poll trial points).
@@ -451,807 +364,50 @@ pub trait MeshState: State {
     fn mesh_index(&self) -> i32;
 }
 
-/// Default state for single-iterate solvers (gradient descent,
-/// Gauss-Newton, …): one `param`, optional cached cost and gradient,
-/// plus iteration/evaluation counters.
+/// FMINSEARCH-style initial simplex from a single starting point.
 ///
-/// The scalar `F` defaults to `f64` so existing `BasicState<P>` call
-/// sites resolve unchanged.
-///
-/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
-/// `P` and `F` are), so it can be checkpointed and reloaded to warm-start a
-/// later run; see
-/// [`CheckpointWriter`](https://docs.rs/basin/latest/basin/core/observer/checkpoint/struct.CheckpointWriter.html).
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasicState<P, F = f64> {
-    pub(crate) param: P,
-    pub(crate) cost: Option<F>,
-    pub(crate) gradient: Option<P>,
-    pub(crate) iter: u64,
-    pub(crate) cost_evals: u64,
-    pub(crate) gradient_evals: u64,
-    pub(crate) best_param: Option<P>,
-    pub(crate) best_cost: F,
-    pub(crate) best_iter: u64,
-    pub(crate) best_cost_evals: u64,
-    pub(crate) best_gradient_evals: u64,
+/// Implemented uniformly for cloneable vectors with coordinate access. The
+/// usual relative step is 5%; zero coordinates use an absolute `0.00025`.
+/// The scalar defaults to `f64` and also supports `f32`.
+pub trait IntoInitialSimplex<V, F: Scalar = f64> {
+    /// Construct `n + 1` vertices by perturbing each coordinate in turn.
+    fn into_initial_simplex(self, relative_step: F) -> Vec<V>;
 }
 
-impl<P, F: Scalar> BasicState<P, F> {
-    /// Build a state at the given starting point. Cost and gradient
-    /// are filled in by [`Solver::init`](crate::core::solver::Solver::init).
-    pub fn new(param: P) -> Self {
-        Self {
-            param,
-            cost: None,
-            gradient: None,
-            iter: 0,
-            cost_evals: 0,
-            gradient_evals: 0,
-            best_param: None,
-            best_cost: F::infinity(),
-            best_iter: 0,
-            best_cost_evals: 0,
-            best_gradient_evals: 0,
-        }
-    }
-}
-
-impl<P: Clone, F: Scalar> State for BasicState<P, F> {
-    type Param = P;
-    type Float = F;
-
-    fn iter(&self) -> u64 {
-        self.iter
-    }
-
-    fn increment_iter(&mut self) {
-        self.iter += 1;
-    }
-
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-
-    fn param(&self) -> &P {
-        &self.param
-    }
-
-    /// Reads the cost cached at the current `param`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if accessed before
-    /// [`Solver::init`](crate::core::solver::Solver::init) has populated
-    /// the cached cost. By contract,
-    /// [`Executor`](crate::core::executor::Executor) calls `init` before
-    /// any termination-criterion check (see the
-    /// [`executor`](crate::core::executor) module docs for the full
-    /// ordering), so reads from inside criteria and from
-    /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
-    /// are safe.
-    fn cost(&self) -> F {
-        self.cost
-            .expect("BasicState::cost read before Solver::init populated it")
-    }
-
-    fn best_param(&self) -> &P {
-        self.best_param.as_ref().expect(
-            "BasicState::best_param read before Solver::init populated it",
-        )
-    }
-
-    fn best_cost(&self) -> F {
-        self.best_cost
-    }
-
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
-    }
-
-    fn update_best(&mut self) {
-        if let Some(curr) = self.cost {
-            if self.best_param.is_none() || curr < self.best_cost {
-                self.best_param = Some(self.param.clone());
-                self.best_cost = curr;
-                self.best_iter = self.iter;
-                self.best_cost_evals = self.cost_evals;
-                self.best_gradient_evals = self.gradient_evals;
-            }
-        }
-    }
-
-    fn reset_best(&mut self) {
-        self.best_param = None;
-        self.best_cost = F::infinity();
-        self.best_iter = 0;
-        self.best_cost_evals = 0;
-        self.best_gradient_evals = 0;
-    }
-}
-
-impl<P: Clone, F: Scalar> GradientState for BasicState<P, F> {
-    fn gradient(&self) -> Option<&P> {
-        self.gradient.as_ref()
-    }
-
-    fn gradient_evals(&self) -> u64 {
-        self.gradient_evals
-    }
-
-    fn best_gradient_evals(&self) -> u64 {
-        self.best_gradient_evals
-    }
-}
-
-impl<P, F> CountsMirror for BasicState<P, F>
+impl<V, F> IntoInitialSimplex<V, F> for V
 where
-    BasicState<P, F>: State,
+    F: Scalar,
+    V: Clone + crate::VectorLen + crate::VectorIndex<F>,
 {
-    fn mirror(&mut self, delta: &EvalCounts) {
-        // NLLS convention preserved: residual calls fold into the cost
-        // counter, Jacobian/Hessian/Hessian-product into gradient. (Today's
-        // Gauss-Newton/LM/TRF impls manually bumped cost_evals on
-        // residual() and gradient_evals on jacobian().)
-        self.cost_evals = delta.cost_evals + delta.residual_evals;
-        self.gradient_evals = delta.gradient_evals
-            + delta.jacobian_evals
-            + delta.hessian_evals
-            + delta.hessian_product_evals;
-    }
-}
-
-/// Default `SimplexState` implementation: `n + 1` vertices and their costs
-/// in parallel `Vec`s. The solver keeps both sorted by ascending cost at
-/// the start and end of every `next_iter`, so `param()`/`cost()` always
-/// return the current best vertex.
-///
-/// The scalar `F` defaults to `f64` so existing `BasicSimplexState<V>`
-/// call sites resolve unchanged.
-///
-/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
-/// `V` and `F` are), so the complete simplex and solver scratch space can be
-/// checkpointed without losing the next iteration's trajectory.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasicSimplexState<V, F = f64> {
-    pub(crate) vertices: Vec<V>,
-    pub(crate) costs: Vec<F>,
-    pub(crate) iter: u64,
-    pub(crate) cost_evals: u64,
-    pub(crate) best_cost: F,
-    pub(crate) best_iter: u64,
-    pub(crate) best_cost_evals: u64,
-    /// Solver-owned scratch buffers, populated lazily in `Solver::init`
-    /// so the per-iter hot path can compute trial vertices in place
-    /// instead of allocating a fresh `V` each time. Empty until the
-    /// solver fills it; size and meaning are entirely a solver's
-    /// internal concern (Nelder-Mead uses three slots for centroid +
-    /// two trial points).
-    pub(crate) scratch: Vec<V>,
-}
-
-impl<V, F: Scalar> BasicSimplexState<V, F> {
-    /// Build from a pre-constructed simplex (advanced users/non-default
-    /// initial geometries). For the common case of "I just have a starting
-    /// point", prefer the backend-specific `BasicSimplexState::new`
-    /// constructors.
-    pub fn from_simplex(vertices: Vec<V>) -> Self {
-        assert!(
-            vertices.len() >= 2,
-            "BasicSimplexState requires at least 2 vertices (n+1 for an n-D problem)"
-        );
-        let n = vertices.len();
-        Self {
-            vertices,
-            costs: vec![F::infinity(); n],
-            iter: 0,
-            cost_evals: 0,
-            best_cost: F::infinity(),
-            best_iter: 0,
-            best_cost_evals: 0,
-            scratch: Vec::new(),
-        }
-    }
-}
-
-/// FMINSEARCH/SciPy-style initial simplex from a single starting point.
-///
-/// Implemented per backend (`Vec<f64>`, `nalgebra::DVector<f64>`, …) so a
-/// single `BasicSimplexState::new(x0)` constructor works uniformly across
-/// backends. The default step is 5% on non-zero coordinates and an
-/// absolute `0.00025` on zero coordinates.
-pub trait IntoInitialSimplex<V> {
-    /// Build a simplex of `n + 1` vertices around `self`, perturbing each
-    /// coordinate by `relative_step`.
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<V>;
-}
-
-impl IntoInitialSimplex<Self> for Vec<f64> {
-    fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
-        let n = self.len();
-        let mut simplex = Vec::with_capacity(n + 1);
-        simplex.push(self.clone());
+    fn into_initial_simplex(self, relative_step: F) -> Vec<V> {
+        let n = self.vec_len();
+        let mut vertices = Vec::with_capacity(n + 1);
+        vertices.push(self.clone());
         for i in 0..n {
-            let mut v = self.clone();
-            v[i] = if self[i] != 0.0 {
-                (1.0 + relative_step) * self[i]
-            } else {
-                0.00025
-            };
-            simplex.push(v);
+            let mut vertex = self.clone();
+            let value = self.get_scalar(i);
+            vertex.set_scalar(
+                i,
+                if value != F::zero() {
+                    (F::one() + relative_step) * value
+                } else {
+                    F::from_f64(0.00025).unwrap()
+                },
+            );
+            vertices.push(vertex);
         }
-        simplex
+        vertices
     }
 }
 
-#[cfg(feature = "nalgebra_all")]
-mod nalgebra_simplex {
-    use super::*;
-    crate::backend_macros::nalgebra_versions!(
-        nalgebra,
-        nalgebra_sparse,
-        nalgebra_lapack,
-        {
-            use super::IntoInitialSimplex;
-            impl IntoInitialSimplex<Self> for nalgebra::DVector<f64> {
-                fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
-                    let n = self.len();
-                    let mut simplex = Vec::with_capacity(n + 1);
-                    simplex.push(self.clone());
-                    for i in 0..n {
-                        let mut v = self.clone();
-                        v[i] = if self[i] != 0.0 {
-                            (1.0 + relative_step) * self[i]
-                        } else {
-                            0.00025
-                        };
-                        simplex.push(v);
-                    }
-                    simplex
-                }
-            }
-        }
-    );
-}
+/// Observable shared simplex progress.
+pub mod simplex;
+pub use simplex::{SimplexProgress, SimplexShapeError};
 
-#[cfg(feature = "faer_all")]
-mod faer_simplex {
-    use super::*;
-    crate::backend_macros::faer_versions!(faer, faer_traits, {
-        use super::IntoInitialSimplex;
-        impl IntoInitialSimplex<Self> for faer::Col<f64> {
-            fn into_initial_simplex(self, relative_step: f64) -> Vec<Self> {
-                let n = self.nrows();
-                let mut simplex = Vec::with_capacity(n + 1);
-                simplex.push(self.clone());
-                for i in 0..n {
-                    let mut v = self.clone();
-                    v[i] = if self[i] != 0.0 {
-                        (1.0 + relative_step) * self[i]
-                    } else {
-                        0.00025
-                    };
-                    simplex.push(v);
-                }
-                simplex
-            }
-        }
-    });
-}
+/// Observable shared population progress.
+pub mod population;
+pub use population::{PopulationProgress, PopulationShapeError};
 
-#[cfg(feature = "ndarray_all")]
-mod ndarray_simplex {
-    use super::*;
-    crate::backend_macros::ndarray_versions!(ndarray, {
-        use super::IntoInitialSimplex;
-        impl IntoInitialSimplex<ndarray::Array1<f64>> for ndarray::Array1<f64> {
-            fn into_initial_simplex(
-                self,
-                relative_step: f64,
-            ) -> Vec<ndarray::Array1<f64>> {
-                let n = self.len();
-                let mut simplex = Vec::with_capacity(n + 1);
-                simplex.push(self.clone());
-                for i in 0..n {
-                    let mut v = self.clone();
-                    v[i] = if self[i] != 0.0 {
-                        (1.0 + relative_step) * self[i]
-                    } else {
-                        0.00025
-                    };
-                    simplex.push(v);
-                }
-                simplex
-            }
-        }
-    });
-}
-
-impl<V, F: Scalar> BasicSimplexState<V, F> {
-    /// Build an FMINSEARCH/SciPy-style simplex around a starting point
-    /// `x0`. Mirrors `BasicState::new` ergonomically; the solver infers
-    /// dimension from the simplex during `init`.
-    pub fn new<X: IntoInitialSimplex<V>>(x0: X) -> Self {
-        Self::from_simplex(x0.into_initial_simplex(0.05))
-    }
-
-    /// Like `new`, but with a custom relative step (default is `0.05`).
-    /// Zero coordinates still use the FMINSEARCH absolute step `0.00025`.
-    pub fn with_step<X: IntoInitialSimplex<V>>(
-        x0: X,
-        relative_step: f64,
-    ) -> Self {
-        Self::from_simplex(x0.into_initial_simplex(relative_step))
-    }
-}
-
-impl<V, F: Scalar> State for BasicSimplexState<V, F> {
-    type Param = V;
-    type Float = F;
-
-    fn iter(&self) -> u64 {
-        self.iter
-    }
-
-    fn increment_iter(&mut self) {
-        self.iter += 1;
-    }
-
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-
-    fn param(&self) -> &V {
-        &self.vertices[0]
-    }
-
-    fn cost(&self) -> F {
-        self.costs[0]
-    }
-
-    fn best_param(&self) -> &V {
-        // costs[0] is monotone non-increasing across iters (sort
-        // invariant), so the best vertex IS vertices[0].
-        &self.vertices[0]
-    }
-
-    fn best_cost(&self) -> F {
-        self.best_cost
-    }
-
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
-    }
-
-    fn update_best(&mut self) {
-        let curr = self.costs[0];
-        if curr < self.best_cost {
-            self.best_cost = curr;
-            self.best_iter = self.iter;
-            self.best_cost_evals = self.cost_evals;
-        }
-    }
-
-    fn reset_best(&mut self) {
-        self.best_cost = F::infinity();
-        self.best_iter = 0;
-        self.best_cost_evals = 0;
-    }
-}
-
-impl<V, F> CountsMirror for BasicSimplexState<V, F>
-where
-    BasicSimplexState<V, F>: State,
-{
-    fn mirror(&mut self, delta: &EvalCounts) {
-        // Derivative-free state: any work folds into the single
-        // `cost_evals` counter (a simplex solver only calls `cost`
-        // today; the generalization matters when a future composed
-        // outer drives a gradient-based inner against this state).
-        self.cost_evals = delta.total_work();
-    }
-}
-
-impl<V, F: Scalar> SimplexState for BasicSimplexState<V, F> {
-    fn vertices(&self) -> &[V] {
-        &self.vertices
-    }
-
-    fn costs(&self) -> &[F] {
-        &self.costs
-    }
-}
-
-/// State for quasi-Newton solvers that maintain a dense inverse-Hessian
-/// approximation `H ≈ ∇²f(x)⁻¹` (BFGS, DFP, SR1).
-///
-/// Generic over the param vector `V` and dense matrix `M`. Constructors
-/// ship for the `Vec<f64>`/[`DenseMatrix`](crate::DenseMatrix) backend
-/// (always available) and
-/// the nalgebra `DVector<f64>`/`DMatrix<f64>` backend (feature `nalgebra`);
-/// faer is reached via the generic [`State`]/[`GradientState`] impls below.
-/// (L-BFGS uses a different state shape, a history of `(s, y)` pairs; see
-/// [`LbfgsState`].)
-///
-/// `initial_scaling_done` tracks whether we've applied the standard
-/// `H₀ ← (sᵀy / yᵀy)·I` rescaling after the first accepted step (Nocedal
-/// & Wright (6.20)). This makes the unit step well-scaled on poorly
-/// conditioned problems where plain identity initialization stalls.
-///
-/// The scalar `F` defaults to `f64` so existing `QuasiNewtonState<V, M>`
-/// call sites resolve unchanged.
-///
-/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
-/// `V`, `M`, and `F` are) for checkpointing; see
-/// [`CheckpointWriter`](https://docs.rs/basin/latest/basin/core/observer/checkpoint/struct.CheckpointWriter.html).
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct QuasiNewtonState<V, M, F = f64> {
-    pub(crate) param: V,
-    pub(crate) cost: Option<F>,
-    pub(crate) gradient: Option<V>,
-    pub(crate) inverse_hessian: M,
-    pub(crate) initial_scaling_done: bool,
-    pub(crate) iter: u64,
-    pub(crate) cost_evals: u64,
-    pub(crate) gradient_evals: u64,
-    pub(crate) best_param: Option<V>,
-    pub(crate) best_cost: F,
-    pub(crate) best_iter: u64,
-    pub(crate) best_cost_evals: u64,
-    pub(crate) best_gradient_evals: u64,
-}
-
-impl<V: VectorLen, M: MatrixIdentity, F: Scalar> QuasiNewtonState<V, M, F> {
-    /// Build a state at the given starting point with the inverse-Hessian
-    /// approximation initialized to the identity.
-    ///
-    /// Generic over the backend: `M` is the dense matrix paired with the
-    /// param vector `V`: [`DenseMatrix`](crate::core::math::DenseMatrix) for
-    /// `Vec<f64>`, `DMatrix<f64>` for nalgebra, `Mat<f64>` for faer. Since
-    /// `M` is not an argument, annotate it at the call site when it can't be
-    /// inferred from context, e.g.
-    /// `QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(x)`.
-    ///
-    /// For the common path, prefer the per-backend alias so neither `V` nor
-    /// `M` has to be spelled: [`DenseQuasiNewtonState`] (`Vec<f64>`),
-    /// [`NalgebraQuasiNewtonState`](https://docs.rs/basin/latest/basin/core/state/type.NalgebraQuasiNewtonState.html) (feature `nalgebra`),
-    /// [`NdarrayQuasiNewtonState`](https://docs.rs/basin/latest/basin/core/state/type.NdarrayQuasiNewtonState.html) (feature `ndarray`), or
-    /// [`FaerQuasiNewtonState`](https://docs.rs/basin/latest/basin/core/state/type.FaerQuasiNewtonState.html) (feature `faer`), e.g.
-    /// `DenseQuasiNewtonState::new(x)`.
-    pub fn new(param: V) -> Self {
-        let n = param.vec_len();
-        Self {
-            param,
-            cost: None,
-            gradient: None,
-            inverse_hessian: M::identity(n),
-            initial_scaling_done: false,
-            iter: 0,
-            cost_evals: 0,
-            gradient_evals: 0,
-            best_param: None,
-            best_cost: F::infinity(),
-            best_iter: 0,
-            best_cost_evals: 0,
-            best_gradient_evals: 0,
-        }
-    }
-}
-
-/// [`QuasiNewtonState`] pinned to the dependency-free `Vec<F>` /
-/// [`DenseMatrix`](crate::core::math::DenseMatrix) backend.
-///
-/// The common path doesn't have to spell the matrix type `M`:
-/// `DenseQuasiNewtonState::new(x)` instead of
-/// `QuasiNewtonState::<Vec<f64>, DenseMatrix>::new(x)`. The scalar `F`
-/// defaults to `f64`.
-pub type DenseQuasiNewtonState<F = f64> =
-    QuasiNewtonState<Vec<F>, crate::core::math::DenseMatrix<F>, F>;
-
-/// [`QuasiNewtonState`] pinned to the nalgebra `DVector<F>`/`DMatrix<F>`
-/// backend (feature `nalgebra`).
-///
-/// `NalgebraQuasiNewtonState::new(x)` instead of
-/// `QuasiNewtonState::<DVector<f64>, DMatrix<f64>>::new(x)`. The scalar `F`
-/// defaults to `f64`.
-///
-/// This legacy alias selects the newest enabled nalgebra version, so enabling
-/// another version can change its concrete type. Use [`QuasiNewtonState`]
-/// with explicit vector and matrix types for stable version selection.
-#[cfg(feature = "nalgebra_all")]
-pub type NalgebraQuasiNewtonState<F = f64> =
-    QuasiNewtonState<nalgebra::DVector<F>, nalgebra::DMatrix<F>, F>;
-
-/// [`QuasiNewtonState`] pinned to the faer `Col<F>`/`Mat<F>` backend
-/// (feature `faer`).
-///
-/// `FaerQuasiNewtonState::new(x)` instead of
-/// `QuasiNewtonState::<Col<f64>, Mat<f64>>::new(x)`. The scalar `F` defaults
-/// to `f64`.
-///
-/// This legacy alias selects the newest enabled faer version, so enabling
-/// another version can change its concrete type. Use [`QuasiNewtonState`]
-/// with explicit vector and matrix types for stable version selection.
-#[cfg(feature = "faer_all")]
-pub type FaerQuasiNewtonState<F = f64> =
-    QuasiNewtonState<faer::Col<F>, faer::Mat<F>, F>;
-
-/// [`QuasiNewtonState`] pinned to the ndarray `Array1<F>`/`Array2<F>`
-/// backend (feature `ndarray`).
-///
-/// `NdarrayQuasiNewtonState::new(x)` instead of
-/// `QuasiNewtonState::<Array1<f64>, Array2<f64>>::new(x)`. The scalar `F`
-/// defaults to `f64`.
-///
-/// This legacy alias selects the newest enabled ndarray version, so enabling
-/// another version can change its concrete type. Use [`QuasiNewtonState`]
-/// with explicit vector and matrix types for stable version selection.
-#[cfg(feature = "ndarray_all")]
-pub type NdarrayQuasiNewtonState<F = f64> =
-    QuasiNewtonState<ndarray::Array1<F>, ndarray::Array2<F>, F>;
-
-impl<V: Clone, M, F: Scalar> State for QuasiNewtonState<V, M, F> {
-    type Param = V;
-    type Float = F;
-
-    fn iter(&self) -> u64 {
-        self.iter
-    }
-
-    fn increment_iter(&mut self) {
-        self.iter += 1;
-    }
-
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-
-    fn param(&self) -> &V {
-        &self.param
-    }
-
-    /// Reads the cost cached at the current `param`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if accessed before
-    /// [`Solver::init`](crate::core::solver::Solver::init) has populated
-    /// the cached cost. See [`BasicState::cost`] for the full safety
-    /// argument; same contract.
-    fn cost(&self) -> F {
-        self.cost.expect(
-            "QuasiNewtonState::cost read before Solver::init populated it",
-        )
-    }
-
-    fn best_param(&self) -> &V {
-        self.best_param
-            .as_ref()
-            .expect("QuasiNewtonState::best_param read before Solver::init populated it")
-    }
-
-    fn best_cost(&self) -> F {
-        self.best_cost
-    }
-
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
-    }
-
-    fn update_best(&mut self) {
-        if let Some(curr) = self.cost {
-            if self.best_param.is_none() || curr < self.best_cost {
-                self.best_param = Some(self.param.clone());
-                self.best_cost = curr;
-                self.best_iter = self.iter;
-                self.best_cost_evals = self.cost_evals;
-                self.best_gradient_evals = self.gradient_evals;
-            }
-        }
-    }
-
-    fn reset_best(&mut self) {
-        self.best_param = None;
-        self.best_cost = F::infinity();
-        self.best_iter = 0;
-        self.best_cost_evals = 0;
-        self.best_gradient_evals = 0;
-    }
-}
-
-impl<V: Clone, M, F: Scalar> GradientState for QuasiNewtonState<V, M, F> {
-    fn gradient(&self) -> Option<&V> {
-        self.gradient.as_ref()
-    }
-
-    fn gradient_evals(&self) -> u64 {
-        self.gradient_evals
-    }
-
-    fn best_gradient_evals(&self) -> u64 {
-        self.best_gradient_evals
-    }
-}
-
-impl<V: Clone, M, F: Scalar> CountsMirror for QuasiNewtonState<V, M, F> {
-    fn mirror(&mut self, delta: &EvalCounts) {
-        self.cost_evals = delta.cost_evals + delta.residual_evals;
-        self.gradient_evals = delta.gradient_evals
-            + delta.jacobian_evals
-            + delta.hessian_evals
-            + delta.hessian_product_evals;
-    }
-}
-
-/// Default [`PopulationState`] implementation: `λ` candidate parameters
-/// and parallel costs. The solver keeps both sorted by ascending cost
-/// at the start and end of every `next_iter`, so [`State::param`] /
-/// [`State::cost`] always return the current best candidate.
-///
-/// Vehicle for [`RandomSearch`](crate::solver::RandomSearch); will be
-/// reused by CMA-ES (S8) without changes.
-///
-/// The scalar `F` defaults to `f64` so existing `BasicPopulationState<V>`
-/// call sites resolve unchanged.
-///
-/// With the `serde` feature this state is `Serialize`/`Deserialize` (when
-/// `V` and `F` are), including the full population and best-so-far history.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasicPopulationState<V, F = f64> {
-    pub(crate) candidates: Vec<V>,
-    pub(crate) costs: Vec<F>,
-    pub(crate) iter: u64,
-    pub(crate) cost_evals: u64,
-    pub(crate) best_cost: F,
-    pub(crate) best_iter: u64,
-    pub(crate) best_cost_evals: u64,
-}
-
-impl<V, F: Scalar> BasicPopulationState<V, F> {
-    /// Build from a pre-constructed population (advanced users; custom
-    /// initial distributions). Costs are filled by the solver in
-    /// [`Solver::init`](crate::core::solver::Solver::init).
-    ///
-    /// # Panics
-    ///
-    /// Panics if `candidates` is empty: a population must have at
-    /// least one member.
-    pub fn from_population(candidates: Vec<V>) -> Self {
-        assert!(
-            !candidates.is_empty(),
-            "BasicPopulationState requires a non-empty population"
-        );
-        let n = candidates.len();
-        Self {
-            candidates,
-            costs: vec![F::infinity(); n],
-            iter: 0,
-            cost_evals: 0,
-            best_cost: F::infinity(),
-            best_iter: 0,
-            best_cost_evals: 0,
-        }
-    }
-
-    /// Empty container with `lambda` capacity reserved. The solver
-    /// fills it in [`Solver::init`](crate::core::solver::Solver::init)
-    /// (e.g. by sampling uniformly in the problem's box).
-    ///
-    /// Use this constructor when the *solver* owns the initial-
-    /// population distribution (the random-search style); use
-    /// [`from_population`](Self::from_population) when the *caller* owns
-    /// it.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `lambda == 0`.
-    pub fn with_size(lambda: usize) -> Self {
-        assert!(lambda >= 1, "BasicPopulationState requires lambda >= 1");
-        Self {
-            candidates: Vec::with_capacity(lambda),
-            costs: Vec::with_capacity(lambda),
-            iter: 0,
-            cost_evals: 0,
-            best_cost: F::infinity(),
-            best_iter: 0,
-            best_cost_evals: 0,
-        }
-    }
-}
-
-impl<V, F: Scalar> State for BasicPopulationState<V, F> {
-    type Param = V;
-    type Float = F;
-
-    fn iter(&self) -> u64 {
-        self.iter
-    }
-
-    fn increment_iter(&mut self) {
-        self.iter += 1;
-    }
-
-    fn cost_evals(&self) -> u64 {
-        self.cost_evals
-    }
-
-    fn param(&self) -> &V {
-        &self.candidates[0]
-    }
-
-    fn cost(&self) -> F {
-        self.costs[0]
-    }
-
-    fn best_param(&self) -> &V {
-        // costs[0] is monotone non-increasing across iters (sort
-        // invariant), so the best candidate IS candidates[0].
-        &self.candidates[0]
-    }
-
-    fn best_cost(&self) -> F {
-        self.best_cost
-    }
-
-    fn best_iter(&self) -> u64 {
-        self.best_iter
-    }
-
-    fn best_cost_evals(&self) -> u64 {
-        self.best_cost_evals
-    }
-
-    fn update_best(&mut self) {
-        let curr = self.costs[0];
-        if curr < self.best_cost {
-            self.best_cost = curr;
-            self.best_iter = self.iter;
-            self.best_cost_evals = self.cost_evals;
-        }
-    }
-
-    fn reset_best(&mut self) {
-        self.best_cost = F::infinity();
-        self.best_iter = 0;
-        self.best_cost_evals = 0;
-    }
-}
-
-impl<V, F> CountsMirror for BasicPopulationState<V, F>
-where
-    BasicPopulationState<V, F>: State,
-{
-    fn mirror(&mut self, delta: &EvalCounts) {
-        // Derivative-free outer: any kind of work (e.g. an L-BFGS
-        // inner's gradient calls inside a CMA-injection wrapper) folds
-        // into the single `cost_evals` counter so `state.cost_evals`
-        // reflects total work, with no per-trait cross-type fold.
-        self.cost_evals = delta.total_work();
-    }
-}
-
-impl<V, F: Scalar> PopulationState for BasicPopulationState<V, F> {
-    fn candidates(&self) -> &[V] {
-        &self.candidates
-    }
-
-    fn costs(&self) -> &[F] {
-        &self.costs
-    }
-}
-
-/// Accepted sequential least-squares programming progress.
-pub mod slsqp;
-pub use slsqp::SlsqpState;
+/// Shared constrained progress with a matching objective gradient.
+pub mod selected_first_order;
+pub use selected_first_order::SelectedFirstOrderState;

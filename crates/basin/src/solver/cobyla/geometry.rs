@@ -70,6 +70,7 @@ pub(crate) fn setdrop_geo<F: Scalar>(
 }
 
 /// Geometry scores reused when choosing a replacement vertex.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct GeometryWork<F> {
     distsq: Vec<F>,
     simid: Vec<F>,

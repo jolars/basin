@@ -10,6 +10,7 @@
 use crate::core::math::Scalar;
 
 /// Reusable interpolation-model storage.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct ModelWork<F> {
     pub(crate) g: Vec<F>,
     pub(crate) a: Vec<F>,

@@ -3,7 +3,7 @@
 use crate::backend_aliases::nalgebra::DVector;
 use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquares;
-use basin::{Executor, GaussNewton, NllsState, TerminationReason};
+use basin::{Executor, GaussNewton, PointState, TerminationReason};
 
 /// 6×3 sparse design with `b = A·[1,2,3]` so the closed-form
 /// least-squares minimum has zero residual at `x* = [1, 2, 3]`.
@@ -35,7 +35,7 @@ fn fixture() -> (
 fn gauss_newton_converges_on_sparse_linear_regression() {
     let (problem, initial) = fixture();
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(20)
             .run()
             .unwrap();
@@ -66,7 +66,7 @@ fn gauss_newton_single_step_matches_closed_form() {
     // x* = (AᵀA)⁻¹Aᵀb = [1, 2, 3].
     let (problem, initial) = fixture();
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(1)
             .run()
             .unwrap();
@@ -94,7 +94,7 @@ fn gauss_newton_single_step_matches_closed_form() {
 fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
     let (problem, initial) = fixture();
     let result =
-        Executor::new(problem, GaussNewton::new(), NllsState::new(initial))
+        Executor::new(problem, GaussNewton::new(), PointState::new(initial))
             .max_iter(50)
             .run()
             .unwrap();

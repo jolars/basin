@@ -3,7 +3,7 @@
 use basin::core::rng::ChaCha8Rng;
 use basin::{
     CostFunction, ExactCheckpoint, ExactCheckpointWriter, Executor, Neighbor,
-    ObserverMode, SimulatedAnnealing, SimulatedAnnealingState, State,
+    ObserverMode, ProposalState, SimulatedAnnealing, State,
     TemperatureSchedule, TerminationReason, read_exact_checkpoint,
 };
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ impl Neighbor<i32, f64, ChaCha8Rng> for StatefulNeighbor {
 }
 
 type TestSolver = SimulatedAnnealing<StatefulNeighbor>;
-type TestState = SimulatedAnnealingState<i32, StatefulNeighbor>;
+type TestState = ProposalState<i32>;
 
 fn solver() -> TestSolver {
     SimulatedAnnealing::new(
@@ -130,29 +130,30 @@ fn serialized_solver_and_state_resume_bit_for_bit() {
 }
 
 #[test]
-fn state_only_resume_api_remains_exact() {
-    let reference = Executor::from_start(RuggedCost, solver(), 12)
-        .max_iter(80)
-        .run()
-        .unwrap();
+fn state_only_snapshot_starts_a_fresh_chain() {
     let split = Executor::from_start(RuggedCost, solver(), 12)
         .max_iter(31)
         .run()
         .unwrap()
         .into_state();
     let bytes = postcard::to_allocvec(&split).unwrap();
-    let (restored, _): (TestState, &[u8]) =
-        postcard::take_from_bytes(&bytes).unwrap();
-
-    let resumed = Executor::resume(RuggedCost, solver(), restored)
+    let restored: TestState = postcard::from_bytes(&bytes).unwrap();
+    let start = *restored.param();
+    let restarted = Executor::new(RuggedCost, solver(), restored)
+        .require_evaluated_state()
         .max_iter(80)
-        .run()
+        .run_with_solver()
         .unwrap();
-
-    assert_eq!(resumed.cost_evals(), 81);
+    let rebuilt = Executor::from_start(RuggedCost, solver(), start)
+        .require_evaluated_state()
+        .max_iter(80)
+        .run_with_solver()
+        .unwrap();
+    assert_eq!(restarted.cost_evals(), 81);
+    assert_eq!(restarted.state, rebuilt.state);
     assert_eq!(
-        postcard::to_allocvec(&resumed.state).unwrap(),
-        postcard::to_allocvec(&reference.state).unwrap(),
+        postcard::to_allocvec(&restarted.solver).unwrap(),
+        postcard::to_allocvec(&rebuilt.solver).unwrap()
     );
 }
 
@@ -173,8 +174,7 @@ impl Neighbor<i32, f64, ChaCha8Rng> for AlwaysRejectNeighbor {
 }
 
 type RejectSolver = SimulatedAnnealing<AlwaysRejectNeighbor>;
-type RejectState =
-    SimulatedAnnealingState<i32, AlwaysRejectNeighbor, f64, ChaCha8Rng>;
+type RejectState = ProposalState<i32>;
 
 fn always_reject() -> RejectSolver {
     SimulatedAnnealing::new(

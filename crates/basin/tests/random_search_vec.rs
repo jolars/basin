@@ -1,10 +1,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::BoothBoxed;
-use basin::{
-    BasicPopulationState, Executor, PopulationState, RandomSearch, State,
-    StepOutcome,
-};
+use basin::{Executor, PopulationProgress, RandomSearch, State, StepOutcome};
 
 /// Same seed → same trajectory. Load-bearing reproducibility check
 /// for the stochastic-solver contract: a `RandomSearch::new(λ, seed)`
@@ -18,7 +15,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_a = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower.clone(), upper.clone()),
         RandomSearch::new(16, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(16),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -27,7 +24,7 @@ fn same_seed_yields_identical_trajectory() {
     let result_b = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
         RandomSearch::new(16, 42),
-        BasicPopulationState::<Vec<f64>>::with_size(16),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(20)
     .run()
@@ -48,7 +45,7 @@ fn different_seeds_yield_different_trajectories() {
     let result_a = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower.clone(), upper.clone()),
         RandomSearch::new(8, 1),
-        BasicPopulationState::<Vec<f64>>::with_size(8),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(5)
     .run()
@@ -57,7 +54,7 @@ fn different_seeds_yield_different_trajectories() {
     let result_b = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
         RandomSearch::new(8, 2),
-        BasicPopulationState::<Vec<f64>>::with_size(8),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(5)
     .run()
@@ -80,7 +77,7 @@ fn converges_to_box_corner_on_tight_booth() {
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
         RandomSearch::new(64, 7),
-        BasicPopulationState::<Vec<f64>>::with_size(64),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(200)
     .run()
@@ -111,7 +108,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
     let mut stepper = Executor::new(
         problem,
         RandomSearch::new(8, 99),
-        BasicPopulationState::<Vec<f64>>::with_size(8),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(50)
     .into_stepper()
@@ -128,7 +125,7 @@ fn elite_keeps_cost_monotone_across_iterations() {
     }
 }
 
-/// `BasicPopulationState` invariant: candidates and costs both have
+/// `PopulationProgress` invariant: candidates and costs both have
 /// length `λ` and are sorted ascending so `param()`/`cost()` always
 /// surface the best. Regression check on the sort and truncate logic in
 /// `next_iter`.
@@ -141,7 +138,7 @@ fn population_invariants_hold_after_iteration() {
     let mut stepper = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
         RandomSearch::new(lambda, 1234),
-        BasicPopulationState::<Vec<f64>>::with_size(lambda),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(10)
     .into_stepper()
@@ -169,7 +166,7 @@ fn population_invariants_hold_after_iteration() {
 /// `MaxIter(0)` returns immediately after `init`, so the result is the
 /// `init`-time first-generation best. Companion to the reproducibility
 /// test: confirms `init` is the place where the seeded RNG starts the
-/// trajectory, regardless of which `BasicPopulationState` constructor
+/// trajectory, regardless of which `PopulationProgress` constructor
 /// the caller used.
 #[test]
 fn max_iter_zero_returns_initial_population_best() {
@@ -179,7 +176,7 @@ fn max_iter_zero_returns_initial_population_best() {
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower.clone(), upper.clone()),
         RandomSearch::new(4, 555),
-        BasicPopulationState::<Vec<f64>>::with_size(4),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(0)
     .run()

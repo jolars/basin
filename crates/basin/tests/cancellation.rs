@@ -5,8 +5,8 @@ use std::convert::Infallible;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CancellationToken, CostFunction, CountsMirror, EvalCounts,
-    Executor, Gradient, GradientDescent, Observe, ObserverMode, Problem,
+    CancellationToken, CostFunction, CountsMirror, EvalCounts, Executor,
+    FirstOrderState, Gradient, GradientDescent, Observe, ObserverMode, Problem,
     Solver, State, StepOutcome, TerminationReason,
 };
 
@@ -56,7 +56,7 @@ fn pre_cancelled_executor_returns_an_initialized_state() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![3.0, 4.0]),
+        FirstOrderState::new(vec![3.0, 4.0]),
     )
     .max_iter(0)
     .with_cancellation_token(token)
@@ -79,7 +79,7 @@ fn a_later_token_replaces_the_previous_one() {
     let result = Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0]),
+        FirstOrderState::new(vec![1.0]),
     )
     .max_iter(0)
     .with_cancellation_token(cancelled)

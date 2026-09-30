@@ -970,7 +970,7 @@ mod tests {
             f64::INFINITY,
         ];
         let g = [3.0, 2.0, -4.0, 9.0, 0.0, -1.0];
-        let mut state = crate::LbfgsState::new(x.to_vec(), 2);
+        let mut state = super::super::workspace::History::new(2);
         for s in [
             vec![1.0, 0.0, 0.0, 2.0, 1.0, 1.0],
             vec![0.0, 2.0, 1.0, 0.0, 0.0, 1.0],

@@ -14,6 +14,7 @@ use crate::line_search::{
 /// [`NonlinearCg::with_update`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CgUpdate {
     /// Safeguarded Hager–Zhang update. This is the default.
     #[default]
@@ -158,6 +159,7 @@ pub enum CgUpdate {
 /// ).max_iter(100).run().unwrap();
 /// assert!(result.cost() < 1e-12);
 /// ```
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NonlinearCg<L, V, F: Scalar = f64> {
     line_search: L,
     update: CgUpdate,
@@ -425,14 +427,14 @@ where
         mut state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
         state.reset();
+        self.line_search.reset();
         self.direction = None;
         self.steepest = true;
         self.steps_since_restart = 0;
-        let param = state.param().clone();
-        let (cost, gradient) = problem.cost_and_gradient(&param)?;
+        let (cost, gradient) = problem.cost_and_gradient(state.param())?;
         self.direction = Some(negative(&gradient));
         state
-            .replace(param, cost, gradient)
+            .set_evaluation(cost, gradient)
             .expect("gradient must match parameter dimension");
         Ok(state)
     }

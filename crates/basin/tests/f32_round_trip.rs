@@ -74,13 +74,14 @@ fn scalar_bracketing_and_roots_f32() {
 use basin::core::executor::Executor;
 use basin::core::math::DenseMatrix;
 use basin::core::problem::{CostFunction, Gradient, Hessian, HessianProduct};
-use basin::core::state::{BasicState, LbfgsState, State};
+use basin::core::state::{FirstOrderState, PointState, State};
 use basin::line_search::{Backtracking, HagerZhang, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{
-    BoxConstraints, Cobyla, CobylaState, FoldedConstraints, Gbnm, GbnmState,
-    GradientDescent, MatrixFree, MoreSorensen, NonlinearConstraints,
-    NonlinearInequalityConstraints, Steihaug, TerminationReason, TrustRegion,
+    BoxConstraints, Cobyla, FoldedConstraints, Gbnm, GradientDescent,
+    MatrixFree, MoreSorensen, NonlinearConstraints,
+    NonlinearInequalityConstraints, SelectedState, Steihaug, TerminationReason,
+    TrustRegion,
 };
 
 /// `f(x) = ‖x − c‖²` with `c = (1, 2, 3)`. Minimum at `c`, cost 0.
@@ -152,10 +153,10 @@ fn cobyla_f32_round_trips_small_and_cached_inverse_paths() {
         };
         let result = Executor::new(
             problem,
-            Cobyla::<f32>::new()
+            Cobyla::<_, f32>::new()
                 .with_initial_radius(0.5)
                 .with_final_radius(1e-4),
-            CobylaState::<Vec<f32>, f32>::new(vec![3.0; n]),
+            SelectedState::<Vec<f32>, f32>::new(vec![3.0; n]),
         )
         .max_iter(1000)
         .run()
@@ -246,7 +247,7 @@ fn cobyla_f32_round_trips_full_form_constraints() {
     };
     let result = Executor::from_start(
         FoldedConstraints::new(problem),
-        Cobyla::<f32>::new()
+        Cobyla::<_, f32>::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-4),
         vec![0.0_f32; 5],
@@ -279,18 +280,18 @@ fn gbnm_f32_round_trips_solver_state_and_bounds() {
         lower: vec![-5.0; 2],
         upper: vec![5.0; 2],
     };
-    let solver = Gbnm::<f32>::new(42);
-    let state = GbnmState::<Vec<f32>, f32>::new(vec![3.0, 3.0]);
+    let solver = Gbnm::<_, f32>::new(42);
+    let state = PointState::<Vec<f32>, f32>::new(vec![3.0, 3.0]);
 
     let result = Executor::new(problem, solver, state)
         .max_iter(300)
-        .run()
+        .run_with_solver()
         .unwrap();
 
     assert!(result.state.best_cost() < 1e-5);
     assert!(
         result
-            .state
+            .solver
             .vertices()
             .iter()
             .flatten()
@@ -303,7 +304,7 @@ fn gradient_descent_f32_with_f32_termination_converges() {
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
-    let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let state = FirstOrderState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
     let solver: GradientDescent<Backtracking<f32>, Vec<f32>, f32> =
         GradientDescent::with_line_search(Backtracking::new());
 
@@ -327,11 +328,11 @@ fn unbounded_lbfgs_f32_round_trips_state_solver_termination() {
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
-    let state = LbfgsState::<Vec<f32>, f32>::new(vec![0.0_f32; 3], 5);
-    let solver: Lbfgs<Unbounded, MoreThuente<f32>, f32> =
-        Lbfgs::<Unbounded, MoreThuente<f32>, f32>::with_line_search(
-            MoreThuente::new(),
-        );
+    let state = FirstOrderState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let solver: Lbfgs<Vec<f32>, f32, Unbounded, MoreThuente<f32>> =
+        Lbfgs::with_line_search(MoreThuente::new())
+            .unbounded()
+            .with_m_capacity(5);
 
     let result = Executor::new(
         problem,
@@ -356,11 +357,11 @@ fn hager_zhang_f32_round_trips_line_search_and_lbfgs() {
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
-    let state = LbfgsState::<Vec<f32>, f32>::new(vec![0.0_f32; 3], 5);
-    let solver: Lbfgs<Unbounded, HagerZhang<f32>, f32> =
-        Lbfgs::<Unbounded, HagerZhang<f32>, f32>::with_line_search(
-            HagerZhang::new(),
-        );
+    let state = FirstOrderState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let solver: Lbfgs<Vec<f32>, f32, Unbounded, HagerZhang<f32>> =
+        Lbfgs::with_line_search(HagerZhang::new())
+            .unbounded()
+            .with_m_capacity(5);
 
     let result = Executor::new(
         problem,
@@ -408,7 +409,7 @@ fn matrix_free_trust_region_f32_round_trips_state_solver_termination() {
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
-    let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let state = FirstOrderState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
     let solver: TrustRegion<Steihaug, f32, MatrixFree> =
         TrustRegion::matrix_free_with(Steihaug::new());
 
@@ -462,14 +463,14 @@ fn configured_steihaug_f32_runs_in_both_modes() {
 #[test]
 fn solis_wets_f32_round_trips_state_solver_termination() {
     // The derivative-free adaptive-random-search pipeline (SolisWets,
-    // SolisWetsState, RhoTolerance via RhoState) runs end-to-end at
+    // PointState, solver-owned step size and RhoTolerance) runs end-to-end at
     // F = f32 over Vec<f32>.
     use basin::SolisWets;
 
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
-    let solver = SolisWets::<f32>::new(42);
+    let solver = SolisWets::<_, f32>::new(42);
 
     let result = Executor::from_start(
         problem,
@@ -493,7 +494,7 @@ fn trust_region_f32_round_trips_state_solver_termination() {
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
-    let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let state = FirstOrderState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
     let solver: TrustRegion<Steihaug, f32> =
         TrustRegion::with_subproblem(Steihaug::new());
 
@@ -517,7 +518,7 @@ fn more_sorensen_f32_round_trips_state_solver_termination() {
     let problem = ShiftedQuadF32 {
         c: vec![1.0_f32, 2.0, 3.0],
     };
-    let state = BasicState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
+    let state = FirstOrderState::<Vec<f32>, f32>::new(vec![0.0_f32; 3]);
     let solver: TrustRegion<MoreSorensen, f32> =
         TrustRegion::with_subproblem(MoreSorensen::new());
 
@@ -614,5 +615,5 @@ fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
     .unwrap();
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!(result.param().iter().all(|v| (*v - 0.5).abs() < 1e-3));
-    assert!(result.state.constraint_violation().unwrap() < 1e-4);
+    assert!(result.state.current().unwrap().3 < 1e-4);
 }

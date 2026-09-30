@@ -16,7 +16,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, FiniteDiff, Gradient, GradientDescent,
+    CostFunction, Executor, FiniteDiff, FirstOrderState, Gradient,
+    GradientDescent,
 };
 
 // ---------------------------------------------------------------------
@@ -56,7 +57,7 @@ fn gradient_descent_runs_with_no_opt_in() {
     // Sphere has no `cost_and_gradient` override; the defaulted body
     // is what the solver hits. No extra trait impl required.
     let solver = GradientDescent::new(0.1);
-    let state = BasicState::new(vec![1.0, 1.0]);
+    let state = FirstOrderState::new(vec![1.0, 1.0]);
     let result = Executor::new(
         Sphere,
         (solver).with_absolute_gradient_tolerance(1e-10),
@@ -111,7 +112,7 @@ fn solver_calls_fused_override() {
         fused_calls: counter.clone(),
     };
     let solver = GradientDescent::new(0.1);
-    let state = BasicState::new(vec![1.0, 1.0]);
+    let state = FirstOrderState::new(vec![1.0, 1.0]);
     let result = Executor::new(
         problem,
         (solver).with_absolute_gradient_tolerance(1e-10),
@@ -141,7 +142,7 @@ fn gradient_descent_reuses_the_fused_line_search_evaluation() {
         GradientDescent::with_line_search(
             basin::MoreThuente::new().alpha_init(0.5),
         ),
-        BasicState::new(vec![1.0, 2.0]),
+        FirstOrderState::new(vec![1.0, 2.0]),
     )
     .max_iter(1)
     .run()
@@ -273,7 +274,7 @@ mod hessian {
 mod lsq {
     use super::*;
     use crate::backend_aliases::nalgebra::{DMatrix, DVector};
-    use basin::{Jacobian, LevenbergMarquardt, NllsState, Residual};
+    use basin::{Jacobian, LevenbergMarquardt, PointState, Residual};
 
     /// `r(x) = (x₀ − 1, x₁ − 2)`, J = I. Minimum at (1, 2).
     struct Affine {
@@ -330,7 +331,7 @@ mod lsq {
         let problem = Affine {
             fused_calls: counter.clone(),
         };
-        let state = NllsState::new(DVector::from_vec(vec![0.0, 0.0]));
+        let state = PointState::new(DVector::from_vec(vec![0.0, 0.0]));
         let solver: LevenbergMarquardt<DVector<f64>, DMatrix<f64>> =
             LevenbergMarquardt::new();
         let result = Executor::new(problem, solver, state)
@@ -365,7 +366,7 @@ impl CostFunction for CostOnly {
 fn finite_diff_runs_through_solver() {
     let problem = FiniteDiff::new(CostOnly);
     let solver = GradientDescent::new(0.1);
-    let state = BasicState::new(vec![0.0, 0.0]);
+    let state = FirstOrderState::new(vec![0.0, 0.0]);
     let result = Executor::new(
         problem,
         (solver).with_absolute_gradient_tolerance(1e-8),

@@ -6,7 +6,7 @@
 
 use std::convert::Infallible;
 
-use basin::{BoxConstraints, CostFunction, Executor, Gbnm, GbnmState};
+use basin::{BoxConstraints, CostFunction, Executor, Gbnm, PointState};
 
 #[cfg(feature = "nalgebra_all")]
 #[test]
@@ -41,10 +41,10 @@ fn nalgebra_parameter_runs() {
             upper: DVector::from_element(2, 5.0),
         },
         Gbnm::new(17),
-        GbnmState::new(DVector::from_element(2, 3.0)),
+        PointState::new(DVector::from_element(2, 3.0)),
     )
     .max_iter(250)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert!(result.best_cost() < 1e-8);
 }
@@ -82,10 +82,10 @@ fn ndarray_parameter_runs() {
             upper: Array1::from_elem(2, 5.0),
         },
         Gbnm::new(17),
-        GbnmState::new(Array1::from_elem(2, 3.0)),
+        PointState::new(Array1::from_elem(2, 3.0)),
     )
     .max_iter(250)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert!(result.best_cost() < 1e-8);
 }
@@ -123,10 +123,10 @@ fn faer_parameter_runs() {
             upper: Col::from_fn(2, |_| 5.0),
         },
         Gbnm::new(17),
-        GbnmState::new(Col::from_fn(2, |_| 3.0)),
+        PointState::new(Col::from_fn(2, |_| 3.0)),
     )
     .max_iter(250)
-    .run()
+    .run_with_solver()
     .unwrap();
     assert!(result.best_cost() < 1e-8);
 }

@@ -1,9 +1,8 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, GlobalBestPso, GlobalBestPsoState,
-    PopulationState, PsoBoundaryHandling, PsoVelocityLimit, State,
-    TerminationReason,
+    BoxConstraints, CostFunction, Executor, GlobalBestPso, PopulationProgress,
+    PsoBoundaryHandling, PsoVelocityLimit, State, TerminationReason,
 };
 use rand::TryRng;
 
@@ -117,10 +116,10 @@ fn one_dimensional_problem() -> BoundedSphere<f64> {
 
 #[test]
 fn defaults_follow_the_standard_pso_coefficient_profile() {
-    let solver = GlobalBestPso::<f64>::new(42);
+    let solver = GlobalBestPso::<Vec<f64>>::new(42);
 
-    assert_eq!(GlobalBestPso::<f64>::default_swarm_size(0), 10);
-    assert_eq!(GlobalBestPso::<f64>::default_swarm_size(9), 16);
+    assert_eq!(GlobalBestPso::<Vec<f64>>::default_swarm_size(0), 10);
+    assert_eq!(GlobalBestPso::<Vec<f64>>::default_swarm_size(9), 16);
     assert!((solver.inertia() - 1.0 / (2.0 * 2.0_f64.ln())).abs() < 1e-15);
     assert!((solver.cognitive() - (0.5 + 2.0_f64.ln())).abs() < 1e-15);
     assert!((solver.social() - (0.5 + 2.0_f64.ln())).abs() < 1e-15);
@@ -134,28 +133,28 @@ fn warm_start_updates_velocity_and_position_synchronously() {
         .with_cognitive(0.0)
         .with_social(0.0)
         .with_boundary_handling(PsoBoundaryHandling::Preserve);
-    let state = GlobalBestPsoState::from_positions_and_velocities(
-        vec![vec![-0.5], vec![0.5]],
-        vec![vec![0.2], vec![-0.4]],
-    );
+    let solver =
+        solver.with_initial_velocities(Some(vec![vec![0.2], vec![-0.4]]));
+    let state =
+        PopulationProgress::from_population(vec![vec![-0.5], vec![0.5]]);
 
     let result = Executor::new(one_dimensional_problem(), solver, state)
         .max_iter(1)
-        .run()
+        .run_with_solver()
         .unwrap();
 
     assert_eq!(result.state.candidates(), &[vec![0.3], vec![-0.4]]);
-    assert_eq!(result.state.velocities(), &[vec![-0.2], vec![0.1]]);
-    assert!((result.state.personal_best_costs()[0] - 0.09).abs() < 1e-15);
-    assert!((result.state.personal_best_costs()[1] - 0.16).abs() < 1e-15);
-    assert_eq!(result.state.global_best_position(), &vec![0.3]);
+    assert_eq!(result.solver.velocities(), &[vec![-0.2], vec![0.1]]);
+    assert!((result.solver.personal_best_costs()[0] - 0.09).abs() < 1e-15);
+    assert!((result.solver.personal_best_costs()[1] - 0.16).abs() < 1e-15);
+    assert_eq!(result.state.current().unwrap().0, &vec![0.3]);
     assert_eq!(result.cost_evals(), 4);
 }
 
 #[test]
 fn positions_only_warm_start_uses_half_displacement_velocity() {
     let solver = GlobalBestPso::new_with_rng(ConstantRng(0));
-    let state = GlobalBestPsoState::from_positions(vec![vec![0.5]]);
+    let state = PopulationProgress::from_population(vec![vec![0.5]]);
     let result = Executor::new(
         BoundedSphere {
             lower: vec![0.0],
@@ -165,11 +164,11 @@ fn positions_only_warm_start_uses_half_displacement_velocity() {
         state,
     )
     .max_iter(0)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.state.candidates(), &[vec![0.5]]);
-    assert_eq!(result.state.velocities(), &[vec![-0.25]]);
+    assert_eq!(result.solver.velocities(), &[vec![-0.25]]);
 }
 
 #[test]
@@ -180,10 +179,12 @@ fn one_generation_matches_argmin_0_11_global_best_reference() {
         .with_cognitive(1.2)
         .with_social(1.4)
         .with_boundary_handling(PsoBoundaryHandling::Preserve);
-    let state = GlobalBestPsoState::from_positions_and_velocities(
-        vec![vec![-0.5, 0.25], vec![0.75, -0.5]],
-        vec![vec![0.2, -0.1], vec![-0.3, 0.4]],
-    );
+    let solver = solver
+        .with_initial_velocities(Some(vec![vec![0.2, -0.1], vec![-0.3, 0.4]]));
+    let state = PopulationProgress::from_population(vec![
+        vec![-0.5, 0.25],
+        vec![0.75, -0.5],
+    ]);
     let result = Executor::new(
         BoundedSphere {
             lower: vec![-1.0; 2],
@@ -193,7 +194,7 @@ fn one_generation_matches_argmin_0_11_global_best_reference() {
         state,
     )
     .max_iter(1)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     let fixture = include_str!("fixtures/global_best_pso_argmin_0_11.csv");
@@ -232,27 +233,25 @@ fn boundary_and_velocity_policies_are_orthogonal() {
             .with_cognitive(0.0)
             .with_social(0.0)
             .with_boundary_handling(boundary);
-        let state = GlobalBestPsoState::from_positions_and_velocities(
-            vec![vec![0.9]],
-            vec![vec![0.4]],
-        );
+        let solver = solver.with_initial_velocities(Some(vec![vec![0.4]]));
+        let state = PopulationProgress::from_population(vec![vec![0.9]]);
         Executor::new(one_dimensional_problem(), solver, state)
             .max_iter(1)
-            .run()
+            .run_with_solver()
             .unwrap()
     };
 
     assert_eq!(
-        run(PsoBoundaryHandling::Absorb).state.velocities(),
+        run(PsoBoundaryHandling::Absorb).solver.velocities(),
         &[vec![0.0]]
     );
     assert_eq!(
-        run(PsoBoundaryHandling::Preserve).state.velocities(),
+        run(PsoBoundaryHandling::Preserve).solver.velocities(),
         &[vec![0.4]]
     );
     assert_eq!(
         run(PsoBoundaryHandling::Reflect { damping: 0.5 })
-            .state
+            .solver
             .velocities(),
         &[vec![-0.2]]
     );
@@ -263,17 +262,15 @@ fn boundary_and_velocity_policies_are_orthogonal() {
         .with_cognitive(0.0)
         .with_social(0.0)
         .with_velocity_limit(PsoVelocityLimit::SpanFraction(0.1));
-    let state = GlobalBestPsoState::from_positions_and_velocities(
-        vec![vec![0.0]],
-        vec![vec![0.9]],
-    );
+    let solver = solver.with_initial_velocities(Some(vec![vec![0.9]]));
+    let state = PopulationProgress::from_population(vec![vec![0.0]]);
     let result = Executor::new(one_dimensional_problem(), solver, state)
         .max_iter(1)
-        .run()
+        .run_with_solver()
         .unwrap();
 
     assert_eq!(result.state.candidates(), &[vec![0.2]]);
-    assert_eq!(result.state.velocities(), &[vec![0.2]]);
+    assert_eq!(result.solver.velocities(), &[vec![0.2]]);
 }
 
 #[test]
@@ -289,10 +286,8 @@ fn span_fraction_limits_velocity_when_box_width_overflows() {
             .with_cognitive(0.0)
             .with_social(0.0)
             .with_velocity_limit(PsoVelocityLimit::SpanFraction(fraction));
-        let state = GlobalBestPsoState::from_positions_and_velocities(
-            vec![vec![0.0_f32]],
-            vec![vec![1e38_f32]],
-        );
+        let solver = solver.with_initial_velocities(Some(vec![vec![1e38_f32]]));
+        let state = PopulationProgress::from_population(vec![vec![0.0_f32]]);
         Executor::new(
             BoundedSphere {
                 lower: vec![lower],
@@ -302,13 +297,13 @@ fn span_fraction_limits_velocity_when_box_width_overflows() {
             state,
         )
         .max_iter(1)
-        .run()
+        .run_with_solver()
         .unwrap()
     };
 
     let stopped = run(0.0);
     assert_eq!(stopped.state.candidates(), &[vec![0.0]]);
-    assert_eq!(stopped.state.velocities(), &[vec![0.0]]);
+    assert_eq!(stopped.solver.velocities(), &[vec![0.0]]);
 
     let limited = run(0.01);
     let expected = 6e36_f32;
@@ -316,7 +311,7 @@ fn span_fraction_limits_velocity_when_box_width_overflows() {
         (limited.state.candidates()[0][0] - expected).abs() < 1e-6 * expected
     );
     assert!(
-        (limited.state.velocities()[0][0] - expected).abs() < 1e-6 * expected
+        (limited.solver.velocities()[0][0] - expected).abs() < 1e-6 * expected
     );
 }
 
@@ -327,17 +322,15 @@ fn non_finite_motion_is_isolated_without_poisoning_the_swarm() {
         .with_inertia(f64::MAX)
         .with_cognitive(0.0)
         .with_social(0.0);
-    let state = GlobalBestPsoState::from_positions_and_velocities(
-        vec![vec![0.0]],
-        vec![vec![f64::MAX]],
-    );
+    let solver = solver.with_initial_velocities(Some(vec![vec![f64::MAX]]));
+    let state = PopulationProgress::from_population(vec![vec![0.0]]);
     let result = Executor::new(one_dimensional_problem(), solver, state)
         .max_iter(1)
-        .run()
+        .run_with_solver()
         .unwrap();
 
     assert_eq!(result.state.candidates(), &[vec![0.0]]);
-    assert_eq!(result.state.velocities(), &[vec![0.0]]);
+    assert_eq!(result.solver.velocities(), &[vec![0.0]]);
 }
 
 #[test]
@@ -349,10 +342,10 @@ fn same_seed_is_reproducible_and_sphere_converges() {
                 upper: vec![5.0; 3],
             },
             GlobalBestPso::new(1729),
-            GlobalBestPsoState::<Vec<f64>>::new(),
+            PopulationProgress::<Vec<f64>>::empty(),
         )
         .max_iter(300)
-        .run()
+        .run_with_solver()
         .unwrap()
     };
     let (a, b) = (run(), run());
@@ -362,7 +355,7 @@ fn same_seed_is_reproducible_and_sphere_converges() {
     assert!(a.cost() < 1e-8, "final cost was {}", a.cost());
     assert_eq!(
         a.cost_evals(),
-        GlobalBestPso::<f64>::default_swarm_size(3) as u64 * 301
+        GlobalBestPso::<Vec<f64>>::default_swarm_size(3) as u64 * 301
     );
 }
 
@@ -373,11 +366,11 @@ fn f32_state_solver_and_objective_round_trip() {
             lower: vec![-3.0_f32; 2],
             upper: vec![3.0_f32; 2],
         },
-        GlobalBestPso::<f32>::new(91).with_swarm_size(12),
-        GlobalBestPsoState::<Vec<f32>, f32>::new(),
+        GlobalBestPso::<_, f32>::new(91).with_swarm_size(12),
+        PopulationProgress::<Vec<f32>, f32>::empty(),
     )
     .max_iter(150)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert!(result.cost() < 1e-5);
@@ -419,10 +412,10 @@ fn converges_on_a_multimodal_rastrigin_problem() {
             upper: vec![5.12; 2],
         },
         GlobalBestPso::new(2025).with_swarm_size(30),
-        GlobalBestPsoState::<Vec<f64>>::new(),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(500)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert!(result.cost() < 1e-8, "final cost was {}", result.cost());
@@ -464,10 +457,10 @@ fn a_finite_evaluation_replaces_a_nan_personal_best() {
         .with_inertia(1.0)
         .with_cognitive(0.0)
         .with_social(0.0);
-    let state = GlobalBestPsoState::from_positions_and_velocities(
-        vec![vec![0.5], vec![0.25]],
-        vec![vec![-0.5], vec![0.0]],
-    );
+    let solver =
+        solver.with_initial_velocities(Some(vec![vec![-0.5], vec![0.0]]));
+    let state =
+        PopulationProgress::from_population(vec![vec![0.5], vec![0.25]]);
     let result = Executor::new(
         PartialNan {
             lower: vec![-1.0],
@@ -477,10 +470,10 @@ fn a_finite_evaluation_replaces_a_nan_personal_best() {
         state,
     )
     .max_iter(1)
-    .run()
+    .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.state.personal_best_costs(), &[0.0, 0.0625]);
+    assert_eq!(result.solver.personal_best_costs(), &[0.0, 0.0625]);
     assert_eq!(result.cost(), 0.0);
 }
 
@@ -522,10 +515,10 @@ fn typed_problem_errors_propagate_unchanged() {
             upper: vec![1.0],
         },
         GlobalBestPso::new(3).with_swarm_size(2),
-        GlobalBestPsoState::<Vec<f64>>::new(),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(1)
-    .run();
+    .run_with_solver();
 
     assert!(matches!(result, Err(ApplicationError::Abort)));
 }
@@ -563,15 +556,18 @@ fn all_non_comparable_initial_costs_stop_cleanly() {
             upper: vec![1.0],
         },
         GlobalBestPso::new(1).with_swarm_size(3),
-        GlobalBestPsoState::<Vec<f64>>::new(),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(2)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverFailed);
     assert_eq!(result.state.iter(), 0);
     assert_eq!(result.cost_evals(), 3);
+    assert!(result.state.current().is_some());
+    assert!(result.state.best().is_none());
+    assert!(result.solver.global_best().is_none());
 }
 
 struct AlwaysNegativeInfinity {
@@ -607,10 +603,10 @@ fn negative_infinity_is_a_clean_global_optimum_stop() {
             upper: vec![1.0],
         },
         GlobalBestPso::new(1).with_swarm_size(2),
-        GlobalBestPsoState::<Vec<f64>>::new(),
+        PopulationProgress::<Vec<f64>>::empty(),
     )
     .max_iter(2)
-    .run()
+    .run_with_solver()
     .unwrap();
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);

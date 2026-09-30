@@ -3,7 +3,7 @@ use std::ops::{Index, IndexMut};
 
 use basin::core::math::{Scalar, VectorLen};
 use basin::{
-    Bobyqa, BobyqaState, BoxConstraints, CostFunction, Executor,
+    Bobyqa, BoxConstraints, CostFunction, Executor, PointState,
     TerminationReason,
 };
 
@@ -68,7 +68,7 @@ where
         let result = Executor::new(
             &problem,
             solver,
-            BobyqaState::new(from_slice(&start)),
+            PointState::new(from_slice(&start)),
         )
         .max_cost_evals(300)
         .run()

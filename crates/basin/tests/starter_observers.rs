@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use basin::{
-    BasicState, CostFunction, Executor, Gradient, GradientDescent, History,
-    Observe, ObserverMode, Report, State,
+    CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
+    History, Observe, ObserverMode, Report, State,
 };
 
 /// f(x) = ½ ‖x‖²: strictly convex, so GD decreases the cost every step.
@@ -54,7 +54,7 @@ fn history_records_full_trajectory_with_monotone_best() {
     Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, -2.0, 3.0]),
+        FirstOrderState::new(vec![1.0, -2.0, 3.0]),
     )
     .max_iter(6)
     .observe_with(history.clone(), ObserverMode::Always)
@@ -88,7 +88,7 @@ fn history_every_n_thins_iters() {
     Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(9)
     .observe_with(history.clone(), ObserverMode::Every(3))
@@ -109,7 +109,7 @@ fn report_smoke_runs_without_panicking() {
     Executor::new(
         Quadratic,
         GradientDescent::new(0.1),
-        BasicState::new(vec![1.0, 1.0]),
+        FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(4)
     .observe_with(Report::with_prefix("gd"), ObserverMode::Every(2))

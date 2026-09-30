@@ -10,7 +10,7 @@
 
 use crate::backend_aliases::ndarray::{Array1, Array2};
 use basin::problems::{Rosenbrock, Sphere};
-use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
+use basin::{CmaEs, CmaInject, Executor, NelderMead, PopulationProgress};
 
 /// Rosenbrock 2-D from `(-1, 1)`: injecting Nelder-Mead refinements
 /// must not break CMA's convergence on the ndarray backend.
@@ -18,7 +18,7 @@ use basin::{CmaEs, CmaEsState, CmaInject, Executor, NelderMead};
 fn converges_on_rosenbrock_2d() {
     let m0 = Array1::from_vec(vec![-1.0, 1.0]);
 
-    let cma = CmaEs::<Array1<f64>, Array2<f64>>::new(17);
+    let cma = CmaEs::<Array1<f64>, Array2<f64>>::new(17, 0.3);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(1)
         .with_inner_max_iter(30);
@@ -26,7 +26,7 @@ fn converges_on_rosenbrock_2d() {
     let result = Executor::new(
         Rosenbrock::<Array1<f64>>::new(),
         solver,
-        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.3),
+        PopulationProgress::<Array1<f64>>::from_point(m0),
     )
     .max_iter(200)
     .run()
@@ -55,15 +55,15 @@ fn aggregates_inner_cost_evals_into_outer() {
     // Vanilla CMA-ES baseline.
     let vanilla = Executor::new(
         Sphere::<Array1<f64>>::new(),
-        CmaEs::<Array1<f64>, Array2<f64>>::new(7),
-        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0.clone(), 0.3),
+        CmaEs::<Array1<f64>, Array2<f64>>::new(7, 0.3),
+        PopulationProgress::<Array1<f64>>::from_point(m0.clone()),
     )
     .max_iter(outer_iters)
     .run()
     .unwrap();
 
     // Memetic variant on the same seed and outer budget.
-    let cma = CmaEs::<Array1<f64>, Array2<f64>>::new(7);
+    let cma = CmaEs::<Array1<f64>, Array2<f64>>::new(7, 0.3);
     let solver = CmaInject::with_inner_solver(cma, NelderMead::adaptive())
         .with_k(k)
         .with_inner_max_iter(inner_iters);
@@ -71,7 +71,7 @@ fn aggregates_inner_cost_evals_into_outer() {
     let memetic = Executor::new(
         Sphere::<Array1<f64>>::new(),
         solver,
-        CmaEsState::<Array1<f64>, Array2<f64>>::new(m0, 0.3),
+        PopulationProgress::<Array1<f64>>::from_point(m0),
     )
     .max_iter(outer_iters)
     .run()

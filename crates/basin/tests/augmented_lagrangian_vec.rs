@@ -7,8 +7,8 @@
 
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
-    AugmentedLagrangianMethod, Backtracking, BasicState, DenseMatrix, Executor,
-    GradientDescent, GradientState, Lbfgsb, TerminationReason,
+    AugmentedLagrangianMethod, Backtracking, DenseMatrix, Executor,
+    GradientDescent, Lbfgsb, SelectedState, TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. The unconstrained min (2,2) is
@@ -35,7 +35,7 @@ fn converges_to_affine_projection() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -68,7 +68,7 @@ fn fully_determined_system() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -94,7 +94,7 @@ fn eval_counts_are_recorded() {
             GradientDescent::with_line_search(Backtracking::new())
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()
@@ -104,12 +104,12 @@ fn eval_counts_are_recorded() {
     // must have accumulated onto the outer state.
     assert!(result.cost_evals() > 0, "no cost evals recorded");
     assert!(
-        result.state.gradient_evals() > 0,
+        result.state.counts().gradient_evals > 0,
         "no gradient evals recorded"
     );
 }
 
-/// An unbounded `Lbfgs` inner (state `LbfgsState`, not `BasicState`) proves the
+/// An unbounded `Lbfgs` inner (state `FirstOrderState`, not `SelectedState`) proves the
 /// augmented-Lagrangian method is inner-agnostic on the `Vec<f64>` backend too.
 /// `L_ρ` is finite everywhere, so the inner's default line search is fine.
 /// Converges to the same projection (1,1).
@@ -125,7 +125,7 @@ fn lbfgs_inner_converges_to_affine_projection() {
                 .unbounded()
                 .with_absolute_gradient_tolerance(1e-8),
         ),
-        BasicState::new(initial),
+        SelectedState::new(initial),
     )
     .max_iter(50)
     .run()

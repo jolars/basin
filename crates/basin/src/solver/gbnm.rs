@@ -9,8 +9,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::gbnm::GbnmRestart;
-use crate::core::state::{BasicSimplexState, GbnmState};
+use crate::core::state::{PointState, SimplexProgress, State};
 use crate::core::termination::TerminationReason;
 use crate::solver::{NelderMead, Projected, Unbounded};
 
@@ -23,6 +22,14 @@ use geometry::{
     simplex_is_degenerate, simplex_is_small,
 };
 use restart::{OptimumAction, select_restart};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+enum GbnmRestart {
+    Probabilistic,
+    SmallTest,
+    LargeTest,
+}
 
 struct BoxGeometry<'a, V> {
     lower: &'a V,
@@ -47,9 +54,31 @@ struct BoxGeometry<'a, V> {
 /// free-coordinate box width.
 ///
 /// The first local search is centered on the caller-provided
-/// [`GbnmState::new`] point, after projection into the box. This makes a known
+/// [`PointState::new`] point, after projection into the box. This makes a known
 /// engineering design usable while retaining the paper's global restart
 /// mechanism for subsequent searches.
+///
+/// # Progress and lifecycle
+///
+/// Publishes [`PointState<V, F>`]: the current point and cost belong to the
+/// best vertex of the active local search and can worsen after a restart.
+/// The state retains a separate historical objective incumbent and all raw
+/// evaluation categories. NaN and positive infinity cannot establish an
+/// incumbent; use checked `current()` and `best()` readers for availability.
+///
+/// The solver owns the local simplex, Nelder-Mead workspace, restart history,
+/// and RNG. Inspect [`vertices`](Self::vertices), [`costs`](Self::costs),
+/// [`search_starts`](Self::search_starts), [`local_optima`](Self::local_optima),
+/// and [`restart_count`](Self::restart_count) through an owned result from
+/// [`Executor::run_with_solver`](crate::Executor::run_with_solver), or a
+/// stepper's [`solver`](crate::Stepper::solver) reader.
+///
+/// Fresh runs reset progress, the configured RNG, and all evolving history,
+/// project the supplied point, and reevaluate a new regular simplex. Reusing
+/// progress seeds the new run at its current point. Exact continuation retains
+/// solver, state, and counts together and skips initialization. With `serde`,
+/// the solver and shared progress serialize; old `GbnmState` payloads are
+/// incompatible with this layout. State-only exact resume is unsupported.
 ///
 /// # Configuration
 ///
@@ -70,14 +99,14 @@ struct BoxGeometry<'a, V> {
 ///
 /// GBNM is a budget-driven global algorithm. Use
 /// [`max_cost_evals`](crate::Executor::max_cost_evals), [`max_iter`](crate::Executor::max_iter),
-/// [`max_time`](crate::Executor::max_time), or [`target_cost`](crate::Executor::target_cost). One
+/// [`max_time`](crate::Executor::max_time), or [`target_objective`](crate::Executor::target_objective). One
 /// simplex operation is atomic. A local step may evaluate up to `n + 2` points
 /// and a restart evaluates `n + 1`, where `n` is the number of free
 /// coordinates, so an evaluation budget may be exceeded by at most `n + 1`
 /// evaluations.
 ///
 /// Local simplex convergence triggers GBNM's restart logic and does not
-/// establish convergence of the outer search. [`GbnmState`] deliberately does not implement
+/// establish convergence of the outer search. [`PointState`] deliberately does not implement
 /// [`SimplexState`](crate::SimplexState), making that mismatch a compile-time
 /// error.
 ///
@@ -98,14 +127,15 @@ struct BoxGeometry<'a, V> {
 ///
 /// # Backends
 ///
-/// Backend-generic; works with `Vec<F>`, `nalgebra::DVector<F>` (feature
-/// `nalgebra`), `ndarray::Array1<F>` (feature `ndarray`), and `faer::Col<F>`
-/// (feature `faer`) for `F = f64` or `F = f32`.
+/// `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer `Col<F>`
+/// for every supported release, with `F = f32` or `f64`. Requires `Clone`,
+/// [`VectorLen`], [`VectorIndex<F>`], [`ClampInPlace`], [`SampleUniformBox`],
+/// [`ScaleInPlace<F>`], and [`ScaledAdd<F>`]. No matrix operations are required.
 ///
 /// # Example
 ///
 /// ```
-/// use basin::{BoxConstraints, CostFunction, Executor, Gbnm, GbnmState};
+/// use basin::{BoxConstraints, CostFunction, Executor, Gbnm, PointState};
 ///
 /// struct BoundedSphere {
 ///     lower: Vec<f64>,
@@ -133,7 +163,7 @@ struct BoxGeometry<'a, V> {
 ///     upper: vec![5.0, 5.0],
 /// };
 /// let result =
-///     Executor::new(problem, Gbnm::new(42), GbnmState::new(vec![4.0, 4.0]))
+///     Executor::new(problem, Gbnm::new(42), PointState::new(vec![4.0, 4.0]))
 ///         .max_cost_evals(2_000)
 ///         .run()
 ///         .unwrap();
@@ -146,9 +176,16 @@ struct BoxGeometry<'a, V> {
 /// engineering optimization,” *Computers & Structures*, 82 (2004), 2251–2260.
 /// [doi:10.1016/j.compstruc.2004.03.072](https://doi.org/10.1016/j.compstruc.2004.03.072).
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Gbnm<F = f64> {
-    local: NelderMead<Projected, F>,
+pub struct Gbnm<V, F: Scalar = f64> {
+    local: NelderMead<V, F, Projected>,
     rng: ChaCha8Rng,
+    seed: u64,
+    simplex: Option<SimplexProgress<V, F>>,
+    search_starts: Vec<V>,
+    local_optima: Vec<(V, F)>,
+    restart: GbnmRestart,
+    restart_center: Option<V>,
+    restart_count: u64,
     restart_candidates: usize,
     gaussian_variance_factor: F,
     initial_simplex_fraction: F,
@@ -162,13 +199,20 @@ pub struct Gbnm<F = f64> {
     degeneracy_shape: F,
 }
 
-impl<F: Scalar> Gbnm<F> {
+impl<V, F: Scalar> Gbnm<V, F> {
     /// Construct GBNM with the paper's standard stochastic settings and a
     /// reproducible PRNG seed.
     pub fn new(seed: u64) -> Self {
         Self {
             local: NelderMead::new().projected(),
             rng: ChaCha8Rng::seed_from_u64(seed),
+            seed,
+            simplex: None,
+            search_starts: Vec::new(),
+            local_optima: Vec::new(),
+            restart: GbnmRestart::Probabilistic,
+            restart_center: None,
+            restart_count: 0,
             restart_candidates: 10,
             gaussian_variance_factor: F::from_f64(0.01).unwrap(),
             initial_simplex_fraction: F::from_f64(0.05).unwrap(),
@@ -183,6 +227,33 @@ impl<F: Scalar> Gbnm<F> {
         }
     }
 
+    /// Vertices of the active local search, sorted by cost. Empty before initialization.
+    pub fn vertices(&self) -> &[V] {
+        self.simplex
+            .as_ref()
+            .map_or(&[], |simplex| simplex.vertices())
+    }
+
+    /// Costs paired with [`vertices`](Self::vertices). Empty before initialization.
+    pub fn costs(&self) -> &[F] {
+        self.simplex.as_ref().map_or(&[], |simplex| simplex.costs())
+    }
+
+    /// Centers of all local searches, starting with the projected initial point.
+    pub fn search_starts(&self) -> &[V] {
+        &self.search_starts
+    }
+
+    /// Distinct possible local optima retained by the restart tests.
+    pub fn local_optima(&self) -> &[(V, F)] {
+        &self.local_optima
+    }
+
+    /// Number of restarts after the initial local search.
+    pub fn restart_count(&self) -> u64 {
+        self.restart_count
+    }
+
     /// Set the local Nelder-Mead reflection, expansion, contraction, and
     /// shrink coefficients (`alpha`, `beta`, `gamma`, and `delta`).
     pub fn with_nm_params(
@@ -192,9 +263,10 @@ impl<F: Scalar> Gbnm<F> {
         gamma: F,
         delta: F,
     ) -> Self {
-        self.local =
-            NelderMead::<Unbounded, F>::with_params(alpha, beta, gamma, delta)
-                .projected();
+        self.local = NelderMead::<V, F, Unbounded>::with_params(
+            alpha, beta, gamma, delta,
+        )
+        .projected();
         self
     }
 
@@ -354,11 +426,11 @@ fn assert_unit_tolerance<F: Scalar>(value: F, name: &str) {
     );
 }
 
-impl<F> Gbnm<F>
+impl<V, F> Gbnm<V, F>
 where
     F: Scalar + SampleUniform,
 {
-    fn sample_restart_center<V>(
+    fn sample_restart_center(
         &mut self,
         lower: &V,
         upper: &V,
@@ -391,10 +463,8 @@ where
         sample
     }
 
-    fn probabilistic_center<V>(
+    fn probabilistic_center(
         &mut self,
-        starts: &[V],
-        local_optima: &[(V, F)],
         lower: &V,
         upper: &V,
         free: &[usize],
@@ -405,8 +475,8 @@ where
         let mut selected = self.sample_restart_center(lower, upper, free);
         let mut selected_density = log_parzen_density(
             &selected,
-            starts,
-            local_optima,
+            &self.search_starts,
+            &self.local_optima,
             lower,
             upper,
             free,
@@ -416,8 +486,8 @@ where
             let candidate = self.sample_restart_center(lower, upper, free);
             let density = log_parzen_density(
                 &candidate,
-                starts,
-                local_optima,
+                &self.search_starts,
+                &self.local_optima,
                 lower,
                 upper,
                 free,
@@ -431,18 +501,19 @@ where
         selected
     }
 
-    fn install_restart<P, V>(
+    fn install_restart<P>(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: GbnmState<V, F>,
+        mut state: PointState<V, F>,
         restart: GbnmRestart,
         center: V,
         edge_fraction: F,
         geometry: BoxGeometry<'_, V>,
-    ) -> Result<GbnmState<V, F>, P::Error>
+    ) -> Result<PointState<V, F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
         V: Clone
+            + VectorLen
             + ClampInPlace
             + ScaleInPlace<F>
             + ScaledAdd<F>
@@ -454,28 +525,28 @@ where
             geometry.free,
             edge_fraction,
         );
-        let simplex = BasicSimplexState::from_simplex(regular_simplex(
+        let simplex = SimplexProgress::from_simplex(regular_simplex(
             &center,
             edge,
             geometry.lower,
             geometry.upper,
             geometry.free,
         ));
-        let simplex = <NelderMead<Projected, F> as Solver<
+        let simplex = <NelderMead<V, F, Projected> as Solver<
             P,
-            BasicSimplexState<V, F>,
+            SimplexProgress<V, F>,
         >>::init(&mut self.local, problem, simplex)?;
-        state.search_starts.push(center.clone());
-        state.restart = restart;
-        state.restart_center = Some(center);
-        state.simplex = Some(simplex);
+        self.search_starts.push(center.clone());
+        self.restart = restart;
+        self.restart_center = Some(center);
+        state.replace_from(&simplex.vertices[0], simplex.costs[0]);
+        self.simplex = Some(simplex);
         Ok(state)
     }
 
-    fn is_known_optimum<V>(
+    fn is_known_optimum(
         &self,
         point: &V,
-        state: &GbnmState<V, F>,
         lower: &V,
         upper: &V,
         free: &[usize],
@@ -483,15 +554,14 @@ where
     where
         V: VectorIndex<F>,
     {
-        state.local_optima.iter().any(|(known, _)| {
+        self.local_optima.iter().any(|(known, _)| {
             normalized_l1_distance(point, known, lower, upper, free)
                 < self.small_tolerance
         })
     }
 
-    fn save_optimum<V>(
-        &self,
-        state: &mut GbnmState<V, F>,
+    fn save_optimum(
+        &mut self,
         point: V,
         cost: F,
         lower: &V,
@@ -501,15 +571,15 @@ where
         V: VectorIndex<F>,
     {
         if !cost.is_finite()
-            || self.is_known_optimum(&point, state, lower, upper, free)
+            || self.is_known_optimum(&point, lower, upper, free)
         {
             return;
         }
-        state.local_optima.push((point, cost));
+        self.local_optima.push((point, cost));
     }
 }
 
-impl<P, V, F> Solver<P, GbnmState<V, F>> for Gbnm<F>
+impl<P, V, F> Solver<P, PointState<V, F>> for Gbnm<V, F>
 where
     F: Scalar + SampleUniform,
     P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
@@ -526,26 +596,27 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: GbnmState<V, F>,
-    ) -> Result<GbnmState<V, F>, Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         assert_eq!(
-            state.initial.vec_len(),
+            state.param().vec_len(),
             lower.vec_len(),
             "GBNM initial point and bounds length mismatch"
         );
         let free = free_coordinates(&lower, &upper);
-        let mut center = state.initial.clone();
+        let mut center = state.param().clone();
         center.clamp_in_place(&lower, &upper);
 
-        state.initial = center.clone();
-        state.simplex = None;
-        state.search_starts.clear();
-        state.local_optima.clear();
-        state.restart_count = 0;
-        state.restart = GbnmRestart::Probabilistic;
-        state.restart_center = None;
+        state.reset();
+        self.rng = ChaCha8Rng::seed_from_u64(self.seed);
+        self.simplex = None;
+        self.search_starts.clear();
+        self.local_optima.clear();
+        self.restart_count = 0;
+        self.restart = GbnmRestart::Probabilistic;
+        self.restart_center = None;
         self.install_restart(
             problem,
             state,
@@ -563,12 +634,13 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: GbnmState<V, F>,
-    ) -> Result<(GbnmState<V, F>, Option<TerminationReason>), Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let free = free_coordinates(&lower, &upper);
-        let simplex = state
+        let simplex = self
             .simplex
             .take()
             .expect("Gbnm::init must run before next_iter");
@@ -593,19 +665,20 @@ where
         );
 
         if !(small || flat || degenerate) {
-            let (simplex, reason) = <NelderMead<Projected, F> as Solver<
+            let (simplex, reason) = <NelderMead<V, F, Projected> as Solver<
                 P,
-                BasicSimplexState<V, F>,
+                SimplexProgress<V, F>,
             >>::next_iter(
                 &mut self.local, problem, simplex
             )?;
-            state.simplex = Some(simplex);
+            state.replace_from(&simplex.vertices[0], simplex.costs[0]);
+            self.simplex = Some(simplex);
             return Ok((state, reason));
         }
 
         let point = simplex.vertices[0].clone();
         let cost = simplex.costs[0];
-        let center = state
+        let center = self
             .restart_center
             .as_ref()
             .expect("GBNM restart center missing after initialization");
@@ -615,8 +688,8 @@ where
         let on_bounds = point_on_bounds(&point, &lower, &upper, &free);
 
         let (next_restart, optimum_action) = select_restart(
-            state.restart,
-            self.is_known_optimum(&point, &state, &lower, &upper, &free),
+            self.restart,
+            self.is_known_optimum(&point, &lower, &upper, &free),
             flat,
             small,
             degenerate,
@@ -624,25 +697,12 @@ where
             on_bounds,
         );
         if optimum_action == OptimumAction::Save {
-            self.save_optimum(
-                &mut state,
-                point.clone(),
-                cost,
-                &lower,
-                &upper,
-                &free,
-            );
+            self.save_optimum(point.clone(), cost, &lower, &upper, &free);
         }
 
         let (next_center, edge_fraction) = match next_restart {
             GbnmRestart::Probabilistic => {
-                let center = self.probabilistic_center(
-                    &state.search_starts,
-                    &state.local_optima,
-                    &lower,
-                    &upper,
-                    &free,
-                );
+                let center = self.probabilistic_center(&lower, &upper, &free);
                 let fraction = self.rng.random_range(
                     self.probabilistic_min_fraction
                         ..=self.probabilistic_max_fraction,
@@ -652,7 +712,7 @@ where
             GbnmRestart::SmallTest => (point, self.small_test_fraction),
             GbnmRestart::LargeTest => (point, self.large_test_fraction),
         };
-        state.restart_count += 1;
+        self.restart_count += 1;
         let state = self.install_restart(
             problem,
             state,
@@ -669,49 +729,32 @@ where
     }
 }
 
-impl<V, F> InitialState<V> for Gbnm<F>
+impl<V, F> InitialState<V> for Gbnm<V, F>
 where
     F: Scalar,
     V: Clone,
 {
-    type State = GbnmState<V, F>;
+    type State = PointState<V, F>;
 
     fn seed(&self, x: &V) -> Self::State {
-        GbnmState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Gbnm;
-    use crate::core::state::GbnmState;
 
     #[test]
     fn possible_local_optima_are_finite_and_deduplicated() {
-        let solver = Gbnm::new(1);
-        let mut state = GbnmState::new(vec![0.0, 0.0]);
+        let mut solver = Gbnm::new(1);
         let lower = vec![-5.0, -5.0];
         let upper = vec![5.0, 5.0];
         let free = [0, 1];
 
+        solver.save_optimum(vec![1.0, 1.0], 2.0, &lower, &upper, &free);
+        solver.save_optimum(vec![1.0 + 1e-7, 1.0], 1.9, &lower, &upper, &free);
         solver.save_optimum(
-            &mut state,
-            vec![1.0, 1.0],
-            2.0,
-            &lower,
-            &upper,
-            &free,
-        );
-        solver.save_optimum(
-            &mut state,
-            vec![1.0 + 1e-7, 1.0],
-            1.9,
-            &lower,
-            &upper,
-            &free,
-        );
-        solver.save_optimum(
-            &mut state,
             vec![3.0, 3.0],
             f64::INFINITY,
             &lower,
@@ -719,6 +762,6 @@ mod tests {
             &free,
         );
 
-        assert_eq!(state.local_optima().len(), 1);
+        assert_eq!(solver.local_optima().len(), 1);
     }
 }

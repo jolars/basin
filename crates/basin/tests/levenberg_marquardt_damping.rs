@@ -3,7 +3,7 @@
 use basin::core::problem::Problem;
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    LmDamping, NllsState, Residual, Solver, State, TerminationReason,
+    LmDamping, PointState, Residual, Solver, State, TerminationReason,
 };
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 
@@ -46,8 +46,8 @@ macro_rules! backend_checks {
                 let tolerance = 64. * <$scalar>::EPSILON;
                 assert!((result.param()[0] - 1.).abs() < tolerance);
                 assert!((result.param()[1] - 2.).abs() < tolerance);
-                assert_eq!(result.cost_evals(), 2);
-                assert_eq!(result.state.jacobian_evals(), 1);
+                assert_eq!(result.state.counts().residual_evals, 2);
+                assert_eq!(result.state.counts().jacobian_evals, 1);
             }
 
             #[test]
@@ -85,8 +85,8 @@ macro_rules! backend_checks {
                         (h0 / (1. - start[0]) - h1 / (2. - start[1])).abs()
                             < tolerance
                     );
-                    assert_eq!(result.cost_evals(), 2);
-                    assert_eq!(result.state.jacobian_evals(), 1);
+                    assert_eq!(result.state.counts().residual_evals, 2);
+                    assert_eq!(result.state.counts().jacobian_evals, 1);
                 }
             }
 
@@ -418,10 +418,13 @@ fn explicit_nielsen_preserves_default_trajectories() {
                 assert_eq!(default.param(), explicit.param());
                 assert_eq!(default.cost(), explicit.cost());
                 assert_eq!(default.reason, explicit.reason);
-                assert_eq!(default.cost_evals(), explicit.cost_evals());
                 assert_eq!(
-                    default.state.jacobian_evals(),
-                    explicit.state.jacobian_evals()
+                    default.state.counts().residual_evals,
+                    explicit.state.counts().residual_evals
+                );
+                assert_eq!(
+                    default.state.counts().jacobian_evals,
+                    explicit.state.counts().jacobian_evals
                 );
             }
         };
@@ -499,12 +502,12 @@ fn trust_qr_recovers_weak_linear_direction_with_relative_stopping() {
 
 fn check_rejection_caching_and_reset<S>(mut solver: S)
 where
-    S: Solver<Nonlinear, NllsState<Vec<f64>>, Error = CallbackError>,
+    S: Solver<Nonlinear, PointState<Vec<f64>>, Error = CallbackError>,
 {
     let counts = Nonlinear::default();
     let mut problem = Problem::new(counts.clone());
     let initial = solver
-        .init(&mut problem, NllsState::new(vec![0.1]))
+        .init(&mut problem, PointState::new(vec![0.1]))
         .unwrap();
     let (mut state, reason) = solver.next_iter(&mut problem, initial).unwrap();
     assert!(reason.is_none());
@@ -520,7 +523,7 @@ where
     }
     assert_ne!(state.param()[0], 0.1);
     let reset = solver
-        .init(&mut problem, NllsState::new(vec![0.1]))
+        .init(&mut problem, PointState::new(vec![0.1]))
         .unwrap();
     let (reset, _) = solver.next_iter(&mut problem, reset).unwrap();
     // A fresh solve must again reject its first, undamped Newton step.

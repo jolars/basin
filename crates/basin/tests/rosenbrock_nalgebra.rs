@@ -3,8 +3,8 @@
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Rosenbrock;
 use basin::{
-    Backtracking, BasicSimplexState, BasicState, CostFunction, Executor,
-    GradientDescent, NelderMead,
+    Backtracking, CostFunction, Executor, FirstOrderState, GradientDescent,
+    NelderMead, SimplexProgress,
 };
 
 #[test]
@@ -16,7 +16,7 @@ fn gradient_descent_with_nalgebra_dvector() {
     let result = Executor::new(
         problem,
         GradientDescent::new(0.001),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(10_000)
     .run()
@@ -39,7 +39,7 @@ fn gradient_descent_with_nalgebra_dvector_and_backtracking() {
     let result = Executor::new(
         problem,
         GradientDescent::with_line_search(Backtracking::new()),
-        BasicState::new(initial),
+        FirstOrderState::new(initial),
     )
     .max_iter(10_000)
     .run()
@@ -61,7 +61,7 @@ fn nelder_mead_with_nalgebra_dvector() {
     let result = Executor::new(
         problem,
         NelderMead::adaptive(),
-        BasicSimplexState::new(initial),
+        SimplexProgress::new(initial),
     )
     .max_iter(2_000)
     .run()

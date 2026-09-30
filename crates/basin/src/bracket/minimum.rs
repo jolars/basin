@@ -63,7 +63,7 @@ impl<F: Scalar> MinimumBracketResult<F> {
 ///
 /// ```
 /// use basin::{BoxConstraints, Brent, CostFunction, Executor, MinimumBracketer,
-///             ScalarState};
+///             PointState};
 /// use std::convert::Infallible;
 /// struct Quadratic { lower: f64, upper: f64 }
 /// impl CostFunction for Quadratic {
@@ -81,7 +81,7 @@ impl<F: Scalar> MinimumBracketResult<F> {
 /// assert!(bracket.bracketed());
 /// let (lower, middle, upper) = bracket.bracket();
 /// let result = Executor::new(Quadratic { lower, upper }, Brent::new(),
-///                            ScalarState::new(middle)).max_iter(100).run().unwrap();
+///                            PointState::new(middle)).max_iter(100).run().unwrap();
 /// assert!((result.best_param() - 10.0).abs() < 1e-6);
 /// ```
 ///

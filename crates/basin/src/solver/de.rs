@@ -7,7 +7,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
-use crate::core::state::BasicPopulationState;
+use crate::core::state::PopulationProgress;
 use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::sort_population_ascending;
 
@@ -133,10 +133,13 @@ pub enum DeCrossover {
 /// the selected mutation's minimum population size, independently of builder
 /// order. Typed problem errors propagate unchanged.
 ///
-/// Initialize with [`BasicPopulationState::with_size`] and any non-zero
-/// capacity. Fresh initialization clears any supplied population, samples a
-/// uniform population of the solver's configured size, and reseeds its
-/// [`ChaCha8Rng`]. Thus reusing a solver starts the same seeded trajectory.
+/// Supply [`PopulationProgress::empty`] to sample the configured population,
+/// or [`PopulationProgress::from_population`] with that many finite vectors
+/// whose dimension matches the bounds. Fresh initialization resets progress
+/// and the configured [`ChaCha8Rng`], projects explicit members into the box,
+/// and reevaluates every member. An explicit population with a different size
+/// or dimension panics. Reusing final members is a population warm start;
+/// an empty state reproduces the original seeded run.
 /// [`DeInject`](crate::DeInject) accepts a configured `De` for local refinement.
 ///
 /// The same seed and settings reproduce the trajectory, including with
@@ -151,6 +154,8 @@ pub enum DeCrossover {
 /// or [`with_absolute_step_tolerance`](Self::with_absolute_step_tolerance),
 /// and set execution budgets on [`Executor`](crate::Executor).
 /// Greedy selection keeps the best cost non-increasing for finite objectives.
+/// Optional change tests compare generation representatives, including
+/// generations that retain the same best member.
 ///
 /// # Backends
 ///
@@ -169,7 +174,7 @@ pub enum DeCrossover {
 ///   mutation formulas, binomial and exponential crossover, and generation-wise
 ///   dithering. Donors and solution quality are checked against this version.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct De<F = f64> {
+pub struct De<F: Scalar = f64> {
     pop_size_override: Option<usize>,
     f: F,
     cr: f64,
@@ -198,7 +203,7 @@ impl<F: Scalar> De<F> {
     }
 }
 
-impl<F> De<F> {
+impl<F: Scalar> De<F> {
     /// Storn & Price's `10·D` rule, floored at 4 so mutation always has
     /// at least three peers to draw from. For non-empty parameter vectors,
     /// this default also satisfies every other mutation rule.
@@ -496,7 +501,7 @@ where
     trial
 }
 
-impl<P, V, F> Solver<P, BasicPopulationState<V, F>> for De<F>
+impl<P, V, F> Solver<P, PopulationProgress<V, F>> for De<F>
 where
     F: Scalar + SampleUniform + crate::core::parallel::MaybeSend,
     P: CostFunction<Param = V, Output = F>
@@ -517,8 +522,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
-    ) -> Result<BasicPopulationState<V, F>, Self::Error> {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let n = lo.vec_len();
@@ -534,19 +539,17 @@ where
             self.mutation
         );
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
-        // Same reseed-from-scratch pattern as Ssga and RandomSearch; the
-        // solver's trajectory is reproducible regardless of which
-        // BasicPopulationState constructor the caller used.
-        state.candidates.clear();
-        state.costs.clear();
-        // Sample the initial population (sequential RNG), then evaluate the
-        // independent members in one batch (parallel under `parallel`).
-        for _ in 0..pop_size {
-            let x = V::sample_uniform_box(&lo, &hi, &mut rng);
-            state.candidates.push(x);
-        }
+        state.reset();
+        super::population::prepare_population(
+            &mut state.candidates,
+            &lo,
+            &hi,
+            pop_size,
+            &mut rng,
+        );
         state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
+        state.select_best_member();
         self.rng = Some(rng);
         Ok(state)
     }
@@ -554,9 +557,9 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicPopulationState<V, F>,
+        mut state: PopulationProgress<V, F>,
     ) -> Result<
-        (BasicPopulationState<V, F>, Option<TerminationReason>),
+        (PopulationProgress<V, F>, Option<TerminationReason>),
         Self::Error,
     > {
         let lo = problem.inner().lower().clone();
@@ -616,6 +619,7 @@ where
             }
         }
         sort_population_ascending(&mut state.candidates, &mut state.costs);
+        state.select_best_member();
         Ok((state, None))
     }
 }
@@ -750,10 +754,10 @@ mod tests {
                 let mut dithered = make().with_dither(0.3, 1.7);
                 let mut fixed = make();
                 let mut actual = dithered
-                    .init(&mut problem, BasicPopulationState::with_size(1))
+                    .init(&mut problem, PopulationProgress::empty())
                     .unwrap();
                 let mut expected = fixed
-                    .init(&mut problem, BasicPopulationState::with_size(1))
+                    .init(&mut problem, PopulationProgress::empty())
                     .unwrap();
                 let mut scales = Vec::new();
                 for _ in 0..4 {

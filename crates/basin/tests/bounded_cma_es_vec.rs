@@ -9,8 +9,8 @@
 
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, CmaEsState, DenseMatrix, Executor, PopulationState,
-    StepOutcome, TerminationReason,
+    BoundedCmaEs, DenseMatrix, Executor, PopulationProgress, StepOutcome,
+    TerminationReason,
 };
 
 /// Same seed → same trajectory on the bounded `Vec<f64>` path.
@@ -22,8 +22,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_a = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.5),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.5),
+        PopulationProgress::<Vec<f64>>::from_point(m0.clone()),
     )
     .max_iter(30)
     .run()
@@ -31,8 +31,8 @@ fn same_seed_yields_identical_trajectory() {
 
     let result_b = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.5),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(30)
     .run()
@@ -52,8 +52,8 @@ fn slack_bounds_recover_unconstrained_minimum() {
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(7),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(400)
     .run()
@@ -78,8 +78,8 @@ fn tight_bounds_converge_to_box_corner() {
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -105,8 +105,8 @@ fn infeasible_initial_mean_converges_to_box_corner() {
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(5),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(5, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(800)
     .run()
@@ -133,8 +133,8 @@ fn with_stds_ones_matches_default() {
 
     let default = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower.clone(), upper.clone()),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0.clone(), 0.5),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.5),
+        PopulationProgress::<Vec<f64>>::from_point(m0.clone()),
     )
     .max_iter(40)
     .run()
@@ -142,8 +142,8 @@ fn with_stds_ones_matches_default() {
 
     let with_ones = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5).with_stds(ones),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(42, 0.5).with_stds(ones),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(40)
     .run()
@@ -163,9 +163,9 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
 
     let result = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        (BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11))
+        (BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(11, 0.3))
             .with_absolute_distribution_size_tolerance(1e-12 * 0.3),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.3),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(2000)
     .run()
@@ -174,9 +174,7 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
 }
 
-/// `PopulationState` invariants survive iteration on the bounded `Vec<f64>`
-/// path: `candidates`/`costs` stay parallel, length-λ, sorted-ascending (on
-/// the penalized costs).
+/// Progress retains matching raw records while model fitness stays sorted.
 #[test]
 fn population_invariants_hold_after_iteration() {
     let lower = vec![-1.0, -1.0];
@@ -186,8 +184,9 @@ fn population_invariants_hold_after_iteration() {
 
     let mut stepper = Executor::new(
         BoothBoxed::<Vec<f64>>::new(lower, upper),
-        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(1234).with_lambda(lambda),
-        CmaEsState::<Vec<f64>, DenseMatrix>::new(m0, 0.5),
+        BoundedCmaEs::<Vec<f64>, DenseMatrix>::new(1234, 0.5)
+            .with_lambda(lambda),
+        PopulationProgress::<Vec<f64>>::from_point(m0),
     )
     .max_iter(10)
     .into_stepper()
@@ -200,7 +199,7 @@ fn population_invariants_hold_after_iteration() {
         let state = stepper.state();
         assert_eq!(state.candidates().len(), lambda);
         assert_eq!(state.costs().len(), lambda);
-        for window in state.costs().windows(2) {
+        for window in stepper.solver().penalized_costs().windows(2) {
             assert!(window[0] <= window[1]);
         }
     }

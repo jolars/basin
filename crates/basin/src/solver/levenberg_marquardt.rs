@@ -11,7 +11,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
-use crate::core::state::NllsState;
+use crate::core::state::{PointState, State};
 use crate::core::termination::TerminationReason;
 use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
@@ -181,7 +181,7 @@ pub enum LmDamping {
 /// to identify all passing native tests at the stopping stage.
 /// Observed absolute-step and cost-change checks are also opt-in and combine
 /// with native checks using OR. Execution budgets belong on the executor.
-/// The least-squares gradient `Jᵀr` is computed internally; [`NllsState`] does
+/// The least-squares gradient `Jᵀr` is computed internally; [`PointState`] does
 /// not expose a [`GradientState`](crate::GradientState).
 /// The numerical no-progress safeguard runs after native convergence tests.
 /// Disabling convergence tests does not disable this safeguard; set
@@ -248,7 +248,7 @@ pub enum LmDamping {
 ///
 /// ```
 /// # #[cfg(feature = "nalgebra_v0_35")] {
-/// use basin::{NllsState, Executor, Jacobian, LevenbergMarquardt, Residual};
+/// use basin::{PointState, Executor, Jacobian, LevenbergMarquardt, Residual};
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Affine;
@@ -270,7 +270,7 @@ pub enum LmDamping {
 /// let result = Executor::new(
 ///     Affine,
 ///     LevenbergMarquardt::new(),
-///     NllsState::new(DVector::from_vec(vec![0.0, 0.0])),
+///     PointState::new(DVector::from_vec(vec![0.0, 0.0])),
 /// )
 /// .max_iter(50)
 /// .run()
@@ -643,7 +643,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 }
 
-impl<P, V, M, F> Solver<P, NllsState<V, F>> for LevenbergMarquardt<V, M, F>
+impl<P, V, M, F> Solver<P, PointState<V, F>> for LevenbergMarquardt<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
@@ -676,20 +676,21 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_model::<_, M, NormalEquations>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
     }
 }
 
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for LevenbergMarquardt<V, M, F>
 where
     F: Scalar,
@@ -726,15 +727,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_model::<_, M, NormalEquations>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
     }
 }
@@ -743,8 +745,8 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
     fn init_model<E, M, Model>(
         &mut self,
         problem: &mut E,
-        mut state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, E::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error>
     where
         E: Evaluation<V, M, F>,
         M: MatTransposeVec<V>,
@@ -762,6 +764,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             + FloorZerosInPlace<F>
             + Clone,
     {
+        state.reset();
         // Seed both the state and the cross-iteration caches from one
         // residual/Jacobian evaluation.
         self.failed = false;
@@ -770,8 +773,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         self.r_cache = None;
         self.model_cache = None;
         self.jtr_cache = None;
-        let (r, j) = problem.residual_and_jacobian(&state.param)?;
-        state.cost = Some(
+        self.diag = None;
+        self.radius = None;
+        self.mu = None;
+        self.nu = F::from_f64(2.0).unwrap();
+        self.first_trust_step = true;
+        let (r, j) = problem.residual_and_jacobian(state.param())?;
+        state.replace(
+            state.param().clone(),
             problem.cost(&r, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
         );
         let Some((model_r, j)) = problem.model(&r, j) else {
@@ -788,7 +797,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
 
         self.radius = if self.damping == LmDamping::TrustRegion {
             self.diag.as_ref().map(|d| {
-                let xnorm = scaled_norm(&state.param, d);
+                let xnorm = scaled_norm(state.param(), d);
                 self.initial_step_bound
                     * if xnorm == F::zero() { F::one() } else { xnorm }
             })
@@ -813,7 +822,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
     fn next_iter_model<E, M, Model>(
         &mut self,
         problem: &mut E,
-        mut state: NllsState<V, F>,
+        mut state: PointState<V, F>,
         rank_tolerance: Option<F>,
     ) -> LmStep<V, F, E::Error>
     where
@@ -839,13 +848,13 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
-            None => problem.residual(&state.param)?,
+            None => problem.residual(state.param())?,
         };
 
         let (a, g) = match (self.model_cache.take(), self.jtr_cache.take()) {
             (Some(a), Some(g)) => (a, g),
             _ => {
-                let j = problem.jacobian(&state.param)?;
+                let j = problem.jacobian(state.param())?;
                 let Some((model_r, j)) = problem.model(&r, j) else {
                     self.failed = true;
                     return Ok((state, Some(TerminationReason::SolverFailed)));
@@ -870,7 +879,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             || self.damping == LmDamping::TrustRegion
             || E::ROBUST)
             && ((!E::ROBUST && !r.norm_squared().is_finite())
-                || !state.cost.expect("initialized cost").is_finite()
+                || !state.cost().is_finite()
                 || !g.norm_infinity().is_finite()
                 || !problem.valid_vector(&g))
         {
@@ -891,7 +900,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 stopping::robust_gradient_converged(
                     &g,
                     &diag_cur,
-                    state.cost.expect("initialized cost"),
+                    state.cost(),
                     tol,
                 )
             } else {
@@ -984,15 +993,12 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         dh.component_mul_assign(&h);
         let l_diff = half * (mu * h.dot(&dh) - h.dot(&g));
 
-        let mut x_trial = state.param.clone();
+        let mut x_trial = state.param().clone();
         x_trial.scaled_add(F::one(), &h);
         let r_trial = problem.residual(&x_trial)?;
-        state.cost_evals += 1;
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
-        let prev_cost = state
-            .cost
-            .expect("cost not set: Solver::init must run before next_iter");
+        let prev_cost = state.cost();
         let actual_diff = prev_cost - f_trial;
         let rho = if l_diff > F::zero() {
             actual_diff / l_diff
@@ -1005,7 +1011,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         // the computed step was lost to rounding.
         let numerical_no_progress = self.numerical_no_progress
             && rho <= F::zero()
-            && finite_unchanged_trial(&state.param, &x_trial)
+            && finite_unchanged_trial(state.param(), &x_trial)
             && [prev_cost, f_trial, actual_diff, l_diff, rho]
                 .iter()
                 .all(|value| value.is_finite())
@@ -1016,7 +1022,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 && [prev_cost, f_trial, actual_diff, l_diff, rho]
                     .into_iter()
                     .all(|value| value.is_finite())
-                && [&state.param, &x_trial, &h, &r, &r_trial, &g]
+                && [state.param(), &x_trial, &h, &r, &r_trial, &g]
                     .into_iter()
                     .all(all_finite)
         });
@@ -1034,8 +1040,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         if rho > F::zero() {
             self.rejected_step = false;
             // Nielsen eq. 2.5 with β=2, γ=3, p=3.
-            state.param = x_trial;
-            state.cost = Some(f_trial);
+            state.replace(x_trial, f_trial);
             if self.damping == LmDamping::Nielsen {
                 let factor = F::one() - (two * rho - F::one()).powi(3);
                 mu = mu * factor.max(one_third);
@@ -1060,7 +1065,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let radius_rel_converged = radius_tolerance.is_some_and(|tol| {
             relative_trust_radius_converged(
                 self.radius.expect("trust radius not initialized"),
-                &state.param,
+                state.param(),
                 &d,
                 tol,
             )
@@ -1082,7 +1087,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         });
         let step_rel_converged = self
             .tol_step_rel
-            .is_some_and(|tol| relative_step_converged(&h, &state.param, tol));
+            .is_some_and(|tol| relative_step_converged(&h, state.param(), tol));
         if cost_rel_converged || step_rel_converged || radius_rel_converged {
             if cost_rel_converged {
                 self.native_convergence
@@ -1107,7 +1112,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
     }
 }
 
-type LmStep<V, F, E> = Result<(NllsState<V, F>, Option<TerminationReason>), E>;
+type LmStep<V, F, E> = Result<(PointState<V, F>, Option<TerminationReason>), E>;
 
 #[derive(PartialEq)]
 enum ModelSolveError {
@@ -1467,7 +1472,7 @@ where
         self
     }
 }
-impl<P, V, M, F> Solver<P, NllsState<V, F>> for LevenbergMarquardtQr<V, M, F>
+impl<P, V, M, F> Solver<P, PointState<V, F>> for LevenbergMarquardtQr<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
@@ -1495,15 +1500,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.inner.init_model::<_, M, PivotedQr>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.inner.next_iter_model::<_, M, PivotedQr>(
             problem,
             state,
@@ -1512,7 +1518,7 @@ where
     }
 }
 
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, NllsState<V, F>>
+impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for LevenbergMarquardtQr<V, M, F>
 where
     F: Scalar,
@@ -1544,15 +1550,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<NllsState<V, F>, Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.inner.init_model::<_, M, PivotedQr>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: NllsState<V, F>,
-    ) -> Result<(NllsState<V, F>, Option<TerminationReason>), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
+    {
         self.inner.next_iter_model::<_, M, PivotedQr>(
             problem,
             state,
@@ -1566,9 +1573,9 @@ impl<V: Clone, M, F: Scalar> crate::core::inner::InitialState<V>
 where
     M: FactorizePivotedQr<V, F>,
 {
-    type State = NllsState<V, F>;
+    type State = PointState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
-        NllsState::new(x.clone())
+        PointState::new(x.clone())
     }
 }
 impl<V: Clone, M, F: Scalar> crate::core::inner::WarmStart<V>

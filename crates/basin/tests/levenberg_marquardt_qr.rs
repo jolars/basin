@@ -1,6 +1,6 @@
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    NllsState, Residual, TerminationReason,
+    PointState, Residual, TerminationReason,
 };
 
 use basin::core::problem::Problem;
@@ -123,7 +123,7 @@ fn rejections_and_damping_retries_reuse_factorization() {
         .with_pivoted_qr()
         .with_absolute_gradient_tolerance(0.);
     let state = solver
-        .init(&mut problem, NllsState::new(vec![0.1]))
+        .init(&mut problem, PointState::new(vec![0.1]))
         .unwrap();
     let (mut state, reason) = solver.next_iter(&mut problem, state).unwrap();
     assert!(reason.is_none());
@@ -142,7 +142,9 @@ fn rejections_and_damping_retries_reuse_factorization() {
     assert_eq!(counts.jacobians.get(), 2);
     assert_eq!(counts.residuals.get(), before + 1);
     // Reusing the solver for a new run must discard the previous factor.
-    solver.init(&mut problem, NllsState::new(vec![2.])).unwrap();
+    solver
+        .init(&mut problem, PointState::new(vec![2.]))
+        .unwrap();
     assert_eq!(counts.factors.get(), 3);
 }
 
@@ -223,13 +225,13 @@ fn actual_augmented_rank_loss_recovers_with_more_damping() {
             .unwrap();
         if attempts == 1 {
             assert_eq!(result.reason, TerminationReason::SolverFailed);
-            assert_eq!(result.cost_evals(), 1);
+            assert_eq!(result.state.counts().residual_evals, 1);
         } else {
             assert_eq!(result.reason, TerminationReason::SolverConverged);
             assert!(result.cost() < 1e-16);
             assert!((result.param()[0] - 0.5).abs() < 1e-8);
             assert!((result.param()[1] - 0.5).abs() < 1e-8);
-            assert_eq!(result.cost_evals(), 2);
+            assert_eq!(result.state.counts().residual_evals, 2);
         }
     }
 }
@@ -280,7 +282,7 @@ fn builder_and_direct_constructor_agree() {
         LevenbergMarquardtQr::new().with_absolute_gradient_tolerance(1e-12),
     ] {
         let result =
-            Executor::new(Linear, solver, NllsState::new(vec![0., 0.]))
+            Executor::new(Linear, solver, PointState::new(vec![0., 0.]))
                 .max_iter(50)
                 .run()
                 .unwrap();
@@ -297,7 +299,7 @@ fn nonlinear_and_deficient_problems() {
     let result = Executor::new(
         RosenbrockResiduals::<Vec<f64>>::new(),
         LevenbergMarquardt::new().with_pivoted_qr(),
-        NllsState::new(vec![-1.2, 1.]),
+        PointState::new(vec![-1.2, 1.]),
     )
     .max_iter(100)
     .run()
@@ -307,7 +309,7 @@ fn nonlinear_and_deficient_problems() {
     let result = Executor::new(
         PowellSingular::<Vec<f64>>::new(),
         LevenbergMarquardt::new().with_pivoted_qr(),
-        NllsState::new(vec![3., -1., 0., 1.]),
+        PointState::new(vec![3., -1., 0., 1.]),
     )
     .max_iter(100)
     .run()

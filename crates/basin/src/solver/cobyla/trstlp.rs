@@ -19,6 +19,7 @@ use crate::core::math::Scalar;
 use super::linalg::{col, dot, dot_pair, hypotenuse, isminor, planerot};
 
 /// Scratch reused by both LP stages and successive driver iterations.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct TrstlpWork<F> {
     a_aug: Vec<F>,
     b_aug: Vec<F>,
@@ -29,6 +30,7 @@ pub(crate) struct TrstlpWork<F> {
     scratch: TrstlpScratch<F>,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct TrstlpScratch<F> {
     sdirn: Vec<F>,
     zdota: Vec<F>,

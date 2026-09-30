@@ -7,15 +7,15 @@
 //! [`Lbfgs`](crate::Lbfgs) is generic over a type-state
 //! [`Mode`](crate::solver::lbfgs::Bounded) marker:
 //!
-//! - [`Lbfgs<Bounded>`](crate::Lbfgs) is a faithful port of Nocedal–Zhu's L-BFGS-B
+//! - [`Lbfgs<V, F, Bounded>`](crate::Lbfgs) is a faithful port of Nocedal–Zhu's L-BFGS-B
 //!   v3.0 Fortran source (`references/lbfgsb-v3.0/`). The Fortran
 //!   subroutines map to submodules below, and the top-level solver
 //!   mirrors the `mainlb` iteration loop (with the goto-style
 //!   coroutine flattened to a Rust `loop`). `Lbfgsb` is the type
 //!   alias for this mode.
-//! - [`Lbfgs<Unbounded>`](crate::Lbfgs) is unconstrained limited-memory BFGS via
+//! - [`Lbfgs<V, F, Unbounded>`](crate::Lbfgs) is unconstrained limited-memory BFGS via
 //!   Nocedal–Wright's two-loop recursion (Algorithm 7.4). Uses the
-//!   same [`LbfgsState`](crate::LbfgsState) history fields (`ws`, `wy`, `sy`, `theta`)
+//!   same solver-owned history (`ws`, `wy`, `sy`, `theta`)
 //!   but skips the Cauchy/`freev`/`subsm` machinery; those are
 //!   box-constraint-specific.
 //!
@@ -40,21 +40,23 @@ pub(crate) mod compact;
 pub(crate) mod formk;
 pub(crate) mod history;
 pub(crate) mod subsm;
+mod workspace;
 
 use core::marker::PhantomData;
 
+use self::workspace::{History, LbfgsbWork};
 use crate::core::constraint::BoxConstraints;
-use crate::core::math::{Dot, Scalar, ScaledAdd};
+use crate::core::math::{Dot, Scalar, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::lbfgs::{LbfgsState, LbfgsbWork};
+use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::TerminationReason;
 use crate::line_search::{
     LineSearch, LineSearchBounds, LineSearchOutcome, LineSearchResult,
     MoreThuente,
 };
 
-use self::backend::{AsFloatSlice, AsFloatSliceMut};
+pub use self::backend::{AsFloatSlice, AsFloatSliceMut};
 use self::cauchy::{cauchy, iwhere as iwh};
 use self::compact::{bmv, formt};
 use self::formk::formk;
@@ -62,7 +64,7 @@ use self::subsm::subsm;
 
 /// Limited-memory BFGS, parameterised over a type-state mode marker.
 ///
-/// `Lbfgs<Bounded>` (aliased as [`Lbfgsb`]) is a faithful port of
+/// `Lbfgs<V, F, Bounded>` (aliased as [`Lbfgsb`]) is a faithful port of
 /// Byrd–Lu–Nocedal 1995 and Zhu–Byrd–Lu–Nocedal 1997 (ACM TOMS Alg. 778),
 /// with the Nocedal–Morales 2011 v3.0 directional-derivative + bound-
 /// backtracking deviation in subspace minimization. Iteration-wise
@@ -71,12 +73,11 @@ use self::subsm::subsm;
 /// New BSD (BSD 3-Clause) licensed; its required notice is retained in the
 /// crate's `COPYRIGHT` file.
 ///
-/// `Lbfgs<Unbounded>` is unconstrained limited-memory BFGS via
+/// `Lbfgs<V, F, Unbounded>` is unconstrained limited-memory BFGS via
 /// Nocedal–Wright's two-loop recursion (Algorithm 7.4). It reuses the
-/// same [`LbfgsState`] history machinery but skips the Cauchy /
-/// `freev`/`subsm` phases; those are box-constraint-specific.
-/// Construct with [`Lbfgs::<Unbounded>::new()`], or transition from
-/// the default [`Lbfgs::<Bounded>::new()`] via [`Lbfgs::unbounded`].
+/// same solver-owned history but skips the Cauchy,
+/// `freev`, and `subsm` phases. Construct with `Lbfgs::new().unbounded()`
+/// or `Lbfgs::with_line_search(search).unbounded()`.
 ///
 /// # Bounded mode: per-iteration outline
 ///
@@ -113,9 +114,13 @@ use self::subsm::subsm;
 ///
 /// # Memory parameter
 ///
-/// The history capacity `m` lives on [`LbfgsState`]:
-/// `LbfgsState::new(x0, m)`. Fortran recommends `m ∈ [3, 20]`;
-/// `m = 10` is a reasonable default.
+/// Set the history capacity with [`Self::with_m_capacity`]. Fortran recommends
+/// `m ∈ [3, 20]`; the default is `10`. Both modes publish
+/// [`FirstOrderState<V, F>`]. The solver owns its history and work buffers.
+/// Fresh initialization clears the model and resets the line search, including
+/// when the parameter dimension changes. Exact checkpoints preserve them.
+/// Use [`crate::Executor::run_with_solver`] to retain the final solver and read
+/// [`Self::history_len`] and [`Self::history_capacity`].
 ///
 /// # Convergence
 ///
@@ -141,20 +146,23 @@ use self::subsm::subsm;
 /// # Backends
 ///
 /// Generic over any parameter type implementing
-/// `AsFloatSliceMut<F>` + [`Clone`] + [`Dot<F>`] +
-/// [`ScaledAdd<F>`]. Built-in impls cover `Vec<F>`,
+/// [`AsFloatSliceMut<F>`] + [`Clone`] + [`Dot<F>`] +
+/// [`ScaledAdd<F>`] + [`VectorLen`]. Built-in impls cover `Vec<F>`,
 /// `nalgebra::DVector<F>` (feature `nalgebra`), `faer::Col<F>`
 /// (feature `faer`), and `ndarray::Array1<F>` (feature `ndarray`).
-/// Other backends can implement the trait if their storage is
-/// contiguous.
+/// Parameters must have contiguous storage; strided ndarray views are unsupported.
+/// Custom backends implement the public slice traits in this module and the
+/// vector operations above. Both `f32` and `f64` are supported.
 ///
 /// # Examples
 ///
 /// See [`Bfgs`](crate::Bfgs) for the quasi-Newton `Executor` pattern.
-/// L-BFGS iterates an `LbfgsState` sized to the history length `m`
-/// (`LbfgsState::new(x0, m)`); construct the solver with `Lbfgs::new()`
-/// (L-BFGS-B, the default) or `Lbfgs::<Unbounded>::new()`.
-pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
+/// Supply progress with `FirstOrderState::new(x0)` and construct the solver
+/// with `Lbfgs::new()`
+/// (L-BFGS-B, the default) or `Lbfgs::new().unbounded()`.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Lbfgs<V, F: Scalar = f64, Mode = Bounded, S = MoreThuente<F>> {
+    history: Option<History<V, F>>,
     line_search: S,
     /// Fortran `dr ≤ epsmch · ddum` curvature-skip threshold
     /// (`lbfgsb.f:875`). Defaults to `F::epsilon()`. Consulted
@@ -163,97 +171,59 @@ pub struct Lbfgs<Mode = Bounded, S = MoreThuente, F = f64> {
     /// Built-in projected-gradient convergence tolerance. Bounded mode
     /// only; emits [`TerminationReason::SolverConverged`] at the top
     /// of an iteration when `‖projgr(x, g, l, u)‖_∞ ≤ tol_pg`. Default
-    /// `1e-10`. Set to `0.0` to disable (matches Fortran `pgtol = 0`),
-    /// required for the iteration-wise parity test against the
-    /// reference, which doesn't terminate on the projected gradient).
+    /// `1e-10`. `None` disables the check; zero tests exact stationarity.
     /// Stored on the shared struct; the field is unused (and the
     /// builder unavailable) in [`Unbounded`] mode, where users wire
     /// [`with_absolute_gradient_tolerance`](Lbfgs::with_absolute_gradient_tolerance)
     /// instead.
     tol_pg: Option<F>,
     tol_pg_reason: TerminationReason,
-    /// Default limited-memory history capacity (Fortran `m`,
-    /// `references/lbfgsb-v3.0/`). Default `10`. Only consulted when
-    /// the solver constructs the state itself, e.g. as a
-    /// [`MemeticInner`](crate::solver::MemeticInner) seeding a fresh
-    /// [`LbfgsState`] for a CMA-ES injection refinement. Standalone
-    /// users supply `m_capacity` directly to `LbfgsState::new(x, m)`,
-    /// in which case `init` reads it off the state and this field is
-    /// unused.
-    ///
-    /// `pub(crate)` so the `MemeticInner` impl in
-    /// `solver/cma_inject.rs` can read it.
-    pub(crate) m_capacity: usize,
+    /// Maximum number of curvature pairs retained by the solver.
+    m_capacity: usize,
     /// Type-state marker; carries the mode at the type level only.
     _mode: PhantomData<fn() -> Mode>,
 }
 
 /// Type-state marker for box-constrained L-BFGS-B (the default).
-/// Constructors live on [`Lbfgs<Bounded, MoreThuente>`]; the
+/// Constructors live on [`Lbfgs<V, F>`]; the
 /// [`Solver`] impl requires `P: BoxConstraints` and the full
 /// `AsFloatSliceMut<F>` + [`Dot<F>`] + [`ScaledAdd<F>`] backend.
 /// [`Lbfgsb`] is the canonical type alias for this mode.
 pub struct Bounded;
 
-/// Type-state marker for unconstrained L-BFGS. Constructors live on
-/// [`Lbfgs<Unbounded, MoreThuente>`]; the [`Solver`] impl has the same
+/// Type-state marker for unconstrained L-BFGS. Use [`Lbfgs::unbounded`].
+/// The [`Solver`] implementation has the same
 /// backend bounds as [`Bounded`] but **no** [`BoxConstraints`]
 /// requirement. The algorithm is Nocedal–Wright's two-loop recursion
-/// over the [`LbfgsState`] history with `H₀ = (1/θ)·I`.
+/// over the solver-owned history with `H₀ = (1/θ)·I`.
 pub struct Unbounded;
 
 /// Canonical name for the bounded-mode L-BFGS-B solver. Equivalent to
-/// [`Lbfgs<Bounded, S>`]; call sites can use either name interchangeably.
-pub type Lbfgsb<S = MoreThuente> = Lbfgs<Bounded, S>;
+/// [`Lbfgs<V, F, Bounded, S>`]; call sites can use either name interchangeably.
+pub type Lbfgsb<V, F = f64, S = MoreThuente<F>> = Lbfgs<V, F, Bounded, S>;
 
-impl Default for Lbfgs<Bounded, MoreThuente> {
+impl<V, F: Scalar> Default for Lbfgs<V, F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Default for Lbfgs<Unbounded, MoreThuente> {
+impl<V, F: Scalar> Default for Lbfgs<V, F, Unbounded> {
     fn default() -> Self {
-        Self::new()
+        Lbfgs::new().unbounded()
     }
 }
 
-impl Lbfgs<Bounded, MoreThuente> {
-    /// L-BFGS-B with Moré–Thuente line search and Fortran v3.0
-    /// defaults (`ftol = 1e-3`, `gtol = 0.9`, `xtol = 0.1`). Built-in
-    /// projected-gradient tolerance is `1e-10`; the seed history
-    /// capacity (used only when the solver constructs the state, e.g.
-    /// for memetic injection) is `10`.
+impl<V, F: Scalar> Lbfgs<V, F> {
+    /// L-BFGS-B with Moré–Thuente line search, history capacity 10,
+    /// and projected-gradient tolerance `1e-10`.
+    /// Use [`Self::unbounded`] for unconstrained L-BFGS.
     pub fn new() -> Self {
-        Self {
-            line_search: MoreThuente::new(),
-            epsilon: f64::EPSILON,
-            tol_pg: Some(1e-10),
-            tol_pg_reason: TerminationReason::SolverConverged,
-            m_capacity: 10,
-            _mode: PhantomData,
-        }
+        Self::with_line_search(MoreThuente::new())
     }
 }
 
-impl Lbfgs<Unbounded, MoreThuente> {
-    /// Unconstrained L-BFGS with Moré–Thuente line search and the same
-    /// curvature-skip and history defaults as the bounded path. The
-    /// `tol_pg` field is unused in this mode; terminate via the
-    /// solver's `with_absolute_gradient_tolerance` setting.
-    pub fn new() -> Self {
-        Self {
-            line_search: MoreThuente::new(),
-            epsilon: f64::EPSILON,
-            tol_pg: Some(1e-10),
-            tol_pg_reason: TerminationReason::SolverConverged,
-            m_capacity: 10,
-            _mode: PhantomData,
-        }
-    }
-}
-
-impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
+impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
     /// L-BFGS-B with an explicit line-search strategy. Note: using
     /// anything other than [`MoreThuente`] forfeits iteration-wise
     /// parity with the Fortran reference. The curvature-skip threshold
@@ -268,6 +238,7 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
             tol_pg: Some(F::from_f64(1e-10).unwrap()),
             tol_pg_reason: TerminationReason::SolverConverged,
             m_capacity: 10,
+            history: None,
             _mode: PhantomData,
         }
     }
@@ -305,51 +276,41 @@ impl<S, F: Scalar> Lbfgs<Bounded, S, F> {
     /// Switch to the unconstrained [`Unbounded`] mode while preserving
     /// the configured line search, curvature threshold, and history
     /// capacity. Mirrors [`NelderMead::projected`](crate::solver::NelderMead::projected)'s
-    /// type-state transition.
-    pub fn unbounded(self) -> Lbfgs<Unbounded, S, F> {
+    /// type-state transition. Discards the initialized model; run fresh
+    /// initialization before using the new mode.
+    pub fn unbounded(self) -> Lbfgs<V, F, Unbounded, S> {
         Lbfgs {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
             tol_pg_reason: self.tol_pg_reason,
             m_capacity: self.m_capacity,
+            history: None,
             _mode: PhantomData,
         }
     }
 }
 
-impl<S, F: Scalar> Lbfgs<Unbounded, S, F> {
-    /// Unconstrained L-BFGS with an explicit line-search strategy. The
-    /// curvature-skip threshold defaults to `F::epsilon()` (matching
-    /// `f64::EPSILON` when `F = f64`).
-    pub fn with_line_search(line_search: S) -> Self {
-        Self {
-            line_search,
-            epsilon: F::epsilon(),
-            tol_pg: Some(F::from_f64(1e-10).unwrap()),
-            tol_pg_reason: TerminationReason::SolverConverged,
-            m_capacity: 10,
-            _mode: PhantomData,
-        }
-    }
-
+impl<V, S, F: Scalar> Lbfgs<V, F, Unbounded, S> {
     /// Switch to box-constrained [`Bounded`] mode while preserving the
     /// configured line search, curvature threshold, and history
     /// capacity. The resulting solver requires the problem to
-    /// implement [`BoxConstraints`].
-    pub fn bounded(self) -> Lbfgs<Bounded, S, F> {
+    /// implement [`BoxConstraints`]. Discards the initialized model; run fresh
+    /// initialization before using the new mode.
+    pub fn bounded(self) -> Lbfgs<V, F, Bounded, S> {
         Lbfgs {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
             tol_pg_reason: self.tol_pg_reason,
             m_capacity: self.m_capacity,
+            history: None,
             _mode: PhantomData,
         }
     }
 }
 
-impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
+impl<V, Mode, S, F: Scalar> Lbfgs<V, F, Mode, S> {
     /// Override the curvature-skip threshold. Default `F::epsilon()`
     /// (= `f64::EPSILON` when `F = f64`), matching Fortran's
     /// `dr ≤ epsmch · ddum` test.
@@ -368,10 +329,9 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
         self
     }
 
-    /// Override the default limited-memory history capacity used when
-    /// the solver constructs its own [`LbfgsState`] (memetic seeding).
-    /// Standalone usage that hands in a state via `LbfgsState::new(x, m)`
-    /// is unaffected. Default `10`; Nocedal recommends `[3, 20]`.
+    /// Set the history capacity for the next fresh solve. Default `10`;
+    /// Nocedal recommends `[3, 20]`. Exact continuation retains the initialized
+    /// model and its capacity; use a fresh executor to apply a changed capacity.
     ///
     /// # Panics
     ///
@@ -381,15 +341,26 @@ impl<Mode, S, F: Scalar> Lbfgs<Mode, S, F> {
         self.m_capacity = m_capacity;
         self
     }
+    /// Number of retained curvature pairs, zero before initialization.
+    pub fn history_len(&self) -> usize {
+        self.history.as_ref().map_or(0, History::col)
+    }
+
+    /// Capacity of the current model, or the setting before initialization.
+    pub fn history_capacity(&self) -> usize {
+        self.history
+            .as_ref()
+            .map_or(self.m_capacity, |history| history.m_capacity)
+    }
 }
 
-impl<P, V, S, F> Solver<P, LbfgsState<V, F>> for Lbfgs<Bounded, S, F>
+impl<P, V, S, F> Solver<P, FirstOrderState<V, F>> for Lbfgs<V, F, Bounded, S>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
         + BoxConstraints,
-    V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F>,
+    V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
     S: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
@@ -397,17 +368,21 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V, F>,
-    ) -> Result<LbfgsState<V, F>, Self::Error> {
-        let n = state.param.as_float_slice().len();
-        let m = state.m_capacity;
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state.reset();
+        self.line_search.reset();
+        self.history = Some(History::new(self.m_capacity));
+        let history = self.history.as_mut().unwrap();
+        let n = state.param().as_float_slice().len();
+        let m = history.m_capacity;
         let mut work = Box::new(LbfgsbWork::<F>::new(n, m));
 
         // Project the initial iterate onto the feasible box and
         // initialize `iwhere`, `cnstnd`, `boxed` (Fortran `active`,
         // `lbfgsb.f:1004`).
         active_init(
-            state.param.as_float_slice_mut(),
+            state.seed_param_mut().as_float_slice_mut(),
             problem.inner().lower().as_float_slice(),
             problem.inner().upper().as_float_slice(),
             &mut work.iwhere,
@@ -415,43 +390,44 @@ where
             &mut work.boxed,
         );
 
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
-        state.work = Some(work);
+        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        state
+            .set_evaluation(cost, grad)
+            .expect("gradient dimension differs from parameter");
+        history.work = Some(work);
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V, F>,
-    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
     {
         // Take the gradient and cost cached at the current `param`;
         // restore them on early exits.
-        let g_v = state
-            .gradient
-            .take()
-            .expect("gradient not set: Solver::init must run before next_iter");
-        let f_old = state
-            .cost
-            .expect("cost not set: Solver::init must run before next_iter");
+        let (f_old, g_v) = state
+            .take_evaluation()
+            .expect("L-BFGS requires initialized progress");
+        let history = self
+            .history
+            .as_mut()
+            .expect("L-BFGS history is not initialized");
 
-        let n = state.param.as_float_slice().len();
-        let m = state.m_capacity;
+        let n = state.param().as_float_slice().len();
+        let m = history.m_capacity;
 
         // Match the Fortran `goto 222` recovery path, with one restart.
         let mut restart_budget = 1u8;
 
         loop {
-            let work = state.work.as_mut().expect("work missing");
+            let work = history.work.as_mut().expect("work missing");
 
             // The projected gradient drives convergence and the Cauchy shortcut.
             // It is checked here because wrapper solvers cannot register a
             // criterion against the inner problem's bounds.
             let sbgnrm = projected_gradient_norm(
-                state.param.as_float_slice(),
+                state.param().as_float_slice(),
                 g_v.as_float_slice(),
                 problem.inner().lower().as_float_slice(),
                 problem.inner().upper().as_float_slice(),
@@ -459,13 +435,14 @@ where
 
             // Restore values taken from the state before returning.
             if self.tol_pg.is_some_and(|tol| sbgnrm <= tol) {
-                state.gradient = Some(g_v);
-                state.cost = Some(f_old);
+                state
+                    .set_evaluation(f_old, g_v)
+                    .expect("gradient dimension differs from parameter");
                 return Ok((state, Some(self.tol_pg_reason)));
             }
 
-            let col = state.ws.len();
-            let theta = state.theta;
+            let col = history.ws.len();
+            let theta = history.theta;
             let cnstnd = work.cnstnd;
             let boxed = work.boxed;
             let updatd = work.updatd;
@@ -473,16 +450,16 @@ where
             // Generalized Cauchy point.
             let mut wrk = updatd;
             if !cnstnd && col > 0 {
-                work.z.copy_from_slice(state.param.as_float_slice());
+                work.z.copy_from_slice(state.param().as_float_slice());
             } else {
                 let cauchy_res = cauchy(
-                    state.param.as_float_slice(),
+                    state.param().as_float_slice(),
                     problem.inner().lower().as_float_slice(),
                     problem.inner().upper().as_float_slice(),
                     g_v.as_float_slice(),
-                    &state.ws,
-                    &state.wy,
-                    &state.sy,
+                    &history.ws,
+                    &history.wy,
+                    &history.sy,
                     &work.wt,
                     m,
                     theta,
@@ -498,10 +475,12 @@ where
                     &mut work.wa_v,
                 );
                 if cauchy_res.is_err() {
-                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
-                    {
+                    if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
+                        state.set_evaluation(f_old, g_v).expect(
+                            "gradient dimension differs from parameter",
+                        );
                         return Ok((
                             state,
                             Some(TerminationReason::SolverFailed),
@@ -517,7 +496,7 @@ where
                 &mut work.index,
                 &mut work.indx2,
                 work.nfree,
-                state.iter,
+                state.iter(),
                 cnstnd,
             );
             work.nfree = nfree;
@@ -533,9 +512,9 @@ where
                         m,
                         col,
                         theta,
-                        &state.sy,
-                        &state.ws,
-                        &state.wy,
+                        &history.sy,
+                        &history.ws,
+                        &history.wy,
                         nfree,
                         &work.index,
                         nenter,
@@ -546,10 +525,12 @@ where
                     )
                     .is_err()
                 {
-                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
-                    {
+                    if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
+                        state.set_evaluation(f_old, g_v).expect(
+                            "gradient dimension differs from parameter",
+                        );
                         return Ok((
                             state,
                             Some(TerminationReason::SolverFailed),
@@ -560,16 +541,16 @@ where
                 // cmprlb: r = −Z'B(z − x) − Z'g, indexed by the free
                 // subspace.
                 if cmprlb(
-                    state.param.as_float_slice(),
+                    state.param().as_float_slice(),
                     g_v.as_float_slice(),
                     &work.z,
                     &mut work.r,
                     &mut work.wa_c,
                     &mut work.wa_p,
-                    &state.sy,
+                    &history.sy,
                     &work.wt,
-                    &state.ws,
-                    &state.wy,
+                    &history.ws,
+                    &history.wy,
                     &work.index,
                     nfree,
                     cnstnd,
@@ -579,10 +560,12 @@ where
                 )
                 .is_err()
                 {
-                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
-                    {
+                    if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
+                        state.set_evaluation(f_old, g_v).expect(
+                            "gradient dimension differs from parameter",
+                        );
                         return Ok((
                             state,
                             Some(TerminationReason::SolverFailed),
@@ -595,13 +578,13 @@ where
                     &mut work.z,
                     &mut work.r,
                     &mut work.xp,
-                    state.param.as_float_slice(),
+                    state.param().as_float_slice(),
                     g_v.as_float_slice(),
                     &work.index[0..nfree],
                     problem.inner().lower().as_float_slice(),
                     problem.inner().upper().as_float_slice(),
-                    &state.ws,
-                    &state.wy,
+                    &history.ws,
+                    &history.wy,
                     &work.wn,
                     &mut work.wa_v,
                     m,
@@ -609,10 +592,12 @@ where
                     theta,
                 );
                 if subsm_res.is_err() {
-                    if try_restart(&mut state, &g_v, f_old, &mut restart_budget)
-                    {
+                    if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
+                        state.set_evaluation(f_old, g_v).expect(
+                            "gradient dimension differs from parameter",
+                        );
                         return Ok((
                             state,
                             Some(TerminationReason::SolverFailed),
@@ -625,7 +610,7 @@ where
 
             // Line search along d = z − x.
             for i in 0..n {
-                work.d[i] = work.z[i] - state.param.as_float_slice()[i];
+                work.d[i] = work.z[i] - state.param().as_float_slice()[i];
             }
             let dtd: F =
                 work.d.iter().fold(F::zero(), |acc, x| acc + (*x) * (*x));
@@ -634,11 +619,11 @@ where
 
             // Maximum feasible step (Fortran lnsrlb `stpmx`).
             let stpmx = if cnstnd {
-                if state.iter == 0 {
+                if state.iter() == 0 {
                     F::one()
                 } else {
                     feasible_step_cap(
-                        state.param.as_float_slice(),
+                        state.param().as_float_slice(),
                         problem.inner().lower().as_float_slice(),
                         problem.inner().upper().as_float_slice(),
                         &work.d,
@@ -648,23 +633,23 @@ where
                 F::from_f64(1.0e10).unwrap()
             };
 
-            let mut d_v = state.param.clone();
+            let mut d_v = state.param().clone();
             d_v.as_float_slice_mut().copy_from_slice(&work.d);
             let stpmx = safeguard_step_cap(
-                &state.param,
+                state.param(),
                 problem.inner().lower().as_float_slice(),
                 problem.inner().upper().as_float_slice(),
                 &d_v,
                 stpmx,
             );
-            let alpha_init = if state.iter == 0 && !boxed {
+            let alpha_init = if state.iter() == 0 && !boxed {
                 (F::one() / dnorm).min(stpmx)
             } else {
                 F::one().min(stpmx)
             };
 
             // Preserve the previous iterate and gradient for the update.
-            work.t_buf.copy_from_slice(state.param.as_float_slice());
+            work.t_buf.copy_from_slice(state.param().as_float_slice());
             work.r.copy_from_slice(g_v.as_float_slice());
             work.gdold = work
                 .d
@@ -678,7 +663,7 @@ where
             {
                 self.line_search.next_with_bounds(
                     problem,
-                    &state.param,
+                    state.param(),
                     f_old,
                     &g_v,
                     &d_v,
@@ -701,7 +686,7 @@ where
                             Some((evaluation.cost, evaluation.gradient)),
                         )
                     } else {
-                        let mut param = state.param.clone();
+                        let mut param = state.param().clone();
                         param.scaled_add(stp, &d_v);
                         (param, None)
                     };
@@ -717,14 +702,18 @@ where
 
             let Some((param_new, evaluation)) = accepted else {
                 // Restart with cleared history when compact-form state exists.
-                state.gradient = Some(g_v.clone());
-                state.cost = Some(f_old);
-                if state.ws.is_empty() {
+                if history.ws.is_empty() {
+                    state
+                        .set_evaluation(f_old, g_v)
+                        .expect("gradient dimension differs from parameter");
                     return Ok((state, Some(TerminationReason::SolverFailed)));
                 }
-                if try_restart_after_lnsrch(&mut state, &mut restart_budget) {
+                if try_restart(history, &mut restart_budget) {
                     continue;
                 } else {
+                    state
+                        .set_evaluation(f_old, g_v)
+                        .expect("gradient dimension differs from parameter");
                     return Ok((state, Some(TerminationReason::SolverFailed)));
                 }
             };
@@ -734,14 +723,13 @@ where
             } else {
                 problem.cost_and_gradient(&param_new)?
             };
-            state.param = param_new;
 
             // Limited-memory update with the Fortran curvature check.
             // s = stp · d  (in slice form, d holds the unscaled
             // direction; the s vector lives in `d` scaled by stp).
             // y = g_new − g_old.
             // dr = y · s, ddum = −gdold · stp (Fortran convention).
-            let work = state.work.as_mut().unwrap();
+            let work = history.work.as_mut().unwrap();
             let g_new_slice = g_new.as_float_slice();
             let g_old_slice = work.r.as_slice(); // saved earlier
 
@@ -766,18 +754,18 @@ where
                 for i in 0..n {
                     y_slice[i] = g_new_slice[i] - g_old_slice[i];
                 }
-                let appended = state.append_pair(s_v, y_v);
+                let appended = history.append_pair(s_v, y_v);
                 if appended {
-                    let work = state.work.as_mut().unwrap();
+                    let work = history.work.as_mut().unwrap();
                     work.updatd = true;
                     work.iupdat = work.iupdat.saturating_add(1);
 
                     // Rebuild T = θ SᵀS + L D⁻¹ Lᵀ. On failure, reset.
-                    let new_col = state.ws.len();
+                    let new_col = history.ws.len();
                     if formt(
-                        state.theta,
-                        &state.sy,
-                        &state.ss,
+                        history.theta,
+                        &history.sy,
+                        &history.ss,
                         new_col,
                         m,
                         &mut work.wt,
@@ -785,41 +773,42 @@ where
                     .is_err()
                     {
                         // Reset history; the next iter starts fresh.
-                        state.ws.clear();
-                        state.wy.clear();
-                        for v in state.sy.iter_mut() {
+                        history.ws.clear();
+                        history.wy.clear();
+                        for v in history.sy.iter_mut() {
                             *v = F::zero();
                         }
-                        for v in state.ss.iter_mut() {
+                        for v in history.ss.iter_mut() {
                             *v = F::zero();
                         }
-                        state.theta = F::one();
+                        history.theta = F::one();
                         work.reset_history();
                     }
                 } else {
                     // append_pair refused (s·y ≤ 0 numerically), so
                     // treat as a skipped update.
-                    let work = state.work.as_mut().unwrap();
+                    let work = history.work.as_mut().unwrap();
                     work.updatd = false;
                 }
             } else {
                 // Skip the update; matches Fortran's `nskip += 1` path.
-                let work = state.work.as_mut().unwrap();
+                let work = history.work.as_mut().unwrap();
                 work.updatd = false;
             }
 
-            state.cost = Some(f_new);
-            state.gradient = Some(g_new);
+            state
+                .replace(param_new, f_new, g_new)
+                .expect("gradient dimension differs from parameter");
             return Ok((state, None));
         }
     }
 }
 
-impl<P, V, S, F> Solver<P, LbfgsState<V, F>> for Lbfgs<Unbounded, S, F>
+impl<P, V, S, F> Solver<P, FirstOrderState<V, F>> for Lbfgs<V, F, Unbounded, S>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
-    V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F>,
+    V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
     S: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
@@ -827,41 +816,42 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V, F>,
-    ) -> Result<LbfgsState<V, F>, Self::Error> {
-        // Cache cost and gradient at the initial iterate. `state.work`
-        // stays `None`; the box-constrained scratch buffers are
-        // never touched on the unbounded path.
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state.reset();
+        self.line_search.reset();
+        self.history = Some(History::new(self.m_capacity));
+        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        state
+            .set_evaluation(cost, grad)
+            .expect("gradient dimension differs from parameter");
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: LbfgsState<V, F>,
-    ) -> Result<(LbfgsState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let g_v = state
-            .gradient
-            .take()
-            .expect("gradient not set: Solver::init must run before next_iter");
-        let f_old = state
-            .cost
-            .expect("cost not set: Solver::init must run before next_iter");
+        let (f_old, g_v) = state
+            .take_evaluation()
+            .expect("L-BFGS requires initialized progress");
+        let history = self
+            .history
+            .as_mut()
+            .expect("L-BFGS history is not initialized");
 
-        let n = state.param.as_float_slice().len();
-        let m = state.m_capacity;
-        let col = state.ws.len();
-        let theta = state.theta;
+        let n = state.param().as_float_slice().len();
+        let m = history.m_capacity;
+        let col = history.ws.len();
+        let theta = history.theta;
 
         // Nocedal–Wright two-loop recursion (Algorithm 7.4). Computes
         // d = −H_k · g into `d_v` via an in-place accumulator that
         // starts at `g`, has the BFGS history applied, scales by
         // `H₀ = (1/θ)·I`, then negates.
-        let mut d_v = state.param.clone();
+        let mut d_v = state.param().clone();
         {
             let d_slice = d_v.as_float_slice_mut();
             let g_slice = g_v.as_float_slice();
@@ -873,9 +863,9 @@ where
 
                 // Backward pass: q ← q − αᵢ yᵢ for i = col-1 .. 0.
                 for i in (0..col).rev() {
-                    let rho_i = F::one() / state.sy[i * m + i];
-                    let s_i = state.ws[i].as_float_slice();
-                    let y_i = state.wy[i].as_float_slice();
+                    let rho_i = F::one() / history.sy[i * m + i];
+                    let s_i = history.ws[i].as_float_slice();
+                    let y_i = history.wy[i].as_float_slice();
                     let mut s_dot_q = F::zero();
                     for k in 0..n {
                         s_dot_q = s_dot_q + s_i[k] * d_slice[k];
@@ -895,9 +885,9 @@ where
 
                 // Forward pass: r ← r + (αᵢ − β) sᵢ for i = 0 .. col-1.
                 for i in 0..col {
-                    let rho_i = F::one() / state.sy[i * m + i];
-                    let s_i = state.ws[i].as_float_slice();
-                    let y_i = state.wy[i].as_float_slice();
+                    let rho_i = F::one() / history.sy[i * m + i];
+                    let s_i = history.ws[i].as_float_slice();
+                    let y_i = history.wy[i].as_float_slice();
                     let mut y_dot_r = F::zero();
                     for k in 0..n {
                         y_dot_r = y_dot_r + y_i[k] * d_slice[k];
@@ -929,7 +919,7 @@ where
 
         let line_search_result = self.line_search.next_with_evaluation(
             problem,
-            &state.param,
+            state.param(),
             f_old,
             &g_v,
             &d_v,
@@ -943,19 +933,20 @@ where
             // Line search bailed. Restore cached cost and gradient so
             // the caller's final state is consistent with the last
             // accepted iterate, and bubble the failure.
-            state.gradient = Some(g_v);
-            state.cost = Some(f_old);
+            state
+                .set_evaluation(f_old, g_v)
+                .expect("gradient dimension differs from parameter");
             return Ok((state, Some(TerminationReason::SolverFailed)));
         }
 
-        let (f_new, g_new) =
+        let (param_new, f_new, g_new) =
             if let Some(evaluation) = line_search_result.evaluation {
-                state.param = evaluation.param;
-                (evaluation.cost, evaluation.gradient)
+                (evaluation.param, evaluation.cost, evaluation.gradient)
             } else {
-                // x ← x + stp · d.
-                state.param.scaled_add(stp, &d_v);
-                problem.cost_and_gradient(&state.param)?
+                let mut param = state.param().clone();
+                param.scaled_add(stp, &d_v);
+                let (cost, gradient) = problem.cost_and_gradient(&param)?;
+                (param, cost, gradient)
             };
 
         // Curvature-conditioned limited-memory update. Matches Fortran
@@ -975,7 +966,7 @@ where
             // Build s = stp · d and y = g_new − g_old as V-typed
             // vectors, then push. `append_pair` re-runs the s·y > 0
             // check as a final safeguard and refreshes `theta`.
-            let mut s_v = state.param.clone();
+            let mut s_v = param_new.clone();
             {
                 let s_slice = s_v.as_float_slice_mut();
                 for i in 0..n {
@@ -989,11 +980,12 @@ where
                     y_slice[i] = g_new_slice[i] - g_old_slice[i];
                 }
             }
-            state.append_pair(s_v, y_v);
+            history.append_pair(s_v, y_v);
         }
 
-        state.cost = Some(f_new);
-        state.gradient = Some(g_new);
+        state
+            .replace(param_new, f_new, g_new)
+            .expect("gradient dimension differs from parameter");
         Ok((state, None))
     }
 }
@@ -1222,64 +1214,21 @@ where
     Ok(())
 }
 
-/// Reset the limited-memory history of `state` and bail or continue
-/// based on `restart_budget`. Returns `true` if a restart was budgeted
-/// and the caller should `continue` the outer loop, `false` if budget
-/// was exhausted.
+/// Clear a failed model and retry at most once with steepest descent.
 fn try_restart<V, F: Scalar>(
-    state: &mut LbfgsState<V, F>,
-    g_v: &V,
-    f_old: F,
-    restart_budget: &mut u8,
-) -> bool
-where
-    V: Clone,
-{
-    if *restart_budget == 0 {
-        // Restore the cached gradient and cost so the state stays
-        // consistent for the caller.
-        state.gradient = Some(g_v.clone());
-        state.cost = Some(f_old);
-        return false;
-    }
-    *restart_budget -= 1;
-    // Clear history & reset theta.
-    state.ws.clear();
-    state.wy.clear();
-    for v in state.sy.iter_mut() {
-        *v = F::zero();
-    }
-    for v in state.ss.iter_mut() {
-        *v = F::zero();
-    }
-    state.theta = F::one();
-    if let Some(work) = state.work.as_mut() {
-        work.reset_history();
-    }
-    true
-}
-
-/// Same as `try_restart`, but used after the line search has already
-/// applied side effects we need to leave intact (state.gradient/cost
-/// already restored by the caller).
-fn try_restart_after_lnsrch<V, F: Scalar>(
-    state: &mut LbfgsState<V, F>,
+    history: &mut History<V, F>,
     restart_budget: &mut u8,
 ) -> bool {
     if *restart_budget == 0 {
         return false;
     }
     *restart_budget -= 1;
-    state.ws.clear();
-    state.wy.clear();
-    for v in state.sy.iter_mut() {
-        *v = F::zero();
-    }
-    for v in state.ss.iter_mut() {
-        *v = F::zero();
-    }
-    state.theta = F::one();
-    if let Some(work) = state.work.as_mut() {
+    history.ws.clear();
+    history.wy.clear();
+    history.sy.fill(F::zero());
+    history.ss.fill(F::zero());
+    history.theta = F::one();
+    if let Some(work) = history.work.as_mut() {
         work.reset_history();
     }
     true
@@ -1334,8 +1283,8 @@ mod tests {
             u: vec![2.0, 2.0],
         };
 
-        let state = LbfgsState::new(vec![1.0, 1.0], 5);
-        let solver = Lbfgsb::new();
+        let state = FirstOrderState::new(vec![1.0, 1.0]);
+        let solver = Lbfgsb::new().with_m_capacity(5);
         let result = Executor::new(
             problem,
             (solver).with_absolute_projected_gradient_tolerance(1e-10),
@@ -1344,7 +1293,7 @@ mod tests {
         .max_iter(50)
         .run()
         .unwrap();
-        let final_x = result.state.param.clone();
+        let final_x = result.state.param().clone();
         // Optimum: clamp((3, -1), [0,0], [2, 2]) = (2, 0).
         assert!((final_x[0] - 2.0).abs() < 1e-6, "x0 = {}", final_x[0]);
         assert!(final_x[1].abs() < 1e-6, "x1 = {}", final_x[1]);
@@ -1392,8 +1341,8 @@ mod tests {
             l: vec![f64::NEG_INFINITY; 2],
             u: vec![f64::INFINITY; 2],
         };
-        let state = LbfgsState::new(vec![-1.2, 1.0], 5);
-        let solver = Lbfgsb::new();
+        let state = FirstOrderState::new(vec![-1.2, 1.0]);
+        let solver = Lbfgsb::new().with_m_capacity(5);
         let result = Executor::new(
             problem,
             (solver).with_absolute_projected_gradient_tolerance(1e-8),
@@ -1402,7 +1351,7 @@ mod tests {
         .max_iter(200)
         .run()
         .unwrap();
-        let final_x = result.state.param.clone();
+        let final_x = result.state.param().clone();
         assert!(
             (final_x[0] - 1.0).abs() < 1e-3 && (final_x[1] - 1.0).abs() < 1e-3,
             "x = {:?}",

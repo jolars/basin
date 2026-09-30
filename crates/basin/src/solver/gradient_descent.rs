@@ -1,8 +1,10 @@
 use crate::core::inner::{InitialState, WarmStart};
-use crate::core::math::{NegInPlace, Scalar, ScaleInPlace, ScaledAdd};
+use crate::core::math::{
+    NegInPlace, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::BasicState;
+use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::TerminationReason;
 use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 
@@ -36,14 +38,19 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// zig-zags. A too-large effective step (roughly `α / (1 − β)` along
 /// consistent directions) diverges, so reduce `α` when adding momentum.
 ///
+/// Progress uses [`FirstOrderState<V, F>`]. Fresh initialization clears
+/// counters and incumbents, resets the line search, and reevaluates the seed.
+/// Momentum starts from rest on each fresh run, including after a dimension
+/// change. Exact checkpoints retain velocity and line-search history.
+///
 /// # Backends
 ///
 /// Backend-generic; works with any `V` implementing
 /// [`ScaledAdd<F>`](crate::core::math::ScaledAdd) +
-/// [`NegInPlace`] + [`ScaleInPlace<F>`] + `Clone`. With the default
-/// `F = f64` that covers `Vec<f64>`, `nalgebra::DVector<f64>` (feature
-/// `nalgebra`), `ndarray::Array1<f64>` (feature `ndarray`), and
-/// `faer::Col<f64>` (feature `faer`).
+/// [`NegInPlace`] + [`ScaleInPlace<F>`] + [`VectorLen`] + `Clone`. Supports
+/// `Vec<F>`, `nalgebra::DVector<F>` (feature `nalgebra`),
+/// `ndarray::Array1<F>` (feature `ndarray`), and `faer::Col<F>` (feature
+/// `faer`) for both `f32` and `f64`.
 ///
 /// # References
 ///
@@ -57,7 +64,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// Minimize the 2-D sphere `f(x) = x₀² + x₁²` from `(1, 1)`:
 ///
 /// ```
-/// use basin::{BasicState, CostFunction, Executor, Gradient, GradientDescent};
+/// use basin::{FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 ///
 /// struct Sphere;
 /// impl CostFunction for Sphere {
@@ -75,14 +82,15 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 ///     }
 /// }
 ///
-/// let result = Executor::new(Sphere, (GradientDescent::new(0.1)).with_absolute_gradient_tolerance(1e-8), BasicState::new(vec![1.0, 1.0]))
+/// let result = Executor::new(Sphere, (GradientDescent::new(0.1)).with_absolute_gradient_tolerance(1e-8), FirstOrderState::new(vec![1.0, 1.0]))
 ///     .max_iter(1_000)
 ///
 ///     .run()
 ///     .unwrap();
 /// assert!(result.cost() < 1e-12);
 /// ```
-pub struct GradientDescent<L, V, F = f64> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GradientDescent<L, V, F: Scalar = f64> {
     line_search: L,
     /// Momentum coefficient `β`; `0.0` disables momentum and runs the plain
     /// steepest-descent step, which keeps no persistent velocity buffer.
@@ -128,11 +136,11 @@ impl<L, V, F: Scalar> GradientDescent<L, V, F> {
     }
 }
 
-impl<P, V, F, L> Solver<P, BasicState<V, F>> for GradientDescent<L, V, F>
+impl<P, V, F, L> Solver<P, FirstOrderState<V, F>> for GradientDescent<L, V, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
-    V: ScaledAdd<F> + NegInPlace + ScaleInPlace<F> + Clone,
+    V: ScaledAdd<F> + NegInPlace + ScaleInPlace<F> + Clone + VectorLen,
     L: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
@@ -140,38 +148,37 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<BasicState<V, F>, Self::Error> {
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state.reset();
+        self.line_search.reset();
         // Start momentum from rest, even if this solver instance is reused
         // across runs (composition): velocity must not leak between runs.
         self.velocity = None;
         // Seed cost and gradient at the initial param so iter-0 termination
         // checks (e.g. `GradientTolerance` on a near-optimal start) see a
         // complete state. Same work we'd do on iter 1, hoisted.
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        state
+            .set_evaluation(cost, grad)
+            .expect("gradient dimension differs from parameter");
         Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: BasicState<V, F>,
-    ) -> Result<(BasicState<V, F>, Option<TerminationReason>), Self::Error>
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
     {
-        let grad = state
-            .gradient
-            .take()
-            .expect("gradient not set: Solver::init must run before next_iter");
-        let prev_cost = state
-            .cost
-            .expect("cost not set: Solver::init must run before next_iter");
+        let (prev_cost, grad) = state
+            .take_evaluation()
+            .expect("solver requires initialized progress");
         let mut direction = grad.clone();
         direction.neg_in_place();
         let line_search_result = self.line_search.next_with_evaluation(
             problem,
-            &state.param,
+            state.param(),
             prev_cost,
             &grad,
             &direction,
@@ -179,8 +186,9 @@ where
         let alpha = match line_search_result.outcome {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
-                state.gradient = Some(grad);
-                state.cost = Some(prev_cost);
+                state
+                    .set_evaluation(prev_cost, grad)
+                    .expect("gradient dimension differs from parameter");
                 return Ok((state, Some(TerminationReason::SolverFailed)));
             }
         };
@@ -189,12 +197,16 @@ where
         // adopt the line search's retained evaluation without recomputing it.
         if self.beta == F::zero() {
             if let Some(evaluation) = line_search_result.evaluation {
-                state.param = evaluation.param;
-                state.cost = Some(evaluation.cost);
-                state.gradient = Some(evaluation.gradient);
+                state
+                    .replace(
+                        evaluation.param,
+                        evaluation.cost,
+                        evaluation.gradient,
+                    )
+                    .expect("gradient dimension differs from parameter");
                 return Ok((state, None));
             }
-            state.param.scaled_add(alpha, &direction);
+            state.seed_param_mut().scaled_add(alpha, &direction);
         } else {
             // Heavy ball: v ← β·v + αₖ·direction (direction = −∇f), then
             // x ← x + v. With v₀ = 0 the first step is just αₖ·direction,
@@ -210,13 +222,14 @@ where
                     direction
                 }
             };
-            state.param.scaled_add(F::one(), &velocity);
+            state.seed_param_mut().scaled_add(F::one(), &velocity);
             self.velocity = Some(velocity);
         }
 
-        let (cost, grad) = problem.cost_and_gradient(&state.param)?;
-        state.cost = Some(cost);
-        state.gradient = Some(grad);
+        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        state
+            .set_evaluation(cost, grad)
+            .expect("gradient dimension differs from parameter");
         Ok((state, None))
     }
 }
@@ -224,15 +237,15 @@ where
 /// Lets [`GradientDescent`] serve as the inner of a composed solver
 /// (e.g. [`BarrierMethod`](crate::solver::BarrierMethod) /
 /// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)),
-/// seeding a fresh [`BasicState`] at the warm-start point.
+/// seeding a fresh [`FirstOrderState`] at the warm-start point.
 impl<L, V, F> InitialState<V> for GradientDescent<L, V, F>
 where
     F: Scalar,
     V: Clone,
 {
-    type State = BasicState<V, F>;
-    fn seed(&self, x: &V) -> BasicState<V, F> {
-        BasicState::new(x.clone())
+    type State = FirstOrderState<V, F>;
+    fn seed(&self, x: &V) -> FirstOrderState<V, F> {
+        FirstOrderState::new(x.clone())
     }
 }
 
@@ -247,7 +260,7 @@ where
 mod tests {
     use super::*;
     use crate::core::state::State;
-    use crate::{BasicState, Executor};
+    use crate::{Executor, FirstOrderState};
 
     /// Isotropic quadratic bowl `f(x) = Σ xᵢ²`, gradient `2x`. Minimum at
     /// the origin. Used where conditioning is irrelevant (first-step and
@@ -300,7 +313,9 @@ mod tests {
         // momentum branch. f = Σx², ∇f = 2x, so x₁ = 1 − 0.1·2 = 0.8.
         let mut solver = GradientDescent::new(0.1).with_momentum(0.0);
         let mut p = Problem::new(Quadratic);
-        let state = solver.init(&mut p, BasicState::new(vec![1.0])).unwrap();
+        let state = solver
+            .init(&mut p, FirstOrderState::new(vec![1.0]))
+            .unwrap();
         let (state, reason) = solver.next_iter(&mut p, state).unwrap();
         assert!(reason.is_none());
         assert!((state.param()[0] - 0.8).abs() < 1e-12);
@@ -319,7 +334,7 @@ mod tests {
         let plain = Executor::new(
             IllConditioned,
             GradientDescent::new(alpha),
-            BasicState::new(start.clone()),
+            FirstOrderState::new(start.clone()),
         )
         .max_iter(iters)
         .run()
@@ -327,7 +342,7 @@ mod tests {
         let momentum = Executor::new(
             IllConditioned,
             GradientDescent::new(alpha).with_momentum(0.9),
-            BasicState::new(start),
+            FirstOrderState::new(start),
         )
         .max_iter(iters)
         .run()
@@ -350,8 +365,9 @@ mod tests {
 
         let run = |solver: &mut GradientDescent<Constant, Vec<f64>>| {
             let mut p = Problem::new(Quadratic);
-            let mut state =
-                solver.init(&mut p, BasicState::new(start.clone())).unwrap();
+            let mut state = solver
+                .init(&mut p, FirstOrderState::new(start.clone()))
+                .unwrap();
             for _ in 0..10 {
                 let (next, _) = solver.next_iter(&mut p, state).unwrap();
                 state = next;

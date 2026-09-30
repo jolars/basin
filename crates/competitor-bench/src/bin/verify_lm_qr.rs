@@ -7,7 +7,7 @@
 
 use basin::{
     Executor, FactorizePivotedQr, Jacobian, LevenbergMarquardt, LmDamping,
-    NllsState, RegularizedQrSolve, Residual, TerminationReason,
+    PointState, RegularizedQrSolve, Residual, TerminationReason,
 };
 use levenberg_marquardt::LeastSquaresProblem;
 use nalgebra::{DMatrix, DVector, Dyn, Owned};
@@ -198,9 +198,9 @@ fn compare(
                             .with_relative_model_reduction_tolerance(0.)
                             .with_relative_step_tolerance(0.);
                     }
-                    let state = NllsState::new(BasinVector::from_column_slice(
-                        x.as_slice(),
-                    ));
+                    let state = PointState::new(
+                        BasinVector::from_column_slice(x.as_slice()),
+                    );
                     let out = if kind.ends_with("qr") {
                         Executor::new(p, solver.with_pivoted_qr(), state)
                             .max_iter((budget - 1) as u64)
@@ -212,7 +212,10 @@ fn compare(
                             .run()
                             .unwrap()
                     };
-                    assert_eq!(out.cost_evals() as usize, nr.get());
+                    assert_eq!(
+                        out.state.counts().residual_evals as usize,
+                        nr.get()
+                    );
                     (
                         DVector::from_column_slice(out.param().as_slice()),
                         format!("{:?}", out.reason),

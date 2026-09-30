@@ -27,9 +27,9 @@ use std::time::{Duration, Instant};
 
 use basin::problems::Rosenbrock;
 use basin::{
-    BasicSimplexState, BasicState, Bfgs, CmaEs, CmaEsState, CountsMirror,
-    DenseMatrix, DenseQuasiNewtonState, Executor, GradientDescent, LbfgsState,
-    Lbfgsb, MoreThuente, NelderMead, Slsqp, SlsqpState, Solver,
+    Bfgs, CmaEs, CountsMirror, DenseMatrix, Executor, FirstOrderState,
+    GradientDescent, Lbfgsb, MoreThuente, NelderMead, PopulationProgress,
+    SelectedFirstOrderState, SimplexProgress, Slsqp, Solver,
     State as BasinState, StepOutcome,
 };
 
@@ -256,7 +256,7 @@ fn run_gd(start: &[f64]) -> Vec<(u128, f64)> {
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
                 GradientDescent::with_line_search(MoreThuente::new()),
-                BasicState::new(start.to_vec()),
+                FirstOrderState::new(start.to_vec()),
             ),
             BUDGET,
         )
@@ -269,7 +269,7 @@ fn run_nm(start: &[f64]) -> Vec<(u128, f64)> {
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
                 NelderMead::new(),
-                BasicSimplexState::new(start.to_vec()),
+                SimplexProgress::new(start.to_vec()),
             ),
             BUDGET,
         )
@@ -282,7 +282,7 @@ fn run_bfgs(start: &[f64]) -> Vec<(u128, f64)> {
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
                 Bfgs::new(),
-                DenseQuasiNewtonState::new(start.to_vec()),
+                FirstOrderState::new(start.to_vec()),
             ),
             BUDGET,
         )
@@ -295,7 +295,7 @@ fn run_lbfgs(start: &[f64]) -> Vec<(u128, f64)> {
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
                 Lbfgsb::new().unbounded(),
-                LbfgsState::new(start.to_vec(), 10),
+                FirstOrderState::new(start.to_vec()),
             ),
             BUDGET,
         )
@@ -309,7 +309,7 @@ fn run_slsqp(start: &[f64]) -> Vec<(u128, f64)> {
                 Unconstrained(Rosenbrock::<Vec<f64>>::default()),
                 // The common objective target owns the accuracy stop here.
                 Slsqp::new().with_absolute_accuracy_tolerance(None),
-                SlsqpState::new(start.to_vec()),
+                SelectedFirstOrderState::new(start.to_vec()),
             ),
             BUDGET,
         )
@@ -322,8 +322,8 @@ fn run_cmaes(start: &[f64], seed: u64) -> Vec<(u128, f64)> {
         basin_trace(
             Executor::new(
                 Rosenbrock::<Vec<f64>>::default(),
-                CmaEs::<Vec<f64>, DenseMatrix>::new(cma_seed),
-                CmaEsState::<Vec<f64>, DenseMatrix>::new(start.to_vec(), 0.3),
+                CmaEs::<Vec<f64>, DenseMatrix>::new(cma_seed, 0.3),
+                PopulationProgress::<Vec<f64>>::from_point(start.to_vec()),
             ),
             BUDGET,
         )

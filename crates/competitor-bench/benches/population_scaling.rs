@@ -40,8 +40,8 @@ use std::hint::black_box;
 use std::sync::Once;
 
 use basin::{
-    BasicPopulationState, BoxConstraints, CmaEs, CmaEsState, CostFunction, De,
-    DenseMatrix, Executor, RandomSearch,
+    BoxConstraints, CmaEs, CostFunction, De, DenseMatrix, Executor,
+    PopulationProgress, RandomSearch,
 };
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -118,12 +118,12 @@ fn bench_cma_es(c: &mut Criterion) {
                     black_box(
                         Executor::new(
                             ExpensiveSphere::new(dim),
-                            CmaEs::<Vec<f64>, DenseMatrix>::new(7)
+                            CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5)
                                 .with_lambda(lambda),
-                            CmaEsState::<Vec<f64>, DenseMatrix>::new(
-                                vec![1.0; dim],
-                                0.5,
-                            ),
+                            PopulationProgress::<Vec<f64>>::from_point(vec![
+                                1.0;
+                                dim
+                            ]),
                         )
                         .max_iter(GENERATIONS)
                         .run(),
@@ -147,7 +147,7 @@ fn bench_de(c: &mut Criterion) {
                         Executor::new(
                             ExpensiveSphere::new(dim),
                             De::<f64>::new(99).with_pop_size(np),
-                            BasicPopulationState::<Vec<f64>>::with_size(np),
+                            PopulationProgress::<Vec<f64>>::empty(),
                         )
                         .max_iter(GENERATIONS)
                         .run(),
@@ -171,7 +171,7 @@ fn bench_random_search(c: &mut Criterion) {
                         Executor::new(
                             ExpensiveSphere::new(dim),
                             RandomSearch::new(lambda, 2024),
-                            BasicPopulationState::<Vec<f64>>::with_size(lambda),
+                            PopulationProgress::<Vec<f64>>::empty(),
                         )
                         .max_iter(GENERATIONS)
                         .run(),
