@@ -22,7 +22,7 @@
 //!    cost.
 //!
 //! Run with
-//! `cargo bench --features nalgebra_latest,faer_latest,problems --bench lm_backends`.
+//! `cargo bench --features nalgebra,faer,problems --bench lm_backends`.
 
 use std::hint::black_box;
 

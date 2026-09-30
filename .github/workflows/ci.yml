@@ -77,7 +77,7 @@ jobs:
           key: docs
       - run: >-
           cargo doc --no-deps -p basin
-          --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde
+          --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde
       - run: cargo doc --no-deps -p basin
 
   test:
@@ -115,12 +115,12 @@ jobs:
             flags: "--no-default-features --features faer_v0_24,problems"
           - features: all backend versions
             flags: "--no-default-features --features nalgebra_v0_32,nalgebra_v0_33,nalgebra_v0_34,nalgebra_v0_35,ndarray_v0_15,ndarray_v0_16,ndarray_v0_17,faer_v0_22,faer_v0_23,faer_v0_24,problems,parallel,serde"
-          # Preserve the pre-versioning feature meanings in Basin 1.x.
-          - features: legacy aliases
+          # Exercise the moving unversioned aliases in Basin 2.x.
+          - features: unversioned aliases
             flags: "--features nalgebra,ndarray,faer,problems"
           # Exercise the rayon-backed `parallel` path (FiniteDiff probe
-          # fan-out), moving aliases, and backend serialization together.
-          - features: latest aliases + parallel + serde
+          # fan-out), deprecated aliases, and backend serialization together.
+          - features: deprecated aliases + parallel + serde
             flags: "--features nalgebra_latest,ndarray_latest,faer_latest,parallel,serde,problems"
     steps:
       - uses: actions/checkout@v7
@@ -189,7 +189,7 @@ jobs:
             flags: "--features serde"
           - features: nalgebra
             flags: "--features nalgebra"
-          - features: nalgebra latest
+          - features: deprecated nalgebra alias
             flags: "--features nalgebra_latest"
           - features: ndarray
             flags: "--features ndarray"

@@ -43,7 +43,7 @@ fit optimization state.
   and benchmarks that use the corpus must declare `required-features =
   ["problems"]` in `crates/basin/Cargo.toml` and be run with `--features problems`.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: lint.
-- `cargo doc --no-deps -p basin --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde`:
+- `cargo doc --no-deps -p basin --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde`:
   build the public docs with the latest backend versions. CI runs this, and
   `lib.rs` has `#![deny(rustdoc::broken_intra_doc_links)]`, so a broken or
   ambiguous intra-doc link (e.g. `[`Foo`](super::foo)` where `foo` is both a
@@ -100,7 +100,7 @@ Outside Nix, an `-L <dir> -l openblas` (or `-l lapack -l blas` for reference
 netlib) pointing at your system libraries does the same. CI does **not** run
 `--all-features` *tests*; the routine local test command is the latest
 pure-Rust feature set:
-`cargo test -p basin --features nalgebra_latest,ndarray_latest,faer_latest,problems,parallel`.
+`cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
 
 The dev environment is provided by `devenv.nix` (loaded automatically via
 `direnv` from `.envrc`). It pins Rust 1.89.0 and adds the
@@ -230,9 +230,9 @@ These shape API decisions and are non-obvious from the code alone.
    names lower the barrier for users arriving from existing frameworks; diverge
    only when another tenet demands it.
 2. **Versioned backend compatibility.** Each supported nalgebra, ndarray, and
-   faer release has an exact Cargo feature; `Vec<f64>` needs none. Moving
-   `*_latest` aliases select the newest supported releases, while the original
-   unversioned aliases retain their Basin 1.x meanings. Every enabled version
+   faer release has an exact Cargo feature; `Vec<f64>` needs none. The
+   unversioned aliases select the newest supported releases. Deprecated
+   `*_latest` features forward to those aliases. Every enabled version
    receives its implementations independently, including problem adapters and
    version-specific acceleration. BFGS uses the `DenseBackend` association to infer its solver-owned
    matrix from the starting vector, independently for every enabled version.

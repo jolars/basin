@@ -14,15 +14,15 @@ opt-in. For example, to use the latest supported
 [Solvers](../solvers/)):
 
 ```sh
-cargo add basin --features nalgebra_latest
+cargo add basin --features nalgebra
 ```
 
-The moving aliases are `nalgebra_latest`, `ndarray_latest`, and `faer_latest`.
+The moving aliases are `nalgebra`, `ndarray`, and `faer`.
 Exact version features are also available for nalgebra 0.32–0.35, ndarray
-0.15–0.17, and faer 0.22–0.24. The original unversioned aliases remain
-available for compatibility: they select nalgebra 0.34, ndarray 0.17, and faer
-0.24. When several releases of one backend are enabled, Basin uses the newest.
-The package MSRV is Rust 1.87; nalgebra 0.35 and `nalgebra_latest` require Rust
+0.15–0.17, and faer 0.22–0.24. The deprecated `nalgebra_latest`,
+`ndarray_latest`, and `faer_latest` features remain as synonyms. When several
+releases of one backend are enabled, Basin implements each independently.
+The package MSRV is Rust 1.87; nalgebra 0.35 and `nalgebra` require Rust
 1.89.
 
 In Basin 2.0, no features are enabled by default. Enable `problems` with

@@ -43,12 +43,12 @@ Basin works on plain `Vec<f64>` out of the box. Linear-algebra backends are
 opt-in. Use a moving alias to follow the newest supported release:
 
 ```sh
-cargo add basin --features nalgebra_latest  # or: ndarray_latest, faer_latest
+cargo add basin --features nalgebra  # or: ndarray, faer
 ```
 
 Exact version features, such as `nalgebra_v0_34`, keep dependency resolution
 stable. Basin's package minimum supported Rust version (MSRV) is **1.87.0**.
-The one exception is nalgebra 0.35: `nalgebra_v0_35` and `nalgebra_latest`
+The one exception is nalgebra 0.35: `nalgebra_v0_35` and `nalgebra`
 require Rust 1.89. The development environment uses Rust 1.89, while CI checks
 the Rust 1.87-compatible feature set separately.
 
@@ -137,17 +137,18 @@ See [Solvers] for which backends each one supports.
 ## Backends
 
 Parameters and linear algebra are generic over the backend. `Vec<f64>` needs no
-features. Each external backend has exact version features and a `*_latest`
+features. Each external backend has exact version features and an unversioned
 alias that tracks the newest supported release:
 
-| Backend    | Exact features                            | Moving alias      |
-| ---------- | ----------------------------------------- | ----------------- |
-| [nalgebra] | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra_latest` |
-| [ndarray]  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray_latest`  |
-| [faer]     | `faer_v0_22` through `faer_v0_24`         | `faer_latest`     |
+| Backend    | Exact features                            | Moving alias |
+| ---------- | ----------------------------------------- | ------------ |
+| [nalgebra] | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra`   |
+| [ndarray]  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray`    |
+| [faer]     | `faer_v0_22` through `faer_v0_24`         | `faer`       |
 
-The original features remain frozen for compatibility: `nalgebra` selects
-0.34, `ndarray` selects 0.17, and `faer` selects 0.24. If dependency feature
+The deprecated `nalgebra_latest`, `ndarray_latest`, and `faer_latest` features
+remain as synonyms for the unversioned aliases. `nalgebra` selects 0.35,
+`ndarray` selects 0.17, and `faer` selects 0.24. If dependency feature
 unification enables several releases of the same backend, Basin provides
 implementations for every enabled release. First-order and derivative-free
 solvers run on any backend; linear-algebra-heavy solvers may require a specific one and say so in
@@ -161,8 +162,8 @@ Every nalgebra feature includes its matching `nalgebra-sparse` release:
 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Exact acceleration features
 follow the same naming scheme—`nalgebra_v0_34-lapack` and
 `ndarray_v0_16-blas`, for example. The moving aliases are
-`nalgebra_latest-lapack` and `ndarray_latest-blas`; the original acceleration
-features remain frozen at nalgebra 0.34 and ndarray 0.17.
+`nalgebra-lapack` and `ndarray-blas`. The deprecated
+`nalgebra_latest-lapack` and `ndarray_latest-blas` spellings remain as synonyms.
 
 BLAS/LAPACK acceleration is off by default and is not wasm-compatible. These
 features expect you to supply the BLAS/LAPACK symbols at link time. The default

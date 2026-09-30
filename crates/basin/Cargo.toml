@@ -16,9 +16,9 @@ exclude = ["/examples/logo.rs", "/examples/favicon.rs"]
 
 [package.metadata.docs.rs]
 features = [
-  "faer_latest",
-  "nalgebra_latest-lapack",
-  "ndarray_latest-blas",
+  "faer",
+  "nalgebra-lapack",
+  "ndarray-blas",
   "parallel",
   "problems",
   "serde",
@@ -31,8 +31,9 @@ path = "src/lib.rs"
 
 [features]
 default = []
-nalgebra = ["nalgebra_v0_34"]
-nalgebra_latest = ["nalgebra_v0_35"]
+nalgebra = ["nalgebra_v0_35"]
+# Deprecated compatibility spelling; use `nalgebra`.
+nalgebra_latest = ["nalgebra"]
 nalgebra_all = []
 nalgebra_v0_32 = [
   "nalgebra_all",
@@ -50,8 +51,9 @@ nalgebra_v0_34 = [
   "dep:nalgebra_sparse_0_11",
 ]
 nalgebra_v0_35 = ["nalgebra_all", "dep:nalgebra", "dep:nalgebra-sparse"]
-nalgebra-lapack = ["nalgebra_v0_34-lapack"]
-nalgebra_latest-lapack = ["nalgebra_v0_35-lapack"]
+nalgebra-lapack = ["nalgebra_v0_35-lapack"]
+# Deprecated compatibility spelling; use `nalgebra-lapack`.
+nalgebra_latest-lapack = ["nalgebra-lapack"]
 nalgebra_v0_32-lapack = ["nalgebra_v0_32", "dep:nalgebra_lapack_0_24"]
 nalgebra_v0_33-lapack = ["nalgebra_v0_33", "dep:nalgebra_lapack_0_25"]
 nalgebra_v0_34-lapack = [
@@ -62,22 +64,25 @@ nalgebra_v0_34-lapack = [
 nalgebra_v0_35-lapack = [
   "nalgebra_v0_35",
   "dep:nalgebra-lapack",
-  # Avoid activating the frozen `nalgebra-lapack` feature alias.
+  # Avoid activating the unversioned `nalgebra-lapack` feature alias.
   "nalgebra-lapack?/lapack-custom",
 ]
 ndarray = ["ndarray_v0_17"]
-ndarray_latest = ["ndarray_v0_17"]
+# Deprecated compatibility spelling; use `ndarray`.
+ndarray_latest = ["ndarray"]
 ndarray_all = []
 ndarray_v0_15 = ["ndarray_all", "dep:ndarray_0_15"]
 ndarray_v0_16 = ["ndarray_all", "dep:ndarray_0_16"]
 ndarray_v0_17 = ["ndarray_all", "dep:ndarray"]
 ndarray-blas = ["ndarray_v0_17-blas"]
-ndarray_latest-blas = ["ndarray_v0_17-blas"]
+# Deprecated compatibility spelling; use `ndarray-blas`.
+ndarray_latest-blas = ["ndarray-blas"]
 ndarray_v0_15-blas = ["ndarray_v0_15", "ndarray_0_15/blas"]
 ndarray_v0_16-blas = ["ndarray_v0_16", "ndarray_0_16/blas"]
 ndarray_v0_17-blas = ["ndarray_v0_17", "ndarray/blas"]
 faer = ["faer_v0_24"]
-faer_latest = ["faer_v0_24"]
+# Deprecated compatibility spelling; use `faer`.
+faer_latest = ["faer"]
 faer_all = []
 faer_v0_22 = [
   "faer_all",
@@ -113,7 +118,7 @@ nalgebra_0_32 = { package = "nalgebra", version = "0.32", optional = true }
 nalgebra_0_33 = { package = "nalgebra", version = "0.33", optional = true }
 nalgebra_0_34 = { package = "nalgebra", version = "0.34", optional = true }
 # nalgebra 0.35 requires Rust 1.89. Older backend features preserve Basin's
-# package MSRV of Rust 1.87; `nalgebra_latest` intentionally uses the dev pin.
+# package MSRV of Rust 1.87; `nalgebra` intentionally uses the dev pin.
 nalgebra = { version = "0.35", optional = true }
 nalgebra_sparse_0_9 = { package = "nalgebra-sparse", version = "0.9", optional = true }
 nalgebra_sparse_0_10 = { package = "nalgebra-sparse", version = "0.10", optional = true }

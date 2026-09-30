@@ -55,6 +55,22 @@ disabled; their former `with_tol` aliases required a positive value. The
 relative position tolerance on `BrentRoot` still requires at least four times
 the scalar machine epsilon.
 
+## Backend features
+
+The unversioned `nalgebra`, `ndarray`, and `faer` features now select Basin's
+newest supported release of each backend. In particular, `nalgebra` moves from
+0.34 to 0.35, and `nalgebra-lapack` moves with it. To keep nalgebra 0.34, replace
+these features with `nalgebra_v0_34` and `nalgebra_v0_34-lapack`, respectively.
+The current `ndarray` and `faer` targets remain 0.17 and 0.24.
+
+The `*_latest` features, including `nalgebra_latest-lapack` and
+`ndarray_latest-blas`, remain available as deprecated synonyms for the
+unversioned features. Use an exact version feature when your application pins
+its backend dependency; a moving alias may select a newer, incompatible
+backend release in a later Basin version. The `nalgebra` and `nalgebra-lapack`
+features now require Rust 1.89 because nalgebra 0.35 does. Basin's package MSRV
+remains Rust 1.87 for features that do not select nalgebra 0.35.
+
 ## Test problems
 
 Basin 2.0 enables no features by default. If your code imports

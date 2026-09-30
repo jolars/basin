@@ -12,7 +12,7 @@
 //!
 //! ```sh
 //! RUSTFLAGS="-L $OPENBLAS_LP64_LIB -l openblas" \
-//!   cargo test -p basin --features nalgebra_latest-lapack --test lapack_nalgebra
+//!   cargo test -p basin --features nalgebra-lapack --test lapack_nalgebra
 //! ```
 #![cfg(all(
     feature = "nalgebra_all",

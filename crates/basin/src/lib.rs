@@ -176,14 +176,14 @@
 //! no features. Each external backend has exact version features and a moving
 //! alias:
 //!
-//! | Backend  | Exact features                            | Moving alias      |
-//! | -------- | ----------------------------------------- | ----------------- |
-//! | nalgebra | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra_latest` |
-//! | ndarray  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray_latest`  |
-//! | faer     | `faer_v0_22` through `faer_v0_24`         | `faer_latest`     |
+//! | Backend  | Exact features                            | Moving alias |
+//! | -------- | ----------------------------------------- | ------------ |
+//! | nalgebra | `nalgebra_v0_32` through `nalgebra_v0_35` | `nalgebra`   |
+//! | ndarray  | `ndarray_v0_15` through `ndarray_v0_17`   | `ndarray`    |
+//! | faer     | `faer_v0_22` through `faer_v0_24`         | `faer`       |
 //!
-//! The original features remain frozen for Basin 1.x compatibility:
-//! `nalgebra` selects 0.34, `ndarray` selects 0.17, and `faer` selects 0.24.
+//! `nalgebra` selects 0.35, `ndarray` selects 0.17, and `faer` selects 0.24.
+//! The `*_latest` features remain available as deprecated synonyms.
 //! If dependency feature unification enables several releases of one backend,
 //! Basin implements every enabled release independently.
 //!
@@ -194,17 +194,17 @@
 //! Each nalgebra release includes its matching `nalgebra-sparse` release:
 //! 0.32/0.9, 0.33/0.10, 0.34/0.11, and 0.35/0.12. Versioned acceleration uses
 //! the `nalgebra_v0_XX-lapack` and `ndarray_v0_XX-blas` features. The moving
-//! aliases are `nalgebra_latest-lapack` and `ndarray_latest-blas`; the original
-//! `nalgebra-lapack` and `ndarray-blas` features remain frozen at nalgebra 0.34
-//! and ndarray 0.17.
+//! aliases are `nalgebra-lapack` and `ndarray-blas`; the
+//! `nalgebra_latest-lapack` and `ndarray_latest-blas` features remain available
+//! as deprecated synonyms.
 //!
 //! BLAS/LAPACK acceleration is off by default, is not wasm-compatible, and
 //! expects the application to supply BLAS/LAPACK symbols at link time. The
 //! default build is wasm-friendly and single-threaded; parallelism is behind
 //! the opt-in `parallel` feature.
 //!
-//! Basin's package MSRV is Rust 1.87. `nalgebra_v0_35` and
-//! `nalgebra_latest` require Rust 1.89 because nalgebra 0.35 does.
+//! Basin's package MSRV is Rust 1.87. `nalgebra_v0_35` and `nalgebra` require
+//! Rust 1.89 because nalgebra 0.35 does.
 //!
 //! # Citation
 //!

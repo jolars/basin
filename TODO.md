@@ -313,16 +313,15 @@ desired backend features.
   API compact; general tracing and exhaustive solver measurements are separate
   concerns. Document migration from the 1.x reasons and diagnostics.
 
-- [ ] **Clean up backend compatibility aliases in Basin 2.0.0.** Retire the
-  frozen unversioned `nalgebra`, `ndarray`, and `faer` feature aliases and
-  their LAPACK/BLAS counterparts in favor of exact version features and the
-  explicit `*_latest` aliases. Remove or replace `NalgebraQuasiNewtonState`,
-  `NdarrayQuasiNewtonState`, and `FaerQuasiNewtonState`, whose concrete
-  types currently change when a newer backend version is enabled. Prefer
-  explicit `QuasiNewtonState<V, M, F>` types or version-specific aliases.
-  Preserve independent implementations for every enabled version and
-  version-specific acceleration. Document the 1.x migration and retain
-  simultaneous-version and downstream Cargo feature-unification tests.
+- [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
+  unversioned `nalgebra`, `ndarray`, and `faer` features and their LAPACK/BLAS
+  counterparts select the newest supported releases. Retain the `*_latest`
+  features as deprecated synonyms and exact version features for pinned
+  dependencies. Remove the backend-specific quasi-Newton state aliases in
+  favor of `FirstOrderState<V, F>` with a solver-owned matrix. Preserve
+  independent implementations for every enabled version and version-specific
+  acceleration. Document the 1.x migration and retain simultaneous-version
+  and downstream Cargo feature-unification tests.
 
 - [x] **Remove bincode in Basin 2.0.0.** Drop legacy readers for unprefixed
   state checkpoints and version 1 exact checkpoints, along with the bincode

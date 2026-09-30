@@ -42,10 +42,10 @@ Run focused tests while developing, then the checks matching the changed scope:
 
 - Rust formatting: `cargo fmt --all -- --check`.
 - Routine pure-Rust tests:
-  `cargo test -p basin --features nalgebra_latest,ndarray_latest,faer_latest,problems,parallel`.
+  `cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel`.
 - Workspace lint: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
 - Public documentation:
-  `cargo doc --no-deps -p basin --features nalgebra_latest-lapack,ndarray_latest-blas,faer_latest,parallel,problems,serde`.
+  `cargo doc --no-deps -p basin --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde`.
 - WASM-sensitive changes:
   `cargo build --target wasm32-unknown-unknown` and
   `cargo build --target wasm32-unknown-unknown --no-default-features`.
@@ -96,12 +96,12 @@ belong in the core crate.
 1. Preserve conventional optimization-framework vocabulary and the generic
    driver-loop shape unless another constraint requires divergence.
 2. Each supported backend release has an exact version feature. The
-   `*_latest` aliases move to the newest supported release, while the original
-   unversioned features retain their Basin 1.x meanings. Implement every enabled
-   backend version independently; enabling another version must preserve existing
-   implementations. Legacy backend-specific quasi-Newton state aliases still
-   select the newest enabled version for Basin 1.x compatibility. Use explicit
-   `QuasiNewtonState<V, M, F>` types when selecting a version.
+   unversioned aliases move to the newest supported release, while deprecated
+   `*_latest` features forward to them. Implement every enabled backend version
+   independently; enabling another version must preserve existing implementations.
+   On `v1`, legacy backend-specific quasi-Newton state aliases select the newest
+   enabled version for compatibility. On `main`, BFGS uses `FirstOrderState<V, F>`
+   and infers its matrix through `DenseBackend`.
 3. Numerical convergence settings belong on the solver, with one owner per
    test and shared internal calculations. Execution budgets, targets, stalls,
    cancellation, and application stops belong to the executor. Bind optional

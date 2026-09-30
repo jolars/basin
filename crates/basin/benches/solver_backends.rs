@@ -33,7 +33,7 @@
 //! charged to `iter_batched` setup, not the timed routine.
 //!
 //! Run with
-//! `cargo bench --features nalgebra_latest,ndarray_latest,faer_latest,problems --bench solver_backends`.
+//! `cargo bench --features nalgebra,ndarray,faer,problems --bench solver_backends`.
 
 use std::hint::black_box;
 use std::time::Duration;

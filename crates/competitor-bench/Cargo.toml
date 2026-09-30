@@ -28,7 +28,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-basin = { path = "../basin", features = ["nalgebra", "faer", "problems"] }
+basin = { path = "../basin", features = ["nalgebra_v0_34", "faer", "problems"] }
 levenberg-marquardt = "0.15"
 nalgebra = "0.34"
 # Workspace `--all-features` enables every Basin nalgebra adapter.
@@ -71,7 +71,7 @@ slsqp = "1.0.2"
 rayon = { version = "1", optional = true }
 
 [features]
-basin-latest = ["basin/nalgebra_latest", "dep:nalgebra_latest"]
+basin-latest = ["basin/nalgebra", "dep:nalgebra_latest"]
 # Off by default so the axis-3 competitor benches (`compare`, `gd_nm`)
 # compile basin *without* rayon—a single-threaded basin vs a
 # single-threaded argmin/lm/gomez/nlopt, with no parallelism confound.
