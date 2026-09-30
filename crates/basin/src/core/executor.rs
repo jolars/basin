@@ -50,7 +50,10 @@ use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
 use crate::core::convergence::{
     NativeConvergenceDiagnostics, NativeConvergenceTest,
 };
-use crate::core::observer::{Observe, ObserverMode};
+use crate::core::observer::{
+    ObservationEvent, Observe, ObserveSolver, ObserverMode, SolverCallback,
+    StateObserver,
+};
 use crate::core::problem::{EvalCounts, Problem};
 use crate::core::run_control::RunControl;
 use crate::core::solver::Solver;
@@ -374,7 +377,7 @@ pub struct Stepper<P, S, So> {
     state: Option<S>,
     solver: So,
     control: RunControl<S>,
-    observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
+    observers: Vec<(Box<dyn ObserveSolver<S, So>>, ObserverMode)>,
     checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
     finished: Option<TerminationReason>,
@@ -398,6 +401,9 @@ where
     }
 
     /// Read the solver's current model and diagnostics between steps.
+    /// For registered logging, use [`Executor::observe_solver`] or
+    /// [`Executor::observe_solver_with`].
+    ///
     /// This borrows the solver without cloning it or performing evaluations.
     /// After a hard error its contents are diagnostic only; exact continuation
     /// requires a successfully published solver-and-state checkpoint.
@@ -495,7 +501,7 @@ where
                 }
                 for (observer, mode) in self.observers.iter_mut() {
                     if mode.fires_on(iter, is_new_best) {
-                        observer.observe_iter(state);
+                        observer.observe_iter(state, &self.solver);
                     }
                 }
             }
@@ -507,7 +513,7 @@ where
                     checkpoint.save(&self.solver, state, self.problem.counts());
                 }
                 for (observer, _mode) in self.observers.iter_mut() {
-                    observer.observe_final(state, &reason);
+                    observer.observe_final(state, &self.solver, &reason);
                 }
             }
         }
@@ -801,7 +807,7 @@ pub struct Executor<P, S, So> {
     state: S,
     solver: So,
     control: RunControl<S>,
-    observers: Vec<(Box<dyn Observe<S>>, ObserverMode)>,
+    observers: Vec<(Box<dyn ObserveSolver<S, So>>, ObserverMode)>,
     checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
     resume_counts: Option<EvalCounts>,
@@ -988,7 +994,9 @@ where
         self
     }
 
-    /// Register an [`Observe`] hook. Observers fire in registration order;
+    /// Register an [`Observe`] hook. Observers fire in registration order,
+    /// including when mixed with [`observe_solver`](Self::observe_solver) or
+    /// [`observe_solver_with`](Self::observe_solver_with);
     /// `mode` gates [`Observe::observe_iter`] only;
     /// [`Observe::observe_init`] and [`Observe::observe_final`] always
     /// fire. See the [`observer`](crate::core::observer) module for the
@@ -1002,8 +1010,79 @@ where
     where
         O: Observe<S> + 'static,
     {
+        self.observers
+            .push((Box::new(StateObserver(observer)), mode));
+        self
+    }
+
+    /// Register an observer that borrows both progress and the solver.
+    ///
+    /// Hooks fire at the same boundaries as [`observe_with`](Self::observe_with),
+    /// in registration order across both kinds of observer. `mode` gates only
+    /// completed iterations; initialization and clean termination always fire.
+    /// No solver or workspace cloning is required. See [`ObserveSolver`] for
+    /// diagnostic semantics and the read-only contract.
+    ///
+    /// The observer is owned and must have `'static` captures; the solver and
+    /// state may borrow data. Use [`observe_solver`](Self::observe_solver) for
+    /// a closure with inferred state and solver types.
+    pub fn observe_solver_with<O>(
+        mut self,
+        observer: O,
+        mode: ObserverMode,
+    ) -> Self
+    where
+        O: ObserveSolver<S, So> + 'static,
+    {
         self.observers.push((Box::new(observer), mode));
         self
+    }
+
+    /// Observe progress and solver diagnostics with a closure.
+    ///
+    /// The callback receives shared state and solver references plus an
+    /// [`ObservationEvent`]. It has the same lifecycle and registration order
+    /// as [`observe_solver_with`](Self::observe_solver_with). Handle logging
+    /// errors inside the callback; cancellation can request a clean stop.
+    ///
+    /// # Example
+    ///
+    /// Record annealing's temperature for the next proposal. The solver type,
+    /// including its anonymous neighbor closure, is inferred automatically.
+    ///
+    /// ```
+    /// use basin::{CostFunction, Executor, ObserverMode, SimulatedAnnealing,
+    ///             State, TemperatureSchedule};
+    /// use basin::core::rng::ChaCha8Rng;
+    /// use std::convert::Infallible;
+    ///
+    /// struct Square;
+    /// impl CostFunction for Square {
+    ///     type Param = f64;
+    ///     type Output = f64;
+    ///     type Error = Infallible;
+    ///     fn cost(&self, x: &f64) -> Result<f64, Infallible> { Ok(x * x) }
+    /// }
+    /// let solver = SimulatedAnnealing::new(
+    ///     |x: &f64, _: f64, _: &mut ChaCha8Rng| x - 0.25,
+    ///     8.0, TemperatureSchedule::geometric(0.5), 42,
+    /// );
+    /// Executor::from_start(Square, solver, 2.0)
+    ///     .max_iter(3)
+    ///     .observe_solver(
+    ///         |state, solver, event| {
+    ///             println!("{event:?}: {} {}", state.iter(), solver.temperature());
+    ///         },
+    ///         ObserverMode::Always,
+    ///     )
+    ///     .run()?;
+    /// # Ok::<(), Infallible>(())
+    /// ```
+    pub fn observe_solver<C>(self, callback: C, mode: ObserverMode) -> Self
+    where
+        C: FnMut(&S, &So, ObservationEvent) + 'static,
+    {
+        self.observe_solver_with(SolverCallback(callback), mode)
     }
 
     /// Register a solver-aware checkpoint destination.
@@ -1074,7 +1153,7 @@ where
             state
         };
         for (observer, _mode) in observers.iter_mut() {
-            observer.observe_init(&state);
+            observer.observe_init(&state, &solver);
         }
         Ok(Stepper {
             problem,

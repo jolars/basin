@@ -12,8 +12,9 @@
 //!   stops the run if `Some`.
 //! - [`Observe`]: returns `()`; the executor ignores any side effects on the
 //!   optimization itself. Failures must be handled inside the observer:
-//!   the trait is infallible by design so a misbehaving logger can't kill
-//!   the run. An observer may request a clean stop by cancelling a cloned
+//!   the trait returns no logging error for the executor to propagate.
+//!   Panics propagate normally. An observer may request a clean stop by
+//!   cancelling a cloned
 //!   [`CancellationToken`](crate::core::executor::CancellationToken); the
 //!   executor observes it before the next iteration.
 //!
@@ -23,6 +24,31 @@
 //! observer impls `Observe<S: GradientState>` and is rejected at compile time
 //! when attached to a derivative-free run.
 //!
+//! # Solver diagnostics
+//!
+//! [`ObserveSolver<S, So>`](ObserveSolver) also borrows the concrete solver.
+//! Register it with [`Executor::observe_solver_with`](crate::Executor::observe_solver_with),
+//! or use [`Executor::observe_solver`](crate::Executor::observe_solver) for a
+//! closure receiving `(&state, &solver, ObservationEvent)`. State observers
+//! and solver observers share the lifecycle below, obey the same modes, and
+//! fire in registration order, including when mixed.
+//!
+//! The solver retains ownership of models and workspace. Observation borrows
+//! them without cloning or evaluating the problem. Getters retain their
+//! individual availability and time semantics: annealing's
+//! [`temperature`](crate::SimulatedAnnealing::temperature) describes the next
+//! proposal, while SLSQP's [`stationarity`](crate::Slsqp::stationarity) and
+//! [`multipliers`](crate::Slsqp::equality_multipliers) are optional and depend
+//! on its current model. Callbacks must not evaluate the problem or mutate
+//! solver machinery through interior mutability.
+//!
+//! Observations belong to the registered executor; they do not include every
+//! iteration of an outer solver's inner solves. For applications that already
+//! drive a [`Stepper`](crate::Stepper), [`Stepper::solver`](crate::Stepper::solver)
+//! exposes the same shared borrow between steps. Retain the final solver with
+//! [`Executor::run_with_solver`](crate::Executor::run_with_solver) when only
+//! final diagnostics are needed.
+//!
 //! # Lifecycle
 //!
 //! Three hooks, called in this order during a run:
@@ -30,10 +56,11 @@
 //! 1. [`observe_init`](Observe::observe_init) fires once after
 //!    [`Solver::init`](crate::core::solver::Solver::init) returns and the
 //!    state's counter mirror is refreshed, before the first termination
-//!    check. The state shows `iter() == 0`.
+//!    check. A fresh run shows `iter() == 0`. Exact continuation skips solver
+//!    initialization and observes the restored iteration and solver instead.
 //! 2. [`observe_iter`](Observe::observe_iter) fires after every successfully
 //!    completed iteration, after the iteration counter is incremented. On
-//!    the first call the state shows `iter() == 1`. Gated by
+//!    the first call of a fresh run the state shows `iter() == 1`. Gated by
 //!    [`ObserverMode`].
 //! 3. [`observe_final`](Observe::observe_final) fires once when the run
 //!    stops cleanly with a [`TerminationReason`]. The state shows the iter
@@ -75,9 +102,11 @@
 
 use crate::core::termination::TerminationReason;
 
+mod adapters;
 mod history;
 mod report;
 
+pub(crate) use adapters::{SolverCallback, StateObserver};
 pub use history::History;
 pub use report::Report;
 
@@ -96,8 +125,8 @@ pub use checkpoint::{CheckpointWriter, read_checkpoint};
 pub trait Observe<S> {
     /// Fired once before the first iteration, after
     /// [`Solver::init`](crate::core::solver::Solver::init) has run and the
-    /// state's counter mirror has been refreshed. The state's iter counter
-    /// is zero.
+    /// state's counter mirror has been refreshed. A fresh run has iteration
+    /// zero; exact continuation observes the restored boundary instead.
     ///
     /// Always fires regardless of the observer's [`ObserverMode`]; modes
     /// gate iteration callbacks only.
@@ -106,7 +135,7 @@ pub trait Observe<S> {
     /// Fired after each successfully completed iteration, after
     /// [`State::increment_iter`](crate::core::state::State::increment_iter)
     /// has run, so `state.iter()` returns the count of the iteration that
-    /// just finished (1 on the first call, …).
+    /// just finished (1 on the first call of a fresh run, …).
     ///
     /// Gated by [`ObserverMode`]: `Never` skips, `Always` fires every iter,
     /// `Every(n)` fires when `state.iter() % n == 0`.
@@ -125,11 +154,86 @@ pub trait Observe<S> {
     fn observe_final(&mut self, _state: &S, _reason: &TerminationReason) {}
 }
 
+/// Read-only observation of progress and solver-owned diagnostics.
+///
+/// Register an implementation with
+/// [`Executor::observe_solver_with`](crate::Executor::observe_solver_with).
+/// For a closure, use [`Executor::observe_solver`](crate::Executor::observe_solver).
+/// Bind only on the state and solver capabilities the observer needs; neither
+/// argument must implement `Clone` or serialization, and both may borrow data.
+/// References passed to a callback cannot be retained beyond that callback.
+///
+/// All hooks default to no-ops. Their ordering, modes, exact continuation, and
+/// error behavior match [`Observe`]; see the [module documentation](self).
+/// Observers must use existing diagnostic getters without evaluating the
+/// problem or mutating solver machinery through interior mutability. Handle
+/// logging errors internally. Panics propagate normally. A cloned
+/// [`CancellationToken`](crate::CancellationToken) can request a clean stop.
+///
+/// # Example
+///
+/// A reusable logger can bind on the minimum state shape while accepting any
+/// annealing neighbor and RNG type:
+///
+/// ```
+/// use basin::{ObserveSolver, SimulatedAnnealing, State};
+///
+/// struct TemperatureLogger;
+/// impl<S, N, R> ObserveSolver<S, SimulatedAnnealing<N, f64, R>>
+///     for TemperatureLogger
+/// where
+///     S: State,
+/// {
+///     fn observe_iter(&mut self, state: &S, solver: &SimulatedAnnealing<N, f64, R>) {
+///         println!("{}: next temperature = {}", state.iter(), solver.temperature());
+///     }
+/// }
+/// ```
+pub trait ObserveSolver<S, So> {
+    /// Fired after successful initialization or exact restoration, before the
+    /// first termination check. Counts and incumbent publication are complete.
+    /// Always fires regardless of [`ObserverMode`].
+    fn observe_init(&mut self, _state: &S, _solver: &So) {}
+
+    /// Fired after a completed iteration, after counts, iteration number, and
+    /// incumbent publication are updated. Gated by [`ObserverMode`].
+    fn observe_iter(&mut self, _state: &S, _solver: &So) {}
+
+    /// Fired once on a clean stop, regardless of [`ObserverMode`].
+    ///
+    /// A partial-step stop refreshes counts without incrementing the iteration
+    /// counter. The solver may contain diagnostics updated by the final step
+    /// or convergence check. Hard errors do not fire this hook.
+    fn observe_final(
+        &mut self,
+        _state: &S,
+        _solver: &So,
+        _reason: &TerminationReason,
+    ) {
+    }
+}
+
+/// The boundary passed to an [`Executor::observe_solver`](crate::Executor::observe_solver)
+/// callback. See the [observer lifecycle](self#lifecycle).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ObservationEvent {
+    /// Successful initialization or entry into an exact continuation.
+    /// The restored iteration can be nonzero.
+    Init,
+    /// A completed iteration selected by [`ObserverMode`].
+    Iter,
+    /// A clean stop, including a partial-step stop. Hard errors do not emit
+    /// an event. Repeated stepping after termination does not repeat it.
+    Final(TerminationReason),
+}
+
 /// Per-registration policy for [`observe_iter`](Observe::observe_iter).
 ///
 /// Every variant gates the iteration callback only: `observe_init` and
 /// `observe_final` always fire. A user who wants to fully disable an observer
-/// should simply not register it.
+/// should simply not register it. The same policy applies to [`ObserveSolver`]
+/// and [`ObservationEvent::Iter`] callbacks.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ObserverMode {

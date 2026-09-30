@@ -374,7 +374,9 @@ pub use crate::core::numdiff::{
 };
 #[cfg(all(feature = "serde", not(target_arch = "wasm32")))]
 pub use crate::core::observer::{CheckpointWriter, read_checkpoint};
-pub use crate::core::observer::{History, Observe, ObserverMode, Report};
+pub use crate::core::observer::{
+    History, ObservationEvent, Observe, ObserveSolver, ObserverMode, Report,
+};
 pub use crate::core::problem::{
     CostFunction, EvalCounts, EvaluationKind, Gradient, Hessian,
     HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,

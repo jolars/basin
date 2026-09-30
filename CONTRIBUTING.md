@@ -300,7 +300,11 @@ The `v1` branch retains its existing APIs and behavior.
 - **Updates:** external solvers can reuse shared storage through public
   operations that keep points, costs, derivatives, and population entries
   consistent. The executor owns bookkeeping. Observers see coherent boundaries
-  without triggering evaluations.
+  without triggering evaluations. `Observe<S>` borrows progress, while optional
+  `ObserveSolver<S, So>` hooks and `Executor::observe_solver` closures also
+  borrow the solver. Both share observation boundaries, modes, and registration
+  order. Diagnostic getters retain their documented availability and time
+  semantics; observation does not clone workspace or transfer its ownership.
 - **Incumbents:** retain matching point, cost, and selection metadata across
   iterations. Best tracking covers published candidates, not every evaluation;
   timestamps record publication. Constrained selection may prefer a higher-cost

@@ -66,6 +66,54 @@ with that application, export parameters from `checkpoint.state()`, and start a
 fresh 2.0 run from those parameters. Reattach the problem and execution controls
 in the new application.
 
+## Observing solver diagnostics
+
+Algorithm quantities that moved from state to solver remain available during
+ordinary `Executor::run()` calls. Use `observe_solver` for a closure receiving
+`(&state, &solver, ObservationEvent)`, or implement `ObserveSolver<S, So>` and
+register it with `observe_solver_with`. Existing `Observe<S>` implementations
+and `observe_with` calls continue to handle progress alone.
+
+For an annealing executor, replace a state-temperature logger with:
+
+```rust,ignore
+executor.observe_solver(
+    |state, solver, event| {
+        println!("{event:?}: {} {}", state.iter(), solver.temperature());
+    },
+    ObserverMode::Every(10),
+).run()?;
+```
+
+Import `State` and `ObserverMode` from `basin`; `ObservationEvent` and
+`ObserveSolver` are also root exports. A reusable observer keeps the familiar
+`observe_init`, `observe_iter`, and `observe_final` hooks, now with `&So` after
+`&S`. The final hook also receives `&TerminationReason`. All hooks have default
+no-op implementations. The closure receives `ObservationEvent::Init`, `Iter`,
+or `Final(reason)` instead.
+
+Both observer kinds fire in registration order. Modes filter completed
+iterations only; initialization and clean termination always fire. Exact
+continuation observes its restored boundary, potentially at a nonzero
+iteration. A clean partial-step stop refreshes counts without incrementing the
+iteration, and a hard error emits no final callback. Registered observers are
+owned and require `'static` captures, but the state and solver may borrow local
+data. A callback can cancel a cloned `CancellationToken` to request a clean stop.
+
+The solver retains its models and workspace. Observation borrows existing
+diagnostics without cloning or evaluating the problem. Preserve each getter's
+meaning: annealing's `temperature()` describes the next proposal after cooling
+and any restart; SLSQP stationarity and multiplier slices can be unavailable.
+Callbacks must not evaluate the problem or mutate solver machinery through
+interior mutability. Outer observers do not automatically receive inner-solver
+iterations.
+
+Applications that already drive a `Stepper` can keep reading
+`Stepper::solver()` between steps. Use `run_with_solver()` when only final
+diagnostics are needed. See the
+[observer API](https://docs.rs/basin/latest/basin/core/observer/index.html)
+for the full lifecycle and a runnable logging example.
+
 ## Shared progress states
 
 The migration replaces algorithm-specific progress with shared states. The
@@ -512,8 +560,9 @@ produce independent evolution state. Arbitrary cloneable parameters, including
 discrete structures, remain supported without vector math. `seed_chain(seed)`
 creates an independent chain from the configured components, without consuming
 live randomness. Read `temperature()`, `reannealings()`, and `neighbor()` from
-the retained solver after `run_with_solver()`, or through `Stepper::solver()`
-between steps. The latter is a read-only borrow available for every solver.
+the solver borrowed by `observe_solver`, the retained solver after
+`run_with_solver()`, or through `Stepper::solver()` between steps. See
+[observing solver diagnostics](#observing-solver-diagnostics) for custom logging.
 
 State-only annealing snapshots no longer implement `ExactResumeState` or work
 with `Executor::resume`. Pass them to `Executor::new` for a fresh chain, or

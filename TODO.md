@@ -338,6 +338,14 @@ desired backend features.
   constructors, public types, trait bounds, stopping semantics, and
   serialized-format compatibility. See the [migration guide](MIGRATING.md#shared-progress-states).
 
+- [x] **Decide how observers access solver diagnostics before finalizing 2.0.**
+  Keep `Observe<S>` for progress and add optional `ObserveSolver<S, So>` hooks
+  and `Executor::observe_solver` closures that borrow the solver at the same
+  observation boundaries. Preserve solver ownership, modes, and mixed
+  registration order without cloning workspace or triggering evaluations.
+  `Stepper::solver()` remains available for applications driving their own
+  loop. See [custom diagnostic logging](MIGRATING.md#observing-solver-diagnostics).
+
 - [ ] **Simplify and strengthen the full-form constraint API (tenet 4).**
   Consider having COBYLA consume `NonlinearConstraints` directly, removing
   the need for the `FoldedConstraints` compatibility adapter. Separate the

@@ -585,11 +585,15 @@ resuming.
 
 ## Observers and Cancellation
 
-Basin observers receive read-only state and return `()`. They do not receive
-solver-specific key-value metadata, and an observer failure cannot accidentally
-kill an optimization. Use a cloned `CancellationToken` when a progress callback
-requests a normal stop; the executor returns the best available state with
-`TerminationReason::Cancelled`.
+Basin's `Observe<S>` observers receive read-only state and return `()`.
+For solver diagnostics, use
+[`observe_solver`](https://docs.rs/basin/latest/basin/core/executor/struct.Executor.html#method.observe_solver)
+with a closure borrowing the state and concrete solver, or implement
+[`ObserveSolver<S, So>`](https://docs.rs/basin/latest/basin/core/observer/trait.ObserveSolver.html).
+Both kinds share the same observation boundaries, modes, and registration order.
+Handle logging errors inside the observer. Use a cloned `CancellationToken`
+when a progress callback requests a normal stop; the executor returns the best
+available state with `TerminationReason::Cancelled`.
 
 <!-- compile: basin-observer-cancellation -->
 ```rust
