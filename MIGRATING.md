@@ -680,9 +680,9 @@ iteration number at publication, including mid-step stops; repeated observation
 does not refresh the incumbent's age. It has no gradient capability or
 `ObjectiveIncumbentState` guarantee. Use a `stop_when` hook that checks both
 violation and objective for constrained targets. `target_objective` and
-`no_objective_improvement` deliberately reject this state; legacy `target_cost`
-and `no_improvement` do not check feasibility and must not be used for these
-selections. Budget gradients with
+`no_objective_improvement` deliberately reject this state. The Basin 1.x
+`target_cost` and `no_improvement` controls did not check feasibility and must
+not be used for these selections. Budget gradients with
 `max_evaluations(EvaluationKind::Gradient, n)`. The outer no longer computes an
 unused original-objective gradient; surrogate gradients remain charged inner
 work. Fresh runs reset multipliers and penalty history, and exact checkpoints
@@ -760,8 +760,8 @@ and Basin versions, as described under [checkpoint files](#checkpoint-files).
 
 ## Stopping conditions
 
-`target_cost` and `no_improvement` now alias `target_objective` and
-`no_objective_improvement`. All four require `ObjectiveIncumbentState` rather
+Replace `target_cost` with `target_objective` and `no_improvement` with
+`no_objective_improvement`. Both require `ObjectiveIncumbentState` rather
 than `State` alone. `SelectedState` and `SelectedFirstOrderState` deliberately
 do not implement that capability: their solvers can prefer feasibility over a
 lower objective. Use an application stop that checks both the selected
@@ -786,7 +786,7 @@ numerical convergence on the solver and execution limits on `Executor`,
   | Removed criterion                                        | Replacement                                                                             |
   | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
   | `MaxIter`, `MaxCostEvals`, `MaxGradientEvals`, `MaxTime` | `max_iter`, `max_cost_evals`, `max_gradient_evals`, `max_time` on the executor          |
-  | `TargetCost`, `NoImprovement`, `NoAcceptance`            | `target_cost`, `no_improvement`, `no_acceptance` on the executor                        |
+  | `TargetCost`, `NoImprovement`, `NoAcceptance`            | `target_objective`, `no_objective_improvement`, `no_acceptance` on the executor          |
   | `GradientTolerance`, `RelativeGradientTolerance`         | `with_absolute_gradient_tolerance`, `with_relative_gradient_tolerance` on the solver    |
   | `ProjectedGradientTolerance`                             | `with_absolute_projected_gradient_tolerance`; bounds come from the problem              |
   | `ParamTolerance`, `RelativeParamTolerance`               | `with_absolute_step_tolerance`, `with_relative_step_tolerance`                          |

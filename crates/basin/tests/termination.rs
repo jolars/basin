@@ -263,7 +263,7 @@ fn relative_cost_tolerance_fires_when_relative_reduction_small() {
 }
 
 #[test]
-fn target_cost_fires_at_iter_zero_when_start_is_below_target() {
+fn target_objective_fires_at_iter_zero_when_start_is_below_target() {
     // f(x_0) = 0.5·‖(0.5, 0.5)‖² = 0.25 ≤ 1.0, so the criterion fires
     // before any iteration runs.
     let result = Executor::new(
@@ -271,7 +271,7 @@ fn target_cost_fires_at_iter_zero_when_start_is_below_target() {
         GradientDescent::new(0.1),
         FirstOrderState::new(vec![0.5, 0.5]),
     )
-    .target_cost(1.0)
+    .target_objective(1.0)
     .run()
     .unwrap();
 
@@ -280,7 +280,7 @@ fn target_cost_fires_at_iter_zero_when_start_is_below_target() {
 }
 
 #[test]
-fn target_cost_fires_when_cost_drops_to_target() {
+fn target_objective_fires_when_cost_drops_to_target() {
     // f_k = 0.5·(1-α)^(2k)·‖x_0‖²; with α = 0.5, ‖x_0‖² = 2, we hit
     // f ≤ 1e-3 after a small number of iterations and well before
     // max_iter.
@@ -290,7 +290,7 @@ fn target_cost_fires_when_cost_drops_to_target() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(1_000)
-    .target_cost(1e-3)
+    .target_objective(1e-3)
     .run()
     .unwrap();
 
@@ -300,7 +300,7 @@ fn target_cost_fires_when_cost_drops_to_target() {
 }
 
 #[test]
-fn target_cost_does_not_fire_when_target_unreachable() {
+fn target_objective_does_not_fire_when_target_unreachable() {
     // Target below the global min (f ≥ 0); should never fire, MaxIter
     // wins.
     let result = Executor::new(
@@ -309,7 +309,7 @@ fn target_cost_does_not_fire_when_target_unreachable() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(10)
-    .target_cost(-1.0)
+    .target_objective(-1.0)
     .run()
     .unwrap();
 
@@ -318,7 +318,7 @@ fn target_cost_does_not_fire_when_target_unreachable() {
 }
 
 #[test]
-fn no_improvement_fires_after_patience_stalled_iters() {
+fn no_objective_improvement_fires_after_patience_stalled_iters() {
     // tol = 10.0 is larger than any drop on the quadratic from [1, 1]
     // (max drop is 0.75 at iter 1), so every iter past the first counts
     // as "no improvement". With patience = 3 the criterion fires once
@@ -329,7 +329,7 @@ fn no_improvement_fires_after_patience_stalled_iters() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(100)
-    .no_improvement(3, 10.0)
+    .no_objective_improvement(3, 10.0)
     .run()
     .unwrap();
 
@@ -338,7 +338,7 @@ fn no_improvement_fires_after_patience_stalled_iters() {
 }
 
 #[test]
-fn no_improvement_does_not_fire_under_monotone_decrease() {
+fn no_objective_improvement_does_not_fire_under_monotone_decrease() {
     // Quadratic with GD(α=0.5) gives f_k = 0.25^k, strictly
     // decreasing. With tol = 0.0 every iteration is "an improvement",
     // so the patience counter never advances and MaxIter wins.
@@ -348,7 +348,7 @@ fn no_improvement_does_not_fire_under_monotone_decrease() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(20)
-    .no_improvement(5, 0.0)
+    .no_objective_improvement(5, 0.0)
     .run()
     .unwrap();
 
@@ -357,7 +357,7 @@ fn no_improvement_does_not_fire_under_monotone_decrease() {
 }
 
 #[test]
-fn no_improvement_resets_counter_on_real_improvement() {
+fn no_objective_improvement_resets_counter_on_real_improvement() {
     // f_k = 0.25^k on Quadratic with GD(α=0.5). Drops are 0.75,
     // 0.1875, 0.0469, 0.0117, 0.0029, …. With tol = 0.1 the first two
     // drops count as improvements (resetting `stalled` to 0 each
@@ -371,7 +371,7 @@ fn no_improvement_resets_counter_on_real_improvement() {
         FirstOrderState::new(vec![1.0, 1.0]),
     )
     .max_iter(100)
-    .no_improvement(3, 0.1)
+    .no_objective_improvement(3, 0.1)
     .run()
     .unwrap();
 

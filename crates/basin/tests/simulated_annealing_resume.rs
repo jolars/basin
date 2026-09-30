@@ -204,7 +204,7 @@ fn rejection_checkpoint(
 fn zero_tolerance_best_stall_retains_absolute_history_on_resume() {
     let checkpoint = rejection_checkpoint("best-stall");
     let result = Executor::resume_from_checkpoint(RuggedCost, checkpoint)
-        .no_improvement(7, 0.0)
+        .no_objective_improvement(7, 0.0)
         .run()
         .unwrap();
 

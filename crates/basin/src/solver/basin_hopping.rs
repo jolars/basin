@@ -211,8 +211,8 @@ fn accept_guard(new_success: bool, incumbent_success: bool) -> bool {
 /// Iteration count is framework-level (tenet 3): cap the number of hops with
 /// [`Executor::max_iter`](crate::core::executor::Executor::max_iter) (SciPy's
 /// `niter`) and stop on stalls with
-/// [`no_improvement`](crate::Executor::no_improvement) (SciPy's
-/// `niter_success`) or [`target_cost`](crate::Executor::target_cost).
+/// [`no_objective_improvement`](crate::Executor::no_objective_improvement) (SciPy's
+/// `niter_success`) or [`target_objective`](crate::Executor::target_objective).
 /// Set the inner budget with [`with_inner_max_iter`](Self::with_inner_max_iter)
 /// and configure convergence on the supplied inner solver. A loose simplex
 /// tolerance can keep Nelder–Mead refinements inexpensive. Application stops

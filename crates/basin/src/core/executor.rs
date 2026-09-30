@@ -851,7 +851,7 @@ where
     /// solver configuration, scalar type, and code. Execution controls are
     /// configured anew; state-derived checks such as
     /// [`no_acceptance`](Self::no_acceptance) and zero-tolerance
-    /// [`no_improvement`](Self::no_improvement) preserve history stored in the
+    /// [`no_objective_improvement`](Self::no_objective_improvement) preserve history stored in the
     /// state, while controls with private clocks or anchors begin a new run.
     pub fn resume(problem: P, solver: So, state: S) -> Self
     where
@@ -877,7 +877,7 @@ where
     /// cancellation token, or checkpoint sinks; configure that execution
     /// policy anew. State-derived checks such as
     /// [`no_acceptance`](Self::no_acceptance) and zero-tolerance
-    /// [`no_improvement`](Self::no_improvement) preserve history stored in the
+    /// [`no_objective_improvement`](Self::no_objective_improvement) preserve history stored in the
     /// state, while controls with private clocks or anchors begin a new run.
     /// Obtain an owned checkpoint with [`Stepper::into_checkpoint`] or
     /// [`OptimizationResultWithSolver::into_checkpoint`], without cloning

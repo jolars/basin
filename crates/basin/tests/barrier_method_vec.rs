@@ -140,7 +140,7 @@ fn target_cost_does_not_bypass_phase_one() {
         PointState::new(vec![2.0, 2.0]),
     )
     .max_iter(50)
-    .target_cost(0.1)
+    .target_objective(0.1)
     .run()
     .unwrap();
 

@@ -342,7 +342,7 @@ fn unbounded_lbfgs_f32_round_trips_state_solver_termination() {
         state,
     )
     .max_iter(100)
-    .target_cost(1e-6)
+    .target_objective(1e-6)
     .run()
     .unwrap();
 
@@ -441,7 +441,7 @@ fn configured_steihaug_f32_runs_in_both_modes() {
             TrustRegion::with_subproblem(subproblem),
             vec![0.0_f32; 3],
         )
-        .target_cost(1e-8_f32)
+        .target_objective(1e-8_f32)
         .run()
         .unwrap();
         let free = Executor::from_start(
@@ -451,7 +451,7 @@ fn configured_steihaug_f32_runs_in_both_modes() {
             TrustRegion::matrix_free_with(subproblem),
             vec![0.0_f32; 3],
         )
-        .target_cost(1e-8_f32)
+        .target_objective(1e-8_f32)
         .run()
         .unwrap();
         assert!(exact.cost() <= 1e-8_f32);

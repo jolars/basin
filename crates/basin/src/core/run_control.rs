@@ -213,7 +213,7 @@ impl<S> RunControl<S> {
     /// Stop when an eligible objective-ordered incumbent reaches `target`.
     ///
     /// Requires [`ObjectiveIncumbentState`]; no incumbent means no target
-    /// success. Replaces [`target_cost`](Self::target_cost), and vice versa.
+    /// success. Repeated calls replace the previous target.
     ///
     /// # Panics
     ///
@@ -244,7 +244,7 @@ impl<S> RunControl<S> {
     /// Repeated observations do not age the stall. Negative infinity can be
     /// an incumbent and does not itself establish unboundedness.
     ///
-    /// Replaces [`no_improvement`](Self::no_improvement), and vice versa.
+    /// Repeated calls replace the previous stall check.
     /// Borrowed runs reset anchor history. Controls are not part of an exact
     /// checkpoint; reattaching a positive-delta check starts fresh history.
     ///
@@ -282,39 +282,6 @@ impl<S> RunControl<S> {
     pub fn max_time(mut self, limit: Duration) -> Self {
         self.limits.time = Some(limit);
         self
-    }
-
-    /// Alias of [`target_objective`](Self::target_objective), with the same
-    /// objective-selection capability and checked incumbent requirement.
-    ///
-    /// ```compile_fail
-    /// use basin::{RunControl, SelectedState};
-    /// let _ = RunControl::<SelectedState<Vec<f64>>>::new().target_cost(0.0);
-    /// ```
-    pub fn target_cost<F: Scalar + 'static>(self, target: F) -> Self
-    where
-        S: ObjectiveIncumbentState<Float = F>,
-    {
-        self.target_objective(target)
-    }
-
-    /// Alias of [`no_objective_improvement`](Self::no_objective_improvement).
-    /// Counts completed iterations, requires a positive patience, and waits
-    /// for an objective-compatible incumbent before tracking stalls.
-    ///
-    /// ```compile_fail
-    /// use basin::{RunControl, SelectedFirstOrderState};
-    /// let _ = RunControl::<SelectedFirstOrderState<Vec<f64>>>::new().no_improvement(5, 0.0);
-    /// ```
-    pub fn no_improvement<F: Scalar + 'static>(
-        self,
-        patience: u64,
-        min_delta: F,
-    ) -> Self
-    where
-        S: ObjectiveIncumbentState<Float = F>,
-    {
-        self.no_objective_improvement(patience, min_delta)
     }
 
     /// Stop after `patience` completed iterations without an accepted move.
@@ -478,7 +445,7 @@ macro_rules! control_methods {
         }
         /// Stop when an eligible objective-ordered incumbent reaches a finite target.
         ///
-        /// Replaces `target_cost`, and vice versa. See
+        /// Repeated calls replace the previous target. See
         /// [`RunControl::target_objective`](crate::RunControl::target_objective).
         pub fn target_objective<F: crate::core::math::Scalar + 'static>(
             mut self,
@@ -493,7 +460,7 @@ macro_rules! control_methods {
         }
         /// Stop after completed iterations without a sufficient objective decrease.
         ///
-        /// Replaces `no_improvement`, and vice versa. See
+        /// Repeated calls replace the previous stall check. See
         /// [`RunControl::no_objective_improvement`](crate::RunControl::no_objective_improvement)
         /// for threshold validation, publication age, and resume behavior.
         pub fn no_objective_improvement<
@@ -528,33 +495,6 @@ macro_rules! control_methods {
         /// Set a time budget starting at the first post-initialization check.
         pub fn max_time(mut self, limit: web_time::Duration) -> Self {
             self.control = std::mem::take(&mut self.control).max_time(limit);
-            self
-        }
-        /// Alias of [`target_objective`](Self::target_objective); requires
-        /// an objective-compatible incumbent.
-        pub fn target_cost<F: crate::core::math::Scalar + 'static>(
-            mut self,
-            target: F,
-        ) -> Self
-        where
-            S: crate::core::state::ObjectiveIncumbentState<Float = F>,
-        {
-            self.control =
-                std::mem::take(&mut self.control).target_cost(target);
-            self
-        }
-        /// Alias of [`no_objective_improvement`](Self::no_objective_improvement);
-        /// counts completed iterations and requires an objective-compatible incumbent.
-        pub fn no_improvement<F: crate::core::math::Scalar + 'static>(
-            mut self,
-            patience: u64,
-            min_delta: F,
-        ) -> Self
-        where
-            S: crate::core::state::ObjectiveIncumbentState<Float = F>,
-        {
-            self.control = std::mem::take(&mut self.control)
-                .no_improvement(patience, min_delta);
             self
         }
         /// Stop after a positive number of iterations without an accepted move.

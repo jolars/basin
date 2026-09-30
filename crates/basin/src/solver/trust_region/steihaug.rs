@@ -724,7 +724,7 @@ mod tests {
             FirstOrderState::new(vec![1.0; 20]),
         )
         .max_iter(100)
-        .target_cost(1e-6)
+        .target_objective(1e-6)
         .run_with_solver()
         .unwrap();
         assert!(result.cost() <= 1e-6);

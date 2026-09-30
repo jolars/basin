@@ -85,8 +85,8 @@ use crate::core::problem::EvalCounts;
 ///   successful [`Solver::init`](crate::core::solver::Solver::init)/
 ///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter).
 ///   Execution controls like
-///   [`no_improvement`](crate::Executor::no_improvement) and
-///   [`target_cost`](crate::Executor::target_cost) bind on
+///   [`no_objective_improvement`](crate::Executor::no_objective_improvement) and
+///   [`target_objective`](crate::Executor::target_objective) bind on
 ///   a checked incumbent and require [`ObjectiveIncumbentState`]; solver-owned
 ///   cost-change tests bind on `cost()`.
 ///
@@ -144,7 +144,7 @@ pub trait State {
     /// Shared states panic if `cost()` is read before
     /// [`Solver::init`](crate::core::solver::Solver::init) has populated
     /// the cached cost. By contract the executor calls `init` before any
-    /// termination criterion check, so reads from criteria and from
+    /// stopping check, so reads from controls and from
     /// [`OptimizationResult`](crate::core::executor::OptimizationResult)
     /// are safe after successful initialization. Constructors supply no
     /// evaluated records; use [`EvaluatedState::current_record`] or an inherent

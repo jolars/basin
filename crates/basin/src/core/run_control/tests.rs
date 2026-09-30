@@ -79,29 +79,6 @@ fn raw_setters_replace_and_preserve_budget_precedence() {
 }
 
 #[test]
-fn new_and_legacy_target_and_stall_setters_share_slots() {
-    let mut state = point(1.0);
-    let counts = EvalCounts::default();
-    let mut control = RunControl::new().target_objective(1.0).target_cost(0.0);
-    assert_eq!(control.check(&state, &counts), None);
-    control = control.target_objective(1.0);
-    assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::TargetCost)
-    );
-    let mut control = RunControl::new()
-        .no_objective_improvement(1, 0.0)
-        .no_improvement(3, 0.0);
-    state.increment_iter();
-    assert_eq!(control.check(&state, &counts), None);
-    control = control.no_objective_improvement(1, 0.0);
-    assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::NoImprovement)
-    );
-}
-
-#[test]
 fn repeated_checks_and_mid_step_publications_do_not_invent_stall_age() {
     for delta in [0.0, 1.0] {
         let mut state = point(10.0);
@@ -187,33 +164,28 @@ fn invalid_objective_control_settings_are_rejected() {
 #[test]
 fn reused_controls_reset_clocks_and_stall_anchors() {
     let counts = EvalCounts::default();
-    for objective in [false, true] {
-        let mut control = RunControl::new().max_time(Duration::from_secs(60));
-        control = if objective {
-            control.no_objective_improvement(2, 1.0)
-        } else {
-            control.no_improvement(2, 1.0)
-        };
-        let mut state = point(1.0);
-        assert_eq!(control.check(&state, &counts), None);
-        for _ in 0..2 {
-            state.increment_iter();
-            control.check(&state, &counts);
-        }
-        assert_eq!(
-            control.check(&state, &counts),
-            Some(TerminationReason::NoImprovement)
-        );
-        control.start = Some(Instant::now() - Duration::from_secs(120));
-        assert_eq!(
-            control.check(&state, &counts),
-            Some(TerminationReason::MaxTime)
-        );
-        control.reset();
-        assert_eq!(control.start, None);
-        let fresh = point(100.0);
-        assert_eq!(control.check(&fresh, &counts), None);
+    let mut control = RunControl::new()
+        .max_time(Duration::from_secs(60))
+        .no_objective_improvement(2, 1.0);
+    let mut state = point(1.0);
+    assert_eq!(control.check(&state, &counts), None);
+    for _ in 0..2 {
+        state.increment_iter();
+        control.check(&state, &counts);
     }
+    assert_eq!(
+        control.check(&state, &counts),
+        Some(TerminationReason::NoImprovement)
+    );
+    control.start = Some(Instant::now() - Duration::from_secs(120));
+    assert_eq!(
+        control.check(&state, &counts),
+        Some(TerminationReason::MaxTime)
+    );
+    control.reset();
+    assert_eq!(control.start, None);
+    let fresh = point(100.0);
+    assert_eq!(control.check(&fresh, &counts), None);
 }
 
 #[test]

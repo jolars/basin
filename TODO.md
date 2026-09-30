@@ -373,7 +373,7 @@ desired backend features.
   `with_inner_grad_tol`, along with their implicit inner-gradient checks.
   Use `with_inner_solver` and the supplied solver's convergence settings.
 
-- [ ] Move remaining shared numerical calculations out of the compatibility
+- [x] Move remaining shared numerical calculations out of the compatibility
   criterion types and remove the compatibility-only tests and bridges.
 
 - [x] **Make the `problems` feature opt-in.** Set `default = []` while retaining
