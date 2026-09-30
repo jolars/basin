@@ -369,7 +369,7 @@ desired backend features.
 - [x] Remove deprecated tolerance and algorithm-setting aliases, including
   scalar/root and line-search aliases.
 
-- [ ] Remove `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and
+- [x] Remove `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and
   `with_inner_grad_tol`, along with their implicit inner-gradient checks.
   Use `with_inner_solver` and the supplied solver's convergence settings.
 

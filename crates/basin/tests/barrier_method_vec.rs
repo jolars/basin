@@ -9,7 +9,7 @@
 use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, CostFunction, DenseMatrix, Executor, Gradient,
-    GradientDescent, LinearInequalityConstraints, PointState,
+    GradientDescent, LinearInequalityConstraints, NelderMead, PointState,
     TerminationReason,
 };
 
@@ -47,6 +47,27 @@ fn active_constraint_converges_to_projection() {
         "expected (1, 1), got {:?}",
         result.param()
     );
+}
+
+#[test]
+fn derivative_free_inner_uses_its_own_convergence_settings() {
+    let result = Executor::new(
+        active_problem(),
+        BarrierMethod::with_inner_solver(
+            NelderMead::adaptive()
+                .with_absolute_simplex_size_tolerance(1e-8)
+                .with_absolute_simplex_cost_tolerance(1e-10),
+        )
+        .with_inner_max_iter(200),
+        PointState::new(vec![0.0, 0.0]),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert!((result.param()[0] - 1.0).abs() < 1e-4);
+    assert!((result.param()[1] - 1.0).abs() < 1e-4);
 }
 
 #[test]

@@ -11,7 +11,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{CountsMirror, GradientState, PointState, State};
+use crate::core::state::{CountsMirror, PointState, State};
 use crate::core::termination::TerminationReason;
 
 /// Two-phase log-barrier method for `min f(x) s.t. A x ≤ b`, layering a
@@ -25,21 +25,22 @@ use crate::core::termination::TerminationReason;
 /// shrinks `μ`. As `μ → 0` the central path converges to the constrained
 /// optimum.
 ///
-/// The method is generic over the inner solver `So`: any gradient-based
-/// solver that implements [`WarmStart`] and
-/// iterates over its own [`GradientState`]. The inner state is seeded at the
+/// The method is generic over inner solvers that implement [`WarmStart`].
+/// The inner state is seeded at the
 /// current iterate via [`InitialState::seed`],
 /// so each of [`GradientDescent`](crate::solver::GradientDescent)
 /// ([`FirstOrderState`](crate::FirstOrderState)), [`Bfgs`](crate::solver::Bfgs)
 /// ([`FirstOrderState`](crate::core::state::FirstOrderState)), and unbounded
 /// [`Lbfgs`](crate::solver::lbfgs::Lbfgs)
-/// ([`FirstOrderState`](crate::core::state::FirstOrderState)) is usable. Two inner kinds
-/// are deliberately excluded: a least-squares solver
+/// ([`FirstOrderState`](crate::core::state::FirstOrderState)) is usable. A
+/// least-squares solver
 /// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)), because the
 /// barrier objective is not a sum of squares and the [`LogBarrier`] adapter
-/// exposes only `CostFunction + Gradient`, not `Residual + Jacobian`, and a
-/// derivative-free solver (Nelder-Mead), ruled out by the [`GradientState`]
-/// bound.
+/// exposes only `CostFunction + Gradient`, not `Residual + Jacobian`.
+/// A derivative-free solver such as [`NelderMead`](crate::solver::NelderMead)
+/// may find a strictly feasible point in Phase I, but
+/// cannot provide the gradient convergence certificate used to report an empty
+/// strict interior.
 ///
 /// **During Phase II the inner solver must keep iterates feasible.**
 /// Feasibility is enforced only by the barrier returning `+∞` outside the
@@ -151,8 +152,6 @@ use crate::core::termination::TerminationReason;
 /// solve through [`run_loop_with_control`],
 /// against the current surrogate problem. Convergence history resets and
 /// inner evaluation counts are added to their corresponding outer categories.
-/// The deprecated `new` constructor additionally applies an inner gradient
-/// threshold, default `1e-8`, for Basin 1.x compatibility.
 ///
 /// # Examples
 ///
@@ -164,7 +163,6 @@ use crate::core::termination::TerminationReason;
 pub struct BarrierMethod<So, F: Scalar = f64> {
     inner_solver: So,
     inner_max_iter: u64,
-    inner_grad_tol: Option<F>,
     mu0: F,
     mu: F,
     reduction: F,
@@ -250,35 +248,18 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// Build a barrier method around an unconstrained inner solver.
     ///
     /// Defaults: `mu0 = 1.0`, `reduction = 10.0`, `tol = 1e-8`,
-    /// `phase_one_tol = 1e-8`, `inner_max_iter = 50`,
-    /// `inner_grad_tol = 1e-8`.
+    /// `phase_one_tol = 1e-8`, and `inner_max_iter = 50`.
     ///
     /// The `inner_max_iter` default is intentionally modest:
     /// [`with_inner_max_iter`](Self::with_inner_max_iter) is the dominant cost lever
     /// (see its docs) and the outer μ-continuation tolerates loosely-centered
     /// subproblems, so a small budget usually converges to the same point far
     /// more cheaply than a large one.
-    #[deprecated(
-        note = "use `with_inner_solver` with convergence configured on the inner solver; removal scheduled for Basin 2.0"
-    )]
-    pub fn new(inner_solver: So) -> Self {
-        Self::legacy_defaults(inner_solver)
-    }
-
-    /// Build around an inner solver that owns its convergence settings.
-    /// No additional inner gradient test is installed. The inner iteration
-    /// budget remains 50; configure the supplied algorithm's tolerances first.
+    /// The supplied inner solver owns its convergence settings.
     pub fn with_inner_solver(inner_solver: So) -> Self {
-        let mut solver = Self::legacy_defaults(inner_solver);
-        solver.inner_grad_tol = None;
-        solver
-    }
-
-    fn legacy_defaults(inner_solver: So) -> Self {
         Self {
             inner_solver,
             inner_max_iter: 50,
-            inner_grad_tol: Some(F::from_f64(1e-8).unwrap()),
             mu0: F::one(),
             mu: F::one(),
             reduction: F::from_f64(10.0).unwrap(),
@@ -349,13 +330,13 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     ///
     /// **This is the dominant cost lever.** A first-order inner solver
     /// (`GradientDescent`) on the ill-conditioned barrier typically exhausts
-    /// this budget rather than reaching [`with_inner_grad_tol`](Self::with_inner_grad_tol),
+    /// this budget rather than its own gradient convergence tolerance,
     /// so total work scales roughly linearly with it. Because the outer
     /// μ-continuation re-solves at each shrinking `μ`, a loosely-centered
     /// (small-budget) subproblem usually still converges to the same point,
     /// often an order of magnitude cheaper. Raise it for hard or higher-
     /// dimensional problems; a Newton-class inner (future work) would center
-    /// in far fewer steps and reach `inner_grad_tol` instead.
+    /// in far fewer steps and reach its configured tolerance instead.
     ///
     /// # Panics
     ///
@@ -364,25 +345,6 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     pub fn with_inner_max_iter(mut self, inner_max_iter: u64) -> Self {
         assert!(inner_max_iter >= 1, "inner_max_iter must be ≥ 1");
         self.inner_max_iter = inner_max_iter;
-        self
-    }
-
-    /// Gradient-norm tolerance for each inner barrier-subproblem solve
-    /// (default `1e-8`). Inner solves stop at `‖∇φ_μ‖ ≤ inner_grad_tol`.
-    ///
-    /// Note: with a first-order inner solver this rarely binds; the
-    /// ill-conditioned barrier means [`with_inner_max_iter`](Self::with_inner_max_iter)
-    /// usually governs instead. It matters for a Newton-class inner.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `inner_grad_tol ≥ 0`.
-    #[deprecated(
-        note = "configure the supplied inner solver and use `with_inner_solver`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
-        assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
-        self.inner_grad_tol = Some(inner_grad_tol);
         self
     }
 }
@@ -417,7 +379,7 @@ where
             So::State,
             Error = <P as CostFunction>::Error,
         >,
-    So::State: GradientState<Param = V, Float = F> + CountsMirror,
+    So::State: State<Param = V> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
@@ -474,11 +436,8 @@ where
         if self.phase == BarrierPhase::PhaseOne {
             let mut barrier_wrapper =
                 Problem::new(LogBarrier::phase_one(problem.inner(), self.mu));
-            let mut control =
-                crate::core::run_control::legacy_inner_control::<So::State, F>(
-                    self.inner_max_iter,
-                    self.inner_grad_tol,
-                );
+            let mut control = crate::core::run_control::RunControl::new()
+                .max_iter(self.inner_max_iter);
             let inner_state = self.inner_solver.seed(state.param());
             let mut phase_one_solver = StopAtStrictFeasibility {
                 inner: &mut self.inner_solver,
@@ -499,20 +458,13 @@ where
                 return Ok((state, Some(TerminationReason::SolverFailed)));
             }
 
-            // A budget or stagnation stop does not establish a centered
-            // Phase I subproblem. The new path trusts only gradient stops.
-            let centered = if let Some(tol) = self.inner_grad_tol {
-                result
-                    .state
-                    .gradient()
-                    .is_some_and(|g| g.norm_squared() <= tol * tol)
-            } else {
-                matches!(
-                    result.reason,
-                    TerminationReason::GradientTolerance
-                        | TerminationReason::RelativeGradientTolerance
-                )
-            };
+            // Only the inner solver's gradient convergence can certify a
+            // centered Phase I subproblem; a budget stop cannot.
+            let centered = matches!(
+                result.reason,
+                TerminationReason::GradientTolerance
+                    | TerminationReason::RelativeGradientTolerance
+            );
             let candidate = result.state.param();
             let feasibility = strict_feasibility(problem.inner(), candidate);
             let Some(is_strictly_feasible) = feasibility else {
@@ -560,10 +512,8 @@ where
         // Fresh criteria each call satisfies the statelessness contract.
         let mut barrier_wrapper =
             Problem::new(LogBarrier::new(problem.inner(), self.mu));
-        let mut control = crate::core::run_control::legacy_inner_control::<
-            So::State,
-            F,
-        >(self.inner_max_iter, self.inner_grad_tol);
+        let mut control = crate::core::run_control::RunControl::new()
+            .max_iter(self.inner_max_iter);
         let inner_state = self.inner_solver.seed(state.param());
         let result = run_loop_with_control(
             &mut barrier_wrapper,
@@ -624,8 +574,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    // Retain validation coverage for the deprecated constructors and aliases.
-    #![allow(deprecated)]
     use super::*;
 
     // The builder validation is backend-independent, so a unit inner stand-in
@@ -634,31 +582,26 @@ mod tests {
     #[test]
     #[should_panic(expected = "mu0 must be > 0")]
     fn rejects_nonpositive_mu0() {
-        let _ = BarrierMethod::new(()).mu0(0.0);
+        let _ = BarrierMethod::with_inner_solver(()).mu0(0.0);
     }
 
     #[test]
     #[should_panic(expected = "reduction must be > 1")]
     fn rejects_reduction_not_greater_than_one() {
-        let _ = BarrierMethod::new(()).with_reduction(1.0);
+        let _ = BarrierMethod::with_inner_solver(()).with_reduction(1.0);
     }
 
     #[test]
     #[should_panic(expected = "phase_one_tol must be > 0")]
     fn rejects_nonpositive_phase_one_tol() {
-        let _ =
-            BarrierMethod::new(()).with_absolute_phase_one_gap_tolerance(0.0);
+        let _ = BarrierMethod::with_inner_solver(())
+            .with_absolute_phase_one_gap_tolerance(0.0);
     }
 
     #[test]
     #[should_panic(expected = "inner_max_iter must be ≥ 1")]
     fn rejects_zero_inner_max_iter() {
-        let _ = BarrierMethod::<_, f64>::new(()).with_inner_max_iter(0);
-    }
-
-    #[test]
-    #[should_panic(expected = "inner_grad_tol must be ≥ 0")]
-    fn rejects_negative_inner_grad_tol() {
-        let _ = BarrierMethod::new(()).with_inner_grad_tol(-1.0);
+        let _ = BarrierMethod::<_, f64>::with_inner_solver(())
+            .with_inner_max_iter(0);
     }
 }

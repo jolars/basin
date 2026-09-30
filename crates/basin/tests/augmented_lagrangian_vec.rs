@@ -8,7 +8,7 @@
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
     AugmentedLagrangianMethod, Backtracking, DenseMatrix, Executor,
-    GradientDescent, Lbfgsb, SelectedState, TerminationReason,
+    GradientDescent, Lbfgsb, NelderMead, SelectedState, TerminationReason,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. The unconstrained min (2,2) is
@@ -138,4 +138,25 @@ fn lbfgs_inner_converges_to_affine_projection() {
         "expected (1, 1), got {:?}",
         result.param()
     );
+}
+
+#[test]
+fn derivative_free_inner_uses_its_own_convergence_settings() {
+    let result = Executor::new(
+        single_row_problem(),
+        AugmentedLagrangianMethod::with_inner_solver(
+            NelderMead::adaptive()
+                .with_absolute_simplex_size_tolerance(1e-8)
+                .with_absolute_simplex_cost_tolerance(1e-10),
+        )
+        .with_inner_max_iter(200),
+        SelectedState::new(vec![0.0, 0.0]),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert!((result.param()[0] - 1.0).abs() < 1e-4);
+    assert!((result.param()[1] - 1.0).abs() < 1e-4);
 }

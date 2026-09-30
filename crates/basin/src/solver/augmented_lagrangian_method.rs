@@ -9,7 +9,7 @@ use crate::core::math::{
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
-use crate::core::state::{CountsMirror, GradientState, SelectedState, State};
+use crate::core::state::{CountsMirror, SelectedState, State};
 use crate::core::termination::TerminationReason;
 
 /// Augmented-Lagrangian method for `min f(x) s.t. A x = b`, the
@@ -26,9 +26,8 @@ use crate::core::termination::TerminationReason;
 /// approaches the true multipliers `λ*`, the unconstrained minimizer of
 /// `L_ρ` approaches the constrained optimum.
 ///
-/// The method is generic over the inner solver `So`: any gradient-based
-/// solver that implements [`WarmStart`] and
-/// iterates over its own [`GradientState`], seeded at the current iterate via
+/// The method is generic over inner solvers that implement [`WarmStart`].
+/// Each inner state is seeded at the current iterate via
 /// [`InitialState::seed`]. That covers
 /// [`GradientDescent`](crate::solver::GradientDescent)
 /// ([`FirstOrderState`](crate::FirstOrderState)),
@@ -38,8 +37,8 @@ use crate::core::termination::TerminationReason;
 /// ([`FirstOrderState`](crate::core::state::FirstOrderState)). A least-squares inner
 /// ([`LevenbergMarquardt`](crate::solver::LevenbergMarquardt)) does not fit:
 /// `L_ρ` is not a sum of squares and the [`AugmentedLagrangian`] adapter
-/// exposes only `CostFunction + Gradient`, and a derivative-free inner
-/// (Nelder-Mead) is excluded by the [`GradientState`] bound.
+/// exposes only `CostFunction + Gradient`. A derivative-free inner solver
+/// such as [`NelderMead`](crate::solver::NelderMead) may also be supplied.
 ///
 /// # Infeasible starts are fine
 ///
@@ -71,8 +70,10 @@ use crate::core::termination::TerminationReason;
 /// The outer feasibility test `‖A x − b‖ ≤ tol` is solver-specific and lives
 /// on the solver (tenet 3): it fires via [`terminate`](Solver::terminate) as
 /// [`SolverConverged`](TerminationReason::SolverConverged). Optimality is the
-/// inner solve's job (it drives `‖∇_x L_ρ‖` down), so once the iterate is
-/// feasible and the inner solve has converged, the KKT conditions hold. Pair
+/// inner solve's job: a gradient-based inner solver can drive
+/// `‖∇_x L_ρ‖` down, while a derivative-free solver uses its own convergence
+/// test. The outer feasibility stop alone does not certify stationarity if
+/// the inner solve exhausted its iteration budget. Pair
 /// with the executor's [`max_iter`](crate::Executor::max_iter) as a safety net.
 ///
 /// The outer [`SelectedState`] reports the original objective and the residual
@@ -123,8 +124,6 @@ use crate::core::termination::TerminationReason;
 /// solve through [`run_loop_with_control`],
 /// against the current surrogate problem. Convergence history resets and
 /// inner evaluation counts are folded into the outer wrapper.
-/// The deprecated `new` constructor additionally applies an inner gradient
-/// threshold, default `1e-8`, for Basin 1.x compatibility.
 ///
 /// # Examples
 ///
@@ -136,7 +135,6 @@ use crate::core::termination::TerminationReason;
 pub struct AugmentedLagrangianMethod<So, V, F: Scalar = f64> {
     inner_solver: So,
     inner_max_iter: u64,
-    inner_grad_tol: Option<F>,
     rho0: F,
     rho: F,
     rho_increase: F,
@@ -157,29 +155,12 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     /// solver.
     ///
     /// Defaults: `rho0 = 10.0`, `rho_increase = 10.0`,
-    /// `feasibility_decrease = 0.25`, `tol = 1e-8`, `inner_max_iter = 50`,
-    /// `inner_grad_tol = 1e-8`.
-    #[deprecated(
-        note = "use `with_inner_solver` with convergence configured on the inner solver; removal scheduled for Basin 2.0"
-    )]
-    pub fn new(inner_solver: So) -> Self {
-        Self::legacy_defaults(inner_solver)
-    }
-
-    /// Build around an inner solver that owns its convergence settings.
-    /// No additional inner gradient test is installed. The inner iteration
-    /// budget remains 50; configure the supplied algorithm's tolerances first.
+    /// `feasibility_decrease = 0.25`, `tol = 1e-8`, and `inner_max_iter = 50`.
+    /// The supplied inner solver owns its convergence settings.
     pub fn with_inner_solver(inner_solver: So) -> Self {
-        let mut solver = Self::legacy_defaults(inner_solver);
-        solver.inner_grad_tol = None;
-        solver
-    }
-
-    fn legacy_defaults(inner_solver: So) -> Self {
         Self {
             inner_solver,
             inner_max_iter: 50,
-            inner_grad_tol: Some(F::from_f64(1e-8).unwrap()),
             rho0: F::from_f64(10.0).unwrap(),
             rho: F::from_f64(10.0).unwrap(),
             rho_increase: F::from_f64(10.0).unwrap(),
@@ -251,7 +232,7 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     ///
     /// As with the barrier, a first-order inner solver on the (increasingly
     /// ill-conditioned) penalized objective typically exhausts this budget
-    /// rather than reaching [`with_inner_grad_tol`](Self::with_inner_grad_tol); the
+    /// rather than reaching its own convergence tolerance; the
     /// outer multiplier updates still converge from loosely-minimized
     /// subproblems. Raise it for hard or higher-dimensional problems.
     ///
@@ -262,21 +243,6 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
     pub fn with_inner_max_iter(mut self, inner_max_iter: u64) -> Self {
         assert!(inner_max_iter >= 1, "inner_max_iter must be ≥ 1");
         self.inner_max_iter = inner_max_iter;
-        self
-    }
-
-    /// Gradient-norm tolerance for each inner subproblem solve (default
-    /// `1e-8`). Inner solves stop at `‖∇L_ρ‖ ≤ inner_grad_tol`.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `inner_grad_tol ≥ 0`.
-    #[deprecated(
-        note = "configure the supplied inner solver and use `with_inner_solver`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_inner_grad_tol(mut self, inner_grad_tol: F) -> Self {
-        assert!(inner_grad_tol >= F::zero(), "inner_grad_tol must be ≥ 0");
-        self.inner_grad_tol = Some(inner_grad_tol);
         self
     }
 }
@@ -334,7 +300,7 @@ where
             So::State,
             Error = <P as CostFunction>::Error,
         >,
-    So::State: GradientState<Param = V, Float = F> + CountsMirror,
+    So::State: State<Param = V> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
@@ -381,10 +347,8 @@ where
             lambda,
             self.rho,
         ));
-        let mut control = crate::core::run_control::legacy_inner_control::<
-            So::State,
-            F,
-        >(self.inner_max_iter, self.inner_grad_tol);
+        let mut control = crate::core::run_control::RunControl::new()
+            .max_iter(self.inner_max_iter);
         let inner_state = self.inner_solver.seed(state.param());
         let result = run_loop_with_control(
             &mut al_wrapper,
@@ -452,8 +416,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    // Retain validation coverage for the deprecated constructors and aliases.
-    #![allow(deprecated)]
     use super::*;
 
     // The builder validation is backend-independent, so a unit inner stand-in
@@ -464,30 +426,24 @@ mod tests {
     #[test]
     #[should_panic(expected = "rho0 must be > 0")]
     fn rejects_nonpositive_rho0() {
-        let _ = Builder::new(()).rho0(0.0);
+        let _ = Builder::with_inner_solver(()).rho0(0.0);
     }
 
     #[test]
     #[should_panic(expected = "rho_increase must be > 1")]
     fn rejects_rho_increase_not_greater_than_one() {
-        let _ = Builder::new(()).with_rho_increase(1.0);
+        let _ = Builder::with_inner_solver(()).with_rho_increase(1.0);
     }
 
     #[test]
     #[should_panic(expected = "feasibility_decrease must be in (0, 1)")]
     fn rejects_feasibility_decrease_out_of_range() {
-        let _ = Builder::new(()).with_feasibility_decrease(1.0);
+        let _ = Builder::with_inner_solver(()).with_feasibility_decrease(1.0);
     }
 
     #[test]
     #[should_panic(expected = "inner_max_iter must be ≥ 1")]
     fn rejects_zero_inner_max_iter() {
-        let _ = Builder::new(()).with_inner_max_iter(0);
-    }
-
-    #[test]
-    #[should_panic(expected = "inner_grad_tol must be ≥ 0")]
-    fn rejects_negative_inner_grad_tol() {
-        let _ = Builder::new(()).with_inner_grad_tol(-1.0);
+        let _ = Builder::with_inner_solver(()).with_inner_max_iter(0);
     }
 }

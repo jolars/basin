@@ -579,26 +579,3 @@ macro_rules! control_methods {
     };
 }
 pub(crate) use control_methods;
-
-// Old outer constructors retain their additional inner-gradient test until
-// Basin 2.0. New constructors pass None and use only solver-owned convergence.
-pub(crate) fn legacy_inner_control<S, F>(
-    max_iter: u64,
-    tolerance: Option<F>,
-) -> RunControl<S>
-where
-    F: Scalar + 'static,
-    S: GradientState<Float = F>,
-    S::Param: crate::NormSquared<F>,
-{
-    let mut control = RunControl::new().max_iter(max_iter);
-    if let Some(tol) = tolerance {
-        control = control.stop_when(move |state: &S| {
-            use crate::NormSquared;
-            let norm_squared = state.gradient()?.norm_squared();
-            (norm_squared <= tol * tol)
-                .then_some(TerminationReason::GradientTolerance)
-        });
-    }
-    control
-}

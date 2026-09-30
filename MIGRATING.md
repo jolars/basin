@@ -2,6 +2,24 @@
 
 ## Solver and line-search settings
 
+Basin 2.0 removes `BarrierMethod::new`, `AugmentedLagrangianMethod::new`,
+and their `with_inner_grad_tol` setters. Construct either method with
+`with_inner_solver(inner)` and configure convergence on `inner` before passing
+it in. The outer methods retain their default 50-iteration inner budgets but
+no longer install an implicit `1e-8` gradient test. For example:
+
+```rust
+let solver = BarrierMethod::with_inner_solver(
+    GradientDescent::with_line_search(Backtracking::new())
+        .with_absolute_gradient_tolerance(1e-8),
+);
+```
+
+Use the same pattern with `AugmentedLagrangianMethod`. Its inner solver may
+choose any convergence test. For `BarrierMethod`, configure gradient
+convergence if Phase I must certify that a constraint system has no strict
+interior; an inner iteration budget alone cannot establish that certificate.
+
 Basin 2.0 removes the deprecated setter aliases below. Replace each call with
 the named method on the same solver or line search. The replacement keeps the
 algorithm's setting and default unless noted here.
