@@ -330,16 +330,6 @@ impl<V, F: Scalar> Gbnm<V, F> {
         self
     }
 
-    /// Set the normalized simplex-size tolerance `epsilon_s1` from equation
-    /// (7). It also defines when convergence points count as identical for the
-    /// restart and local-optimum memory tests. The default is `1e-6`.
-    #[deprecated(
-        note = "use `with_normalized_simplex_size_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_small_tolerance(self, tolerance: F) -> Self {
-        self.with_normalized_simplex_size_tolerance(tolerance)
-    }
-
     /// Configure the normalized simplex size tolerance.
     /// Retains the algorithm's existing formula, validation, and default.
     pub fn with_normalized_simplex_size_tolerance(
@@ -349,15 +339,6 @@ impl<V, F: Scalar> Gbnm<V, F> {
         assert_positive_finite(tolerance, "small-simplex tolerance");
         self.small_tolerance = tolerance;
         self
-    }
-
-    /// Set the absolute cost-spread tolerance `epsilon_s2` from equation (8).
-    /// The default is `1e-20`.
-    #[deprecated(
-        note = "use `with_absolute_simplex_cost_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_flat_tolerance(self, tolerance: F) -> Self {
-        self.with_absolute_simplex_cost_tolerance(tolerance)
     }
 
     /// Configure the absolute simplex cost tolerance.
@@ -385,22 +366,6 @@ impl<V, F: Scalar> Gbnm<V, F> {
     pub fn with_normalized_determinant_tolerance(mut self, value: F) -> Self {
         assert_unit_tolerance(value, "degeneracy shape tolerance");
         self.degeneracy_shape = value;
-        self
-    }
-
-    /// Set both legacy degeneracy thresholds.
-    #[deprecated(
-        note = "use `with_edge_ratio_tolerance` and `with_normalized_determinant_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_degeneracy_tolerances(
-        mut self,
-        edge_ratio: F,
-        shape: F,
-    ) -> Self {
-        assert_unit_tolerance(edge_ratio, "degeneracy edge-ratio tolerance");
-        assert_unit_tolerance(shape, "degeneracy shape tolerance");
-        self.degeneracy_edge_ratio = edge_ratio;
-        self.degeneracy_shape = shape;
         self
     }
 }

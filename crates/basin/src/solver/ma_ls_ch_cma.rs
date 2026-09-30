@@ -69,16 +69,4 @@ where
         self.ls = self.ls.with_lambda(lambda);
         self
     }
-
-    /// Renamed alias of
-    /// [`with_initial_scale_fallback`](MaLsCh::with_initial_scale_fallback):
-    /// σ is CMA-ES's name for the chain scale, but the knob is
-    /// operator-agnostic, so the generic builder uses the neutral name.
-    #[deprecated(
-        since = "1.5.0",
-        note = "renamed to `with_initial_scale_fallback`"
-    )]
-    pub fn with_initial_sigma_fallback(self, sigma: F) -> Self {
-        self.with_initial_scale_fallback(sigma)
-    }
 }

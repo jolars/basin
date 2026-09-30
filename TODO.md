@@ -366,7 +366,7 @@ desired backend features.
   semantics through structured reports, solver convergence setters, direct
   execution controls, and closure hooks.
 
-- [ ] Remove deprecated tolerance and algorithm-setting aliases, including
+- [x] Remove deprecated tolerance and algorithm-setting aliases, including
   scalar/root and line-search aliases.
 
 - [ ] Remove `BarrierMethod::new`, `AugmentedLagrangianMethod::new`, and

@@ -88,8 +88,8 @@ use crate::core::termination::TerminationReason;
 /// produces `A x < b`; Phase II then restarts the `μ` schedule at `mu0`.
 ///
 /// If a centered Phase I subproblem reaches
-/// [`with_phase_one_tol`](Self::with_phase_one_tol) without finding a strict
-/// point, the constraints are reported as
+/// [`with_absolute_phase_one_gap_tolerance`](Self::with_absolute_phase_one_gap_tolerance)
+/// without finding a strict point, the constraints are reported as
 /// [`SolverFailed`](TerminationReason::SolverFailed). An inner solve that
 /// exhausts its iteration budget is not a certificate: Phase I retries the
 /// same `μ` from the returned candidate. Numerically, the centered certificate
@@ -316,23 +316,8 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
         self
     }
 
-    /// Outer duality-gap tolerance: stop once `m · μ ≤ tol` (default
-    /// `1e-8`).
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `tol > 0`.
-    #[deprecated(
-        note = "use `with_absolute_duality_gap_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol(mut self, tol: F) -> Self {
-        assert!(tol > F::zero(), "tol must be > 0");
-        self.tol = Some(tol);
-        self
-    }
-
-    /// Configure the absolute duality gap tolerance.
-    /// Retains the algorithm's existing formula, validation, and default.
+    /// Stop when the outer duality gap `m · μ` reaches this tolerance
+    /// (default `1e-8`). `None` disables the check.
     pub fn with_absolute_duality_gap_tolerance(
         mut self,
         tol: impl Into<Option<F>>,
@@ -341,28 +326,15 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
         self
     }
 
-    /// Phase I accuracy used to classify a constraint system with no strict
-    /// interior (default `1e-8`). If a centered Phase I subproblem has not
-    /// found `A x < b` once its auxiliary duality gap `m · μ` is at most this
+    /// Set the Phase I accuracy used to classify a constraint system with no
+    /// strict interior (default `1e-8`). If a centered Phase I subproblem has
+    /// not found `A x < b` once its auxiliary duality gap `m · μ` reaches this
     /// tolerance, the solver reports
     /// [`SolverFailed`](TerminationReason::SolverFailed).
     ///
-    /// A finite-precision method cannot distinguish an exactly empty interior
-    /// from an arbitrarily thin one. This tolerance therefore means "no strict
-    /// interior at this numerical scale."
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `phase_one_tol > 0`.
-    #[deprecated(
-        note = "use `with_absolute_phase_one_gap_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_phase_one_tol(self, phase_one_tol: F) -> Self {
-        self.with_absolute_phase_one_gap_tolerance(phase_one_tol)
-    }
-
-    /// Configure the absolute phase one gap tolerance.
-    /// Retains the algorithm's existing formula, validation, and default.
+    /// Finite precision cannot distinguish an empty interior from an
+    /// arbitrarily thin one. This tolerance sets the numerical scale for that
+    /// decision and must be positive.
     pub fn with_absolute_phase_one_gap_tolerance(
         mut self,
         phase_one_tol: F,
@@ -672,15 +644,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "tol must be > 0")]
-    fn rejects_nonpositive_tol() {
-        let _ = BarrierMethod::new(()).with_tol(0.0);
-    }
-
-    #[test]
     #[should_panic(expected = "phase_one_tol must be > 0")]
     fn rejects_nonpositive_phase_one_tol() {
-        let _ = BarrierMethod::new(()).with_phase_one_tol(0.0);
+        let _ =
+            BarrierMethod::new(()).with_absolute_phase_one_gap_tolerance(0.0);
     }
 
     #[test]

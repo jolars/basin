@@ -359,21 +359,6 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         }
     }
 
-    /// Absolute first-order optimality tolerance: emit
-    /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`
-    /// (Madsen et al. eq. 3.3a). Set to `0.0` to disable the check and
-    /// rely solely on [`with_tol_grad_rel`](Self::with_tol_grad_rel) and/or
-    /// framework termination criteria. Default `1e-8`.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_absolute_gradient_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_grad(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
-        self.tol_grad = (tol > F::zero()).then_some(tol);
-        self
-    }
-
     /// Configure the infinity norm of J-transpose times residual.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
@@ -385,30 +370,6 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         value: impl Into<Option<F>>,
     ) -> Self {
         self.tol_grad = crate::core::convergence::optional_tolerance(value);
-        self
-    }
-
-    /// Relative (scale-invariant) first-order optimality tolerance,
-    /// the MINPACK `gtol` test (Moré 1978): emit
-    /// [`TerminationReason::SolverConverged`] when the cosine of the
-    /// angle between the residual `r` and every Jacobian column is at
-    /// most `tol`, i.e. `max_j |gⱼ| / (‖J·,ⱼ‖ · ‖r‖) ≤ tol` with
-    /// `g = Jᵀr`. Being a dimensionless cosine, it is invariant to
-    /// scaling of the residuals, so one tolerance ports across problems
-    /// with different residual normalizations, unlike the absolute
-    /// [`with_tol_grad`](Self::with_tol_grad). Set to `0.0` to disable. Default
-    /// `0.0` (disabled); use e.g. `1e-8` for MINPACK `gtol` parity.
-    ///
-    /// Both gradient tests can be active at once; the solver converges
-    /// when *either* fires (matching MINPACK, which checks `ftol`,
-    /// `xtol`, and `gtol` independently).
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_gradient_orthogonality_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_grad_rel(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "tol_grad_rel must be ≥ 0");
-        self.tol_grad_rel = (tol > F::zero()).then_some(tol);
         self
     }
 
@@ -432,43 +393,6 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         self
     }
 
-    /// Relative cost-reduction tolerance, the MINPACK `ftol` test
-    /// (Moré 1978): emit [`TerminationReason::SolverConverged`] when both
-    /// the *actual* and the *predicted* reduction in `½‖r‖²` over an
-    /// iteration are at most `tol` relative to the current cost, and the
-    /// gain ratio is sane:
-    ///
-    /// ```text
-    /// |actred| ≤ tol·F   AND   prered ≤ tol·F   AND   ρ ≤ 2
-    /// ```
-    ///
-    /// with `actred = F(x) − F(x+h)`, `prered = L(0) − L(h)` the model's
-    /// predicted reduction, `F = ½‖r‖²`, and `ρ = actred/prered`.
-    ///
-    /// The `prered` clause is the load-bearing difference from the
-    /// framework's `with_relative_cost_change_tolerance`, which sees only the
-    /// achieved reduction between consecutive costs and has no access to
-    /// the LM model. Predicted reduction is evaluated at the damped step;
-    /// excessive damping can make both reductions small even when a weak
-    /// direction remains unresolved. This check does not establish parameter
-    /// recovery. This model-dependent check belongs on the solver rather
-    /// than in the termination layer. Basin uses Nielsen damping and a step
-    /// norm test; its complete stopping behavior is not identical to MINPACK.
-    ///
-    /// Set to `0.0` to disable. Default `0.0` (disabled); use e.g. `1e-8`
-    /// for MINPACK `ftol` parity. Converges when *any* enabled test fires
-    /// (see [`with_tol_grad`](Self::with_tol_grad)).
-    ///
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_relative_model_reduction_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_cost_rel(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "tol_cost_rel must be ≥ 0");
-        self.tol_cost_rel = (tol > F::zero()).then_some(tol);
-        self
-    }
-
     /// Configure both actual and predicted reduction relative to the current cost, with gain ratio at most two.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
@@ -480,26 +404,6 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         value: impl Into<Option<F>>,
     ) -> Self {
         self.tol_cost_rel = crate::core::convergence::optional_tolerance(value);
-        self
-    }
-
-    /// Relative attempted-step tolerance, analogous to MINPACK's `xtol`:
-    /// emit [`TerminationReason::SolverConverged`] when the accepted (or
-    /// attempted) step is negligible relative to the iterate,
-    /// `‖h‖ ≤ tol·‖x‖`. Nielsen's smooth μ-update carries no explicit
-    /// trust radius `δ`, so the step norm is the natural analog of
-    /// MINPACK's `delta ≤ xtol·xnorm`. Set to `0.0` to disable. Default
-    /// `0.0` (disabled). For a scaled-radius criterion with trust-region
-    /// damping, use [`Self::with_relative_trust_radius_tolerance`].
-    /// Converges when *any* enabled test fires (see
-    /// [`with_tol_grad`](Self::with_tol_grad)).
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_relative_step_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_step_rel(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "tol_step_rel must be ≥ 0");
-        self.tol_step_rel = (tol > F::zero()).then_some(tol);
         self
     }
 
@@ -1218,7 +1122,7 @@ where
 ///
 /// Rank is checked after diagonal regularization and column equilibration.
 /// The default threshold is `epsilon(F) * (m+n)`; see
-/// [`Self::with_rank_tolerance`]. Nielsen damping increases after rank loss,
+/// [`Self::with_relative_rank_tolerance`]. Nielsen damping increases after rank loss,
 /// reusing the factorization, until the attempt limit yields `SolverFailed`.
 /// Trust-region damping uses rank loss to bound the parameter search, retaining
 /// a feasible regularized step if available and otherwise yielding `SolverFailed`.
@@ -1321,18 +1225,6 @@ where
             rank_tolerance: None,
         }
     }
-    /// Override the dimensionless augmented-system rank threshold.
-    ///
-    /// Default: `epsilon(F) * (m+n)`. Finite values in `[0,1)` are valid;
-    /// other values panic. Zero detects only exactly zero triangular pivots.
-    /// See [`RegularizedQrSolve::solve_regularized`] for the rank contract.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_relative_rank_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_rank_tolerance(self, tol: F) -> Self {
-        self.with_relative_rank_tolerance(tol)
-    }
 
     /// Configure the relative rank tolerance.
     /// Retains the algorithm's existing formula, validation, and default.
@@ -1342,15 +1234,6 @@ where
             "rank tolerance must be finite and in [0,1)"
         );
         self.rank_tolerance = Some(tol);
-        self
-    }
-    /// Configure [`LevenbergMarquardt::with_tol_grad`] for the QR route.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_absolute_gradient_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_grad(mut self, value: F) -> Self {
-        self.inner = self.inner.with_tol_grad(value);
         self
     }
 
@@ -1365,15 +1248,6 @@ where
         value: impl Into<Option<F>>,
     ) -> Self {
         self.inner = self.inner.with_absolute_gradient_tolerance(value);
-        self
-    }
-    /// Configure [`LevenbergMarquardt::with_tol_grad_rel`] for the QR route.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_gradient_orthogonality_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_grad_rel(mut self, value: F) -> Self {
-        self.inner = self.inner.with_tol_grad_rel(value);
         self
     }
 
@@ -1391,15 +1265,6 @@ where
         self.inner = self.inner.with_gradient_orthogonality_tolerance(value);
         self
     }
-    /// Configure [`LevenbergMarquardt::with_tol_cost_rel`] for the QR route.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_relative_model_reduction_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_cost_rel(mut self, value: F) -> Self {
-        self.inner = self.inner.with_tol_cost_rel(value);
-        self
-    }
 
     /// Configure both actual and predicted reduction relative to the current cost, with gain ratio at most two.
     ///
@@ -1412,15 +1277,6 @@ where
         value: impl Into<Option<F>>,
     ) -> Self {
         self.inner = self.inner.with_relative_model_reduction_tolerance(value);
-        self
-    }
-    /// Configure [`LevenbergMarquardt::with_tol_step_rel`] for the QR route.
-    #[allow(deprecated)]
-    #[deprecated(
-        note = "use `with_relative_step_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_step_rel(mut self, value: F) -> Self {
-        self.inner = self.inner.with_tol_step_rel(value);
         self
     }
 

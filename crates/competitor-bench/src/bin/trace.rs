@@ -102,8 +102,8 @@ const N: usize = 2;
 const N_ST: usize = 5;
 
 /// Matched trust-region schedule for the NEWUOA case: initial radius ρ_beg
-/// (basin's `with_rho_beg` and nlopt's initial step) and final radius ρ_end
-/// (basin's `with_rho_end` and nlopt's `xtol_abs`).
+/// (basin's `with_initial_radius` and nlopt's initial step) and final radius ρ_end
+/// (basin's `with_final_radius` and nlopt's `xtol_abs`).
 const ST_RHO_BEG: f64 = 0.5;
 const ST_RHO_END: f64 = 1e-6;
 /// Safety budget for the NEWUOA case: basin's iteration cap and nlopt's eval

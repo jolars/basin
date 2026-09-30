@@ -222,18 +222,6 @@ impl<V, M> Trf<V, M> {
 }
 
 impl<V, M, F: Scalar> Trf<V, M, F> {
-    /// First-order optimality tolerance: emit
-    /// [`TerminationReason::SolverConverged`] when
-    /// `‖D · Jᵀr‖_∞ ≤ tol`. Set to `0.0` to disable. Default `1e-8`.
-    #[deprecated(
-        note = "use `with_absolute_scaled_gradient_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_grad(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
-        self.tol_grad = (tol > F::zero()).then_some(tol);
-        self
-    }
-
     /// Configure the Coleman-Li scaled gradient infinity norm.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.

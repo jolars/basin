@@ -78,21 +78,6 @@ impl<F: Scalar> Brent<F> {
             inner: None,
         }
     }
-
-    /// Brent solver with explicit relative and absolute tolerances. Both
-    /// must be strictly positive.
-    #[deprecated(
-        note = "use `new().with_relative_position_tolerance(...).with_absolute_position_tolerance(...)`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol(tol_rel: F, tol_abs: F) -> Self {
-        assert!(tol_rel > F::zero(), "tol_rel must be > 0");
-        assert!(tol_abs > F::zero(), "tol_abs must be > 0");
-        Self {
-            tol_rel,
-            tol_abs,
-            inner: None,
-        }
-    }
 }
 
 impl<F: Scalar> Brent<F> {

@@ -96,16 +96,6 @@ impl<F: Scalar> HagerZhang<F> {
         Self::default()
     }
 
-    /// Set the ordinary and approximate-Wolfe coefficients.
-    ///
-    /// Panics unless `0 < delta < 0.5` and `delta <= sigma < 1`.
-    #[deprecated(
-        note = "use `with_wolfe_coefficients`; removal scheduled for Basin 2.0"
-    )]
-    pub fn delta_sigma(self, delta: F, sigma: F) -> Self {
-        self.with_wolfe_coefficients(delta, sigma)
-    }
-
     /// Configure the wolfe coefficients.
     /// Uses the same mathematical condition and validation as the original setting.
     pub fn with_wolfe_coefficients(mut self, delta: F, sigma: F) -> Self {
@@ -122,14 +112,6 @@ impl<F: Scalar> HagerZhang<F> {
         self.delta = delta;
         self.sigma = sigma;
         self
-    }
-
-    /// Set the non-negative relative function-value tolerance.
-    #[deprecated(
-        note = "use `with_relative_cost_relaxation_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn epsilon(self, epsilon: F) -> Self {
-        self.with_relative_cost_relaxation_tolerance(epsilon)
     }
 
     /// Configure the relative cost relaxation tolerance.

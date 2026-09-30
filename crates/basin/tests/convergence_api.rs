@@ -413,7 +413,7 @@ fn simplex_size_and_cost_are_an_and_group() {
 
 #[test]
 #[allow(deprecated)] // Verify that the old zero-disable contract survives the migration.
-fn native_zero_is_exact_and_legacy_zero_still_disables() {
+fn native_zero_is_exact_and_none_disables() {
     use basin::{DenseMatrix, GaussNewton, Jacobian, Residual};
     struct Linear;
     impl Residual for Linear {
@@ -439,16 +439,15 @@ fn native_zero_is_exact_and_legacy_zero_still_disables() {
     .run()
     .unwrap();
     assert_eq!(exact.reason, TerminationReason::SolverConverged);
-    for solver in [
-        GaussNewton::new().with_tol_grad(0.0),
+    let result = Executor::from_start(
+        Linear,
         GaussNewton::new().with_absolute_gradient_tolerance(None),
-    ] {
-        let result = Executor::from_start(Linear, solver, vec![0.0])
-            .max_iter(1)
-            .run()
-            .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxIter);
-    }
+        vec![0.0],
+    )
+    .max_iter(1)
+    .run()
+    .unwrap();
+    assert_eq!(result.reason, TerminationReason::MaxIter);
 }
 
 #[test]

@@ -87,14 +87,6 @@ impl<F: Scalar> MoreThuente<F> {
         Self::default()
     }
 
-    /// Override the Armijo coefficient. Panics if not in `(0, 1)`.
-    #[deprecated(
-        note = "use `with_sufficient_decrease_coefficient`; removal scheduled for Basin 2.0"
-    )]
-    pub fn ftol(self, ftol: F) -> Self {
-        self.with_sufficient_decrease_coefficient(ftol)
-    }
-
     /// Configure the sufficient decrease coefficient.
     /// Uses the same mathematical condition and validation as the original setting.
     pub fn with_sufficient_decrease_coefficient(mut self, ftol: F) -> Self {
@@ -106,14 +98,6 @@ impl<F: Scalar> MoreThuente<F> {
         self
     }
 
-    /// Override the curvature coefficient. Panics if not in `(0, 1)`.
-    #[deprecated(
-        note = "use `with_curvature_coefficient`; removal scheduled for Basin 2.0"
-    )]
-    pub fn gtol(self, gtol: F) -> Self {
-        self.with_curvature_coefficient(gtol)
-    }
-
     /// Configure the curvature coefficient.
     /// Uses the same mathematical condition and validation as the original setting.
     pub fn with_curvature_coefficient(mut self, gtol: F) -> Self {
@@ -123,14 +107,6 @@ impl<F: Scalar> MoreThuente<F> {
         );
         self.gtol = gtol;
         self
-    }
-
-    /// Override the bracket-width relative tolerance. Panics if `< 0`.
-    #[deprecated(
-        note = "use `with_relative_bracket_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn xtol(self, xtol: F) -> Self {
-        self.with_relative_bracket_tolerance(xtol)
     }
 
     /// Configure the relative bracket tolerance.

@@ -87,12 +87,12 @@ pub struct Bounded;
 ///
 /// # Configuration
 ///
-/// - [`with_rho_beg`](Self::with_rho_beg): initial trust-region radius `ρ_beg`
+/// - [`with_initial_radius`](Self::with_initial_radius): initial trust-region radius `ρ_beg`
 ///   (default `1.0`). Also the initial `Δ`. The initial sampling needs room
 ///   `b_i ≥ a_i + 2ρ_beg` (Powell 2009, eq. 2.1); if `ρ_beg` is too large for a
 ///   narrow box it is reduced to `min(b_i − a_i)/4` (with `ρ_end` pulled down to
 ///   match), mirroring PRIMA rather than rejecting the solve.
-/// - [`with_rho_end`](Self::with_rho_end): final radius `ρ_end` (default
+/// - [`with_final_radius`](Self::with_final_radius): final radius `ρ_end` (default
 ///   `1e-6`); must satisfy `ρ_beg > ρ_end > 0`.
 /// - [`with_npt`](Self::with_npt): interpolation-set size `npt`, in
 ///   `[2n+1, ½(n+1)(n+2)]` (default `2n+1`).
@@ -200,27 +200,11 @@ impl<F: Scalar> Bobyqa<Bounded, F> {
         }
     }
 
-    /// Set the initial trust-region radius `ρ_beg` (also the initial `Δ`).
-    #[deprecated(
-        note = "use `with_initial_radius`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_rho_beg(self, rho_beg: F) -> Self {
-        self.with_initial_radius(rho_beg)
-    }
-
     /// Configure the initial radius.
     /// Retains the algorithm's existing formula, validation, and default.
     pub fn with_initial_radius(mut self, rho_beg: F) -> Self {
         self.rho_beg = rho_beg;
         self
-    }
-
-    /// Set the final trust-region radius `ρ_end`. Must satisfy `ρ_beg > ρ_end > 0`.
-    #[deprecated(
-        note = "use `with_final_radius`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_rho_end(self, rho_end: F) -> Self {
-        self.with_final_radius(rho_end)
     }
 
     /// Configure the final radius.

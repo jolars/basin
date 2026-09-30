@@ -117,8 +117,8 @@ the same reference in machine-readable form.
 ## Where to Go Next
 
 - [Getting Started](getting-started/): install Basin and run your first solve.
-- [Migrating Convergence Settings](migrating-convergence/): replace deprecated
-  criteria and setter names before Basin 2.0.
+- [Migrating Convergence Settings](migrating-convergence/): replace removed
+  criteria and setter names in Basin 2.0.
 - [Migrating from Argmin](migrating-from-argmin/): translate problem traits,
   solver configuration, errors, bounds, and observers from Argmin 0.11.
 - [Solvers](solvers/): the catalog of optimization solvers, scalar root finding,

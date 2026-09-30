@@ -264,30 +264,6 @@ impl<F: Scalar> BrentRoot<F> {
         }
     }
 
-    /// Set relative and absolute position tolerances.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless both tolerances are finite, `tol_rel` is at least four
-    /// times the machine epsilon of `F`, and `tol_abs` is strictly positive.
-    #[deprecated(
-        note = "use `with_relative_position_tolerance` and `with_absolute_position_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol(mut self, tol_rel: F, tol_abs: F) -> Self {
-        let min_tol_rel = F::from_f64(4.0).unwrap() * F::epsilon();
-        assert!(
-            tol_rel.is_finite() && tol_rel >= min_tol_rel,
-            "BrentRoot relative tolerance must be finite and at least four times machine epsilon"
-        );
-        assert!(
-            tol_abs.is_finite() && tol_abs > F::zero(),
-            "BrentRoot absolute tolerance must be finite and positive"
-        );
-        self.tol_rel = tol_rel;
-        self.tol_abs = tol_abs;
-        self
-    }
-
     /// Set the finite, strictly positive absolute position tolerance.
     pub fn with_absolute_position_tolerance(mut self, value: F) -> Self {
         assert!(

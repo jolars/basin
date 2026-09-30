@@ -135,16 +135,6 @@ impl<V: DenseBackend<F>, F: Scalar, M, S> Bfgs<V, F, M, S> {
         self.inverse_hessian.as_ref()
     }
 
-    /// Relative threshold for the curvature condition `yᵀs > ε · |y| · |s|`.
-    /// Iterations where this fails skip the H update (rare with strong
-    /// Wolfe). Default `1e-10`.
-    #[deprecated(
-        note = "use `with_relative_curvature_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_epsilon(self, epsilon: F) -> Self {
-        self.with_relative_curvature_tolerance(epsilon)
-    }
-
     /// Set the relative threshold for accepting a curvature update.
     /// This is an algorithm safeguard, not an optimization stopping test.
     pub fn with_relative_curvature_tolerance(mut self, epsilon: F) -> Self {

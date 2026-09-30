@@ -6,7 +6,9 @@ executors. Basin 2.0 removes the criterion facility, including `terminate_on`,
 They remain available on the Basin 1.x maintenance branch. The
 [Basin 2.0 migration guide](https://github.com/jolars/basin/blob/main/MIGRATING.md#stopping-conditions)
 lists replacements, stopping order, closure lifecycles, and checkpoint constraints.
-Abbreviated tolerance setters remain deprecated pending their separate removal.
+The abbreviated tolerance and algorithm-setting aliases are also removed in
+Basin 2.0. The [migration guide](https://github.com/jolars/basin/blob/main/MIGRATING.md#solver-and-line-search-settings)
+lists their replacements.
 
 ```rust
 let solver =

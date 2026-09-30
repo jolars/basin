@@ -236,19 +236,6 @@ impl<V, F: Scalar> SolisWets<V, F> {
     }
 
     /// Configure the initial mutation standard deviation for every fresh run
-    /// (default `1`).
-    ///
-    /// # Panics
-    ///
-    /// Panics if `rho_init ≤ 0`.
-    #[deprecated(
-        note = "use `with_initial_step_size`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_rho_init(self, rho_init: F) -> Self {
-        self.with_initial_step_size(rho_init)
-    }
-
-    /// Configure the initial mutation standard deviation for every fresh run
     /// (default `1`). Exact checkpoints preserve the current adapted value.
     pub fn with_initial_step_size(mut self, rho_init: F) -> Self {
         assert!(

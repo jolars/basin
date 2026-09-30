@@ -125,19 +125,6 @@ impl<V, M> GaussNewton<V, M> {
 }
 
 impl<V, M, F: Scalar> GaussNewton<V, M, F> {
-    /// First-order optimality tolerance: emit
-    /// [`TerminationReason::SolverConverged`] when `‖Jᵀr‖_∞ ≤ tol`.
-    /// Set to `0.0` to disable the check and rely solely on framework
-    /// termination criteria. Default `1e-8`.
-    #[deprecated(
-        note = "use `with_absolute_gradient_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_grad(mut self, tol: F) -> Self {
-        assert!(tol >= F::zero(), "tol_grad must be ≥ 0");
-        self.tol_grad = (tol > F::zero()).then_some(tol);
-        self
-    }
-
     /// Configure the infinity norm of J-transpose times residual.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.

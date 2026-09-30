@@ -237,23 +237,8 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
         self
     }
 
-    /// Outer feasibility tolerance: stop once `‖A x − b‖ ≤ tol` (default
-    /// `1e-8`).
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `tol > 0`.
-    #[deprecated(
-        note = "use `with_absolute_feasibility_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol(mut self, tol: F) -> Self {
-        assert!(tol > F::zero(), "tol must be > 0");
-        self.tol = Some(tol);
-        self
-    }
-
-    /// Configure the absolute feasibility tolerance.
-    /// Retains the algorithm's existing formula, validation, and default.
+    /// Stop when outer feasibility `‖A x − b‖` reaches this tolerance
+    /// (default `1e-8`). `None` disables the check.
     pub fn with_absolute_feasibility_tolerance(
         mut self,
         tol: impl Into<Option<F>>,
@@ -492,12 +477,6 @@ mod tests {
     #[should_panic(expected = "feasibility_decrease must be in (0, 1)")]
     fn rejects_feasibility_decrease_out_of_range() {
         let _ = Builder::new(()).with_feasibility_decrease(1.0);
-    }
-
-    #[test]
-    #[should_panic(expected = "tol must be > 0")]
-    fn rejects_nonpositive_tol() {
-        let _ = Builder::new(()).with_tol(0.0);
     }
 
     #[test]

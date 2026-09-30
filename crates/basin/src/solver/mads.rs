@@ -127,7 +127,7 @@ pub struct Constrained;
 /// - [`with_initial_poll_size`](Self::with_initial_poll_size): initial poll
 ///   size `Δ₀` (a reasonable initial change to the variables; default `1.0`). It
 ///   uniformly scales the mesh, so trial points stay on the scaled integer mesh.
-/// - [`with_min_poll_size`](Self::with_min_poll_size): convergence floor on the
+/// - [`with_minimum_poll_size`](Self::with_minimum_poll_size): convergence floor on the
 ///   poll size (default `1e-6`). The run converges once `Δᵖ` reaches it; must be
 ///   `> 0` and `< Δ₀`.
 ///
@@ -261,14 +261,6 @@ impl<Mode, F: Scalar> Mads<Mode, F> {
     pub fn with_initial_poll_size(mut self, poll_size_init: F) -> Self {
         self.poll_size_init = poll_size_init;
         self
-    }
-
-    /// Set the convergence floor on the poll size. Must satisfy `0 < floor < Δ₀`.
-    #[deprecated(
-        note = "use `with_minimum_poll_size`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_min_poll_size(self, poll_size_min: F) -> Self {
-        self.with_minimum_poll_size(poll_size_min)
     }
 
     /// Configure the minimum poll size.

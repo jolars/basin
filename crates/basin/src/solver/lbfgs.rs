@@ -243,21 +243,6 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
         }
     }
 
-    /// Override the built-in projected-gradient convergence tolerance.
-    /// Default `1e-10`; pass `0.0` to disable (Fortran-`pgtol=0`
-    /// semantics, used by the iteration-wise parity test). Bounded
-    /// mode only; the unbounded path doesn't compute a projected
-    /// gradient.
-    #[deprecated(
-        note = "use `with_absolute_projected_gradient_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_tol_pg(mut self, tol_pg: F) -> Self {
-        assert!(tol_pg >= F::zero(), "tol_pg must be ≥ 0");
-        self.tol_pg = Some(tol_pg);
-        self.tol_pg_reason = TerminationReason::SolverConverged;
-        self
-    }
-
     /// Configure the projected-gradient infinity norm computed using the current problem bounds.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
@@ -311,16 +296,6 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Unbounded, S> {
 }
 
 impl<V, Mode, S, F: Scalar> Lbfgs<V, F, Mode, S> {
-    /// Override the curvature-skip threshold. Default `F::epsilon()`
-    /// (= `f64::EPSILON` when `F = f64`), matching Fortran's
-    /// `dr ≤ epsmch · ddum` test.
-    #[deprecated(
-        note = "use `with_relative_curvature_tolerance`; removal scheduled for Basin 2.0"
-    )]
-    pub fn with_epsilon(self, epsilon: F) -> Self {
-        self.with_relative_curvature_tolerance(epsilon)
-    }
-
     /// Set the relative threshold for accepting a curvature update.
     /// This is an algorithm safeguard, not an optimization stopping test.
     pub fn with_relative_curvature_tolerance(mut self, epsilon: F) -> Self {

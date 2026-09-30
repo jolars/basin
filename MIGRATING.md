@@ -1,5 +1,42 @@
 # Migrating to Basin 2.0
 
+## Solver and line-search settings
+
+Basin 2.0 removes the deprecated setter aliases below. Replace each call with
+the named method on the same solver or line search. The replacement keeps the
+algorithm's setting and default unless noted here.
+
+| Solver or component | Removed method | Replacement |
+| --- | --- | --- |
+| `Brent`, `BrentDerivative`, `GoldenSection` | `with_tol(relative, absolute)` | `new().with_relative_position_tolerance(relative).with_absolute_position_tolerance(absolute)` |
+| `BrentRoot` | `with_tol(relative, absolute)` | `with_relative_position_tolerance(relative).with_absolute_position_tolerance(absolute)` |
+| `GaussNewton`, `Trf`, `LevenbergMarquardt`, `LevenbergMarquardtQr` | `with_tol_grad` | `with_absolute_gradient_tolerance` (`with_absolute_scaled_gradient_tolerance` for `Trf`) |
+| `LevenbergMarquardt`, `LevenbergMarquardtQr` | `with_tol_grad_rel`, `with_tol_cost_rel`, `with_tol_step_rel` | `with_gradient_orthogonality_tolerance`, `with_relative_model_reduction_tolerance`, `with_relative_step_tolerance` |
+| `LevenbergMarquardtQr` | `with_rank_tolerance` | `with_relative_rank_tolerance` |
+| `Lbfgs` in bounded mode | `with_tol_pg` | `with_absolute_projected_gradient_tolerance` |
+| `Bfgs`, `Lbfgs` | `with_epsilon` | `with_relative_curvature_tolerance` |
+| `Gbnm` | `with_small_tolerance`, `with_flat_tolerance` | `with_normalized_simplex_size_tolerance`, `with_absolute_simplex_cost_tolerance` |
+| `Gbnm` | `with_degeneracy_tolerances(edge, determinant)` | `with_edge_ratio_tolerance(edge).with_normalized_determinant_tolerance(determinant)` |
+| `BarrierMethod`, `AugmentedLagrangianMethod` | `with_tol` | `with_absolute_duality_gap_tolerance`, `with_absolute_feasibility_tolerance`, respectively |
+| `BarrierMethod` | `with_phase_one_tol` | `with_absolute_phase_one_gap_tolerance` |
+| `Newuoa`, `Bobyqa`, `Lincoa`, `Cobyla` | `with_rho_beg`, `with_rho_end` | `with_initial_radius`, `with_final_radius` |
+| `Mads` | `with_min_poll_size` | `with_minimum_poll_size` |
+| `SolisWets` | `with_rho_init` | `with_initial_step_size` |
+| `MaLsChCma` | `with_initial_sigma_fallback` | `with_initial_scale_fallback` |
+| `Backtracking` | `c` | `with_sufficient_decrease_coefficient` |
+| `Wolfe` | `c1`, `c2` | `with_sufficient_decrease_coefficient`, `with_curvature_coefficient` |
+| `MoreThuente` | `ftol`, `gtol`, `xtol` | `with_sufficient_decrease_coefficient`, `with_curvature_coefficient`, `with_relative_bracket_tolerance` |
+| `HagerZhang` | `delta_sigma`, `epsilon` | `with_wolfe_coefficients`, `with_relative_cost_relaxation_tolerance` |
+
+The newer optional numerical tolerance setters accept `None` to disable a
+check and zero to request an exact-zero threshold. Some old setters treated
+zero as disabled, so use `None` when preserving that behavior. The new setters
+also validate finite, nonnegative values. `with_absolute_duality_gap_tolerance`
+and `with_absolute_feasibility_tolerance` accept `None` when a check should be
+disabled; their former `with_tol` aliases required a positive value. The
+relative position tolerance on `BrentRoot` still requires at least four times
+the scalar machine epsilon.
+
 ## Test problems
 
 Basin 2.0 enables no features by default. If your code imports
