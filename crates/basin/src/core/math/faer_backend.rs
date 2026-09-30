@@ -689,7 +689,6 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for Mat<F> {
     }
 }
 
-
 impl<F: Scalar> super::DenseBackend<F> for faer::Col<F> {
     type Matrix = faer::Mat<F>;
 }
