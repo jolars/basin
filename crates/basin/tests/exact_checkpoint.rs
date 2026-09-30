@@ -115,10 +115,9 @@ impl Solver<(), TestState> for CountingSolver {
         &mut self,
         _problem: &mut Problem<()>,
         state: TestState,
-    ) -> Result<(TestState, Option<basin::TerminationReason>), Self::Error>
-    {
+    ) -> Result<basin::SolverStep<TestState>, Self::Error> {
         self.steps += 1;
-        Ok((state, None))
+        Ok(basin::SolverStep::completed(state))
     }
 }
 
@@ -293,7 +292,7 @@ mod file {
             .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[..8], b"BASINEX\0");
-        assert_eq!(&bytes[8..12], &2_u32.to_le_bytes());
+        assert_eq!(&bytes[8..12], &3_u32.to_le_bytes());
         let header_len =
             u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
         let (header, rest): ((String, String, String), _) =
@@ -319,7 +318,7 @@ mod file {
         let path = checkpoint_path("unsupported-format");
         write_valid_checkpoint(&path);
         let original = std::fs::read(&path).unwrap();
-        for version in [0_u32, 1, 3, u32::MAX] {
+        for version in [0_u32, 1, 2, 4, u32::MAX] {
             let mut bytes = original.clone();
             bytes[8..12].copy_from_slice(&version.to_le_bytes());
             std::fs::write(&path, &bytes).unwrap();

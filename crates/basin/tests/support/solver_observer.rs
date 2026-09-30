@@ -1,8 +1,5 @@
 #![allow(dead_code)]
-use basin::{
-    CostFunction, Executor, PointState, Problem, Solver, State,
-    TerminationReason,
-};
+use basin::{CostFunction, Executor, PointState, Problem, Solver, State};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Scenario {
@@ -58,7 +55,7 @@ impl Solver<Linear, PointState<f64>> for Probe {
         &mut self,
         p: &mut Problem<Linear>,
         mut s: PointState<f64>,
-    ) -> Result<(PointState<f64>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
         let x = *s.param()
             - if self.scenario == Scenario::Flat {
                 0.0
@@ -72,20 +69,28 @@ impl Solver<Linear, PointState<f64>> for Probe {
             return Err("step");
         }
         s.replace(x, cost);
-        Ok((
+        Ok(basin::SolverStep::from((
             s,
-            (self.scenario == Scenario::MidStop)
-                .then_some(TerminationReason::SolverFailed),
-        ))
+            (self.scenario == Scenario::MidStop).then(|| {
+                basin::Termination::numerical_failure(
+                    "External solver reported a numerical failure.",
+                )
+            }),
+        )))
     }
     fn check_convergence(
         &mut self,
         _: &Problem<Linear>,
         s: &PointState<f64>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<basin::Termination<<PointState<f64> as basin::State>::Float>>
+    {
         if self.scenario == Scenario::CheckStop && s.iter() == 2 {
             self.diagnostic = 99.0;
-            Some(TerminationReason::SolverConverged)
+            Some(basin::Termination::custom(
+                "external.SolverConverged",
+                "External solver stopping predicate: SolverConverged.",
+                vec![],
+            ))
         } else {
             None
         }

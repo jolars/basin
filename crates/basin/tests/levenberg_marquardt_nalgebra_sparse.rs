@@ -4,7 +4,7 @@ use crate::backend_aliases::nalgebra::DVector;
 use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquares;
 use basin::{
-    Executor, LevenbergMarquardt, LmDamping, PointState, TerminationReason,
+    Executor, LevenbergMarquardt, LmDamping, PointState, TerminationCode,
 };
 
 /// Mirror of the GN sparse fixture: 6×3 design with `b = A·[1,2,3]` so
@@ -46,7 +46,7 @@ fn levenberg_marquardt_converges_on_sparse_linear_regression() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-15, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-7,
@@ -81,7 +81,7 @@ fn levenberg_marquardt_handles_sparse_diagonal_damping() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-20, "cost = {}", result.cost());
 }
 
@@ -108,7 +108,7 @@ fn trust_region_limits_sparse_steps_and_converges() {
             assert_eq!(result.state.counts().residual_evals, 2);
             assert_eq!(result.state.counts().jacobian_evals, 1);
         } else {
-            assert_eq!(result.reason, TerminationReason::SolverConverged);
+            assert_eq!(result.report.code(), TerminationCode::SolverConverged);
             assert!(result.cost() < 1e-20, "cost = {}", result.cost());
             for i in 0..3 {
                 assert!((result.param()[i] - (i + 1) as f64).abs() < 1e-9);
@@ -128,7 +128,7 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     .max_iter(50)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[path = "support/backend_aliases.rs"]

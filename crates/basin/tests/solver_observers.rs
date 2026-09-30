@@ -1,10 +1,28 @@
 #[path = "support/solver_observer.rs"]
 mod support;
+use basin::ObserveSolver;
 use basin::{
     CancellationToken, Executor, Observe, ObserverMode, PointState, State,
-    StepOutcome, TerminationReason,
+    StepOutcome, TerminationCode,
 };
-use basin::{ObservationEvent as Event, ObserveSolver};
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Event {
+    Init,
+    Iter,
+    Final(TerminationCode),
+}
+impl From<basin::ObservationEvent<'_>> for Event {
+    fn from(event: basin::ObservationEvent<'_>) -> Self {
+        match event {
+            basin::ObservationEvent::Init => Self::Init,
+            basin::ObservationEvent::Iter => Self::Iter,
+            basin::ObservationEvent::Final(report) => {
+                Self::Final(report.code())
+            }
+            _ => unreachable!("unknown observation event"),
+        }
+    }
+}
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -41,15 +59,20 @@ impl ObserveSolver<PointState<f64>, Probe> for Recorder {
         &mut self,
         state: &PointState<f64>,
         solver: &Probe,
-        reason: &TerminationReason,
+        reason: &basin::TerminationReport,
     ) {
-        record(&self.0, state, solver.diagnostic, Event::Final(*reason));
+        record(
+            &self.0,
+            state,
+            solver.diagnostic,
+            Event::Final(reason.code()),
+        );
     }
 }
 fn attach(run: Run, kind: u8, log: Log, mode: ObserverMode) -> Run {
     match kind {
         0 => run.observe_solver(
-            move |s, so, event| record(&log, s, so.diagnostic, event),
+            move |s, so, event| record(&log, s, so.diagnostic, event.into()),
             mode,
         ),
         1 => run.observe_solver_with(Recorder(log), mode),
@@ -81,7 +104,7 @@ fn manual(scenario: Scenario) -> (Vec<Record>, Result<(), &'static str>) {
                     &log,
                     stepper.state(),
                     stepper.solver().diagnostic,
-                    Event::Final(reason),
+                    Event::Final(reason.code()),
                 );
                 break Ok(());
             }
@@ -168,7 +191,7 @@ fn cancellation_and_exact_continuation_keep_boundary_semantics() {
         .unwrap();
         assert_eq!(
             log.borrow().iter().map(|r| r.event).collect::<Vec<_>>(),
-            vec![Event::Init, Event::Final(TerminationReason::Cancelled)]
+            vec![Event::Init, Event::Final(TerminationCode::Cancelled)]
         );
 
         let mut stepper = executor(Scenario::Normal).into_stepper().unwrap();
@@ -208,7 +231,11 @@ impl Observe<PointState<f64>> for StateTag {
     fn observe_iter(&mut self, _: &PointState<f64>) {
         self.0.borrow_mut().push(0);
     }
-    fn observe_final(&mut self, _: &PointState<f64>, _: &TerminationReason) {
+    fn observe_final(
+        &mut self,
+        _: &PointState<f64>,
+        _: &basin::TerminationReport,
+    ) {
         self.0.borrow_mut().push(0);
     }
 }
@@ -429,7 +456,7 @@ fn init_and_final_fire_without_iterations_or_new_incumbents() {
             assert_eq!((log[0].event, log[0].iter), (Event::Init, 0));
             assert_eq!(
                 (log[1].event, log[1].iter),
-                (Event::Final(TerminationReason::MaxIter), result.iter())
+                (Event::Final(TerminationCode::MaxIter), result.iter())
             );
         }
     }
@@ -445,8 +472,8 @@ fn solver_observer_can_cancel_after_a_completed_iteration() {
         .with_cancellation_token(token)
         .observe_solver(
             move |state, solver, event| {
-                record(&output, state, solver.diagnostic, event);
-                if event == Event::Iter {
+                record(&output, state, solver.diagnostic, event.into());
+                if event == basin::ObservationEvent::Iter {
                     request.cancel();
                 }
             },
@@ -454,7 +481,7 @@ fn solver_observer_can_cancel_after_a_completed_iteration() {
         )
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::Cancelled);
+    assert_eq!(result.report.code(), TerminationCode::Cancelled);
     assert_eq!(result.iter(), 1);
     assert_eq!(result.cost_evals(), 2);
     assert_eq!(
@@ -462,7 +489,7 @@ fn solver_observer_can_cancel_after_a_completed_iteration() {
         vec![
             Event::Init,
             Event::Iter,
-            Event::Final(TerminationReason::Cancelled)
+            Event::Final(TerminationCode::Cancelled)
         ]
     );
 }
@@ -495,9 +522,9 @@ fn state_and_solver_may_borrow_local_data_with_mixed_observers() {
             &mut self,
             _: &mut Problem<Cost<'a>>,
             state: PointState<&'a f64>,
-        ) -> Result<(PointState<&'a f64>, Option<TerminationReason>), Infallible>
+        ) -> Result<basin::SolverStep<PointState<&'a f64>>, Infallible>
         {
-            Ok((state, None))
+            Ok(basin::SolverStep::completed(state))
         }
     }
     struct Progress;

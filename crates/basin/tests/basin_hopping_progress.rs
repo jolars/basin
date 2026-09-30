@@ -186,7 +186,7 @@ fn rejected_hops_do_not_trigger_change_convergence() {
     .max_iter(5)
     .run()
     .unwrap();
-    assert_eq!(result.reason, basin::TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), basin::TerminationCode::MaxIter);
     assert_eq!(result.state.iter(), 5);
     assert_eq!(result.state.best_iter(), 0);
     assert_eq!(result.state.best_counts().unwrap().cost_evals, 3);
@@ -254,11 +254,8 @@ impl basin::Solver<Sphere, PointState<Vec<f64>>> for EveryCategory {
         &mut self,
         _: &mut basin::Problem<Sphere>,
         s: PointState<Vec<f64>>,
-    ) -> Result<
-        (PointState<Vec<f64>>, Option<basin::TerminationReason>),
-        Infallible,
-    > {
-        Ok((s, None))
+    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Infallible> {
+        Ok(basin::SolverStep::completed(s))
     }
 }
 

@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use basin::solver::lbfgs::Lbfgs;
 use basin::{
     CostFunction, Executor, FirstOrderState, Gradient, HagerZhang, LineSearch,
-    LineSearchOutcome, Problem, TerminationReason,
+    LineSearchOutcome, Problem, TerminationCode,
 };
 
 struct ShiftedQuadratic {
@@ -530,7 +530,7 @@ fn unbounded_lbfgs_with_hager_zhang_progresses_on_ackley() {
     .run()
     .unwrap();
 
-    assert_ne!(result.reason, TerminationReason::SolverFailed);
+    assert_ne!(result.report.code(), TerminationCode::SolverFailed);
     assert!(
         result.cost() < initial_cost,
         "cost {} did not improve on {initial_cost}",

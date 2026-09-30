@@ -77,7 +77,7 @@ fn main() {
 
     println!("x = {:?}", result.param());
     println!("f = {}", result.cost());
-    println!("stopped: {:?}", result.reason);
+    println!("stopped: {:?}", result.report.termination);
 }
 ```
 
@@ -145,11 +145,11 @@ existing setters. Adding a relative check leaves any absolute check enabled
 unless you explicitly disable it with `None`.
 
 Budgets are checked after initialization and between iterations, so evaluation
-limits can be exceeded within an iteration. `result.reason` reports why the run
-ended. Reaching a budget or reporting `NumericalNoProgress` does not establish
+limits can be exceeded within an iteration. `result.report.termination` reports why the run
+ended. Reaching a budget or reporting a numerical stall does not establish
 convergence or rule out an accurate solution. Inspect the returned solution
 alongside the reason. For an application condition, use `stop_when(|state| ...)`,
-returning `Some(TerminationReason::UserRequested)` to stop or `None` to continue.
+returning `Some(basin::ApplicationStop::new("my_stop"))` to stop or `None` to continue.
 
 Basin 2.0 removes the former `terminate_on` facility and abbreviated tolerance
 setters. See [Migrating Convergence Settings](../migrating-convergence/).

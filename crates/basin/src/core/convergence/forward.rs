@@ -125,7 +125,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+        CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
     }
@@ -360,7 +360,9 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&<I as InitialState<V>>::State) -> Option<TerminationReason>
+        CheckFn: FnMut(
+                &<I as InitialState<V>>::State,
+            ) -> Option<crate::ApplicationStop>
             + 'static,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
@@ -401,7 +403,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+        CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
     }
@@ -507,7 +509,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+        CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         self.map_solver(|solver| solver.inner_stop_when_factory(make))
     }

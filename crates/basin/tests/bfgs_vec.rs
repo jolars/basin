@@ -8,7 +8,7 @@
 
 use basin::problems::Rosenbrock;
 use basin::{
-    Bfgs, CostFunction, Executor, FirstOrderState, Gradient, TerminationReason,
+    Bfgs, CostFunction, Executor, FirstOrderState, Gradient, TerminationCode,
 };
 
 #[test]
@@ -53,7 +53,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
 }
 
@@ -110,7 +110,7 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     // Optimum: x[i] = 1 / diag[i]; cost = -½ Σ 1/diag[i].
     let expected_cost = -0.5 * (1.0 + 0.5 + 1.0 / 3.0 + 0.25 + 0.2);
     assert!(

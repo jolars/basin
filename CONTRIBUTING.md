@@ -180,10 +180,9 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `solver.rs`: the `Solver` trait: `init` (one-time setup, e.g. seeding
     cost/gradient at iter 0), `next_iter`, plus convergence reset/check hooks and the legacy `terminate` hook.
   - `executor.rs`: `Executor` owns problem + state + solver and drives the loop;
-    `run()` returns an `OptimizationResult<S>` (final state +
-    `TerminationReason`); opt-in `run_with_solver()` returns an
-    `OptimizationResultWithSolver<S, So>` retaining the final solver and raw
-    counts. Also `run_loop_with_control`/`Stepper`, solver-and-state
+    `run()` returns an `OptimizationResult<S>` (final state, authoritative counts, and an owned
+    `TerminationReport<S::Float>`); opt-in `run_with_solver()` returns an
+    `OptimizationResultWithSolver<S, So>` retaining the final solver as well. Also `run_loop_with_control`/`Stepper`, solver-and-state
     `Executor::resume`/`Executor::resume_from_checkpoint`, and the cooperative,
     top-level `CancellationToken`.
   - `checkpoint.rs`: solver-aware exact checkpoints. The executor captures the
@@ -284,6 +283,15 @@ These shape API decisions and are non-obvious from the code alone.
    is optional; document it separately and test every claimed sparse backend.
 
 ## State and lifecycle contracts
+
+Stopping decisions carry owned evidence in `Termination<F>`. The executor
+publishes `TerminationReport<F>` with the observation stage and completed
+iteration count. `SolverStep::completed` is independent of its optional
+termination, and every successful step publishes counts and coherent progress.
+Ordinary results retain the report and authoritative evaluation counts. Exact
+continuation preserves convergence history and publishes a new event. See
+[MIGRATING.md](MIGRATING.md#structured-termination-reports) for signatures,
+observer ordering, and explicit policies for consuming inner results.
 
 Basin 2.0 on `main` uses shared progress states with solver-owned algorithm
 machinery. The migration follows the validated

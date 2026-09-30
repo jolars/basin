@@ -6,7 +6,66 @@
 
 use crate::core::problem::Problem;
 use crate::core::state::State;
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
+
+/// Progress published by one solver step. Completion and termination are
+/// independent: a finished step can also be the step that stops the run.
+/// A continuing partial step publishes progress without an iteration callback.
+#[derive(Debug)]
+pub struct SolverStep<S: State> {
+    /// Coherent progress published by this step.
+    pub state: S,
+    /// Whether the executor should increment the completed-iteration count.
+    pub completed: bool,
+    /// An optional stopping decision, independent of iteration completion.
+    pub termination: Option<Termination<S::Float>>,
+}
+
+impl<S: State> SolverStep<S> {
+    /// Publish a completed iteration and continue.
+    pub fn completed(state: S) -> Self {
+        Self {
+            state,
+            completed: true,
+            termination: None,
+        }
+    }
+    /// Publish a partial step and its stopping explanation.
+    pub fn stopped(state: S, termination: Termination<S::Float>) -> Self {
+        Self {
+            state,
+            completed: false,
+            termination: Some(termination),
+        }
+    }
+    /// Publish a completed iteration and its stopping explanation.
+    pub fn completed_with_termination(
+        state: S,
+        termination: Termination<S::Float>,
+    ) -> Self {
+        Self {
+            state,
+            completed: true,
+            termination: Some(termination),
+        }
+    }
+    /// Extract the published state and decision. Callers driving iterations
+    /// manually must account for `completed` before consuming this value.
+    pub fn into_parts(self) -> (S, bool, Option<Termination<S::Float>>) {
+        (self.state, self.completed, self.termination)
+    }
+}
+
+// Tuple conversion preserves the 1.x convention that a stopping step is partial.
+impl<S: State> From<(S, Option<Termination<S::Float>>)> for SolverStep<S> {
+    fn from((state, termination): (S, Option<Termination<S::Float>>)) -> Self {
+        Self {
+            completed: termination.is_none(),
+            state,
+            termination,
+        }
+    }
+}
 
 /// A concrete optimization algorithm. Implementations carry the
 /// solver's configuration and any internal scratch state; the iterate
@@ -32,8 +91,7 @@ use crate::core::termination::TerminationReason;
 ///   correspond to the *current* [`State::param`].
 /// - **Implementor must:** report mid-iteration failures
 ///   (line-search bailout, non-descent direction, etc.) via
-///   [`next_iter`](Self::next_iter)'s `Option<TerminationReason>`
-///   return rather than panicking; and use [`terminate`](Self::terminate)
+///   [`SolverStep::termination`] field rather than panicking; and use [`terminate`](Self::terminate)
 ///   only for clean convergence tests on the current state.
 ///
 /// # Eval counting
@@ -108,18 +166,14 @@ pub trait Solver<P, S: State> {
     ///   are mutually consistent at the new iterate. Termination
     ///   criteria evaluated *before* the next iteration assume these
     ///   fields agree.
-    /// - **Implementor must:** report mid-iteration failures
-    ///   (line-search bailout, non-descent direction, ill-conditioned
-    ///   subproblem, …) via the returned
-    ///   `Option<TerminationReason>` rather than panicking. The executor
-    ///   stops immediately when `Some(_)` is returned and the
-    ///   iteration counter is *not* incremented, so
-    ///   `state.iter()` reflects the last *fully completed* iteration.
-    /// - **Implementor may:** return `Err` to *hard-abort* the run; the
-    ///   error bubbles out of
-    ///   [`Executor::run`](crate::core::executor::Executor::run). Distinct
-    ///   from the `Option<TerminationReason>` channel: that's a clean
-    ///   stop, `Err` is "the user's problem said abort."
+    /// - **Implementor must:** return a [`SolverStep`] with independent
+    ///   completion and termination fields. `completed: true` increments the
+    ///   iteration counter, including when `termination` is present. A partial
+    ///   stopping step publishes coherent progress without incrementing it.
+    ///   Numerical failure and safeguards belong in [`Termination`].
+    /// - **Implementor may:** return `Err` to hard-abort the run. This consumes
+    ///   the state; the executor exposes counts but promises no recoverable
+    ///   checkpoint or final observation.
     /// - **Implementor must (composition, adapter-problem inner only):**
     ///   when running an inner solver against an *adapter problem*
     ///   (e.g. [`LogBarrier`](crate::core::barrier::LogBarrier),
@@ -138,7 +192,7 @@ pub trait Solver<P, S: State> {
         &mut self,
         problem: &mut Problem<P>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error>;
+    ) -> Result<SolverStep<S>, Self::Error>;
 
     /// Reset per-run convergence history without changing algorithm state.
     ///
@@ -170,7 +224,7 @@ pub trait Solver<P, S: State> {
         &mut self,
         _problem: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<S::Float>> {
         self.terminate(state)
     }
 
@@ -183,7 +237,7 @@ pub trait Solver<P, S: State> {
     /// [`next_iter`](Self::next_iter)'s return value instead. See the
     /// [`executor`](crate::core::executor) module docs for the full
     /// ordering.
-    fn terminate(&self, _state: &S) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &S) -> Option<Termination<S::Float>> {
         None
     }
 }

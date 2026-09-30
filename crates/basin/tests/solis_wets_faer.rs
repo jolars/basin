@@ -6,7 +6,7 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::Sphere;
-use basin::{Executor, SolisWets, TerminationReason};
+use basin::{Executor, SolisWets, TerminationCode};
 
 fn col(values: &[f64]) -> Col<f64> {
     Col::<f64>::from_fn(values.len(), |i| values[i])
@@ -41,7 +41,7 @@ fn converges_on_sphere_5d_via_rho_tolerance() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RhoTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert!(
         result.cost() < 1e-6,
         "sphere 5-D cost = {} (expected < 1e-6)",

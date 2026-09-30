@@ -5,7 +5,7 @@ use basin::{
     FirstOrderState, Gradient, Hessian, HessianProduct, Jacobian,
     LevenbergMarquardt, LmDamping, PointState, Problem, Residual,
     RobustLeastSquares, RunControl, Solver, SquaredLoss, State,
-    TerminationReason, Trf, TrustRegion, run_loop_with_control,
+    TerminationCode, Trf, TrustRegion, run_loop_with_control,
 };
 use std::convert::Infallible;
 
@@ -91,7 +91,7 @@ fn check_rejections<P, S, So>(
     make_problem: impl Fn() -> P,
     make_state: impl Fn() -> S,
     mut solver: So,
-    accepted_reason: TerminationReason,
+    accepted_reason: TerminationCode,
 ) where
     S: State<Param = Vec<f64>, Float = f64> + basin::CountsMirror,
     So: Solver<P, S, Error = Infallible>,
@@ -106,7 +106,7 @@ fn check_rejections<P, S, So>(
             &mut RunControl::new().max_iter(1),
         )
         .unwrap();
-        assert_eq!(first.reason, TerminationReason::MaxIter);
+        assert_eq!(first.report.code(), TerminationCode::MaxIter);
         assert_eq!(first.state.param(), &[0.1]);
         assert_eq!(first.state.cost(), 0.5 * 0.99_f64.powi(2));
         assert_eq!(solver.check_convergence(&problem, &first.state), None);
@@ -119,7 +119,7 @@ fn check_rejections<P, S, So>(
                 .max_iter(100)
                 .run_with_solver()
                 .unwrap();
-        assert_eq!(result.reason, accepted_reason);
+        assert_eq!(result.report.code(), accepted_reason);
         assert!(result.state.cost() < 0.5 * 0.99_f64.powi(2));
         assert!(result.state.param()[0] > 0.1);
         solver = result.solver;
@@ -139,7 +139,7 @@ macro_rules! rejection_checks {
                     || $problem,
                     || $state::new(vec![0.1]),
                     ($solver).$setter(10.),
-                    TerminationReason::$reason,
+                    TerminationCode::$reason,
                 );
                 let result = Executor::new(
                     $problem,
@@ -149,7 +149,7 @@ macro_rules! rejection_checks {
                 .max_iter(2)
                 .run()
                 .unwrap();
-                assert_eq!(result.reason, TerminationReason::MaxIter);
+                assert_eq!(result.report.code(), TerminationCode::MaxIter);
                 let result = Executor::new(
                     $problem,
                     ($solver).$setter(1e-13),
@@ -271,7 +271,7 @@ fn rejection_after_accepted_steps_does_not_establish_convergence() {
                 .windows(2)
                 .any(|pair| { pair[0] != 0.1 && pair[0] == pair[1] })
         );
-        assert_eq!(result.reason, TerminationReason::GradientTolerance);
+        assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
         assert!(result.cost() < 1e-16);
     }
 

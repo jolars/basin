@@ -1,5 +1,5 @@
 //! [`CmaInject`] must bubble `SolverFailed` from the inner solver out
-//! through the outer's mid-iter `Option<TerminationReason>` return
+//! through the outer stopping report, retaining the nested failure
 //! (CONTRIBUTING.md "Solver composition" rule 3).
 //!
 //! Uses the `AlwaysFails` harness (sibling of the one in
@@ -15,7 +15,7 @@ use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::Sphere;
 use basin::{
     ClosureInner, CmaEs, CmaInject, Executor, PointState, PopulationProgress,
-    Problem, Solver, State, TerminationReason,
+    Problem, Solver, State, TerminationCode,
 };
 
 /// Inner solver that always returns `SolverFailed` on the first
@@ -29,8 +29,13 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
         &mut self,
         _problem: &mut Problem<P>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
-        Ok((state, Some(TerminationReason::SolverFailed)))
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::numerical_failure(
+                "External solver reported a numerical failure.",
+            )),
+        )))
     }
 }
 
@@ -57,10 +62,22 @@ fn bubbles_inner_failure() {
     .unwrap();
 
     assert_eq!(
-        result.reason,
-        TerminationReason::SolverFailed,
+        result.report.code(),
+        TerminationCode::SolverFailed,
         "outer should bubble SolverFailed from the inner; got {:?}",
-        result.reason
+        result.report.code()
+    );
+    let basin::Termination::Failed(basin::NumericalFailure::Inner { report }) =
+        &result.report.termination
+    else {
+        panic!("expected nested inner failure");
+    };
+    assert_eq!(
+        report.stage,
+        basin::TerminationStage::Step { completed: false }
+    );
+    assert!(
+        matches!(&report.termination, basin::Termination::Failed(basin::NumericalFailure::Solver {message, ..}) if message == "External solver reported a numerical failure.")
     );
     // The first injection runs inside the first call to
     // `CmaInject::next_iter`, which bails mid-iter with SolverFailed;

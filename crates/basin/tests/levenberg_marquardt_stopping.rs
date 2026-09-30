@@ -2,7 +2,7 @@
 
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    LmDamping, NativeConvergenceTest, Residual, State, TerminationReason,
+    LmDamping, NativeConvergenceTest, Residual, State, TerminationCode,
 };
 use std::convert::Infallible;
 
@@ -73,7 +73,20 @@ macro_rules! stopping_checks {
                 ]);
                 assert_eq!(result.counts.residual_evals, 2);
                 assert_eq!(result.counts.jacobian_evals, 1);
-                assert_eq!(result.iter(), 0);
+                assert_eq!(result.iter(), 1);
+                assert_eq!(result.report.stage, basin::TerminationStage::Step { completed: true });
+                let basin::Termination::Converged(convergence) = &result.report.termination else { panic!("expected native report") };
+                assert_eq!(convergence.criteria().len(), 3);
+                let basin::ConvergenceEvidence::ModelReduction { actual, predicted, reference_cost, gain_ratio, tolerance } = convergence.criteria()[0].evidence else { panic!("expected model evidence") };
+                assert_eq!(reference_cost, 2.);
+                assert_eq!(actual, reference_cost - result.cost());
+                assert!(actual.abs() <= tolerance * reference_cost);
+                assert!(predicted <= tolerance * reference_cost);
+                assert!(gain_ratio <= 2.);
+                for criterion in &convergence.criteria()[1..] {
+                    let basin::ConvergenceEvidence::FactoredUpperBound { value, bound, .. } = &criterion.evidence else { panic!("expected factored evidence") };
+                    assert!(value.significand == 0. || (value.exponent, value.significand) <= (bound.exponent, bound.significand));
+                }
             }
 
             #[test]
@@ -92,10 +105,10 @@ macro_rules! stopping_checks {
                     .unwrap();
                     // The accepted step is two, the updated radius is four,
                     // and the accepted iterate norm is three.
-                    assert_eq!(result.reason, if tolerance == Some(1.5) {
-                        TerminationReason::SolverConverged
+                    assert_eq!(result.report.code(), if tolerance == Some(1.5) {
+                        TerminationCode::SolverConverged
                     } else {
-                        TerminationReason::MaxIter
+                        TerminationCode::MaxIter
                     });
                     assert!((result.param()[0] - 3.).abs() < 16. * <$scalar>::EPSILON);
                     assert_eq!(result.state.counts().residual_evals, 2);
@@ -134,10 +147,10 @@ macro_rules! stopping_checks {
                     .unwrap();
                     // The rejected GN trial is 5.05. The radius shrinks to
                     // 0.099, while the base's scaled norm remains 0.02.
-                    assert_eq!(result.reason, if converged {
-                        TerminationReason::SolverConverged
+                    assert_eq!(result.report.code(), if converged {
+                        TerminationCode::SolverConverged
                     } else {
-                        TerminationReason::MaxIter
+                        TerminationCode::MaxIter
                     });
                     assert_eq!(result.native_convergence_tests(), if converged {
                         &[NativeConvergenceTest::RelativeTrustRadius][..]
@@ -176,7 +189,7 @@ macro_rules! stopping_checks {
                     ).max_iter(evaluations - 1).run().unwrap();
                     // Newton iterates are 2.5, 2.05, and about 2.00061.
                     // D grows from 4 to 25, then retains 25 as J shrinks.
-                    assert_eq!(result.reason, TerminationReason::SolverConverged);
+                    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
                     assert_eq!(result.state.counts().residual_evals, evaluations);
                     assert_eq!(result.state.counts().jacobian_evals, evaluations - 1);
                 }
@@ -198,10 +211,10 @@ macro_rules! stopping_checks {
                         .max_iter(1)
                         .run()
                         .unwrap();
-                        assert_eq!(result.reason, if converged {
-                            TerminationReason::SolverConverged
+                        assert_eq!(result.report.code(), if converged {
+                            TerminationCode::SolverConverged
                         } else {
-                            TerminationReason::MaxIter
+                            TerminationCode::MaxIter
                         });
                         assert!((result.param()[0] - 0.1).abs() < 0.02);
                         assert_eq!(result.param()[1], scale);
@@ -225,10 +238,10 @@ macro_rules! stopping_checks {
                         .max_iter(1)
                         .run()
                         .unwrap();
-                        assert_eq!(result.reason, if damping == LmDamping::TrustRegion && tolerance.is_some() {
-                            TerminationReason::SolverConverged
+                        assert_eq!(result.report.code(), if damping == LmDamping::TrustRegion && tolerance.is_some() {
+                            TerminationCode::SolverConverged
                         } else {
-                            TerminationReason::MaxIter
+                            TerminationCode::MaxIter
                         });
                         assert_eq!(result.state.counts().residual_evals, 2);
                     }
@@ -251,12 +264,12 @@ macro_rules! stopping_checks {
                         .max_iter(1)
                         .run()
                         .unwrap();
-                        assert_eq!(result.reason, if tolerance == Some(101.) {
-                            TerminationReason::SolverConverged
+                        assert_eq!(result.report.code(), if tolerance == Some(101.) {
+                            TerminationCode::SolverConverged
                         } else if safeguard {
-                            TerminationReason::NumericalNoProgress
+                            TerminationCode::NumericalNoProgress
                         } else {
-                            TerminationReason::MaxIter
+                            TerminationCode::MaxIter
                         });
                         assert_eq!(result.state.counts().residual_evals, 2);
                     }
@@ -283,10 +296,10 @@ macro_rules! stopping_checks {
                             .unwrap();
                             // Each column's cosine is 1/sqrt(2), at every scale.
                             let converged = tolerance == Some(2.);
-                            assert_eq!(result.reason, if converged {
-                                TerminationReason::SolverConverged
+                            assert_eq!(result.report.code(), if converged {
+                                TerminationCode::SolverConverged
                             } else {
-                                TerminationReason::MaxIter
+                                TerminationCode::MaxIter
                             }, "scale={scale}, tolerance={tolerance:?}, damping={damping:?}");
                             assert_eq!(result.state.counts().residual_evals, if converged { 1 } else { 2 });
                             if !converged {
@@ -317,10 +330,10 @@ macro_rules! stopping_checks {
                             .run()
                             .unwrap();
                             // Starting at zero makes the accepted step and iterate identical.
-                            assert_eq!(result.reason, if tolerance == Some(2.) {
-                                TerminationReason::SolverConverged
+                            assert_eq!(result.report.code(), if tolerance == Some(2.) {
+                                TerminationCode::SolverConverged
                             } else {
-                                TerminationReason::MaxIter
+                                TerminationCode::MaxIter
                             }, "scale={scale}, tolerance={tolerance:?}, damping={damping:?}");
                             assert!(result.param()[0] > 0.);
                             assert_eq!(result.state.counts().residual_evals, 2);
@@ -345,10 +358,10 @@ macro_rules! stopping_checks {
                     .max_iter(1)
                     .run()
                     .unwrap();
-                    assert_eq!(result.reason, if converged {
-                        TerminationReason::SolverConverged
+                    assert_eq!(result.report.code(), if converged {
+                        TerminationCode::SolverConverged
                     } else {
-                        TerminationReason::MaxIter
+                        TerminationCode::MaxIter
                     });
                     assert!(result.param()[0] > 0.9);
                 }
@@ -377,10 +390,10 @@ macro_rules! stopping_checks {
                             .max_iter(1)
                             .run()
                             .unwrap();
-                            assert_eq!(result.reason, if tolerance.is_some() {
-                                TerminationReason::SolverConverged
+                            assert_eq!(result.report.code(), if tolerance.is_some() {
+                                TerminationCode::SolverConverged
                             } else {
-                                TerminationReason::MaxIter
+                                TerminationCode::MaxIter
                             }, "coordinate={coordinate}, check={check}, tolerance={tolerance:?}");
                         }
                     }
@@ -405,10 +418,10 @@ macro_rules! stopping_checks {
                         .max_iter(4)
                         .run()
                         .unwrap();
-                        assert_eq!(result.reason, if enabled {
-                            TerminationReason::NumericalNoProgress
+                        assert_eq!(result.report.code(), if enabled {
+                            TerminationCode::NumericalNoProgress
                         } else {
-                            TerminationReason::MaxIter
+                            TerminationCode::MaxIter
                         });
                         assert_eq!(result.state.counts().residual_evals, if enabled { 2 } else { 5 });
                         assert_eq!(result.state.counts().jacobian_evals, 1);
@@ -438,8 +451,8 @@ macro_rules! stopping_checks {
                     .max_iter(5)
                     .run()
                     .unwrap();
-                    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
-                    assert!(!result.reason.is_failure());
+                    assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
+                    assert!(!result.report.code().is_failure());
                     assert_eq!(result.cost(), 1.);
                     assert_eq!(result.param()[0], 1.);
                     assert_eq!(result.param()[1], 2.);
@@ -482,7 +495,7 @@ macro_rules! stopping_checks {
                     .max_iter(20)
                     .run()
                     .unwrap();
-                    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+                    assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
                     assert!(result.cost() > 0.);
                     assert!(result.cost() <= 4. * <$scalar>::EPSILON.powi(2));
                     assert!((result.param()[0] - root).abs() <= <$scalar>::EPSILON);
@@ -504,12 +517,12 @@ macro_rules! stopping_checks {
                             &mut problem,
                             PointState::new(($vector_new)(&[0.1, 0.1])),
                         ).unwrap();
-                        let (mut state, reason) = solver.next_iter(&mut problem, initial).unwrap();
+                        let (mut state, _, reason) = solver.next_iter(&mut problem, initial).unwrap().into_parts();
                         assert!(reason.is_none());
                         assert_eq!(state.param()[0], 0.1);
                         for _ in 0..20 {
                             let reason;
-                            (state, reason) = solver.next_iter(&mut problem, state).unwrap();
+                            (state, _, reason) = solver.next_iter(&mut problem, state).unwrap().into_parts();
                             assert!(reason.is_none());
                             if state.param()[0] != 0.1 {
                                 break;
@@ -538,7 +551,7 @@ macro_rules! stopping_checks {
                             solver,
                             ($vector_new)(&[1., 2.]),
                         ).max_iter(4).run().unwrap();
-                        assert_eq!(result.reason, TerminationReason::SolverConverged);
+                        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
                         assert_eq!(result.state.counts().residual_evals, if check < 2 { 1 } else { 2 });
                     }
                 }

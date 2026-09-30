@@ -3,7 +3,7 @@
 use crate::backend_aliases::nalgebra::DVector;
 use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquaresBoxed;
-use basin::{Executor, PointState, TerminationReason, Trf};
+use basin::{Executor, PointState, TerminationCode, Trf};
 
 /// 6×3 design: identity stack + pairwise-sum rows. With `b = A·[1, 2, 3]`,
 /// the closed-form unconstrained least-squares minimum lands exactly at
@@ -44,7 +44,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-5,
         "x[0] = {}",
@@ -76,7 +76,7 @@ fn trf_with_binding_upper_bound_converges_to_face() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     // x[2] should be at (or just inside) the upper bound 1.5.
     assert!(
         result.param()[2] <= 1.5 && result.param()[2] >= 1.5 - 1e-3,
@@ -95,7 +95,7 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         .max_iter(50)
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[path = "support/backend_aliases.rs"]

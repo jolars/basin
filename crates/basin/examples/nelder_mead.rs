@@ -40,5 +40,5 @@ fn main() {
     println!("final iter:    {}", result.iter());
     println!("final param:   {:?}", result.param());
     println!("final cost:    {}", result.cost());
-    println!("termination:   {:?}", result.reason);
+    println!("termination:   {:?}", result.report.code());
 }

@@ -10,7 +10,6 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, SimplexProgress, State};
-use crate::core::termination::TerminationReason;
 use crate::solver::{NelderMead, Projected, Unbounded};
 
 mod geometry;
@@ -600,8 +599,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let free = free_coordinates(&lower, &upper);
@@ -630,15 +628,21 @@ where
         );
 
         if !(small || flat || degenerate) {
-            let (simplex, reason) = <NelderMead<V, F, Projected> as Solver<
+            let crate::SolverStep {
+                state: simplex,
+                termination: reason,
+                completed,
+            } = <NelderMead<V, F, Projected> as Solver<
                 P,
                 SimplexProgress<V, F>,
-            >>::next_iter(
-                &mut self.local, problem, simplex
-            )?;
+            >>::next_iter(&mut self.local, problem, simplex)?;
             state.replace_from(&simplex.vertices[0], simplex.costs[0]);
             self.simplex = Some(simplex);
-            return Ok((state, reason));
+            return Ok(crate::SolverStep {
+                state,
+                completed,
+                termination: reason,
+            });
         }
 
         let point = simplex.vertices[0].clone();
@@ -690,7 +694,7 @@ where
                 free: &free,
             },
         )?;
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }
 

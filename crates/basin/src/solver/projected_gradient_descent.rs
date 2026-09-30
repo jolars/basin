@@ -6,7 +6,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{FirstOrderState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 
 /// Projected gradient descent for box-constrained problems.
@@ -201,8 +201,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         let (prev_cost, grad) = state
             .take_evaluation()
             .expect("solver requires initialized progress");
@@ -220,7 +219,12 @@ where
                 state
                     .set_evaluation(prev_cost, grad)
                     .expect("gradient dimension differs from parameter");
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "Projected gradient-descent line search failed.",
+                    )),
+                )));
             }
         };
         state.seed_param_mut().scaled_add(alpha, &direction);
@@ -231,6 +235,6 @@ where
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }

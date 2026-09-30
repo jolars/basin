@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 
 use crate::core::observer::Observe;
 use crate::core::state::State;
-use crate::core::termination::TerminationReason;
+use crate::core::termination::TerminationReport;
 
 const MAGIC: &[u8; 8] = b"BASINST\0";
 const FORMAT_VERSION: u32 = 1;
@@ -124,7 +124,11 @@ where
         self.try_write(state);
     }
 
-    fn observe_final(&mut self, state: &S, _reason: &TerminationReason) {
+    fn observe_final(
+        &mut self,
+        state: &S,
+        _reason: &TerminationReport<S::Float>,
+    ) {
         self.try_write(state);
     }
 }

@@ -8,7 +8,6 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
-use crate::core::termination::TerminationReason;
 use crate::solver::cma_es::sort_population_ascending;
 
 /// Steady-state real-coded genetic algorithm with BLX-α crossover,
@@ -495,10 +494,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -535,7 +531,7 @@ where
 
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }
 

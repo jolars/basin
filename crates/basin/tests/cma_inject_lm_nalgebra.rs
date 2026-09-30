@@ -95,7 +95,7 @@ mod backend_aliases;
 
 #[test]
 fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
-    use basin::{CostFunction, Jacobian, Residual, State, TerminationReason};
+    use basin::{CostFunction, Jacobian, Residual, State, TerminationCode};
     use std::{
         convert::Infallible,
         sync::{
@@ -159,7 +159,7 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
     .max_iter(4)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.state.iter(), 4);
     assert!(result.param().iter().all(|value| value.is_finite()));
     assert!(result.cost().is_finite());

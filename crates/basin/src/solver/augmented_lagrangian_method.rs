@@ -10,7 +10,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, SelectedState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 /// Augmented-Lagrangian method for `min f(x) s.t. A x = b`, the
 /// equality-constrained analogue of the log-barrier
@@ -69,7 +69,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// The outer feasibility test `‖A x − b‖ ≤ tol` is solver-specific and lives
 /// on the solver (tenet 3): it fires via [`terminate`](Solver::terminate) as
-/// [`SolverConverged`](TerminationReason::SolverConverged). Optimality is the
+/// [`SolverConverged`](crate::TerminationCode::SolverConverged). Optimality is the
 /// inner solve's job: a gradient-based inner solver can drive
 /// `‖∇_x L_ρ‖` down, while a derivative-free solver uses its own convergence
 /// test. The outer feasibility stop alone does not certify stationarity if
@@ -300,7 +300,7 @@ where
             So::State,
             Error = <P as CostFunction>::Error,
         >,
-    So::State: State<Param = V> + CountsMirror,
+    So::State: State<Param = V, Float = F> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
@@ -335,8 +335,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: SelectedState<V, F>,
-    ) -> Result<(SelectedState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
         // *separate* inner state seeded (warm-started) at the current
         // iterate. Fresh criteria each call satisfies the statelessness
@@ -366,8 +365,17 @@ where
         problem.counts_mut().add(&inner_counts);
         let result = result?;
 
-        if result.reason.is_failure() {
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+        if !result
+            .report
+            .termination
+            .can_continue_as_inner(crate::PartialResultPolicy::Consume)
+        {
+            return Ok(crate::SolverStep::from((
+                state,
+                result.report.into_outer_termination(
+                    crate::PartialResultPolicy::Consume,
+                ),
+            )));
         }
 
         // The outer record reports the original objective and feasibility;
@@ -393,7 +401,7 @@ where
             self.rho = self.rho * self.rho_increase;
         }
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {
@@ -403,11 +411,24 @@ where
     fn terminate(
         &self,
         _state: &SelectedState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         // Feasibility bound ‖A x − b‖ from the most recent solve. Optimality
         // is handled by the inner solve driving ‖∇L_ρ‖ down.
         if self.tol.is_some_and(|tol| self.c_norm <= tol) {
-            Some(TerminationReason::SolverConverged)
+            Some(Termination::custom(
+                "augmented_lagrangian.feasibility",
+                "The norm of the equality residual is at most the outer feasibility tolerance.",
+                vec![
+                    crate::Measurement {
+                        name: "residual_norm".into(),
+                        value: self.c_norm,
+                    },
+                    crate::Measurement {
+                        name: "tolerance".into(),
+                        value: self.tol.unwrap(),
+                    },
+                ],
+            ))
         } else {
             None
         }

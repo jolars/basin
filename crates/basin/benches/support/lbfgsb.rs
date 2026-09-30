@@ -9,7 +9,6 @@ pub mod short;
 use basin::{
     BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
     GradientState, Lbfgsb, OptimizationResult, Solver, State,
-    TerminationReason,
 };
 use std::convert::Infallible;
 
@@ -177,7 +176,7 @@ impl<V: Vector> Driver<V> {
                 && (state.cost_evals() >= evaluation_limit
                     || pg <= 1e-10 * (1.0 + value.abs()))
             {
-                return Some(TerminationReason::UserRequested);
+                return Some(basin::ApplicationStop::new("benchmark_target"));
             }
             if first
                 && old.is_some_and(|old| {
@@ -187,7 +186,9 @@ impl<V: Vector> Driver<V> {
                             * old.abs().max(value.abs()).max(1.0)
                 })
             {
-                return Some(TerminationReason::RelativeCostTolerance);
+                return Some(basin::ApplicationStop::new(
+                    "benchmark_relative_cost",
+                ));
             }
             None
         })
@@ -207,12 +208,14 @@ impl<V: Vector> Driver<V> {
         assert_eq!(result.cost_evals(), evaluations);
         assert_eq!(result.state.gradient_evals(), evaluations);
         assert_eq!(
-            result.reason,
-            if self.number == 1 {
-                TerminationReason::RelativeCostTolerance
-            } else {
-                TerminationReason::UserRequested
-            }
+            result.report.termination,
+            basin::Termination::Application(basin::ApplicationStop::new(
+                if self.number == 1 {
+                    "benchmark_relative_cost"
+                } else {
+                    "benchmark_target"
+                }
+            ))
         );
         let mut gradient = vec![0.0; self.lower.as_slice().len()];
         // Independent verification calls are outside the solve's counters/timer.

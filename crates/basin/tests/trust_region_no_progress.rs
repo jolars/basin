@@ -3,7 +3,7 @@
 use basin::{
     CostFunction, DenseMatrix, Executor, FirstOrderState, Gradient,
     GradientState, Hessian, HessianProduct, Solver, State, Steihaug,
-    TerminationReason, TrustRegion,
+    TerminationCode, TrustRegion,
 };
 use std::convert::Infallible;
 
@@ -55,11 +55,8 @@ macro_rules! backend_checks {
                 }
             }
 
-            fn check_stop<S>(
-                solver: S,
-                start: $scalar,
-                reason: TerminationReason,
-            ) where
+            fn check_stop<S>(solver: S, start: $scalar, reason: TerminationCode)
+            where
                 S: Solver<
                         OffsetQuadratic,
                         FirstOrderState<$vector, $scalar>,
@@ -75,7 +72,7 @@ macro_rules! backend_checks {
                 .run()
                 .unwrap();
 
-                assert_eq!(result.reason, reason);
+                assert_eq!(result.report.code(), reason);
                 assert_eq!(result.state.param()[0], start);
                 assert_eq!(result.state.gradient().unwrap()[0], start);
                 assert_eq!(
@@ -89,12 +86,12 @@ macro_rules! backend_checks {
                 check_stop(
                     TrustRegion::with_subproblem(Steihaug::new()),
                     1.,
-                    TerminationReason::NumericalNoProgress,
+                    TerminationCode::NumericalNoProgress,
                 );
                 check_stop(
                     TrustRegion::matrix_free_with(Steihaug::new()),
                     1.,
-                    TerminationReason::NumericalNoProgress,
+                    TerminationCode::NumericalNoProgress,
                 );
             }
 
@@ -104,13 +101,13 @@ macro_rules! backend_checks {
                     TrustRegion::with_subproblem(Steihaug::new())
                         .with_radius(<$scalar>::MIN_POSITIVE),
                     1.,
-                    TerminationReason::NumericalNoProgress,
+                    TerminationCode::NumericalNoProgress,
                 );
                 check_stop(
                     TrustRegion::matrix_free_with(Steihaug::new())
                         .with_radius(<$scalar>::MIN_POSITIVE),
                     1.,
-                    TerminationReason::NumericalNoProgress,
+                    TerminationCode::NumericalNoProgress,
                 );
             }
 
@@ -119,12 +116,12 @@ macro_rules! backend_checks {
                 check_stop(
                     TrustRegion::with_subproblem(Steihaug::new()),
                     0.,
-                    TerminationReason::SolverConverged,
+                    TerminationCode::SolverConverged,
                 );
                 check_stop(
                     TrustRegion::matrix_free_with(Steihaug::new()),
                     0.,
-                    TerminationReason::SolverConverged,
+                    TerminationCode::SolverConverged,
                 );
             }
 
@@ -135,14 +132,14 @@ macro_rules! backend_checks {
                         .with_radius(<$scalar>::MIN_POSITIVE)
                         .with_absolute_gradient_tolerance(0.1),
                     0.01,
-                    TerminationReason::GradientTolerance,
+                    TerminationCode::GradientTolerance,
                 );
                 check_stop(
                     TrustRegion::matrix_free_with(Steihaug::new())
                         .with_radius(<$scalar>::MIN_POSITIVE)
                         .with_relative_gradient_tolerance(1.),
                     0.01,
-                    TerminationReason::RelativeGradientTolerance,
+                    TerminationCode::RelativeGradientTolerance,
                 );
             }
 
@@ -152,13 +149,13 @@ macro_rules! backend_checks {
                     TrustRegion::with_subproblem(Steihaug::new())
                         .with_absolute_gradient_tolerance(0.),
                     1.,
-                    TerminationReason::NumericalNoProgress,
+                    TerminationCode::NumericalNoProgress,
                 );
                 check_stop(
                     TrustRegion::matrix_free_with(Steihaug::new())
                         .with_relative_gradient_tolerance(0.),
                     1.,
-                    TerminationReason::NumericalNoProgress,
+                    TerminationCode::NumericalNoProgress,
                 );
             }
         }

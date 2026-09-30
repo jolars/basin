@@ -5,7 +5,7 @@ use std::convert::Infallible;
 
 use basin::{
     BoxConstraints, CostFunction, Executor, Gbnm, PointState, State,
-    TerminationReason,
+    TerminationCode,
 };
 
 #[derive(Clone)]
@@ -78,7 +78,7 @@ fn starts_from_the_callers_point_and_builds_a_feasible_regular_simplex() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.solver.search_starts(), &[vec![10.0, 10.0]]);
     assert_eq!(result.solver.restart_count(), 0);
     assert_eq!(result.solver.vertices().len(), 3);

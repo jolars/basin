@@ -56,7 +56,7 @@ use crate::core::problem::{
 };
 use crate::core::solver::Solver;
 use crate::core::state::{FirstOrderState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 /// The outcome of an (approximate) trust-region subproblem solve: the step
 /// `d`, the predicted model decrease `m(0) − m(d)`, and whether the
@@ -281,8 +281,8 @@ where
 /// iteration and evaluation budgets on the executor.
 ///
 /// A finite, non-positive predicted reduction stops the solver. It reports
-/// [`TerminationReason::SolverConverged`] only if the computed gradient norm
-/// is zero; otherwise it reports [`TerminationReason::NumericalNoProgress`],
+/// [`crate::TerminationCode::SolverConverged`] only if the computed gradient norm
+/// is zero; otherwise it reports [`crate::TerminationCode::NumericalNoProgress`],
 /// which does not establish stationarity. Configured gradient tolerances
 /// are checked before each iteration and can establish approximate
 /// convergence before this safeguard is reached.
@@ -648,7 +648,7 @@ fn tr_next_iter<P, V, F>(
         &V,
         F,
     ) -> Result<Step<V, F>, P::Error>,
-) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>, bool), P::Error>
+) -> Result<(FirstOrderState<V, F>, Option<Termination<F>>, bool), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
@@ -671,7 +671,13 @@ where
             state
                 .set_evaluation(cost_old, g)
                 .expect("gradient dimension differs from parameter");
-            return Ok((state, Some(TerminationReason::SolverFailed), false));
+            return Ok((
+                state,
+                Some(Termination::numerical_failure(
+                    "The trust-region subproblem returned a non-finite predicted reduction.",
+                )),
+                false,
+            ));
         }
 
         // Radius collapse or roundoff can erase the predicted reduction
@@ -680,9 +686,18 @@ where
         // convergence here without adding an implicit tolerance.
         if step.predicted_reduction <= F::zero() {
             let reason = if g.norm_squared() == F::zero() {
-                TerminationReason::SolverConverged
+                Termination::custom(
+                    "trust_region.zero_gradient",
+                    "The computed squared Euclidean gradient norm is exactly zero.",
+                    vec![crate::Measurement {
+                        name: "gradient_norm_squared".into(),
+                        value: g.norm_squared(),
+                    }],
+                )
             } else {
-                TerminationReason::NumericalNoProgress
+                Termination::numerical_stall(
+                    "trust_region: no numerical progress",
+                )
             };
             state
                 .set_evaluation(cost_old, g)
@@ -771,8 +786,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         // One Hessian per outer iteration, reused across all inner radius
         // reductions at zero extra derivative evaluations (the gradient is
         // likewise fixed while x is).
@@ -788,7 +802,7 @@ where
             |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
         )?;
         self.rejected_step = !accepted;
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 }
 
@@ -821,8 +835,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         // No Hessian is formed: every product goes through the problem's
         // counted `hessian_product`. Unlike exact mode, an inner radius
         // reduction re-pays its CG products at the same iterate (the
@@ -842,7 +855,7 @@ where
             },
         )?;
         self.rejected_step = !accepted;
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 }
 
@@ -1004,18 +1017,18 @@ mod tests {
         .run()
         .unwrap();
 
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
-        assert!(result.reason.is_failure());
+        assert_eq!(result.report.code(), crate::TerminationCode::SolverFailed);
+        assert!(result.report.termination.is_failure());
     }
 
     #[test]
     fn invalid_model_reduction_preserves_the_nonstationary_state() {
         for (predicted_reduction, expected_reason) in [
-            (0.0, TerminationReason::NumericalNoProgress),
-            (-1.0, TerminationReason::NumericalNoProgress),
-            (f64::NAN, TerminationReason::SolverFailed),
-            (f64::INFINITY, TerminationReason::SolverFailed),
-            (f64::NEG_INFINITY, TerminationReason::SolverFailed),
+            (0.0, crate::TerminationCode::NumericalNoProgress),
+            (-1.0, crate::TerminationCode::NumericalNoProgress),
+            (f64::NAN, crate::TerminationCode::SolverFailed),
+            (f64::INFINITY, crate::TerminationCode::SolverFailed),
+            (f64::NEG_INFINITY, crate::TerminationCode::SolverFailed),
         ] {
             let mut problem = Problem::new(Quadratic);
             let mut radius = 1.0;
@@ -1044,7 +1057,10 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(reason, Some(expected_reason));
+            assert_eq!(
+                reason.as_ref().map(|stop| stop.code()),
+                Some(expected_reason)
+            );
             assert_eq!(state.param(), &vec![1.0, 0.0]);
             assert_eq!(state.current().unwrap().2, &vec![1.0, 0.0]);
             assert_eq!(state.cost(), 0.5);
@@ -1249,7 +1265,8 @@ mod tests {
             .init(&mut problem, FirstOrderState::new(vec![-1.2, 1.0]))
             .unwrap();
         for _ in 0..3 {
-            let (next, _) = solver.next_iter(&mut problem, state).unwrap();
+            let (next, _, _) =
+                solver.next_iter(&mut problem, state).unwrap().into_parts();
             state = next;
         }
         let counts = problem.counts();

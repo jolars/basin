@@ -7,7 +7,7 @@
 //! the V↔Vec bridge, count mirroring, convergence/budget/early-stop paths)
 //! and convergence on smooth problems across backends.
 
-use basin::{CostFunction, Executor, Mads, PointState, TerminationReason};
+use basin::{CostFunction, Executor, Mads, PointState, TerminationCode};
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
@@ -50,7 +50,7 @@ fn converges_on_sphere() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.best_cost() < 1e-10,
         "best_cost = {}",
@@ -76,7 +76,7 @@ fn converges_on_rosenbrock_2d() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.best_cost() < 1e-4,
         "best_cost = {}",
@@ -107,7 +107,7 @@ fn mesh_tolerance_stops_early() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MeshTolerance);
+    assert_eq!(result.report.code(), TerminationCode::MeshTolerance);
     assert!(
         result.solver.poll_size().unwrap() <= 1e-3,
         "poll_size = {}",
@@ -128,7 +128,7 @@ fn respects_cost_eval_budget() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
     assert!(
         result.cost_evals() >= 50,
         "cost_evals = {}",
@@ -220,7 +220,7 @@ fn backend_generic_nalgebra() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.best_cost() < 1e-10,
         "best_cost = {}",
@@ -256,7 +256,7 @@ fn backend_generic_ndarray() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.best_cost() < 1e-10,
         "best_cost = {}",
@@ -289,7 +289,7 @@ fn backend_generic_faer() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.best_cost() < 1e-10,
         "best_cost = {}",

@@ -6,7 +6,7 @@ use basin::core::math::{MatVec, VectorLen};
 use basin::{
     Cobyla, CostFunction, DenseMatrix, Executor, FoldedConstraints,
     NonlinearConstraints, NonlinearInequalityConstraints, Problem,
-    SelectedState, Solver, State, TerminationReason,
+    SelectedState, Solver, State, TerminationCode,
 };
 
 #[path = "support/backend_aliases.rs"]
@@ -117,7 +117,7 @@ where
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
     let expected = [1.0, 0.5, 0.25, 0.75, 3.0];
     for (i, target) in expected.into_iter().enumerate() {
@@ -240,7 +240,7 @@ fn agrees_with_hand_expanded_legacy_constraints() {
             .run()
             .unwrap();
 
-    assert_eq!(folded.reason, expanded.reason);
+    assert_eq!(folded.report.code(), expanded.report.code());
     assert_eq!(folded.cost_evals(), expanded.cost_evals());
     assert_eq!(folded.best_cost(), expanded.best_cost());
     assert_eq!(folded.best_param(), expanded.best_param());
@@ -352,7 +352,7 @@ fn counts_objective_evaluations_once_and_preserves_callback_order() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
     assert_eq!(result.cost_evals(), costs.get() as u64);
     assert_eq!(costs.get(), constraints.get());
     assert!(costs.get() >= 15);
@@ -474,7 +474,8 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
         state.update_best();
         let snapshot = state.best_param().clone();
         let snapshot_cost = state.best_cost();
-        let (mut state, _) = solver.next_iter(&mut problem, state).unwrap();
+        let (mut state, _, _) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
 
         assert_eq!(state.param().len(), n);
         assert_eq!(state.best_param(), &snapshot);

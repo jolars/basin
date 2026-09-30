@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use basin::{
     AddDiagonalVectorInPlace, BoxConstraints, CostFunction, Executor,
     GramMatrix, Jacobian, LinearSolveError, LinearSolveSpd, MatTransposeVec,
-    MaxDiagonal, Residual, TerminationReason, Trf,
+    MaxDiagonal, Residual, TerminationCode, Trf,
 };
 
 #[derive(Clone)]
@@ -104,6 +104,6 @@ fn trf_accepts_a_downstream_jacobian_type() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 2.0).abs() < 1e-8);
 }

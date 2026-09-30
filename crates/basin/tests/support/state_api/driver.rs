@@ -1,6 +1,6 @@
 use super::state::{ObjectiveBest, Progress};
 use basin::core::math::Scalar;
-use basin::{EvalCounts, ExactCheckpoint, Problem, Solver, TerminationReason};
+use basin::{EvalCounts, ExactCheckpoint, Problem, Solver, TerminationCode};
 use num_traits::Float;
 
 /// A narrow experiment with publication and ownership-returning completion.
@@ -9,14 +9,14 @@ pub struct Run<P, S, So> {
     problem: Problem<P>,
     state: Option<S>,
     solver: So,
-    stopped: Option<TerminationReason>,
+    stopped: Option<TerminationCode>,
 }
 
 pub struct Completed<S, So> {
     pub state: S,
     pub solver: So,
     pub counts: EvalCounts,
-    pub reason: TerminationReason,
+    pub reason: TerminationCode,
 }
 
 impl<S, So> Completed<S, So> {
@@ -83,7 +83,7 @@ where
         self.problem.counts()
     }
 
-    pub fn step(&mut self) -> Result<Option<TerminationReason>, So::Error> {
+    pub fn step(&mut self) -> Result<Option<TerminationCode>, So::Error> {
         if let Some(reason) = self.stopped {
             return Ok(Some(reason));
         }
@@ -92,14 +92,17 @@ where
         if let Some(reason) =
             self.solver.check_convergence(&self.problem, state)
         {
+            let reason = reason.code();
             self.stopped = Some(reason);
             return Ok(Some(reason));
         }
-        let (mut state, reason) = self
+        let (mut state, completed, reason) = self
             .solver
-            .next_iter(&mut self.problem, self.state.take().unwrap())?;
+            .next_iter(&mut self.problem, self.state.take().unwrap())?
+            .into_parts();
+        let reason = reason.map(|termination| termination.code());
         assert!(state.is_ready(), "solver published incomplete state");
-        state.publish(reason.is_none(), *self.problem.counts());
+        state.publish(completed, *self.problem.counts());
         self.state = Some(state);
         self.stopped = reason;
         Ok(reason)
@@ -119,7 +122,7 @@ where
                 break reason;
             }
             if self.state.as_ref().unwrap().iter() >= max_iter {
-                break TerminationReason::MaxIter;
+                break TerminationCode::MaxIter;
             }
             if let Some(reason) = self.step()? {
                 break reason;

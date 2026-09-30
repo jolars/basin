@@ -292,26 +292,16 @@ desired backend features.
   capability requirements in default simplex checks, and document explicit
   settings that recover the 1.x behavior.
 
-- [ ] **Make structured termination reports part of ordinary results.** Build
-  on the 1.x native diagnostics. Replace the flat `TerminationReason` with a
-  payload-bearing report distinguishing convergence, execution limits,
-  objective targets, numerical stalls, numerical failures, cancellation, and
-  application stops. Return it with the final state and authoritative counts
-  from ordinary `run()`; retaining the solver remains optional. Native and
-  shared checks should return their explanation with the stopping decision,
-  both at iteration boundaries and inside steps. Preserve precise criterion
-  semantics, simultaneous passing tests, and relevant measurements when
-  available, and provide an extension mechanism for external solvers.
-  Keep iteration completion independent of termination. Reports describe a
-  particular stopping event; exact continuation retains algorithm and
-  convergence history and produces a report for the resumed run. Composition
-  must distinguish inner convergence from outer convergence, retain relevant
-  inner failure details, and explicitly decide whether to consume partial
-  results. Keep typed callback aborts in `Result::Err`, distinct from numerical
-  termination with a published state. Replace enum numeric casts with an
-  explicit documented code mapping if bindings require one. Keep the reporting
-  API compact; general tracing and exhaustive solver measurements are separate
-  concerns. Document migration from the 1.x reasons and diagnostics.
+- [x] **Make structured termination reports part of ordinary results.**
+  Ordinary `run()` returns an owned report, final state, and authoritative
+  counts. Reports distinguish convergence, limits, targets, stalls, failures,
+  cancellation, and application stops, retaining simultaneous criteria and
+  their measurements. `SolverStep` separates completion from termination;
+  composed runs retain inner failure details and use explicit policies for
+  partial results. Exact continuation produces a new report, and typed callback
+  aborts remain `Result::Err`. See the
+  [migration guide](MIGRATING.md#structured-termination-reports) for the API,
+  binding code mapping, observer lifecycle, and checkpoint changes.
 
 - [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
   unversioned `nalgebra`, `ndarray`, and `faer` features and their LAPACK/BLAS

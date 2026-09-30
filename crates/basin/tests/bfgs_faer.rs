@@ -8,7 +8,7 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::Rosenbrock;
-use basin::{Bfgs, Executor, FirstOrderState, TerminationReason};
+use basin::{Bfgs, Executor, FirstOrderState, TerminationCode};
 
 #[test]
 fn bfgs_converges_on_rosenbrock() {
@@ -52,7 +52,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
 }
 

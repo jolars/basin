@@ -40,7 +40,7 @@ use crate::core::math::{MatVec, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 use driver::{CobylaWork, Transition};
 
@@ -122,7 +122,7 @@ use driver::{CobylaWork, Transition};
 /// # Termination
 ///
 /// Natural convergence is `ρ` reaching `ρ_end`, signalled as
-/// [`TerminationReason::SolverConverged`]; this does not certify feasibility.
+/// [`crate::TerminationCode::SolverConverged`]; this does not certify feasibility.
 /// Add
 /// [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the budget (each evaluated point
 /// counts once) or [`with_absolute_radius_tolerance`](crate::Cobyla::with_absolute_radius_tolerance) to stop at a coarser
@@ -175,7 +175,7 @@ use driver::{CobylaWork, Transition};
 /// pp. 51–67. Ported from [PRIMA](https://github.com/libprima/prima).
 ///
 /// [`CostFunction`]: crate::core::problem::CostFunction
-/// [`TerminationReason::SolverConverged`]: crate::TerminationReason::SolverConverged
+/// [`crate::TerminationCode::SolverConverged`]: crate::TerminationCode::SolverConverged
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cobyla<V, F: Scalar = f64> {
     radius_tolerance: Option<F>,
@@ -297,8 +297,7 @@ where
     }
 }
 
-type CobylaStep<V, F, E> =
-    Result<(SelectedState<V, F>, Option<TerminationReason>), E>;
+type CobylaStep<V, F, E> = Result<crate::SolverStep<SelectedState<V, F>>, E>;
 
 impl<V, F: Scalar> Cobyla<V, F> {
     fn init_with<P>(
@@ -384,18 +383,34 @@ impl<V, F: Scalar> Cobyla<V, F> {
         publish(work, param, &mut state);
 
         let reason = match transition {
-            Transition::Converged => Some(TerminationReason::SolverConverged),
-            Transition::Failed => Some(TerminationReason::SolverFailed),
+            Transition::Converged => Some(Termination::custom(
+                "cobyla.final_radius",
+                "The algorithm completed its final trust-radius stage; this does not certify feasibility.",
+                vec![crate::Measurement {
+                    name: "final_radius".into(),
+                    value: self.rho_end,
+                }],
+            )),
+            Transition::Failed => Some(Termination::numerical_failure(
+                "COBYLA could not produce a valid interpolation step.",
+            )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
-    fn radius_termination(&self) -> Option<TerminationReason> {
+    fn radius_termination(&self) -> Option<Termination<F>> {
         let tolerance = self.radius_tolerance?;
         let metric = self.rho()?;
-        (metric.is_finite() && metric <= tolerance)
-            .then_some(TerminationReason::RhoTolerance)
+        (metric.is_finite() && metric <= tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::Radius,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }
 
@@ -443,8 +458,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: SelectedState<V, F>,
-    ) -> Result<(SelectedState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
         let m = problem.inner().num_constraints();
         self.next_iter_with(problem, state, |p, x| inequality_values(p, x, m))
     }
@@ -452,7 +466,7 @@ where
     fn terminate(
         &self,
         _state: &SelectedState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         self.radius_termination()
     }
 }
@@ -482,15 +496,14 @@ where
         &mut self,
         problem: &mut Problem<FoldedConstraints<P>>,
         state: SelectedState<V, F>,
-    ) -> Result<(SelectedState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
         self.next_iter_with(problem, state, folded_values)
     }
 
     fn terminate(
         &self,
         _state: &SelectedState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         self.radius_termination()
     }
 }

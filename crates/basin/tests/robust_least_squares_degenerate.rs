@@ -1,8 +1,8 @@
 use basin::{
     BoxConstraints, CostFunction, DenseMatrix, Executor, GaussNewton, Gradient,
     HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, PointState,
-    Residual, RobustLeastSquares, Scalar, Solver, SquaredLoss,
-    TerminationReason, Trf, TrustRegionReflective,
+    Residual, RobustLeastSquares, Scalar, Solver, SquaredLoss, TerminationCode,
+    Trf, TrustRegionReflective,
 };
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 
@@ -93,11 +93,11 @@ where
         .run_with_solver()
         .unwrap();
         assert_eq!(
-            result.reason,
+            result.report.code(),
             if invalid {
-                TerminationReason::SolverFailed
+                TerminationCode::SolverFailed
             } else {
-                TerminationReason::SolverConverged
+                TerminationCode::SolverConverged
             }
         );
         assert_eq!(result.cost(), 0.0);
@@ -133,7 +133,7 @@ where
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param().iter().sum::<f64>() - 1.0 / 3.0).abs() < 1e-7);
     assert!((result.cost() - 28.0 / 3.0).abs() < 1e-12);
 }
@@ -192,8 +192,8 @@ fn check_extreme_scales<F: Scalar>(large: F, small: F) {
         .run()
         .unwrap();
         assert_eq!(
-            result.reason,
-            TerminationReason::SolverConverged,
+            result.report.code(),
+            TerminationCode::SolverConverged,
             "scale={scale:?}"
         );
         assert!(result.param()[0].abs() <= tolerance, "scale={scale:?}");

@@ -3,7 +3,7 @@
 use basin::problems::BoothBoxed;
 use basin::{
     Backtracking, Executor, FirstOrderState, ProjectedGradientDescent,
-    TerminationReason,
+    TerminationCode,
 };
 
 /// Slack bounds: the unconstrained Booth minimum (1, 3) lies inside
@@ -86,7 +86,7 @@ fn infeasible_initial_param_is_projected_at_init() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.param(), &vec![1.0, 1.0]);
 }
 
@@ -112,7 +112,10 @@ fn projected_gradient_tolerance_triggers_at_corner_minimum() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::ProjectedGradientTolerance);
+    assert_eq!(
+        result.report.code(),
+        TerminationCode::ProjectedGradientTolerance
+    );
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-7,
         "x[0] = {}",

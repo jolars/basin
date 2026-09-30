@@ -3,7 +3,7 @@ use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::PointState;
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 /// Golden-section search for 1D minimization on a closed interval
 /// `[lower, upper]` supplied via `BoxConstraints`. Maintains a shrinking
@@ -171,8 +171,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<F, F>,
-    ) -> Result<(PointState<F, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<F, F>>, Self::Error> {
         let s = self
             .inner
             .as_mut()
@@ -212,20 +211,42 @@ where
         // the bracket has shrunk below tolerance, so the two coincide at
         // convergence.
         state.replace(u, fu);
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<F, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<F, F>) -> Option<Termination<F>> {
         let s = self.inner.as_ref()?;
         let two = F::from_f64(2.0).unwrap();
         // Relative term anchored on the current best interior point.
         let x = if s.f1 <= s.f2 { s.c1 } else { s.c2 };
         let tol = self.tol_rel * x.abs() + self.tol_abs;
         if s.b - s.a <= two * tol {
-            Some(TerminationReason::SolverConverged)
+            Some(Termination::custom(
+                "golden_section.bracket",
+                "b-a <= 2 * (relative_tolerance * |best_interior_point| + absolute_tolerance).",
+                vec![
+                    crate::Measurement {
+                        name: "a".into(),
+                        value: s.a,
+                    },
+                    crate::Measurement {
+                        name: "b".into(),
+                        value: s.b,
+                    },
+                    crate::Measurement {
+                        name: "best_interior_point".into(),
+                        value: x,
+                    },
+                    crate::Measurement {
+                        name: "relative_tolerance".into(),
+                        value: self.tol_rel,
+                    },
+                    crate::Measurement {
+                        name: "absolute_tolerance".into(),
+                        value: self.tol_abs,
+                    },
+                ],
+            ))
         } else {
             None
         }
@@ -237,7 +258,6 @@ mod tests {
     use super::*;
     use crate::core::executor::Executor;
     use crate::core::state::State;
-    use crate::core::termination::TerminationReason;
 
     struct Quadratic {
         lo: f64,
@@ -270,7 +290,7 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverConverged);
+        assert_eq!(r.report.code(), crate::TerminationCode::SolverConverged);
         assert!((r.param() - 2.0).abs() < 1e-6, "x = {}", r.param());
         assert!(*r.param() >= 0.0 && *r.param() <= 5.0);
     }
@@ -322,7 +342,7 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverConverged);
+        assert_eq!(r.report.code(), crate::TerminationCode::SolverConverged);
         assert!(
             (r.best_param() - 1.0).abs() < 1e-6,
             "x = {}",
@@ -386,13 +406,13 @@ mod tests {
             (r.best_param() - 1.0).abs() < 1e-3,
             "best_x = {}, reason = {:?}",
             r.best_param(),
-            r.reason
+            r.report.code()
         );
         assert!(
             (r.best_cost() + 2.0).abs() < 1e-6,
             "best_cost = {}, reason = {:?}",
             r.best_cost(),
-            r.reason
+            r.report.code()
         );
         assert!(r.best_iter() > 0, "best_iter = {}", r.best_iter());
         assert!(

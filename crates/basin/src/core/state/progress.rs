@@ -46,7 +46,7 @@
 //! ```
 //! use basin::{
 //!     CostFunction, Executor, FirstOrderState, Gradient, Problem, Solver,
-//!     State, TerminationReason,
+//!     State, SolverStep,
 //! };
 //! use std::convert::Infallible;
 //!
@@ -84,12 +84,12 @@
 //!         &mut self,
 //!         problem: &mut Problem<Quadratic>,
 //!         mut state: FirstOrderState<Vec<f64>>,
-//!     ) -> Result<(FirstOrderState<Vec<f64>>, Option<TerminationReason>), Infallible> {
+//!     ) -> Result<SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
 //!         let (x, _, gradient) = state.current().unwrap();
 //!         let next = x.iter().zip(gradient).map(|(x, g)| x - 0.25 * g).collect();
 //!         let (cost, gradient) = problem.cost_and_gradient(&next)?;
 //!         state.replace(next, cost, gradient).unwrap();
-//!         Ok((state, None))
+//!         Ok(SolverStep::completed(state))
 //!     }
 //! }
 //! let result = Executor::new(

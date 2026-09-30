@@ -6,7 +6,7 @@ use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::EqualityConstrainedQuadratic;
 use basin::{
     AugmentedLagrangianMethod, Backtracking, Bfgs, Executor, GradientDescent,
-    Lbfgsb, SelectedState, TerminationReason,
+    Lbfgsb, SelectedState, TerminationCode,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ = 2`. The unconstrained min (2,2) is
@@ -40,7 +40,7 @@ fn converges_to_affine_projection() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -73,7 +73,7 @@ fn fully_determined_system() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 0.5).abs() < 1e-4
             && (result.param()[1] - 1.5).abs() < 1e-4,
@@ -126,7 +126,7 @@ fn bfgs_inner_converges_to_affine_projection() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -155,7 +155,7 @@ fn lbfgs_inner_converges_to_affine_projection() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,

@@ -1,6 +1,6 @@
 use basin::{
     CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
-    NelderMead, TerminationReason,
+    NelderMead, TerminationCode,
 };
 
 struct Sphere;
@@ -46,8 +46,8 @@ impl Gradient for ConstantCost {
 #[test]
 fn exact_step_checks_allow_overflowing_parameter_norms() {
     for (absolute, relative, expected) in [
-        (Some(0.0), None, TerminationReason::ParamTolerance),
-        (None, Some(0.0), TerminationReason::RelativeParamTolerance),
+        (Some(0.0), None, TerminationCode::ParamTolerance),
+        (None, Some(0.0), TerminationCode::RelativeParamTolerance),
     ] {
         let solver = GradientDescent::new(0.1)
             .with_absolute_step_tolerance(absolute)
@@ -56,7 +56,7 @@ fn exact_step_checks_allow_overflowing_parameter_norms() {
             .max_iter(2)
             .run()
             .unwrap();
-        assert_eq!(result.reason, expected);
+        assert_eq!(result.report.code(), expected);
         assert_eq!(result.iter(), 1);
     }
 }
@@ -79,9 +79,9 @@ fn relative_step_checks_scale_large_parameters_before_taking_the_norm() {
         }
     }
     for (tolerance, expected) in [
-        (0.0, TerminationReason::MaxIter),
-        (1e-300, TerminationReason::MaxIter),
-        (1e-200, TerminationReason::RelativeParamTolerance),
+        (0.0, TerminationCode::MaxIter),
+        (1e-300, TerminationCode::MaxIter),
+        (1e-200, TerminationCode::RelativeParamTolerance),
     ] {
         let solver =
             GradientDescent::new(0.5).with_relative_step_tolerance(tolerance);
@@ -89,7 +89,7 @@ fn relative_step_checks_scale_large_parameters_before_taking_the_norm() {
             .max_iter(2)
             .run()
             .unwrap();
-        assert_eq!(result.reason, expected);
+        assert_eq!(result.report.code(), expected);
     }
 }
 
@@ -104,7 +104,7 @@ fn step_checks_reject_nonfinite_steps() {
                 .max_iter(2)
                 .run()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxIter);
+        assert_eq!(result.report.code(), TerminationCode::MaxIter);
     }
 }
 
@@ -140,8 +140,8 @@ fn simplex_cost_check_does_not_require_vector_norms() {
     }
 
     for (tolerance, expected) in [
-        (Some(0.0), TerminationReason::SimplexTolerance),
-        (None, TerminationReason::MaxIter),
+        (Some(0.0), TerminationCode::SimplexTolerance),
+        (None, TerminationCode::MaxIter),
     ] {
         let direct = NelderMead::new()
             .with_absolute_simplex_cost_tolerance(1.0)
@@ -162,7 +162,7 @@ fn simplex_cost_check_does_not_require_vector_norms() {
             .max_iter(1)
             .run()
             .unwrap();
-            assert_eq!(result.reason, expected);
+            assert_eq!(result.report.code(), expected);
         }
     }
 }
@@ -172,32 +172,27 @@ fn simplex_group_preserves_settings_in_both_setter_orders() {
     use basin::SimplexProgress;
 
     for (size, cost, vertices, expected) in [
-        (
-            Some(0.0),
-            Some(0.0),
-            [-1.0, 1.0],
-            TerminationReason::MaxIter,
-        ),
-        (Some(1.0), Some(0.0), [1.0, 2.0], TerminationReason::MaxIter),
+        (Some(0.0), Some(0.0), [-1.0, 1.0], TerminationCode::MaxIter),
+        (Some(1.0), Some(0.0), [1.0, 2.0], TerminationCode::MaxIter),
         (
             Some(2.0),
             Some(0.0),
             [-1.0, 1.0],
-            TerminationReason::SimplexTolerance,
+            TerminationCode::SimplexTolerance,
         ),
         (
             None,
             Some(0.0),
             [-1.0, 1.0],
-            TerminationReason::SimplexTolerance,
+            TerminationCode::SimplexTolerance,
         ),
         (
             Some(1.0),
             None,
             [1.0, 2.0],
-            TerminationReason::SimplexTolerance,
+            TerminationCode::SimplexTolerance,
         ),
-        (None, None, [1.0, 2.0], TerminationReason::MaxIter),
+        (None, None, [1.0, 2.0], TerminationCode::MaxIter),
     ] {
         let size_first = NelderMead::new()
             .with_absolute_simplex_size_tolerance(100.0)
@@ -218,7 +213,7 @@ fn simplex_group_preserves_settings_in_both_setter_orders() {
             .max_iter(1)
             .run()
             .unwrap();
-            assert_eq!(result.reason, expected);
+            assert_eq!(result.report.code(), expected);
         }
     }
 }
@@ -230,7 +225,7 @@ fn solver_gradient_tolerance_stops_before_first_step() {
     let result = Executor::from_start(Sphere, solver, vec![0.0])
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert_eq!(result.iter(), 0);
     assert_eq!(result.cost_evals(), 1);
 }
@@ -244,7 +239,7 @@ fn repeated_setters_replace_and_none_disables() {
         .max_iter(2)
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 2);
 }
 
@@ -255,7 +250,7 @@ fn direct_budget_observes_initialization() {
             .max_cost_evals(0)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
     assert_eq!(result.cost_evals(), 1);
     assert_eq!(result.iter(), 0);
 }
@@ -266,11 +261,11 @@ fn custom_stop_sees_initialized_state() {
         Executor::from_start(Sphere, GradientDescent::new(0.1), vec![1.0])
             .stop_when(|state: &FirstOrderState<Vec<f64>>| {
                 (basin::State::cost(state) == 1.0)
-                    .then_some(TerminationReason::UserRequested)
+                    .then(|| basin::ApplicationStop::new("user_requested"))
             })
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::UserRequested);
+    assert_eq!(result.report.code(), TerminationCode::UserRequested);
     assert_eq!(result.iter(), 0);
 }
 
@@ -282,7 +277,7 @@ fn simplex_settings_converge_together() {
     let result = Executor::from_start(Sphere, solver, vec![1.0, -2.0])
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::SimplexTolerance);
+    assert_eq!(result.report.code(), TerminationCode::SimplexTolerance);
     assert!(result.cost() < 1e-12);
 }
 
@@ -301,7 +296,10 @@ fn relative_gradient_history_resets_for_fresh_borrowed_runs() {
             &mut control,
         )
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::RelativeGradientTolerance);
+        assert_eq!(
+            result.report.code(),
+            TerminationCode::RelativeGradientTolerance
+        );
         assert_eq!(result.iter(), 7);
         assert_eq!(result.cost_evals(), 8);
     }
@@ -327,7 +325,10 @@ fn exact_resume_preserves_relative_gradient_anchor() {
         .run()
         .unwrap();
     assert_eq!(exact.iter(), 7);
-    assert_eq!(exact.reason, TerminationReason::RelativeGradientTolerance);
+    assert_eq!(
+        exact.report.code(),
+        TerminationCode::RelativeGradientTolerance
+    );
 }
 
 #[test]
@@ -354,7 +355,7 @@ fn repeated_boundary_checks_do_not_create_zero_changes() {
         .max_iter(2)
         .run()
         .unwrap();
-    assert_eq!(resumed.reason, TerminationReason::MaxIter);
+    assert_eq!(resumed.report.code(), TerminationCode::MaxIter);
 }
 
 #[test]
@@ -366,7 +367,8 @@ fn inner_stop_factory_restarts_history_and_counts() {
             let mut calls = 0;
             move |_: &FirstOrderState<Vec<f64>>| {
                 calls += 1;
-                (calls == 3).then_some(TerminationReason::UserRequested)
+                (calls == 3)
+                    .then(|| basin::ApplicationStop::new("user_requested"))
             }
         });
     let mut problem = Problem::new(Sphere);
@@ -374,7 +376,7 @@ fn inner_stop_factory_restarts_history_and_counts() {
         let result = inner
             .run(&mut problem, FirstOrderState::new(vec![1.0]))
             .unwrap();
-        assert_eq!(result.reason, TerminationReason::UserRequested);
+        assert_eq!(result.report.code(), TerminationCode::UserRequested);
         assert_eq!(result.state.iter(), 2);
         assert_eq!(result.cost_evals(), 3);
     }
@@ -387,10 +389,10 @@ fn direct_budgets_take_precedence_over_convergence_and_hooks() {
         GradientDescent::new(0.1).with_absolute_gradient_tolerance(0.0);
     let result = Executor::from_start(Sphere, solver, vec![0.0])
         .max_gradient_evals(1)
-        .stop_when(|_| Some(TerminationReason::UserRequested))
+        .stop_when(|_| Some(basin::ApplicationStop::new("user_requested")))
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxGradientEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxGradientEvals);
     assert_eq!(result.iter(), 0);
 }
 
@@ -408,7 +410,7 @@ fn simplex_size_and_cost_are_an_and_group() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
 }
 
 #[test]
@@ -438,7 +440,7 @@ fn native_zero_is_exact_and_none_disables() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(exact.reason, TerminationReason::SolverConverged);
+    assert_eq!(exact.report.code(), TerminationCode::SolverConverged);
     let result = Executor::from_start(
         Linear,
         GaussNewton::new().with_absolute_gradient_tolerance(None),
@@ -447,7 +449,7 @@ fn native_zero_is_exact_and_none_disables() {
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
 }
 
 #[test]
@@ -520,7 +522,7 @@ fn cost_check_does_not_require_vector_norms() {
     let result = Executor::from_start(MinimalSphere, solver, Minimal(1.0))
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::CostTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CostTolerance);
 }
 
 #[cfg(feature = "serde")]
@@ -544,7 +546,7 @@ fn configured_solver_and_inner_budgets_round_trip() {
         .run(&mut Problem::new(Sphere), SimplexProgress::new(vec![1.0]))
         .unwrap();
     assert_eq!(result.iter(), expected.iter());
-    assert_eq!(result.reason, expected.reason);
+    assert_eq!(result.report.code(), expected.report.code());
     assert_eq!(result.param(), expected.param());
     let with_hook = decoded.stop_when(|_| None);
     assert!(postcard::to_allocvec(&with_hook).is_err());
@@ -586,8 +588,8 @@ fn projected_check_uses_each_inner_problems_bounds() {
         .with_absolute_projected_gradient_tolerance(0.0);
     let mut control = RunControl::new().max_iter(1);
     for (lower, expected) in [
-        (1.0, TerminationReason::ProjectedGradientTolerance),
-        (0.0, TerminationReason::MaxIter),
+        (1.0, TerminationCode::ProjectedGradientTolerance),
+        (0.0, TerminationCode::MaxIter),
     ] {
         let mut problem = Problem::new(BoundedSphere {
             lower: vec![lower],
@@ -600,7 +602,7 @@ fn projected_check_uses_each_inner_problems_bounds() {
             &mut control,
         )
         .unwrap();
-        assert_eq!(result.reason, expected);
+        assert_eq!(result.report.code(), expected);
     }
 }
 
@@ -628,7 +630,7 @@ fn serialized_checkpoint_preserves_observed_convergence_history() {
         &mut RunControl::new().max_iter(4),
     )
     .unwrap();
-    assert_eq!(first.reason, TerminationReason::MaxIter);
+    assert_eq!(first.report.code(), TerminationCode::MaxIter);
     let checkpoint =
         ExactCheckpoint::from_parts(solver, first.state, *problem.counts());
     let restored = round_trip(&checkpoint);
@@ -638,7 +640,7 @@ fn serialized_checkpoint_preserves_observed_convergence_history() {
     let decoded = Executor::resume_from_checkpoint(Sphere, restored)
         .run()
         .unwrap();
-    assert_eq!(direct.reason, decoded.reason);
+    assert_eq!(direct.report.code(), decoded.report.code());
     assert_eq!(direct.iter(), decoded.iter());
     assert_eq!(direct.param(), decoded.param());
     assert_eq!(direct.cost_evals(), decoded.cost_evals());

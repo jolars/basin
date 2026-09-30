@@ -6,7 +6,6 @@ use crate::core::problem::{CostFunction, MiniBatchGradient, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
 
 /// Vanilla mini-batch stochastic gradient descent (SGD) with a constant
 /// learning rate and optional heavy-ball momentum.
@@ -354,8 +353,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let bs = self.effective_batch;
         let n = self.perm.len();
 
@@ -411,7 +409,7 @@ where
             self.iters_since_cost = 0;
         }
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {
@@ -605,7 +603,8 @@ mod tests {
             let mut state =
                 solver.init(&mut p, PointState::new(start.clone())).unwrap();
             for _ in 0..15 {
-                let (next, _) = solver.next_iter(&mut p, state).unwrap();
+                let (next, _, _) =
+                    solver.next_iter(&mut p, state).unwrap().into_parts();
                 state = next;
             }
             state.param().clone()
@@ -639,7 +638,8 @@ mod tests {
         // 3 steps: enough to trigger the reshuffle at step 3 (cursor
         // would be 6, and 6 + 3 > 7).
         for _ in 0..3 {
-            let (next, _) = sgd.next_iter(&mut p, state).unwrap();
+            let (next, _, _) =
+                sgd.next_iter(&mut p, state).unwrap().into_parts();
             state = next;
         }
         // Cursor after step 3 should be 3 (we reshuffled before step 3,
@@ -695,13 +695,13 @@ mod tests {
         let state =
             sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
         assert_eq!(state.cost(), initial_cost);
-        let (state, _) = sgd.next_iter(&mut p, state).unwrap();
+        let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_eq!(
             state.cost(),
             initial_cost,
             "default schedule must retain the evaluated record within an epoch",
         );
-        let (state, _) = sgd.next_iter(&mut p, state).unwrap();
+        let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_ne!(
             state.cost(),
             initial_cost,
@@ -719,7 +719,7 @@ mod tests {
         let mut p = Problem::new(problem);
         let state =
             sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
-        let (state, _) = sgd.next_iter(&mut p, state).unwrap();
+        let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_ne!(
             state.cost(),
             initial_cost,
@@ -738,7 +738,8 @@ mod tests {
         let mut sgd = Sgd::new(0.1, 5, 0).with_momentum(0.0);
         let mut p = Problem::new(problem);
         let state = sgd.init(&mut p, PointState::new(vec![1.0, 1.0])).unwrap();
-        let (state, reason) = sgd.next_iter(&mut p, state).unwrap();
+        let (state, _, reason) =
+            sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert!(reason.is_none());
         // Full batch gradient is 2·(x − centroid), so x₁ = x − α·2·(x − centroid).
         let alpha = 0.1;

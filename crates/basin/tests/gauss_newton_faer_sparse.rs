@@ -3,7 +3,7 @@
 use crate::backend_aliases::faer::Col;
 use crate::backend_aliases::faer::sparse::{SparseColMat, Triplet};
 use basin::problems::SparseLeastSquares;
-use basin::{Executor, GaussNewton, PointState, TerminationReason};
+use basin::{Executor, GaussNewton, PointState, TerminationCode};
 
 type FaerSparseLeastSquares =
     SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>;
@@ -43,7 +43,7 @@ fn gauss_newton_converges_on_sparse_linear_regression() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-20, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-9,
@@ -74,7 +74,7 @@ fn gauss_newton_single_step_matches_closed_form() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 1);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-10,
@@ -103,7 +103,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
             .max_iter(50)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[path = "support/backend_aliases.rs"]

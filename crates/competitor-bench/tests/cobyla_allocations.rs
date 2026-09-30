@@ -80,7 +80,7 @@ fn driver_allocations_stay_bounded_without_changing_numerical_results() {
 fn public_quadratic_iterations_reuse_trial_buffers() {
     use basin::{
         Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
-        Observe, ObserverMode, SelectedState, TerminationReason,
+        Observe, ObserverMode, SelectedState, TerminationCode,
     };
     use std::{convert::Infallible, rc::Rc};
 
@@ -124,7 +124,7 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
         fn observe_final(
             &mut self,
             _: &SelectedState<Vec<f64>>,
-            _: &TerminationReason,
+            _: &basin::TerminationReport,
         ) {
             self.0.end.set(REQUESTS.get());
         }
@@ -150,7 +150,7 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
     // vectors. Reject renewed per-iteration trial or geometry-step allocation.
     assert!(end_requests - start_requests <= 2 * calls + 16);
     assert!(end_bytes - start_bytes <= (2 * calls + 16) * 5 * size_of::<f64>());
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.cost_evals(), 61);
     assert_eq!(counts.callbacks.get(), 61);
     assert!((result.best_cost() - 0.124_999_997_365_822).abs() < 1e-13);

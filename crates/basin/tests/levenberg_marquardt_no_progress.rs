@@ -2,7 +2,7 @@
 
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LmDamping, PointState,
-    Residual, Solver, TerminationReason,
+    Residual, Solver, TerminationCode,
 };
 use std::{cell::Cell, rc::Rc};
 
@@ -58,7 +58,7 @@ where
         Err(error) => assert_eq!(result.err(), Some(error)),
         Ok(value) => {
             let result = result.unwrap();
-            assert_eq!(result.reason, TerminationReason::MaxIter);
+            assert_eq!(result.report.code(), TerminationCode::MaxIter);
             assert_eq!(result.param(), &[1.]);
             assert_eq!(result.cost(), if value == 0. { 0. } else { 0.5 });
             assert_eq!(result.state.counts().residual_evals, 2);
@@ -109,11 +109,11 @@ fn observed_step_tolerance_uses_acceptance_even_at_identical_coordinates() {
         .unwrap();
         assert_eq!(result.param(), &[1.]);
         assert_eq!(
-            result.reason,
+            result.report.code(),
             if response == 0. {
-                TerminationReason::ParamTolerance
+                TerminationCode::ParamTolerance
             } else {
-                TerminationReason::MaxIter
+                TerminationCode::MaxIter
             }
         );
     }
@@ -171,7 +171,7 @@ where
     .max_iter(1)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.state.counts().residual_evals, 2);
     assert_eq!(result.param(), &[1.]);
     assert_eq!(result.cost(), 0.5);
@@ -260,7 +260,7 @@ fn trust_radius_does_not_bypass_model_solve_failure() {
         .max_iter(1)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(calls.get(), 1);
     }
     check(solver());
@@ -282,7 +282,7 @@ where
     .max_iter(4)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.state.counts().residual_evals, 5);
 }
 
@@ -338,7 +338,7 @@ fn execution_budget_precedes_a_trial_and_its_numerical_stop() {
     .max_evaluations(basin::EvaluationKind::Residual, 1)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxEvaluations);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert_eq!(calls.get(), 1);
 }
 
@@ -361,11 +361,11 @@ fn rejected_zero_steps_stop_only_on_the_numerical_safeguard_or_budget() {
         .run()
         .unwrap();
         assert_eq!(
-            result.reason,
+            result.report.code(),
             if enabled {
-                TerminationReason::NumericalNoProgress
+                TerminationCode::NumericalNoProgress
             } else {
-                TerminationReason::MaxIter
+                TerminationCode::MaxIter
             }
         );
         assert_eq!(result.iter(), if enabled { 0 } else { 4 });

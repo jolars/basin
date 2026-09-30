@@ -216,21 +216,22 @@ where
 ///    closure per run. A direct [`stop_when`](Self::stop_when) closure retains
 ///    its captures across calls.
 ///
-/// 3. **Failure routing.** [`run`](Self::run) returns a full
-///    [`OptimizationResult`]; classify the reason. Use
-///    [`TerminationReason::is_failure`](crate::core::termination::TerminationReason::is_failure)
-///    to decide whether to bubble: `SolverFailed` should bubble via the
-///    outer's mid-iter `Option<TerminationReason>` return; everything
-///    else (`MaxIter`, `*Tolerance`, `SolverConverged`, `NumericalNoProgress`)
-///    is a "clean stop" the outer can consume and continue past. A clean stop
-///    does not itself establish convergence or solution accuracy.
-pub struct InnerExecutor<S, So> {
+/// 3. **Stop routing.** [`run`](Self::run) returns a full
+///    [`OptimizationResult`]. Use
+///    [`TerminationReport::into_outer_termination`](crate::TerminationReport::into_outer_termination)
+///    with an explicit [`PartialResultPolicy`](crate::PartialResultPolicy).
+///    Inner convergence permits outer work to continue. Limits, targets, and
+///    stalls require a policy that consumes partial progress. Failures retain
+///    the nested report; cancellation and application stops propagate.
+///    An algorithm may explicitly reject a failed local candidate and continue,
+///    as basin hopping does. Inner convergence never certifies outer convergence.
+pub struct InnerExecutor<S: State, So> {
     solver: So,
     control: crate::RunControl<S>,
 }
 
 #[cfg(feature = "serde")]
-impl<S, So> serde::Serialize for InnerExecutor<S, So>
+impl<S: State, So> serde::Serialize for InnerExecutor<S, So>
 where
     So: serde::Serialize,
 {
@@ -256,7 +257,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, S, So> serde::Deserialize<'de> for InnerExecutor<S, So>
+impl<'de, S: State, So> serde::Deserialize<'de> for InnerExecutor<S, So>
 where
     So: serde::Deserialize<'de>,
 {
@@ -312,7 +313,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// Use [`stop_when_factory`](Self::stop_when_factory) for fresh per-run history.
     pub fn stop_when<C>(mut self, check: C) -> Self
     where
-        C: FnMut(&S) -> Option<crate::TerminationReason> + 'static,
+        C: FnMut(&S) -> Option<crate::ApplicationStop> + 'static,
     {
         self.control = std::mem::take(&mut self.control).stop_when(check);
         self

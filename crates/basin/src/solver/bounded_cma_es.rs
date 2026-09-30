@@ -12,7 +12,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 use super::cma_es::{
     CmaConstants, apply_permutation, compute_constants, nan_last_cmp,
@@ -592,10 +592,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let work = self.work.as_mut().expect("CMA init must precede iteration");
         let k = self
             .constants
@@ -695,7 +692,12 @@ where
         let (b_new, eigs) = match work.c.try_eigh() {
             Ok(pair) => pair,
             Err(_) => {
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "Bounded CMA-ES covariance eigendecomposition failed.",
+                    )),
+                )));
             }
         };
         work.b = b_new;
@@ -728,18 +730,25 @@ where
         work.m_cost = Some(raw);
 
         publish(work, &mut state, &lo, &hi);
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(
         &self,
         _state: &PopulationProgress<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         let tolerance = self.distribution_tolerance?;
         let work = self.work.as_ref()?;
         let metric = work.sigma * work.max_axis_std();
-        (metric.is_finite() && metric < tolerance)
-            .then_some(TerminationReason::CmaEsTolerance)
+        (metric.is_finite() && metric < tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::DistributionSize,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }
 

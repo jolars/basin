@@ -1,36 +1,36 @@
 use basin::{
     Backtracking, CostFunction, Executor, FirstOrderState, Gradient,
     GradientDescent, GradientState, NelderMead, PointState, Problem,
-    SimplexProgress, Solver, State, TerminationReason,
+    SimplexProgress, Solver, State, TerminationCode,
 };
 use std::time::Duration;
 
 #[test]
 fn termination_reasons_preserve_numeric_casts_and_values() {
     let reasons = [
-        TerminationReason::MaxIter,
-        TerminationReason::MaxCostEvals,
-        TerminationReason::MaxGradientEvals,
-        TerminationReason::GradientTolerance,
-        TerminationReason::RelativeGradientTolerance,
-        TerminationReason::ProjectedGradientTolerance,
-        TerminationReason::ParamTolerance,
-        TerminationReason::RelativeParamTolerance,
-        TerminationReason::CostTolerance,
-        TerminationReason::RelativeCostTolerance,
-        TerminationReason::TargetCost,
-        TerminationReason::NoImprovement,
-        TerminationReason::NoAcceptedMove,
-        TerminationReason::SimplexTolerance,
-        TerminationReason::CmaEsTolerance,
-        TerminationReason::RhoTolerance,
-        TerminationReason::MeshTolerance,
-        TerminationReason::MaxTime,
-        TerminationReason::Cancelled,
-        TerminationReason::UserRequested,
-        TerminationReason::SolverConverged,
-        TerminationReason::SolverFailed,
-        TerminationReason::NumericalNoProgress,
+        TerminationCode::MaxIter,
+        TerminationCode::MaxCostEvals,
+        TerminationCode::MaxGradientEvals,
+        TerminationCode::GradientTolerance,
+        TerminationCode::RelativeGradientTolerance,
+        TerminationCode::ProjectedGradientTolerance,
+        TerminationCode::ParamTolerance,
+        TerminationCode::RelativeParamTolerance,
+        TerminationCode::CostTolerance,
+        TerminationCode::RelativeCostTolerance,
+        TerminationCode::TargetCost,
+        TerminationCode::NoImprovement,
+        TerminationCode::NoAcceptedMove,
+        TerminationCode::SimplexTolerance,
+        TerminationCode::CmaEsTolerance,
+        TerminationCode::RhoTolerance,
+        TerminationCode::MeshTolerance,
+        TerminationCode::MaxTime,
+        TerminationCode::Cancelled,
+        TerminationCode::UserRequested,
+        TerminationCode::SolverConverged,
+        TerminationCode::SolverFailed,
+        TerminationCode::NumericalNoProgress,
     ];
     for (reason, value) in reasons.into_iter().zip(0u8..) {
         assert_eq!(reason as u8, value);
@@ -73,7 +73,7 @@ fn gradient_tolerance_fires_at_iter_zero_when_starting_at_optimum() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert_eq!(result.iter(), 0, "should not have done any iterations");
 }
 
@@ -88,7 +88,7 @@ fn gradient_tolerance_fires_after_convergence() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert!(result.iter() > 0 && result.iter() < 1_000);
     let g = result
         .state
@@ -112,7 +112,10 @@ fn relative_gradient_tolerance_fires_after_convergence() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RelativeGradientTolerance);
+    assert_eq!(
+        result.report.code(),
+        TerminationCode::RelativeGradientTolerance
+    );
     assert!(
         result.iter() > 0 && result.iter() < 20,
         "expected convergence near iter 10, got {}",
@@ -132,7 +135,10 @@ fn relative_gradient_tolerance_fires_at_iter_zero_when_starting_at_optimum() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RelativeGradientTolerance);
+    assert_eq!(
+        result.report.code(),
+        TerminationCode::RelativeGradientTolerance
+    );
     assert_eq!(result.iter(), 0);
 }
 
@@ -157,8 +163,14 @@ fn relative_gradient_tolerance_is_scale_invariant() {
     let small = run_from(1.0);
     let large = run_from(1.0e6);
 
-    assert_eq!(small.reason, TerminationReason::RelativeGradientTolerance);
-    assert_eq!(large.reason, TerminationReason::RelativeGradientTolerance);
+    assert_eq!(
+        small.report.code(),
+        TerminationCode::RelativeGradientTolerance
+    );
+    assert_eq!(
+        large.report.code(),
+        TerminationCode::RelativeGradientTolerance
+    );
     assert_eq!(
         small.iter(),
         large.iter(),
@@ -177,7 +189,7 @@ fn max_iter_field_default_is_one_thousand() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 1_000);
 }
 
@@ -193,7 +205,7 @@ fn explicit_max_iter_replaces_default() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 5);
 }
 
@@ -208,7 +220,7 @@ fn param_tolerance_fires_when_steps_become_small() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::ParamTolerance);
+    assert_eq!(result.report.code(), TerminationCode::ParamTolerance);
 }
 
 #[test]
@@ -222,7 +234,7 @@ fn cost_tolerance_fires_when_cost_stagnates() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::CostTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CostTolerance);
 }
 
 #[test]
@@ -241,7 +253,10 @@ fn relative_param_tolerance_fires_when_relative_step_small() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RelativeParamTolerance);
+    assert_eq!(
+        result.report.code(),
+        TerminationCode::RelativeParamTolerance
+    );
     assert!(result.iter() < 5, "fired late at iter {}", result.iter());
 }
 
@@ -258,7 +273,7 @@ fn relative_cost_tolerance_fires_when_relative_reduction_small() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RelativeCostTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RelativeCostTolerance);
     assert!(result.iter() < 5, "fired late at iter {}", result.iter());
 }
 
@@ -275,7 +290,7 @@ fn target_objective_fires_at_iter_zero_when_start_is_below_target() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::TargetCost);
+    assert_eq!(result.report.code(), TerminationCode::TargetCost);
     assert_eq!(result.iter(), 0);
 }
 
@@ -294,7 +309,7 @@ fn target_objective_fires_when_cost_drops_to_target() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::TargetCost);
+    assert_eq!(result.report.code(), TerminationCode::TargetCost);
     assert!(result.iter() > 0 && result.iter() < 1_000);
     assert!(result.state.cost() <= 1e-3);
 }
@@ -313,7 +328,7 @@ fn target_objective_does_not_fire_when_target_unreachable() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 10);
 }
 
@@ -333,7 +348,7 @@ fn no_objective_improvement_fires_after_patience_stalled_iters() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::NoImprovement);
+    assert_eq!(result.report.code(), TerminationCode::NoImprovement);
     assert_eq!(result.iter(), 3);
 }
 
@@ -352,7 +367,7 @@ fn no_objective_improvement_does_not_fire_under_monotone_decrease() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 20);
 }
 
@@ -375,7 +390,7 @@ fn no_objective_improvement_resets_counter_on_real_improvement() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::NoImprovement);
+    assert_eq!(result.report.code(), TerminationCode::NoImprovement);
     assert_eq!(result.iter(), 5);
 }
 
@@ -401,8 +416,8 @@ fn relative_cost_tolerance_is_scale_invariant() {
     let small = run_from(1.0);
     let large = run_from(1.0e6);
 
-    assert_eq!(small.reason, TerminationReason::RelativeCostTolerance);
-    assert_eq!(large.reason, TerminationReason::RelativeCostTolerance);
+    assert_eq!(small.report.code(), TerminationCode::RelativeCostTolerance);
+    assert_eq!(large.report.code(), TerminationCode::RelativeCostTolerance);
     assert_eq!(
         small.iter(),
         large.iter(),
@@ -423,7 +438,7 @@ fn solver_step_tolerance_precedes_iteration_budget() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::ParamTolerance);
+    assert_eq!(result.report.code(), TerminationCode::ParamTolerance);
     assert!(result.iter() < 5);
 }
 
@@ -440,7 +455,7 @@ fn max_time_eventually_fires() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxTime);
+    assert_eq!(result.report.code(), TerminationCode::MaxTime);
 }
 
 /// Solver that always reports converged via the `terminate` hook, used to
@@ -454,16 +469,20 @@ impl Solver<Quadratic, PointState<Vec<f64>>> for AlwaysConverged {
         &mut self,
         _problem: &mut Problem<Quadratic>,
         state: PointState<Vec<f64>>,
-    ) -> Result<(PointState<Vec<f64>>, Option<TerminationReason>), Self::Error>
-    {
-        Ok((state, None))
+    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Self::Error> {
+        Ok(basin::SolverStep::from((state, None)))
     }
 
     fn terminate(
         &self,
         _state: &PointState<Vec<f64>>,
-    ) -> Option<TerminationReason> {
-        Some(TerminationReason::SolverConverged)
+    ) -> Option<basin::Termination<<PointState<Vec<f64>> as basin::State>::Float>>
+    {
+        Some(basin::Termination::custom(
+            "external.SolverConverged",
+            "External solver stopping predicate: SolverConverged.",
+            vec![],
+        ))
     }
 }
 
@@ -477,7 +496,7 @@ fn solver_terminate_hook_is_honored() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.iter(), 0);
 }
 
@@ -495,14 +514,18 @@ impl Solver<Quadratic, PointState<Vec<f64>>> for FailsOnSecondCall {
         &mut self,
         _problem: &mut Problem<Quadratic>,
         state: PointState<Vec<f64>>,
-    ) -> Result<(PointState<Vec<f64>>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Self::Error> {
         Ok({
             self.calls += 1;
             if self.calls >= 2 {
-                (state, Some(TerminationReason::SolverFailed))
+                basin::SolverStep::stopped(
+                    state,
+                    basin::Termination::numerical_failure(
+                        "External solver reported a numerical failure.",
+                    ),
+                )
             } else {
-                (state, None)
+                basin::SolverStep::completed(state)
             }
         })
     }
@@ -519,7 +542,7 @@ fn solver_can_signal_termination_mid_iter() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     // First call completed (iter 0 → 1), second call bailed without
     // incrementing, so iter stays at 1.
     assert_eq!(result.iter(), 1);
@@ -595,7 +618,7 @@ fn max_gradient_evals_fires_before_max_iter() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxGradientEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxGradientEvals);
     assert!(result.state.gradient_evals() >= 5);
 }
 
@@ -611,7 +634,7 @@ fn max_cost_evals_fires_before_max_iter() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
     assert!(
         result.state.cost_evals() >= 25,
         "cost_evals should have reached the budget: {}",
@@ -628,11 +651,12 @@ fn custom_stop_hook() {
     )
     .max_iter(1_000)
     .stop_when(|state| {
-        (state.iter() == 7).then_some(TerminationReason::UserRequested)
+        (state.iter() == 7)
+            .then(|| basin::ApplicationStop::new("user_requested"))
     })
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::UserRequested);
+    assert_eq!(result.report.code(), TerminationCode::UserRequested);
     assert_eq!(result.iter(), 7);
 }

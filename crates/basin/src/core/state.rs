@@ -103,7 +103,7 @@ pub trait State {
     /// `nalgebra::DVector<f64>`).
     type Param;
     /// The scalar type of the objective, such as `f64` or `f32`.
-    type Float;
+    type Float: Scalar;
 
     /// Number of fully completed iterations. A
     /// [`Solver::next_iter`](crate::core::solver::Solver::next_iter)

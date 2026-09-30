@@ -76,7 +76,7 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
         "cost evals:       {}  (rolls up LM residual + Jacobian calls)",
         result.cost_evals()
     );
-    eprintln!("termination:      {:?}", result.reason);
+    eprintln!("termination:      {:?}", result.report.code());
     eprintln!();
 
     // -----------------------------------------------------------------

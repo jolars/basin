@@ -29,7 +29,7 @@ use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 use driver::{BobyqaWork, Transition};
 
@@ -312,8 +312,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let template = state.param().clone();
         let work = self
             .work
@@ -338,20 +337,31 @@ where
         }
 
         let reason = match out.transition {
-            Transition::Converged => Some(TerminationReason::SolverConverged),
+            Transition::Converged => Some(Termination::custom(
+                "bobyqa.final_radius",
+                "The algorithm completed its final trust-radius stage; this does not certify feasibility or global optimality.",
+                vec![crate::Measurement {
+                    name: "final_radius".into(),
+                    value: self.rho_end,
+                }],
+            )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         let tolerance = self.radius_tolerance?;
         let metric = self.rho()?;
-        (metric.is_finite() && metric <= tolerance)
-            .then_some(TerminationReason::RhoTolerance)
+        (metric.is_finite() && metric <= tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::Radius,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }
 

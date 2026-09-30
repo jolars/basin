@@ -10,9 +10,7 @@ use basin::core::math::{NormSquared, ScaledAdd};
 use basin::core::math::{Scalar, VectorLen};
 use basin::core::rng::{ChaCha8Rng, RngExt};
 use basin::solver::simulated_annealing::{Neighbor, TemperatureSchedule};
-use basin::{
-    CostFunction, Gradient, Problem, Solver, State, TerminationReason,
-};
+use basin::{CostFunction, Gradient, Problem, Solver, State, TerminationCode};
 use prototype::driver::Run;
 use prototype::solvers::{Annealing, Bfgs, Lbfgs, NelderMead};
 use prototype::state::{FirstOrderState, PointState, Progress};
@@ -150,16 +148,13 @@ impl Solver<Sphere, FirstOrderState<Vec<f64>>> for ExternalDescent {
         &mut self,
         problem: &mut Problem<Sphere>,
         mut state: FirstOrderState<Vec<f64>>,
-    ) -> Result<
-        (FirstOrderState<Vec<f64>>, Option<TerminationReason>),
-        Infallible,
-    > {
+    ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
         let (x, _, gradient) = state.take_current().unwrap();
         let mut next = x;
         next.scaled_add(-0.1, &gradient);
         let (cost, gradient) = problem.cost_and_gradient(&next)?;
         state.replace(next, cost, gradient).unwrap();
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -749,10 +744,8 @@ fn a_first_order_solver_must_initialize_the_gradient() {
             &mut self,
             _: &mut Problem<Sphere>,
             _: FirstOrderState<Vec<f64>>,
-        ) -> Result<
-            (FirstOrderState<Vec<f64>>, Option<TerminationReason>),
-            Infallible,
-        > {
+        ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible>
+        {
             unreachable!()
         }
     }
@@ -770,7 +763,7 @@ fn objective_targets_require_an_eligible_incumbent() {
     assert!(run.cost_budget_reached(2));
     assert!(!run.cost_budget_reached(3));
     let result = run.run(1).unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.reason, TerminationCode::MaxIter);
 }
 
 struct HistoryStop<So> {
@@ -802,7 +795,7 @@ impl<P, S: Progress, So: Solver<P, S>> Solver<P, S> for HistoryStop<So> {
         &mut self,
         problem: &mut Problem<P>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
         self.solver.next_iter(problem, state)
     }
     fn reset_convergence(&mut self) {
@@ -814,14 +807,18 @@ impl<P, S: Progress, So: Solver<P, S>> Solver<P, S> for HistoryStop<So> {
         &mut self,
         problem: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<basin::Termination<<S as basin::State>::Float>> {
         let boundary = (state.iter(), *state.counts());
         if self.last != Some(boundary) {
             self.checks += 1;
             self.last = Some(boundary);
         }
         if self.checks >= 8 {
-            Some(TerminationReason::SolverConverged)
+            Some(basin::Termination::custom(
+                "external.SolverConverged",
+                "External solver stopping predicate: SolverConverged.",
+                vec![],
+            ))
         } else {
             self.solver.check_convergence(problem, state)
         }
@@ -838,7 +835,7 @@ fn exact_resume_preserves_convergence_history_and_fresh_run_resets_it() {
     .unwrap()
     .run(100)
     .unwrap();
-    assert_eq!(baseline.reason, TerminationReason::SolverConverged);
+    assert_eq!(baseline.reason, TerminationCode::SolverConverged);
     assert_eq!(baseline.state.iter(), 7);
     let checkpoint = Run::new(
         Sphere,
@@ -955,8 +952,7 @@ impl Solver<FallibleSphere, PointState<Vec<f64>>> for EvaluationScript {
         &mut self,
         problem: &mut Problem<FallibleSphere>,
         mut state: PointState<Vec<f64>>,
-    ) -> Result<(PointState<Vec<f64>>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Self::Error> {
         let x = vec![0.5];
         let (cost, _) = problem.cost_and_gradient(&x)?;
         problem.residual_and_jacobian(&x)?;
@@ -968,7 +964,14 @@ impl Solver<FallibleSphere, PointState<Vec<f64>>> for EvaluationScript {
             // A consumed candidate must not escape through observation on Err.
             problem.cost_and_gradient(&vec![-1.0])?;
         }
-        Ok((state, Some(TerminationReason::SolverConverged)))
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::custom(
+                "external.SolverConverged",
+                "External solver stopping predicate: SolverConverged.",
+                vec![],
+            )),
+        )))
     }
 }
 
@@ -980,10 +983,7 @@ fn counts_keep_categories_at_clean_stops_and_hard_failures() {
         PointState::new(vec![2.0]),
     )
     .unwrap();
-    assert_eq!(
-        run.step().unwrap(),
-        Some(TerminationReason::SolverConverged)
-    );
+    assert_eq!(run.step().unwrap(), Some(TerminationCode::SolverConverged));
     let state = run.state().unwrap();
     assert_eq!(state.iter(), 0);
     assert_eq!(state.cost_evals(), 5);
@@ -996,7 +996,7 @@ fn counts_keep_categories_at_clean_stops_and_hard_failures() {
     assert_eq!(run.counts().total_work(), 10);
     assert!(!run.cost_budget_reached(6));
     let result = run.run(0).unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.reason, TerminationCode::SolverConverged);
 
     let mut failed = Run::new(
         FallibleSphere,

@@ -5,7 +5,7 @@ use std::convert::Infallible;
 use basin::{
     ConstraintJacobian, CostFunction, DenseMatrix, Executor, Gradient,
     NonlinearConstraints, OptimizationResultWithSolver,
-    SelectedFirstOrderState, Slsqp, State, TerminationReason,
+    SelectedFirstOrderState, Slsqp, State, TerminationCode,
 };
 
 pub type Result =
@@ -99,7 +99,7 @@ pub fn hs71() -> Result {
 }
 
 pub fn verify_hs71(result: &Result) {
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.state.param();
     assert!(x.iter().all(|v| v.is_finite() && (1.0..=5.0).contains(v)));
     let cost = x[0] * x[3] * (x[0] + x[1] + x[2]) + x[2];

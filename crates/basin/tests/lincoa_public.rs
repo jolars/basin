@@ -11,7 +11,7 @@
 
 use basin::core::constraint::LinearConstraints;
 use basin::{
-    CostFunction, DenseMatrix, Executor, Lincoa, PointState, TerminationReason,
+    CostFunction, DenseMatrix, Executor, Lincoa, PointState, TerminationCode,
 };
 
 /// `min ‖x − c‖²` subject to `A x ≤ b`, on `Vec<f64>` with the pure-Rust
@@ -58,7 +58,7 @@ fn converges_to_projection() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
@@ -234,7 +234,7 @@ fn respects_cost_eval_budget() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
     assert!(
         result.cost_evals() >= 15,
         "cost_evals = {}",
@@ -261,7 +261,7 @@ fn rho_tolerance_stops_early() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RhoTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert!(
         result.solver.rho().unwrap() <= 1e-3,
         "rho = {}",
@@ -312,7 +312,7 @@ fn backend_generic_nalgebra() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
@@ -365,7 +365,7 @@ fn backend_generic_ndarray() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,
@@ -414,7 +414,7 @@ fn backend_generic_faer() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
     assert!(
         (x[0] - 1.0).abs() < 1e-3 && (x[1] - 1.0).abs() < 1e-3,

@@ -1,8 +1,8 @@
-//! Optional explanations of native solver convergence in Basin 1.x.
+//! Compatibility access to native solver convergence identities.
 
 /// A native test that participated in a solver's convergence decision.
 ///
-/// These identities supplement [`TerminationReason::SolverConverged`](crate::TerminationReason::SolverConverged)
+/// These identities supplement [`TerminationCode::SolverConverged`](crate::TerminationCode::SolverConverged)
 /// without changing its value or any stopping behavior. They describe the
 /// solver's own coordinates and objective, including problem adapters.
 /// Passing a test does not establish global optimality or parameter accuracy.
@@ -48,7 +48,7 @@ pub enum NativeConvergenceTest {
 /// All passing tests at that stage are retained; tests at other stages are
 /// not evaluated retroactively. Slice order does not imply precedence.
 /// Numerical safeguards, failures, and shared observed convergence checks
-/// have their existing [`TerminationReason`](crate::TerminationReason) values
+/// have their existing [`Termination`](crate::Termination) values
 /// and are not native convergence tests.
 ///
 /// Fresh initialization and the next native check or step clear the previous
@@ -56,7 +56,8 @@ pub enum NativeConvergenceTest {
 /// Consequently, a solver's record can describe an earlier run segment when
 /// an executor control stops exact continuation before calling the solver.
 /// Prefer [`OptimizationResultWithSolver::native_convergence_tests`](crate::OptimizationResultWithSolver::native_convergence_tests)
-/// to inspect a completed run: that accessor also checks its termination reason.
+/// to inspect a completed run: that accessor derives identities from its owned report.
+/// Ordinary results carry the same evidence in `result.report.termination`.
 pub trait NativeConvergenceDiagnostics {
     /// Tests recorded at the most recent native convergence decision, or an
     /// empty slice if none is recorded. Reading this never evaluates the problem.

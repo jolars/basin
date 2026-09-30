@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 use basin::{
     CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
-    GradientState, Observe, ObserverMode, State, TerminationReason,
+    GradientState, Observe, ObserverMode, State, TerminationCode,
 };
 
 /// f(x) = ½ ‖x‖²: convex quadratic, min at origin, gradient = x. Cheap
@@ -115,7 +115,11 @@ impl<S: State<Float = f64>> Observe<S> for ProgressLogger {
         );
     }
 
-    fn observe_final(&mut self, state: &S, reason: &TerminationReason) {
+    fn observe_final(
+        &mut self,
+        state: &S,
+        reason: &basin::TerminationReport<S::Float>,
+    ) {
         println!(
             "  stopped  iter={:>4}  cost={:>14.6e}  reason={:?}",
             state.iter(),
@@ -162,7 +166,7 @@ fn example_observer_on_quadratic() {
     //    so ‖∇f‖ halves each step and the run exits cleanly at the
     //    gradient tolerance well inside the budget.
     // -----------------------------------------------------------------
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert!(result.cost() < 1e-15);
 
     // -----------------------------------------------------------------

@@ -291,13 +291,8 @@ fn inner_failure_preserves_every_category_and_current_population() {
             &mut self,
             problem: &mut basin::Problem<Sphere>,
             state: basin::PointState<Vec<f64>>,
-        ) -> Result<
-            (
-                basin::PointState<Vec<f64>>,
-                Option<basin::TerminationReason>,
-            ),
-            Infallible,
-        > {
+        ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Infallible>
+        {
             // A custom adapter can report work performed by an external evaluator.
             let counts = problem.counts_mut();
             counts.gradient_evals += 2;
@@ -305,7 +300,10 @@ fn inner_failure_preserves_every_category_and_current_population() {
             counts.jacobian_evals += 4;
             counts.hessian_evals += 5;
             counts.hessian_product_evals += 6;
-            Ok((state, Some(basin::TerminationReason::SolverFailed)))
+            Ok(basin::SolverStep::stopped(
+                state,
+                basin::Termination::numerical_failure("scripted inner failure"),
+            ))
         }
     }
     let solver = basin::MaLsCh::with_inner(71, Failing)
@@ -318,7 +316,7 @@ fn inner_failure_preserves_every_category_and_current_population() {
             .run_with_solver()
             .unwrap();
     coherent(&result.state, &result.solver);
-    assert_eq!(result.reason, basin::TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), basin::TerminationCode::SolverFailed);
     assert_eq!(
         result.counts,
         EvalCounts {

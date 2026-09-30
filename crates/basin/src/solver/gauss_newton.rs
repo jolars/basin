@@ -7,7 +7,7 @@ use crate::core::math::{
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
@@ -40,7 +40,7 @@ use crate::{
 /// - **Rank-deficient `J`** (`JᵀJ` not positive definite) → the
 ///   Cholesky inside [`LinearSolveSpd`] returns
 ///   [`NotPositiveDefinite`](crate::core::math::LinearSolveError::NotPositiveDefinite),
-///   and the solver returns [`TerminationReason::SolverFailed`]. This
+///   and the solver returns [`crate::TerminationCode::SolverFailed`]. This
 ///   is the *correct* behavior for pure GN; Powell's singular
 ///   function is the canonical example. Reach for Levenberg-Marquardt
 ///   when this fires.
@@ -54,7 +54,7 @@ use crate::{
 /// The native first-order test is `‖Jᵀr‖_∞ ≤ tolerance`, configured by
 /// [`with_absolute_gradient_tolerance`](Self::with_absolute_gradient_tolerance).
 /// Its default is `1e-8`; `None` disables it, and zero tests exact stationarity.
-/// It reports [`TerminationReason::SolverConverged`] before computing a step.
+/// It reports [`crate::TerminationCode::SolverConverged`] before computing a step.
 /// Optional observed cost and step checks are disabled by default and combine
 /// with this test using OR. Execution budgets belong on the executor.
 ///
@@ -170,8 +170,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
     }
 }
@@ -199,8 +198,7 @@ where
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
     }
 }
@@ -244,7 +242,12 @@ where
         mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
         if self.failed {
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "Gauss-Newton could not initialize a finite residual model.",
+                )),
+            )));
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
@@ -256,7 +259,12 @@ where
                 let j = problem.jacobian(state.param())?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
-                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
+                            "Gauss-Newton could not construct the residual model at the current point.",
+                        )),
+                    )));
                 };
                 model
             }
@@ -267,13 +275,27 @@ where
         let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
         if !problem.valid_vector(&g) {
             self.failed = true;
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "The Gauss-Newton model gradient is invalid.",
+                )),
+            )));
         }
         if self.tol_grad.is_some_and(|tol| g.norm_infinity() <= tol) {
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             self.model_r_cache = model_r;
-            return Ok((state, Some(TerminationReason::SolverConverged)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::upper_bound(
+                    crate::ConvergenceTest::AbsoluteGradientInfinity,
+                    g.norm_infinity(),
+                    self.tol_grad.unwrap(),
+                    self.tol_grad.unwrap(),
+                    None,
+                )),
+            )));
         }
 
         // Solve (JᵀJ) δ = −Jᵀr. Cholesky failure means JᵀJ is not
@@ -290,7 +312,12 @@ where
                 self.r_cache = Some(r);
                 self.j_cache = Some(j);
                 self.model_r_cache = model_r;
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "The Gauss-Newton normal-equation Cholesky solve failed.",
+                    )),
+                )));
             }
         };
 
@@ -311,6 +338,9 @@ where
 
         let failed = E::ROBUST && !state.cost().is_finite();
         self.failed = failed;
-        Ok((state, failed.then_some(TerminationReason::SolverFailed)))
+        Ok(crate::SolverStep::from((
+            state,
+            failed.then(|| Termination::numerical_failure("Gauss-Newton trial produced a non-finite robust objective.")),
+        )))
     }
 }

@@ -11,7 +11,7 @@ use crate::core::state::{
     CountsMirror, FirstOrderState, IntoInitialSimplex, PointState,
     PopulationProgress, SimplexProgress, State,
 };
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::solver::cma_es::{CmaEs, sort_population_ascending};
 use crate::solver::lbfgs::{Bounded, Lbfgs};
 use crate::solver::levenberg_marquardt::LevenbergMarquardt;
@@ -106,10 +106,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
+    ) -> Result<crate::SolverStep<S>, Self::Error> {
         self.inner.next_iter(problem, state)
     }
-    fn terminate(&self, state: &S) -> Option<TerminationReason> {
+    fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
         self.inner.terminate(state)
     }
 }
@@ -399,7 +399,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+        CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         let Self {
             cma,
@@ -471,17 +471,15 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
         //    previous generation, sample λ fresh candidates sorted by
         //    cost ascending.
-        let (mut state, reason) = self.cma.next_iter(problem, state)?;
-        if let Some(r) = reason {
-            return Ok((state, Some(r)));
+        let step = self.cma.next_iter(problem, state)?;
+        if step.termination.is_some() {
+            return Ok(step);
         }
+        let mut state = step.state;
 
         let work = self.cma.work.as_mut().expect("CMA init precedes injection");
         let n = work.m.vec_len();
@@ -508,12 +506,21 @@ where
 
             // 4. Failure routing: bubble SolverFailed only (composition
             //    contract).
-            if inner_result.reason.is_failure() {
+            if !inner_result
+                .report
+                .termination
+                .can_continue_as_inner(crate::PartialResultPolicy::Consume)
+            {
                 sort_population_ascending(
                     &mut state.candidates,
                     &mut state.costs,
                 );
-                return Ok((state, Some(inner_result.reason)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    inner_result.report.into_outer_termination(
+                        crate::PartialResultPolicy::Consume,
+                    ),
+                )));
             }
 
             // 5. Extract refined point.
@@ -556,12 +563,12 @@ where
             sort_population_ascending(&mut state.candidates, &mut state.costs);
         }
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
     fn terminate(
         &self,
         state: &PopulationProgress<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         <_ as Solver<P, PopulationProgress<V, F>>>::terminate(&self.cma, state)
     }
 }

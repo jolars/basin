@@ -9,7 +9,7 @@
 
 use crate::backend_aliases::ndarray::Array1;
 use basin::problems::BoothBoxedResiduals;
-use basin::{Executor, PointState, TerminationReason, Trf};
+use basin::{Executor, PointState, TerminationCode, Trf};
 
 #[test]
 fn trf_with_slack_bounds_reaches_unconstrained_min() {
@@ -27,7 +27,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-5,
         "x[0] = {}",
@@ -58,7 +58,7 @@ fn trf_with_tight_bounds_converges_to_box_corner() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     // The strict-interior θ < 1 keeps the iterate just inside the
     // corner (e.g. ~(0.9999..., 0.9999...)), so check tolerances are
     // looser than the unconstrained case but tight enough to confirm
@@ -93,7 +93,7 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
     executor = executor.max_iter(0);
     let result = executor.run().unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     let x = result.param();
     // Strict interior: each component should be strictly less than the
     // upper bound and strictly greater than the lower bound.
@@ -128,7 +128,7 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn trf_caches_residual_and_jacobian_across_iterations() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 3);
     assert_eq!(
         result.state.counts().residual_evals,

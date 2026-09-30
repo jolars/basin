@@ -8,7 +8,7 @@
 //! [`Executor`](crate::core::executor::Executor):
 //!
 //! - [`stop_when`](crate::Executor::stop_when):
-//!   returns `Option<TerminationReason>`; framework consumes the result and
+//!   returns `Option<ApplicationStop>`; framework consumes the result and
 //!   stops the run if `Some`.
 //! - [`Observe`]: returns `()`; the executor ignores any side effects on the
 //!   optimization itself. Failures must be handled inside the observer:
@@ -63,17 +63,15 @@
 //!    the first call of a fresh run the state shows `iter() == 1`. Gated by
 //!    [`ObserverMode`].
 //! 3. [`observe_final`](Observe::observe_final) fires once when the run
-//!    stops cleanly with a [`TerminationReason`]. The state shows the iter
+//!    stops cleanly with a [`TerminationReport`]. The state shows the iter
 //!    count of the last fully-completed iteration.
 //!
 //! # Edge cases
 //!
-//! - **Mid-iter termination.** If
-//!   [`Solver::next_iter`](crate::core::solver::Solver::next_iter) returns
-//!   `(state, Some(reason))`, the iteration counter is *not* incremented,
-//!   [`observe_iter`](Observe::observe_iter) does *not* fire for that
-//!   partial iteration, and [`observe_final`](Observe::observe_final) fires
-//!   with the mid-iter reason.
+//! - **Stopping steps.** A step with `completed: false` leaves the iteration
+//!   count unchanged and fires only the final hook. A stopping step with
+//!   `completed: true` increments the count and fires the gated iteration hook
+//!   followed by the final hook. Both receive the same coherent progress.
 //! - **Hard error from the problem.** If `next_iter` returns `Err(_)`, the
 //!   state is consumed by the failing call and there's nothing to observe;
 //!   [`observe_final`](Observe::observe_final) does *not* fire and the
@@ -83,7 +81,7 @@
 //!   that need to react to hard aborts should track liveness themselves.
 //! - **Reading the reason from inside observers.** The argument to
 //!   [`observe_final`](Observe::observe_final) is the
-//!   [`TerminationReason`]; state types do not carry it.
+//!   [`TerminationReport`]; state types do not carry it.
 //!
 //! # Starter observers
 //!
@@ -100,7 +98,7 @@
 //! warm-starting a later run. Solver-aware exact checkpoints live in the
 //! sibling [`checkpoint`](crate::core::checkpoint) module.
 
-use crate::core::termination::TerminationReason;
+use crate::core::termination::TerminationReport;
 
 mod adapters;
 mod history;
@@ -122,7 +120,7 @@ pub use checkpoint::{CheckpointWriter, read_checkpoint};
 /// they need. Bind on the minimum state shape required (`S: State`,
 /// `S: GradientState`, `S: SimplexState`, …) so a mismatch with the solver is
 /// a compile error rather than a runtime no-op.
-pub trait Observe<S> {
+pub trait Observe<S: crate::State> {
     /// Fired once before the first iteration, after
     /// [`Solver::init`](crate::core::solver::Solver::init) has run and the
     /// state's counter mirror has been refreshed. A fresh run has iteration
@@ -142,7 +140,7 @@ pub trait Observe<S> {
     fn observe_iter(&mut self, _state: &S) {}
 
     /// Fired once when the run stops with a clean
-    /// [`TerminationReason`]. `state` is the final iterate; `reason` is what
+    /// [`TerminationReport`]. `state` is the final iterate; `reason` is what
     /// halted the run.
     ///
     /// Does *not* fire when
@@ -151,7 +149,12 @@ pub trait Observe<S> {
     /// there is nothing to observe.
     ///
     /// Always fires regardless of the observer's [`ObserverMode`].
-    fn observe_final(&mut self, _state: &S, _reason: &TerminationReason) {}
+    fn observe_final(
+        &mut self,
+        _state: &S,
+        _reason: &TerminationReport<S::Float>,
+    ) {
+    }
 }
 
 /// Read-only observation of progress and solver-owned diagnostics.
@@ -189,7 +192,7 @@ pub trait Observe<S> {
 ///     }
 /// }
 /// ```
-pub trait ObserveSolver<S, So> {
+pub trait ObserveSolver<S: crate::State, So> {
     /// Fired after successful initialization or exact restoration, before the
     /// first termination check. Counts and incumbent publication are complete.
     /// Always fires regardless of [`ObserverMode`].
@@ -208,16 +211,16 @@ pub trait ObserveSolver<S, So> {
         &mut self,
         _state: &S,
         _solver: &So,
-        _reason: &TerminationReason,
+        _reason: &TerminationReport<S::Float>,
     ) {
     }
 }
 
 /// The boundary passed to an [`Executor::observe_solver`](crate::Executor::observe_solver)
 /// callback. See the [observer lifecycle](self#lifecycle).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
-pub enum ObservationEvent {
+pub enum ObservationEvent<'a, F: crate::Scalar = f64> {
     /// Successful initialization or entry into an exact continuation.
     /// The restored iteration can be nonzero.
     Init,
@@ -225,7 +228,7 @@ pub enum ObservationEvent {
     Iter,
     /// A clean stop, including a partial-step stop. Hard errors do not emit
     /// an event. Repeated stepping after termination does not repeat it.
-    Final(TerminationReason),
+    Final(&'a TerminationReport<F>),
 }
 
 /// Per-registration policy for [`observe_iter`](Observe::observe_iter).

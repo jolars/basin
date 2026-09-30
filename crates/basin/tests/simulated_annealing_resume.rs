@@ -4,7 +4,7 @@ use basin::core::rng::ChaCha8Rng;
 use basin::{
     CostFunction, ExactCheckpoint, ExactCheckpointWriter, Executor, Neighbor,
     ObserverMode, ProposalState, SimulatedAnnealing, State,
-    TemperatureSchedule, TerminationReason, read_exact_checkpoint,
+    TemperatureSchedule, TerminationCode, read_exact_checkpoint,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
@@ -208,7 +208,7 @@ fn zero_tolerance_best_stall_retains_absolute_history_on_resume() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::NoImprovement);
+    assert_eq!(result.report.code(), TerminationCode::NoImprovement);
     assert_eq!(result.iter(), 7);
 }
 
@@ -220,7 +220,7 @@ fn acceptance_stall_criterion_retains_absolute_history_on_resume() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::NoAcceptedMove);
+    assert_eq!(result.report.code(), TerminationCode::NoAcceptedMove);
     assert_eq!(result.iter(), 7);
     assert_eq!(result.best_iter(), 0);
 }

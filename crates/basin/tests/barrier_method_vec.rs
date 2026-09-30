@@ -10,7 +10,7 @@ use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, CostFunction, DenseMatrix, Executor, Gradient,
     GradientDescent, LinearInequalityConstraints, NelderMead, PointState,
-    TerminationReason,
+    TerminationCode,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`. The unconstrained min (2,2) is
@@ -40,7 +40,7 @@ fn active_constraint_converges_to_projection() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -65,7 +65,7 @@ fn derivative_free_inner_uses_its_own_convergence_settings() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 1.0).abs() < 1e-4);
     assert!((result.param()[1] - 1.0).abs() < 1e-4);
 }
@@ -93,7 +93,7 @@ fn inactive_constraint_recovers_unconstrained_minimum() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 0.5).abs() < 1e-4
             && (result.param()[1] - 0.5).abs() < 1e-4,
@@ -120,7 +120,7 @@ fn infeasible_start_runs_phase_one_then_converges() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -144,7 +144,7 @@ fn target_cost_does_not_bypass_phase_one() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.param()[0] + result.param()[1] < 2.0);
 }
 
@@ -184,7 +184,7 @@ impl LinearInequalityConstraints for LinearProbe {
     }
 }
 
-fn run_probe(problem: LinearProbe, initial: Vec<f64>) -> TerminationReason {
+fn run_probe(problem: LinearProbe, initial: Vec<f64>) -> TerminationCode {
     Executor::new(
         problem,
         BarrierMethod::with_inner_solver(
@@ -196,7 +196,8 @@ fn run_probe(problem: LinearProbe, initial: Vec<f64>) -> TerminationReason {
     .max_iter(50)
     .run()
     .unwrap()
-    .reason
+    .report
+    .code()
 }
 
 #[test]
@@ -213,7 +214,7 @@ fn boundary_start_runs_phase_one_then_phase_two() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.param()[0] + result.param()[1] < 2.0);
 }
 
@@ -224,10 +225,7 @@ fn inconsistent_constraints_report_failure() {
         a: DenseMatrix::from_row_slice(2, 1, &[1.0, -1.0]),
         b: vec![0.0, -1.0],
     };
-    assert_eq!(
-        run_probe(problem, vec![0.5]),
-        TerminationReason::SolverFailed
-    );
+    assert_eq!(run_probe(problem, vec![0.5]), TerminationCode::SolverFailed);
 }
 
 #[test]
@@ -251,7 +249,7 @@ fn distant_feasible_system_is_not_reported_infeasible() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.param()[0] < 0.0,
         "expected a strict point, got {:?}",
@@ -280,7 +278,7 @@ fn empty_strict_interior_reports_failure() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
 }
 
 #[test]
@@ -291,7 +289,7 @@ fn nonfinite_initial_parameter_reports_failure() {
     };
     assert_eq!(
         run_probe(problem, vec![f64::NAN]),
-        TerminationReason::SolverFailed
+        TerminationCode::SolverFailed
     );
 }
 
@@ -301,10 +299,7 @@ fn nonfinite_constraint_data_reports_failure() {
         a: DenseMatrix::from_row_slice(1, 1, &[1.0]),
         b: vec![f64::INFINITY],
     };
-    assert_eq!(
-        run_probe(problem, vec![0.0]),
-        TerminationReason::SolverFailed
-    );
+    assert_eq!(run_probe(problem, vec![0.0]), TerminationCode::SolverFailed);
 }
 
 #[test]
@@ -358,7 +353,7 @@ fn two_constraints_both_active() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 0.5).abs() < 1e-4
             && (result.param()[1] - 1.5).abs() < 1e-4,

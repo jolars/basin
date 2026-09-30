@@ -14,7 +14,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use core::ops::{Index, IndexMut};
 
 /// Perturbation strategy for [`BasinHopping`]: given the current iterate,
@@ -357,6 +357,7 @@ pub struct BasinHopping<
     // a candidate from a failed local solve is accepted only when the incumbent
     // also came from a failed solve. Set by `init`, updated on every accept.
     incumbent_success: bool,
+    pending_stop: Option<Termination<F>>,
 }
 
 impl<I, V, F> BasinHopping<I, V, F, RandomDisplacement<F>, Metropolis<F>>
@@ -390,6 +391,7 @@ where
             nstep: 0,
             naccept: 0,
             incumbent_success: true,
+            pending_stop: None,
         }
     }
 
@@ -445,6 +447,7 @@ where
             nstep: self.nstep,
             naccept: self.naccept,
             incumbent_success: self.incumbent_success,
+            pending_stop: self.pending_stop,
         }
     }
 
@@ -467,6 +470,7 @@ where
             nstep: self.nstep,
             naccept: self.naccept,
             incumbent_success: self.incumbent_success,
+            pending_stop: self.pending_stop,
         }
     }
 
@@ -528,7 +532,7 @@ where
     /// [`max_iter`](crate::Executor::max_iter), which counts as a
     /// *successful* solve for the acceptance guard (unlike SciPy, whose
     /// `minimize` reports `success = False` on max-iter). Only a soft
-    /// [`SolverFailed`](crate::core::termination::TerminationReason::SolverFailed)
+    /// [`SolverFailed`](crate::TerminationCode::SolverFailed)
     /// marks a candidate unsuccessful.
     pub fn with_inner_max_iter(mut self, n: u64) -> Self {
         self.inner = self.inner.max_iter(n);
@@ -539,7 +543,9 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(mut self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&<I as InitialState<V>>::State) -> Option<TerminationReason>
+        CheckFn: FnMut(
+                &<I as InitialState<V>>::State,
+            ) -> Option<crate::ApplicationStop>
             + 'static,
     {
         self.inner = self.inner.stop_when_factory(make);
@@ -584,6 +590,7 @@ where
         self.nstep = 0;
         self.naccept = 0;
         self.accepted_iterate = true;
+        self.pending_stop = None;
         // Relax the starting point once so the Metropolis walk begins from a
         // local minimum (the `Ẽ` value of x0). Same-problem composition, so
         // the inner's evals flow into the outer wrapper transparently.
@@ -593,7 +600,13 @@ where
         // Record whether the initial relaxation succeeded so the first hop's
         // acceptance guard has a faithful incumbent-success flag (a hard `Err`
         // still bubbles via `?`; only soft `SolverFailed` reasons fold in here).
-        self.incumbent_success = !result.reason.is_failure();
+        self.incumbent_success = !result.report.termination.is_failure();
+        if matches!(
+            result.report.termination,
+            Termination::Cancelled | Termination::Application(_)
+        ) {
+            self.pending_stop = Some(result.report.termination);
+        }
         Ok(state)
     }
 
@@ -601,8 +614,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let f_old = state.cost();
 
         // 1. Perturb the current iterate.
@@ -615,7 +627,16 @@ where
         // stops (converged, max-iter, tolerance) leave the candidate successful.
         let seeded = self.inner.solver().seed(&x_trial);
         let result = self.inner.run(problem, seeded)?;
-        let new_success = !result.reason.is_failure();
+        if matches!(
+            result.report.termination,
+            Termination::Cancelled | Termination::Application(_)
+        ) {
+            return Ok(crate::SolverStep::stopped(
+                state,
+                result.report.termination,
+            ));
+        }
+        let new_success = !result.report.termination.is_failure();
 
         let f_new = result.state.cost();
         let x_new = result.state.param().clone();
@@ -652,7 +673,11 @@ where
             self.step.adjust_scale(factor);
         }
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
+    }
+
+    fn terminate(&self, _: &PointState<V, F>) -> Option<Termination<F>> {
+        self.pending_stop.clone()
     }
 
     fn should_check_iterate_change(&self) -> bool {

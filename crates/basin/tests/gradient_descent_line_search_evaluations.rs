@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use basin::{
     CostFunction, Dot, Executor, FirstOrderState, Gradient, GradientDescent,
     GradientState, LineSearch, LineSearchOutcome, MoreThuente, NegInPlace,
-    NormSquared, Problem, Scalar, ScaleInPlace, ScaledAdd, TerminationReason,
+    NormSquared, Problem, Scalar, ScaleInPlace, ScaledAdd, TerminationCode,
 };
 
 #[derive(Debug, PartialEq)]
@@ -127,7 +127,7 @@ where
     .unwrap();
 
     assert_eq!(result.iter(), 2);
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.param(), old.param());
     assert_eq!(result.cost(), old.cost());
     assert_eq!(result.state.gradient(), old.state.gradient());
@@ -286,7 +286,7 @@ fn legacy_soft_failure_restores_cost_and_gradient() {
         .run()
         .unwrap();
 
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.param(), &[1.0, 2.0]);
         assert_eq!(result.cost(), 5.0);
         assert_eq!(result.state.gradient().unwrap(), &[2.0, 4.0]);

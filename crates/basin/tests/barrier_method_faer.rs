@@ -7,7 +7,7 @@ use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, Executor, GradientDescent, PointState,
-    TerminationReason,
+    TerminationCode,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`; constrained optimum (1, 1).
@@ -36,7 +36,7 @@ fn active_constraint_converges_to_projection() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -63,7 +63,7 @@ fn infeasible_start_runs_phase_one_then_converges() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-4
             && (result.param()[1] - 1.0).abs() < 1e-4,
@@ -96,7 +96,7 @@ fn two_constraints_both_active() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 0.5).abs() < 1e-4
             && (result.param()[1] - 1.5).abs() < 1e-4,

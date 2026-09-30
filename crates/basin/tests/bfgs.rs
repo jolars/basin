@@ -4,7 +4,7 @@ use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, Bfgs, CostFunction, Executor, FirstOrderState, Gradient,
-    GradientDescent, HagerZhang, TerminationReason,
+    GradientDescent, HagerZhang, TerminationCode,
 };
 
 #[test]
@@ -52,7 +52,7 @@ fn bfgs_terminates_on_gradient_tolerance() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert!(result.cost() < 1e-10, "cost = {}", result.cost());
 }
 
@@ -70,7 +70,7 @@ fn bfgs_reports_hager_zhang_budget_exhaustion_as_failure() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.param(), &initial);
 }
 
@@ -170,7 +170,7 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     // Optimum: x[i] = 1 / diag[i]; cost = -½ Σ 1/diag[i].
     let expected_cost = -0.5 * (1.0 + 0.5 + 1.0 / 3.0 + 0.25 + 0.2);
     assert!(
@@ -190,11 +190,11 @@ fn bfgs_on_5d_quadratic_converges_quickly() {
 
 /// Confirms the line-search-bail safety net: if a user picks a gradient
 /// tolerance below machine precision, Bfgs still terminates (via
-/// `SolverConverged`) instead of spinning forever doing wasted line-search
+/// `NumericalNoProgress`) instead of spinning forever doing wasted line-search
 /// work. The fast convergence makes |g| machine-epsilon-small after ~12
 /// iterations on this problem.
 #[test]
-fn bfgs_terminates_via_converged_when_at_machine_precision() {
+fn bfgs_reports_numerical_stall_at_machine_precision() {
     let problem = Quadratic {
         diag: vec![1.0, 2.0, 3.0, 4.0, 5.0],
     };
@@ -209,7 +209,8 @@ fn bfgs_terminates_via_converged_when_at_machine_precision() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
+    assert!(!result.report.termination.is_converged());
     let expected_cost = -0.5 * (1.0 + 0.5 + 1.0 / 3.0 + 0.25 + 0.2);
     assert!(
         (result.cost() - expected_cost).abs() < 1e-10,

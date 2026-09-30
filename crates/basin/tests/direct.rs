@@ -5,7 +5,7 @@ mod backend_aliases;
 
 use basin::{
     BoxConstraints, CostFunction, Direct, EvaluationKind, Executor, PointState,
-    Problem, Solver, State, TerminationReason,
+    Problem, Solver, State, TerminationCode,
 };
 use std::{
     convert::Infallible,
@@ -118,7 +118,7 @@ fn f32_mixed_magnitude_costs_refine_the_best_rectangle() {
     .run()
     .unwrap();
     assert_eq!(result.cost(), -2e-9);
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
 }
 
 #[cfg(feature = "nalgebra_all")]
@@ -166,7 +166,7 @@ fn midpoint_then_first_cross_and_budget_overshoot() {
     assert_eq!(stepper.state().cost(), 3.0);
     assert_eq!(stepper.state().counts().cost_evals, 1);
     let result = stepper.run_to_end().unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxEvaluations);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert_eq!(result.iter(), 1);
     assert_eq!(result.state.counts().cost_evals, 5);
     let mut points = calls.lock().unwrap().clone();
@@ -214,11 +214,11 @@ fn initialization_only_and_fixed_box() {
         assert_eq!(result.iter(), 0);
         assert_eq!(result.state.counts().cost_evals, 1);
         assert_eq!(
-            result.reason,
+            result.report.code(),
             if value < f64::INFINITY {
-                TerminationReason::SolverConverged
+                TerminationCode::SolverConverged
             } else {
-                TerminationReason::SolverFailed
+                TerminationCode::SolverFailed
             }
         );
     }
@@ -235,7 +235,7 @@ fn tolerances_are_optional_and_use_normalized_geometry() {
                 .max_iter(20)
                 .run()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert_eq!(result.iter(), 0);
     }
     for solver in [
@@ -249,7 +249,7 @@ fn tolerances_are_optional_and_use_normalized_geometry() {
                 .max_iter(3)
                 .run()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxIter);
+        assert_eq!(result.report.code(), TerminationCode::MaxIter);
         assert_eq!(result.iter(), 3);
     }
 }
@@ -274,7 +274,7 @@ fn rejected_midpoint_can_recover_and_all_rejections_do_not_converge() {
                 .max_iter(30)
                 .run()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::TargetCost);
+        assert_eq!(result.report.code(), TerminationCode::TargetCost);
         assert!(result.cost().is_finite());
         let problem = Objective {
             lower: vec![0.0],
@@ -289,7 +289,7 @@ fn rejected_midpoint_can_recover_and_all_rejections_do_not_converge() {
         .max_iter(4)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxIter);
+        assert_eq!(result.report.code(), TerminationCode::MaxIter);
         assert!(result.state.best().is_none());
         assert_eq!(result.state.counts().cost_evals, 9);
     }
@@ -331,7 +331,7 @@ fn negative_infinity_and_typed_errors() {
             Executor::new(problem, Direct::new(), PointState::new(vec![0.0]))
                 .run()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert_eq!(result.cost(), f64::NEG_INFINITY);
         assert_eq!(result.state.best_cost(), result.cost());
     }
@@ -354,7 +354,7 @@ fn extreme_bounds_and_roundoff_stop() {
                 .max_iter(2)
                 .run()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxIter);
+        assert_eq!(result.report.code(), TerminationCode::MaxIter);
     }
     let problem = Objective {
         lower: vec![1.0],
@@ -366,7 +366,7 @@ fn extreme_bounds_and_roundoff_stop() {
             .max_iter(2)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
     assert_eq!(result.iter(), 0);
     assert_eq!(result.state.counts().cost_evals, 1);
 }
@@ -516,7 +516,7 @@ fn scipy_solution_quality_and_evaluation_counts() {
             result.state.cost_evals(),
             reference - minimum
         );
-        assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+        assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
         assert!(
             gap >= -1e-11 && gap <= tolerance,
             "{name}: gap={gap}, tolerance={tolerance}"

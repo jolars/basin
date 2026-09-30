@@ -15,7 +15,7 @@
 
 use basin::{
     Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
-    SelectedState, TerminationReason,
+    SelectedState, TerminationCode,
 };
 
 /// `min x0·x1` s.t. `x0² + x1² ≤ 1` on `Vec<f64>` (default features). The
@@ -56,7 +56,7 @@ fn converges_to_disk_optimum() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-3,
         "f = {}",
@@ -85,7 +85,7 @@ fn respects_cost_eval_budget() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
     assert!(
         result.cost_evals() >= 15,
         "cost_evals = {}",
@@ -215,7 +215,7 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
         .run_with_solver()
         .unwrap();
         assert_eq!(calls.get(), budget);
-        assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+        assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
         assert!(result.best_param()[0].abs() <= 1.0 + f64::EPSILON.sqrt());
         assert!((result.best_cost() - 1.0).abs() < 1e-12);
         if budget >= 2 {
@@ -238,7 +238,7 @@ fn rho_tolerance_stops_early() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RhoTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert!(
         result.solver.rho().unwrap() <= 1e-3,
         "rho = {}",
@@ -289,7 +289,7 @@ fn backend_generic_nalgebra() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-3,
         "f = {}",
@@ -341,7 +341,7 @@ fn backend_generic_ndarray() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-3,
         "f = {}",
@@ -391,7 +391,7 @@ fn backend_generic_faer() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-3,
         "f = {}",
@@ -440,7 +440,8 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
         let snapshot_cost = state.best_cost();
         // Solver callbacks reuse their own parameter buffer. The selected
         // snapshot remains unchanged until the executor publishes the boundary.
-        let (mut state, _) = solver.next_iter(&mut problem, state).unwrap();
+        let (mut state, _, _) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
         assert_eq!(state.best_param(), &snapshot);
         assert_eq!(state.best_cost(), snapshot_cost);
         assert_eq!(state.param().len(), n);

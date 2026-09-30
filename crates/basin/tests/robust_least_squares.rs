@@ -2,7 +2,7 @@ use basin::{
     ArctanLoss, CauchyLoss, CostFunction, DenseMatrix, Executor, GaussNewton,
     Gradient, HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
     LossFunction, PointState, Residual, RobustLeastSquares, SoftL1Loss,
-    SquaredLoss, TerminationReason,
+    SquaredLoss, TerminationCode,
 };
 
 #[derive(Clone)]
@@ -81,7 +81,7 @@ macro_rules! location_solver {
             .max_iter(100)
             .run()
             .unwrap();
-            assert_eq!(result.reason, TerminationReason::SolverConverged);
+            assert_eq!(result.report.code(), TerminationCode::SolverConverged);
             assert!((result.param()[0] - 1.0 / 3.0).abs() < 1e-7);
             assert!((result.cost() - 28.0 / 3.0).abs() < 1e-12);
         }
@@ -129,7 +129,7 @@ fn bounds_and_fixed_coordinates_use_the_robust_objective() {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert!((result.param()[0] - 0.2).abs() < 1e-6);
         assert!(
             (result.cost() - problem.cost(result.param()).unwrap()).abs()
@@ -144,7 +144,7 @@ fn bounds_and_fixed_coordinates_use_the_robust_objective() {
         .max_iter(100)
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 0.2).abs() < 1e-6);
 }
 
@@ -280,7 +280,7 @@ fn invalid_evaluations_cannot_be_hidden_by_a_bounded_loss() {
             .max_iter(10)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     let result = Executor::from_start(
         RobustLeastSquares::new(
             Domain {
@@ -321,7 +321,7 @@ fn rejected_trials_reuse_the_model_and_gauss_newton_fails_cleanly() {
             .max_iter(2)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.cost(), f64::INFINITY);
 }
 

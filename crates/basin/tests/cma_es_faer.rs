@@ -3,7 +3,7 @@
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CmaEs, Executor, PopulationProgress, StepOutcome, TerminationReason,
+    CmaEs, Executor, PopulationProgress, StepOutcome, TerminationCode,
 };
 
 /// Same seed → same trajectory, on the faer backend. Reproducibility
@@ -102,7 +102,7 @@ fn sphere_terminates_solver_converged_on_tol_x() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CmaEsTolerance);
 }
 
 /// `with_stds(ones)` reproduces the isotropic default bit-for-bit on the
@@ -137,7 +137,7 @@ fn with_stds_ones_matches_default() {
     for i in 0..a.nrows() {
         assert_eq!(a[i], b[i]);
     }
-    assert_eq!(default.reason, with_ones.reason);
+    assert_eq!(default.report.code(), with_ones.report.code());
 }
 
 /// Anisotropic stds still converge on Sphere (faer backend).

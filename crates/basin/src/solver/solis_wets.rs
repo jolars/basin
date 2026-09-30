@@ -6,7 +6,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::solver::cma_inject::MemeticInner;
 
 /// Solis-Wets adaptive random local search.
@@ -93,7 +93,7 @@ use crate::solver::cma_inject::MemeticInner;
 /// [`with_absolute_step_size_tolerance`](Self::with_absolute_step_size_tolerance)
 /// to stop when the mutation standard deviation `ρ` reaches the threshold.
 /// `None` disables this optional check; zero tests exact collapse.
-/// The reason is [`TerminationReason::RhoTolerance`]. Each iteration spends
+/// The reason is [`crate::TerminationCode::RhoTolerance`]. Each iteration spends
 /// one or two evaluations, so an executor cost budget can be exceeded by one.
 /// Optional cost- and step-change checks observe accepted moves; failed
 /// proposals do not turn an unchanged point into convergence. Native step-size
@@ -388,8 +388,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let f_x = state.cost();
         self.accepted_iterate = false;
         let bias = self.bias.as_mut().expect("SolisWets must be initialized");
@@ -450,21 +449,25 @@ where
             self.rho = self.rho * self.contract_factor;
         }
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {
         self.accepted_iterate
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         let tolerance = self.step_tolerance?;
         let metric = self.rho;
-        (metric.is_finite() && metric <= tolerance)
-            .then_some(TerminationReason::RhoTolerance)
+        (metric.is_finite() && metric <= tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::Radius,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }
 
@@ -616,7 +619,8 @@ mod tests {
 
         let x_old = state.param().clone();
         let bias_old = solver.bias().unwrap().clone();
-        let (state, reason) = solver.next_iter(&mut problem, state).unwrap();
+        let (state, _, reason) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
         assert!(reason.is_none());
 
         // Forward success moved to x + step with step = x_new − x_old,
@@ -647,7 +651,8 @@ mod tests {
             let bias_old = solver.bias().unwrap().clone();
             let f_old = state.cost();
 
-            let (state, _) = solver.next_iter(&mut problem, state).unwrap();
+            let (state, _, _) =
+                solver.next_iter(&mut problem, state).unwrap().into_parts();
             let moved = state.param() != &x_old;
             let improved = state.cost() < f_old;
             if moved && improved && solver.success_count() == 1 {
@@ -683,7 +688,8 @@ mod tests {
         // Seed a nonzero bias after initialization so the decay is observable.
         solver.bias = Some(vec![0.8, -0.4]);
 
-        let (state, reason) = solver.next_iter(&mut problem, state).unwrap();
+        let (state, _, reason) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
         assert!(reason.is_none());
         approx_eq(solver.bias().unwrap(), &[0.4, -0.2], 1e-12);
         assert_eq!(solver.failure_count(), 1);
@@ -701,7 +707,8 @@ mod tests {
         let mut state = solver.init(&mut problem, state).unwrap();
 
         for i in 1..=5 {
-            let (s, _) = solver.next_iter(&mut problem, state).unwrap();
+            let (s, _, _) =
+                solver.next_iter(&mut problem, state).unwrap().into_parts();
             state = s;
             if i < 5 {
                 assert_eq!(solver.success_count(), i);
@@ -724,7 +731,8 @@ mod tests {
         let mut state = solver.init(&mut problem, state).unwrap();
 
         for i in 1..=3 {
-            let (s, _) = solver.next_iter(&mut problem, state).unwrap();
+            let (s, _, _) =
+                solver.next_iter(&mut problem, state).unwrap().into_parts();
             state = s;
             if i < 3 {
                 assert_eq!(solver.failure_count(), i);
@@ -746,7 +754,7 @@ mod tests {
         let state = PointState::new(vec![1.5, -0.5]);
         let mut state = solver.init(&mut problem, state).unwrap();
         for _ in 0..10 {
-            state = solver.next_iter(&mut problem, state).unwrap().0;
+            state = solver.next_iter(&mut problem, state).unwrap().state;
         }
         state.replace(state.param().clone(), -1000.0);
         let state = solver.init(&mut problem, state).unwrap();

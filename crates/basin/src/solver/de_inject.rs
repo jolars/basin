@@ -11,7 +11,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PopulationProgress, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::solver::cma_es::sort_population_ascending;
 use crate::solver::cma_inject::MemeticInner;
 use crate::solver::de::De;
@@ -245,7 +245,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+        CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         let Self {
             de,
@@ -316,23 +316,21 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // 1. Vanilla DE generation: mutation, repair, crossover,
         //    selection, ascending sort.
-        let (mut state, reason) = self.de.next_iter(problem, state)?;
-        if let Some(r) = reason {
-            return Ok((state, Some(r)));
+        let step = self.de.next_iter(problem, state)?;
+        if step.termination.is_some() {
+            return Ok(step);
         }
+        let mut state = step.state;
 
         // 2. Schedule gate. `state.iter()` is pre-increment here
         //    (executor bumps it after `next_iter` returns), so iter == 0
         //    on the first call. With `refine_every = 1` (default) this
         //    is always true.
         if state.iter() % self.refine_every != 0 {
-            return Ok((state, None));
+            return Ok(crate::SolverStep::from((state, None)));
         }
 
         // Snapshot the box once; reused for the clip on every refined
@@ -362,13 +360,22 @@ where
             // 5. Failure routing: bubble SolverFailed only (composition
             //    contract 3). MaxIter / tolerances / SolverConverged are
             //    clean stops; consume the inner's final iterate.
-            if inner_result.reason.is_failure() {
+            if !inner_result
+                .report
+                .termination
+                .can_continue_as_inner(crate::PartialResultPolicy::Consume)
+            {
                 sort_population_ascending(
                     &mut state.candidates,
                     &mut state.costs,
                 );
                 state.select_best_member();
-                return Ok((state, Some(inner_result.reason)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    inner_result.report.into_outer_termination(
+                        crate::PartialResultPolicy::Consume,
+                    ),
+                )));
             }
 
             // 6. Saturating clip to the box. The inner may have stepped
@@ -403,13 +410,13 @@ where
             state.select_best_member();
         }
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(
         &self,
         state: &PopulationProgress<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         <De<F> as Solver<P, PopulationProgress<V, F>>>::terminate(
             &self.de, state,
         )

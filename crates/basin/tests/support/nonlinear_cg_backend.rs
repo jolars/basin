@@ -1,7 +1,7 @@
 use basin::{
     CgUpdate, CostFunction, Dot, Executor, FirstOrderState, Gradient,
     NegInPlace, NonlinearCg, NormInfinity, NormSquared, Scalar, ScaledAdd,
-    TerminationReason, VectorIndex, VectorLen,
+    TerminationCode, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -124,8 +124,8 @@ where
             .run()
             .unwrap();
             assert_eq!(
-                result.reason,
-                TerminationReason::GradientTolerance,
+                result.report.code(),
+                TerminationCode::GradientTolerance,
                 "update={update:?}, cost={:?}, iter={}",
                 result.cost(),
                 result.iter()

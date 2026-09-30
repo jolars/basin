@@ -1,5 +1,112 @@
 # Migrating to Basin 2.0
 
+## Structured termination reports
+
+Ordinary `Executor::run()` now returns `OptimizationResult<S>` with three
+owned fields: `state`, authoritative `counts: EvalCounts`, and
+`report: TerminationReport<S::Float>`. Use `run_with_solver()` when you also
+need the final solver. The report retains the stopping decision and its
+evidence even after the solver is dropped or resumed.
+
+```rust
+use basin::Termination;
+
+match &result.report.termination {
+    Termination::Converged(convergence) => {
+        for criterion in convergence.criteria() {
+            println!("{:?}: {:?}", criterion.test, criterion.evidence);
+        }
+    }
+    Termination::Limit(limits) => println!("exhausted budgets: {limits:?}"),
+    stop => println!("stopped: {stop:?}"),
+}
+```
+
+`Termination` distinguishes `Converged`, `Limit`, `Target`, `Stalled`,
+`Failed`, `Cancelled`, and `Application`. A numerical failure returns a
+coherent state through `Ok`; a typed callback abort still returns `Err` and
+consumes the state. A failed stepper exposes evaluation counts but no report
+or recoverable checkpoint.
+
+Convergence retains all sufficient predicates evaluated at the stopping
+stage. `ConvergenceTest` identifies their formulas and norms;
+`ConvergenceEvidence` records measured values, tolerances, and reference
+values. Compound conditions stay grouped: LM's relative model-reduction test
+records actual and predicted reductions, reference cost, gain ratio, and
+tolerance. Extreme-scale LM comparisons retain significands and binary
+exponents rather than overflowing a reconstructed norm. External solvers can
+use `Termination::custom(key, definition, measurements)` with a namespaced
+key and named scalar measurements. Reports do not certify global optimality
+or parameter accuracy.
+
+The main replacements are:
+
+| Basin 1.x | Basin 2.0 |
+| --- | --- |
+| `result.reason` | `result.report.termination` |
+| `TerminationReason` | `Termination<F>` for decisions; `TerminationReport<F>` for published events |
+| `next_iter -> Result<(S, Option<TerminationReason>), E>` | `next_iter -> Result<SolverStep<S>, E>` |
+| `terminate` / `check_convergence -> Option<TerminationReason>` | `Option<Termination<S::Float>>` |
+| `stop_when -> Option<TerminationReason>` | `Option<ApplicationStop>` |
+| `Observe::observe_final(..., &TerminationReason)` | `observe_final(..., &TerminationReport<S::Float>)` |
+| `ObservationEvent::Final(reason)` | `ObservationEvent::Final(&report)` |
+| `StepOutcome::Stopped(reason)` | `StepOutcome::Stopped(report)` |
+| `Stepper::finished() -> Option<TerminationReason>` | `Option<&TerminationReport<S::Float>>` |
+| Enum casts such as `reason as u8` | `result.report.code().as_u8()` |
+
+`State::Float` now requires `Scalar`. `StepOutcome<F>` is `Clone`, rather than
+`Copy`. Final observer events borrow the report; clone it explicitly when
+retaining it beyond the callback. `TerminationCode` is a compact, lossy
+projection with an explicit `as_u8()` mapping preserving the 24 Basin 1.x
+numeric identifiers. Simultaneous criteria or budgets project to the first
+entry. Inspect the structured report when the distinction matters.
+
+`SolverStep` separates completion from termination. Use
+`SolverStep::completed(state)` to continue, `stopped(state, decision)` to
+publish a partial stopping step, or
+`completed_with_termination(state, decision)` when the stopping iteration
+finished. A completed stopping step increments the iteration count, fires
+the gated iteration observer, and then fires the final observer. A partial
+stopping step fires only the final observer. A continuing partial step
+publishes progress without incrementing the count or firing iteration observers.
+In all cases the executor
+publishes counts and incumbent updates. `report.stage` distinguishes an
+execution boundary from a step and records whether the step completed.
+
+LM now counts a completed trial that passes a native stopping test as an
+iteration, including a rejected trial. Initial gradient checks remain partial
+step stops at iteration zero. Evaluation counts and numerical trajectories
+are unchanged. BFGS reports a finite nonpositive line-search step as a
+numerical stall; a non-finite step is a numerical failure. Bounded L-BFGS
+reports its bound-clipped gradient predicate consistently, with the compact
+code `ProjectedGradientTolerance` for both default and configured tolerances.
+
+Execution controls still precede numerical checks. A limit report retains
+all budgets exhausted at that boundary, including their observed counts and
+thresholds. Application hooks return, for example,
+`Some(ApplicationStop::new("feasible_target"))`; they cannot impersonate a
+numerical convergence test. Targets and stalls retain their measurements.
+
+Exact continuation preserves solver and convergence history, discards the
+previous event, and produces a new report. Native identities are available
+from `result.report.termination.native_convergence_tests()` without retaining
+the solver. The compatibility accessor on `OptimizationResultWithSolver`
+now derives its owned `Vec<NativeConvergenceTest>` from the report, so an
+execution limit cannot expose an earlier convergence event.
+
+Composed solvers can call
+`report.into_outer_termination(PartialResultPolicy::Consume)` to accept inner
+limits, targets, or stalls as partial progress, or use `RequireConvergence`.
+An inner numerical failure retains its nested report. Cancellation and
+application stops propagate. An algorithm may explicitly reject a failed
+local candidate and continue, as basin hopping does; an inner convergence
+report never establishes outer convergence.
+
+Exact checkpoint files now use format version 3 because solver convergence
+history includes report payloads. Older exact formats are rejected. Finish
+those runs with the matching application and export parameters for a fresh
+run. State-only checkpoint files retain their format.
+
 ## Solver and line-search settings
 
 Basin 2.0 removes `BarrierMethod::new`, `AugmentedLagrangianMethod::new`,
@@ -102,7 +209,7 @@ checkpoint file I/O. The checkpoint writers keep their postcard formats:
   | Checkpoint                      | Accepted format                                     | Removed format                            |
   | ------------------------------- | --------------------------------------------------- | ----------------------------------------- |
   | State (`read_checkpoint`)       | `BASINST\0`, version 1, postcard payload            | Unprefixed bincode payload                |
-  | Exact (`read_exact_checkpoint`) | `BASINEX\0`, version 2, postcard header and payload | Version 1 with bincode header and payload |
+  | Exact (`read_exact_checkpoint`) | `BASINEX\0`, version 3, postcard header and payload | Versions 1 (bincode) and 2 (older solver layouts) |
 
 Both readers return `std::io::ErrorKind::InvalidData` for removed formats,
 unsupported versions, malformed data, or trailing bytes. Reading a checkpoint
@@ -159,7 +266,7 @@ executor.observe_solver(
 Import `State` and `ObserverMode` from `basin`; `ObservationEvent` and
 `ObserveSolver` are also root exports. A reusable observer keeps the familiar
 `observe_init`, `observe_iter`, and `observe_final` hooks, now with `&So` after
-`&S`. The final hook also receives `&TerminationReason`. All hooks have default
+`&S`. The final hook also receives `&TerminationReport<S::Float>`. All hooks have default
 no-op implementations. The closure receives `ObservationEvent::Init`, `Iter`,
 or `Final(reason)` instead.
 
@@ -830,7 +937,7 @@ let result = Executor::from_start(problem, solver, x0)
     .max_iter(1_000)
     .max_cost_evals(10_000)
     .stop_when(|state| {
-        (state.iter() >= 500).then_some(TerminationReason::UserRequested)
+        (state.iter() >= 500).then(|| ApplicationStop::new("user_requested"))
     })
     .run()?;
 ```
@@ -840,15 +947,15 @@ iteration-zero boundary. Their fixed order is iteration budget, cost budget,
 gradient budget, raw evaluation budgets, time budget, target, improvement stall,
 acceptance stall, and custom hooks in insertion order. This replaces criterion
 registration order. Budgets are checked at boundaries; initialization and an
-in-progress iteration can exceed an evaluation limit. A clean mid-step stop
+in-progress iteration can exceed an evaluation limit. A partial stopping step
 updates evaluation counts without incrementing the completed-step count.
-`TerminationReason`, `StepOutcome`, and optimization results still report why
+`TerminationReport`, `StepOutcome`, and optimization results describe why
 the run stopped. A budget, target, application stop, or numerical safeguard does
-not establish convergence. Native convergence details remain available through
-`run_with_solver()` and the result's `native_convergence_tests()`.
+not establish convergence. Native and shared convergence details are retained
+in the report from ordinary `run()`.
 
 Replace a custom criterion's `check` implementation with a closure returning
-`Option<TerminationReason>`. For reusable inner solves, move its constructor and
+`Option<ApplicationStop>`. For reusable inner solves, move its constructor and
 reset logic into a factory:
 
 ```rust
@@ -856,7 +963,7 @@ let inner = InnerExecutor::new(solver).stop_when_factory(|| {
     let mut checks = 0;
     move |_| {
         checks += 1;
-        (checks == 3).then_some(TerminationReason::UserRequested)
+        (checks == 3).then(|| ApplicationStop::new("user_requested"))
     }
 });
 ```

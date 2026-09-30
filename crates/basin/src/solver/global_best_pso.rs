@@ -6,7 +6,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::solver::cma_es::{apply_permutation, nan_last_cmp};
 
 /// Response applied when a particle crosses a box boundary.
@@ -79,8 +79,8 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 ///   particle arrays in parallel order, and maintain the personal/global
 ///   bests using strict improvements. `NaN` and `+∞` are treated as rejected
 ///   point costs; if initialization finds no usable cost, the run stops with
-///   [`TerminationReason::SolverFailed`]. A global cost of `-∞` stops with
-///   [`TerminationReason::SolverConverged`].
+///   [`crate::TerminationCode::SolverFailed`]. A global cost of `-∞` stops with
+///   [`crate::TerminationCode::SolverConverged`].
 ///
 /// Builder methods panic immediately on invalid coefficients or policy
 /// values. Invalid problem bounds or malformed warm-start vector shapes panic
@@ -651,10 +651,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let global_best = self
@@ -742,18 +739,27 @@ where
                 self.global_best_cost,
             )
             .expect("updated swarm has matching member shapes");
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(
         &self,
         _state: &PopulationProgress<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         let cost = self.global_best_cost;
         if !usable_cost(cost) {
-            Some(TerminationReason::SolverFailed)
+            Some(Termination::numerical_failure(
+                "The swarm has no incumbent with a usable objective value.",
+            ))
         } else if cost == F::neg_infinity() {
-            Some(TerminationReason::SolverConverged)
+            Some(Termination::custom(
+                "global_best_pso.negative_infinity",
+                "The published incumbent objective equals negative infinity.",
+                vec![crate::Measurement {
+                    name: "cost".into(),
+                    value: cost,
+                }],
+            ))
         } else {
             None
         }

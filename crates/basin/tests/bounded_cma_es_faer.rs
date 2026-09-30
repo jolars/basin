@@ -3,7 +3,7 @@
 use crate::backend_aliases::faer::{Col, Mat};
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, Executor, PopulationProgress, StepOutcome, TerminationReason,
+    BoundedCmaEs, Executor, PopulationProgress, StepOutcome, TerminationCode,
 };
 
 /// Same seed → same trajectory on the faer backend's bounded variant.
@@ -137,7 +137,7 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CmaEsTolerance);
 }
 
 /// Progress retains matching raw records while model fitness stays sorted.

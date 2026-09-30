@@ -80,7 +80,7 @@ fn projected_iterations_do_not_clone_bounds() {
     let mut state = solver.init(&mut problem, state).unwrap();
     clones.set(0);
     for _ in 0..20 {
-        state = solver.next_iter(&mut problem, state).unwrap().0;
+        state = solver.next_iter(&mut problem, state).unwrap().state;
     }
     assert_eq!(
         clones.get(),

@@ -5,10 +5,9 @@ use crate::BoxConstraints;
 use crate::core::math::{Scalar, ScaleRowsInPlace, VectorIndex, VectorLen};
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::state::PointState;
-use crate::core::termination::TerminationReason;
 
 pub(crate) type NllsStep<V, F, E> =
-    Result<(PointState<V, F>, Option<TerminationReason>), E>;
+    Result<crate::SolverStep<PointState<V, F>>, E>;
 
 // Separate implementations keep additional robust math capabilities off the
 // existing solver bounds, including downstream minimal Jacobian types.

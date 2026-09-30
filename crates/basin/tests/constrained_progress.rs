@@ -290,7 +290,7 @@ fn nonfinite_objectives_do_not_create_invalid_incumbents() {
         .max_iter(0)
         .run()
         .unwrap();
-    assert_eq!(result.reason, basin::TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), basin::TerminationCode::MaxIter);
     assert_eq!(result.state.best().unwrap().1, f64::NEG_INFINITY);
 }
 
@@ -300,13 +300,18 @@ fn constrained_target_hook_requires_feasibility_as_well_as_cost() {
         .stop_when(|state| {
             state.best().and_then(|(_, cost, violation)| {
                 (violation <= 1e-3 && cost <= 1.0)
-                    .then_some(basin::TerminationReason::TargetCost)
+                    .then(|| basin::ApplicationStop::new("feasible_target"))
             })
         })
         .max_iter(10)
         .run()
         .unwrap();
-    assert_eq!(result.reason, basin::TerminationReason::TargetCost);
+    assert_eq!(
+        result.report.termination,
+        basin::Termination::Application(basin::ApplicationStop::new(
+            "feasible_target"
+        ))
+    );
     assert!(result.state.iter() > 0);
     assert!(result.state.best().unwrap().2 <= 1e-3);
 }

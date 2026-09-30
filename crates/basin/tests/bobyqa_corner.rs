@@ -3,8 +3,7 @@ use std::ops::{Index, IndexMut};
 
 use basin::core::math::{Scalar, VectorLen};
 use basin::{
-    Bobyqa, BoxConstraints, CostFunction, Executor, PointState,
-    TerminationReason,
+    Bobyqa, BoxConstraints, CostFunction, Executor, PointState, TerminationCode,
 };
 
 struct Corner<V> {
@@ -75,7 +74,7 @@ where
         .unwrap();
 
         let tolerance = F::from_f64(1e-6).unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         for (i, &coefficient) in coefficients.iter().enumerate() {
             let expected = if coefficient < 0.0 {
                 F::one()

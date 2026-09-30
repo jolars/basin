@@ -30,7 +30,7 @@ use basin::{
     DenseMatrix, Executor, FiniteDiff, FirstOrderState, Gradient,
     GradientDescent, Mads, NelderMead, PointState, PopulationProgress,
     RandomSearch, SimplexProgress, Ssga, State, StepOutcome, Stepper,
-    TerminationReason,
+    TerminationCode,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -769,7 +769,15 @@ impl Run {
                     }
                 }
                 StepOutcome::Stopped(reason) => {
-                    self.finished = Some(reason_str(reason));
+                    if reason.stage
+                        == (basin::TerminationStage::Step { completed: true })
+                    {
+                        let (x, y) = self.inner.xy();
+                        self.trajectory.extend([x, y]);
+                        self.costs.push(self.inner.cost());
+                        iters_added += 1;
+                    }
+                    self.finished = Some(reason_str(reason.code()));
                     break;
                 }
             }
@@ -798,33 +806,33 @@ where
         .unwrap_or_else(|_| unreachable!("Problem2D's Error is Infallible"))
 }
 
-/// Stable, JS-friendly string for a `TerminationReason`. The wasm
+/// Stable, JS-friendly string for a `TerminationCode`. The wasm
 /// boundary discards Rust enum nuance, so we serialize one short tag
 /// per variant; the UI can branch on it.
-fn reason_str(r: TerminationReason) -> &'static str {
+fn reason_str(r: TerminationCode) -> &'static str {
     match r {
-        TerminationReason::UserRequested => "user_requested",
-        TerminationReason::MaxIter => "max_iter",
-        TerminationReason::MaxCostEvals => "max_cost_evals",
-        TerminationReason::MaxGradientEvals => "max_gradient_evals",
-        TerminationReason::GradientTolerance => "gradient_tolerance",
-        TerminationReason::RelativeGradientTolerance => {
+        TerminationCode::UserRequested => "user_requested",
+        TerminationCode::MaxIter => "max_iter",
+        TerminationCode::MaxCostEvals => "max_cost_evals",
+        TerminationCode::MaxGradientEvals => "max_gradient_evals",
+        TerminationCode::GradientTolerance => "gradient_tolerance",
+        TerminationCode::RelativeGradientTolerance => {
             "relative_gradient_tolerance"
         }
-        TerminationReason::ProjectedGradientTolerance => {
+        TerminationCode::ProjectedGradientTolerance => {
             "projected_gradient_tolerance"
         }
-        TerminationReason::ParamTolerance => "param_tolerance",
-        TerminationReason::RelativeParamTolerance => "relative_param_tolerance",
-        TerminationReason::CostTolerance => "cost_tolerance",
-        TerminationReason::RelativeCostTolerance => "relative_cost_tolerance",
-        TerminationReason::TargetCost => "target_cost",
-        TerminationReason::NoImprovement => "no_improvement",
-        TerminationReason::SimplexTolerance => "simplex_tolerance",
-        TerminationReason::MaxTime => "max_time",
-        TerminationReason::SolverConverged => "solver_converged",
-        TerminationReason::SolverFailed => "solver_failed",
-        TerminationReason::NumericalNoProgress => "numerical_no_progress",
+        TerminationCode::ParamTolerance => "param_tolerance",
+        TerminationCode::RelativeParamTolerance => "relative_param_tolerance",
+        TerminationCode::CostTolerance => "cost_tolerance",
+        TerminationCode::RelativeCostTolerance => "relative_cost_tolerance",
+        TerminationCode::TargetCost => "target_cost",
+        TerminationCode::NoImprovement => "no_improvement",
+        TerminationCode::SimplexTolerance => "simplex_tolerance",
+        TerminationCode::MaxTime => "max_time",
+        TerminationCode::SolverConverged => "solver_converged",
+        TerminationCode::SolverFailed => "solver_failed",
+        TerminationCode::NumericalNoProgress => "numerical_no_progress",
         _ => "unknown",
     }
 }
@@ -836,7 +844,7 @@ mod tests {
     #[test]
     fn numerical_no_progress_has_a_distinct_reason_tag() {
         assert_eq!(
-            reason_str(TerminationReason::NumericalNoProgress),
+            reason_str(TerminationCode::NumericalNoProgress),
             "numerical_no_progress"
         );
     }

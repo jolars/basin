@@ -12,7 +12,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 /// Two-phase log-barrier method for `min f(x) s.t. A x ≤ b`, layering a
 /// barrier on an unconstrained inner solver.
@@ -91,7 +91,7 @@ use crate::core::termination::TerminationReason;
 /// If a centered Phase I subproblem reaches
 /// [`with_absolute_phase_one_gap_tolerance`](Self::with_absolute_phase_one_gap_tolerance)
 /// without finding a strict point, the constraints are reported as
-/// [`SolverFailed`](TerminationReason::SolverFailed). An inner solve that
+/// [`SolverFailed`](crate::TerminationCode::SolverFailed). An inner solve that
 /// exhausts its iteration budget is not a certificate: Phase I retries the
 /// same `μ` from the returned candidate. Numerically, the centered certificate
 /// means "no strict interior at the configured scale": exact zero margin
@@ -102,7 +102,7 @@ use crate::core::termination::TerminationReason;
 ///
 /// The outer duality-gap test `m · μ ≤ tol` is solver-specific and lives on
 /// the solver (tenet 3): it fires via [`terminate`](Solver::terminate) as
-/// [`SolverConverged`](TerminationReason::SolverConverged). Pair with the
+/// [`SolverConverged`](crate::TerminationCode::SolverConverged). Pair with the
 /// executor's [`max_iter`](crate::Executor::max_iter) as a safety net. A strictly feasible start uses only
 /// Phase II; an infeasible or boundary start spends additional outer
 /// iterations in Phase I. With the defaults each continuation closes its gap
@@ -216,19 +216,37 @@ where
         &mut self,
         problem: &mut Problem<LogBarrier<'p, P, F>>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
-        let (state, reason) = self.inner.next_iter(problem, state)?;
-        let inner_failed = reason.is_some_and(|reason| reason.is_failure());
+    ) -> Result<crate::SolverStep<S>, Self::Error> {
+        let crate::SolverStep {
+            state,
+            termination: reason,
+            completed,
+        } = self.inner.next_iter(problem, state)?;
+        let inner_failed = reason.as_ref().is_some_and(|reason| {
+            !reason.can_continue_as_inner(crate::PartialResultPolicy::Consume)
+        });
         if !inner_failed
             && problem.inner().strict_feasibility(state.param()) == Some(true)
         {
-            Ok((state, Some(TerminationReason::SolverConverged)))
+            Ok(crate::SolverStep {
+                state,
+                completed,
+                termination: Some(Termination::custom(
+                    "barrier.strict_feasibility",
+                    "All inequality slacks are strictly positive.",
+                    vec![],
+                )),
+            })
         } else {
-            Ok((state, reason))
+            Ok(crate::SolverStep {
+                state,
+                termination: reason,
+                completed,
+            })
         }
     }
 
-    fn terminate(&self, state: &S) -> Option<TerminationReason> {
+    fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
         self.inner.terminate(state)
     }
 
@@ -239,7 +257,7 @@ where
         &mut self,
         problem: &Problem<LogBarrier<'p, P, F>>,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<S::Float>> {
         self.inner.check_convergence(problem, state)
     }
 }
@@ -311,7 +329,7 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// strict interior (default `1e-8`). If a centered Phase I subproblem has
     /// not found `A x < b` once its auxiliary duality gap `m · μ` reaches this
     /// tolerance, the solver reports
-    /// [`SolverFailed`](TerminationReason::SolverFailed).
+    /// [`SolverFailed`](crate::TerminationCode::SolverFailed).
     ///
     /// Finite precision cannot distinguish an empty interior from an
     /// arbitrarily thin one. This tolerance sets the numerical scale for that
@@ -379,7 +397,7 @@ where
             So::State,
             Error = <P as CostFunction>::Error,
         >,
-    So::State: State<Param = V> + CountsMirror,
+    So::State: State<Param = V, Float = F> + CountsMirror,
 {
     type Error = <P as CostFunction>::Error;
 
@@ -426,11 +444,15 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.accepted_iterate = false;
         if self.phase == BarrierPhase::Failed {
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "The barrier method could not initialize a finite barrier model.",
+                )),
+            )));
         }
 
         if self.phase == BarrierPhase::PhaseOne {
@@ -453,23 +475,38 @@ where
             problem.counts_mut().add(&inner_counts);
             let result = result?;
 
-            if result.reason.is_failure() {
+            if !result
+                .report
+                .termination
+                .can_continue_as_inner(crate::PartialResultPolicy::Consume)
+            {
                 self.phase = BarrierPhase::Failed;
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    result.report.into_outer_termination(
+                        crate::PartialResultPolicy::Consume,
+                    ),
+                )));
             }
 
             // Only the inner solver's gradient convergence can certify a
             // centered Phase I subproblem; a budget stop cannot.
             let centered = matches!(
-                result.reason,
-                TerminationReason::GradientTolerance
-                    | TerminationReason::RelativeGradientTolerance
+                &result.report.termination,
+                Termination::Converged(convergence) if convergence.criteria().iter().any(|criterion|
+                    matches!(criterion.test, crate::ConvergenceTest::AbsoluteGradientSquared | crate::ConvergenceTest::RelativeGradientSquared)
+                )
             );
             let candidate = result.state.param();
             let feasibility = strict_feasibility(problem.inner(), candidate);
             let Some(is_strictly_feasible) = feasibility else {
                 self.phase = BarrierPhase::Failed;
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "Phase I produced non-finite constraint slacks.",
+                    )),
+                )));
             };
 
             if is_strictly_feasible {
@@ -481,7 +518,7 @@ where
                 self.mu = self.mu0;
                 self.gap = F::infinity();
                 self.accepted_iterate = true;
-                return Ok((state, None));
+                return Ok(crate::SolverStep::from((state, None)));
             }
 
             state.replace(candidate.clone(), F::infinity());
@@ -496,13 +533,18 @@ where
                         * self.mu;
                 if phase_one_gap <= self.phase_one_tol {
                     self.phase = BarrierPhase::Failed;
-                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
+                            "A centered Phase I subproblem reached its gap threshold without strict feasibility.",
+                        )),
+                    )));
                 }
 
                 self.mu = self.mu / self.reduction;
             }
 
-            return Ok((state, None));
+            return Ok(crate::SolverStep::from((state, None)));
         }
 
         // Minimize the barrier objective at the current μ on a *separate*
@@ -531,16 +573,30 @@ where
         problem.counts_mut().add(&inner_counts);
         let result = result?;
 
-        if result.reason.is_failure() {
+        if !result
+            .report
+            .termination
+            .can_continue_as_inner(crate::PartialResultPolicy::Consume)
+        {
             self.phase = BarrierPhase::Failed;
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                result.report.into_outer_termination(
+                    crate::PartialResultPolicy::Consume,
+                ),
+            )));
         }
 
         // Publish the original objective only after verifying the barrier domain.
         let candidate = result.state.param();
         if strict_feasibility(problem.inner(), candidate) != Some(true) {
             self.phase = BarrierPhase::Failed;
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "The inner barrier solve returned a point outside the strict barrier domain.",
+                )),
+            )));
         }
         let cost = problem.cost(candidate)?;
         state.replace(candidate.clone(), cost);
@@ -550,22 +606,32 @@ where
         self.gap =
             F::from_usize(problem.inner().b().vec_len()).unwrap() * self.mu;
         self.mu = self.mu / self.reduction;
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {
         self.accepted_iterate
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         // Log-barrier duality-gap bound m·μ from the most recent solve.
         if self.phase == BarrierPhase::PhaseTwo
             && self.tol.is_some_and(|tol| self.gap <= tol)
         {
-            Some(TerminationReason::SolverConverged)
+            Some(Termination::custom(
+                "barrier.duality_gap",
+                "In phase two, m * mu is at most the configured duality-gap tolerance.",
+                vec![
+                    crate::Measurement {
+                        name: "gap".into(),
+                        value: self.gap,
+                    },
+                    crate::Measurement {
+                        name: "tolerance".into(),
+                        value: self.tol.unwrap(),
+                    },
+                ],
+            ))
         } else {
             None
         }

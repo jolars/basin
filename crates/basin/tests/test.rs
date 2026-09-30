@@ -11,8 +11,7 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::{
     Backtracking, BarrierMethod, CostFunction, Executor, Gradient,
-    GradientDescent, LinearInequalityConstraints, PointState,
-    TerminationReason,
+    GradientDescent, LinearInequalityConstraints, PointState, TerminationCode,
 };
 
 // 1. Define the problem. The objective and its gradient are the usual
@@ -100,13 +99,13 @@ fn barrier_method_tour() {
     let x = result.param();
     println!(
         "reason = {:?}, optimum ≈ ({:.5}, {:.5}), f = {:.5}",
-        result.reason,
+        result.report.code(),
         x[0],
         x[1],
         result.cost(),
     );
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((x[0] - 1.0).abs() < 1e-4 && (x[1] - 1.0).abs() < 1e-4);
 }
 

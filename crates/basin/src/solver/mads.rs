@@ -41,7 +41,7 @@
 //!
 //! MADS's natural convergence is the poll size `Δᵖ` reaching the configured floor
 //! `poll_size_min`; the solver signals it via
-//! [`TerminationReason::SolverConverged`]. Add [`max_cost_evals`](crate::Executor::max_cost_evals)
+//! [`crate::TerminationCode::SolverConverged`]. Add [`max_cost_evals`](crate::Executor::max_cost_evals)
 //! to cap the evaluation budget, or [`with_absolute_poll_size_tolerance`](crate::Mads::with_absolute_poll_size_tolerance) to
 //! stop early at a coarser poll size.
 //!
@@ -54,7 +54,7 @@
 //!
 //! [`CostFunction`]: crate::core::problem::CostFunction
 //! [`VectorLen`]: crate::core::math::VectorLen
-//! [`TerminationReason::SolverConverged`]: crate::TerminationReason::SolverConverged
+//! [`crate::TerminationCode::SolverConverged`]: crate::TerminationCode::SolverConverged
 
 pub(crate) mod driver;
 pub(crate) mod geometry;
@@ -69,7 +69,7 @@ use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, SelectedState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::solver::nelder_mead::Unbounded;
 
 use driver::{MadsWork, Transition};
@@ -420,8 +420,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let template = state.param().clone();
         let work = self
             .work
@@ -448,20 +447,31 @@ where
 
         // The poll size reaching its floor is MADS's natural convergence.
         let reason = match out.transition {
-            Transition::Converged => Some(TerminationReason::SolverConverged),
+            Transition::Converged => Some(Termination::custom(
+                "mads.final_poll",
+                "The poll schedule reached its configured minimum size.",
+                vec![crate::Measurement {
+                    name: "minimum_poll_size".into(),
+                    value: self.poll_size_min,
+                }],
+            )),
             Transition::Continue => None,
         };
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         let tolerance = self.poll_tolerance?;
         let metric = self.poll_size()?;
-        (metric.is_finite() && metric <= tolerance)
-            .then_some(TerminationReason::MeshTolerance)
+        (metric.is_finite() && metric <= tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::Mesh,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }
 
@@ -533,8 +543,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: SelectedState<V, F>,
-    ) -> Result<(SelectedState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
         let m = problem.inner().num_constraints();
         let template = state.param().clone();
         let work = self
@@ -566,20 +575,34 @@ where
         }
 
         let reason = match out.transition {
-            Transition::Converged => Some(TerminationReason::SolverConverged),
+            Transition::Converged => Some(Termination::custom(
+                "mads.final_poll",
+                "The poll schedule reached its configured minimum size.",
+                vec![crate::Measurement {
+                    name: "minimum_poll_size".into(),
+                    value: self.poll_size_min,
+                }],
+            )),
             Transition::Continue => None,
         };
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
     fn terminate(
         &self,
         _state: &SelectedState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         let tolerance = self.poll_tolerance?;
         let metric = self.poll_size()?;
-        (metric.is_finite() && metric <= tolerance)
-            .then_some(TerminationReason::MeshTolerance)
+        (metric.is_finite() && metric <= tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::Mesh,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }
 
@@ -648,8 +671,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let n = state.param().vec_len();
         let lower = to_vec(problem.inner().lower(), n);
         let upper = to_vec(problem.inner().upper(), n);
@@ -679,19 +701,30 @@ where
         }
 
         let reason = match out.transition {
-            Transition::Converged => Some(TerminationReason::SolverConverged),
+            Transition::Converged => Some(Termination::custom(
+                "mads.final_poll",
+                "The poll schedule reached its configured minimum size.",
+                vec![crate::Measurement {
+                    name: "minimum_poll_size".into(),
+                    value: self.poll_size_min,
+                }],
+            )),
             Transition::Continue => None,
         };
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         let tolerance = self.poll_tolerance?;
         let metric = self.poll_size()?;
-        (metric.is_finite() && metric <= tolerance)
-            .then_some(TerminationReason::MeshTolerance)
+        (metric.is_finite() && metric <= tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::Mesh,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }

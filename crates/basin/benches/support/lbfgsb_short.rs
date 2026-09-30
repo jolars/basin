@@ -8,7 +8,7 @@ use super::Vector;
 use basin::{
     BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
     GradientState, Lbfgsb, OptimizationResult, Solver, State, Stepper,
-    TerminationReason,
+    TerminationCode,
 };
 use std::convert::Infallible;
 
@@ -186,7 +186,7 @@ impl<V: Vector> Short<V> {
                 && (state.cost_evals() >= 1000
                     || pg <= 1e-10 * (1.0 + value.abs()))
             {
-                return Some(TerminationReason::UserRequested);
+                return Some(basin::ApplicationStop::new("benchmark_target"));
             }
             if cost_tolerance > 0.0
                 && old.is_some_and(|old| {
@@ -194,7 +194,7 @@ impl<V: Vector> Short<V> {
                         <= cost_tolerance * old.abs().max(value.abs()).max(1.0)
                 })
             {
-                Some(TerminationReason::RelativeCostTolerance)
+                Some(basin::ApplicationStop::new("benchmark_relative_cost"))
             } else {
                 None
             }
@@ -249,8 +249,8 @@ impl<V: Vector> Short<V> {
         assert_eq!(result.cost_evals(), evaluations);
         assert_eq!(result.state.gradient_evals(), evaluations);
         assert_eq!(
-            result.reason,
-            TerminationReason::ProjectedGradientTolerance
+            result.report.code(),
+            TerminationCode::ProjectedGradientTolerance
         );
         self.verify_feasibility(result.param().as_slice());
         for (&value, &expected) in result.param().as_slice().iter().zip(target)

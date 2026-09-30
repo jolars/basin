@@ -12,7 +12,7 @@ use crate::core::math::{
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
@@ -130,7 +130,7 @@ pub enum LmDamping {
 /// - **Cholesky failure under bumped μ.** Roundoff can defeat positive
 ///   definiteness when damping is small relative to the Jacobian's
 ///   conditioning. If no usable step is available, the inner loop increases
-///   μ and retries, returning [`TerminationReason::SolverFailed`] if the attempt
+///   μ and retries, returning [`crate::TerminationCode::SolverFailed`] if the attempt
 ///   cap is reached or damping overflows. Positive damping does not guarantee
 ///   accurate steps from normal equations. Initially zero columns have a unit scaling floor.
 /// - **Divergence on highly nonlinear or poorly initialized problems.**
@@ -140,7 +140,7 @@ pub enum LmDamping {
 ///   [`max_iter`](crate::Executor::max_iter) on the executor.
 /// - **Unchanged finite trial.** By default, a rejected trial whose computed
 ///   step leaves every parameter unchanged reports
-///   [`TerminationReason::NumericalNoProgress`]. This can occur at an accurate
+///   [`crate::TerminationCode::NumericalNoProgress`]. This can occur at an accurate
 ///   rounded solution or an inaccurate, heavily damped point. An outer solver
 ///   may consume the result and continue. Configure this independently with
 ///   [`Self::with_no_progress_check`].
@@ -154,7 +154,7 @@ pub enum LmDamping {
 /// test does not disable the absolute gradient test.
 ///
 /// Five native tests combine with OR and report
-/// [`TerminationReason::SolverConverged`]:
+/// [`crate::TerminationCode::SolverConverged`]:
 ///
 /// - [`with_absolute_gradient_tolerance`](Self::with_absolute_gradient_tolerance):
 ///   `‖Jᵀr‖_∞ ≤ tolerance`, default `1e-8`.
@@ -428,7 +428,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Configure the scaled trust radius relative to the scaled iterate norm.
     ///
     /// With [`LmDamping::TrustRegion`], reports
-    /// [`TerminationReason::SolverConverged`] when
+    /// [`crate::TerminationCode::SolverConverged`] when
     /// `δ ≤ tolerance * sqrt(xᵀ D x)`, using the updated radius and the
     /// current monotone Marquardt diagonal. The check runs after acceptance:
     /// `x` is the accepted iterate, or the base iterate after rejection.
@@ -466,7 +466,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Stop after one rejected finite trial whose computed `x + h` equals
     /// the base `x` componentwise. Enabled by default.
     ///
-    /// Reports [`TerminationReason::NumericalNoProgress`], which permits an
+    /// Reports [`crate::TerminationCode::NumericalNoProgress`], which permits an
     /// outer solver to consume the result but makes no convergence, fit, or
     /// parameter-recovery claim. Excessive damping can trigger this safeguard
     /// at an inaccurate point. A rejected trial with different coordinates
@@ -532,7 +532,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 
     /// Maximum number of damping bumps inside a single outer iteration
-    /// before giving up with [`TerminationReason::SolverFailed`]. With Nielsen
+    /// before giving up with [`crate::TerminationCode::SolverFailed`]. With Nielsen
     /// damping, each bump multiplies μ by ν (initially 2) and doubles ν;
     /// overflow can end retries before the cap. Default `50`.
     ///
@@ -588,8 +588,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
     }
 }
@@ -639,8 +638,7 @@ where
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
     }
 }
@@ -748,7 +746,12 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
     {
         self.native_convergence.clear();
         if self.failed {
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "LM initialization produced an invalid residual model.",
+                )),
+            )));
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
@@ -761,7 +764,12 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 let j = problem.jacobian(state.param())?;
                 let Some((model_r, j)) = problem.model(&r, j) else {
                     self.failed = true;
-                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
+                            "The least-squares objective cannot produce a valid local model.",
+                        )),
+                    )));
                 };
                 (
                     Model::prepare(&j, model_r.as_ref().unwrap_or(&r)),
@@ -775,7 +783,12 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 self.model_cache = Some(Err(error));
                 self.r_cache = Some(r);
                 self.jtr_cache = Some(g);
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "LM model factorization failed.",
+                    )),
+                )));
             }
         };
         // Squaring a finite gradient can overflow even when the QR step is valid.
@@ -790,7 +803,12 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             self.model_cache = Some(Ok(a));
             self.r_cache = Some(r);
             self.jtr_cache = Some(g);
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "The residual, objective, or gradient is non-finite.",
+                )),
+            )));
         }
         let diag_cur = Model::diagonal(&a);
 
@@ -812,6 +830,36 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             }
         });
         if abs_converged || rel_converged {
+            let absolute = abs_converged.then(|| {
+                Termination::upper_bound(
+                    crate::ConvergenceTest::AbsoluteGradientInfinity,
+                    g.norm_infinity(),
+                    self.tol_grad.unwrap(),
+                    self.tol_grad.unwrap(),
+                    None,
+                )
+            });
+            let relative = rel_converged.then(|| {
+                Termination::converged(crate::ConvergenceCriterion {
+                    test: if E::ROBUST {
+                        crate::ConvergenceTest::RobustGradientOrthogonality
+                    } else {
+                        crate::ConvergenceTest::GradientOrthogonality
+                    },
+                    evidence: stopping::orthogonality_evidence(
+                        &g,
+                        &diag_cur,
+                        &r,
+                        E::ROBUST.then_some(state.cost()),
+                        self.tol_grad_rel.unwrap(),
+                    ),
+                })
+            });
+            let termination = absolute
+                .into_iter()
+                .chain(relative)
+                .reduce(Termination::merge)
+                .unwrap();
             if abs_converged {
                 self.native_convergence
                     .push(NativeConvergenceTest::AbsoluteGradient);
@@ -827,7 +875,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             self.r_cache = Some(r);
             self.model_cache = Some(Ok(a));
             self.jtr_cache = Some(g);
-            return Ok((state, Some(TerminationReason::SolverConverged)));
+            return Ok(crate::SolverStep::from((state, Some(termination))));
         }
 
         // Moré's monotone scaling keeps the damped Gram positive definite.
@@ -887,7 +935,12 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 self.r_cache = Some(r);
                 self.model_cache = Some(Ok(a));
                 self.jtr_cache = Some(g);
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "LM could not solve the damped model within its retry limit.",
+                    )),
+                )));
             }
         };
 
@@ -993,6 +1046,45 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             .tol_step_rel
             .is_some_and(|tol| relative_step_converged(&h, state.param(), tol));
         if cost_rel_converged || step_rel_converged || radius_rel_converged {
+            let model = cost_rel_converged.then(|| {
+                Termination::converged(crate::ConvergenceCriterion {
+                    test: crate::ConvergenceTest::RelativeModelReduction,
+                    evidence: crate::ConvergenceEvidence::ModelReduction {
+                        actual: actual_diff,
+                        predicted: l_diff,
+                        reference_cost: prev_cost,
+                        gain_ratio: rho,
+                        tolerance: self.tol_cost_rel.unwrap(),
+                    },
+                })
+            });
+            let step = step_rel_converged.then(|| {
+                Termination::converged(crate::ConvergenceCriterion {
+                    test: crate::ConvergenceTest::RelativeTrialStep,
+                    evidence: stopping::step_evidence(
+                        &h,
+                        state.param(),
+                        self.tol_step_rel.unwrap(),
+                    ),
+                })
+            });
+            let radius = radius_rel_converged.then(|| {
+                Termination::converged(crate::ConvergenceCriterion {
+                    test: crate::ConvergenceTest::RelativeTrustRadius,
+                    evidence: stopping::radius_evidence(
+                        self.radius.unwrap(),
+                        state.param(),
+                        self.diag.as_ref().unwrap(),
+                        self.tol_radius_rel.unwrap(),
+                    ),
+                })
+            });
+            let termination = model
+                .into_iter()
+                .chain(step)
+                .chain(radius)
+                .reduce(Termination::merge)
+                .unwrap();
             if cost_rel_converged {
                 self.native_convergence
                     .push(NativeConvergenceTest::RelativeModelReduction);
@@ -1005,18 +1097,26 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 self.native_convergence
                     .push(NativeConvergenceTest::RelativeTrustRadius);
             }
-            return Ok((state, Some(TerminationReason::SolverConverged)));
+            return Ok(crate::SolverStep::completed_with_termination(
+                state,
+                termination,
+            ));
         }
 
         if numerical_no_progress {
-            return Ok((state, Some(TerminationReason::NumericalNoProgress)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_stall(
+                    "A finite rejected LM trial changes no parameter in floating-point arithmetic.",
+                )),
+            )));
         }
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }
 
-type LmStep<V, F, E> = Result<(PointState<V, F>, Option<TerminationReason>), E>;
+type LmStep<V, F, E> = Result<crate::SolverStep<PointState<V, F>>, E>;
 
 #[derive(PartialEq)]
 enum ModelSolveError {
@@ -1364,8 +1464,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.inner.next_iter_model::<_, M, PivotedQr>(
             problem,
             state,
@@ -1414,8 +1513,7 @@ where
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.inner.next_iter_model::<_, M, PivotedQr>(
             problem,
             state,
@@ -1505,7 +1603,10 @@ mod tests {
             .max_iter(50)
             .run()
             .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(
+            result.report.code(),
+            crate::TerminationCode::SolverConverged
+        );
         assert!((result.param()[0] - 1.).abs() < 1e-8);
     }
 }

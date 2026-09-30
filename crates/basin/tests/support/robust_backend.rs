@@ -1,7 +1,7 @@
 use basin::{
     BoxConstraints, CostFunction, Executor, HuberLoss, Jacobian, PointState,
-    Residual, RobustLeastSquares, Scalar, Solver, TerminationReason,
-    VectorIndex, VectorLen,
+    Residual, RobustLeastSquares, Scalar, Solver, TerminationCode, VectorIndex,
+    VectorLen,
 };
 use std::convert::Infallible;
 
@@ -69,7 +69,7 @@ where
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param().get_scalar(0) - F::from_f64(1.0 / 3.0).unwrap()).abs()
             < tolerance

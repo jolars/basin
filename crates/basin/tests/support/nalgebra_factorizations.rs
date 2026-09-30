@@ -60,7 +60,7 @@ fn gauss_newton_converges_through_lapack_cholesky() {
     // through `LinearSolveSpd` on the nalgebra backend, i.e. the LAPACK
     // Cholesky impl under this feature. Mirrors `gauss_newton_nalgebra.rs`.
     use basin::problems::RosenbrockResiduals;
-    use basin::{Executor, GaussNewton, PointState, TerminationReason};
+    use basin::{Executor, GaussNewton, PointState, TerminationCode};
 
     let problem = RosenbrockResiduals::<DVector<f64>>::new();
     let initial = DVector::from_vec(vec![-1.2, 1.0]);
@@ -70,7 +70,7 @@ fn gauss_newton_converges_through_lapack_cholesky() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.param();
     assert!(approx_eq(x[0], 1.0, 1e-6));
     assert!(approx_eq(x[1], 1.0, 1e-6));

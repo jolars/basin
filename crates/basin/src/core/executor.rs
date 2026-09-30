@@ -14,7 +14,7 @@
 //!    (including the first):
 //!    1. An executor-attached [`CancellationToken`] is checked, when
 //!       configured. Cancellation stops the run with
-//!       [`TerminationReason::Cancelled`]. The borrowed [`run_loop_with_control`] path
+//!       [`Termination::Cancelled`]. The borrowed [`run_loop_with_control`] path
 //!       has no attached token and skips this step.
 //!    2. Execution controls check iteration, legacy cost and gradient budgets,
 //!       raw evaluation budgets, elapsed time, target cost, improvement stall,
@@ -23,12 +23,11 @@
 //!    3. [`Solver::check_convergence`] evaluates solver-owned convergence.
 //!       Its default delegates to the legacy [`Solver::terminate`] hook.
 //!       The first stop ends the run.
-//! 3. If nothing fired, [`Solver::next_iter`] is called. It may itself
-//!    report a mid-iter termination via its return tuple; in that case
-//!    the iteration counter is **not** incremented, so the final
-//!    [`State::iter`] reflects the last *fully completed* iteration.
-//! 4. Otherwise the iteration counter is incremented and we go back to
-//!    step 2.
+//! 3. If nothing fired, [`Solver::next_iter`] returns a [`SolverStep`]. The
+//!    executor publishes counts and coherent progress, increments the iteration
+//!    counter when `completed` is true, and updates the incumbent.
+//! 4. A step with `termination` stops with a report tagged
+//!    [`TerminationStage::Step`]. Otherwise execution returns to step 2.
 //!
 //! Because checks happen *before* iter 0, an already-optimal initial
 //! point exits immediately with the corresponding reason rather than
@@ -47,9 +46,7 @@
 //! final solver and raw counters with [`Executor::run_with_solver`].
 
 use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
-use crate::core::convergence::{
-    NativeConvergenceDiagnostics, NativeConvergenceTest,
-};
+use crate::core::convergence::NativeConvergenceTest;
 use crate::core::observer::{
     ObservationEvent, Observe, ObserveSolver, ObserverMode, SolverCallback,
     StateObserver,
@@ -58,7 +55,10 @@ use crate::core::problem::{EvalCounts, Problem};
 use crate::core::run_control::RunControl;
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, ExactResumeState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::{
+    ApplicationStop, Termination, TerminationReport, TerminationStage,
+};
+use crate::{Scalar, SolverStep};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -115,16 +115,18 @@ impl CancellationToken {
 
 /// Outcome of an optimization run.
 ///
-/// Owns the final solver state plus the reason the executor stopped.
+/// Owns the final progress, authoritative evaluation counts, and stopping report.
 /// Delegates `param()`/`cost()`/`iter()` to the underlying state so
 /// callers don't need to import `State` for the common reads.
-/// Use [`Executor::run_with_solver`] to retain the final solver and raw counts
+/// Use [`Executor::run_with_solver`] to retain the final solver as well
 /// in an [`OptimizationResultWithSolver`].
-pub struct OptimizationResult<S> {
+pub struct OptimizationResult<S: State> {
+    /// Authoritative evaluation counts in this run's scope.
+    pub counts: EvalCounts,
     /// Final solver state at termination.
     pub state: S,
     /// Why the executor stopped.
-    pub reason: TerminationReason,
+    pub report: TerminationReport<S::Float>,
 }
 
 impl<S: State> OptimizationResult<S> {
@@ -191,7 +193,7 @@ impl<S: State> OptimizationResult<S> {
 /// Shared states report raw cost calls through [`cost_evals`](Self::cost_evals).
 /// Custom states define their own [`CountsMirror`] mapping.
 /// [`counts`](Self::counts) always contains the authoritative per-category counters.
-pub struct OptimizationResultWithSolver<S, So> {
+pub struct OptimizationResultWithSolver<S: State, So> {
     /// Final solver state at termination.
     pub state: S,
     /// Final solver, including its evolving machinery and convergence history.
@@ -199,63 +201,18 @@ pub struct OptimizationResultWithSolver<S, So> {
     /// Authoritative evaluation counters, including counts restored on resume.
     pub counts: EvalCounts,
     /// Why the executor stopped.
-    pub reason: TerminationReason,
+    pub report: TerminationReport<S::Float>,
 }
 
-impl<S, So: NativeConvergenceDiagnostics> OptimizationResultWithSolver<S, So> {
-    /// Native tests that caused this run's [`TerminationReason::SolverConverged`].
-    ///
-    /// Returns an empty slice for every other termination reason, including
-    /// shared observed convergence checks, numerical safeguards, and execution
-    /// limits. This prevents an earlier native stop retained in an exact
-    /// checkpoint from being attributed to a subsequent budget stop.
-    /// Application hooks should report [`TerminationReason::UserRequested`]:
-    /// the 1.x reason cannot distinguish a hook returning `SolverConverged`
-    /// from a native stop.
-    /// Neither this reader nor the solver capability performs evaluations.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use basin::{DenseMatrix, Executor, Jacobian, LevenbergMarquardtQr,
-    ///     NativeConvergenceTest, Residual, TerminationReason};
-    /// # struct Fit;
-    /// # impl Residual for Fit {
-    /// #     type Param = Vec<f64>;
-    /// #     type Output = Vec<f64>;
-    /// #     type Error = std::convert::Infallible;
-    /// #     fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
-    /// #         Ok(vec![x[0] - 1.])
-    /// #     }
-    /// # }
-    /// # impl Jacobian for Fit {
-    /// #     type Jacobian = DenseMatrix;
-    /// #     fn jacobian(&self, _: &Vec<f64>) -> Result<DenseMatrix, Self::Error> {
-    /// #         Ok(DenseMatrix::from_row_slice(1, 1, &[1.]))
-    /// #     }
-    /// # }
-    /// # let problem = Fit;
-    /// # let x0 = vec![1.];
-    /// let solver = LevenbergMarquardtQr::<Vec<f64>, DenseMatrix>::new();
-    /// let result = Executor::from_start(problem, solver, x0)
-    ///     .max_iter(100)
-    ///     .run_with_solver()?;
-    /// if result.reason == TerminationReason::SolverConverged {
-    ///     assert!(result.native_convergence_tests()
-    ///         .contains(&NativeConvergenceTest::AbsoluteGradient));
-    /// }
-    /// # Ok::<(), std::convert::Infallible>(())
-    /// ```
-    pub fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
-        if self.reason == TerminationReason::SolverConverged {
-            self.solver.native_convergence_tests()
-        } else {
-            &[]
-        }
+impl<S: State, So> OptimizationResultWithSolver<S, So> {
+    /// Native criteria from this stopping event, without consulting retained
+    /// solver history. Shared and native criteria can both appear in a report.
+    pub fn native_convergence_tests(&self) -> Vec<NativeConvergenceTest> {
+        self.report.termination.native_convergence_tests()
     }
 }
 
-impl<S, So> OptimizationResultWithSolver<S, So> {
+impl<S: State, So> OptimizationResultWithSolver<S, So> {
     /// Consume the result and return the final state, dropping the solver.
     pub fn into_state(self) -> S {
         self.state
@@ -263,12 +220,12 @@ impl<S, So> OptimizationResultWithSolver<S, So> {
 
     /// Consume the result and retain ordinary progress and its stop reason.
     ///
-    /// Drops the solver and the raw counters. State-mirrored counts remain
-    /// available through the returned [`OptimizationResult`].
+    /// Drops the solver while preserving the report and authoritative counts.
     pub fn into_result(self) -> OptimizationResult<S> {
         OptimizationResult {
             state: self.state,
-            reason: self.reason,
+            report: self.report,
+            counts: self.counts,
         }
     }
 
@@ -329,17 +286,28 @@ impl<S: State, So> OptimizationResultWithSolver<S, So> {
 
 /// Outcome of a single [`Stepper::step`] call.
 ///
-/// `Stopped` carries the same [`TerminationReason`] the executor would
+/// `Stopped` carries the same [`TerminationReport`] the executor would
 /// have returned. After `Stopped` is returned once, subsequent calls to
 /// `step` keep returning the same `Stopped(reason)` so callers don't
 /// have to track whether they're done.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StepOutcome {
-    /// The step completed without triggering termination.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StepOutcome<F: Scalar = f64> {
+    /// Execution may continue after this step's publication. Read the state
+    /// iteration count to distinguish completed iterations from partial steps.
     Continue,
     /// Termination fired with the given reason. Subsequent
     /// [`Stepper::step`] calls keep returning this same outcome.
-    Stopped(TerminationReason),
+    Stopped(TerminationReport<F>),
+}
+
+impl<F: Scalar> StepOutcome<F> {
+    /// Borrow the report when this step stopped the run.
+    pub fn report(&self) -> Option<&TerminationReport<F>> {
+        match self {
+            Self::Continue => None,
+            Self::Stopped(report) => Some(report),
+        }
+    }
 }
 
 /// Drive a solver one iteration at a time.
@@ -369,7 +337,7 @@ pub enum StepOutcome {
 ///     }
 /// };
 /// ```
-pub struct Stepper<P, S, So> {
+pub struct Stepper<P, S: State, So> {
     problem: Problem<P>,
     // `Option<S>` because `Solver::next_iter` consumes the state by
     // value. A hard error cannot restore that owned value, so the slot
@@ -380,7 +348,7 @@ pub struct Stepper<P, S, So> {
     observers: Vec<(Box<dyn ObserveSolver<S, So>>, ObserverMode)>,
     checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
-    finished: Option<TerminationReason>,
+    finished: Option<TerminationReport<S::Float>>,
 }
 
 impl<P, S, So> Stepper<P, S, So>
@@ -426,7 +394,7 @@ where
     }
 
     /// Termination reason if the stepper has stopped, else `None`.
-    pub fn finished(&self) -> Option<&TerminationReason> {
+    pub fn finished(&self) -> Option<&TerminationReport<S::Float>> {
         self.finished.as_ref()
     }
 
@@ -441,13 +409,13 @@ where
         self.state().iter()
     }
 
-    /// Advance one iteration. Once a `Stopped` outcome has been returned
+    /// Run one solver step. Once a `Stopped` outcome has been returned
     /// the stepper is sticky: subsequent calls keep returning the same
     /// `Stopped(reason)` without touching the state or solver.
     ///
     /// Registered observers fire here:
-    /// [`observe_iter`](Observe::observe_iter) on
-    /// [`StepOutcome::Continue`], gated by each observer's
+    /// [`observe_iter`](Observe::observe_iter) after completed iterations,
+    /// including completed stopping steps, gated by each observer's
     /// [`ObserverMode`]; [`observe_final`](Observe::observe_final) once
     /// when this call first returns [`StepOutcome::Stopped`]. See the
     /// [`observer`](crate::core::observer) module for the lifecycle.
@@ -460,16 +428,21 @@ where
     /// call [`into_checkpoint`](Self::into_checkpoint), which returns `None`.
     /// State access and further stepping are not supported after the error.
     /// Observers and checkpoint sinks do not fire on the failed transition.
-    pub fn step(&mut self) -> Result<StepOutcome, So::Error> {
-        if let Some(reason) = self.finished {
-            return Ok(StepOutcome::Stopped(reason));
+    pub fn step(&mut self) -> Result<StepOutcome<S::Float>, So::Error> {
+        if let Some(report) = &self.finished {
+            return Ok(StepOutcome::Stopped(report.clone()));
         }
+        let starting_iter = self.state().iter();
         let outcome = if self
             .cancellation_token
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
         {
-            StepOutcome::Stopped(TerminationReason::Cancelled)
+            StepOutcome::Stopped(TerminationReport {
+                termination: Termination::Cancelled,
+                stage: TerminationStage::Boundary,
+                iteration: self.state().iter(),
+            })
         } else {
             step_once(
                 &mut self.problem,
@@ -479,13 +452,16 @@ where
                 &mut self.control,
             )?
         };
-        match outcome {
+        match &outcome {
             StepOutcome::Continue => {
                 let state = self
                     .state
                     .as_ref()
                     .expect("state slot is Some after Continue");
                 let iter = state.iter();
+                if iter == starting_iter {
+                    return Ok(outcome);
+                }
                 // `update_best` set `best_iter == iter` iff this iteration
                 // strictly improved the incumbent; that is exactly the
                 // `NewBest` firing condition.
@@ -506,14 +482,25 @@ where
                 }
             }
             StepOutcome::Stopped(reason) => {
-                self.finished = Some(reason);
+                self.finished = Some(reason.clone());
                 let state =
                     self.state.as_ref().expect("state slot is Some on Stopped");
                 for (checkpoint, _mode) in self.checkpoints.iter_mut() {
                     checkpoint.save(&self.solver, state, self.problem.counts());
                 }
+                if reason.stage == (TerminationStage::Step { completed: true })
+                {
+                    for (observer, mode) in self.observers.iter_mut() {
+                        if mode.fires_on(
+                            state.iter(),
+                            state.best_iter() == state.iter(),
+                        ) {
+                            observer.observe_iter(state, &self.solver);
+                        }
+                    }
+                }
                 for (observer, _mode) in self.observers.iter_mut() {
-                    observer.observe_final(state, &self.solver, &reason);
+                    observer.observe_final(state, &self.solver, reason);
                 }
             }
         }
@@ -523,7 +510,7 @@ where
     /// Drive [`step`](Self::step) to completion and return an
     /// [`OptimizationResult`].
     /// Use [`run_to_end_with_solver`](Self::run_to_end_with_solver) to retain
-    /// the final solver and raw evaluation counters as well.
+    /// the final solver as well.
     pub fn run_to_end(self) -> Result<OptimizationResult<S>, So::Error> {
         self.run_to_end_with_solver()
             .map(OptimizationResultWithSolver::into_result)
@@ -552,7 +539,7 @@ where
                         .expect("state slot is Some on stop"),
                     solver: self.solver,
                     counts: *self.problem.counts(),
-                    reason,
+                    report: reason,
                 });
             }
         }
@@ -641,49 +628,43 @@ fn step_once<P, S, So>(
     state_slot: &mut Option<S>,
     solver: &mut So,
     control: &mut RunControl<S>,
-) -> Result<StepOutcome, So::Error>
+) -> Result<StepOutcome<S::Float>, So::Error>
 where
     S: State + CountsMirror,
     So: Solver<P, S>,
 {
+    let state = state_slot.as_ref().expect("cannot step after a hard error");
+    if let Some(termination) = control
+        .check(state, &problem.counts().delta_since(baseline))
+        .or_else(|| solver.check_convergence(problem, state))
     {
-        let state = state_slot
-            .as_ref()
-            .expect("step_once called with empty state slot");
-        if let Some(reason) =
-            control.check(state, &problem.counts().delta_since(baseline))
-        {
-            return Ok(StepOutcome::Stopped(reason));
-        }
-        if let Some(reason) = solver.check_convergence(problem, state) {
-            return Ok(StepOutcome::Stopped(reason));
-        }
+        return Ok(StepOutcome::Stopped(TerminationReport {
+            termination,
+            stage: TerminationStage::Boundary,
+            iteration: state.iter(),
+        }));
     }
-    let prev = state_slot.take().unwrap();
-    let next_iter_result = solver.next_iter(problem, prev);
-    let (mut next, mid_iter_reason) = match next_iter_result {
-        Ok(t) => t,
-        Err(e) => {
-            // The solver consumed `prev`, so restoring the state would
-            // require a separate snapshot. Preserve the hard error and
-            // leave the wrapper's charged counts available for diagnosis.
-            return Err(e);
-        }
-    };
+    let SolverStep {
+        state: mut next,
+        completed,
+        termination,
+    } = solver.next_iter(problem, state_slot.take().unwrap())?;
     control.validate(&next);
     next.mirror(&problem.counts().delta_since(baseline));
-    if let Some(reason) = mid_iter_reason {
-        // Refresh best-so-far from the mid-iter state too: the solver
-        // may have produced its best iterate on the same step that
-        // bailed.
-        next.update_best();
-        *state_slot = Some(next);
-        return Ok(StepOutcome::Stopped(reason));
+    if completed {
+        next.increment_iter();
     }
-    next.increment_iter();
     next.update_best();
+    let iteration = next.iter();
     *state_slot = Some(next);
-    Ok(StepOutcome::Continue)
+    Ok(match termination {
+        Some(termination) => StepOutcome::Stopped(TerminationReport {
+            termination,
+            stage: TerminationStage::Step { completed },
+            iteration,
+        }),
+        None => StepOutcome::Continue,
+    })
 }
 
 /// Drive a borrowed solver using execution budgets and application stops.
@@ -695,8 +676,8 @@ where
 /// For an adapter problem, use a separate wrapper and fold its counts into
 /// the outer wrapper with [`EvalCounts::add`] and [`Problem::counts_mut`].
 ///
-/// Execution controls run before solver convergence. A mid-iteration stop
-/// preserves the count of fully completed iterations. This borrowed driver
+/// Execution controls run before solver convergence. Step completion and
+/// termination are independent, as in [`SolverStep`]. This borrowed driver
 /// has no executor-attached cancellation token. See [`RunControl`] for check
 /// ordering and clock semantics.
 pub fn run_loop_with_control<P, S, So>(
@@ -752,7 +733,8 @@ where
     };
     Ok(OptimizationResult {
         state: slot.take().expect("state slot is Some on stop"),
-        reason,
+        report: reason,
+        counts: problem.counts().delta_since(&baseline),
     })
 }
 
@@ -802,7 +784,7 @@ where
 ///
 /// assert!(result.cost() < 1e-12);
 /// ```
-pub struct Executor<P, S, So> {
+pub struct Executor<P, S: State, So> {
     problem: P,
     state: S,
     solver: So,
@@ -932,7 +914,7 @@ where
     /// The closure sees an initialized state, including iteration zero.
     pub fn stop_when<C>(mut self, check: C) -> Self
     where
-        C: FnMut(&S) -> Option<TerminationReason> + 'static,
+        C: FnMut(&S) -> Option<ApplicationStop> + 'static,
     {
         self.control = std::mem::take(&mut self.control).stop_when(check);
         self
@@ -942,7 +924,7 @@ where
     ///
     /// The executor checks the token after [`Solver::init`] and before every
     /// top-level iteration. A cancellation request returns
-    /// `Ok(OptimizationResult)` with [`TerminationReason::Cancelled`]; the
+    /// `Ok(OptimizationResult)` with [`Termination::Cancelled`]; the
     /// state remains at the last fully completed iteration, including its
     /// best-so-far fields. An in-progress iteration or problem evaluation is
     /// allowed to finish before the token is observed.
@@ -954,7 +936,7 @@ where
     /// ```
     /// use basin::{
     ///     FirstOrderState, CancellationToken, CostFunction, Executor, Gradient,
-    ///     GradientDescent, TerminationReason,
+    ///     GradientDescent, Termination,
     /// };
     ///
     /// struct Sphere;
@@ -986,7 +968,7 @@ where
     /// .run()
     /// .unwrap();
     ///
-    /// assert_eq!(result.reason, TerminationReason::Cancelled);
+    /// assert_eq!(result.report.termination, Termination::Cancelled);
     /// assert_eq!(result.iter(), 0);
     /// ```
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
@@ -1080,7 +1062,7 @@ where
     /// ```
     pub fn observe_solver<C>(self, callback: C, mode: ObserverMode) -> Self
     where
-        C: FnMut(&S, &So, ObservationEvent) + 'static,
+        C: FnMut(&S, &So, ObservationEvent<'_, S::Float>) + 'static,
     {
         self.observe_solver_with(SolverCallback(callback), mode)
     }
@@ -1170,7 +1152,7 @@ where
     /// Drive the iteration loop to completion and return the
     /// [`OptimizationResult`].
     /// Use [`run_with_solver`](Self::run_with_solver) to retain the final
-    /// solver and raw evaluation counters as well.
+    /// solver as well.
     ///
     /// Returns `Err` when the underlying problem returns `Err` from any
     /// cost/gradient/residual/Jacobian/Hessian call (the

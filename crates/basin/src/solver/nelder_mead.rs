@@ -7,7 +7,6 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::SimplexProgress;
-use crate::core::termination::TerminationReason;
 
 /// Nelder-Mead simplex method (derivative-free).
 ///
@@ -271,7 +270,7 @@ impl<V, Mode, F: Scalar> NelderMead<V, F, Mode> {
 /// solver enforces this by pre-allocating scratch in `init`).
 fn affine_into<V, F>(out: &mut V, a: &V, b: &V, t: F)
 where
-    V: ScaleInPlace<F> + ScaledAdd<F>,
+    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
     F: Scalar,
 {
     out.scale_in_place(F::zero());
@@ -283,7 +282,7 @@ where
 /// contents are overwritten.
 fn centroid_into<V, F>(out: &mut V, vertices: &[V])
 where
-    V: ScaleInPlace<F> + ScaledAdd<F>,
+    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
     F: Scalar,
 {
     let inv = F::from_usize(vertices.len()).unwrap().recip();
@@ -329,11 +328,11 @@ fn next_iter_inner<P, V, F, Proj>(
     p: Params<F>,
     scratch: &mut [V],
     project: &Proj,
-) -> Result<(SimplexProgress<V, F>, Option<TerminationReason>), P::Error>
+) -> Result<crate::SolverStep<SimplexProgress<V, F>>, P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: ScaleInPlace<F> + ScaledAdd<F>,
+    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
     Proj: Fn(&P, &mut V),
 {
     let m = state.vertices.len();
@@ -403,7 +402,7 @@ where
     }
 
     state.sort();
-    Ok((state, None))
+    Ok(crate::SolverStep::from((state, None)))
 }
 
 fn shrink_inner<P, V, F, Proj>(
@@ -415,7 +414,7 @@ fn shrink_inner<P, V, F, Proj>(
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: ScaleInPlace<F> + ScaledAdd<F>,
+    V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
     Proj: Fn(&P, &mut V),
 {
     // Best vertex is fixed at index 0; shrink every other vertex toward
@@ -461,8 +460,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: SimplexProgress<V, F>,
-    ) -> Result<(SimplexProgress<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<SimplexProgress<V, F>>, Self::Error> {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
@@ -508,8 +506,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: SimplexProgress<V, F>,
-    ) -> Result<(SimplexProgress<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<SimplexProgress<V, F>>, Self::Error> {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");

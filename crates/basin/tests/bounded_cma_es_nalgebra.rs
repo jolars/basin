@@ -3,7 +3,7 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::BoothBoxed;
 use basin::{
-    BoundedCmaEs, Executor, PopulationProgress, StepOutcome, TerminationReason,
+    BoundedCmaEs, Executor, PopulationProgress, StepOutcome, TerminationCode,
 };
 
 /// Same seed → same trajectory on the bounded variant. Reproducibility
@@ -69,7 +69,7 @@ fn with_stds_ones_matches_default() {
 
     assert_eq!(default.cost(), with_ones.cost());
     assert_eq!(default.param(), with_ones.param());
-    assert_eq!(default.reason, with_ones.reason);
+    assert_eq!(default.report.code(), with_ones.report.code());
 }
 
 /// Anisotropic stds on the bounded variant still recover the interior
@@ -220,7 +220,7 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CmaEsTolerance);
 }
 
 /// Progress retains matching raw records while model fitness stays sorted.

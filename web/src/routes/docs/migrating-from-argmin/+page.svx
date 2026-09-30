@@ -593,13 +593,13 @@ with a closure borrowing the state and concrete solver, or implement
 Both kinds share the same observation boundaries, modes, and registration order.
 Handle logging errors inside the observer. Use a cloned `CancellationToken`
 when a progress callback requests a normal stop; the executor returns the best
-available state with `TerminationReason::Cancelled`.
+available state with `Termination::Cancelled`.
 
 <!-- compile: basin-observer-cancellation -->
 ```rust
 use basin::{
     CancellationToken, CostFunction, Executor, NelderMead, Observe,
-    ObserverMode, State, TerminationReason,
+    ObserverMode, State, Termination,
 };
 use std::convert::Infallible;
 
@@ -641,7 +641,7 @@ fn main() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::Cancelled);
+    assert_eq!(result.report.termination, Termination::Cancelled);
     assert_eq!(result.iter(), 5);
 }
 ```

@@ -100,7 +100,7 @@ fn main() {
         "x = {:?}, f = {}, stopped: {:?}",
         result.param(),
         result.cost(),
-        result.reason
+        result.report.termination
     );
 }
 ```

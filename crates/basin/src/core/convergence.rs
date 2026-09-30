@@ -13,7 +13,11 @@ use super::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd};
 use super::problem::Problem;
 use super::solver::Solver;
 use super::state::{GradientState, SimplexState, State};
-use super::termination::TerminationReason;
+use super::termination::{
+    ConvergenceCriterion, ConvergenceEvidence, ConvergenceTest, Termination,
+    Threshold,
+};
+use crate::SolverStep;
 
 /// A solver carrying fixed, optional convergence checks.
 ///
@@ -45,8 +49,6 @@ pub struct ConfiguredSolver<So, G = (), X = (), C = (), T = ()> {
     step: X,
     cost: C,
     simplex: T,
-    checked: Option<(u64, u64)>,
-    reason: Option<TerminationReason>,
 }
 
 impl<So> ConfiguredSolver<So> {
@@ -57,8 +59,6 @@ impl<So> ConfiguredSolver<So> {
             step: (),
             cost: (),
             simplex: (),
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -79,8 +79,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             step: self.step,
             cost: self.cost,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -89,14 +87,7 @@ impl<So: NativeConvergenceDiagnostics, G, X, C, T> NativeConvergenceDiagnostics
     for ConfiguredSolver<So, G, X, C, T>
 {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
-        if self
-            .reason
-            .is_some_and(|reason| reason != TerminationReason::SolverConverged)
-        {
-            &[]
-        } else {
-            self.solver.native_convergence_tests()
-        }
+        self.solver.native_convergence_tests()
     }
 }
 
@@ -118,18 +109,22 @@ mod sealed {
 
 /// Implementation detail of the fixed convergence slots.
 #[doc(hidden)]
-pub trait Check<P, S>: sealed::Sealed {
+pub trait Check<P, S: State>: sealed::Sealed {
     fn reset(&mut self);
     fn check(
         &mut self,
         problem: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason>;
+    ) -> Option<Termination<S::Float>>;
 }
 
-impl<P, S> Check<P, S> for () {
+impl<P, S: State> Check<P, S> for () {
     fn reset(&mut self) {}
-    fn check(&mut self, _: &Problem<P>, _: &S) -> Option<TerminationReason> {
+    fn check(
+        &mut self,
+        _: &Problem<P>,
+        _: &S,
+    ) -> Option<Termination<S::Float>> {
         None
     }
 }
@@ -174,19 +169,41 @@ where
         &mut self,
         _: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<S::Float>> {
         let norm_squared = state.gradient()?.norm_squared();
         if !norm_squared.is_finite() {
             return None;
         }
-        if self.absolute.is_some_and(|tol| norm_squared <= tol * tol) {
-            return Some(TerminationReason::GradientTolerance);
-        }
-        let relative = self.relative.as_mut()?;
-        let initial =
-            *relative.initial_norm_squared.get_or_insert(norm_squared);
-        (norm_squared <= relative.tol * relative.tol * initial)
-            .then_some(TerminationReason::RelativeGradientTolerance)
+        let absolute = self
+            .absolute
+            .filter(|&tol| norm_squared <= tol * tol)
+            .map(|tol| {
+                Termination::upper_bound(
+                    ConvergenceTest::AbsoluteGradientSquared,
+                    norm_squared,
+                    tol * tol,
+                    tol,
+                    None,
+                )
+            });
+        let relative = self.relative.as_mut().and_then(|check| {
+            let initial =
+                *check.initial_norm_squared.get_or_insert(norm_squared);
+            let bound = check.tol * check.tol * initial;
+            (norm_squared <= bound).then(|| {
+                Termination::upper_bound(
+                    ConvergenceTest::RelativeGradientSquared,
+                    norm_squared,
+                    bound,
+                    check.tol,
+                    Some(initial),
+                )
+            })
+        });
+        absolute
+            .into_iter()
+            .chain(relative)
+            .reduce(Termination::merge)
     }
 }
 
@@ -215,7 +232,7 @@ where
         &mut self,
         problem: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<S::Float>> {
         let tol = self.tolerance?;
         let g = state.gradient()?;
         if !g.norm_infinity().is_finite() {
@@ -225,8 +242,16 @@ where
         probe.scaled_add(-F::one(), g);
         probe.clamp_in_place(problem.inner().lower(), problem.inner().upper());
         probe.scaled_add(-F::one(), state.param());
-        (probe.norm_infinity() <= tol)
-            .then_some(TerminationReason::ProjectedGradientTolerance)
+        let value = probe.norm_infinity();
+        (value <= tol).then(|| {
+            Termination::upper_bound(
+                ConvergenceTest::ProjectedGradient,
+                value,
+                tol,
+                tol,
+                None,
+            )
+        })
     }
 }
 
@@ -238,6 +263,7 @@ pub struct StepChecks<V, F: Scalar = f64> {
     absolute: Option<F>,
     relative: Option<F>,
     last: Option<V>,
+    cache: Option<CheckCache<F>>,
 }
 impl<V, F: Scalar> From<()> for StepChecks<V, F> {
     fn from(_: ()) -> Self {
@@ -245,6 +271,7 @@ impl<V, F: Scalar> From<()> for StepChecks<V, F> {
             absolute: None,
             relative: None,
             last: None,
+            cache: None,
         }
     }
 }
@@ -257,48 +284,71 @@ where
 {
     fn reset(&mut self) {
         self.last = None;
+        self.cache = None;
     }
     fn check(
         &mut self,
         _: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
-        if self.absolute.is_none() && self.relative.is_none() {
-            return None;
+    ) -> Option<Termination<S::Float>> {
+        let boundary = (state.iter(), state.cost_evals());
+        if let Some((previous, result)) = &self.cache {
+            if *previous == boundary {
+                return result.clone();
+            }
         }
-        let current = state.param();
-        let last = self.last.replace(current.clone())?;
-        let mut difference = current.clone();
-        difference.scaled_add(-F::one(), &last);
-        let step = difference.norm_squared().sqrt();
-        // A finite iterate's squared norm can overflow even when its step is zero.
-        if !step.is_finite() {
-            return None;
-        }
-        if self.absolute.is_some_and(|tolerance| step <= tolerance) {
-            return Some(TerminationReason::ParamTolerance);
-        }
-        self.relative
-            .is_some_and(|tolerance| {
-                // Avoid zero times infinity when the iterate's squared norm overflows.
-                if tolerance == F::zero() {
-                    step == F::zero()
+        let result = (|| {
+            if self.absolute.is_none() && self.relative.is_none() {
+                return None;
+            }
+            let current = state.param();
+            let last = self.last.replace(current.clone())?;
+            let mut difference = current.clone();
+            difference.scaled_add(-F::one(), &last);
+            let step = difference.norm_squared().sqrt();
+            if !step.is_finite() {
+                return None;
+            }
+            let absolute =
+                self.absolute.filter(|&tol| step <= tol).map(|tol| {
+                    Termination::upper_bound(
+                        ConvergenceTest::AbsoluteStep,
+                        step,
+                        tol,
+                        tol,
+                        None,
+                    )
+                });
+            let relative = self.relative.and_then(|tol| {
+                let norm = current.norm_squared().sqrt();
+                let bound = if tol == F::zero() {
+                    F::zero()
+                } else if norm.is_finite() {
+                    tol * norm
                 } else {
-                    let norm = current.norm_squared().sqrt();
-                    let bound = if norm.is_finite() {
-                        tolerance * norm
-                    } else {
-                        // Scale before taking the norm so a small tolerance can
-                        // still yield a finite bound for very large parameters.
-                        let mut scaled = current.clone();
-                        scaled.scaled_add(-F::one(), current);
-                        scaled.scaled_add(tolerance, current);
-                        scaled.norm_squared().sqrt()
-                    };
-                    step <= bound
-                }
-            })
-            .then_some(TerminationReason::RelativeParamTolerance)
+                    // Scale before squaring to avoid overflow in the reference norm.
+                    let mut scaled = current.clone();
+                    scaled.scaled_add(-F::one(), current);
+                    scaled.scaled_add(tol, current);
+                    scaled.norm_squared().sqrt()
+                };
+                (step <= bound).then(|| {
+                    Termination::upper_bound(
+                        ConvergenceTest::RelativeStep,
+                        step,
+                        bound,
+                        tol,
+                        Some(norm),
+                    )
+                })
+            });
+            absolute
+                .into_iter()
+                .chain(relative)
+                .reduce(Termination::merge)
+        })();
+        self.cache = Some((boundary, result.clone()));
+        result
     }
 }
 
@@ -309,6 +359,8 @@ struct CostChangeCheck<F: Scalar> {
     last: Option<F>,
 }
 
+type CheckCache<F> = ((u64, u64), Option<Termination<F>>);
+
 /// Fixed objective-change settings; constructed by solver setters.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
@@ -316,12 +368,14 @@ struct CostChangeCheck<F: Scalar> {
 pub struct CostChecks<F: Scalar = f64> {
     absolute: Option<CostChangeCheck<F>>,
     relative: Option<CostChangeCheck<F>>,
+    cache: Option<CheckCache<F>>,
 }
 impl<F: Scalar> From<()> for CostChecks<F> {
     fn from(_: ()) -> Self {
         Self {
             absolute: None,
             relative: None,
+            cache: None,
         }
     }
 }
@@ -332,6 +386,7 @@ where
     S: State<Float = F>,
 {
     fn reset(&mut self) {
+        self.cache = None;
         if let Some(c) = &mut self.absolute {
             c.last = None;
         }
@@ -343,28 +398,51 @@ where
         &mut self,
         _: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<S::Float>> {
+        let boundary = (state.iter(), state.cost_evals());
+        if let Some((previous, result)) = &self.cache {
+            if *previous == boundary {
+                return result.clone();
+            }
+        }
         if !state.cost().is_finite() {
             <Self as Check<P, S>>::reset(self);
             return None;
         }
         let current = state.cost();
-        let absolute = self.absolute.as_mut().is_some_and(|check| {
-            check
-                .last
-                .replace(current)
-                .is_some_and(|last| (last - current).abs() <= check.tol)
-        });
-        let relative = self.relative.as_mut().is_some_and(|check| {
-            check.last.replace(current).is_some_and(|last| {
-                (last - current).abs() <= check.tol * last.abs()
+        let absolute = self.absolute.as_mut().and_then(|check| {
+            let last = check.last.replace(current)?;
+            let value = (last - current).abs();
+            (value <= check.tol).then(|| {
+                Termination::upper_bound(
+                    ConvergenceTest::AbsoluteCostChange,
+                    value,
+                    check.tol,
+                    check.tol,
+                    Some(last),
+                )
             })
         });
-        if absolute {
-            Some(TerminationReason::CostTolerance)
-        } else {
-            relative.then_some(TerminationReason::RelativeCostTolerance)
-        }
+        let relative = self.relative.as_mut().and_then(|check| {
+            let last = check.last.replace(current)?;
+            let value = (last - current).abs();
+            let bound = check.tol * last.abs();
+            (value <= bound).then(|| {
+                Termination::upper_bound(
+                    ConvergenceTest::RelativeCostChange,
+                    value,
+                    bound,
+                    check.tol,
+                    Some(last),
+                )
+            })
+        });
+        let result = absolute
+            .into_iter()
+            .chain(relative)
+            .reduce(Termination::merge);
+        self.cache = Some((boundary, result.clone()));
+        result
     }
 }
 
@@ -414,9 +492,23 @@ where
         &mut self,
         _: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
-        simplex_cost_within_tolerance(state.costs(), self.cost?)
-            .then_some(TerminationReason::SimplexTolerance)
+    ) -> Option<Termination<S::Float>> {
+        let tolerance = self.cost?;
+        if !simplex_cost_within_tolerance(state.costs(), tolerance) {
+            return None;
+        }
+        let best = state.costs()[0];
+        let value = state
+            .costs()
+            .iter()
+            .fold(F::zero(), |max, &cost| max.max((cost - best).abs()));
+        Some(Termination::converged(ConvergenceCriterion {
+            test: ConvergenceTest::Simplex,
+            evidence: ConvergenceEvidence::Simplex {
+                size: None,
+                cost_spread: Some(Threshold { value, tolerance }),
+            },
+        }))
     }
 }
 
@@ -431,7 +523,7 @@ where
         &mut self,
         _: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<S::Float>> {
         if self.size.is_none() && self.cost.is_none() {
             return None;
         }
@@ -441,18 +533,37 @@ where
         ) {
             return None;
         }
+        let mut max_distance = F::zero();
         if let Some(tolerance) = self.size {
             let best = state.vertices().first()?;
             for vertex in state.vertices() {
                 let mut difference = vertex.clone();
                 difference.scaled_add(-F::one(), best);
                 let distance = difference.norm_infinity();
+                max_distance = max_distance.max(distance);
                 if !distance.is_finite() || distance > tolerance {
                     return None;
                 }
             }
         }
-        Some(TerminationReason::SimplexTolerance)
+        let best = state.costs()[0];
+        let spread = state
+            .costs()
+            .iter()
+            .fold(F::zero(), |max, &cost| max.max((cost - best).abs()));
+        Some(Termination::converged(ConvergenceCriterion {
+            test: ConvergenceTest::Simplex,
+            evidence: ConvergenceEvidence::Simplex {
+                size: self.size.map(|tolerance| Threshold {
+                    value: max_distance,
+                    tolerance,
+                }),
+                cost_spread: self.cost.map(|tolerance| Threshold {
+                    value: spread,
+                    tolerance,
+                }),
+            },
+        }))
     }
 }
 
@@ -477,18 +588,16 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
+    ) -> Result<SolverStep<S>, Self::Error> {
         self.solver.next_iter(problem, state)
     }
-    fn terminate(&self, state: &S) -> Option<TerminationReason> {
+    fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
         self.solver.terminate(state)
     }
     fn should_check_iterate_change(&self) -> bool {
         self.solver.should_check_iterate_change()
     }
     fn reset_convergence(&mut self) {
-        self.checked = None;
-        self.reason = None;
         self.gradient.reset();
         self.step.reset();
         self.cost.reset();
@@ -499,28 +608,24 @@ where
         &mut self,
         problem: &Problem<P>,
         state: &S,
-    ) -> Option<TerminationReason> {
-        let boundary = (state.iter(), state.cost_evals());
-        if self.checked == Some(boundary) {
-            return self.reason;
-        }
-        self.checked = Some(boundary);
+    ) -> Option<Termination<S::Float>> {
         let check_change = self.solver.should_check_iterate_change();
-        self.reason = self
-            .gradient
-            .check(problem, state)
-            .or_else(|| {
-                if check_change {
-                    self.step
-                        .check(problem, state)
-                        .or_else(|| self.cost.check(problem, state))
-                } else {
-                    None
-                }
-            })
-            .or_else(|| self.simplex.check(problem, state))
-            .or_else(|| self.solver.check_convergence(problem, state));
-        self.reason
+        let checks = [
+            self.gradient.check(problem, state),
+            if check_change {
+                self.step.check(problem, state)
+            } else {
+                None
+            },
+            if check_change {
+                self.cost.check(problem, state)
+            } else {
+                None
+            },
+            self.simplex.check(problem, state),
+            self.solver.check_convergence(problem, state),
+        ];
+        checks.into_iter().flatten().reduce(Termination::merge)
     }
 }
 
@@ -570,8 +675,6 @@ where
                 step: self.step.clone(),
                 cost: self.cost.clone(),
                 simplex: self.simplex.clone(),
-                checked: None,
-                reason: None,
             },
             state,
         )
@@ -607,8 +710,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             step: self.step,
             cost: self.cost,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -633,8 +734,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             step: self.step,
             cost: self.cost,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -650,14 +749,13 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         let mut slot: StepChecks<V, F> = self.step.into();
         slot.absolute = optional_tolerance(value);
         slot.last = None;
+        slot.cache = None;
         ConfiguredSolver {
             solver: self.solver,
             gradient: self.gradient,
             step: slot,
             cost: self.cost,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -673,14 +771,13 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         let mut slot: StepChecks<V, F> = self.step.into();
         slot.relative = optional_tolerance(value);
         slot.last = None;
+        slot.cache = None;
         ConfiguredSolver {
             solver: self.solver,
             gradient: self.gradient,
             step: slot,
             cost: self.cost,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -694,6 +791,7 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         C: Into<CostChecks<F>>,
     {
         let mut slot: CostChecks<F> = self.cost.into();
+        slot.cache = None;
         slot.absolute = optional_tolerance(value)
             .map(|tol| CostChangeCheck { tol, last: None });
         ConfiguredSolver {
@@ -702,8 +800,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             step: self.step,
             cost: slot,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -717,6 +813,7 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         C: Into<CostChecks<F>>,
     {
         let mut slot: CostChecks<F> = self.cost.into();
+        slot.cache = None;
         slot.relative = optional_tolerance(value)
             .map(|tol| CostChangeCheck { tol, last: None });
         ConfiguredSolver {
@@ -725,8 +822,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             step: self.step,
             cost: slot,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -747,8 +842,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             step: self.step,
             cost: self.cost,
             simplex: slot,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -767,8 +860,6 @@ impl<So, G, X, C> ConfiguredSolver<So, G, X, C> {
                 size: (),
                 cost: optional_tolerance(value),
             },
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -781,8 +872,6 @@ impl<So, G, X, C, F: Scalar, Size>
         value: impl Into<Option<F>>,
     ) -> Self {
         self.simplex.cost = optional_tolerance(value);
-        self.checked = None;
-        self.reason = None;
         self
     }
 }
@@ -803,8 +892,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
             step: self.step,
             cost: self.cost,
             simplex: self.simplex,
-            checked: None,
-            reason: None,
         }
     }
 }
@@ -826,16 +913,22 @@ mod tests {
                 absolute: Some(0.0),
                 relative: Some(0.0),
                 last: None,
+                cache: None,
             };
             for x in [0.0, nonfinite, nonfinite, 0.0] {
+                checks.cache = None;
                 assert_eq!(
                     checks.check(&problem, &PointState::new(vec![x])),
                     None
                 );
             }
+            checks.cache = None;
             assert_eq!(
-                checks.check(&problem, &PointState::new(vec![0.0])),
-                Some(TerminationReason::ParamTolerance),
+                checks
+                    .check(&problem, &PointState::new(vec![0.0]))
+                    .as_ref()
+                    .map(|stop| stop.code()),
+                Some(crate::TerminationCode::ParamTolerance),
             );
         }
     }
@@ -846,6 +939,7 @@ mod tests {
             absolute: Some(1e200),
             relative: Some(1.0),
             last: Some(vec![-1e200]),
+            cache: None,
         };
         assert_eq!(
             checks.check(&Problem::new(()), &PointState::new(vec![1e200])),
@@ -888,23 +982,39 @@ mod tests {
             });
             let expected = if relative {
                 checks.relative = check;
-                TerminationReason::RelativeCostTolerance
+                crate::TerminationCode::RelativeCostTolerance
             } else {
                 checks.absolute = check;
-                TerminationReason::CostTolerance
+                crate::TerminationCode::CostTolerance
             };
             let mut state = PointState::new(1.0);
             state.replace(1.0, 1.0);
             assert_eq!(checks.check(&problem, &state), None);
-            assert_eq!(checks.check(&problem, &state), Some(expected));
+            state.increment_iter();
+            assert_eq!(
+                checks
+                    .check(&problem, &state)
+                    .as_ref()
+                    .map(|stop| stop.code()),
+                Some(expected)
+            );
             <CostChecks as Check<(), PointState<f64>>>::reset(&mut checks);
             assert_eq!(checks.check(&problem, &state), None);
             for cost in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                state.increment_iter();
                 state.replace(1.0, cost);
                 assert_eq!(checks.check(&problem, &state), None);
+                state.increment_iter();
                 state.replace(1.0, 1.0);
                 assert_eq!(checks.check(&problem, &state), None);
-                assert_eq!(checks.check(&problem, &state), Some(expected));
+                state.increment_iter();
+                assert_eq!(
+                    checks
+                        .check(&problem, &state)
+                        .as_ref()
+                        .map(|stop| stop.code()),
+                    Some(expected)
+                );
             }
         }
     }

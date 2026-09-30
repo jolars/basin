@@ -46,8 +46,12 @@ fn observation_borrows_workspace_without_allocations_during_steps() {
         .into_stepper()
         .unwrap();
     REQUESTS.set(0);
-    while stepper.step().unwrap() == StepOutcome::Continue {}
+    for _ in 0..100 {
+        assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
+    }
     let requests = REQUESTS.get();
     assert_eq!(requests, 0);
+    // Publishing the final owned report may allocate; observation borrows it.
+    assert!(matches!(stepper.step().unwrap(), StepOutcome::Stopped(_)));
     assert_eq!(stepper.counts().cost_evals, 101);
 }

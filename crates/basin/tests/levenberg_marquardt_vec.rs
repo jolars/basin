@@ -11,7 +11,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::{PowellSingular, RosenbrockResiduals};
-use basin::{Executor, LevenbergMarquardt, PointState, TerminationReason};
+use basin::{Executor, LevenbergMarquardt, PointState, TerminationCode};
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -31,7 +31,7 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-15, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-7,
@@ -65,7 +65,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.cost() < 1e-10,
         "cost = {} (LM should drive Powell to the origin)",
@@ -94,7 +94,7 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.cost() < 1e-10,
         "cost = {} (Powell from classical start should reach near-zero)",
@@ -118,5 +118,5 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }

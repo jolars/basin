@@ -6,7 +6,6 @@ use crate::NonlinearInequalityConstraints;
 use crate::core::executor::Executor;
 use crate::core::problem::CostFunction;
 use crate::core::state::SelectedState;
-use crate::core::termination::TerminationReason;
 use crate::solver::Cobyla;
 
 /// A closure-defined nonlinearly-constrained test problem.
@@ -56,7 +55,10 @@ fn problem_b_disk_min_product() {
         "F = {}",
         result.best_cost()
     );
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(
+        result.report.code(),
+        crate::TerminationCode::SolverConverged
+    );
 }
 
 #[test]

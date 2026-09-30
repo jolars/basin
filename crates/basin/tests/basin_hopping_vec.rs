@@ -19,7 +19,7 @@ use basin::core::rng::Rng;
 use basin::problems::{Ackley, Rastrigin};
 use basin::{
     BasinHopping, Executor, InitialState, NelderMead, PointState, Problem,
-    Solver, State, StepTaker, TerminationReason, WarmStart,
+    Solver, State, StepTaker, TerminationCode, WarmStart,
 };
 
 /// Same seed in, same trajectory out: the reproducibility contract every
@@ -271,8 +271,13 @@ where
         &mut self,
         _problem: &mut Problem<P>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
-        Ok((state, Some(TerminationReason::SolverFailed)))
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::numerical_failure(
+                "External solver reported a numerical failure.",
+            )),
+        )))
     }
 }
 
@@ -301,8 +306,8 @@ fn failed_inner_solve_does_not_terminate_the_walk() {
     .unwrap();
 
     assert_eq!(
-        result.reason,
-        TerminationReason::MaxIter,
+        result.report.code(),
+        TerminationCode::MaxIter,
         "walk should run to MaxIter, not stop on the inner's SolverFailed"
     );
     assert_eq!(result.iter(), hops, "all hops should execute");

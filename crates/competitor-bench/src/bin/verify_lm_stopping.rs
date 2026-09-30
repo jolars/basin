@@ -13,7 +13,7 @@
 
 use basin::{
     Executor, Jacobian, LevenbergMarquardt, LmDamping, PointState, Problem,
-    Residual, Solver, State, TerminationReason,
+    Residual, Solver, State, TerminationCode,
 };
 use nalgebra::{DMatrix, DVector};
 use std::{
@@ -187,7 +187,7 @@ struct Row {
     predicted: Option<f64>,
     step: Option<f64>,
     scaled_step: Option<f64>,
-    reason: Option<TerminationReason>,
+    reason: Option<TerminationCode>,
 }
 
 impl Row {
@@ -251,10 +251,8 @@ where
         &mut self,
         problem: &mut Problem<Probe<'a>>,
         state: PointState<BasinVector<f64>>,
-    ) -> Result<
-        (PointState<BasinVector<f64>>, Option<TerminationReason>),
-        Infallible,
-    > {
+    ) -> Result<basin::SolverStep<PointState<BasinVector<f64>>>, Infallible>
+    {
         let base = DVector::from_column_slice(state.param().as_slice());
         let (prediction, j) = self.case.model.evaluate(&base);
         let r = prediction - self.observations;
@@ -272,7 +270,8 @@ where
         let base_cost = state.cost();
         let before = self.calls.residual.get();
         self.calls.trial.take();
-        let (state, reason) = self.inner.next_iter(problem, state)?;
+        let (state, completed, reason) =
+            self.inner.next_iter(problem, state)?.into_parts();
         let calls = self.calls.residual.get() - before;
         assert!(calls <= 1, "LM unexpectedly made multiple trial callbacks");
         let trial = self.calls.trial.take();
@@ -290,7 +289,7 @@ where
             predicted: None,
             step: None,
             scaled_step: None,
-            reason,
+            reason: reason.as_ref().map(|stop| stop.code()),
         };
         if let Some(trial) = trial {
             // Coordinate subtraction reflects observable movement, including rounding.
@@ -318,7 +317,11 @@ where
             ));
         }
         self.rows.borrow_mut().push(row);
-        Ok((state, reason))
+        Ok(basin::SolverStep {
+            state,
+            completed,
+            termination: reason,
+        })
     }
 
     fn reset_convergence(&mut self) {
@@ -329,14 +332,22 @@ where
         &mut self,
         problem: &Problem<Probe<'a>>,
         state: &PointState<BasinVector<f64>>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<
+        basin::Termination<
+            <PointState<BasinVector<f64>> as basin::State>::Float,
+        >,
+    > {
         self.inner.check_convergence(problem, state)
     }
 
     fn terminate(
         &self,
         state: &PointState<BasinVector<f64>>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<
+        basin::Termination<
+            <PointState<BasinVector<f64>> as basin::State>::Float,
+        >,
+    > {
         self.inner.terminate(state)
     }
 }
@@ -413,7 +424,7 @@ where
     let diagnostics =
         Diagnostics::at(case, &observations, &x, &diagonal.borrow());
     if case.name == "tiny-orthogonality" {
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert!(calls.residual.get() > 1);
         assert!((&x - &case.truth).amax() < 1e-12);
         assert!(diagnostics.relative_residual < 1e-12);
@@ -430,7 +441,7 @@ where
         predicted: None,
         step: None,
         scaled_step: None,
-        reason: Some(result.reason),
+        reason: Some(result.report.code()),
     }
     .print(case, route, profile, "final");
 }

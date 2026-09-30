@@ -9,7 +9,7 @@ use crate::core::math::{
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
@@ -106,7 +106,7 @@ use crate::{
 ///   bumps μ via `μ ← μ·ν, ν ← 2ν` if it doesn't, capped at
 ///   [`with_max_inner_attempts`](Self::with_max_inner_attempts) (default 50).
 ///   Cap exhaustion or μ overflowing to `inf` returns
-///   [`TerminationReason::SolverFailed`].
+///   [`crate::TerminationCode::SolverFailed`].
 /// - **Boundary starting point.** `D` is undefined where `v_i = 0`
 ///   (i.e. on a finite face). [`init`](Solver::init) projects the
 ///   starting iterate strictly into `(lower, upper)` via
@@ -118,7 +118,7 @@ use crate::{
 /// [`with_absolute_scaled_gradient_tolerance`](Self::with_absolute_scaled_gradient_tolerance)
 /// configures the native first-order test `max_i |g_i| · |v_i| ≤ tolerance`,
 /// where `g = Jᵀr` and `v` is BCL's distance-to-bound scaling. It reports
-/// [`TerminationReason::SolverConverged`] and defaults to `1e-8`.
+/// [`crate::TerminationCode::SolverConverged`] and defaults to `1e-8`.
 /// `None` disables the test; zero tests exact stationarity. The scaled metric
 /// vanishes at a KKT point and differs from the unscaled projected gradient.
 /// Observed cost and step checks are opt-in and combine with it using OR.
@@ -269,7 +269,7 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     }
 
     /// Maximum number of damping bumps inside a single outer iteration
-    /// before giving up with [`TerminationReason::SolverFailed`]. Each
+    /// before giving up with [`crate::TerminationCode::SolverFailed`]. Each
     /// bump multiplies μ by ν (initially 2) and doubles ν. Default
     /// `50` is effectively unreachable in practice (μ grows by `2^50 ≈
     /// 10¹⁵` before bailing). Default `50`.
@@ -325,8 +325,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
     }
 }
@@ -369,8 +368,7 @@ where
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
     }
 }
@@ -461,7 +459,12 @@ where
         // previous accept-or-reject branch). Only count an eval when the
         // cache misses.
         if self.failed {
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "Legacy TRF could not initialize a finite residual model.",
+                )),
+            )));
         }
         let r = match self.r_cache.take() {
             Some(r) => r,
@@ -473,7 +476,12 @@ where
                 let j = problem.jacobian(state.param())?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
-                    return Ok((state, Some(TerminationReason::SolverFailed)));
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
+                            "Legacy TRF could not construct the residual model at the current point.",
+                        )),
+                    )));
                 };
                 model
             }
@@ -482,7 +490,12 @@ where
         let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
         if !problem.valid_vector(&g) {
             self.failed = true;
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "The legacy TRF model gradient is invalid.",
+                )),
+            )));
         }
 
         // Compute the Coleman-Li affine scaling diagonals at the
@@ -512,7 +525,23 @@ where
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             self.model_r_cache = model_r;
-            return Ok((state, Some(TerminationReason::SolverConverged)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::custom(
+                    "trf.legacy_scaled_gradient",
+                    "The legacy bounded-LM Coleman-Li KKT gradient metric is at most the absolute tolerance.",
+                    vec![
+                        crate::Measurement {
+                            name: "scaled_gradient".into(),
+                            value: g.cl_kkt_inf_norm(&d_sq),
+                        },
+                        crate::Measurement {
+                            name: "tolerance".into(),
+                            value: self.tol_grad.unwrap(),
+                        },
+                    ],
+                )),
+            )));
         }
 
         let mut neg_g = g.clone();
@@ -554,10 +583,12 @@ where
                         self.r_cache = Some(r);
                         self.j_cache = Some(j);
                         self.model_r_cache = model_r;
-                        return Ok((
+                        return Ok(crate::SolverStep::from((
                             state,
-                            Some(TerminationReason::SolverFailed),
-                        ));
+                            Some(Termination::numerical_failure(
+                                "Legacy TRF exhausted damped linear-solve attempts or produced non-finite damping.",
+                            )),
+                        )));
                     }
                     mu = mu * nu;
                     nu = nu * two;
@@ -637,6 +668,6 @@ where
 
         self.mu = Some(mu);
         self.nu = nu;
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }

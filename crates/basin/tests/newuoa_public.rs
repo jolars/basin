@@ -7,7 +7,7 @@
 //! init/next_iter, the V↔Vec bridge, count mirroring, and the convergence/
 //! budget/early-stop termination paths.
 
-use basin::{CostFunction, Executor, Newuoa, PointState, TerminationReason};
+use basin::{CostFunction, Executor, Newuoa, PointState, TerminationCode};
 
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
@@ -39,7 +39,7 @@ fn converges_on_rosenbrock_2d() {
     .unwrap();
 
     // NEWUOA's natural convergence (ρ reached ρ_end), well within budget.
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.best_cost() < 1e-7,
         "best_cost = {}",
@@ -73,7 +73,7 @@ fn respects_cost_eval_budget() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
     assert!(
         result.cost_evals() >= 20,
         "cost_evals = {}",
@@ -99,7 +99,7 @@ fn rho_tolerance_stops_early() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RhoTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert!(
         result.solver.rho().unwrap() <= 1e-3,
         "rho = {}",
@@ -143,7 +143,7 @@ fn backend_generic_nalgebra() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.best_cost() < 1e-7,
         "best_cost = {}",

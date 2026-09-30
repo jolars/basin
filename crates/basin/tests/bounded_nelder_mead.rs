@@ -11,7 +11,7 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::{BoothBoxed, RastriginBoxed};
-use basin::{Executor, NelderMead, SimplexProgress, TerminationReason};
+use basin::{Executor, NelderMead, SimplexProgress, TerminationCode};
 
 /// Slack bounds: the unconstrained Booth minimum `(1, 3)` lies inside
 /// `[-5, 5]²`, so the projection step should be a no-op for any vertex
@@ -100,7 +100,7 @@ fn infeasible_initial_simplex_is_projected_at_init() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     for v in result.state.vertices() {
         assert!(
             v[0] >= -1.0 - 1e-12 && v[0] <= 1.0 + 1e-12,

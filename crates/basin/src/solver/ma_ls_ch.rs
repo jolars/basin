@@ -22,7 +22,6 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
-use crate::core::termination::TerminationReason;
 use rand::distr::uniform::SampleUniform;
 // Cycle-following in-place permutation: after the call,
 // `slice[i] = original[idx[i]]`.
@@ -492,10 +491,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let history = &mut self.history;
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
@@ -632,9 +628,18 @@ where
         // outer wrapper, so shared progress preserves their raw categories. `SolverFailed` is the only failure
         // reason; other reasons (`MaxCostEvals` from our budget, the
         // operator's own tolerances) are clean stops the outer consumes.
-        if inner_result.reason.is_failure() {
+        if !inner_result
+            .report
+            .termination
+            .can_continue_as_inner(crate::PartialResultPolicy::Consume)
+        {
             // Leave the chain dropped so a future pick would restart.
-            return Ok((state, Some(inner_result.reason)));
+            return Ok(crate::SolverStep::from((
+                state,
+                inner_result.report.into_outer_termination(
+                    crate::PartialResultPolicy::Consume,
+                ),
+            )));
         }
 
         // Adopt the chain's best *evaluated* point (xbest), not
@@ -674,7 +679,7 @@ where
         // -- Phase 6: resort all parallel arrays jointly. --
         sort_parallel_arrays(&mut state, history);
 
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }
 

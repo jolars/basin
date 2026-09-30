@@ -1,6 +1,6 @@
 use basin::{
     BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian, PointState,
-    Residual, State, TerminationReason, TrustRegionReflective,
+    Residual, State, TerminationCode, TrustRegionReflective,
 };
 
 #[path = "support/backend_aliases.rs"]
@@ -162,7 +162,7 @@ fn interior_active_and_fixed_solutions() {
         .max_iter(200)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         for (x, want) in result.param().iter().zip(&expected) {
             assert!((x - want).abs() < 2e-4, "{x} != {want}");
         }
@@ -199,7 +199,7 @@ fn rank_deficient_and_underdetermined() {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert!(result.cost() < 1e-20, "{}", result.cost());
         assert!(result.param().iter().all(|x| x.is_finite()));
     }
@@ -215,7 +215,7 @@ fn bounded_rosenbrock() {
     .max_iter(200)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 1.22437075).abs() < 1e-6);
     assert!((result.param()[1] - 1.5).abs() < 1e-8);
     assert!((result.cost() - 0.0252130939468).abs() < 1e-10);
@@ -229,7 +229,7 @@ fn narrow_interval_and_no_representable_interior() {
             .max_iter(100)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let model = Model::linear(
         &[1.0],
         &[2.0],
@@ -241,7 +241,7 @@ fn narrow_interval_and_no_representable_interior() {
             .max_iter(100)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.state.counts().residual_evals, 0);
 }
 
@@ -253,7 +253,7 @@ fn initialization_counts_and_stationarity() {
         Executor::from_start(model, TrustRegionReflective::new(), vec![0.0])
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.iter(), 0);
     assert_eq!(result.state.counts().residual_evals, 1);
     assert_eq!(result.state.counts().jacobian_evals, 1);
@@ -319,7 +319,7 @@ fn settings_compose_in_both_orders() {
             .max_iter(200)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let _ = TrustRegionReflective::<f64>::new()
         .with_initial_radius(None)
         .with_absolute_scaled_gradient_tolerance(None)
@@ -339,7 +339,7 @@ fn check_cost_floor<P>(
     problem: P,
     gradient_tolerance: f64,
     change_tolerance: Option<f64>,
-    expected: TerminationReason,
+    expected: TerminationCode,
 ) where
     P: Residual<Param = Vec<f64>, Output = Vec<f64>, Error = &'static str>
         + Jacobian<Jacobian = DenseMatrix>
@@ -356,12 +356,12 @@ fn check_cost_floor<P>(
     .max_iter(200)
     .run()
     .unwrap();
-    assert_eq!(result.reason, expected);
+    assert_eq!(result.report.code(), expected);
     for (x, target) in result.param().iter().zip([0.3, 0.7]) {
         assert!((x - target).abs() < 1e-8);
     }
     assert_eq!(result.state.counts().jacobian_evals, result.iter() + 1);
-    if expected == TerminationReason::NumericalNoProgress {
+    if expected == TerminationCode::NumericalNoProgress {
         assert_eq!(result.cost(), 2.0);
         assert_eq!(result.iter(), 4);
         assert!(
@@ -372,7 +372,7 @@ fn check_cost_floor<P>(
         let scaled_gradient =
             ((1.0 - x[0]) * (x[0] - 0.3).abs()).max(x[1] * (x[1] - 0.7).abs());
         assert!(scaled_gradient > gradient_tolerance);
-        assert!(!result.reason.is_failure());
+        assert!(!result.report.code().is_failure());
     }
 }
 
@@ -383,7 +383,7 @@ fn cost_floor_stops_without_claiming_stationarity() {
             cost_floor_problem(2.0),
             1e-10,
             tolerance,
-            TerminationReason::NumericalNoProgress,
+            TerminationCode::NumericalNoProgress,
         );
         let problem = basin::BoundedFiniteDiff::new(
             cost_floor_problem(2.0),
@@ -395,7 +395,7 @@ fn cost_floor_stops_without_claiming_stationarity() {
             problem,
             1e-10,
             tolerance,
-            TerminationReason::NumericalNoProgress,
+            TerminationCode::NumericalNoProgress,
         );
     }
 }
@@ -407,7 +407,7 @@ fn cost_floor_controls_still_converge() {
             cost_floor_problem(constant),
             gradient_tolerance,
             Some(1e-12),
-            TerminationReason::SolverConverged,
+            TerminationCode::SolverConverged,
         );
         let problem = basin::BoundedFiniteDiff::new(
             cost_floor_problem(constant),
@@ -419,7 +419,7 @@ fn cost_floor_controls_still_converge() {
             problem,
             gradient_tolerance,
             Some(1e-12),
-            TerminationReason::SolverConverged,
+            TerminationCode::SolverConverged,
         );
     }
 }
@@ -435,7 +435,7 @@ fn cost_floor_checkpoint_preserves_the_numerical_stop() {
     .max_iter(200)
     .run_with_solver()
     .unwrap();
-    assert_eq!(stopped.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(stopped.report.code(), TerminationCode::NumericalNoProgress);
     let snapshot = |state: &PointState<Vec<f64>>| {
         (
             state.param().clone(),
@@ -453,7 +453,7 @@ fn cost_floor_checkpoint_preserves_the_numerical_stop() {
     .max_iter(200)
     .run_with_solver()
     .unwrap();
-    assert_eq!(resumed.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(resumed.report.code(), TerminationCode::NumericalNoProgress);
     assert_eq!(snapshot(&resumed.state), state);
     let fresh = Executor::from_start(
         cost_floor_problem(0.0),
@@ -465,7 +465,7 @@ fn cost_floor_checkpoint_preserves_the_numerical_stop() {
     .unwrap();
     // Disabling the stationarity check at an exact solution must retain the
     // existing failure behavior, without inheriting the earlier rejection.
-    assert_eq!(fresh.reason, TerminationReason::SolverFailed);
+    assert_eq!(fresh.report.code(), TerminationCode::SolverFailed);
     assert_eq!(fresh.iter(), 0);
     assert_eq!(fresh.state.counts().residual_evals, 1);
 }
@@ -500,8 +500,8 @@ fn scipy_reference_fixtures() {
         .run()
         .unwrap();
         assert_eq!(
-            result.reason,
-            TerminationReason::SolverConverged,
+            result.report.code(),
+            TerminationCode::SolverConverged,
             "{}",
             case[0]
         );
@@ -610,7 +610,7 @@ fn nonfinite_trials_shrink_radius_and_reuse_jacobian() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 2.0_f64.ln()).abs() < 1e-8);
     assert!(
         result.state.counts().residual_evals
@@ -631,7 +631,7 @@ fn retry_exhaustion_preserves_the_current_state() {
     )
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.param(), &vec![-1.0]);
     assert_eq!(result.iter(), 0);
     assert_eq!(result.state.counts().residual_evals, 2);
@@ -654,7 +654,7 @@ fn equal_cost_alone_does_not_establish_numerical_no_progress() {
     .max_iter(200)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.iter(), 4);
     assert_eq!(result.cost(), 2.0);
     assert_eq!(result.state.counts().residual_evals, 6);
@@ -683,7 +683,7 @@ fn collapsed_trials_after_invalid_or_worse_costs_remain_failures() {
         .max_iter(200)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.param(), &[1.0]);
         assert_eq!(result.cost(), 0.5);
         assert_eq!(result.iter(), 0);
@@ -710,7 +710,7 @@ fn invalid_evaluations_and_typed_errors() {
         .max_iter(10)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.param(), &vec![0.0]);
         assert_eq!(result.iter(), 0);
     }
@@ -743,8 +743,8 @@ fn invalid_evaluations_and_typed_errors() {
 #[test]
 fn disabled_and_exact_gradient_tolerances() {
     for (tol, reason) in [
-        (None, TerminationReason::SolverFailed),
-        (Some(0.0), TerminationReason::SolverConverged),
+        (None, TerminationCode::SolverFailed),
+        (Some(0.0), TerminationCode::SolverConverged),
     ] {
         let problem = Callbacks::new(Ok, |_| Ok(1.0));
         let result = Executor::from_start(
@@ -756,7 +756,7 @@ fn disabled_and_exact_gradient_tolerances() {
         .max_iter(2)
         .run()
         .unwrap();
-        assert_eq!(result.reason, reason);
+        assert_eq!(result.report.code(), reason);
     }
 }
 
@@ -817,7 +817,7 @@ fn bound_aware_numerical_jacobian() {
             .max_iter(100)
             .run()
             .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 1.0).abs() < 1e-7);
 }
 

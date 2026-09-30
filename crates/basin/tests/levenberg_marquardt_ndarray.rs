@@ -9,7 +9,7 @@
 
 use crate::backend_aliases::ndarray::Array1;
 use basin::problems::{ExponentialFit, PowellSingular, RosenbrockResiduals};
-use basin::{Executor, LevenbergMarquardt, PointState, TerminationReason};
+use basin::{Executor, LevenbergMarquardt, PointState, TerminationCode};
 
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
@@ -30,7 +30,7 @@ fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-15, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-7,
@@ -64,7 +64,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.cost() < 1e-10,
         "cost = {} (LM should drive Powell to the origin)",
@@ -94,7 +94,7 @@ fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         result.cost() < 1e-10,
         "cost = {} (Powell from classical start should reach near-zero)",
@@ -119,7 +119,7 @@ fn levenberg_marquardt_emits_solver_converged_via_first_order_optimality() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn levenberg_marquardt_converges_fast_on_poorly_scaled_exponential_fit() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0e5).abs() < 1.0,
@@ -194,7 +194,7 @@ fn levenberg_marquardt_pairs_with_relative_cost_tolerance() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RelativeCostTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RelativeCostTolerance);
     assert!(
         (result.cost() - 10.).abs() < 1e-6,
         "cost = {}",
@@ -228,7 +228,7 @@ fn levenberg_marquardt_converges_via_relative_gradient_tolerance() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0e5).abs() < 1.0,
@@ -265,7 +265,7 @@ fn levenberg_marquardt_converges_via_ftol() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0e5).abs() < 1.0,
@@ -299,7 +299,7 @@ fn levenberg_marquardt_converges_via_xtol() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-6, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0e5).abs() < 1.0,
@@ -344,8 +344,8 @@ fn relative_gradient_tolerance_is_invariant_to_residual_scaling() {
     let small = solve(1.0);
     let large = solve(1.0e3);
 
-    assert_eq!(small.reason, TerminationReason::SolverConverged);
-    assert_eq!(large.reason, TerminationReason::SolverConverged);
+    assert_eq!(small.report.code(), TerminationCode::SolverConverged);
+    assert_eq!(large.report.code(), TerminationCode::SolverConverged);
     assert_eq!(
         small.iter(),
         large.iter(),
@@ -386,7 +386,7 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 3);
     assert_eq!(
         result.state.counts().residual_evals,

@@ -442,13 +442,8 @@ impl Solver<Sphere, PopulationProgress<Vec<f64>>> for ExternalPopulation {
         &mut self,
         p: &mut basin::Problem<Sphere>,
         mut state: PopulationProgress<Vec<f64>>,
-    ) -> Result<
-        (
-            PopulationProgress<Vec<f64>>,
-            Option<basin::TerminationReason>,
-        ),
-        Infallible,
-    > {
+    ) -> Result<basin::SolverStep<PopulationProgress<Vec<f64>>>, Infallible>
+    {
         let (mut members, mut costs) = state.take_members();
         for (member, cost) in members.iter_mut().zip(&mut costs) {
             member[0] *= 0.5;
@@ -458,7 +453,12 @@ impl Solver<Sphere, PopulationProgress<Vec<f64>>> for ExternalPopulation {
         p.residual_and_jacobian(&members[0])?;
         p.hessian_product(&members[0], &members[0])?;
         state.replace(members, costs).unwrap();
-        Ok((state, Some(basin::TerminationReason::UserRequested)))
+        Ok(basin::SolverStep::stopped(
+            state,
+            basin::Termination::Application(basin::ApplicationStop::new(
+                "user_requested",
+            )),
+        ))
     }
 }
 
@@ -472,7 +472,7 @@ fn external_solver_preserves_every_category_at_a_midstep_stop() {
     .require_evaluated_state()
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, basin::TerminationReason::UserRequested);
+    assert_eq!(result.report.code(), basin::TerminationCode::UserRequested);
     assert_eq!(result.iter(), 0);
     coherent(&result.state);
     assert_eq!(result.state.candidates(), &[vec![2.5], vec![2.0]]);
@@ -530,23 +530,22 @@ impl Solver<Sphere, basin::PointState<Vec<f64>>> for PartialRefinement {
         &mut self,
         _: &mut basin::Problem<Sphere>,
         _: basin::PointState<Vec<f64>>,
-    ) -> Result<
-        (
-            basin::PointState<Vec<f64>>,
-            Option<basin::TerminationReason>,
-        ),
-        Infallible,
-    > {
+    ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Infallible>
+    {
         unreachable!("the test inner terminates at initialization")
     }
     fn terminate(
         &self,
         _: &basin::PointState<Vec<f64>>,
-    ) -> Option<basin::TerminationReason> {
+    ) -> Option<basin::Termination> {
         Some(if self.calls == 3 {
-            basin::TerminationReason::SolverFailed
+            basin::Termination::numerical_failure("scripted inner failure")
         } else {
-            basin::TerminationReason::SolverConverged
+            basin::Termination::custom(
+                "scripted.stop",
+                "Scripted inner predicate.",
+                vec![],
+            )
         })
     }
 }
@@ -568,7 +567,7 @@ fn partial_refinement_failure_publishes_prior_improvements_and_all_inner_work()
     .max_iter(1)
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, basin::TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), basin::TerminationCode::SolverFailed);
     assert_eq!(result.iter(), 0);
     coherent(&result.state);
     assert_eq!(result.state.costs(), &[0.0, 0.25, 16.0, 16.0]);

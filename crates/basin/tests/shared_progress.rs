@@ -11,7 +11,7 @@ use basin::{
     CostFunction, CountsMirror, EvalCounts, EvaluatedGradientState,
     EvaluatedState, EvaluationKind, Executor, FirstOrderState, Gradient,
     GradientDimensionMismatch, GradientState, IncumbentState, PointState,
-    Problem, RawEvaluationState, RunControl, Solver, State, TerminationReason,
+    Problem, RawEvaluationState, RunControl, Solver, State, TerminationCode,
 };
 use std::convert::Infallible;
 use std::marker::PhantomData;
@@ -73,15 +73,14 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         let (x, _, gradient) = state.current().unwrap();
         let mut next = x.clone();
         next.scaled_add(-F::from_f64(0.25).unwrap(), gradient);
         let (cost, gradient) = problem.cost_and_gradient(&next)?;
         state.replace(next, cost, gradient).unwrap();
         self.steps += 1;
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -164,13 +163,12 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<basin::SolverStep<PointState<V, F>>, Self::Error> {
         let mut x = state.param().clone();
         x.scale_in_place(F::from_f64(0.5).unwrap());
         let cost = problem.cost(&x)?;
         state.replace(x, cost);
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -419,7 +417,7 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
         &mut self,
         problem: &mut Problem<FallibleIdentity>,
         mut state: PointState<f64>,
-    ) -> Result<(PointState<f64>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
         state.replace(-2.0, problem.cost(&-2.0)?);
         // Unpublished probes still count, including the failing one.
         problem.cost(&-10.0)?;
@@ -427,7 +425,12 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
         if self.hard_error {
             return Err(error);
         }
-        Ok((state, Some(TerminationReason::SolverFailed)))
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::numerical_failure(
+                "External solver reported a numerical failure.",
+            )),
+        )))
     }
 }
 
@@ -440,7 +443,7 @@ fn mid_step_stop_stamps_final_counts_without_completing_an_iteration() {
     )
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.state.iter(), 0);
     assert_eq!(result.state.best(), Some((&-2.0, -2.0)));
     assert_eq!(result.state.best_iter(), 0);
@@ -474,7 +477,7 @@ fn nonfinite_cost_does_not_choose_a_termination_reason() {
         .max_iter(0)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxIter);
+        assert_eq!(result.report.code(), TerminationCode::MaxIter);
         assert_eq!(result.state.best().is_some(), seed == f64::NEG_INFINITY);
     }
 }

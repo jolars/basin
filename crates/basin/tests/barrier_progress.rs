@@ -176,7 +176,7 @@ fn phase_one_does_not_trigger_objective_or_step_stopping() {
         .max_iter(4)
         .run()
         .unwrap();
-    assert_eq!(result.reason, basin::TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), basin::TerminationCode::MaxIter);
     assert_eq!(result.state.iter(), 4);
     assert_eq!(result.state.current(), Some((&vec![3.0], f64::INFINITY)));
     assert!(result.state.best().is_none());
@@ -210,13 +210,8 @@ where
         &mut self,
         _: &mut Problem<P>,
         _: basin::FirstOrderState<Vec<f64>>,
-    ) -> Result<
-        (
-            basin::FirstOrderState<Vec<f64>>,
-            Option<basin::TerminationReason>,
-        ),
-        Self::Error,
-    > {
+    ) -> Result<basin::SolverStep<basin::FirstOrderState<Vec<f64>>>, Self::Error>
+    {
         unreachable!()
     }
 }
@@ -279,6 +274,6 @@ fn feasible_initialization_seeds_outer_change_checks() {
         .max_iter(3)
         .run()
         .unwrap();
-    assert_eq!(result.reason, basin::TerminationReason::CostTolerance);
+    assert_eq!(result.report.code(), basin::TerminationCode::CostTolerance);
     assert_eq!(result.state.iter(), 1);
 }

@@ -131,7 +131,7 @@
 //!   This is the channel for "this `x` is outside my domain, but the solve
 //!   should continue."
 //! - **Clean stop**: the run ends *normally* with a
-//!   [`TerminationReason`], either
+//!   [`TerminationReport`], either
 //!   because convergence or an execution limit was reached, an attached
 //!   [`CancellationToken`] was cancelled, or the [`Solver`] reported a
 //!   mid-iteration stop. [`Executor::run`] returns
@@ -382,7 +382,7 @@ pub use crate::core::problem::{
     HessianProduct, Jacobian, MiniBatchGradient, Problem, Residual,
 };
 pub use crate::core::run_control::RunControl;
-pub use crate::core::solver::Solver;
+pub use crate::core::solver::{Solver, SolverStep};
 pub use crate::core::state::{
     AcceptanceState, CountsMirror, EvaluatedGradientState, EvaluatedState,
     ExactResumeState, FirstOrderState, GradientDimensionMismatch,
@@ -392,7 +392,12 @@ pub use crate::core::state::{
     RhoState, SelectedFirstOrderState, SelectedState, SimplexProgress,
     SimplexShapeError, SimplexState, State,
 };
-pub use crate::core::termination::TerminationReason;
+pub use crate::core::termination::{
+    ApplicationStop, BinaryValue, Convergence, ConvergenceCriterion,
+    ConvergenceEvidence, ConvergenceTest, ExecutionLimit, Measurement,
+    NumericalFailure, PartialResultPolicy, Stall, Termination, TerminationCode,
+    TerminationReport, TerminationStage, Threshold,
+};
 pub use crate::line_search::{
     Backtracking, Constant, HagerZhang, LineSearch, LineSearchBounds,
     LineSearchEvaluation, LineSearchOutcome, LineSearchResult, MoreThuente,

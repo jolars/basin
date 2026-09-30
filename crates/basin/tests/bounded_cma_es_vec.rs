@@ -10,7 +10,7 @@
 use basin::problems::BoothBoxed;
 use basin::{
     BoundedCmaEs, DenseMatrix, Executor, PopulationProgress, StepOutcome,
-    TerminationReason,
+    TerminationCode,
 };
 
 /// Same seed → same trajectory on the bounded `Vec<f64>` path.
@@ -151,7 +151,7 @@ fn with_stds_ones_matches_default() {
 
     assert_eq!(default.cost(), with_ones.cost());
     assert_eq!(default.param(), with_ones.param());
-    assert_eq!(default.reason, with_ones.reason);
+    assert_eq!(default.report.code(), with_ones.report.code());
 }
 
 /// Solver-internal TolX termination still fires when bounds are slack.
@@ -171,7 +171,7 @@ fn slack_bounds_terminate_solver_converged_on_tol_x() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CmaEsTolerance);
 }
 
 /// Progress retains matching raw records while model fitness stays sorted.

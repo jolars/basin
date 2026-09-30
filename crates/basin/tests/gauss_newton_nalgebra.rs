@@ -2,7 +2,7 @@
 
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::{PowellSingular, RosenbrockResiduals};
-use basin::{Executor, GaussNewton, PointState, TerminationReason};
+use basin::{Executor, GaussNewton, PointState, TerminationCode};
 
 #[test]
 fn gauss_newton_converges_on_rosenbrock_residuals() {
@@ -18,7 +18,7 @@ fn gauss_newton_converges_on_rosenbrock_residuals() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-20, "cost = {}", result.cost());
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-9,
@@ -49,7 +49,7 @@ fn gauss_newton_single_step_matches_normal_equation_solution() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 1);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-9,
@@ -79,7 +79,7 @@ fn gauss_newton_emits_solver_converged_via_first_order_optimality() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn gauss_newton_fails_on_rank_deficient_powell_singular_jacobian() {
             .run()
             .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
 }
 
 #[test]
@@ -130,7 +130,7 @@ fn gauss_newton_caches_residual_and_jacobian_across_iterations() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 3);
     assert_eq!(
         result.state.counts().residual_evals,

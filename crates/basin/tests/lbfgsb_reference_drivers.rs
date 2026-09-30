@@ -174,7 +174,8 @@ where
 #[test]
 fn short_case_allocations_separate_setup_iterations_and_extraction() {
     use support::short::{Adapter, Case, Short};
-    for (case, ceiling) in [(Case::Mixed, 36), (Case::Rollover, 64)] {
+    // The final owned report and retained stepper report add fixed allocations.
+    for (case, ceiling) in [(Case::Mixed, 38), (Case::Rollover, 66)] {
         let problem = Short::<Vec<f64>>::new(case);
         for adapter in
             [Adapter::Reference, Adapter::Trimmed, Adapter::RequiredStops]

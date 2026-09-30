@@ -3,7 +3,7 @@
 use basin::problems::Rosenbrock;
 use basin::{
     Backtracking, CostFunction, Executor, FirstOrderState, GradientDescent,
-    TerminationReason,
+    TerminationCode,
 };
 
 #[test]
@@ -22,7 +22,7 @@ fn gradient_descent_decreases_rosenbrock_cost() {
     .unwrap();
 
     assert_eq!(result.iter(), 10_000, "should hit max_iter");
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert!(
         result.cost() < initial_cost * 0.1,
         "expected cost to drop by >10x: initial={}, final={}",

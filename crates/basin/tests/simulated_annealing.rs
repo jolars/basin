@@ -1,7 +1,7 @@
 use basin::core::rng::ChaCha8Rng;
 use basin::{
     CostFunction, Executor, Neighbor, Reannealing, SimulatedAnnealing,
-    StepOutcome, TemperatureSchedule, TerminationReason,
+    StepOutcome, TemperatureSchedule, TerminationCode,
 };
 use rand::TryRng;
 use std::convert::Infallible;
@@ -258,7 +258,7 @@ fn no_acceptance_is_a_shared_resume_safe_criterion() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::NoAcceptedMove);
+    assert_eq!(result.report.code(), TerminationCode::NoAcceptedMove);
     assert_eq!(result.iter(), 3);
 }
 
@@ -384,7 +384,7 @@ fn non_finite_costs_follow_the_documented_policy() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.iter(), 3);
     assert_eq!(result.cost(), f64::NEG_INFINITY);
     assert_eq!(result.cost_evals(), 4);
@@ -400,7 +400,7 @@ fn non_finite_costs_follow_the_documented_policy() {
     let nan_start = Executor::from_start(NonFiniteCost, nan_start, 1)
         .run()
         .unwrap();
-    assert_eq!(nan_start.reason, TerminationReason::SolverFailed);
+    assert_eq!(nan_start.report.code(), TerminationCode::SolverFailed);
     assert_eq!(nan_start.iter(), 0);
 
     let negative_infinity_start = SimulatedAnnealing::new(
@@ -414,8 +414,8 @@ fn non_finite_costs_follow_the_documented_policy() {
             .run()
             .unwrap();
     assert_eq!(
-        negative_infinity_start.reason,
-        TerminationReason::SolverConverged
+        negative_infinity_start.report.code(),
+        TerminationCode::SolverConverged
     );
     assert_eq!(negative_infinity_start.iter(), 0);
 

@@ -2,7 +2,7 @@
 
 use basin::{
     BoxConstraints, CostFunction, Executor, MaLsCh, PointState, Problem,
-    ResumableInner, SolisWets, Solver, State, TerminationReason,
+    ResumableInner, SolisWets, Solver, State, TerminationCode,
 };
 use std::cell::{Cell, RefCell};
 use std::convert::Infallible;
@@ -112,7 +112,7 @@ fn rejected_trials_do_not_create_cost_or_step_convergence() {
         .max_iter(5)
         .run_with_solver()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxIter);
+        assert_eq!(result.report.code(), TerminationCode::MaxIter);
         assert_eq!(result.state.iter(), 5);
         assert_eq!(result.state.cost(), 0.0);
         assert_eq!(result.state.best_iter(), 0);
@@ -127,7 +127,7 @@ fn rejected_trials_do_not_create_cost_or_step_convergence() {
     .max_iter(10)
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::RhoTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert_eq!(result.state.iter(), 3);
 }
 
@@ -223,12 +223,11 @@ impl Solver<FlatBox, PointState<Vec<f64>>> for Chain {
         &mut self,
         problem: &mut Problem<FlatBox>,
         state: PointState<Vec<f64>>,
-    ) -> Result<(PointState<Vec<f64>>, Option<TerminationReason>), Infallible>
-    {
+    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Infallible> {
         self.model_steps += 1;
         self.seen.borrow_mut().push(self.model_steps);
         problem.cost(state.param())?;
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 

@@ -7,7 +7,7 @@ use basin::{
     CancellationToken, CheckpointSink, CostFunction, CountsMirror, EvalCounts,
     Executor, Gradient, Hessian, HessianProduct, Jacobian, Observe,
     ObserverMode, OptimizationResultWithSolver, Problem, Residual, Solver,
-    State, StepOutcome, TerminationReason,
+    State, StepOutcome, TerminationCode,
 };
 
 #[derive(Default)]
@@ -167,18 +167,20 @@ impl Solver<Quadratic, OwnedState> for OwnedSolver {
         &mut self,
         problem: &mut Problem<Quadratic>,
         mut state: OwnedState,
-    ) -> Result<(OwnedState, Option<TerminationReason>), Self::Error> {
+    ) -> Result<basin::SolverStep<OwnedState>, Self::Error> {
         self.steps += 1;
         self.workspace[0] += 1;
         *state.point *= 0.5;
         state.cost = problem.cost_and_gradient_and_hessian(state.param())?.0;
         problem.residual_and_jacobian(state.param())?;
         problem.hessian_product(state.param(), &1.0)?;
-        Ok((
+        Ok(basin::SolverStep::from((
             state,
             self.stop_mid_step
-                .then_some(TerminationReason::UserRequested),
-        ))
+                .then_some(basin::Termination::Application(
+                    basin::ApplicationStop::new("user_requested"),
+                )),
+        )))
     }
 }
 
@@ -204,7 +206,11 @@ impl Observe<OwnedState> for Recorder {
     fn observe_iter(&mut self, state: &OwnedState) {
         self.0.borrow_mut().push(("iter", state.iter()));
     }
-    fn observe_final(&mut self, state: &OwnedState, _: &TerminationReason) {
+    fn observe_final(
+        &mut self,
+        state: &OwnedState,
+        _: &basin::TerminationReport,
+    ) {
         self.0.borrow_mut().push(("final", state.iter()));
     }
 }
@@ -292,7 +298,7 @@ fn owned_completion_matches_ordinary_results_and_callbacks() {
         assert_eq!(result.best_cost(), ordinary.best_cost());
         assert_eq!(result.best_iter(), ordinary.best_iter());
         assert_eq!(result.best_cost_evals(), ordinary.best_cost_evals());
-        assert_eq!(result.reason, ordinary.reason);
+        assert_eq!(result.report.code(), ordinary.report.code());
         assert_eq!(result.counts, counts(3));
         assert_ne!(result.cost_evals(), result.counts.cost_evals);
         assert_eq!(result.solver.workspace[0], 3);
@@ -312,7 +318,7 @@ fn stopped_stepper_extraction_does_not_repeat_final_callbacks() {
             stepper.into_checkpoint().unwrap()
         } else {
             let result = stepper.run_to_end_with_solver().unwrap();
-            assert_eq!(result.reason, TerminationReason::MaxIter);
+            assert_eq!(result.report.code(), TerminationCode::MaxIter);
             result.into_checkpoint()
         };
         assert_eq!(*log.borrow(), before);
@@ -343,11 +349,11 @@ fn clean_mid_step_stop_extracts_charged_counts_without_incrementing_iteration()
     .into_stepper()
     .unwrap();
     assert_eq!(
-        stepper.step().unwrap(),
-        StepOutcome::Stopped(TerminationReason::UserRequested)
+        stepper.step().unwrap().report().map(|report| report.code()),
+        Some(TerminationCode::UserRequested)
     );
     let result = stepper.run_to_end_with_solver().unwrap();
-    assert_eq!(result.reason, TerminationReason::UserRequested);
+    assert_eq!(result.report.code(), TerminationCode::UserRequested);
     assert_eq!(result.iter(), 0);
     assert_eq!(result.cost(), 16.0);
     assert_eq!(result.counts, counts(1));
@@ -370,7 +376,7 @@ fn cancelled_run_can_resume_with_new_execution_policy() {
         }
         token.cancel();
         let result = stepper.run_to_end_with_solver().unwrap();
-        assert_eq!(result.reason, TerminationReason::Cancelled);
+        assert_eq!(result.report.code(), TerminationCode::Cancelled);
         assert_eq!(result.iter(), pause);
         assert_eq!(result.counts, counts(pause));
         let resumed = Executor::resume_from_checkpoint(
@@ -380,7 +386,7 @@ fn cancelled_run_can_resume_with_new_execution_policy() {
         .max_iter(3)
         .run_with_solver()
         .unwrap();
-        assert_eq!(resumed.reason, TerminationReason::MaxIter);
+        assert_eq!(resumed.report.code(), TerminationCode::MaxIter);
         assert_eq!(resumed.counts, counts(3));
     }
 }
@@ -475,7 +481,7 @@ where
             assert_eq!(resumed.counts(), reference.counts());
             if let StepOutcome::Stopped(reason) = expected {
                 let result = resumed.run_to_end_with_solver().unwrap();
-                assert_eq!(reason, baseline.reason);
+                assert_eq!(reason.code(), baseline.report.code());
                 assert_eq!(result.iter(), baseline.iter());
                 assert_eq!(result.param(), baseline.param());
                 assert_eq!(result.counts, baseline.counts);
@@ -534,8 +540,8 @@ macro_rules! gradient_continuation {
                 Sphere::new,
             );
             assert_eq!(
-                result.reason,
-                TerminationReason::RelativeGradientTolerance
+                result.report.code(),
+                TerminationCode::RelativeGradientTolerance
             );
             assert_eq!(result.iter(), 7);
             assert_eq!(result.counts.cost_evals, 8);

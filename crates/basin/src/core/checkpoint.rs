@@ -96,7 +96,7 @@ mod file {
     use super::{CheckpointSink, EvalCounts, ExactCheckpoint};
 
     const MAGIC: &[u8; 8] = b"BASINEX\0";
-    const FORMAT_VERSION: u32 = 2;
+    const FORMAT_VERSION: u32 = 3;
     const PREFIX_LEN: usize = MAGIC.len() + 2 * size_of::<u32>();
     const MAX_HEADER_LEN: usize = 64 * 1024;
 
@@ -288,7 +288,7 @@ mod file {
     /// Read the result with [`read_exact_checkpoint`] and pass it to
     /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
     ///
-    /// Writes format version 2 with postcard-encoded metadata and payload.
+    /// Writes format version 3 with postcard-encoded metadata and payload.
     /// Older Basin releases that only support version 1 cannot read these files.
     /// See [`read_exact_checkpoint`] for migration from Basin 1.x.
     #[derive(Clone, Debug)]
@@ -373,7 +373,7 @@ mod file {
     ///
     /// The format, exact Basin version, and concrete solver/state type names
     /// must match before the payload is deserialized.
-    /// Reads only postcard format version 2 without modifying the file.
+    /// Reads only postcard format version 3 without modifying the file.
     /// Unsupported formats, mismatched metadata, malformed data, and trailing
     /// bytes return [`io::ErrorKind::InvalidData`].
     ///

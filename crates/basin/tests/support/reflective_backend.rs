@@ -1,6 +1,6 @@
 use basin::{
     BoxConstraints, CostFunction, DenseMatrixFromFn, Executor, Jacobian,
-    MatrixIndex, NativeConvergenceTest, Residual, Scalar, TerminationReason,
+    MatrixIndex, NativeConvergenceTest, Residual, Scalar, TerminationCode,
     TrustRegionReflective, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
@@ -108,7 +108,7 @@ where
         .max_iter(200)
         .run_with_solver()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert_eq!(
             result.native_convergence_tests(),
             &[NativeConvergenceTest::AbsoluteScaledGradient]
@@ -216,7 +216,7 @@ where
                 .max_iter(max_iter)
                 .run()
                 .unwrap();
-                assert_ne!(result.reason, TerminationReason::SolverFailed);
+                assert_ne!(result.report.code(), TerminationCode::SolverFailed);
                 let x = result.param().get_scalar(0);
                 if max_iter == 1 {
                     assert_eq!(result.iter(), 1);
@@ -226,8 +226,8 @@ where
                     );
                 } else {
                     assert_eq!(
-                        result.reason,
-                        TerminationReason::SolverConverged
+                        result.report.code(),
+                        TerminationCode::SolverConverged
                     );
                     assert!((x / start - num(2.0)).abs() < num(1e-6));
                 }
@@ -263,7 +263,7 @@ where
     .max_iter(1)
     .run()
     .unwrap();
-    assert_ne!(result.reason, TerminationReason::SolverFailed);
+    assert_ne!(result.report.code(), TerminationCode::SolverFailed);
     let h0 = result.param().get_scalar(0) - num(2.0);
     let h1 = result.param().get_scalar(1);
     assert!((h0.hypot(h1) - num(2.0)).abs() < num(1e-5));
@@ -296,7 +296,7 @@ where
     .max_iter(200)
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
     assert!(result.native_convergence_tests().is_empty());
     assert_eq!(result.cost(), num(2.0));
     let x = result.param().get_scalar(0);

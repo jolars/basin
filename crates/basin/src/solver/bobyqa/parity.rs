@@ -67,7 +67,7 @@ use std::rc::Rc;
 
 use crate::core::constraint::BoxConstraints;
 use crate::core::problem::CostFunction;
-use crate::{Bobyqa, Executor, PointState, TerminationReason};
+use crate::{Bobyqa, Executor, PointState};
 
 /// One PRIMA reference run, parsed from a `bobyqa_*.tsv` fixture.
 struct Fixture {
@@ -318,8 +318,8 @@ fn check_parity(text: &str) {
 
     // --- Tier 3: converged final output matches PRIMA's.
     assert_eq!(
-        result.reason,
-        TerminationReason::SolverConverged,
+        result.report.code(),
+        crate::TerminationCode::SolverConverged,
         "{}: basin stopped on the eval budget, not convergence",
         fx.problem,
     );

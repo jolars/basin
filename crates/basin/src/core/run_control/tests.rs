@@ -27,8 +27,11 @@ fn raw_categories_read_the_state_without_legacy_folds() {
         assert_eq!(control.check(&state, &EvalCounts::default()), None);
         control = control.max_evaluations(kind, count);
         assert_eq!(
-            control.check(&state, &EvalCounts::default()),
-            Some(TerminationReason::MaxEvaluations)
+            control
+                .check(&state, &EvalCounts::default())
+                .as_ref()
+                .map(|stop| stop.code()),
+            Some(crate::TerminationCode::MaxEvaluations)
         );
     }
 }
@@ -53,28 +56,43 @@ fn raw_setters_replace_and_preserve_budget_precedence() {
         .max_time(Duration::ZERO)
         .target_objective(1.0);
     assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::MaxEvaluations)
+        control
+            .check(&state, &counts)
+            .as_ref()
+            .map(|stop| stop.code()),
+        Some(crate::TerminationCode::MaxEvaluations)
     );
     control = control.max_evaluations(EvaluationKind::Cost, 2);
     assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::MaxEvaluations)
+        control
+            .check(&state, &counts)
+            .as_ref()
+            .map(|stop| stop.code()),
+        Some(crate::TerminationCode::MaxEvaluations)
     );
     control = control.max_gradient_evals(1);
     assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::MaxGradientEvals)
+        control
+            .check(&state, &counts)
+            .as_ref()
+            .map(|stop| stop.code()),
+        Some(crate::TerminationCode::MaxGradientEvals)
     );
     control = control.max_cost_evals(1);
     assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::MaxCostEvals)
+        control
+            .check(&state, &counts)
+            .as_ref()
+            .map(|stop| stop.code()),
+        Some(crate::TerminationCode::MaxCostEvals)
     );
     control = control.max_iter(0);
     assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::MaxIter)
+        control
+            .check(&state, &counts)
+            .as_ref()
+            .map(|stop| stop.code()),
+        Some(crate::TerminationCode::MaxIter)
     );
 }
 
@@ -104,8 +122,11 @@ fn repeated_checks_and_mid_step_publications_do_not_invent_stall_age() {
         assert_eq!(control.check(&state, &counts), None);
         state.increment_iter();
         assert_eq!(
-            control.check(&state, &counts),
-            Some(TerminationReason::NoImprovement)
+            control
+                .check(&state, &counts)
+                .as_ref()
+                .map(|stop| stop.code()),
+            Some(crate::TerminationCode::NoImprovement)
         );
     }
 }
@@ -131,8 +152,11 @@ fn objective_anchor_handles_large_decreases_and_negative_infinity() {
         assert_eq!(control.check(&state, &counts), None);
         state.increment_iter();
         assert_eq!(
-            control.check(&state, &counts),
-            Some(TerminationReason::NoImprovement)
+            control
+                .check(&state, &counts)
+                .as_ref()
+                .map(|stop| stop.code()),
+            Some(crate::TerminationCode::NoImprovement)
         );
     }
 }
@@ -174,13 +198,19 @@ fn reused_controls_reset_clocks_and_stall_anchors() {
         control.check(&state, &counts);
     }
     assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::NoImprovement)
+        control
+            .check(&state, &counts)
+            .as_ref()
+            .map(|stop| stop.code()),
+        Some(crate::TerminationCode::NoImprovement)
     );
     control.start = Some(Instant::now() - Duration::from_secs(120));
     assert_eq!(
-        control.check(&state, &counts),
-        Some(TerminationReason::MaxTime)
+        control
+            .check(&state, &counts)
+            .as_ref()
+            .map(|stop| stop.code()),
+        Some(crate::TerminationCode::MaxTime)
     );
     control.reset();
     assert_eq!(control.start, None);

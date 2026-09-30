@@ -6,7 +6,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{ProposalState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 /// Generate one candidate from the current simulated-annealing state.
 ///
@@ -319,8 +319,8 @@ pub(crate) struct ReannealingProgress {
 ///
 /// Proposed `NaN` and `+∞` costs are rejected. A finite proposal replaces a
 /// `+∞` incumbent, and `-∞` is accepted and stops on the following framework
-/// check with [`TerminationReason::SolverConverged`]. A `NaN` incumbent stops
-/// with [`TerminationReason::SolverFailed`]. Equal finite costs are accepted.
+/// check with [`crate::TerminationCode::SolverConverged`]. A `NaN` incumbent stops
+/// with [`crate::TerminationCode::SolverFailed`]. Equal finite costs are accepted.
 ///
 /// # Proposal contract
 ///
@@ -596,8 +596,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: ProposalState<V, F>,
-    ) -> Result<(ProposalState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<ProposalState<V, F>>, Self::Error> {
         let incumbent_cost = state.cost();
         let temperature = self.temperature();
         let rng = self
@@ -643,22 +642,28 @@ where
                 self.reannealings = self.reannealings.saturating_add(1);
             }
         }
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {
         self.accepted_iterate
     }
 
-    fn terminate(
-        &self,
-        state: &ProposalState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, state: &ProposalState<V, F>) -> Option<Termination<F>> {
         let cost = state.cost();
         if cost.is_nan() {
-            Some(TerminationReason::SolverFailed)
+            Some(Termination::numerical_failure(
+                "Simulated annealing has a NaN objective at its current point.",
+            ))
         } else if cost == F::neg_infinity() {
-            Some(TerminationReason::SolverConverged)
+            Some(Termination::custom(
+                "simulated_annealing.negative_infinity",
+                "The published incumbent objective equals negative infinity.",
+                vec![crate::Measurement {
+                    name: "cost".into(),
+                    value: cost,
+                }],
+            ))
         } else {
             None
         }

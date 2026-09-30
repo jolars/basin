@@ -4,14 +4,14 @@ use core::fmt::Display;
 
 use crate::core::observer::Observe;
 use crate::core::state::State;
-use crate::core::termination::TerminationReason;
+use crate::core::termination::TerminationReport;
 
 /// Print a one-line progress report on every fire.
 ///
 /// Each line carries the iteration counter, the current
 /// [`cost`](State::cost), and the best cost so far
 /// ([`best_cost`](State::best_cost)); the final line adds the
-/// [`TerminationReason`]. Output goes to **stderr** (`eprintln!`) so it never
+/// [`TerminationReport`]. Output goes to **stderr** (`eprintln!`) so it never
 /// interleaves with data a caller might be writing to stdout.
 ///
 /// Binds on the minimum shape [`State`] (with a [`Display`] scalar), so it
@@ -98,7 +98,11 @@ where
         self.line("iter", state);
     }
 
-    fn observe_final(&mut self, state: &S, reason: &TerminationReason) {
+    fn observe_final(
+        &mut self,
+        state: &S,
+        reason: &TerminationReport<S::Float>,
+    ) {
         self.line("done", state);
         if self.prefix.is_empty() {
             eprintln!("[done] stopped: {reason:?}");

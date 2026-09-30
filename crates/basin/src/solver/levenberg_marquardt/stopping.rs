@@ -133,6 +133,25 @@ where
     {
         return false;
     }
+    let Some((exponent, sum)) = weighted_norm_parts(x, diagonal) else {
+        return false;
+    };
+    if radius == F::zero() {
+        return true;
+    }
+    if tol == F::zero() || sum == F::zero() {
+        return false;
+    }
+    // Keep the norm's exponent separate even when the norm itself cannot fit.
+    let (power, fraction) = product_parts(&[tol, sum.sqrt()]);
+    product_parts(&[radius]) <= (power + exponent, fraction)
+}
+
+fn weighted_norm_parts<V, F>(x: &V, diagonal: &V) -> Option<(i32, F)>
+where
+    F: Scalar,
+    V: ComponentZip<F>,
+{
     let two = F::from_f64(2.).unwrap();
     let mut exponent = 0;
     let mut sum = F::zero();
@@ -160,17 +179,9 @@ where
         true
     });
     if !finite {
-        return false;
+        return None;
     }
-    if radius == F::zero() {
-        return true;
-    }
-    if tol == F::zero() || sum == F::zero() {
-        return false;
-    }
-    // Keep the norm's exponent separate even when the norm itself cannot fit.
-    let (power, fraction) = product_parts(&[tol, sum.sqrt()]);
-    product_parts(&[radius]) <= (power + exponent, fraction)
+    Some((exponent, sum))
 }
 
 // Keep the norm factored: even an unsquared norm can exceed the scalar range.
@@ -228,6 +239,115 @@ fn product_parts<F: Scalar>(factors: &[F]) -> (i32, F) {
         }
     }
     (exponent, fraction)
+}
+
+fn binary_product<F: Scalar>(factors: &[F]) -> crate::BinaryValue<F> {
+    if factors.contains(&F::zero()) {
+        return crate::BinaryValue {
+            significand: F::zero(),
+            exponent: 0,
+        };
+    }
+    let (exponent, significand) = product_parts(factors);
+    crate::BinaryValue {
+        significand,
+        exponent,
+    }
+}
+
+pub(super) fn step_evidence<V, F>(
+    h: &V,
+    x: &V,
+    tolerance: F,
+) -> crate::ConvergenceEvidence<F>
+where
+    F: Scalar,
+    V: Clone + NormInfinity<F> + NormSquared<F> + ScaleInPlace<F>,
+{
+    let (hs, hn) = norm_parts(h).expect("a passing step test has finite data");
+    let (xs, xn) = norm_parts(x).expect("a passing step test has finite data");
+    crate::ConvergenceEvidence::FactoredUpperBound {
+        value: binary_product(&[hs, hn]),
+        bound: binary_product(&[tolerance, xs, xn]),
+        tolerance,
+        reference: Some(binary_product(&[xs, xn])),
+    }
+}
+
+pub(super) fn radius_evidence<V, F>(
+    radius: F,
+    x: &V,
+    d: &V,
+    tolerance: F,
+) -> crate::ConvergenceEvidence<F>
+where
+    F: Scalar,
+    V: ComponentZip<F>,
+{
+    let (exponent, sum) = weighted_norm_parts(x, d)
+        .expect("a passing radius test has finite data");
+    let mut bound = binary_product(&[tolerance, sum.sqrt()]);
+    bound.exponent += exponent;
+    crate::ConvergenceEvidence::FactoredUpperBound {
+        value: binary_product(&[radius]),
+        bound,
+        tolerance,
+        reference: Some(crate::BinaryValue {
+            significand: sum.sqrt(),
+            exponent,
+        }),
+    }
+}
+
+pub(super) fn orthogonality_evidence<V, F>(
+    g: &V,
+    d: &V,
+    r: &V,
+    robust_cost: Option<F>,
+    tolerance: F,
+) -> crate::ConvergenceEvidence<F>
+where
+    F: Scalar,
+    V: Clone
+        + NormInfinity<F>
+        + NormSquared<F>
+        + ScaleInPlace<F>
+        + ComponentZip<F>,
+{
+    let (scale, norm) = robust_cost.map_or_else(
+        || {
+            norm_parts(r)
+                .expect("a passing orthogonality test has finite residuals")
+        },
+        |cost| (cost.sqrt(), F::from_f64(2.).unwrap().sqrt()),
+    );
+    let mut maximum = crate::BinaryValue {
+        significand: F::zero(),
+        exponent: 0,
+    };
+    g.all_zip(d, |value, square| {
+        if value != F::zero() {
+            let (np, nf) = product_parts(&[value.abs()]);
+            let (dp, df) = product_parts(&[scale, norm, square.sqrt()]);
+            let (rp, rf) = product_parts(&[nf / df]);
+            let exponent = np - dp + rp;
+            if maximum.significand == F::zero()
+                || (exponent, rf) > (maximum.exponent, maximum.significand)
+            {
+                maximum = crate::BinaryValue {
+                    significand: rf,
+                    exponent,
+                };
+            }
+        }
+        true
+    });
+    crate::ConvergenceEvidence::FactoredUpperBound {
+        value: maximum,
+        bound: binary_product(&[tolerance]),
+        tolerance,
+        reference: Some(binary_product(&[scale, norm])),
+    }
 }
 
 #[cfg(test)]

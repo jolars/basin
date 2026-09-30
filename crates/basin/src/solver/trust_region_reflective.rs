@@ -13,7 +13,7 @@ use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::{LossFunction, RobustLeastSquares, ScaleRowsInPlace};
 use step::{Model, interior, number, update_radius};
 
@@ -71,9 +71,9 @@ use step::{Model, interior, number, update_radius};
 /// Non-finite trial residuals cause rejection and radius contraction. Invalid
 /// initial evaluations or derivatives, failed factorizations (100 Jacobi sweeps),
 /// exhausted inner attempts, or other numerical breakdowns report
-/// [`TerminationReason::SolverFailed`]. After a finite equal-cost rejection,
+/// [`crate::TerminationCode::SolverFailed`]. After a finite equal-cost rejection,
 /// a contracted trial that changes no parameter in floating-point arithmetic
-/// reports [`TerminationReason::NumericalNoProgress`] at the last accepted
+/// reports [`crate::TerminationCode::NumericalNoProgress`] at the last accepted
 /// point. This safeguard does not establish stationarity or solution accuracy.
 /// A free interval without a representable interior fails before any callback.
 /// User errors propagate unchanged.
@@ -393,7 +393,7 @@ where
         &mut self,
         _problem: &Problem<P>,
         _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         self.check_native_convergence()
     }
     fn init(
@@ -407,11 +407,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
     }
-    fn terminate(&self, state: &PointState<V, F>) -> Option<TerminationReason> {
+    fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
         self.terminate_evaluated(state)
     }
 }
@@ -434,7 +433,7 @@ where
         &mut self,
         _problem: &Problem<RobustLeastSquares<P, L, F>>,
         _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         self.check_native_convergence()
     }
     fn init(
@@ -448,11 +447,10 @@ where
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
     }
-    fn terminate(&self, state: &PointState<V, F>) -> Option<TerminationReason> {
+    fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
         self.terminate_evaluated(state)
     }
 }
@@ -585,13 +583,17 @@ impl<F: Scalar> TrustRegionReflective<F> {
     {
         self.native_convergence.clear();
         let work = self.work.as_mut().expect("TRF must be initialized");
-        let failed = Some(TerminationReason::SolverFailed);
+        let failed = || {
+            Some(Termination::numerical_failure(
+                "TRF could not construct or solve a finite feasible trust-region model.",
+            ))
+        };
         if work.failed {
-            return Ok((state, failed));
+            return Ok(crate::SolverStep::from((state, failed())));
         }
         let Some(model) = work.model(state.param()) else {
             work.failed = true;
-            return Ok((state, failed));
+            return Ok(crate::SolverStep::from((state, failed())));
         };
         let n = work.free.len();
         let m = work.residual.len();
@@ -602,7 +604,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
         }
         let Some(svd) = DenseSvd::factor(m + n, n, augmented) else {
             work.failed = true;
-            return Ok((state, failed));
+            return Ok(crate::SolverStep::from((state, failed())));
         };
         let mut rhs = work.residual.clone();
         rhs.resize(m + n, F::zero());
@@ -666,10 +668,12 @@ impl<F: Scalar> TrustRegionReflective<F> {
                     .zip(&x)
                     .all(|(&i, &x)| trial.get_scalar(i) == x)
             {
-                return Ok((
+                return Ok(crate::SolverStep::from((
                     state,
-                    Some(TerminationReason::NumericalNoProgress),
-                ));
+                    Some(Termination::numerical_stall(
+                        "A contracted TRF trial changes no parameter after a finite equal-cost rejection.",
+                    )),
+                )));
             }
             if !feasible
                 || !length.is_finite()
@@ -714,19 +718,47 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 state.replace(trial, new_cost);
                 work.failed = !work.update_gradient()
                     || work.model(state.param()).is_none();
-                return Ok((state, if work.failed { failed } else { None }));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    if work.failed { failed() } else { None },
+                )));
             }
         }
         work.failed = true;
-        Ok((state, failed))
+        Ok(crate::SolverStep::from((state, failed())))
     }
 
     fn terminate_evaluated<V>(
         &self,
         _: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         self.convergence_test()
-            .map(|_| TerminationReason::SolverConverged)
+            .map(|test| self.convergence_report(test))
+    }
+
+    fn convergence_report(
+        &self,
+        test: NativeConvergenceTest,
+    ) -> Termination<F> {
+        match test {
+            NativeConvergenceTest::NoFreeParameters => {
+                Termination::converged(crate::ConvergenceCriterion {
+                    test: crate::ConvergenceTest::NoFreeParameters,
+                    evidence: crate::ConvergenceEvidence::NoFreeParameters,
+                })
+            }
+            NativeConvergenceTest::AbsoluteScaledGradient => {
+                let tolerance = self.gradient_tolerance.unwrap();
+                Termination::upper_bound(
+                    crate::ConvergenceTest::AbsoluteScaledGradient,
+                    self.work.as_ref().unwrap().optimality,
+                    tolerance,
+                    tolerance,
+                    None,
+                )
+            }
+            _ => unreachable!("TRF only produces its own native predicates"),
+        }
     }
 
     fn convergence_test(&self) -> Option<NativeConvergenceTest> {
@@ -743,10 +775,10 @@ impl<F: Scalar> TrustRegionReflective<F> {
         }
     }
 
-    fn check_native_convergence(&mut self) -> Option<TerminationReason> {
+    fn check_native_convergence(&mut self) -> Option<Termination<F>> {
         self.native_convergence.clear();
         let test = self.convergence_test()?;
         self.native_convergence.push(test);
-        Some(TerminationReason::SolverConverged)
+        Some(self.convergence_report(test))
     }
 }

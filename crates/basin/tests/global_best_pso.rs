@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use basin::{
     BoxConstraints, CostFunction, Executor, GlobalBestPso, PopulationProgress,
-    PsoBoundaryHandling, PsoVelocityLimit, State, TerminationReason,
+    PsoBoundaryHandling, PsoVelocityLimit, State, TerminationCode,
 };
 use rand::TryRng;
 
@@ -562,7 +562,7 @@ fn all_non_comparable_initial_costs_stop_cleanly() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.state.iter(), 0);
     assert_eq!(result.cost_evals(), 3);
     assert!(result.state.current().is_some());
@@ -609,6 +609,6 @@ fn negative_infinity_is_a_clean_global_optimum_stop() {
     .run_with_solver()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.state.iter(), 0);
 }

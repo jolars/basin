@@ -1,11 +1,13 @@
 use super::{ObservationEvent, Observe, ObserveSolver};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::TerminationReport;
 
 // Adapting state observers keeps both kinds in one registration-ordered list
 // with one dynamic call per callback and no bounds on state or solver storage.
 pub(crate) struct StateObserver<O>(pub(crate) O);
 
-impl<S, So, O: Observe<S>> ObserveSolver<S, So> for StateObserver<O> {
+impl<S: crate::State, So, O: Observe<S>> ObserveSolver<S, So>
+    for StateObserver<O>
+{
     fn observe_init(&mut self, state: &S, _solver: &So) {
         self.0.observe_init(state);
     }
@@ -18,7 +20,7 @@ impl<S, So, O: Observe<S>> ObserveSolver<S, So> for StateObserver<O> {
         &mut self,
         state: &S,
         _solver: &So,
-        reason: &TerminationReason,
+        reason: &TerminationReport<S::Float>,
     ) {
         self.0.observe_final(state, reason);
     }
@@ -26,9 +28,9 @@ impl<S, So, O: Observe<S>> ObserveSolver<S, So> for StateObserver<O> {
 
 pub(crate) struct SolverCallback<C>(pub(crate) C);
 
-impl<S, So, C> ObserveSolver<S, So> for SolverCallback<C>
+impl<S: crate::State, So, C> ObserveSolver<S, So> for SolverCallback<C>
 where
-    C: FnMut(&S, &So, ObservationEvent),
+    C: FnMut(&S, &So, ObservationEvent<'_, S::Float>),
 {
     fn observe_init(&mut self, state: &S, solver: &So) {
         (self.0)(state, solver, ObservationEvent::Init);
@@ -42,8 +44,8 @@ where
         &mut self,
         state: &S,
         solver: &So,
-        reason: &TerminationReason,
+        reason: &TerminationReport<S::Float>,
     ) {
-        (self.0)(state, solver, ObservationEvent::Final(*reason));
+        (self.0)(state, solver, ObservationEvent::Final(reason));
     }
 }

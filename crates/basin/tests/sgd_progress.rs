@@ -2,7 +2,7 @@
 
 use basin::{
     CostFunction, EvaluationKind, Executor, MiniBatchGradient, PointState, Sgd,
-    State, TerminationReason,
+    State, TerminationCode,
 };
 use std::convert::Infallible;
 
@@ -171,7 +171,7 @@ fn convergence_observes_refreshes_and_budgets_count_every_batch() {
     .run()
     .unwrap();
     assert_eq!(result.state.iter(), 3);
-    assert_eq!(result.reason, TerminationReason::CostTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CostTolerance);
     let result = Executor::from_start(problem(), solver(), vec![10.0, -5.0])
         .require_evaluated_state()
         .max_evaluations(EvaluationKind::Gradient, 4)

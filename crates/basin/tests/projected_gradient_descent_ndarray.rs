@@ -4,7 +4,7 @@ use crate::backend_aliases::ndarray::Array1;
 use basin::problems::BoothBoxed;
 use basin::{
     Backtracking, Executor, FirstOrderState, ProjectedGradientDescent,
-    TerminationReason,
+    TerminationCode,
 };
 
 #[test]
@@ -79,7 +79,7 @@ fn infeasible_initial_param_is_projected_at_init() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.param()[0], 1.0);
     assert_eq!(result.param()[1], 1.0);
 }
@@ -101,7 +101,10 @@ fn projected_gradient_tolerance_triggers_at_corner_minimum() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::ProjectedGradientTolerance);
+    assert_eq!(
+        result.report.code(),
+        TerminationCode::ProjectedGradientTolerance
+    );
 }
 
 #[path = "support/backend_aliases.rs"]

@@ -11,11 +11,11 @@ use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedFirstOrderState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use factor::Factor;
 use least_squares::{Lsei, Matrix, dot, norm, number};
 
-/// Numerical failure reported alongside [`TerminationReason::SolverFailed`].
+/// Numerical failure reported alongside [`crate::TerminationCode::SolverFailed`].
 /// User callback errors propagate separately, unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -242,7 +242,7 @@ impl<V: Clone, F: Scalar> InitialState<V> for Slsqp<F> {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-struct Work<F> {
+struct Work<F: Scalar> {
     free: Vec<usize>,
     lower: Vec<F>,
     upper: Vec<F>,
@@ -267,6 +267,7 @@ struct Work<F> {
     last_change: Option<F>,
     last_step: Option<F>,
     converged: bool,
+    convergence: Option<Termination<F>>,
     failure: Option<SlsqpFailure>,
     stationarity: Option<F>,
     complementarity: Option<F>,
@@ -487,6 +488,22 @@ impl<F: Scalar> Work<F> {
             let feasible =
                 below(self.violation(), Some(accuracy.unwrap_or_else(F::zero)));
             self.converged = accuracy.is_some() && feasible;
+            self.convergence = self.converged.then(|| {
+                Termination::custom(
+                    "slsqp.fixed_feasible",
+                    "All parameters are fixed. Violation < accuracy, or violation == accuracy == 0.",
+                    vec![
+                        crate::Measurement {
+                            name: "violation".into(),
+                            value: self.violation(),
+                        },
+                        crate::Measurement {
+                            name: "accuracy".into(),
+                            value: accuracy.unwrap(),
+                        },
+                    ],
+                )
+            });
             if !feasible {
                 self.failure = Some(SlsqpFailure::IncompatibleConstraints);
             }
@@ -557,6 +574,24 @@ impl<F: Scalar> Work<F> {
                 && below(self.violation(), accuracy)
             {
                 self.converged = true;
+                self.convergence = Some(Termination::custom(
+                    "slsqp.qp_optimality",
+                    "The QP is consistent. Optimality = |g dot step| + sum |multiplier * residual|. Optimality and violation are each < accuracy, or exactly zero when accuracy is zero.",
+                    vec![
+                        crate::Measurement {
+                            name: "optimality".into(),
+                            value: optimality,
+                        },
+                        crate::Measurement {
+                            name: "violation".into(),
+                            value: self.violation(),
+                        },
+                        crate::Measurement {
+                            name: "accuracy".into(),
+                            value: accuracy.unwrap(),
+                        },
+                    ],
+                ));
                 return;
             }
             self.derivative = gs - self.weighted_violation() * slack_factor;
@@ -572,6 +607,48 @@ impl<F: Scalar> Work<F> {
             }
         }
     }
+    fn change_convergence(
+        &self,
+        accuracy: Option<F>,
+        relaxed: bool,
+    ) -> Option<Termination<F>> {
+        let accuracy = accuracy?;
+        if self.inconsistent || !below(self.violation(), Some(accuracy)) {
+            return None;
+        }
+        [
+            ("cost_change", self.last_change),
+            ("step_norm", self.last_step),
+        ]
+        .into_iter()
+        .filter_map(|(name, value)| {
+            let value = value.filter(|&v| below(v, Some(accuracy)))?;
+            Some(Termination::custom(
+                format!("slsqp.{name}"),
+                "The QP is consistent. Violation and this change metric are each < effective_accuracy, or exactly zero when effective_accuracy is zero.",
+                vec![
+                    crate::Measurement {
+                        name: name.into(),
+                        value,
+                    },
+                    crate::Measurement {
+                        name: "violation".into(),
+                        value: self.violation(),
+                    },
+                    crate::Measurement {
+                        name: "effective_accuracy".into(),
+                        value: accuracy,
+                    },
+                    crate::Measurement {
+                        name: "relaxed".into(),
+                        value: if relaxed { F::one() } else { F::zero() },
+                    },
+                ],
+            ))
+        })
+        .reduce(Termination::merge)
+    }
+
     fn reset_factor(&mut self, accuracy: Option<F>) -> bool {
         self.resets += 1;
         if self.resets > 5 {
@@ -580,6 +657,7 @@ impl<F: Scalar> Work<F> {
                 && below(self.violation(), relaxed)
                 && (self.last_change.is_some_and(|v| below(v, relaxed))
                     || self.last_step.is_some_and(|v| below(v, relaxed)));
+            self.convergence = self.change_convergence(relaxed, true);
             if !self.converged {
                 self.failure = Some(SlsqpFailure::NonDescentDirection);
             }
@@ -816,6 +894,7 @@ where
             last_change: None,
             last_step: None,
             converged: false,
+            convergence: None,
             failure: None,
             stationarity: None,
             complementarity: None,
@@ -851,26 +930,36 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: SelectedFirstOrderState<V, F>,
-    ) -> Result<
-        (SelectedFirstOrderState<V, F>, Option<TerminationReason>),
-        P::Error,
-    > {
+    ) -> Result<crate::SolverStep<SelectedFirstOrderState<V, F>>, P::Error>
+    {
         let work = self.work.as_mut().expect("SLSQP must be initialized");
         if work.failure.is_some() {
             work.diagnostics(state.param());
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(format!(
+                    "SLSQP numerical failure: {:?}.",
+                    work.failure
+                ))),
+            )));
         }
         if work.free.is_empty() {
             // No step is possible, so disabled convergence leaves termination
             // to executor controls without attempting empty BFGS updates.
-            return Ok((state, None));
+            return Ok(crate::SolverStep::from((state, None)));
         }
         let old_cost = state.cost();
         let merit = old_cost + work.weighted_violation();
         if !merit.is_finite() {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
             work.diagnostics(state.param());
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(format!(
+                    "SLSQP numerical failure: {:?}.",
+                    work.failure
+                ))),
+            )));
         }
         let mut alpha = F::one();
         let mut accepted = None;
@@ -922,7 +1011,13 @@ where
         let Some((param, cost, c)) = accepted else {
             work.failure = Some(SlsqpFailure::LineSearchFailed);
             work.diagnostics(state.param());
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(format!(
+                    "SLSQP numerical failure: {:?}.",
+                    work.failure
+                ))),
+            )));
         };
         let gradient = problem.gradient(&param)?;
         assert_eq!(
@@ -938,7 +1033,13 @@ where
         {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
             work.diagnostics(state.param());
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(format!(
+                    "SLSQP numerical failure: {:?}.",
+                    work.failure
+                ))),
+            )));
         }
         work.scratch.y.resize(work.free.len(), F::zero());
         for (j, &i) in work.free.iter().enumerate() {
@@ -958,6 +1059,7 @@ where
             && below(work.violation(), self.accuracy)
             && (below((cost - old_cost).abs(), self.accuracy)
                 || below(norm(&work.direction), self.accuracy));
+        work.convergence = work.change_convergence(self.accuracy, false);
         if !work.converged
             && (work.factor.update(
                 &work.direction,
@@ -973,15 +1075,15 @@ where
             .replace(param, cost, gradient, work.reported_violation())
             .expect("SLSQP gradient dimensions were checked");
         state.select_current();
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
     fn terminate(
         &self,
         _state: &SelectedFirstOrderState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         self.work
             .as_ref()
             .filter(|w| w.converged)
-            .map(|_| TerminationReason::SolverConverged)
+            .and_then(|w| w.convergence.clone())
     }
 }

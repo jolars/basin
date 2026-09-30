@@ -62,7 +62,7 @@ fn main() {
         r.param()[0],
         r.param()[1],
         r.state.counts().residual_evals,
-        r.reason
+        r.report.code()
     );
 
     let r = Executor::new(
@@ -80,7 +80,7 @@ fn main() {
         r.param()[0],
         r.param()[1],
         r.state.counts().residual_evals,
-        r.reason
+        r.report.code()
     );
 
     // ---- Powell singular (n = 4, m = 4), rank-deficient at optimum ----
@@ -118,7 +118,7 @@ fn main() {
         p[2],
         p[3],
         r.state.counts().residual_evals,
-        r.reason
+        r.report.code()
     );
 
     let r = Executor::new(
@@ -139,7 +139,7 @@ fn main() {
         p[2],
         p[3],
         r.state.counts().residual_evals,
-        r.reason
+        r.report.code()
     );
 
     // ---- Variably Dimensioned (well-conditioned, full-rank) at the
@@ -180,7 +180,7 @@ fn main() {
                 .map(|&v| (v - 1.0).abs())
                 .fold(0.0, f64::max),
             r.state.counts().residual_evals,
-            r.reason
+            r.report.code()
         );
 
         let r = Executor::new(
@@ -199,7 +199,7 @@ fn main() {
                 .map(|i| (r.param()[i] - 1.0).abs())
                 .fold(0.0, f64::max),
             r.state.counts().residual_evals,
-            r.reason
+            r.report.code()
         );
     }
 
@@ -234,7 +234,7 @@ fn main() {
             r.cost(),
             r.param().iter().map(|&v| v.abs()).fold(0.0, f64::max),
             r.state.counts().residual_evals,
-            r.reason
+            r.report.code()
         );
 
         let p = UnderDet::<Col<f64>>::new(m, n);
@@ -250,7 +250,7 @@ fn main() {
             r.cost(),
             (0..n).map(|i| r.param()[i].abs()).fold(0.0, f64::max),
             r.state.counts().residual_evals,
-            r.reason
+            r.report.code()
         );
     }
 }

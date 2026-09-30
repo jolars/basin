@@ -7,7 +7,7 @@ use backend::{Kind, Objective};
 use basin::{
     CgUpdate, Constant, CostFunction, Dot, Executor, FirstOrderState, Gradient,
     LineSearch, LineSearchOutcome, LineSearchResult, MoreThuente, NonlinearCg,
-    NormInfinity, Problem, Solver, State, TerminationReason,
+    NormInfinity, Problem, Solver, State, TerminationCode,
 };
 use std::{cell::RefCell, convert::Infallible, rc::Rc};
 
@@ -37,7 +37,7 @@ fn optimal_start_and_empty_history() {
         .max_iter(10)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::GradientTolerance);
+        assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
         assert_eq!(result.iter(), 0);
         assert_eq!(result.state.counts().cost_evals, 1);
         assert_eq!(result.state.counts().gradient_evals, 1);
@@ -146,7 +146,7 @@ fn exact_search_produces_conjugate_directions_and_n_step_convergence() {
         .max_iter(10)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::GradientTolerance);
+        assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
         assert_eq!(result.iter(), 2);
         assert!(result.param().norm_infinity() < 1e-12);
         let trace = trace.borrow();
@@ -223,7 +223,7 @@ fn failed_conjugate_search_retries_same_point_with_steepest_descent() {
 #[test]
 fn exhausted_recovery_preserves_current_record_and_counts() {
     let (result, trace) = recorded_steps(None, vec![1, 2]);
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.iter(), 1);
     assert_eq!(result.param(), &vec![1.5, -1.0]);
     let (x, cost, gradient) = result.state.current().unwrap();
@@ -235,7 +235,7 @@ fn exhausted_recovery_preserves_current_record_and_counts() {
     assert_eq!(result.state.counts().gradient_evals, 2);
     assert_eq!(trace.borrow().len(), 3);
     let (result, trace) = recorded_steps(None, vec![0]);
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.iter(), 0);
     assert_eq!(trace.borrow().len(), 1);
     assert_eq!(result.state.counts().cost_evals, 2);
@@ -290,7 +290,7 @@ fn polak_ribiere_plus_recovers_failed_searches_and_preserves_failed_records() {
     assert_eq!(trace[1].gradient, trace[2].gradient);
 
     let (result, _) = pr_steps(None, vec![1, 2]);
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.iter(), 1);
     assert_eq!(result.state.counts().cost_evals, 4);
     assert_eq!(result.state.counts().gradient_evals, 2);
@@ -320,10 +320,12 @@ fn changing_updates_between_iterations_restarts_from_the_current_gradient() {
         let state = solver
             .init(&mut problem, FirstOrderState::new(vec![2.0, -1.0]))
             .unwrap();
-        let (state, reason) = solver.next_iter(&mut problem, state).unwrap();
+        let (state, _, reason) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
         assert_eq!(reason, None);
         let mut solver = solver.with_update(update);
-        let (_, reason) = solver.next_iter(&mut problem, state).unwrap();
+        let (_, _, reason) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
         assert_eq!(reason, None);
         assert_eq!(trace.borrow().len(), 2);
         assert!(is_steepest(&trace.borrow()[1]));
@@ -473,7 +475,7 @@ fn nonfinite_initial_or_trial_data_fail_without_publishing_a_step() {
                 .max_iter(2)
                 .run()
                 .unwrap();
-                assert_eq!(result.reason, TerminationReason::SolverFailed);
+                assert_eq!(result.report.code(), TerminationCode::SolverFailed);
                 assert_eq!(result.iter(), 0);
                 assert_eq!(result.param(), &vec![1.0]);
                 assert_eq!(result.state.counts().cost_evals, 1);
@@ -491,7 +493,7 @@ fn nonfinite_initial_or_trial_data_fail_without_publishing_a_step() {
         .max_iter(2)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.iter(), 0);
         assert_eq!(result.state.current(), Some((&vec![1.0], 1.0, &vec![2.0])));
         assert_eq!(result.state.counts().cost_evals, 2);
@@ -512,8 +514,8 @@ fn invalid_steps_are_soft_failures() {
             .run()
             .unwrap();
             assert_eq!(
-                result.reason,
-                TerminationReason::SolverFailed,
+                result.report.code(),
+                TerminationCode::SolverFailed,
                 "alpha={alpha}"
             );
             assert_eq!(result.iter(), 0);
@@ -617,7 +619,7 @@ fn solutions_agree_with_cg_descent_c_1_2() {
         .max_iter(10_000)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::GradientTolerance);
+        assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
         assert!((result.cost() - reference_cost).abs() < 1e-12);
         for (&actual, &expected) in result.param().iter().zip(&reference_point)
         {
@@ -663,7 +665,7 @@ fn underflowing_gradient_norm_is_not_reported_as_exact_zero() {
         .max_iter(2)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.iter(), 0);
     }
 }

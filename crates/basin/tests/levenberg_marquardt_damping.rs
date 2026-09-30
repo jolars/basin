@@ -3,7 +3,7 @@
 use basin::core::problem::Problem;
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    LmDamping, PointState, Residual, Solver, State, TerminationReason,
+    LmDamping, PointState, Residual, Solver, State, TerminationCode,
 };
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 
@@ -137,8 +137,8 @@ macro_rules! backend_checks {
                     .run()
                     .unwrap();
                     assert_eq!(
-                        result.reason,
-                        TerminationReason::SolverConverged
+                        result.report.code(),
+                        TerminationCode::SolverConverged
                     );
                     assert!(result.cost() < tolerance * tolerance);
                     if insensitive {
@@ -191,7 +191,10 @@ macro_rules! backend_checks {
                 .max_iter(100)
                 .run()
                 .unwrap();
-                assert_eq!(result.reason, TerminationReason::SolverConverged);
+                assert_eq!(
+                    result.report.code(),
+                    TerminationCode::SolverConverged
+                );
                 assert!((result.param()[0] - 1.).abs() < tolerance);
                 assert_eq!(result.param()[1], inactive);
                 assert!(result.cost() < tolerance * tolerance);
@@ -210,7 +213,7 @@ macro_rules! backend_checks {
                 .max_iter(4)
                 .run()
                 .unwrap();
-                assert_eq!(result.reason, TerminationReason::MaxIter);
+                assert_eq!(result.report.code(), TerminationCode::MaxIter);
                 assert_eq!(result.cost(), 0.);
                 assert_eq!(result.param()[0], 1.);
                 assert_eq!(result.param()[1], 2.);
@@ -417,7 +420,7 @@ fn explicit_nielsen_preserves_default_trajectories() {
                 let explicit = run(($solver).with_damping(LmDamping::Nielsen));
                 assert_eq!(default.param(), explicit.param());
                 assert_eq!(default.cost(), explicit.cost());
-                assert_eq!(default.reason, explicit.reason);
+                assert_eq!(default.report.code(), explicit.report.code());
                 assert_eq!(
                     default.state.counts().residual_evals,
                     explicit.state.counts().residual_evals
@@ -494,7 +497,7 @@ fn trust_qr_recovers_weak_linear_direction_with_relative_stopping() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 1.).abs() < 1e-8);
     assert!((result.param()[1] - 2.).abs() < 1e-8);
     assert_eq!(result.cost(), 0.5);
@@ -509,7 +512,10 @@ where
     let initial = solver
         .init(&mut problem, PointState::new(vec![0.1]))
         .unwrap();
-    let (mut state, reason) = solver.next_iter(&mut problem, initial).unwrap();
+    let (mut state, _, reason) = solver
+        .next_iter(&mut problem, initial)
+        .unwrap()
+        .into_parts();
     assert!(reason.is_none());
     assert_eq!(state.param(), &vec![0.1]);
     assert_eq!(counts.residuals.get(), 2);
@@ -518,14 +524,15 @@ where
         if state.param()[0] != 0.1 {
             break;
         }
-        (state, _) = solver.next_iter(&mut problem, state).unwrap();
+        state = solver.next_iter(&mut problem, state).unwrap().state;
         assert_eq!(counts.jacobians.get(), 1);
     }
     assert_ne!(state.param()[0], 0.1);
     let reset = solver
         .init(&mut problem, PointState::new(vec![0.1]))
         .unwrap();
-    let (reset, _) = solver.next_iter(&mut problem, reset).unwrap();
+    let (reset, _, _) =
+        solver.next_iter(&mut problem, reset).unwrap().into_parts();
     // A fresh solve must again reject its first, undamped Newton step.
     assert_eq!(reset.param(), &vec![0.1]);
     assert_eq!(counts.jacobians.get(), 2);

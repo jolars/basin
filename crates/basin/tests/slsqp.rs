@@ -1,7 +1,7 @@
 use basin::{
     ConstraintJacobian, CostFunction, DenseMatrix, Executor, Gradient,
     GradientState, NonlinearConstraints, RawEvaluationState,
-    SelectedFirstOrderState, Slsqp, State, TerminationReason,
+    SelectedFirstOrderState, Slsqp, State, TerminationCode,
 };
 use std::convert::Infallible;
 
@@ -63,7 +63,7 @@ fn analytic_equality_solution_and_records() {
     .max_iter(100)
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.state.param();
     assert!(x[0].abs() < 1e-7, "{x:?}");
     assert!((x[1] - 1.0).abs() < 1e-7, "{x:?}");
@@ -88,7 +88,7 @@ fn optimal_seed_stops_at_iteration_zero() {
     .max_iter(10)
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.state.iter(), 0);
     assert_eq!(result.state.raw_counts().cost_evals, 1);
     assert_eq!(result.state.raw_counts().gradient_evals, 1);
@@ -206,8 +206,8 @@ where
     .run_with_solver()
     .unwrap();
     assert_eq!(
-        result.reason,
-        TerminationReason::SolverConverged,
+        result.report.code(),
+        TerminationCode::SolverConverged,
         "failure={:?}, x={:?}, violation={:?}, stationarity={:?}",
         result.solver.failure(),
         (0..4)
@@ -321,7 +321,7 @@ fn hs71_reference_accepted_trajectory_and_exact_continuation() {
         }
     }
     let result = stepper.run_to_end().unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[test]
@@ -354,7 +354,7 @@ fn checkpoint_rebuilds_scratch_for_exact_continuation() {
                 .max_iter(100)
                 .run_with_solver()
                 .unwrap();
-        assert_eq!(resumed.reason, expected.reason);
+        assert_eq!(resumed.report.code(), expected.report.code());
         assert_eq!(resumed.state.param(), expected.state.param());
         assert_eq!(resumed.state.cost(), expected.state.cost());
         assert_eq!(resumed.state.gradient(), expected.state.gradient());
@@ -474,7 +474,7 @@ fn linear_blocks_fixed_coordinates_active_bounds_and_unconstrained() {
         .max_iter(50)
         .run_with_solver()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverConverged);
+        assert_eq!(r.report.code(), TerminationCode::SolverConverged);
         for (a, b) in r.state.param().iter().zip(expected) {
             assert!((a - b).abs() < 1e-7, "{:?}", r.state.param());
         }
@@ -512,13 +512,13 @@ fn all_fixed_feasible_and_infeasible() {
             .run_with_solver()
             .unwrap();
             assert_eq!(
-                r.reason,
+                r.report.code(),
                 if !feasible {
-                    TerminationReason::SolverFailed
+                    TerminationCode::SolverFailed
                 } else if accuracy.is_some() {
-                    TerminationReason::SolverConverged
+                    TerminationCode::SolverConverged
                 } else {
-                    TerminationReason::MaxIter
+                    TerminationCode::MaxIter
                 },
                 "accuracy={accuracy:?}, feasible={feasible}"
             );
@@ -558,7 +558,7 @@ fn all_fixed_bounds_with_disabled_accuracy_reach_iteration_limit() {
     .max_iter(10)
     .run_with_solver()
     .unwrap();
-    assert_eq!(r.reason, TerminationReason::MaxIter);
+    assert_eq!(r.report.code(), TerminationCode::MaxIter);
     assert_eq!(r.solver.failure(), None);
     assert_eq!(r.state.iter(), 10);
     assert_eq!(r.state.param(), &vec![1.]);
@@ -589,7 +589,7 @@ fn dependent_and_excess_equalities_fail_cleanly() {
         .max_iter(20)
         .run_with_solver()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverFailed);
+        assert_eq!(r.report.code(), TerminationCode::SolverFailed);
         assert_eq!(r.solver.failure(), Some(expected));
         assert_eq!(r.state.iter(), 0);
     }
@@ -607,7 +607,7 @@ fn incompatible_inequalities_never_report_convergence() {
     .max_iter(100)
     .run_with_solver()
     .unwrap();
-    assert_eq!(r.reason, TerminationReason::SolverFailed);
+    assert_eq!(r.report.code(), TerminationCode::SolverFailed);
     assert!(r.solver.constraint_violation().unwrap() > 0.9);
 }
 #[test]
@@ -622,7 +622,7 @@ fn numerical_constraint_derivatives_solve_hs71() {
     .max_iter(100)
     .run_with_solver()
     .unwrap();
-    assert_eq!(r.reason, TerminationReason::SolverConverged);
+    assert_eq!(r.report.code(), TerminationCode::SolverConverged);
     assert!((r.state.cost() - 17.014017289134).abs() < 1e-7);
     assert!(r.solver.constraint_violation().unwrap() < 1e-8);
 }
@@ -770,7 +770,7 @@ fn nonfinite_callbacks_fail_without_publishing_a_partial_trial() {
         .max_iter(20)
         .run_with_solver()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverFailed);
+        assert_eq!(r.report.code(), TerminationCode::SolverFailed);
         assert_eq!(r.state.param(), &vec![3., -1.]);
         assert_eq!(r.state.best_param(), &vec![3., -1.]);
         assert_eq!(r.state.cost(), 13.);
@@ -796,7 +796,7 @@ fn nonfinite_initial_values_report_numerical_failure() {
         .max_iter(20)
         .run_with_solver()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverFailed);
+        assert_eq!(r.report.code(), TerminationCode::SolverFailed);
         assert_eq!(
             r.solver.failure(),
             Some(basin::SlsqpFailure::NonFiniteEvaluation)
@@ -853,8 +853,8 @@ fn inconsistent_linearization_uses_slack_recovery() {
     .run_with_solver()
     .unwrap();
     assert_eq!(
-        r.reason,
-        TerminationReason::SolverConverged,
+        r.report.code(),
+        TerminationCode::SolverConverged,
         "{:?}",
         r.solver.failure()
     );
@@ -871,7 +871,7 @@ fn folded_constraints_include_both_signs_of_nonlinear_equalities() {
     .max_iter(1000)
     .run_with_solver()
     .unwrap();
-    assert_eq!(r.reason, TerminationReason::SolverConverged);
+    assert_eq!(r.report.code(), TerminationCode::SolverConverged);
     assert!((r.state.param()[0] + r.state.param()[1] - 1.).abs() < 1e-5);
     assert!(r.state.param()[0].abs() < 1e-3);
 }
@@ -899,7 +899,7 @@ fn nnls_iteration_limit_reports_a_subproblem_failure() {
     .max_iter(10)
     .run_with_solver()
     .unwrap();
-    assert_eq!(r.reason, TerminationReason::SolverFailed);
+    assert_eq!(r.report.code(), TerminationCode::SolverFailed);
     assert_eq!(
         r.solver.failure(),
         Some(basin::SlsqpFailure::SubproblemIterationLimit)
@@ -953,7 +953,7 @@ fn nonfinite_trials_can_backtrack_to_a_finite_solution() {
         .max_iter(10)
         .run_with_solver()
         .unwrap();
-    assert_eq!(r.reason, TerminationReason::SolverConverged);
+    assert_eq!(r.report.code(), TerminationCode::SolverConverged);
     assert!((r.state.param()[0] - 0.1).abs() < 1e-12);
     assert_eq!(r.state.raw_counts().cost_evals, 3);
     assert_eq!(r.state.raw_counts().gradient_evals, 2);
@@ -991,8 +991,8 @@ fn unconstrained_rosenbrock_exercises_repeated_bfgs_and_backtracking() {
     .run_with_solver()
     .unwrap();
     assert_eq!(
-        r.reason,
-        TerminationReason::SolverConverged,
+        r.report.code(),
+        TerminationCode::SolverConverged,
         "{:?}",
         r.solver.failure()
     );
@@ -1010,7 +1010,7 @@ fn disabled_accuracy_leaves_iteration_budget_in_control() {
     .max_iter(1)
     .run_with_solver()
     .unwrap();
-    assert_eq!(r.reason, TerminationReason::MaxIter);
+    assert_eq!(r.report.code(), TerminationCode::MaxIter);
     assert_eq!(r.state.iter(), 1);
 }
 
@@ -1061,7 +1061,7 @@ fn repeated_zero_step_bfgs_updates_exhaust_the_reset_limit() {
     .max_iter(10)
     .run_with_solver()
     .unwrap();
-    assert_eq!(r.reason, TerminationReason::SolverFailed);
+    assert_eq!(r.report.code(), TerminationCode::SolverFailed);
     assert_eq!(
         r.solver.failure(),
         Some(basin::SlsqpFailure::NonDescentDirection)
@@ -1111,7 +1111,7 @@ fn overflowing_directional_model_is_a_numerical_failure() {
         .max_iter(10)
         .run_with_solver()
         .unwrap();
-    assert_eq!(r.reason, TerminationReason::SolverFailed);
+    assert_eq!(r.report.code(), TerminationCode::SolverFailed);
     assert_eq!(
         r.solver.failure(),
         Some(basin::SlsqpFailure::NonFiniteEvaluation)

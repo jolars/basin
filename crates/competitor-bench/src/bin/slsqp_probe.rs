@@ -120,7 +120,7 @@ fn main() {
         hs71.state.param(),
         hs71.state.iter(),
         hs71.state.raw_counts(),
-        hs71.reason,
+        hs71.report.code(),
     );
     measure("basin_hs71", 1000, workloads::hs71);
     for n in [2, 8, 32] {

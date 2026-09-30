@@ -6,7 +6,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{FirstOrderState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 
 /// BFGS quasi-Newton solver.
@@ -185,8 +185,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         let (param, cost_old, g) =
             state.current().expect("BFGS requires initialized progress");
         let mut param = param.clone();
@@ -206,17 +205,30 @@ where
         {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "BFGS line search failed.",
+                    )),
+                )));
             }
         };
 
-        // Line search bailed (α = 0): direction wasn't descent, or we're
-        // at numerical convergence. Restore gradient and cost so the state
-        // stays consistent and report it as a mid-iter termination so the
-        // executor halts immediately. NaN routes here too
-        // (`NaN > 0.0` is false).
+        // A nonpositive step may indicate stagnation even away from a
+        // stationary point, so it cannot establish convergence on its own.
         if !(alpha.is_finite() && alpha > F::zero()) {
-            return Ok((state, Some(TerminationReason::SolverConverged)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(if alpha.is_finite() {
+                    Termination::numerical_stall(
+                        "The line search returned a nonpositive step without establishing stationarity.",
+                    )
+                } else {
+                    Termination::numerical_failure(
+                        "The line search returned a non-finite step.",
+                    )
+                }),
+            )));
         }
 
         // s = α d, x ← x + s.
@@ -271,7 +283,7 @@ where
         state
             .replace(param, cost_new, g_new)
             .expect("gradient dimension differs from parameter");
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }
 

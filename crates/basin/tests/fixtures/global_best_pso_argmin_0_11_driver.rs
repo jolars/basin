@@ -69,7 +69,7 @@ fn main() -> Result<(), argmin::core::Error> {
         .with_social_factor(1.4)?;
     let mut problem = Problem::new(Sphere);
     let (state, _) = solver.init(&mut problem, state)?;
-    let (state, _) = solver.next_iter(&mut problem, state)?;
+    let (state, _, _) = solver.next_iter(&mut problem, state)?.into_parts();
 
     let mut rows: Vec<_> = state
         .get_population()

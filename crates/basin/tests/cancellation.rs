@@ -7,7 +7,7 @@ use std::rc::Rc;
 use basin::{
     CancellationToken, CostFunction, CountsMirror, EvalCounts, Executor,
     FirstOrderState, Gradient, GradientDescent, Observe, ObserverMode, Problem,
-    Solver, State, StepOutcome, TerminationReason,
+    Solver, State, StepOutcome, TerminationCode,
 };
 
 struct Quadratic;
@@ -63,7 +63,7 @@ fn pre_cancelled_executor_returns_an_initialized_state() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::Cancelled);
+    assert_eq!(result.report.code(), TerminationCode::Cancelled);
     assert_eq!(result.iter(), 0);
     assert_eq!(result.cost(), 25.0);
     assert_eq!(result.best_param(), &vec![3.0, 4.0]);
@@ -87,7 +87,7 @@ fn a_later_token_replaces_the_previous_one() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
 }
 
 struct ScriptedSolver;
@@ -197,7 +197,7 @@ impl Solver<Quadratic, ScriptedState> for ScriptedSolver {
         &mut self,
         problem: &mut Problem<Quadratic>,
         mut state: ScriptedState,
-    ) -> Result<(ScriptedState, Option<TerminationReason>), Infallible> {
+    ) -> Result<basin::SolverStep<ScriptedState>, Infallible> {
         let param = if state.iter() == 0 {
             vec![0.0]
         } else {
@@ -206,14 +206,14 @@ impl Solver<Quadratic, ScriptedState> for ScriptedSolver {
         let cost = problem.cost(&param)?;
         state.param = param;
         state.cost = cost;
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
 struct CancelAfter {
     iter: u64,
     token: CancellationToken,
-    final_reason: Rc<RefCell<Option<TerminationReason>>>,
+    final_reason: Rc<RefCell<Option<TerminationCode>>>,
 }
 
 impl<S: State> Observe<S> for CancelAfter {
@@ -223,8 +223,12 @@ impl<S: State> Observe<S> for CancelAfter {
         }
     }
 
-    fn observe_final(&mut self, _state: &S, reason: &TerminationReason) {
-        *self.final_reason.borrow_mut() = Some(*reason);
+    fn observe_final(
+        &mut self,
+        _state: &S,
+        reason: &basin::TerminationReport<S::Float>,
+    ) {
+        *self.final_reason.borrow_mut() = Some(reason.code());
     }
 }
 
@@ -251,14 +255,18 @@ fn stepper_cancels_between_iterations_without_rewinding_state() {
     assert_eq!(stepper.state().param(), &vec![10.0]);
     assert_eq!(stepper.state().best_param(), &vec![0.0]);
 
-    let stopped = StepOutcome::Stopped(TerminationReason::Cancelled);
+    let stopped = stepper.step().unwrap();
+    assert_eq!(stopped.report().unwrap().code(), TerminationCode::Cancelled);
     assert_eq!(stepper.step().unwrap(), stopped);
     assert_eq!(stepper.step().unwrap(), stopped);
-    assert_eq!(stepper.finished(), Some(&TerminationReason::Cancelled));
+    assert_eq!(
+        stepper.finished().map(|report| report.code()),
+        Some(TerminationCode::Cancelled)
+    );
     assert_eq!(stepper.iter(), 2);
     assert_eq!(stepper.state().param(), &vec![10.0]);
     assert_eq!(stepper.state().cost(), 100.0);
     assert_eq!(stepper.state().best_param(), &vec![0.0]);
     assert_eq!(stepper.state().best_cost(), 0.0);
-    assert_eq!(*final_reason.borrow(), Some(TerminationReason::Cancelled));
+    assert_eq!(*final_reason.borrow(), Some(TerminationCode::Cancelled));
 }

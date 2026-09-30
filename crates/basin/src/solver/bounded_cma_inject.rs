@@ -10,7 +10,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PopulationProgress, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::solver::bounded_cma_es::{BoundedCmaEs, evaluate_with_penalty};
 use crate::solver::bounded_cma_es::{publish, sort_bounded_population};
 use crate::solver::cma_inject::{MemeticInner, default_c_y};
@@ -165,7 +165,7 @@ where
     pub fn inner_stop_when_factory<Mk, CheckFn>(self, make: Mk) -> Self
     where
         Mk: FnMut() -> CheckFn + 'static,
-        CheckFn: FnMut(&I::State) -> Option<TerminationReason> + 'static,
+        CheckFn: FnMut(&I::State) -> Option<crate::ApplicationStop> + 'static,
     {
         let Self {
             cma,
@@ -226,15 +226,13 @@ where
         &mut self,
         problem: &mut Problem<P>,
         state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // 1. Standard BoundedCmaEs iteration first.
-        let (mut state, reason) = self.cma.next_iter(problem, state)?;
-        if let Some(r) = reason {
-            return Ok((state, Some(r)));
+        let step = self.cma.next_iter(problem, state)?;
+        if step.termination.is_some() {
+            return Ok(step);
         }
+        let mut state = step.state;
 
         let work = self.cma.work.as_mut().expect("CMA init precedes injection");
         let n = work.m.vec_len();
@@ -257,7 +255,11 @@ where
                 self.inner.run(problem, inner_state)?;
 
             // 4. Failure routing: bubble SolverFailed only.
-            if inner_result.reason.is_failure() {
+            if !inner_result
+                .report
+                .termination
+                .can_continue_as_inner(crate::PartialResultPolicy::Consume)
+            {
                 sort_bounded_population(work);
                 publish(
                     work,
@@ -265,7 +267,12 @@ where
                     problem.inner().lower(),
                     problem.inner().upper(),
                 );
-                return Ok((state, Some(inner_result.reason)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    inner_result.report.into_outer_termination(
+                        crate::PartialResultPolicy::Consume,
+                    ),
+                )));
             }
 
             // 5. Extract refined point.
@@ -334,12 +341,12 @@ where
             problem.inner().lower(),
             problem.inner().upper(),
         );
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
     fn terminate(
         &self,
         state: &PopulationProgress<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         <_ as Solver<P, PopulationProgress<V, F>>>::terminate(&self.cma, state)
     }
 }

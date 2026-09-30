@@ -4,7 +4,6 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
-use crate::core::termination::TerminationReason;
 // Joint ascending-by-cost sort shared with the population solvers.
 use crate::solver::cma_es::sort_population_ascending;
 
@@ -183,10 +182,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // Snapshot the elite before resampling; this is what makes
         // state.cost() monotone.
         let elite_x = state.candidates[0].clone();
@@ -216,6 +212,6 @@ where
         state.candidates.truncate(self.lambda);
         state.costs.truncate(self.lambda);
         state.select_best_member();
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }

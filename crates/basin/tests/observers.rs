@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use basin::{
     CostFunction, Executor, FirstOrderState, Gradient, GradientDescent,
-    Observe, ObserverMode, State, StepOutcome, TerminationReason,
+    Observe, ObserverMode, State, StepOutcome, TerminationCode,
 };
 
 /// f(x) = ½ ‖x‖²: convex quadratic, gradient = x.
@@ -38,7 +38,7 @@ impl Gradient for Quadratic {
 #[derive(Default)]
 struct Recorder {
     log: Rc<RefCell<Vec<(&'static str, u64)>>>,
-    final_reason: Rc<RefCell<Option<TerminationReason>>>,
+    final_reason: Rc<RefCell<Option<TerminationCode>>>,
 }
 
 impl Recorder {
@@ -57,9 +57,13 @@ impl<S: State> Observe<S> for Recorder {
     fn observe_iter(&mut self, state: &S) {
         self.log.borrow_mut().push(("iter", state.iter()));
     }
-    fn observe_final(&mut self, state: &S, reason: &TerminationReason) {
+    fn observe_final(
+        &mut self,
+        state: &S,
+        reason: &basin::TerminationReport<S::Float>,
+    ) {
         self.log.borrow_mut().push(("final", state.iter()));
-        *self.final_reason.borrow_mut() = Some(*reason);
+        *self.final_reason.borrow_mut() = Some(reason.code());
     }
 }
 
@@ -77,7 +81,11 @@ impl<S: State> Observe<S> for Tagger {
     fn observe_iter(&mut self, _state: &S) {
         self.log.borrow_mut().push(self.tag);
     }
-    fn observe_final(&mut self, _state: &S, _reason: &TerminationReason) {
+    fn observe_final(
+        &mut self,
+        _state: &S,
+        _reason: &basin::TerminationReport<S::Float>,
+    ) {
         self.log.borrow_mut().push(self.tag);
     }
 }
@@ -103,7 +111,7 @@ fn init_then_iter_per_step_then_final_with_reason() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 5);
 
     let log = log.borrow();
@@ -115,7 +123,7 @@ fn init_then_iter_per_step_then_final_with_reason() {
     }
     assert_eq!(log[6], ("final", 5));
 
-    assert_eq!(*reason_holder.borrow(), Some(TerminationReason::MaxIter));
+    assert_eq!(*reason_holder.borrow(), Some(TerminationCode::MaxIter));
 }
 
 #[test]

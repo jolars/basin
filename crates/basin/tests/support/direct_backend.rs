@@ -1,7 +1,7 @@
 use basin::core::parallel::{MaybeSend, MaybeSync};
 use basin::{
     BoxConstraints, CostFunction, Direct, Executor, PointState, Scalar, State,
-    TerminationReason, VectorIndex, VectorLen,
+    TerminationCode, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -73,8 +73,8 @@ where
         .run()
         .unwrap();
         assert_eq!(
-            result.reason,
-            TerminationReason::TargetCost,
+            result.report.code(),
+            TerminationCode::TargetCost,
             "cost={:?}",
             result.cost()
         );

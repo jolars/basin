@@ -1,6 +1,6 @@
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    PointState, Residual, TerminationReason,
+    PointState, Residual, TerminationCode,
 };
 
 use basin::core::problem::Problem;
@@ -125,14 +125,15 @@ fn rejections_and_damping_retries_reuse_factorization() {
     let state = solver
         .init(&mut problem, PointState::new(vec![0.1]))
         .unwrap();
-    let (mut state, reason) = solver.next_iter(&mut problem, state).unwrap();
+    let (mut state, _, reason) =
+        solver.next_iter(&mut problem, state).unwrap().into_parts();
     assert!(reason.is_none());
     assert_eq!(state.param(), &vec![0.1]);
     assert_eq!(counts.factors.get(), 1);
     assert_eq!(counts.solves.get(), 3);
     assert_eq!(counts.residuals.get(), 2);
     while state.param()[0] == 0.1 {
-        (state, _) = solver.next_iter(&mut problem, state).unwrap();
+        state = solver.next_iter(&mut problem, state).unwrap().state;
         assert_eq!(counts.factors.get(), 1);
         assert!(counts.residuals.get() < 20);
     }
@@ -166,7 +167,7 @@ fn failed_solve_does_not_evaluate_trial_residual() {
         .max_iter(20)
         .run()
         .unwrap();
-        assert_eq!(out.reason, TerminationReason::SolverFailed);
+        assert_eq!(out.report.code(), TerminationCode::SolverFailed);
         assert_eq!(out.param(), &vec![0.1]);
         assert_eq!(problem.residuals.get(), 1);
         assert_eq!(problem.factors.get(), 1);
@@ -189,7 +190,7 @@ fn nonfinite_gradient_fails_before_solving() {
         .max_iter(20)
         .run()
         .unwrap();
-        assert_eq!(out.reason, TerminationReason::SolverFailed);
+        assert_eq!(out.report.code(), TerminationCode::SolverFailed);
         assert_eq!(out.param(), &vec![0.1]);
         assert_eq!(problem.residuals.get(), 1);
         assert_eq!(problem.solves.get(), 0);
@@ -224,10 +225,10 @@ fn actual_augmented_rank_loss_recovers_with_more_damping() {
             .run()
             .unwrap();
         if attempts == 1 {
-            assert_eq!(result.reason, TerminationReason::SolverFailed);
+            assert_eq!(result.report.code(), TerminationCode::SolverFailed);
             assert_eq!(result.state.counts().residual_evals, 1);
         } else {
-            assert_eq!(result.reason, TerminationReason::SolverConverged);
+            assert_eq!(result.report.code(), TerminationCode::SolverConverged);
             assert!(result.cost() < 1e-16);
             assert!((result.param()[0] - 0.5).abs() < 1e-8);
             assert!((result.param()[1] - 0.5).abs() < 1e-8);
@@ -286,7 +287,7 @@ fn builder_and_direct_constructor_agree() {
                 .max_iter(50)
                 .run()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert!((result.param()[0] - 1.).abs() < 1e-10);
         assert!((result.param()[1] - 2.).abs() < 1e-10);
     }
@@ -304,7 +305,7 @@ fn nonlinear_and_deficient_problems() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-15);
     let result = Executor::new(
         PowellSingular::<Vec<f64>>::new(),
@@ -314,7 +315,7 @@ fn nonlinear_and_deficient_problems() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.cost() < 1e-10);
 }
 
@@ -369,7 +370,10 @@ macro_rules! scaled_gradient_checks {
                     assert!(out.cost().is_finite());
                     assert!(out.cost() < 0.5 * residual.norm_squared());
                 } else {
-                    assert_eq!(out.reason, TerminationReason::SolverConverged);
+                    assert_eq!(
+                        out.report.code(),
+                        TerminationCode::SolverConverged
+                    );
                     assert!((out.param()[0] - 1.).abs() < tol);
                 }
                 // An insensitive parameter retains its initial value.
@@ -461,7 +465,7 @@ macro_rules! backend_solve {
                     .max_iter(50)
                     .run()
                     .unwrap();
-            assert_eq!(out.reason, TerminationReason::SolverConverged);
+            assert_eq!(out.report.code(), TerminationCode::SolverConverged);
             assert!((out.param()[0] - 1.).abs() < tol);
             assert!((out.param()[1] - 2.).abs() < tol);
         }

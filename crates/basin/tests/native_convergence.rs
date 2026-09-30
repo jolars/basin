@@ -2,7 +2,7 @@ use basin::{
     BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian,
     LevenbergMarquardt, LevenbergMarquardtQr, LmDamping,
     NativeConvergenceDiagnostics, NativeConvergenceTest as Test, PointState,
-    Residual, RobustLeastSquares, Solver, SquaredLoss, TerminationReason,
+    Residual, RobustLeastSquares, Solver, SquaredLoss, TerminationCode,
     TrustRegionReflective,
 };
 use std::convert::Infallible;
@@ -68,7 +68,10 @@ where
             .max_iter(100)
             .run_with_solver()
             .unwrap();
-    assert_eq!(uninterrupted.reason, TerminationReason::SolverConverged);
+    assert_eq!(
+        uninterrupted.report.code(),
+        TerminationCode::SolverConverged
+    );
     assert!(!uninterrupted.native_convergence_tests().is_empty());
 
     let mut stepper =
@@ -100,7 +103,7 @@ where
     .max_iter(iter)
     .run_with_solver()
     .unwrap();
-    assert_eq!(limited.reason, TerminationReason::MaxIter);
+    assert_eq!(limited.report.code(), TerminationCode::MaxIter);
     assert!(limited.native_convergence_tests().is_empty());
 
     let fresh =
@@ -220,7 +223,7 @@ fn continuing_a_native_stop_replaces_its_record() {
     let resumed = Executor::resume_from_checkpoint(Fit::new(1.), checkpoint)
         .run_with_solver()
         .unwrap();
-    assert_eq!(resumed.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(resumed.report.code(), TerminationCode::NumericalNoProgress);
     assert!(resumed.native_convergence_tests().is_empty());
     assert!(resumed.solver.native_convergence_tests().is_empty());
 }
@@ -252,11 +255,11 @@ fn trial_tests_report_all_passing_tests_without_changing_work() {
             .max_iter(1)
             .run_with_solver()
             .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         assert_eq!(result.native_convergence_tests(), expected);
         assert_eq!(result.counts.residual_evals, 2);
         assert_eq!(result.counts.jacobian_evals, 1);
-        assert_eq!(result.iter(), 0);
+        assert_eq!(result.iter(), 1);
     }
 }
 
@@ -301,7 +304,7 @@ fn safeguards_failures_and_observed_checks_are_not_native_convergence() {
     )
     .run_with_solver()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::NumericalNoProgress);
+    assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
     assert!(result.native_convergence_tests().is_empty());
     assert!(result.solver.native_convergence_tests().is_empty());
 
@@ -312,7 +315,7 @@ fn safeguards_failures_and_observed_checks_are_not_native_convergence() {
     )
     .run_with_solver()
     .unwrap();
-    assert_eq!(failed.reason, TerminationReason::SolverFailed);
+    assert_eq!(failed.report.code(), TerminationCode::SolverFailed);
     assert!(failed.native_convergence_tests().is_empty());
 
     let observed = Executor::from_start(
@@ -324,6 +327,6 @@ fn safeguards_failures_and_observed_checks_are_not_native_convergence() {
     )
     .run_with_solver()
     .unwrap();
-    assert_eq!(observed.reason, TerminationReason::ParamTolerance);
+    assert_eq!(observed.report.code(), TerminationCode::ParamTolerance);
     assert!(observed.native_convergence_tests().is_empty());
 }

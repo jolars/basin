@@ -2,7 +2,7 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxedResiduals;
-use basin::{Executor, PointState, TerminationReason, Trf};
+use basin::{Executor, PointState, TerminationCode, Trf};
 
 #[test]
 fn trf_with_slack_bounds_reaches_unconstrained_min() {
@@ -17,7 +17,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-5,
         "x[0] = {}",
@@ -43,7 +43,7 @@ fn trf_with_tight_bounds_converges_to_box_corner() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.param()[0] - 1.0).abs() < 1e-3,
         "x[0] = {}",
@@ -69,7 +69,7 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
     executor = executor.max_iter(0);
     let result = executor.run().unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     let x = result.param();
     assert!(
         x[0] < 1.0,
@@ -98,7 +98,7 @@ fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
         .run()
         .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
 #[path = "support/backend_aliases.rs"]

@@ -4,7 +4,7 @@ use basin::{
     Backtracking, BoxConstraints, Constant, CostFunction, Executor,
     FirstOrderState, Gradient, GradientState, HagerZhang, Lbfgsb, LineSearch,
     LineSearchBounds, LineSearchOutcome, LineSearchResult, MoreThuente,
-    Problem, State, TerminationReason, Wolfe,
+    Problem, State, TerminationCode, Wolfe,
 };
 
 #[derive(Clone)]
@@ -101,7 +101,10 @@ fn distant_optima_keep_every_evaluation_and_cached_value_feasible() {
             .max_iter(100)
             .run()
             .unwrap();
-            assert_eq!(result.reason, TerminationReason::SolverConverged);
+            assert_eq!(
+                result.report.code(),
+                TerminationCode::ProjectedGradientTolerance
+            );
             assert_eq!(result.param(), &expected);
             assert_eq!(result.best_param(), &expected);
             assert_eq!(result.cost(), problem.cost(result.param()).unwrap());
@@ -160,7 +163,10 @@ fn rounded_endpoints_are_feasible_before_evaluation() {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(
+            result.report.code(),
+            TerminationCode::ProjectedGradientTolerance
+        );
         assert!((result.param()[0] - bound).abs() < 1e-12);
         assert_eq!(result.cost(), problem.cost(result.param()).unwrap());
         assert_eq!(
@@ -189,7 +195,10 @@ fn one_sided_and_fixed_bounds_keep_evaluations_feasible() {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(
+            result.report.code(),
+            TerminationCode::ProjectedGradientTolerance
+        );
         assert_eq!(result.param(), &[expected; 2]);
         assert_eq!(result.best_param(), result.param());
     }
@@ -208,7 +217,10 @@ fn check_builtin<S: LineSearch<Quadratic, Vec<f64>, Error = Infallible>>(
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(
+        result.report.code(),
+        TerminationCode::ProjectedGradientTolerance
+    );
     assert_eq!(result.param(), &[0.0, 1.0]);
     assert_eq!(result.best_param(), result.param());
     assert_eq!(result.cost(), problem.cost(result.param()).unwrap());
@@ -258,7 +270,7 @@ fn unsupported_custom_search_fails_without_evaluating_or_changing_state() {
     .max_iter(100)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverFailed);
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
     assert_eq!(result.param(), &[0.5; 2]);
     assert_eq!(result.best_param(), result.param());
     assert_eq!(result.cost_evals(), 1);
@@ -317,7 +329,7 @@ fn invalid_selected_steps_and_cached_points_leave_a_feasible_best() {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverFailed);
+        assert_eq!(result.report.code(), TerminationCode::SolverFailed);
         assert_eq!(result.param(), &[0.5; 2]);
         assert_eq!(result.best_param(), result.param());
         assert_eq!(result.cost_evals(), 1);
@@ -417,7 +429,10 @@ macro_rules! backend_regression {
                 .max_iter(100)
                 .run()
                 .unwrap();
-                assert_eq!(result.reason, TerminationReason::SolverConverged);
+                assert_eq!(
+                    result.report.code(),
+                    TerminationCode::ProjectedGradientTolerance
+                );
                 assert_eq!(result.param()[0], 0.0);
                 assert_eq!(result.param()[1], 1.0);
                 assert_eq!(result.best_param(), result.param());

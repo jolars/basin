@@ -43,7 +43,7 @@
 //!
 //! NEWUOA's natural convergence is `ρ` reaching `ρ_end` (configured on the
 //! solver, where it also drives the eq-7.6 schedule); the solver signals it via
-//! [`TerminationReason::SolverConverged`]. Add
+//! [`crate::TerminationCode::SolverConverged`]. Add
 //! [`max_cost_evals`](crate::Executor::max_cost_evals) to cap the evaluation budget, or
 //! [`with_absolute_radius_tolerance`](crate::Newuoa::with_absolute_radius_tolerance) to stop early at a coarser `ρ`.
 //!
@@ -55,7 +55,7 @@
 //! clean: the model algebra is pure-Rust `Vec<F>` with no BLAS/LAPACK.
 //!
 //! [`CostFunction`]: crate::core::problem::CostFunction
-//! [`TerminationReason::SolverConverged`]: crate::TerminationReason::SolverConverged
+//! [`crate::TerminationCode::SolverConverged`]: crate::TerminationCode::SolverConverged
 
 pub(crate) mod bigden;
 pub(crate) mod biglag;
@@ -71,7 +71,7 @@ use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 use driver::{NewuoaWork, Transition};
 
@@ -293,8 +293,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let template = state.param().clone();
         let work = self
             .work
@@ -322,19 +321,30 @@ where
         // ρ reaching ρ_end (with the work there complete) is NEWUOA's natural
         // convergence; signal it as a clean stop.
         let reason = match out.transition {
-            Transition::Converged => Some(TerminationReason::SolverConverged),
+            Transition::Converged => Some(Termination::custom(
+                "newuoa.final_radius",
+                "The algorithm completed its final trust-radius stage; this does not certify feasibility or global optimality.",
+                vec![crate::Measurement {
+                    name: "final_radius".into(),
+                    value: self.rho_end,
+                }],
+            )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok((state, reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         let tolerance = self.radius_tolerance?;
         let metric = self.rho()?;
-        (metric.is_finite() && metric <= tolerance)
-            .then_some(TerminationReason::RhoTolerance)
+        (metric.is_finite() && metric <= tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::Radius,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }

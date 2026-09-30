@@ -80,7 +80,7 @@ use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{
     BoxConstraints, Cobyla, FoldedConstraints, Gbnm, GradientDescent,
     MatrixFree, MoreSorensen, NonlinearConstraints,
-    NonlinearInequalityConstraints, SelectedState, Steihaug, TerminationReason,
+    NonlinearInequalityConstraints, SelectedState, Steihaug, TerminationCode,
     TrustRegion,
 };
 
@@ -161,7 +161,7 @@ fn cobyla_f32_round_trips_small_and_cached_inverse_paths() {
         .max_iter(1000)
         .run()
         .unwrap();
-        assert_eq!(result.reason, TerminationReason::SolverConverged);
+        assert_eq!(result.report.code(), TerminationCode::SolverConverged);
         let x = result.best_param();
         assert!(x.iter().all(|v| v.is_finite() && (*v - 1.0).abs() < 5e-4));
         assert!((result.best_cost() - n as f32).abs() < 5e-3);
@@ -256,7 +256,7 @@ fn cobyla_f32_round_trips_full_form_constraints() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
     let expected = [1.0, 0.5, 0.25, 0.75, 3.0];
     for (value, target) in x.iter().zip(expected) {
@@ -563,7 +563,7 @@ fn levenberg_marquardt_qr_f32_round_trip() {
         .max_iter(50)
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 1.).abs() < 1e-5);
     assert!((result.param()[1] - 2.).abs() < 1e-5);
 }
@@ -613,7 +613,7 @@ fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
     .max_iter(30)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(result.param().iter().all(|v| (*v - 0.5).abs() < 1e-3));
     assert!(result.state.current().unwrap().3 < 1e-4);
 }

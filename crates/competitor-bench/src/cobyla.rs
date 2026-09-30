@@ -5,7 +5,7 @@
 
 use basin::{
     Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
-    SelectedState, TerminationReason,
+    SelectedState, TerminationCode,
 };
 use std::{cell::Cell, convert::Infallible};
 
@@ -130,9 +130,9 @@ impl Case {
             objective_calls: problem.objective_calls.get(),
             constraint_calls: problem.constraint_calls.get(),
             iterations: Some(result.iter()),
-            stop: match result.reason {
-                TerminationReason::MaxCostEvals => Stop::Budget,
-                TerminationReason::SolverConverged => Stop::Radius,
+            stop: match result.report.code() {
+                TerminationCode::MaxCostEvals => Stop::Budget,
+                TerminationCode::SolverConverged => Stop::Radius,
                 other => panic!("unexpected Basin termination: {other:?}"),
             },
         }

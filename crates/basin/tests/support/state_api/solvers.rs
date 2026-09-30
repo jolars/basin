@@ -8,9 +8,7 @@ use basin::core::math::{
 use basin::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use basin::line_search::{LineSearch, LineSearchOutcome, MoreThuente, Wolfe};
 use basin::solver::simulated_annealing::{Neighbor, TemperatureSchedule};
-use basin::{
-    CostFunction, Gradient, Problem, Solver, State, TerminationReason,
-};
+use basin::{CostFunction, Gradient, Problem, Solver, State};
 use std::marker::PhantomData;
 
 // Basin's rank-update trait and DenseMatrix mutation are private. Keeping this
@@ -239,8 +237,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), P::Error>
-    {
+    ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, P::Error> {
         let (mut x, cost, gradient) = state.take_current().unwrap();
         let matrix = self.matrix.as_mut().unwrap();
         let mut direction = matrix.matvec(&gradient);
@@ -252,12 +249,24 @@ where
             LineSearchOutcome::Step(alpha) => alpha,
             _ => {
                 state.replace(x, cost, gradient).unwrap();
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(basin::SolverStep::from((
+                    state,
+                    Some(basin::Termination::numerical_failure(
+                        "External solver reported a numerical failure.",
+                    )),
+                )));
             }
         };
         if !(alpha.is_finite() && alpha > F::zero()) {
             state.replace(x, cost, gradient).unwrap();
-            return Ok((state, Some(TerminationReason::SolverConverged)));
+            return Ok(basin::SolverStep::from((
+                state,
+                Some(basin::Termination::custom(
+                    "external.SolverConverged",
+                    "External solver stopping predicate: SolverConverged.",
+                    vec![],
+                )),
+            )));
         }
         let mut s = direction;
         s.scale_in_place(alpha);
@@ -284,7 +293,7 @@ where
             matrix.general_rank_one_update(-rho, &hy, &s);
         }
         state.replace(x, cost_new, gradient_new).unwrap();
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -366,8 +375,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), P::Error>
-    {
+    ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, P::Error> {
         let (mut x, cost, gradient) = state.take_current().unwrap();
         let mut direction = gradient.clone();
         let mut alpha = vec![F::zero(); self.pairs.len()];
@@ -391,7 +399,12 @@ where
         };
         if !(step.is_finite() && step > F::zero()) {
             state.replace(x, cost, gradient).unwrap();
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(basin::SolverStep::from((
+                state,
+                Some(basin::Termination::numerical_failure(
+                    "External solver reported a numerical failure.",
+                )),
+            )));
         }
         let (cost_new, gradient_new) =
             if let Some(evaluation) = result.evaluation {
@@ -418,7 +431,7 @@ where
             self.pairs.push(Pair { s, y, sy });
         }
         state.replace(x, cost_new, gradient_new).unwrap();
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -471,7 +484,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: SimplexState<V, F>,
-    ) -> Result<(SimplexState<V, F>, Option<TerminationReason>), P::Error> {
+    ) -> Result<basin::SolverStep<SimplexState<V, F>>, P::Error> {
         let (mut points, mut costs) = state.take_members();
         let n = points.len() - 1;
         let one = F::one();
@@ -526,7 +539,7 @@ where
             }
         }
         state.replace_members(points, costs).unwrap();
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -621,7 +634,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), P::Error> {
+    ) -> Result<basin::SolverStep<PointState<V, F>>, P::Error> {
         let temperature = self.temperature();
         let candidate =
             self.neighbor
@@ -636,6 +649,6 @@ where
             }
         }
         self.age += 1;
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }

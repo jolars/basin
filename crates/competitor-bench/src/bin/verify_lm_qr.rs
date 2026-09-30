@@ -7,7 +7,7 @@
 
 use basin::{
     Executor, FactorizePivotedQr, Jacobian, LevenbergMarquardt, LmDamping,
-    PointState, RegularizedQrSolve, Residual, TerminationReason,
+    PointState, RegularizedQrSolve, Residual, TerminationCode,
 };
 use levenberg_marquardt::LeastSquaresProblem;
 use nalgebra::{DMatrix, DVector, Dyn, Owned};
@@ -218,8 +218,8 @@ fn compare(
                     );
                     (
                         DVector::from_column_slice(out.param().as_slice()),
-                        format!("{:?}", out.reason),
-                        out.reason == TerminationReason::SolverConverged,
+                        format!("{:?}", out.report.code()),
+                        out.report.code() == TerminationCode::SolverConverged,
                     )
                 };
                 let reason = reason.replace('"', "\"\"");

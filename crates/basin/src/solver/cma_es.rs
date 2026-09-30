@@ -7,7 +7,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 pub(crate) mod workspace;
 use workspace::Distribution;
@@ -119,7 +119,7 @@ use workspace::Distribution;
 ///
 /// Configure [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance)
 /// for the TolX test `σ · max d_i < tolerance` (Hansen 2016 Appendix B.3).
-/// It is disabled by default and reports [`TerminationReason::CmaEsTolerance`].
+/// It is disabled by default and reports [`crate::TerminationCode::CmaEsTolerance`].
 /// The recommended value is `1e-12 · initial_sigma`, scaled by the largest
 /// initial axis standard deviation for anisotropic covariance. `None` disables
 /// TolX. Its strict inequality means zero never triggers it.
@@ -576,10 +576,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
-    ) -> Result<
-        (PopulationProgress<V, F>, Option<TerminationReason>),
-        Self::Error,
-    > {
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let work = self.work.as_mut().expect("CMA init must precede iteration");
         let k = self
             .constants
@@ -690,7 +687,12 @@ where
             Err(_) => {
                 state.candidates = std::mem::take(&mut work.candidates);
                 state.costs = std::mem::take(&mut work.costs);
-                return Ok((state, Some(TerminationReason::SolverFailed)));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
+                        "CMA-ES covariance eigendecomposition failed.",
+                    )),
+                )));
             }
         };
         work.b = b_new;
@@ -720,18 +722,25 @@ where
         work.m_cost = Some(m_cost);
 
         publish(work, &mut state);
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(
         &self,
         _state: &PopulationProgress<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         let tolerance = self.distribution_tolerance?;
         let work = self.work.as_ref()?;
         let metric = work.sigma * work.max_axis_std();
-        (metric.is_finite() && metric < tolerance)
-            .then_some(TerminationReason::CmaEsTolerance)
+        (metric.is_finite() && metric < tolerance).then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::DistributionSize,
+                metric,
+                tolerance,
+                tolerance,
+                None,
+            )
+        })
     }
 }
 

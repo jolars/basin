@@ -23,7 +23,7 @@ use basin::problems::Booth;
 use basin::{
     Backtracking, CostFunction, CountsMirror, EvalCounts, Executor,
     FirstOrderState, Gradient, GradientDescent, InnerExecutor, Problem, Solver,
-    State, TerminationReason,
+    State, TerminationCode,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -161,7 +161,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: MultiStartState,
-    ) -> Result<(MultiStartState, Option<TerminationReason>), Self::Error> {
+    ) -> Result<basin::SolverStep<MultiStartState>, Self::Error> {
         let mut new_iterates: Vec<Vec<f64>> =
             Vec::with_capacity(state.iterates.len());
         let mut new_costs: Vec<f64> = Vec::with_capacity(state.iterates.len());
@@ -174,7 +174,7 @@ where
 
             // Failure routing (contract 3): bubble `SolverFailed` via
             // the outer's mid-iter return; consume everything else.
-            if result.reason.is_failure() {
+            if result.report.code().is_failure() {
                 // Restore a non-empty `iterates` so `state.param()` /
                 // `state.cost()` don't panic on the outer reason read.
                 state.iterates = new_iterates;
@@ -183,7 +183,12 @@ where
                     state.iterates.push(vec![0.0; 2]);
                     state.costs.push(f64::INFINITY);
                 }
-                return Ok((state, Some(result.reason)));
+                return Ok(basin::SolverStep::from((
+                    state,
+                    result.report.into_outer_termination(
+                        basin::PartialResultPolicy::Consume,
+                    ),
+                )));
             }
 
             new_costs.push(result.cost());
@@ -193,7 +198,7 @@ where
         state.iterates = new_iterates;
         state.costs = new_costs;
         sort_by_cost(&mut state.iterates, &mut state.costs);
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -209,8 +214,13 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
         &mut self,
         _problem: &mut Problem<P>,
         state: S,
-    ) -> Result<(S, Option<TerminationReason>), Self::Error> {
-        Ok((state, Some(TerminationReason::SolverFailed)))
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::numerical_failure(
+                "External solver reported a numerical failure.",
+            )),
+        )))
     }
 }
 
@@ -332,10 +342,10 @@ fn inner_executor_bubbles_inner_solver_failed_via_outer() {
         .unwrap();
 
     assert_eq!(
-        result.reason,
-        TerminationReason::SolverFailed,
+        result.report.code(),
+        TerminationCode::SolverFailed,
         "outer should bubble SolverFailed from the inner; got {:?}",
-        result.reason
+        result.report.code()
     );
     // Outer didn't complete a full iter; `iter()` reflects the last
     // *fully completed* iteration per the executor contract.

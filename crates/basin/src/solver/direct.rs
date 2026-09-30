@@ -5,7 +5,7 @@ use crate::core::parallel::{MaybeSend, MaybeSync};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 mod rectangle;
 use rectangle::{Rectangle, Work};
@@ -56,7 +56,7 @@ use rectangle::{Rectangle, Work};
 /// normalized coordinates is at most `1e-6`. Relative volume stopping is
 /// disabled by default because volumes shrink quickly with dimension. The
 /// enabled geometry checks compose with OR and return
-/// [`SolverConverged`](TerminationReason::SolverConverged). They measure
+/// [`SolverConverged`](crate::TerminationCode::SolverConverged). They measure
 /// search resolution and do not certify global optimality.
 ///
 /// Use [`Executor`](crate::Executor) for budgets, objective targets,
@@ -73,7 +73,7 @@ use rectangle::{Rectangle, Work};
 /// normalized geometry and restored in every callback. Interpolation avoids
 /// overflowing the width of a box spanning extreme finite values. If a split
 /// cannot produce distinct probes in both normalized and original coordinates,
-/// the solver returns [`NumericalNoProgress`](TerminationReason::NumericalNoProgress)
+/// the solver returns [`NumericalNoProgress`](crate::TerminationCode::NumericalNoProgress)
 /// without evaluating those probes.
 ///
 /// NaN and positive infinity reject a sample. As an extension for rejected
@@ -81,7 +81,7 @@ use rectangle::{Rectangle, Work};
 /// rectangle; its cost is excluded from the finite selection diagram. This
 /// permits recovery from a rejected midpoint. Geometry stopping requires a
 /// usable incumbent. An all-rejected run stops through executor controls with
-/// no incumbent, or reports [`SolverFailed`](TerminationReason::SolverFailed)
+/// no incumbent, or reports [`SolverFailed`](crate::TerminationCode::SolverFailed)
 /// for an entirely fixed box. Negative infinity is retained and stops with
 /// `SolverConverged`. Typed objective errors propagate unchanged.
 ///
@@ -260,19 +260,25 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
-    ) -> Result<(PointState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let work = self.work.as_mut().expect("DIRECT must be initialized");
         let selected = work.select(self.epsilon);
         if selected.is_empty() {
-            return Ok((state, Some(TerminationReason::NumericalNoProgress)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_stall(
+                    "direct: no numerical progress",
+                )),
+            )));
         }
         for id in selected {
             let Some(probes) = work.probes(state.param(), id) else {
-                return Ok((
+                return Ok(crate::SolverStep::from((
                     state,
-                    Some(TerminationReason::NumericalNoProgress),
-                ));
+                    Some(Termination::numerical_stall(
+                        "direct: no numerical progress",
+                    )),
+                )));
             };
             let costs = problem.cost_batch(&probes.params)?;
             work.divide(id, probes.axes, probes.centers, costs);
@@ -283,30 +289,44 @@ where
                     rectangle.cost,
                 );
                 if rectangle.cost == F::neg_infinity() {
-                    return Ok((
+                    return Ok(crate::SolverStep::from((
                         state,
-                        Some(TerminationReason::SolverConverged),
-                    ));
+                        Some(Termination::custom(
+                            "direct.negative_infinity",
+                            "The selected rectangle has objective negative infinity.",
+                            vec![crate::Measurement {
+                                name: "cost".into(),
+                                value: rectangle.cost,
+                            }],
+                        )),
+                    )));
                 }
             }
         }
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
-    fn terminate(
-        &self,
-        _state: &PointState<V, F>,
-    ) -> Option<TerminationReason> {
+    fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         let work = self.work.as_ref()?;
         let Some(best) = work.best else {
-            return work
-                .active
-                .is_empty()
-                .then_some(TerminationReason::SolverFailed);
+            return work.active.is_empty().then(|| Termination::numerical_failure("DIRECT exhausted its rectangles without a valid incumbent."));
         };
         let rectangle = &work.rectangles[best];
         if rectangle.cost == F::neg_infinity() || work.active.is_empty() {
-            return Some(TerminationReason::SolverConverged);
+            return Some(Termination::custom(
+                "direct.exhausted_or_unbounded",
+                "The selected objective is negative infinity or every splittable rectangle is exhausted.",
+                vec![
+                    crate::Measurement {
+                        name: "cost".into(),
+                        value: rectangle.cost,
+                    },
+                    crate::Measurement {
+                        name: "active_rectangles".into(),
+                        value: F::from_usize(work.active.len()).unwrap(),
+                    },
+                ],
+            ));
         }
         let radius = work.radius(rectangle);
         let radius_small = self.radius_tolerance.is_some_and(|t| {
@@ -318,7 +338,41 @@ where
                     * F::from_f64(3.0).unwrap().ln()
                     >= -t.ln()
         });
-        (radius_small || volume_small)
-            .then_some(TerminationReason::SolverConverged)
+        let radius_report = radius_small.then(|| {
+            Termination::custom(
+                "direct.radius",
+                "The positive scaled best-rectangle radius is <= the positive tolerance.",
+                vec![
+                    crate::Measurement {
+                        name: "radius".into(),
+                        value: radius,
+                    },
+                    crate::Measurement {
+                        name: "tolerance".into(),
+                        value: self.radius_tolerance.unwrap(),
+                    },
+                ],
+            )
+        });
+        let volume_report = volume_small.then(|| {
+            Termination::custom(
+                "direct.volume",
+                "level * ln(3) >= -ln(volume_tolerance), with volume_tolerance > 0.",
+                vec![
+                    crate::Measurement {
+                        name: "level".into(),
+                        value: F::from_u64(rectangle.level()).unwrap(),
+                    },
+                    crate::Measurement {
+                        name: "tolerance".into(),
+                        value: self.volume_tolerance.unwrap(),
+                    },
+                ],
+            )
+        });
+        radius_report
+            .into_iter()
+            .chain(volume_report)
+            .reduce(Termination::merge)
     }
 }

@@ -17,7 +17,7 @@
 
 use basin::{
     CostFunction, Executor, Mads, NonlinearInequalityConstraints,
-    SelectedState, TerminationReason,
+    SelectedState, TerminationCode,
 };
 
 /// `min x0·x1` s.t. `x0² + x1² ≤ 1` on `Vec<f64>` (default features). The
@@ -48,9 +48,9 @@ impl NonlinearInequalityConstraints for Disk {
 #[test]
 fn poll_tolerance_can_be_set_after_constraining() {
     for (tolerance, expected) in [
-        (Some(1.0), TerminationReason::MeshTolerance),
-        (Some(0.0), TerminationReason::MaxIter),
-        (None, TerminationReason::MaxIter),
+        (Some(1.0), TerminationCode::MeshTolerance),
+        (Some(0.0), TerminationCode::MaxIter),
+        (None, TerminationCode::MaxIter),
     ] {
         let solver = Mads::new()
             .constrained()
@@ -69,8 +69,8 @@ fn poll_tolerance_can_be_set_after_constraining() {
             .max_iter(1)
             .run()
             .unwrap();
-        assert_eq!(direct.reason, expected);
-        assert_eq!(wrapped.reason, expected);
+        assert_eq!(direct.report.code(), expected);
+        assert_eq!(wrapped.report.code(), expected);
     }
 }
 
@@ -88,7 +88,7 @@ fn converges_to_disk_optimum() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-2,
         "f = {}",
@@ -122,7 +122,7 @@ fn infeasible_start_reaches_feasible_optimum() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
     assert!(
         x[0] * x[0] + x[1] * x[1] <= 1.0 + 1e-6,
@@ -136,7 +136,7 @@ fn infeasible_start_reaches_feasible_optimum() {
 }
 
 /// The evaluation budget is honored: a tiny cap stops the run with
-/// [`TerminationReason::MaxCostEvals`].
+/// [`TerminationCode::MaxCostEvals`].
 #[test]
 fn respects_eval_budget() {
     let result = Executor::new(
@@ -148,7 +148,7 @@ fn respects_eval_budget() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxCostEvals);
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
 }
 
 /// Backend-generic: drive constrained MADS on nalgebra `DVector`. Guards the
@@ -192,7 +192,7 @@ fn backend_generic_nalgebra() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-2,
         "f = {}",
@@ -241,7 +241,7 @@ fn backend_generic_ndarray() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-2,
         "f = {}",
@@ -287,7 +287,7 @@ fn backend_generic_faer() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SolverConverged);
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
         (result.best_cost() - (-0.5)).abs() < 1e-2,
         "f = {}",

@@ -5,7 +5,7 @@
 
 use basin::problems::Sphere;
 use basin::{
-    Executor, FiniteDiff, FirstOrderState, GradientDescent, TerminationReason,
+    Executor, FiniteDiff, FirstOrderState, GradientDescent, TerminationCode,
 };
 
 #[test]
@@ -27,7 +27,7 @@ fn gradient_descent_on_finite_diff_sphere_converges() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert!(result.cost() < 1e-12, "cost = {}", result.cost());
     for (i, &xi) in result.param().iter().enumerate() {
         assert!(xi.abs() < 1e-6, "x[{i}] = {xi} (expected near 0)");
@@ -40,7 +40,7 @@ mod nalgebra {
     use basin::problems::{Rosenbrock, RosenbrockResiduals};
     use basin::{
         Executor, FiniteDiff, FirstOrderState, LevenbergMarquardt, Method,
-        PointState, TerminationReason, TrustRegion,
+        PointState, TerminationCode, TrustRegion,
     };
 
     #[test]
@@ -91,7 +91,7 @@ mod nalgebra {
         .run()
         .unwrap();
 
-        assert_eq!(fd.reason, TerminationReason::SolverConverged);
+        assert_eq!(fd.report.code(), TerminationCode::SolverConverged);
         assert!(fd.cost() < 1e-12, "fd cost = {}", fd.cost());
         assert!(
             (fd.param()[0] - 1.0).abs() < 1e-6,
@@ -116,7 +116,7 @@ mod faer {
     use crate::backend_aliases::faer::Col;
     use basin::problems::RosenbrockResiduals;
     use basin::{
-        Executor, FiniteDiff, LevenbergMarquardt, PointState, TerminationReason,
+        Executor, FiniteDiff, LevenbergMarquardt, PointState, TerminationCode,
     };
 
     #[test]
@@ -132,7 +132,7 @@ mod faer {
         .run()
         .unwrap();
 
-        assert_eq!(fd.reason, TerminationReason::SolverConverged);
+        assert_eq!(fd.report.code(), TerminationCode::SolverConverged);
         assert!(fd.cost() < 1e-12, "fd cost = {}", fd.cost());
         assert!(
             (fd.param()[0] - 1.0).abs() < 1e-6,

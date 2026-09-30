@@ -10,14 +10,14 @@
 #![cfg(feature = "problems")]
 
 use basin::problems::BoothBoxed;
-use basin::{Executor, Mads, PointState, State, TerminationReason};
+use basin::{Executor, Mads, PointState, State, TerminationCode};
 
 #[test]
 fn poll_tolerance_can_be_set_after_bounding() {
     for (tolerance, expected) in [
-        (Some(1.0), TerminationReason::MeshTolerance),
-        (Some(0.0), TerminationReason::MaxIter),
-        (None, TerminationReason::MaxIter),
+        (Some(1.0), TerminationCode::MeshTolerance),
+        (Some(0.0), TerminationCode::MaxIter),
+        (None, TerminationCode::MaxIter),
     ] {
         let solver = Mads::new()
             .bounded()
@@ -38,8 +38,8 @@ fn poll_tolerance_can_be_set_after_bounding() {
             .max_iter(1)
             .run()
             .unwrap();
-        assert_eq!(direct.reason, expected);
-        assert_eq!(wrapped.reason, expected);
+        assert_eq!(direct.report.code(), expected);
+        assert_eq!(wrapped.report.code(), expected);
     }
 }
 
@@ -126,7 +126,7 @@ fn infeasible_start_clamped_at_init() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     let x = result.state.param();
     assert!(
         (x[0] - 1.0).abs() < 1e-12 && (x[1] - 1.0).abs() < 1e-12,

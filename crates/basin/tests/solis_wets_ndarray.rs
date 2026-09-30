@@ -6,7 +6,7 @@
 
 use crate::backend_aliases::ndarray::Array1;
 use basin::problems::Sphere;
-use basin::{Executor, SolisWets, TerminationReason};
+use basin::{Executor, SolisWets, TerminationCode};
 
 #[test]
 fn same_seed_yields_identical_trajectory() {
@@ -37,7 +37,7 @@ fn converges_on_sphere_5d_via_rho_tolerance() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::RhoTolerance);
+    assert_eq!(result.report.code(), TerminationCode::RhoTolerance);
     assert!(
         result.cost() < 1e-6,
         "sphere 5-D cost = {} (expected < 1e-6)",

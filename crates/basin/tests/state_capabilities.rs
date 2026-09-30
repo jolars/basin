@@ -6,7 +6,7 @@ use basin::{
     Gradient, Hessian, HessianProduct, IncumbentRef, IncumbentState,
     InnerExecutor, Jacobian, ObjectiveIncumbentState, Observe, ObserverMode,
     PointState, Problem, RawEvaluationState, Residual, RunControl, Solver,
-    State, TerminationReason, run_loop_with_control,
+    State, TerminationCode, run_loop_with_control,
 };
 use std::cell::Cell;
 use std::convert::Infallible;
@@ -58,7 +58,7 @@ impl Solver<Identity, PointState<f64>> for Trajectory {
         &mut self,
         problem: &mut Problem<Identity>,
         mut state: PointState<f64>,
-    ) -> Result<(PointState<f64>, Option<TerminationReason>), Infallible> {
+    ) -> Result<basin::SolverStep<PointState<f64>>, Infallible> {
         let x = self
             .points
             .get(self.next)
@@ -66,7 +66,7 @@ impl Solver<Identity, PointState<f64>> for Trajectory {
             .unwrap_or(*state.param());
         self.next += 1;
         state.replace(x, problem.cost(&x)?);
-        Ok((state, None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -117,14 +117,14 @@ fn generic_records_distinguish_seeds_rejections_and_incumbents() {
 
 struct CountObservers(Rc<Cell<usize>>);
 
-impl<S> Observe<S> for CountObservers {
+impl<S: State> Observe<S> for CountObservers {
     fn observe_init(&mut self, _: &S) {
         self.0.set(self.0.get() + 1);
     }
     fn observe_iter(&mut self, _: &S) {
         self.0.set(self.0.get() + 1);
     }
-    fn observe_final(&mut self, _: &S, _: &TerminationReason) {
+    fn observe_final(&mut self, _: &S, _: &basin::TerminationReport<S::Float>) {
         self.0.set(self.0.get() + 1);
     }
 }
@@ -152,15 +152,15 @@ impl Solver<(), FirstOrderState<Vec<f64>>> for Incomplete {
         &mut self,
         _: &mut Problem<()>,
         mut state: FirstOrderState<Vec<f64>>,
-    ) -> Result<
-        (FirstOrderState<Vec<f64>>, Option<TerminationReason>),
-        Infallible,
-    > {
+    ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
         state.reset();
-        Ok((
+        Ok(basin::SolverStep::from((
             state,
-            self.mid_step.then_some(TerminationReason::SolverFailed),
-        ))
+            self.mid_step
+                .then_some(basin::Termination::numerical_failure(
+                    "External solver reported a numerical failure.",
+                )),
+        )))
     }
 }
 
@@ -235,7 +235,7 @@ fn raw_budget_observes_init_and_nested_run_deltas() {
             .run()
             .unwrap();
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.reason, TerminationReason::MaxEvaluations);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     let mut problem = Problem::new(Identity);
     problem.cost(&10.0).unwrap();
     let mut inner = InnerExecutor::new(Trajectory::new(&[]))
@@ -262,7 +262,7 @@ fn objective_targets_require_an_available_incumbent() {
         .run()
         .unwrap();
         assert_eq!(result.iter(), 2);
-        assert_eq!(result.reason, TerminationReason::TargetCost);
+        assert_eq!(result.report.code(), TerminationCode::TargetCost);
     }
     let result = Executor::new(
         Identity,
@@ -274,7 +274,7 @@ fn objective_targets_require_an_available_incumbent() {
     .run()
     .unwrap();
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.reason, TerminationReason::TargetCost);
+    assert_eq!(result.report.code(), TerminationCode::TargetCost);
 }
 
 #[test]
@@ -289,7 +289,7 @@ fn objective_stalls_use_publication_age_and_threshold_anchors() {
         .run()
         .unwrap();
         assert_eq!(result.iter(), expected);
-        assert_eq!(result.reason, TerminationReason::NoImprovement);
+        assert_eq!(result.report.code(), TerminationCode::NoImprovement);
     }
     let result = Executor::new(
         Identity,
@@ -300,7 +300,7 @@ fn objective_stalls_use_publication_age_and_threshold_anchors() {
     .no_objective_improvement(1, 0.0)
     .run()
     .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
 }
 
 #[test]
@@ -486,16 +486,19 @@ impl Solver<Quadratic, PointState<f64>> for WorkStep {
         &mut self,
         problem: &mut Problem<Quadratic>,
         mut state: PointState<f64>,
-    ) -> Result<(PointState<f64>, Option<TerminationReason>), Self::Error> {
+    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
         state.replace(0.0, evaluate_all(problem, 0.0)?);
         if matches!(self, Self::Fail) {
             problem.cost_batch(&[0.0, 999.0, 2.0])?;
         }
-        Ok((
+        Ok(basin::SolverStep::from((
             state,
-            matches!(self, Self::Stop)
-                .then_some(TerminationReason::UserRequested),
-        ))
+            matches!(self, Self::Stop).then_some(
+                basin::Termination::Application(basin::ApplicationStop::new(
+                    "user_requested",
+                )),
+            ),
+        )))
     }
 }
 
@@ -515,7 +518,7 @@ fn every_raw_budget_counts_fused_and_batch_work_without_folding() {
                 .max_evaluations(kind, work + 1)
                 .run_with_solver()
                 .unwrap();
-        assert_eq!(result.reason, TerminationReason::MaxEvaluations);
+        assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
         assert_eq!(result.iter(), 1);
         let mut expected = WORK;
         expected.add(&WORK);
@@ -533,7 +536,7 @@ fn clean_stops_stamp_all_counts_and_errors_keep_charged_batch_work() {
         .run_with_solver()
         .unwrap();
     assert_eq!(result.iter(), 0);
-    assert_eq!(result.reason, TerminationReason::UserRequested);
+    assert_eq!(result.report.code(), TerminationCode::UserRequested);
     let best = result.state.incumbent_record().unwrap();
     assert_eq!((*best.param, best.cost, best.iter), (0.0, 0.0, 0));
     assert_eq!(best.counts, &result.counts);

@@ -5,7 +5,7 @@
 use basin::problems::Rosenbrock;
 use basin::{
     CostFunction, Executor, FirstOrderState, GradientDescent, State,
-    StepOutcome, TerminationReason,
+    StepOutcome, TerminationCode,
 };
 
 #[test]
@@ -35,7 +35,7 @@ fn stepper_run_to_end_matches_executor_run() {
     .unwrap();
 
     assert_eq!(direct.iter(), via_stepper.iter());
-    assert_eq!(direct.reason, via_stepper.reason);
+    assert_eq!(direct.report.code(), via_stepper.report.code());
     assert!(
         (direct.cost() - via_stepper.cost()).abs() < 1e-12,
         "direct cost {} != stepper cost {}",
@@ -80,8 +80,8 @@ fn stepper_stops_on_max_iter_with_correct_reason() {
         assert_eq!(stepper.step().unwrap(), StepOutcome::Continue);
     }
     assert_eq!(
-        stepper.step().unwrap(),
-        StepOutcome::Stopped(TerminationReason::MaxIter),
+        stepper.step().unwrap().report().map(|report| report.code()),
+        Some(TerminationCode::MaxIter),
     );
     assert_eq!(stepper.iter(), 3);
 }
@@ -101,7 +101,10 @@ fn stepper_is_sticky_after_stop() {
     stepper.step().unwrap();
     let first_stop = stepper.step().unwrap();
     let second_stop = stepper.step().unwrap();
-    assert_eq!(first_stop, StepOutcome::Stopped(TerminationReason::MaxIter));
+    assert_eq!(
+        first_stop.report().map(|report| report.code()),
+        Some(TerminationCode::MaxIter)
+    );
     assert_eq!(first_stop, second_stop);
 }
 
@@ -118,7 +121,7 @@ fn stepper_honors_gradient_tolerance() {
     .unwrap();
 
     let result = stepper.run_to_end().unwrap();
-    assert_eq!(result.reason, TerminationReason::GradientTolerance);
+    assert_eq!(result.report.code(), TerminationCode::GradientTolerance);
     assert_eq!(result.iter(), 0, "should fire at iter 0");
 }
 

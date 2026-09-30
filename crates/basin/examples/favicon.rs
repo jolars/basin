@@ -323,7 +323,8 @@ fn trace_river() -> Vec<[f64; 2]> {
         .unwrap();
     let mut full = vec![[state.param()[0], state.param()[1]]];
     for _ in 0..RIVER_ITERS {
-        let (next, stop) = solver.next_iter(&mut problem, state).unwrap();
+        let (next, _, stop) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
         state = next;
         full.push([state.param()[0], state.param()[1]]);
         if stop.is_some() {

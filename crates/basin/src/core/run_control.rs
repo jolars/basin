@@ -10,13 +10,13 @@ use super::state::{
     AcceptanceState, EvaluatedState, GradientState, ObjectiveIncumbentState,
     RawEvaluationState, State,
 };
-use super::termination::TerminationReason;
+use super::termination::{ApplicationStop, ExecutionLimit, Stall, Termination};
 use web_time::{Duration, Instant};
 
 #[cfg(test)]
 mod tests;
 
-type Stop<S> = Box<dyn FnMut(&S) -> Option<TerminationReason>>;
+type Stop<S> = Box<dyn FnMut(&S) -> Option<Termination<<S as State>::Float>>>;
 
 struct RawBudgets<S> {
     limits: [Option<u64>; 7],
@@ -33,7 +33,7 @@ impl<F: Scalar> ObjectiveStall<F> {
     fn check<S: ObjectiveIncumbentState<Float = F>>(
         &mut self,
         state: &S,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<<S as State>::Float>> {
         let incumbent = state.incumbent_record()?;
         let improved_at = if self.min_delta == F::zero() {
             incumbent.iter
@@ -50,12 +50,21 @@ impl<F: Scalar> ObjectiveStall<F> {
             }
             *iter
         };
-        (state.iter().saturating_sub(improved_at) >= self.patience)
-            .then_some(TerminationReason::NoImprovement)
+        (state.iter().saturating_sub(improved_at) >= self.patience).then(|| {
+            Termination::Stalled(Stall::NoImprovement {
+                iterations: state.iter().saturating_sub(improved_at),
+                patience: self.patience,
+                tolerance: self.min_delta,
+                reference_cost: self
+                    .anchor
+                    .map_or(incumbent.cost, |(cost, _)| cost),
+                best_cost: incumbent.cost,
+            })
+        })
     }
 }
 
-enum Entry<S> {
+enum Entry<S: State> {
     Hook(Stop<S>),
     Factory {
         make: Box<dyn FnMut() -> Stop<S>>,
@@ -63,14 +72,14 @@ enum Entry<S> {
     },
 }
 
-impl<S> Entry<S> {
+impl<S: State> Entry<S> {
     fn reset(&mut self) {
         if let Self::Factory { make, current } = self {
             *current = Some(make());
         }
     }
 
-    fn check(&mut self, state: &S) -> Option<TerminationReason> {
+    fn check(&mut self, state: &S) -> Option<Termination<<S as State>::Float>> {
         match self {
             Self::Hook(check) => check(state),
             Self::Factory { make, current } => {
@@ -97,7 +106,7 @@ pub(crate) struct Limits {
 /// cost, improvement stall, acceptance stall, and hooks.
 /// The clock starts at the first check after initialization.
 /// Publication validation, when enabled, precedes observers and all checks.
-pub struct RunControl<S> {
+pub struct RunControl<S: State> {
     pub(crate) max_iter: u64,
     pub(crate) limits: Limits,
     raw: Option<RawBudgets<S>>,
@@ -109,13 +118,13 @@ pub struct RunControl<S> {
     entries: Vec<Entry<S>>,
 }
 
-impl<S> Default for RunControl<S> {
+impl<S: State> Default for RunControl<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S> RunControl<S> {
+impl<S: State> RunControl<S> {
     /// Create controls with a 1,000-iteration limit and no other stops.
     pub fn new() -> Self {
         Self {
@@ -188,7 +197,7 @@ impl<S> RunControl<S> {
     ///
     /// Replaces the limit for `kind`. Different kinds and legacy budgets are
     /// independent; legacy budgets are checked first. Exhaustion reports
-    /// [`TerminationReason::MaxEvaluations`] for every kind. Compare the
+    /// [`ExecutionLimit::Evaluations`] for every kind. Compare the
     /// state's [`raw_counts`](RawEvaluationState::raw_counts) with configured
     /// limits to identify exhausted budgets. Capability controls on an
     /// [`InnerExecutor`](crate::InnerExecutor) cannot be serialized.
@@ -229,8 +238,12 @@ impl<S> RunControl<S> {
     {
         assert!(target.is_finite(), "target objective must be finite");
         self.target = Some(Box::new(move |state| {
-            (state.incumbent_record()?.cost <= target)
-                .then_some(TerminationReason::TargetCost)
+            (state.incumbent_record()?.cost <= target).then_some(
+                Termination::Target {
+                    cost: state.incumbent_record()?.cost,
+                    target,
+                },
+            )
         }));
         self
     }
@@ -294,22 +307,29 @@ impl<S> RunControl<S> {
         self.acceptance = Some(Box::new(move |state| {
             (state.iter().saturating_sub(state.last_accepted_iter())
                 >= patience)
-                .then_some(TerminationReason::NoAcceptedMove)
+                .then_some(Termination::Stalled(Stall::NoAcceptedMove {
+                    iterations: state
+                        .iter()
+                        .saturating_sub(state.last_accepted_iter()),
+                    patience,
+                }))
         }));
         self
     }
 
     /// Append a custom state-based stop, evaluated before solver convergence.
     ///
-    /// Return `Some(TerminationReason::UserRequested)` for an application stop,
+    /// Return `Some(ApplicationStop::new("my_stop"))` for an application stop,
     /// or another reason describing the condition. A closure's captured state
     /// persists when these controls are reused. Use [`stop_when_factory`](Self::stop_when_factory)
     /// for history that must start fresh on each borrowed run.
-    pub fn stop_when<C>(mut self, check: C) -> Self
+    pub fn stop_when<C>(mut self, mut check: C) -> Self
     where
-        C: FnMut(&S) -> Option<TerminationReason> + 'static,
+        C: FnMut(&S) -> Option<ApplicationStop> + 'static,
     {
-        self.entries.push(Entry::Hook(Box::new(check)));
+        self.entries.push(Entry::Hook(Box::new(move |state| {
+            check(state).map(Termination::Application)
+        })));
         self
     }
 
@@ -317,10 +337,15 @@ impl<S> RunControl<S> {
     pub fn stop_when_factory<M, C>(mut self, mut make: M) -> Self
     where
         M: FnMut() -> C + 'static,
-        C: FnMut(&S) -> Option<TerminationReason> + 'static,
+        C: FnMut(&S) -> Option<ApplicationStop> + 'static,
     {
         self.entries.push(Entry::Factory {
-            make: Box::new(move || Box::new(make())),
+            make: Box::new(move || {
+                let mut check = make();
+                Box::new(move |state| {
+                    check(state).map(Termination::Application)
+                })
+            }),
             current: None,
         });
         self
@@ -353,37 +378,56 @@ impl<S> RunControl<S> {
         &mut self,
         state: &S,
         counts: &EvalCounts,
-    ) -> Option<TerminationReason>
+    ) -> Option<Termination<<S as State>::Float>>
     where
         S: State,
     {
+        let mut limits = Vec::new();
         if state.iter() >= self.max_iter {
-            return Some(TerminationReason::MaxIter);
+            limits.push(ExecutionLimit::Iterations {
+                observed: state.iter(),
+                limit: self.max_iter,
+            });
         }
-        if self.limits.cost.is_some_and(|n| state.cost_evals() >= n) {
-            return Some(TerminationReason::MaxCostEvals);
-        }
-        if self
-            .limits
-            .gradient
-            .is_some_and(|n| counts.gradient_evals >= n)
+        if let Some(limit) =
+            self.limits.cost.filter(|&n| state.cost_evals() >= n)
         {
-            return Some(TerminationReason::MaxGradientEvals);
+            limits.push(ExecutionLimit::CostEvaluations {
+                observed: state.cost_evals(),
+                limit,
+            });
+        }
+        if let Some(limit) =
+            self.limits.gradient.filter(|&n| counts.gradient_evals >= n)
+        {
+            limits.push(ExecutionLimit::GradientEvaluations {
+                observed: counts.gradient_evals,
+                limit,
+            });
         }
         if let Some(raw) = &self.raw {
             let counts = (raw.counts)(state);
             for kind in EvaluationKind::ALL {
-                if raw.limits[kind as usize]
-                    .is_some_and(|limit| kind.count(counts) >= limit)
+                let observed = kind.count(counts);
+                if let Some(limit) =
+                    raw.limits[kind as usize].filter(|&limit| observed >= limit)
                 {
-                    return Some(TerminationReason::MaxEvaluations);
+                    limits.push(ExecutionLimit::Evaluations {
+                        kind,
+                        observed,
+                        limit,
+                    });
                 }
             }
         }
         if let Some(limit) = self.limits.time {
-            if self.start.get_or_insert_with(Instant::now).elapsed() >= limit {
-                return Some(TerminationReason::MaxTime);
+            let elapsed = self.start.get_or_insert_with(Instant::now).elapsed();
+            if elapsed >= limit {
+                limits.push(ExecutionLimit::Time { elapsed, limit });
             }
+        }
+        if !limits.is_empty() {
+            return Some(Termination::Limit(limits));
         }
         if let Some(reason) =
             self.target.as_mut().and_then(|check| check(state))
@@ -510,7 +554,7 @@ macro_rules! control_methods {
         pub fn stop_when_factory<M, C>(mut self, make: M) -> Self
         where
             M: FnMut() -> C + 'static,
-            C: FnMut(&S) -> Option<crate::TerminationReason> + 'static,
+            C: FnMut(&S) -> Option<crate::ApplicationStop> + 'static,
         {
             self.control =
                 std::mem::take(&mut self.control).stop_when_factory(make);

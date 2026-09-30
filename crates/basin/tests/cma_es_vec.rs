@@ -12,7 +12,7 @@
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
     CmaEs, CostFunction, DenseMatrix, Executor, PopulationProgress,
-    StepOutcome, TerminationReason,
+    StepOutcome, TerminationCode,
 };
 
 /// Same seed → same trajectory on the `Vec<f64>` backend. Reproducibility is
@@ -104,7 +104,7 @@ fn sphere_terminates_solver_converged_on_tol_x() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::CmaEsTolerance);
+    assert_eq!(result.report.code(), TerminationCode::CmaEsTolerance);
 }
 
 /// `with_stds(ones)` reproduces the isotropic `C = I` default bit-for-bit on
@@ -135,7 +135,7 @@ fn with_stds_ones_matches_default() {
 
     assert_eq!(default.cost(), with_ones.cost());
     assert_eq!(default.param(), with_ones.param());
-    assert_eq!(default.reason, with_ones.reason);
+    assert_eq!(default.report.code(), with_ones.report.code());
 }
 
 /// Anisotropic stds on the well-conditioned Sphere must still converge: the

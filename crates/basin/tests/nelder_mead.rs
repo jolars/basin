@@ -2,7 +2,7 @@
 
 use basin::problems::{Rosenbrock, Sphere};
 use basin::{
-    CostFunction, Executor, NelderMead, SimplexProgress, TerminationReason,
+    CostFunction, Executor, NelderMead, SimplexProgress, TerminationCode,
 };
 
 #[test]
@@ -60,7 +60,7 @@ fn nelder_mead_hits_max_iter_when_too_few() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 5);
 }
 
@@ -118,7 +118,7 @@ fn simplex_tolerance_fires_when_simplex_collapses() {
     .run()
     .unwrap();
 
-    assert_eq!(result.reason, TerminationReason::SimplexTolerance);
+    assert_eq!(result.report.code(), TerminationCode::SimplexTolerance);
     assert!(result.iter() > 0 && result.iter() < 2_000);
 
     // Verify the (T1) invariant actually holds at termination.

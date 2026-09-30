@@ -3,7 +3,7 @@ use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{FirstOrderState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 
 /// Brent's method using first derivatives ("dbrent") for 1D minimization on a
 /// closed interval `[lower, upper]` supplied via `BoxConstraints`. Within the
@@ -171,8 +171,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<F, F>,
-    ) -> Result<(FirstOrderState<F, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<FirstOrderState<F, F>>, Self::Error> {
         let s = self
             .inner
             .as_mut()
@@ -312,20 +311,45 @@ where
         // bracket-collapse `terminate` only fires once the bracket has shrunk
         // below tolerance, so the two coincide at convergence.
         state.replace(u, fu, du).expect("scalar dimensions agree");
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(
         &self,
         _state: &FirstOrderState<F, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         let s = self.inner.as_ref()?;
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();
         let m = half * (s.a + s.b);
         let tol = self.tol_rel * s.x.abs() + self.tol_abs;
         if (s.x - m).abs() + half * (s.b - s.a) <= two * tol {
-            Some(TerminationReason::SolverConverged)
+            Some(Termination::custom(
+                "brent_derivative.bracket",
+                "|x - (a+b)/2| + (b-a)/2 <= 2 * (relative_tolerance * |x| + absolute_tolerance).",
+                vec![
+                    crate::Measurement {
+                        name: "a".into(),
+                        value: s.a,
+                    },
+                    crate::Measurement {
+                        name: "b".into(),
+                        value: s.b,
+                    },
+                    crate::Measurement {
+                        name: "x".into(),
+                        value: s.x,
+                    },
+                    crate::Measurement {
+                        name: "relative_tolerance".into(),
+                        value: self.tol_rel,
+                    },
+                    crate::Measurement {
+                        name: "absolute_tolerance".into(),
+                        value: self.tol_abs,
+                    },
+                ],
+            ))
         } else {
             None
         }
@@ -337,7 +361,6 @@ mod tests {
     use super::*;
     use crate::core::executor::Executor;
     use crate::core::state::State;
-    use crate::core::termination::TerminationReason;
 
     struct Quadratic {
         lo: f64,
@@ -376,7 +399,7 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverConverged);
+        assert_eq!(r.report.code(), crate::TerminationCode::SolverConverged);
         assert!((r.param() - 2.0).abs() < 1e-7, "x = {}", r.param());
         assert!(*r.param() >= 0.0 && *r.param() <= 5.0);
     }
@@ -434,7 +457,7 @@ mod tests {
         .max_iter(100)
         .run()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::SolverConverged);
+        assert_eq!(r.report.code(), crate::TerminationCode::SolverConverged);
         assert!(
             (r.best_param() - 1.0).abs() < 1e-6,
             "x = {}",
@@ -464,7 +487,7 @@ mod tests {
         .max_iter(200)
         .run()
         .unwrap();
-        assert_eq!(r.reason, TerminationReason::GradientTolerance);
+        assert_eq!(r.report.code(), crate::TerminationCode::GradientTolerance);
         // |f'(x)| = 3|x²−1| ≈ 6|x−1| near the optimum, so |f'| ≤ 1e-4 puts the
         // best iterate within ~2e-5 of x = 1.
         assert!(
@@ -492,13 +515,13 @@ mod tests {
             (r.best_param() - 1.0).abs() < 1e-5,
             "best_x = {}, reason = {:?}",
             r.best_param(),
-            r.reason
+            r.report.code()
         );
         assert!(
             (r.best_cost() + 2.0).abs() < 1e-9,
             "best_cost = {}, reason = {:?}",
             r.best_cost(),
-            r.reason
+            r.report.code()
         );
         assert!(r.best_iter() > 0, "best_iter = {}", r.best_iter());
         assert!(

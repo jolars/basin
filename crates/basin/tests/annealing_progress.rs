@@ -3,7 +3,7 @@
 use basin::core::rng::{ChaCha8Rng, RngExt};
 use basin::{
     CostFunction, Executor, Neighbor, SimulatedAnnealing, State,
-    TemperatureSchedule, TerminationReason,
+    TemperatureSchedule, TerminationCode,
 };
 use std::convert::Infallible;
 
@@ -82,7 +82,7 @@ fn rejected_proposals_do_not_trigger_iterate_change_stopping() {
         .max_iter(6)
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxIter);
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
     assert_eq!(result.iter(), 6);
     assert_eq!(result.state.rejected_moves(), 6);
 }
@@ -295,7 +295,7 @@ fn raw_cost_budget_and_checked_records_work_without_a_gradient_capability() {
         .max_iter(100)
         .run()
         .unwrap();
-    assert_eq!(result.reason, TerminationReason::MaxEvaluations);
+    assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
     assert_eq!(result.iter(), 7);
     assert_eq!(result.state.counts().cost_evals, 8);
     assert_eq!(result.state.counts().total_work(), 8);
@@ -371,7 +371,7 @@ fn exact_resume_preserves_cost_change_history() {
         )
     };
     let expected = make().max_iter(20).run_with_solver().unwrap();
-    assert_eq!(expected.reason, TerminationReason::CostTolerance);
+    assert_eq!(expected.report.code(), TerminationCode::CostTolerance);
     assert_eq!(expected.iter(), 4);
     for split in [0, 1, 3] {
         let checkpoint = make()
@@ -383,7 +383,7 @@ fn exact_resume_preserves_cost_change_history() {
             .max_iter(20)
             .run_with_solver()
             .unwrap();
-        assert_eq!(resumed.reason, expected.reason);
+        assert_eq!(resumed.report.code(), expected.report.code());
         assert_eq!(resumed.state, expected.state);
         assert_eq!(resumed.counts, expected.counts);
     }

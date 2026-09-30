@@ -15,7 +15,7 @@ use std::time::Instant;
 use basin::problems::{rosenbrock, rosenbrock_gradient};
 use basin::{
     CostFunction, CountsMirror, Executor, Gradient, Problem,
-    SelectedFirstOrderState, Slsqp, Solver, State, TerminationReason,
+    SelectedFirstOrderState, Slsqp, Solver, State, TerminationCode,
 };
 
 use crate::unconstrained::Unconstrained;
@@ -128,7 +128,7 @@ impl Objective {
 
 fn manual(
     obj: Objective,
-) -> (SelectedFirstOrderState<Vec<f64>>, TerminationReason) {
+) -> (SelectedFirstOrderState<Vec<f64>>, TerminationCode) {
     let mut problem = Problem::new(Unconstrained(obj));
     let mut solver = Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY);
     let mut state = solver
@@ -138,18 +138,21 @@ fn manual(
     state.update_best();
     loop {
         if state.iter() >= BUDGET as u64 {
-            return (state, TerminationReason::MaxIter);
+            return (state, TerminationCode::MaxIter);
         }
         if let Some(reason) = solver.check_convergence(&problem, &state) {
-            return (state, reason);
+            return (state, reason.code());
         }
-        let (mut next, reason) = solver.next_iter(&mut problem, state).unwrap();
+        let (mut next, completed, reason) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
         next.mirror(problem.counts());
+        if completed {
+            next.increment_iter();
+        }
         if let Some(reason) = reason {
             next.update_best();
-            return (next, reason);
+            return (next, reason.code());
         }
-        next.increment_iter();
         next.update_best();
         state = next;
     }
@@ -179,14 +182,14 @@ pub fn run(library: Library) -> Run {
                 .max_iter(BUDGET as u64)
                 .run()
                 .unwrap();
-                (result.state, result.reason)
+                (result.state, result.report.code())
             };
             iterations = Some(state.iter());
             (
                 state.param().clone(),
                 state.cost(),
                 format!("{reason:?}"),
-                reason == TerminationReason::SolverConverged,
+                reason == TerminationCode::SolverConverged,
             )
         }
         Library::Slsqp => {

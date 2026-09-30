@@ -5,7 +5,7 @@ use crate::core::math::{
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{FirstOrderState, State};
-use crate::core::termination::TerminationReason;
+use crate::core::termination::Termination;
 use crate::line_search::{
     HagerZhang, LineSearch, LineSearchEvaluation, LineSearchOutcome,
 };
@@ -88,7 +88,7 @@ pub enum CgUpdate {
 /// # Convergence and lifecycle
 ///
 /// An exactly zero gradient at a finite point with finite cost terminates with
-/// [`GradientTolerance`](TerminationReason::GradientTolerance). Optional
+/// [`GradientTolerance`](crate::TerminationCode::GradientTolerance). Optional
 /// gradient, step, and cost-change tolerances are disabled by default. Configure
 /// them with the `with_absolute_*_tolerance` and `with_relative_*_tolerance`
 /// setters; distinct enabled checks combine with OR. Execution budgets belong
@@ -97,7 +97,7 @@ pub enum CgUpdate {
 /// Accepted line-search evaluations are reused. If a search fails along a
 /// conjugate direction, the solver retries once from the same point along the
 /// negative gradient. Failure along steepest descent, an unrepresentable step,
-/// or non-finite accepted data returns [`SolverFailed`](TerminationReason::SolverFailed)
+/// or non-finite accepted data returns [`SolverFailed`](crate::TerminationCode::SolverFailed)
 /// with the previous current record intact. Non-finite initial data also fail
 /// softly on the first attempted iteration. A typed problem error aborts
 /// unchanged. Gradients must have the same dimension as their parameters.
@@ -443,8 +443,7 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
-    ) -> Result<(FirstOrderState<V, F>, Option<TerminationReason>), Self::Error>
-    {
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         let (param, cost, gradient) = state
             .current()
             .expect("Solver::init must precede next_iter");
@@ -452,7 +451,12 @@ where
             || !param.norm_infinity().is_finite()
             || !gradient.norm_infinity().is_finite()
         {
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "Nonlinear CG received a non-finite iterate, cost, or gradient.",
+                )),
+            )));
         }
         let mut direction = self
             .direction
@@ -477,7 +481,12 @@ where
         };
         let Some(evaluation) = accepted else {
             self.direction = Some(direction);
-            return Ok((state, Some(TerminationReason::SolverFailed)));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
+                    "Nonlinear CG line search failed after restarting with steepest descent.",
+                )),
+            )));
         };
         self.direction = Some(self.update_direction(
             gradient,
@@ -487,18 +496,26 @@ where
         state
             .replace(evaluation.param, evaluation.cost, evaluation.gradient)
             .expect("accepted gradient dimension was checked");
-        Ok((state, None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(
         &self,
         state: &FirstOrderState<V, F>,
-    ) -> Option<TerminationReason> {
+    ) -> Option<Termination<F>> {
         let (param, cost, gradient) = state.current()?;
         (cost.is_finite()
             && param.norm_infinity().is_finite()
             && gradient.norm_infinity() == F::zero())
-        .then_some(TerminationReason::GradientTolerance)
+        .then(|| {
+            Termination::upper_bound(
+                crate::ConvergenceTest::AbsoluteGradientSquared,
+                F::zero(),
+                F::zero(),
+                F::zero(),
+                None,
+            )
+        })
     }
 }
 
