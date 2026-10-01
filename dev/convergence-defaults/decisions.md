@@ -67,6 +67,7 @@ evidence; implementation and verification remain separate work.
   | Q004 | Which stochastic methods should retain budget-driven termination, and how should their numerical stops be interpreted?                                                                                     | Steps 3, 4, and 6 |
   | Q005 | What experiment budgets, repetition counts, and reliability/work thresholds should guide selection?                                                                                                        | Step 4            |
   | Q006 | Should DIRECT's documented zero radius and volume tolerances use exact-zero checks, or should their setter docs explicitly disallow zero? The current termination code gates both on a positive threshold. | Steps 2 and 7     |
+  | Q007 | Should `Backtracking` report `Failed` when all Armijo trials fail? It now returns an untested reduced step, and the default outcome wrapper labels it `Step`.                                              | Steps 2 and 7     |
 
 These questions do not prevent the step 2 inventory. Add concrete findings and
 new questions as that audit proceeds.
