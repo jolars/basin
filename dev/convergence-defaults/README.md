@@ -15,9 +15,10 @@ records do not replace the repository's [agent guide](../../AGENTS.md) or
 
 Step 1 is complete. Step 2 has a first source pass for all 47 public solver
 names and key dependencies, with variant and work-accounting checks remaining.
-Step 3 has a versioned reference pilot and draft candidate policies for four
-families; the remaining references and candidates are pending. No solver
-policies have been selected and no numerical experiments have run.
+Step 3 has a versioned reference pilot and draft candidates for four families,
+plus first-order, SLSQP, and scalar reference passes. The remaining references
+and candidates are pending. No solver policies have been selected and no
+numerical experiments have run.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -41,6 +42,12 @@ policies have been selected and no numerical experiments have run.
   observation stages.
 - [Pilot candidates](candidate-pilot.md): testable policy alternatives and
   variant distinctions for the four pilot families; no selected defaults.
+- [First-order references and candidates](reference-first-order.md): versioned
+  SciPy, Ceres, and NLopt comparisons and testable policies for first-order,
+  Newton, Gauss–Newton, and SLSQP names; named evidence gaps remain.
+- [Scalar references and candidates](reference-scalar.md): versioned SciPy
+  comparisons and testable bracket, position, and derivative policies for all
+  three scalar minimizers and five root solvers.
 - [Protocol](protocol.md): experimental requirements and choices that must be
   resolved before calibration. It remains a draft.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
@@ -296,3 +303,52 @@ panache format --check dev/convergence-defaults
 panache lint dev/convergence-defaults
 git diff --check
 ```
+
+### S008: Extend the reference survey, 2026-10-01
+
+- Starting revision: `4f3655093e67771b2fe7855e02605e7e76f1c88a` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: step 3 reference and candidate pass for `GradientDescent`,
+  `ProjectedGradientDescent`, `NonlinearCg`, `Bfgs`, `TrustRegion`, `Sgd`,
+  `GaussNewton`, `Slsqp`, the three scalar minimizers, and all five root
+  solvers.
+- Evidence: [reference-first-order.md](reference-first-order.md) records
+  versioned SciPy 1.16.2, Ceres 2.2.0, and NLopt 2.10.0 references beside
+  Basin's current source audit. It specifies observation stage, norm,
+  composition, default, precision caveat, and distinct no-progress paths where
+  the reference establishes them. The candidate table keeps variants separate.
+  [reference-scalar.md](reference-scalar.md) compares SciPy's scalar minimum and
+  root rules with Basin's bracket tests, including the difference between
+  SciPy's unbracketed Newton family and Basin's bracketed variants.
+- Finding: SciPy's default BFGS and CG gradient threshold uses the infinity
+  norm; Basin's optional shared gradient threshold uses the Euclidean norm.
+  SciPy's trust-region gradient anchor is also algorithm-specific. Ceres'
+  projected-gradient rule provides a closer mathematical reference for Basin's
+  projected method than an ordinary gradient threshold.
+- Decisions: none. No threshold, candidate, or solver disposition is accepted.
+  The per-solver tracker remains pending until the named evidence gaps and
+  precision review are resolved.
+- Validation: documentation formatting, lint, local links, and diff checks are
+  recorded in this session's command output. No Rust behavior changed.
+- Open questions: source-level SciPy/NLopt SLSQP branch composition, Hager–Zhang
+  and projected-line-search reference behavior, SGD noise-aware stopping, scalar
+  `f32` floors, and the still unsurveyed derivative-free, population, and
+  composed families.
+- Next task: survey versioned primary references and specify candidates for
+  Powell-model derivative-free methods, then global and population methods.
+
+Commands run from the repository root:
+
+```sh
+git status --short --branch
+git log -1 --format='%H%n%s'
+panache format dev/convergence-defaults TODO.md
+panache format dev/convergence-defaults/reference-scalar.md
+panache format --check dev/convergence-defaults TODO.md
+panache lint dev/convergence-defaults TODO.md
+git diff --check
+```
+
+The reference pass also opened the tagged SciPy 1.16.2, Ceres 2.2.0, and NLopt
+2.10.0 sources linked from the new records. A local Markdown file-link check
+resolved the new links. No corpus sweep or numerical test ran.

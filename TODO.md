@@ -390,7 +390,9 @@ Progress: the [inventory](dev/convergence-defaults/inventory.md) has an initial
 source-checked stopping record for all 47 public solver names, and the
 [dependency audit](dev/convergence-defaults/dependencies.md) covers line
 searches, bracketers, and principal subproblems. A [versioned reference
-pilot](dev/convergence-defaults/reference-pilot.md) has begun. Solver-specific
+pilot](dev/convergence-defaults/reference-pilot.md) has expanded to
+[first-order](dev/convergence-defaults/reference-first-order.md) and
+[scalar](dev/convergence-defaults/reference-scalar.md) comparisons. Remaining
 candidate policies, experiments, decisions, and verification remain open; the
 coverage boxes below require all of them.
 
