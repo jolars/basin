@@ -121,7 +121,8 @@ implementations. The setup checkpoint is the Git commit titled
   modes, legacy `Trf`, and full `TrustRegionReflective`.
 - Evidence: [inventory.md](inventory.md#public-api-reconciliation) records the
   public-surface comparison, [variant register](inventory.md#variant-register),
-  and [initial stopping records](inventory.md#initial-stopping-records). The
+  [initial stopping records](inventory.md#initial-stopping-records), and a
+  [47-name evidence tracker](inventory.md#per-solver-evidence-tracker). The
   source links there identify the implementations. `Lbfgsb` is the bounded
   `Lbfgs` alias; the two LM damping modes and the two TRF implementations need
   separate records despite similar tolerance names.
