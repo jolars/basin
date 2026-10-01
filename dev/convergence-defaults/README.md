@@ -145,3 +145,26 @@ implementations. The setup checkpoint is the Git commit titled
   mode, including defaults, formula, observation stage, and the separation of
   convergence from safeguards and execution budgets. Keep the TODO boxes open
   until decisions and validation exist for every applicable variant.
+
+### S003: Audit first-order and Gauss–Newton stops, 2026-10-01
+
+- Starting revision: `7bb53a2b5763b497b23e1eaee503b6c2ec7f82f0` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: source audit of `GradientDescent`, `ProjectedGradientDescent`,
+  `NonlinearCg`, `Bfgs`, `TrustRegion`, `Sgd`, and `GaussNewton`, including
+  stopping-relevant updates, trust-region modes, and objective-refresh choices.
+- Evidence: [first-order and Gauss-Newton
+  records](inventory.md#first-order-and-gauss-newton-stopping-records) link to
+  each defining source and the shared configured-check builders. The per-solver
+  tracker distinguishes this source observation from the pending reference,
+  candidate, experiment, decision, implementation, and verification stages.
+- Decisions: none; all numerical dispositions remain pending.
+- Validation: `panache format --check dev/convergence-defaults`,
+  `panache lint dev/convergence-defaults`, and `git diff --check` pass. An ad
+  hoc local Markdown link and heading-anchor check passes. No Rust code or
+  numerical behavior changed.
+- Open questions: audit the inner trust-region strategies and line searches
+  separately, especially failure propagation, then continue through the
+  remaining derivative-free, constrained, global, and composed solvers.
+- Next task: record source-backed stops for the remaining solvers and build
+  explicit dependency records for line searches, bracketers, and subproblems.
