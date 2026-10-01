@@ -392,9 +392,10 @@ source-checked stopping record for all 47 public solver names, and the
 searches, bracketers, and principal subproblems. A [versioned reference
 pilot](dev/convergence-defaults/reference-pilot.md) has expanded to
 [first-order](dev/convergence-defaults/reference-first-order.md) and
-[scalar](dev/convergence-defaults/reference-scalar.md) comparisons. Remaining
-candidate policies, experiments, decisions, and verification remain open; the
-coverage boxes below require all of them.
+[scalar](dev/convergence-defaults/reference-scalar.md) and [derivative-free
+local](dev/convergence-defaults/reference-derivative-free.md) comparisons.
+Remaining candidate policies, experiments, decisions, and verification remain
+open; the coverage boxes below require all of them.
 
 - [x] **1. Establish the branch and durable session records.** Created the
   `convergence-defaults` branch and temporary development documents under
