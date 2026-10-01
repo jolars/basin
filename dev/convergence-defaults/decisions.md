@@ -59,13 +59,14 @@ evidence; implementation and verification remain separate work.
 
 ## Open questions
 
-  | ID   | Question                                                                                                               | Resolve in        |
-  | ---- | ---------------------------------------------------------------------------------------------------------------------- | ----------------- |
-  | Q001 | Which problem families and applications should determine coverage and weights?                                         | Steps 2 and 4     |
-  | Q002 | Which external accuracy targets and precision floors are attainable and useful for each solver family?                 | Steps 3 and 4     |
-  | Q003 | Is the reporter's NIST harness available, and which additional cases are needed for full solver coverage?              | Steps 2 and 4     |
-  | Q004 | Which stochastic methods should retain budget-driven termination, and how should their numerical stops be interpreted? | Steps 3, 4, and 6 |
-  | Q005 | What experiment budgets, repetition counts, and reliability/work thresholds should guide selection?                    | Step 4            |
+  | ID   | Question                                                                                                                                                                                                   | Resolve in        |
+  | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+  | Q001 | Which problem families and applications should determine coverage and weights?                                                                                                                             | Steps 2 and 4     |
+  | Q002 | Which external accuracy targets and precision floors are attainable and useful for each solver family?                                                                                                     | Steps 3 and 4     |
+  | Q003 | Is the reporter's NIST harness available, and which additional cases are needed for full solver coverage?                                                                                                  | Steps 2 and 4     |
+  | Q004 | Which stochastic methods should retain budget-driven termination, and how should their numerical stops be interpreted?                                                                                     | Steps 3, 4, and 6 |
+  | Q005 | What experiment budgets, repetition counts, and reliability/work thresholds should guide selection?                                                                                                        | Step 4            |
+  | Q006 | Should DIRECT's documented zero radius and volume tolerances use exact-zero checks, or should their setter docs explicitly disallow zero? The current termination code gates both on a positive threshold. | Steps 2 and 7     |
 
 These questions do not prevent the step 2 inventory. Add concrete findings and
 new questions as that audit proceeds.
