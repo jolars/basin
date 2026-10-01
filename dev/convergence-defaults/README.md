@@ -32,6 +32,8 @@ no numerical experiments have run.
 
 - [Inventory](inventory.md): initial coverage, audit fields, and completion
   requirements for each solver and relevant variant.
+- [Dependencies](dependencies.md): source audit of line searches, bracketers,
+  and inner model stops.
 - [Protocol](protocol.md): experimental requirements and choices that must be
   resolved before calibration. It remains a draft.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
@@ -198,3 +200,33 @@ implementations. The setup checkpoint is the Git commit titled
   then audit line searches, bracketers, and inner subproblem completion.
 - Next task: record the remaining ten public solver names and their inner-stop
   interactions, then reconcile the full source audit before reference review.
+
+### S005: Complete the first source pass, 2026-10-01
+
+- Starting revision: `2b543efadde2d9169bae383c9c77fbd950cfe30f` on
+  `convergence-defaults`; the working tree was clean. This session continued
+  after an interruption with the constrained and composed records uncommitted.
+- Scope: inspect the remaining ten solver names and record their outer and inner
+  stops. Audit public line searches, root and minimum bracketers, and
+  trust-region, LM, and SLSQP subproblem completion as dependencies.
+- Evidence: all 47 names have a source-checked entry in the
+  [tracker](inventory.md#per-solver-evidence-tracker). The [constrained and
+  composed records](inventory.md#constrained-and-composed-stopping-records) and
+  [dependency audit](dependencies.md) identify the distinct stop owners,
+  defaults, and budget or failure paths. This is a source pass, not a reference
+  comparison or empirical validation.
+- Finding: `Backtracking` exhausts its Armijo trials by returning a further
+  reduced, untested step; the default outcome wrapper labels it `Step`. Q007
+  records the needed disposition. The existing DIRECT mismatch remains Q006.
+- Decisions: none. Candidate policies, experiments, solver dispositions,
+  implementation, and verification remain pending. No TODO coverage box is
+  complete.
+- Validation: `panache format --check dev/convergence-defaults`,
+  `panache lint dev/convergence-defaults`, and `git diff --check` pass. An ad
+  hoc local file and heading-anchor check passes, and the tracker has 47 rows
+  with no pending current-stop entry. No Rust behavior changed.
+- Open questions: Q001-Q007 in [decisions.md](decisions.md#open-questions).
+- Next task: reconcile the first source pass against current exports and the web
+  catalogue, then begin versioned reference comparisons and candidate records
+  for the initial Nelder-Mead, L-BFGS-B, LM, and TRF pilot. Expand the
+  subproblem-work and composed outcome audits before designing measurements.
