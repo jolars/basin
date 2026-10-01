@@ -382,6 +382,14 @@ including justified decisions to retain its defaults or rely on execution
 budgets. Do not promise universal scale invariance or interpret a local stop as
 a certificate of global optimality.
 
+Progress: the [inventory](dev/convergence-defaults/inventory.md) has an initial
+source-checked stopping record for all 47 public solver names, and the
+[dependency audit](dev/convergence-defaults/dependencies.md) covers line
+searches, bracketers, and principal subproblems. A
+[versioned reference pilot](dev/convergence-defaults/reference-pilot.md) has
+begun. Solver-specific candidate policies, experiments, decisions, and
+verification remain open; the coverage boxes below require all of them.
+
 - [x] **1. Establish the branch and durable session records.** Created the
   `convergence-defaults` branch and temporary development documents under
   [dev/convergence-defaults/](dev/convergence-defaults/README.md):
