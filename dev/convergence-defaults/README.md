@@ -172,3 +172,29 @@ implementations. The setup checkpoint is the Git commit titled
   remaining constrained, global, and composed solvers.
 - Next task: record source-backed stops for the remaining solvers and build
   explicit dependency records for line searches, bracketers, and subproblems.
+
+### S004: Audit global and population stops, 2026-10-01
+
+- Starting revision: `aac2c51` on `convergence-defaults`; the working tree was
+  clean.
+- Scope: inspect the native stopping behavior and stopping-relevant variants of
+  `Direct`, `Gbnm`, `RandomSearch`, `SimulatedAnnealing`, `CmaEs`,
+  `BoundedCmaEs`, `De`, `GlobalBestPso`, and `Ssga`.
+- Evidence: [global and population stopping
+  records](inventory.md#global-and-population-stopping-records) distinguish
+  solver stops from local restarts, generation representatives, distribution
+  collapse, and executor budgets. The per-solver tracker links the nine names to
+  these source observations.
+- Finding: DIRECT's zero-threshold setters promise exact-zero checks, but the
+  current termination code requires positive thresholds. This is tracked as Q006
+  in [decisions.md](decisions.md#open-questions), pending a test-first
+  behavioral fix or documented contract change.
+- Decisions: none. The source findings do not yet select or retain defaults.
+- Validation: `panache format --check dev/convergence-defaults`,
+  `panache lint dev/convergence-defaults`, and `git diff --check` pass. An ad
+  hoc local Markdown link and heading-anchor check passes. No Rust code or
+  numerical behavior changed.
+- Open questions: complete the constrained and composed solver source audit,
+  then audit line searches, bracketers, and inner subproblem completion.
+- Next task: record the remaining ten public solver names and their inner-stop
+  interactions, then reconcile the full source audit before reference review.
