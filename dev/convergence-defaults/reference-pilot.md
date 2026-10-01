@@ -59,12 +59,72 @@ legacy `Trf`, which uses simplified bounded LM. The reference's strict `<` tests
 and Basin's `<=` tests can differ at an exact threshold. The reference's `f64`
 defaults do not determine suitable `f32` settings.
 
+### LM observation stages and MINPACK comparison
+
+SciPy 1.16.2 calls MINPACK's `lmder` for `method='lm'`, with `diag=None` for its
+default Jacobian scaling and `max_nfev=100*n` unless overridden ([tagged
+wrapper](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/least_squares.py#L46-L77)).
+In [MINPACK's original `lmder`](https://www.netlib.org/minpack/lmder.f), the
+orthogonality test runs after the Jacobian and its QR factorization at the
+current point, before an inner trial. It checks the maximum absolute cosine
+against `gtol`, including the zero-residual case. After a trial, MINPACK updates
+the radius, accepts the trial only for gain ratio at least `1e-4`, and then
+tests `|actred| <= ftol`, `prered <= ftol`, and `ratio <= 2`, or
+`delta <= xtol * norm(diag*x)`. These last tests also run after rejection; the
+returned point is then the retained base point. `actred` and `prered` are
+relative to the base sum of squares. See the [gradient
+check](https://www.netlib.org/minpack/lmder.f), the inner-loop acceptance, and
+the convergence checks in that source.
+
+[Basin's LM engine](../../crates/basin/src/solver/levenberg_marquardt.rs)
+likewise checks its optional cosine criterion before a trial and its optional
+model reduction and step criteria after a trial, including a rejected one. For
+ordinary least squares, its model reduction test has the same three-part shape
+as MINPACK's `ftol` test after normalization by the base cost. Basin accepts any
+positive gain ratio, while MINPACK requires at least `1e-4`; their returned
+points and subsequent radius histories can therefore differ. Basin's
+`with_relative_step_tolerance` checks the unscaled trial step
+`‖h‖ <= tolerance * ‖x‖`, which is not MINPACK's radius test. The separate
+`with_relative_trust_radius_tolerance` checks
+`radius <= tolerance * sqrt(xᵀ D x)` after the radius update, but only with
+trust-region damping. Nielsen damping has no corresponding radius. The normal
+equations and QR variants share these stopping settings, though their steps and
+rank handling differ. For robust losses, Basin's gradient-orthogonality builder
+tests a different normalized robust gradient; MINPACK's residual cosine is not a
+reference for that mode.
+
+### TRF observation stages and optional Basin checks
+
+In [SciPy's tagged bounded
+TRF](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py#L263-L274),
+the bound-scaled gradient test runs at the current accepted point, including the
+initial point. During each inner attempt, the solver evaluates a trial, updates
+its radius, and calls the shared
+[`check_termination`](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/common.py#L705-L717)
+*before* accepting that trial. Its cost test requires
+`actual_reduction < ftol * base_cost` **and** `ratio > 0.25`; its step test
+requires `‖step‖₂ < xtol * (xtol + ‖base_x‖₂)`. The two tests combine with OR,
+and a simultaneous pass has its own status. A rejected or equal-cost trial can
+therefore satisfy the step test while SciPy returns the unchanged base point
+([tagged trial
+loop](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py#L349-L385)).
+
+[Basin's full
+`TrustRegionReflective`](../../crates/basin/src/solver/trust_region_reflective.rs)
+checks its native bound-scaled gradient at the initial point and after an
+accepted step. Its optional shared observed cost test uses the absolute change
+between accepted costs, `|F_k - F_(k-1)| <= tolerance * |F_(k-1)|`; its optional
+step test uses `‖x_k - x_(k-1)‖₂ <= tolerance * ‖x_k‖₂`. Neither tests rejected
+trials, includes SciPy's gain-ratio condition or additive `xtol²` term, or
+reproduces SciPy's strict inequality. Its numerical no-progress stop is a
+separate failure path. The legacy [`Trf`](../../crates/basin/src/solver/trf.rs)
+uses a different bounded-LM model and its own native scaled-gradient check;
+SciPy's TRF is not an algorithmic match for it.
+
 ## Next checks
 
-Read the versioned implementation paths for SciPy's LM and TRF termination
-stages and the original MINPACK and L-BFGS-B rules, then compare Basin's
-optional observed checks line by line. Add independent quality targets and
-reference versions for the remaining solver families before any default
-decision. Do not promote these reference candidates into the per-solver
-candidate or decision tracker until their exact Basin formulas and tests are
-specified.
+The [pilot candidate register](candidate-pilot.md) records testable formulas and
+variant distinctions without selecting defaults. Compare the original L-BFGS-B
+acceptance and cost rule, then add independent quality targets and reference
+versions for the remaining solver families. The shared observed check lifecycle
+and robust-loss variants need focused traces before calibration.
