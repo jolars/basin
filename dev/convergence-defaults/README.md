@@ -16,9 +16,9 @@ records do not replace the repository's [agent guide](../../AGENTS.md) or
 Step 1 is complete. Step 2 has a first source pass for all 47 public solver
 names and key dependencies, with variant and work-accounting checks remaining.
 Step 3 has a versioned reference pilot and draft candidates for four families,
-plus first-order, SLSQP, and scalar reference passes. The remaining references
-and candidates are pending. No solver policies have been selected and no
-numerical experiments have run.
+plus first-order, SLSQP, scalar, and derivative-free local reference passes. The
+remaining references and candidates are pending. No solver policies have been
+selected and no numerical experiments have run.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -48,6 +48,10 @@ numerical experiments have run.
 - [Scalar references and candidates](reference-scalar.md): versioned SciPy
   comparisons and testable bracket, position, and derivative policies for all
   three scalar minimizers and five root solvers.
+- [Derivative-free local references and
+  candidates](reference-derivative-free.md): versioned PDFO, PRIMA, SciPy,
+  NLopt, NOMAD, and Solis–Wets comparisons for Powell-model methods, MADS, and
+  Solis–Wets.
 - [Protocol](protocol.md): experimental requirements and choices that must be
   resolved before calibration. It remains a draft.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
@@ -352,3 +356,38 @@ git diff --check
 The reference pass also opened the tagged SciPy 1.16.2, Ceres 2.2.0, and NLopt
 2.10.0 sources linked from the new records. A local Markdown file-link check
 resolved the new links. No corpus sweep or numerical test ran.
+
+### S009: Survey derivative-free local stops, 2026-10-01
+
+- Starting revision: `8982cbb` on `convergence-defaults`; the working tree was
+  clean.
+- Scope: step 3 reference and candidate pass for `Newuoa`, `Bobyqa`, `Lincoa`,
+  `Cobyla`, `Mads`, and `SolisWets`, with constrained modes treated separately.
+- Evidence: [reference-derivative-free.md](reference-derivative-free.md)
+  compares Basin with PDFO 1.3, PRIMA v0.7.1 source, SciPy 1.16.2 COBYLA, NLopt
+  2.10.0 documentation, NOMAD 4.5.0, and the Solis–Wets paper. It distinguishes
+  a radius schedule's final stage from an optional early radius test, and a
+  small search scale from returned-point feasibility.
+- Finding: SciPy's COBYLA wrapper requires both an acceptable constraint
+  violation and a radius or target code for success. Basin's current COBYLA
+  completion reads only its final-radius schedule. NOMAD distinguishes mesh and
+  frame sizes, while Basin's MADS has one scalar poll-size floor.
+- Decisions: none. Candidate thresholds and solver dispositions remain
+  unselected; the step 3 checklist is open.
+- Validation: documentation formatting and lint, local links, and Git diff
+  checks are recorded below. No Rust code or numerical experiment changed.
+- Open questions: exact PRIMA/Basin model-path differences, constrained
+  violation scales and reporting, Solis–Wets finite-run reference details, and
+  all remaining global, population, and composed methods.
+- Next task: survey versioned primary sources for global and population methods,
+  then composed methods and the remaining constrained adapters.
+
+Commands run from the repository root:
+
+```sh
+git status --short --branch
+git log -5 --oneline
+panache format dev/convergence-defaults/reference-derivative-free.md
+panache lint dev/convergence-defaults/reference-derivative-free.md
+git diff --check
+```
