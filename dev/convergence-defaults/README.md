@@ -118,14 +118,16 @@ implementations. The setup checkpoint is the Git commit titled
   `solver`, and `root` exports and the web catalogue. Inspected source for type
   aliases and configurable modes, then recorded initial native stopping behavior
   for Nelder–Mead, L-BFGS-B/unbounded L-BFGS, both LM factorizations and damping
-  modes, legacy `Trf`, and full `TrustRegionReflective`.
+  modes, legacy `Trf`, full `TrustRegionReflective`, three scalar minimizers,
+  and five scalar root solvers.
 - Evidence: [inventory.md](inventory.md#public-api-reconciliation) records the
   public-surface comparison, [variant register](inventory.md#variant-register),
-  [initial stopping records](inventory.md#initial-stopping-records), and a
-  [47-name evidence tracker](inventory.md#per-solver-evidence-tracker). The
-  source links there identify the implementations. `Lbfgsb` is the bounded
-  `Lbfgs` alias; the two LM damping modes and the two TRF implementations need
-  separate records despite similar tolerance names.
+  [initial stopping records](inventory.md#initial-stopping-records), [scalar
+  stopping records](inventory.md#scalar-stopping-records), and a [47-name
+  evidence tracker](inventory.md#per-solver-evidence-tracker). The source links
+  there identify the implementations. `Lbfgsb` is the bounded `Lbfgs` alias; the
+  two LM damping modes and the two TRF implementations need separate records
+  despite similar tolerance names.
 - Decisions: none. Every candidate policy, experiment, and solver disposition
   remains pending. This source audit does not justify changing defaults.
 - Validation: an ad hoc Python name-set check matched all 47 seed names to the
