@@ -1,9 +1,11 @@
 # Solver inventory
 
-Status: scope seed only. The stopping-behavior audit in step 2 has not begun.
-This seed copies the agreed coverage from the [TODO
-plan](../../TODO.md#convergence-defaults-investigation) at the [starting
-revision](README.md). All defaults and dispositions remain pending.
+Status: API reconciliation complete at
+`3ae7be6977334cd50554217c4f3f013f4cb6bf1c`; behavior audit in progress. This
+inventory copies the agreed coverage from the [TODO
+plan](../../TODO.md#convergence-defaults-investigation). Numerical references,
+candidates, experiments, decisions, implementation, and verification remain
+pending unless a record below says otherwise.
 
 ## Coverage seed
 
@@ -21,12 +23,61 @@ algorithms or an exhaustive list of configurable variants.
   | Global and population                 | `Direct`, `Gbnm`, `RandomSearch`, `SimulatedAnnealing`, `CmaEs`, `BoundedCmaEs`, `De`, `GlobalBestPso`, `Ssga` | Pending      |
   | Composed                              | `BasinHopping`, `CmaInject`, `BoundedCmaInject`, `DeInject`, `MaLsCh`, `MaLsChCma`, `MaLsChSw`                 | Pending      |
 
-Reconcile this seed against the [public exports](../../crates/basin/src/lib.rs),
-the [solver module](../../crates/basin/src/solver.rs), the [root
+## Public API reconciliation
+
+At the audited revision, the [crate-root
+exports](../../crates/basin/src/lib.rs), the public [solver
+module](../../crates/basin/src/solver.rs), the public [root
 module](../../crates/basin/src/root.rs), and the [web
-catalogue](../../web/src/routes/docs/solvers/+page.svx). Check public submodules
-for APIs absent from the root re-exports. Repeat this reconciliation before
-closing the investigation so later additions are included.
+catalogue](../../web/src/routes/docs/solvers/+page.svx) cover the same 47 solver
+names in the coverage seed. All are available at the crate root and in their
+defining public modules. The `solver` module directly re-exports 40 of its 42
+names; `Lbfgs` and `Lbfgsb` are reached through `solver::lbfgs`. `Lbfgsb`,
+`MaLsChCma`, and `MaLsChSw` are type aliases; the other names denote concrete
+solver types. The catalogue also mentions `RootBracketer` and
+`MinimumBracketer`, which are bracket searches, and the line-search strategies,
+which are solver dependencies. The exported strategy, result, error, and
+type-state names are not additional solvers.
+
+This reconciles public names, not stopping behavior. Repeat the comparison at
+the final revision so a solver added during the investigation cannot be missed.
+
+## Variant register
+
+Each row below needs a separate stopping record or an explicit proof that its
+stop is identical to the parent record. The list is a source-backed starting
+point, not a completed variant audit.
+
+  | Solver family                                 | Public variants and current stopping distinction                                                                                                                                                             | Source                                                                                                                                 |
+  | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+  | `NelderMead`                                  | Unbounded and projected; standard, adaptive, and custom coefficients. Both modes have all native tests disabled by default. Projection can collapse vertices on a bound.                                     | [nelder_mead.rs](../../crates/basin/src/solver/nelder_mead.rs)                                                                         |
+  | `Lbfgs` / `Lbfgsb`                            | `Lbfgs::new()` and `Lbfgsb` are the bounded mode; `unbounded()` is a separate mode. Bounded has a default projected-gradient test; unbounded has no default gradient test. Both accept custom line searches. | [lbfgs.rs](../../crates/basin/src/solver/lbfgs.rs)                                                                                     |
+  | `LevenbergMarquardt` / `LevenbergMarquardtQr` | Normal-equations and pivoted-QR implementations each accept Nielsen or trust-region damping. QR forwards the convergence settings to the same LM engine; the rank cutoff is a numerical safeguard.           | [levenberg_marquardt.rs](../../crates/basin/src/solver/levenberg_marquardt.rs)                                                         |
+  | `Trf` / `TrustRegionReflective`               | Separate implementations and stop paths. `Trf` is the legacy bounded-LM algorithm; `TrustRegionReflective` has a radius, reflected trials, and fixed-coordinate elimination.                                 | [trf.rs](../../crates/basin/src/solver/trf.rs), [trust_region_reflective.rs](../../crates/basin/src/solver/trust_region_reflective.rs) |
+  | `Mads`                                        | Unbounded, box-bounded, and progressive-barrier constrained modes have separate `Solver` implementations and state types.                                                                                    | [mads.rs](../../crates/basin/src/solver/mads.rs)                                                                                       |
+  | `TrustRegion`                                 | Exact-Hessian and matrix-free modes; `Steihaug`, `CauchyPoint`, `Dogleg`, and `MoreSorensen` subproblem strategies have distinct inner completion rules.                                                     | [trust_region.rs](../../crates/basin/src/solver/trust_region.rs)                                                                       |
+  | `NonlinearCg`                                 | Hager–Zhang and Polak–Ribière+ updates; line search and periodic restart settings may alter progress or failure.                                                                                             | [nonlinear_cg.rs](../../crates/basin/src/solver/nonlinear_cg.rs)                                                                       |
+  | `De`                                          | Mutation, crossover, and dithering settings alter generation behavior; check whether they share the outer stop.                                                                                              | [de.rs](../../crates/basin/src/solver/de.rs)                                                                                           |
+  | `GlobalBestPso`                               | Boundary handling and velocity-limit policies can change population progress; check outer stop separately.                                                                                                   | [global_best_pso.rs](../../crates/basin/src/solver/global_best_pso.rs)                                                                 |
+  | `SimulatedAnnealing`                          | Cooling schedule and optional reannealing triggers; distinguish a schedule restart from termination.                                                                                                         | [simulated_annealing.rs](../../crates/basin/src/solver/simulated_annealing.rs)                                                         |
+  | Composed solvers                              | `BasinHopping`, `CmaInject`, `BoundedCmaInject`, `DeInject`, `MaLsCh`, `MaLsChCma`, `MaLsChSw`, `BarrierMethod`, and `AugmentedLagrangianMethod` depend on the configured inner solver's stop and budget.    | [solver.rs](../../crates/basin/src/solver.rs)                                                                                          |
+
+## Initial stopping records
+
+These are source observations, not proposed defaults or accepted numerical
+decisions. The shared opt-in observed cost and step checks need their own
+formula and observation-stage audit before any record is complete.
+
+  | Solver or mode                                              | Current native stop and default, for `f32` and `f64`                                                                                                                        | Stage and distinction                                                                                                                    | Reference, candidate, experiment, decision, delivery                                                       |
+  | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+  | `NelderMead` unbounded and projected                        | No native convergence test enabled; optional absolute simplex size and cost spread require both thresholds. Standard, adaptive, and custom coefficients share this default. | Whole simplex after initialization or an iteration; projected vertices are clamped before evaluation.                                    | Reference comparison, candidate policy, experiment, disposition, implementation, and verification pending. |
+  | `Lbfgs` bounded / `Lbfgsb` alias                            | `‖x - projection(x - g)‖∞ ≤ 1e-10`; opt-in observed step and cost checks combine with OR.                                                                                   | Current point at the top of an iteration; the alias uses exactly this implementation.                                                    | Fortran v3.0 named in rustdoc; precise comparison and all later stages pending.                            |
+  | `Lbfgs` unbounded                                           | No native gradient test enabled; optional absolute or relative Euclidean gradient norm.                                                                                     | Current iterate; custom line searches have their own acceptance or failure rules.                                                        | Nocedal–Wright reference named in rustdoc; precise comparison and all later stages pending.                |
+  | `LevenbergMarquardt` normal equations, Nielsen damping      | `‖Jᵀr‖∞ ≤ 1e-8`. Orthogonality, relative model reduction, relative trial step, and radius tests disabled.                                                                   | Gradient before a trial; opt-in model and step tests use trial diagnostics, including rejected trials.                                   | MINPACK and Madsen et al. named in rustdoc; precise comparison and all later stages pending.               |
+  | `LevenbergMarquardt` normal equations, trust-region damping | Same enabled default; opt-in relative radius test is active only in this damping mode.                                                                                      | Radius test uses the updated radius; a small radius alone does not establish fit accuracy.                                               | MINPACK named in rustdoc; precise comparison and all later stages pending.                                 |
+  | `LevenbergMarquardtQr`, both damping modes                  | Forwards the same convergence settings to LM; default `‖Jᵀr‖∞ ≤ 1e-8`.                                                                                                      | Pivoted QR changes the linear solve and rank safeguard; damping still determines radius-test availability.                               | MINPACK named in rustdoc; precise comparison and all later stages pending.                                 |
+  | `Trf`                                                       | `maxᵢ abs((Jᵀr)ᵢ)·abs(vᵢ) ≤ 1e-8`; opt-in observed cost and step checks combine with OR.                                                                                    | Coleman–Li bound scaling in the legacy bounded-LM implementation.                                                                        | Branch–Coleman–Li named in rustdoc; precise comparison and all later stages pending.                       |
+  | `TrustRegionReflective`                                     | Same named scaled-gradient formula and `1e-8` default, computed over free coordinates; all-fixed termination is structural.                                                 | Initial point and accepted iterates; observed checks exclude rejected inner trials. Rank cutoff and inner-attempt limits are safeguards. | SciPy 1.16.2 comparison named in rustdoc; precise comparison and all later stages pending.                 |
 
 ## Record required for each solver
 
