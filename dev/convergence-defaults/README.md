@@ -15,8 +15,9 @@ records do not replace the repository's [agent guide](../../AGENTS.md) or
 
 Step 1 is complete. Step 2 has a first source pass for all 47 public solver
 names and key dependencies, with variant and work-accounting checks remaining.
-Step 3 has begun a versioned reference pilot. No solver policies have been
-selected and no numerical experiments have run.
+Step 3 has a versioned reference pilot and draft candidate policies for four
+families; the remaining references and candidates are pending. No solver
+policies have been selected and no numerical experiments have run.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -36,7 +37,10 @@ selected and no numerical experiments have run.
 - [Dependencies](dependencies.md): source audit of line searches, bracketers,
   and inner model stops.
 - [Reference pilot](reference-pilot.md): first versioned stopping-formula
-  comparison for Nelder-Mead, bounded L-BFGS, LM, and TRF.
+  comparison for Nelder-Mead, bounded L-BFGS, LM, and TRF, including LM and TRF
+  observation stages.
+- [Pilot candidates](candidate-pilot.md): testable policy alternatives and
+  variant distinctions for the four pilot families; no selected defaults.
 - [Protocol](protocol.md): experimental requirements and choices that must be
   resolved before calibration. It remains a draft.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
@@ -254,3 +258,41 @@ implementations. The setup checkpoint is the Git commit titled
 - Next task: compare SciPy's tagged LM and TRF implementation stages and
   MINPACK's original tests with Basin's optional checks. Then record candidate
   formulas for each pilot variant and design scaled, held-out tests.
+
+### S007: Specify pilot stopping candidates, 2026-10-01
+
+- Starting revision: `b415db7611678493bc2a3905229ee9143aa1c10a` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: trace SciPy 1.16.2's LM wrapper and dense TRF trial loop, MINPACK's
+  original `lmder`, and Basin's native and shared optional checks. Draft
+  candidate policies for all four pilot families and their relevant modes.
+- Evidence:
+  [reference-pilot.md](reference-pilot.md#lm-observation-stages-and-minpack-comparison)
+  now records the exact LM and TRF observation stages and mismatches;
+  [candidate-pilot.md](candidate-pilot.md) states formulas, composition,
+  reference anchors, and variant boundaries. The per-solver tracker remains
+  pending until each candidate has a complete reference and precision review.
+- Findings: Basin's ordinary LM model-reduction test closely matches MINPACK's
+  normalized three-part test, but acceptance and radius histories differ. The
+  unscaled LM step check is not MINPACK's `xtol`. SciPy TRF checks cost and step
+  on a trial before acceptance; Basin's shared observed checks only see accepted
+  states and use different formulas. A SciPy-like TRF policy would require a
+  native trial-stage implementation.
+- Decisions: none. External `f64` defaults are candidate anchors, not selected
+  Basin settings; `f32` thresholds and experiment grids are unchosen.
+- Validation: documentation formatting, lint, links, and `git diff --check` are
+  recorded below. No Rust code or numerical behavior changed.
+- Open questions: original L-BFGS-B cost and acceptance details, an
+  unconstrained L-BFGS reference, robust-loss candidates, independent targets,
+  and the remaining solver families.
+- Next task: finish the L-BFGS-B and unconstrained reference comparison; specify
+  and review the experimental protocol before calibration.
+
+Commands run from the repository root:
+
+```sh
+panache format dev/convergence-defaults
+panache format --check dev/convergence-defaults
+panache lint dev/convergence-defaults
+git diff --check
+```

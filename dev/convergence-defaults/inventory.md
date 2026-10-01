@@ -215,6 +215,12 @@ does not close the reference, variant, or numerical audit. `Pending` means no
 claim of completion. Aliases retain their own rows because callers see those
 names and may configure different modes through the defining type.
 
+The [pilot reference comparison](reference-pilot.md) and [draft pilot
+candidates](candidate-pilot.md) cover Nelder-Mead, bounded and unbounded L-BFGS,
+both LM factorizations and damping modes, and both TRF implementations. Their
+tracker fields stay pending until variant references, precision-specific
+settings, and candidate grids are complete.
+
   | Public name                 | Defining source                                                                                | Current stop                                                                          | Reference match | Candidate | Experiment | Decision | Implementation | Verification |
   | --------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------- | --------- | ---------- | -------- | -------------- | ------------ |
   | `Brent`                     | [brent.rs](../../crates/basin/src/solver/brent.rs)                                             | Source checked; [scalar record above](#scalar-stopping-records)                       | Pending         | Pending   | Pending    | Pending  | Pending        | Pending      |
