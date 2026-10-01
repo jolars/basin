@@ -272,25 +272,14 @@ desired backend features.
   open until the release is ready.
 
 - [ ] **Revise solver convergence defaults ([#109](https://github.com/jolars/basin/issues/109)).**
-  Preserve existing defaults throughout Basin 1.x. Use established
-  solver-specific stopping policies as the baseline for 2.0: paired absolute
-  simplex-size and cost-spread tests for Nelder-Mead, projected-gradient or
-  normalized cost-reduction tests for L-BFGS-B, MINPACK-style orthogonality,
-  model-reduction, and scaled-step tests for LM, and cost and step tests
-  alongside the bound-scaled gradient test for full TRF. Compare the precise
-  formulas, observation stages, and defaults with
-  [SciPy](https://docs.scipy.org/doc/scipy/reference/optimize.html) and
-  [Ceres](https://ceres-solver.readthedocs.io/latest/nnls_solving.html), and
-  distinguish full `TrustRegionReflective` from the legacy bounded-LM `Trf`.
-  Match the mathematics rather than only similarly named tolerance settings;
-  do not promise universal scale invariance. Obtain the reporter's NIST StRD
-  harness and validate solution accuracy as well as termination reasons on
-  both supplied starting points, rescaled objectives and parameters, zero-cost
-  optima, active bounds, and stagnation away from a solution. Select and test
-  defaults for both `f32` and `f64` across supported backends. Keep numerical
-  no-progress safeguards distinct from convergence, account for new vector
-  capability requirements in default simplex checks, and document explicit
-  settings that recover the 1.x behavior.
+  Follow the [multi-session investigation plan](#convergence-defaults-investigation)
+  below. Cover every solver in Basin, including scalar roots, stochastic
+  methods, aliases, and composed solvers. Use established solver-specific
+  policies as baselines, then calibrate and independently validate their
+  accuracy and work before selecting 2.0 defaults. Uniformity means clear
+  semantics and comparable expectations, not identical tolerance values or
+  guaranteed objective accuracy. Preserve existing defaults throughout
+  Basin 1.x and document explicit settings that recover its behavior.
 
 - [x] **Make structured termination reports part of ordinary results.**
   Ordinary `run()` returns an owned report, final state, and authoritative
@@ -382,6 +371,162 @@ desired backend features.
   cannot complete initialization. Cover COBYLA's `n + 1`-point
   initialization and zero-to-two-evaluation steps in any resulting contract
   and tests.
+
+### Convergence defaults investigation
+
+Treat this as a sequence of reviewable sessions on a dedicated development
+branch from `main`. Each phase produces evidence for the next; a corpus sweep
+alone does not settle the defaults. Every solver needs a recorded disposition,
+including justified decisions to retain its defaults or rely on execution
+budgets. Do not promise universal scale invariance or interpret a local stop
+as a certificate of global optimality.
+
+- [ ] **1. Establish the branch and durable session records.** Create a
+  `convergence-defaults` branch and tracked, temporary development documents
+  under `dev/convergence-defaults/`: `README.md` for status and session
+  handoffs, `inventory.md` for solver coverage and references, `protocol.md`
+  for experimental design, and `decisions.md` for conclusions and unresolved
+  questions. Keep run manifests and concise result summaries alongside them;
+  put bulk traces and exploratory output in ignored
+  `target/convergence-defaults/`. Each session records its starting revision,
+  commands, evidence, decisions, open questions, and next concrete task.
+  Distinguish proposals from accepted decisions and revisit decisions when
+  new evidence contradicts them.
+
+- [ ] **2. Inventory every solver and its stopping behavior.** Reconcile
+  `crates/basin/src/lib.rs`, the public `solver` and `root` modules, and the
+  web solver catalogue. Track references, current defaults, candidate
+  policies, experiment status, decision, implementation, and verification
+  for each solver. Give aliases and configurable modes separate entries
+  wherever their stopping behavior differs. Reconcile the inventory again
+  before completion so solvers added during the investigation are included.
+  The initial coverage checklist is:
+
+  - [ ] Scalar minimization: `Brent`, `BrentDerivative`, `GoldenSection`.
+  - [ ] Scalar roots: `BrentRoot`, `SecantRoot`, `NewtonRoot`, `HalleyRoot`,
+    `Toms748Root`.
+  - [ ] First-order, quasi-Newton, and Newton methods: `GradientDescent`,
+    `ProjectedGradientDescent`, `NonlinearCg`, `Bfgs`, `Lbfgs`, `Lbfgsb`,
+    `TrustRegion`, and `Sgd`.
+  - [ ] Least squares: `GaussNewton`, `LevenbergMarquardt`,
+    `LevenbergMarquardtQr`, `Trf`, and `TrustRegionReflective`.
+  - [ ] Derivative-free local methods: `NelderMead`, `Newuoa`, `Bobyqa`,
+    `Lincoa`, `Cobyla`, `Mads`, and `SolisWets`.
+  - [ ] Other constrained methods: `Slsqp`, `BarrierMethod`, and
+    `AugmentedLagrangianMethod`.
+  - [ ] Global and population methods: `Direct`, `Gbnm`, `RandomSearch`,
+    `SimulatedAnnealing`, `CmaEs`, `BoundedCmaEs`, `De`, `GlobalBestPso`, and
+    `Ssga`.
+  - [ ] Composed methods: `BasinHopping`, `CmaInject`, `BoundedCmaInject`,
+    `DeInject`, `MaLsCh`, `MaLsChCma`, and `MaLsChSw`.
+
+  Cover constrained modes, trust-region strategies, damping choices,
+  stochastic updates, and inner-solver configurations where they affect
+  stopping. Audit line searches, root/minimum bracketers, and subproblem
+  tolerances as dependencies, keeping their acceptance or completion tests
+  distinct from convergence of the enclosing solve. Check these coverage
+  boxes only after all applicable decisions and verification are complete.
+
+- [ ] **3. Survey references and specify candidate policies.** Record
+  versioned primary documentation, research, and reference implementations.
+  Start with [SciPy](https://docs.scipy.org/doc/scipy/reference/optimize.html),
+  [Ceres](https://ceres-solver.readthedocs.io/latest/nnls_solving.html),
+  [NLopt](https://nlopt.readthedocs.io/en/stable/NLopt_Algorithms/), and
+  algorithm-author implementations where available. Document exact formulas,
+  norms, scaling, observation stages, AND/OR composition, enabled defaults,
+  precision assumptions, and failure/no-progress safeguards. Equal tolerance
+  names do not establish equivalent mathematics or algorithm variants.
+  Initial candidates include paired absolute simplex-size and cost-spread
+  tests for Nelder-Mead, projected-gradient or normalized cost-reduction
+  tests for L-BFGS-B, MINPACK-style orthogonality, model-reduction, and
+  scaled-step tests for LM, and cost and step tests alongside the bound-scaled
+  gradient test for full TRF. Distinguish `TrustRegionReflective` from the
+  legacy bounded-LM `Trf`. Review the candidate set and evidence gaps before
+  launching large sweeps; these examples do not limit the solver inventory.
+
+- [ ] **4. Define and review the experimental protocol.** Specify success
+  independently of each solver's stopping predicate. Use multiple objective
+  accuracy targets with known or independently validated reference values,
+  explicit absolute and relative scales, and attainable precision floors.
+  Add stationarity and feasibility checks for applicable problems, parameter
+  error where identifiable, and bracket/root accuracy for scalar roots.
+  Distinguish a different local optimum from premature termination. For
+  stochastic and global methods, assess repeated-run success and quality
+  within budgets without treating population collapse as global convergence.
+  Use data profiles and work to reach common targets as methodological
+  references: [More and Wild](https://www.mcs.anl.gov/~wild/papers/2009/JJMSMW07.html)
+  and [COCO](https://numbbo.github.io/coco-doc/perf-assessment/).
+
+  Stratify Basin's problem corpus by solver applicability, family,
+  dimension, constraints, and conditioning. Obtain the reporter's NIST StRD
+  harness and include both supplied starts; independently assemble those
+  cases if the harness remains unavailable. Include zero and nonzero
+  residual minima, objective rescaling and offsets, parameter rescaling,
+  active bounds, fixed coordinates, rank deficiency, non-finite inputs,
+  and stagnation away from a solution. Cover analytic and finite-difference
+  derivatives and noisy evaluations where supported. Hold out whole problem
+  families, keeping their dimensions, starts, and transformed copies in the
+  same partition. Fix family weights, budgets, seeds, target grids, and
+  selection criteria before tuning. Define how missing applicable problems
+  will be supplied; add new corpus problems through the project workflow.
+
+- [ ] **5. Build a reproducible measurement harness and pilot it.** Extend
+  `crates/competitor-bench` using the existing convergence traces and LM
+  stopping probes. Record returned-point quality, all passing stopping
+  criteria and measurements, termination stage, accepted/rejected steps,
+  iterations, authoritative evaluations by kind, underlying finite-difference
+  calls, and elapsed time. Separate verification work from solve costs, and
+  distinguish returned points from best sampled trials. Keep failures,
+  budgets, no-progress stops, and infeasible results in the summaries.
+  Preserve numerical safeguards and account for inner-solver and bracketing
+  work. Validate the harness on analytic cases and matching references before
+  running the corpus. Start with the issue's Nelder-Mead, L-BFGS-B, LM, and
+  TRF cases, but retain the full coverage checklist.
+
+- [ ] **6. Calibrate by solver family and validate independently.** Compare
+  current defaults, reference policies, and a small logarithmic sweep of
+  defensible candidates. Vary enabled criteria and composition as well as
+  thresholds. Where thresholds only affect termination, record candidate
+  stopping points along a stricter run; confirm shortlisted policies with
+  actual solves and correct observation stages. Measure early termination,
+  improvement available under stricter continuation, work after first
+  attaining each target, and final quality. Compare attainable targets across
+  precisions without blindly transferring double-precision constants or
+  epsilon formulas to `f32`. Use paired seeds and report uncertainty for
+  stochastic methods. Validate finalists across every supported backend.
+
+  Prefer a simple policy in a stable region of the accuracy/work tradeoff.
+  Inspect worst cases and family-level results rather than selecting on a
+  pooled average. Record each solver's recommended policy, alternatives,
+  evidence for retaining or changing defaults, precision behavior, and known
+  limitations. Review those decisions before implementation. Evaluate frozen
+  candidates on held-out families; if those results cause retuning, record
+  that the set has become development data and arrange fresh validation.
+
+- [ ] **7. Implement reviewed decisions in bounded batches.** Add regression
+  tests before behavioral fixes and implement one solver family at a time.
+  Keep numerical no-progress safeguards and execution controls distinct from
+  convergence. Preserve fresh-run resets, exact continuation, and diagnostic
+  observation stages. Verify outer/inner stopping interactions and partial
+  results for composed solvers. Account for any new vector capabilities
+  required by default checks, especially simplex size, without silently
+  dropping backend support. Run focused tests during development, then the
+  applicable formatting, pure-Rust tests, clippy, rustdoc, WASM, and web checks
+  from `AGENTS.md`. Cover both `f32` and `f64`, supported backend versions,
+  disabled checks, exact-zero tolerances, and relevant degenerate inputs.
+
+- [ ] **8. Close the inventory and publish the lasting rationale.** Require
+  a supported disposition and completed validation for every solver and
+  applicable variant, even when no default changes. Rerun the frozen protocol
+  against the final implementation and explain material deviations from the
+  selected policies. Document formulas, scaling, defaults, composition,
+  termination meaning, and precision limitations in rustdoc and the relevant
+  guides. Add migration settings that recover 1.x behavior and synchronize
+  the web catalogue when references or backend support change. Retain the
+  reusable harness, regression cases, reproduction manifests, and concise
+  decision rationale in permanent repository locations before removing the
+  temporary development documents. Leave unresolved decisions visible and
+  keep the parent task open until the full inventory is complete.
 
 ## Deferred design
 
