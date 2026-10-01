@@ -443,7 +443,7 @@ open; the coverage boxes below require all of them.
   convergence of the enclosing solve. Check these coverage boxes only after all
   applicable decisions and verification are complete.
 
-- [ ] **3. Survey references and specify candidate policies.** Record versioned
+- [x] **3. Survey references and specify candidate policies.** Record versioned
   primary documentation, research, and reference implementations. Start with
   [SciPy](https://docs.scipy.org/doc/scipy/reference/optimize.html),
   [Ceres](https://ceres-solver.readthedocs.io/latest/nnls_solving.html),
@@ -459,7 +459,9 @@ open; the coverage boxes below require all of them.
   bound-scaled gradient test for full TRF. Distinguish
   `TrustRegionReflective` from the legacy bounded-LM `Trf`. Review the
   candidate set and evidence gaps before launching large sweeps; these
-  examples do not limit the solver inventory.
+  examples do not limit the solver inventory. The [step 3
+  review](dev/convergence-defaults/review-step3.md) covers all 47 names and
+  records the evidence gates before large sweeps.
 
 - [ ] **4. Define and review the experimental protocol.** Specify success
   independently of each solver's stopping predicate. Use multiple objective

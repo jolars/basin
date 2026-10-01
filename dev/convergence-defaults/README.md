@@ -15,16 +15,16 @@ records do not replace the repository's [agent guide](../../AGENTS.md) or
 
 Step 1 is complete. Step 2 has a first source pass for all 47 public solver
 names and key dependencies, with variant and work-accounting checks remaining.
-Step 3 has a versioned reference pilot and draft candidates for four families,
-plus first-order, SLSQP, scalar, and derivative-free local reference passes. The
-remaining references and candidates are pending. No solver policies have been
+Step 3 has a reference survey and draft candidate policies for all 47 public
+solver names. The [candidate and evidence review](review-step3.md) records the
+remaining gaps and gates before large sweeps. No solver policies have been
 selected and no numerical experiments have run.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
   | 1    | Branch and session records                    | Complete    |
   | 2    | Inventory of stopping behavior and variants   | In progress |
-  | 3    | Reference survey and candidate policies       | In progress |
+  | 3    | Reference survey and candidate policies       | Complete    |
   | 4    | Reviewed experimental protocol                | Pending     |
   | 5    | Measurement harness and pilot                 | Pending     |
   | 6    | Calibration and independent validation        | Pending     |
@@ -52,6 +52,14 @@ selected and no numerical experiments have run.
   candidates](reference-derivative-free.md): versioned PDFO, PRIMA, SciPy,
   NLopt, NOMAD, and Solis–Wets comparisons for Powell-model methods, MADS, and
   Solis–Wets.
+- [Global and population references and candidates](reference-global.md):
+  versioned SciPy and pycma comparisons, primary research, and explicit
+  budget-driven controls for all nine names.
+- [Constrained and composed references and candidates](reference-composed.md):
+  log-barrier and augmented-Lagrangian checks, basin hopping, injections, and
+  local-search chains with separate inner and outer stop owners.
+- [Step 3 review](review-step3.md): 47-name coverage, candidate interpretation,
+  evidence gaps, and gates before large sweeps.
 - [Protocol](protocol.md): experimental requirements and choices that must be
   resolved before calibration. It remains a draft.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
@@ -389,5 +397,52 @@ git status --short --branch
 git log -5 --oneline
 panache format dev/convergence-defaults/reference-derivative-free.md
 panache lint dev/convergence-defaults/reference-derivative-free.md
+git diff --check
+```
+
+### S010: Finish the reference and candidate survey, 2026-10-01
+
+- Starting revision: `cb8cd60` on `convergence-defaults`; the working tree was
+  clean.
+- Scope: step 3 reference and candidate passes for the nine global and
+  population names, two remaining constrained adapters, and seven composed
+  names. Reviewed candidate coverage and evidence gaps across all 47 public
+  names and marked step 3 complete.
+- Evidence: [global reference policies](reference-global.md) compare Basin's
+  DIRECT geometry with SciPy 1.16.2, CMA distribution TolX with pycma r4.3.0,
+  and DE population-energy spread with SciPy 1.16.2; primary research anchors
+  the budget-driven stochastic controls. [Constrained and composed
+  policies](reference-composed.md) compare barrier and augmented-Lagrangian
+  checks, SciPy basin hopping, injection inheritance, and local-search chain
+  segments. The [step 3 review](review-step3.md) enumerates 47 names, candidate
+  meanings, and pre-sweep gates.
+- Findings: external thresholds with equal names are often different
+  measurements. In particular, SciPy's default DIRECT_L length differs from
+  Basin's original DIRECT half-diagonal; pycma TolX includes coordinate and
+  evolution-path checks while Basin has one principal-axis check; SciPy DE
+  observes full population objective spread while Basin's outer default is
+  budget-driven. Inner completion does not terminate a composed outer solve.
+- Decisions: the survey and draft candidate set are complete. No candidate
+  default or threshold was selected; the review blocks large sweeps until the
+  protocol resolves its stated quality, precision, and work-accounting gates.
+- Validation: formatting, lint, local Markdown links, a 47-name coverage check,
+  and `git diff --check` pass. No Rust code or numerical behavior changed.
+- Open questions: the high-priority and follow-up gaps in
+  [review-step3.md](review-step3.md#evidence-gaps-and-gates), including exact
+  L-BFGS-B and SLSQP reference branches, constrained stationarity diagnostics,
+  and DIRECT's zero-threshold discrepancy.
+- Next task: finish and review the [experimental protocol](protocol.md) with
+  independent success, precision floors, diagnostic stages, seed pairing, and
+  inner/outer evaluation accounting. Resolve the gate items with focused checks
+  before any large sweep.
+
+Commands run from the repository root:
+
+```sh
+git status --short --branch
+git log -3 --oneline
+panache format dev/convergence-defaults TODO.md
+panache format --check dev/convergence-defaults TODO.md
+panache lint dev/convergence-defaults TODO.md
 git diff --check
 ```

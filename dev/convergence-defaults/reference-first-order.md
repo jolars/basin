@@ -100,7 +100,7 @@ failure, trust-region rejection, or exhausted budget as convergence.
 The candidate set still lacks an algorithm-author reference for the specific
 Hager–Zhang implementation, an exact SciPy/NLopt SLSQP branch comparison, a
 reference for projected gradient with a projected line search, and a noise-aware
-stopping source for SGD. Resolve those gaps before declaring this family's
-reference field complete or starting a large sweep. The [protocol](protocol.md)
-must also fix independently checked targets and `f32` floors before thresholds
-are selected.
+stopping source for SGD. The [step 3 review](review-step3.md) records how these
+gaps limit candidate interpretation. Resolve the relevant gates before a large
+sweep. The [protocol](protocol.md) must also fix independently checked targets
+and `f32` floors before thresholds are selected.
