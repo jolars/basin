@@ -13,15 +13,16 @@ records do not replace the repository's [agent guide](../../AGENTS.md) or
 
 ## Status
 
-Step 1 is complete. Step 2 has reconciled the public solver names and begun the
-variant and stopping-behavior audit. No solver policies have been selected and
-no numerical experiments have run.
+Step 1 is complete. Step 2 has a first source pass for all 47 public solver
+names and key dependencies, with variant and work-accounting checks remaining.
+Step 3 has begun a versioned reference pilot. No solver policies have been
+selected and no numerical experiments have run.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
   | 1    | Branch and session records                    | Complete    |
   | 2    | Inventory of stopping behavior and variants   | In progress |
-  | 3    | Reference survey and candidate policies       | Pending     |
+  | 3    | Reference survey and candidate policies       | In progress |
   | 4    | Reviewed experimental protocol                | Pending     |
   | 5    | Measurement harness and pilot                 | Pending     |
   | 6    | Calibration and independent validation        | Pending     |
@@ -34,6 +35,8 @@ no numerical experiments have run.
   requirements for each solver and relevant variant.
 - [Dependencies](dependencies.md): source audit of line searches, bracketers,
   and inner model stops.
+- [Reference pilot](reference-pilot.md): first versioned stopping-formula
+  comparison for Nelder-Mead, bounded L-BFGS, LM, and TRF.
 - [Protocol](protocol.md): experimental requirements and choices that must be
   resolved before calibration. It remains a draft.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
@@ -230,3 +233,24 @@ implementations. The setup checkpoint is the Git commit titled
   catalogue, then begin versioned reference comparisons and candidate records
   for the initial Nelder-Mead, L-BFGS-B, LM, and TRF pilot. Expand the
   subproblem-work and composed outcome audits before designing measurements.
+
+### S006: Start versioned reference comparisons, 2026-10-01
+
+- Starting revision: `41f9ca5` on `convergence-defaults`; the working tree was
+  clean.
+- Scope: compare the first four pilot families against SciPy 1.16.2's public
+  documentation and tagged source. Keep similarly named tolerances distinct.
+- Evidence: [reference-pilot.md](reference-pilot.md) records SciPy's Nelder-Mead
+  two-spread rule, L-BFGS-B projected gradient and relative cost rules, and
+  method-specific LM and TRF criteria beside Basin's current rules. Each
+  external claim links to versioned primary documentation or source.
+- Decisions: none. The values are reference candidates, not accepted defaults;
+  precise optional-check comparison, independent quality targets, `f32`
+  calibration, and validation remain pending. Tracker reference fields remain
+  pending until each solver's comparison is complete.
+- Validation: `panache format --check dev/convergence-defaults`,
+  `panache lint dev/convergence-defaults`, and `git diff --check` pass. Local
+  file and heading-anchor links resolve. No Rust code changed.
+- Next task: compare SciPy's tagged LM and TRF implementation stages and
+  MINPACK's original tests with Basin's optional checks. Then record candidate
+  formulas for each pilot variant and design scaled, held-out tests.
