@@ -24,7 +24,11 @@ evidence. The [coverage matrix](coverage.md) now documents 57 experimental
 fixture definitions, native `f32`/`f64` evaluation, proposed family partitions,
 and executable coverage of 14 solver names. The [expanded
 pilot](runs/2026-10-02-coverage-002.md) exercises development cases only. No
-solver policies have been selected or independently validated.
+solver policies have been selected or independently validated. The [policy and
+timing pilot](runs/2026-10-02-policies-003.md) now supplies matched recording
+controls, common boundary-budget probes, and an independent target audit for
+three NIST cases. It identifies timing perturbation and persistent `f32`
+failures that need attention before calibration.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -602,3 +606,55 @@ command, output path, and output hash.
 - Verification: Panache format/lint, local document links, and
   `git diff --check` pass. Rust tests are not needed for this documentation-only
   revision.
+
+### S014: Measure policies, timing perturbation, and target attainment, 2026-10-02
+
+- Starting revision: `3d8d102` on `convergence-defaults`; implementation began
+  from a clean tree and resumed with the same uncommitted runner changes after
+  interruption.
+- Scope: implement solver-time budgets, preserve overshoot on native stopping
+  steps, add an ordinary Executor control without fixture recording, and compare
+  named policies in both precisions. The experimental tooling was committed as
+  `571235f` before collecting timing evidence.
+- Evidence: [run 003](runs/2026-10-02-policies-003.md) records 4,800 retained
+  development solves. All 192 policy/case comparisons match returned points,
+  native reports, and authoritative counts across three recording modes and
+  seven repetitions. The independent decimal audit explains all negative NIST
+  gaps within reference rounding and demonstrates all 42 proposed target
+  combinations for those three cases.
+- Findings: paired Nelder–Mead checks and native LM probes reduce work on these
+  cases. Stricter checks do not resolve the persistent `f32` Misra1a failures
+  and stagnation. Charged tracing overhead varies by solver, and short time caps
+  can overshoot substantially. D006 records the measurement consequences; no
+  default or calibration budget was selected.
+- Verification: 20 focused Rust tests, workspace all-target/all-feature clippy,
+  rustfmt, Ruff, Panache, schema and partition checks, matched-work checks,
+  monotone trace accounting, decimal reference checks, and artifact hashes pass.
+  A stale NLopt CMake cache initially caused clippy to fail; removing only that
+  generated package cache with `cargo clean -p nlopt --profile dev` resolved it.
+  No system installation was attempted to work around the error.
+- Next task: measure an unrecorded boundary driver that includes initialization
+  in its time budget, then extend the target audit and nearby candidate probes.
+  Investigate the `f32` failures before the larger sweep. Preserve the remaining
+  coverage and reference gates. There is no new human-only prerequisite.
+
+Commands run from the repository root:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --release -p competitor-bench --lib --bin convergence_policies --bin convergence_suite --bin convergence_scalar --bin convergence_pilot
+CARGO_INCREMENTAL=0 cargo build --release -p competitor-bench --bin convergence_policies
+CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
+ruff check crates/competitor-bench/scripts
+ruff format --check crates/competitor-bench/scripts
+taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py controls target/convergence-defaults/2026-10-02-policies-003
+taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py traces target/convergence-defaults/2026-10-02-policies-003
+taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py budgets target/convergence-defaults/2026-10-02-policies-003 --budgets 0.0001 0.001 0.01
+python3 crates/competitor-bench/scripts/convergence_policies.py summarize target/convergence-defaults/2026-10-02-policies-003
+python3 crates/competitor-bench/scripts/convergence_reference_audit.py target/convergence-defaults/2026-10-02-policies-003/finals.csv target/convergence-defaults/2026-10-02-policies-003/reference-audit.csv
+panache format --check dev/convergence-defaults
+panache lint dev/convergence-defaults
+sha256sum --check dev/convergence-defaults/runs/2026-10-02-policies-003.sources.sha256
+sha256sum --check dev/convergence-defaults/runs/2026-10-02-policies-003.outputs.sha256
+git diff --check
+```

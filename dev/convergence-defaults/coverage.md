@@ -187,6 +187,13 @@ observed target-grid crossings, and the last boundary within each budget. Grid
 crossings are descriptive observations, not scored successes: reference
 uncertainties and precision floors still require validation.
 
+The [first policy and timing pilot](runs/2026-10-02-policies-003.md) exercises
+all three modes and common time budgets. Its independent [decimal
+audit](../../crates/competitor-bench/scripts/convergence_reference_audit.py)
+checks the three NIST formulas at 60 and 90 digits, retains certificate rounding
+uncertainty, and records strict-run witnesses for all 42 proposed target
+combinations in that subset. This does not establish floors for the full corpus.
+
 ## Before calibration
 
 The expanded set is sufficient for developing and piloting the harness. Next,

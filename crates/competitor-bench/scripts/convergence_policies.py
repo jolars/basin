@@ -307,6 +307,42 @@ def summarize(args):
     write_csv(directory / "finals.csv", finals)
     write_csv(directory / "crossings.csv", crossings)
     write_csv(directory / "budget-boundaries.csv", budget_rows)
+    if finals and comparisons:
+        controls = {
+            tuple(row[k] for k in KEY + ("policy",)): row for row in comparisons
+        }
+        keep = (
+            "case",
+            "family",
+            "precision",
+            "start",
+            "solver",
+            "policy",
+            "policy_settings",
+            "iteration",
+            "termination",
+            "report",
+            "value_passes",
+            "derivative_passes",
+            "cost_difference",
+            "relative_gap",
+            "gradient_inf",
+        )
+        compact = []
+        for row in finals:
+            control = controls[tuple(row[k] for k in KEY + ("policy",))]
+            compact.append(
+                {k: row[k] for k in keep}
+                | {
+                    f"plain_seconds_{q}": control[f"plain_solver_seconds_{q}"]
+                    for q in ("q1", "median", "q3")
+                }
+                | {
+                    k: control[k]
+                    for k in ("trace_charged_ratio", "trace_harness_ratio")
+                }
+            )
+        write_csv(directory / "results.csv", compact)
     print(
         json.dumps(
             {

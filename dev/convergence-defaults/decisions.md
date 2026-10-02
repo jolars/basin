@@ -120,6 +120,27 @@ changes a decision, preserve its history and link its successor.
   accuracy targets, or solver defaults. The existing measurement and validation
   gates remain.
 
+## D006: Retain timing and reference gates after the policy pilot
+
+- Status: measurement finding, 2026-10-02; no numerical default selected.
+- Evidence: [run 003](runs/2026-10-02-policies-003.md) compares three policies
+  for four solvers on four development families. Recording modes agree on
+  numerical work and returned results, but their charged timings differ. A
+  common boundary budget also permits overshoot, which remains visible even when
+  the solver stops natively.
+- Consequence: do not freeze cross-solver time allowances from the instrumented
+  pilot or subtract a single overhead factor. Compare an unrecorded boundary
+  driver with ordinary Executor execution, preserving initialization in the
+  charged budget. Retain separate physical work and within-budget quality.
+- Reference finding: independent high-precision reevaluation explains all
+  negative NIST differences within printed certificate rounding. Strict runs
+  demonstrate all 42 proposed target combinations for the three NIST cases; this
+  is evidence for that subset, not a floor certificate for every family.
+- Follow-up: test nearby Nelder–Mead and LM policies, extend reference checks,
+  and diagnose persistent `f32` failures/stagnation. Human application weights
+  and an arbitrary accuracy/work exchange rate are not prerequisites. D003,
+  held-out validation, and the solver-specific gates remain open.
+
 ## Numerical decision template
 
 For each policy decision, record the solver and variants, current and proposed

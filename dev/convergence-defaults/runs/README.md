@@ -1,5 +1,10 @@
 # Run records
 
+The [policy and timing pilot](2026-10-02-policies-003.md) measures recording
+perturbation, three policies per solver, common time-budget overshoot, and
+attainable targets for three NIST cases. It preserves compact per-case results
+and a target audit alongside its manifest.
+
 The [expanded coverage pilot](2026-10-02-coverage-002.md) records development
 cases from the 57 experimental fixtures, both precisions, and 14 solver names.
 

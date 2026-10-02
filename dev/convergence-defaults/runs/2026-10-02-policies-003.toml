@@ -1,9 +1,9 @@
 id = "2026-10-02-policies-003"
-status = "planned"
+status = "complete"
 purpose = "Measure recorder perturbation, stopping-policy behavior, and boundary time caps on development cases; no default selection."
 protocol = "../protocol.md (proposed, not frozen)"
 starting_revision = "3d8d102"
-source_revision = "Recorded by each phase manifest after committing the runner."
+source_revision = "571235f; supplementary decimal audit identified by source hashes"
 compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
 profile = "release"
 features = "competitor-bench defaults; basin nalgebra_v0_34, faer, problems"
@@ -22,7 +22,9 @@ control_rounds = 7
 trace_rounds = 1
 control_and_trace_max_iter = 2000
 pass_limit = "None"
-budget_plan = "After controls, choose a common logarithmic range and record it before running. Strict policy for every solver; three blocks; max_iter=100000."
+budget_plan = "Controls span median plain solve times of 2.267 us to 15.388 ms. Probe 0.1, 1, and 10 ms as common boundary budgets, retaining censoring; these are not a frozen calibration range. Strict policy for every solver; three blocks; max_iter=100000."
+budgets_seconds = [0.0001, 0.001, 0.01]
+budgets_command = "taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py budgets target/convergence-defaults/2026-10-02-policies-003 --budgets 0.0001 0.001 0.01"
 quality = "Independent f64 reevaluation; signed gaps divided by absolute initial-reference gap. Observed target-grid crossings are unscored; reference uncertainty and precision floors are not yet certified."
 timing = "Recorded modes sum initialization and step durations, excluding diagnostics. Plain mode times the whole Executor. harness_seconds includes diagnostic and trace construction costs but excludes CSV and fixture/solver construction."
 schema = "convergence-policies-v1: original 30 fields plus 15 policy, budget, timing, and reference fields"
@@ -31,3 +33,41 @@ build_command = "CARGO_INCREMENTAL=0 cargo build --release -p competitor-bench -
 controls_command = "taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py controls target/convergence-defaults/2026-10-02-policies-003"
 traces_command = "taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py traces target/convergence-defaults/2026-10-02-policies-003"
 summarize_command = "python3 crates/competitor-bench/scripts/convergence_policies.py summarize target/convergence-defaults/2026-10-02-policies-003"
+
+python = "3.14.7; standard library only"
+binary_sha256 = "c45b5acaff315c44d4a0bc2e75a474b93adf15bbb43c7d5adf11e22605e99552"
+source_hashes = "2026-10-02-policies-003.sources.sha256"
+output_hashes = "2026-10-02-policies-003.outputs.sha256"
+retained_solves = 4800
+discarded_warmups = 4800
+matched_policy_case_comparisons = 192
+nist_audited_final_points = 144
+nist_demonstrated_target_combinations = 42
+results = "2026-10-02-policies-003.results.csv"
+targets = "2026-10-02-policies-003.targets.csv"
+audit_command = "python3 crates/competitor-bench/scripts/convergence_reference_audit.py target/convergence-defaults/2026-10-02-policies-003/finals.csv target/convergence-defaults/2026-10-02-policies-003/reference-audit.csv"
+validation = "20 focused Rust tests; all-target/all-feature workspace clippy; rustfmt; Ruff; Panache; matched results/counts/reports; monotone work/time; decimal reevaluation; schema, partition, and hashes"
+
+[[phases]]
+name = "controls"
+processes = 63
+rows = 4032
+solves = 4032
+started_utc = "2026-10-02T12:51:17Z"
+finished_utc = "2026-10-02T12:51:29Z"
+
+[[phases]]
+name = "traces"
+processes = 3
+rows = 125136
+solves = 192
+started_utc = "2026-10-02T12:51:45Z"
+finished_utc = "2026-10-02T12:51:46Z"
+
+[[phases]]
+name = "budgets"
+processes = 9
+rows = 914054
+solves = 576
+started_utc = "2026-10-02T12:52:57Z"
+finished_utc = "2026-10-02T12:53:08Z"

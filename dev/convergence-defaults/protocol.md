@@ -11,6 +11,13 @@ development pilots to make the remaining numerical choices concrete, then freeze
 the design before calibration. Record the accepted revision and decision ID
 here.
 
+The [policy and timing pilot](runs/2026-10-02-policies-003.md) now measures
+recording perturbation and boundary-budget overshoot, with an independent
+high-precision target audit for three NIST cases. Its common `0.1–10` ms
+allowances are diagnostic probes, not frozen calibration budgets. The observed
+overhead requires a further unrecorded timing control before cross-solver time
+comparisons. Candidate selection and the remaining reference floors stay open.
+
 ## Unit of comparison and independent success
 
 One case is a problem family, dimension, start, transformation, derivative
