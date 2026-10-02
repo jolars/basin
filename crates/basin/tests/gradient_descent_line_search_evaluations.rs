@@ -2,10 +2,30 @@ use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
 
 use basin::{
-    CostFunction, Dot, Executor, FirstOrderState, Gradient, GradientDescent,
-    GradientState, LineSearch, LineSearchOutcome, MoreThuente, NegInPlace,
-    NormSquared, Problem, Scalar, ScaleInPlace, ScaledAdd, TerminationCode,
+    Backtracking, CostFunction, Dot, Executor, FirstOrderState, Gradient,
+    GradientDescent, GradientState, LineSearch, LineSearchOutcome, MoreThuente,
+    NegInPlace, NormSquared, Problem, Scalar, ScaleInPlace, ScaledAdd,
+    TerminationCode,
 };
+
+#[test]
+fn exhausted_backtracking_keeps_the_accepted_iterate() {
+    let calls = Calls::default();
+    let result = Executor::new(
+        Sphere::new(&calls),
+        GradientDescent::with_line_search(Backtracking::new().max_iter(1)),
+        FirstOrderState::new(vec![1.0]),
+    )
+    .max_iter(10)
+    .run()
+    .unwrap();
+
+    assert_eq!(result.report.code(), TerminationCode::SolverFailed);
+    assert_eq!(result.param(), &[1.0]);
+    assert_eq!(result.cost(), 1.0);
+    assert_eq!(result.cost_evals(), 2);
+    assert_eq!(calls.costs.borrow().as_slice(), &[vec![1.0], vec![-1.0]]);
+}
 
 #[derive(Debug, PartialEq)]
 enum Stop {

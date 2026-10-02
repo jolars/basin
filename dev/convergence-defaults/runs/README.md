@@ -1,7 +1,8 @@
 # Run records
 
-No numerical runs have been recorded. This directory establishes the record
-conventions for the later harness and experiments.
+The [Misra1a pilot](2026-10-02-misra1a-001.md) is the first focused numerical
+run. This directory also establishes conventions for the later harness and
+experiments.
 
 Use a stable run ID such as `YYYY-MM-DD-family-NNN`. Keep the manifest in
 `<run-id>.toml` and a concise interpretation in `<run-id>.md`. Commit small case

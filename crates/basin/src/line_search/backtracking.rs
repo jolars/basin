@@ -7,6 +7,10 @@ use crate::line_search::{
 /// Backtracking line search satisfying the Armijo condition only
 /// (Nocedal & Wright §3.1). Halves the trial step until
 /// `f(x + α d) ≤ f(x) + c · α · ∇f(x)ᵀd`.
+///
+/// Outcome-aware calls report [`LineSearchOutcome::Failed`] when every trial
+/// fails the condition. The legacy [`LineSearch::next`] method retains its
+/// step-only fallback and returns the reduced, untested step after exhaustion.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Backtracking<F = f64> {
     /// Initial trial step. Default `1.0`.
@@ -63,6 +67,33 @@ impl<F: Scalar> Backtracking<F> {
     }
 }
 
+fn search_armijo<P, V, F>(
+    search: &Backtracking<F>,
+    problem: &mut Problem<P>,
+    param: &V,
+    cost: F,
+    gradient: &V,
+    direction: &V,
+) -> Result<(Option<F>, F), P::Error>
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>,
+    V: ScaledAdd<F> + Dot<F> + Clone,
+{
+    let g_dot_d = gradient.dot(direction);
+    let mut alpha = search.alpha_init;
+    for _ in 0..search.max_iter {
+        let mut trial = param.clone();
+        trial.scaled_add(alpha, direction);
+        let trial_cost = problem.cost(&trial)?;
+        if trial_cost <= cost + search.c * alpha * g_dot_d {
+            return Ok((Some(alpha), alpha));
+        }
+        alpha = alpha * search.rho;
+    }
+    Ok((None, alpha))
+}
+
 impl<P, V, F> LineSearch<P, V, F> for Backtracking<F>
 where
     F: Scalar,
@@ -79,20 +110,22 @@ where
         gradient: &V,
         direction: &V,
     ) -> Result<F, Self::Error> {
-        // Armijo: f(x + α d) ≤ f(x) + c α (∇f · d). For a descent direction,
-        // `g_dot_d` is negative, so the threshold drops with α.
-        let g_dot_d = gradient.dot(direction);
-        let mut alpha = self.alpha_init;
-        for _ in 0..self.max_iter {
-            let mut trial = param.clone();
-            trial.scaled_add(alpha, direction);
-            let trial_cost = problem.cost(&trial)?;
-            if trial_cost <= cost + self.c * alpha * g_dot_d {
-                return Ok(alpha);
-            }
-            alpha = alpha * self.rho;
-        }
-        Ok(alpha)
+        let (accepted, fallback) =
+            search_armijo(self, problem, param, cost, gradient, direction)?;
+        Ok(accepted.unwrap_or(fallback))
+    }
+
+    fn next_with_outcome(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchOutcome<F>, Self::Error> {
+        let (accepted, _) =
+            search_armijo(self, problem, param, cost, gradient, direction)?;
+        Ok(accepted.map_or(LineSearchOutcome::Failed, LineSearchOutcome::Step))
     }
 
     fn next_with_bounds(
@@ -203,5 +236,30 @@ mod tests {
             (alpha - 1.0 / 32.0).abs() < 1e-12,
             "expected α=1/32, got {alpha}",
         );
+    }
+
+    #[test]
+    fn exhausted_search_reports_failure_without_an_accepted_step() {
+        let mut problem = Problem::new(Quadratic);
+        let param = vec![0.0];
+        let cost = problem.cost(&param).unwrap();
+        let gradient = vec![-6.0];
+        let direction = vec![-6.0];
+        let baseline = problem.counts().cost_evals;
+        let mut search = Backtracking::new().max_iter(5);
+
+        let outcome = search
+            .next_with_evaluation(
+                &mut problem,
+                &param,
+                cost,
+                &gradient,
+                &direction,
+            )
+            .unwrap();
+
+        assert_eq!(outcome.outcome, LineSearchOutcome::Failed);
+        assert!(outcome.evaluation.is_none());
+        assert_eq!(problem.counts().cost_evals - baseline, 5);
     }
 }

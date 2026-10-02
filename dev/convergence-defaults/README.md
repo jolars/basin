@@ -17,16 +17,18 @@ Step 1 is complete. Step 2 has a first source pass for all 47 public solver
 names and key dependencies, with variant and work-accounting checks remaining.
 Step 3 has a reference survey and draft candidate policies for all 47 public
 solver names. The [candidate and evidence review](review-step3.md) records the
-remaining gaps and gates before large sweeps. No solver policies have been
-selected and no numerical experiments have run.
+remaining gaps and gates before large sweeps. The [protocol](protocol.md) now
+contains a concrete proposal for maintainer review, and the [Misra1a
+pilot](runs/2026-10-02-misra1a-001.md) supplies the first focused numerical
+evidence. No solver policies have been selected or independently validated.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
   | 1    | Branch and session records                    | Complete    |
   | 2    | Inventory of stopping behavior and variants   | In progress |
   | 3    | Reference survey and candidate policies       | Complete    |
-  | 4    | Reviewed experimental protocol                | Pending     |
-  | 5    | Measurement harness and pilot                 | Pending     |
+  | 4    | Reviewed experimental protocol                | Proposed    |
+  | 5    | Measurement harness and pilot                 | Pilot begun |
   | 6    | Calibration and independent validation        | Pending     |
   | 7    | Implementation and verification               | Pending     |
   | 8    | Complete coverage and permanent documentation | Pending     |
@@ -60,13 +62,13 @@ selected and no numerical experiments have run.
   local-search chains with separate inner and outer stop owners.
 - [Step 3 review](review-step3.md): 47-name coverage, candidate interpretation,
   evidence gaps, and gates before large sweeps.
-- [Protocol](protocol.md): experimental requirements and choices that must be
-  resolved before calibration. It remains a draft.
+- [Protocol](protocol.md): proposed success definitions, case strata, budgets,
+  and selection rule. It awaits maintainer review before a large sweep.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
-- [Run records](runs/README.md): conventions for tracked manifests and concise
-  results. Bulk traces belong in `target/convergence-defaults/`, which the
-  repository already ignores.
+- [Run records](runs/README.md): the first NIST pilot, conventions for tracked
+  manifests, and concise results. Bulk traces belong in
+  `target/convergence-defaults/`, which the repository already ignores.
 
 Keep these documents and small reproduction inputs in Git. Before removing this
 directory in step 8, move the reusable harness, regression cases, manifests, and
@@ -442,6 +444,59 @@ Commands run from the repository root:
 git status --short --branch
 git log -3 --oneline
 panache format dev/convergence-defaults TODO.md
+panache format --check dev/convergence-defaults TODO.md
+panache lint dev/convergence-defaults TODO.md
+git diff --check
+```
+
+### S011: Propose the protocol and run the first NIST pilot, 2026-10-02
+
+- Starting revision: `9ef821dc3496c7dc06eae7628c7ff79ef9e397ad` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: turn the draft [protocol](protocol.md) into a reviewable proposal,
+  reproduce one public NIST StRD case from both starts across the four pilot
+  solvers, and resolve Backtracking's exhausted Armijo outcome with a test-first
+  fix.
+- Evidence: [run 2026-10-02-misra1a-001](runs/2026-10-02-misra1a-001.md) records
+  the NIST source, certified answer, exact command and hashes, returned quality,
+  termination, and callback categories. Five of six runs with relative parameter
+  error below `1e-8` ended without `SolverConverged`; L-BFGS-B remained less
+  accurate at the 500-iteration pilot cap. This is one development case, not a
+  27-case replication or a selected default.
+- Decisions: no numerical default or selection threshold was accepted. Q003 no
+  longer requires the reporter's private harness because NIST publishes the 27
+  primary files. Q007 is resolved for outcome-aware Backtracking callers; its
+  legacy step-only method remains source-compatible. Step 4 awaits maintainer
+  review and freezing before a large calibration sweep.
+- Validation: the Backtracking regression failed before the fix and passed after
+  it; gradient descent now reports `SolverFailed` and retains the accepted point
+  on exhausted backtracking. The Misra1a certificate and analytic Jacobian test
+  passes. The routine pure-Rust feature test suite, all-target all-feature
+  clippy, rustdoc, both WASM builds, rustfmt, Panache format/lint, and
+  `git diff --check` pass.
+- Open questions: the proposed case weights, target grid, resource budgets, and
+  material reliability/work threshold need maintainer review. Step 5 still needs
+  stage-aware tracing, physical model-call accounting, and additional case
+  families; Q006 and the other [step 3
+  gates](review-step3.md#evidence-gaps-and-gates) remain open.
+- Next task: obtain maintainer review of the [protocol](protocol.md), then
+  freeze its accepted revision and implement the full measurement schema before
+  calibration. Continue assembling NIST and non-NIST cases and resolve
+  solver-specific source gates without treating this pilot as a default choice.
+
+Commands run from the repository root:
+
+```sh
+cargo test -p basin --lib line_search::backtracking::tests
+cargo test -p basin --test gradient_descent_line_search_evaluations exhausted_backtracking_keeps_the_accepted_iterate
+cargo test --release -p competitor-bench --bin convergence_pilot
+cargo run -p competitor-bench --release --bin convergence_pilot > target/convergence-defaults/2026-10-02-misra1a-001/raw.csv
+cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel
+CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo doc --no-deps -p basin --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde
+cargo build --target wasm32-unknown-unknown
+cargo build --target wasm32-unknown-unknown --no-default-features
+cargo fmt --all -- --check
 panache format --check dev/convergence-defaults TODO.md
 panache lint dev/convergence-defaults TODO.md
 git diff --check
