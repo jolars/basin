@@ -633,10 +633,13 @@ command, output path, and output hash.
   A stale NLopt CMake cache initially caused clippy to fail; removing only that
   generated package cache with `cargo clean -p nlopt --profile dev` resolved it.
   No system installation was attempted to work around the error.
-- Next task: measure an unrecorded boundary driver that includes initialization
-  in its time budget, then extend the target audit and nearby candidate probes.
-  Investigate the `f32` failures before the larger sweep. Preserve the remaining
-  coverage and reference gates. There is no new human-only prerequisite.
+- Next task: extend the target audit and nearby candidate probes, and
+  investigate the `f32` failures before the larger sweep. Compare policies
+  within the same solver using quality, separate evaluation counts, and generous
+  safety caps. An unrecorded timing control is needed before cross-solver
+  time-budget claims, but is not a prerequisite for this defaults work. Preserve
+  the remaining coverage and reference gates. There is no new human-only
+  prerequisite.
 
 Commands run from the repository root:
 

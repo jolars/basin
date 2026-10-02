@@ -151,17 +151,23 @@ policies and the strict control the same upper allowance. If budget exhaustion
 hides their stopping behavior, extend all policies in that comparison during
 development rather than interpreting the limit as premature convergence.
 
+These primary experiments can use generous iteration or evaluation safety caps
+and report actual work by category. A time-limited run is not required to
+identify premature or unnecessarily late stopping. Treat common time budgets as
+a secondary comparison across solvers; resolving instrumentation overhead for
+those comparisons must not block the within-solver defaults investigation.
+
 For comparisons across solvers, record time to common attainable targets and
 quality at a common sequence of elapsed-time budgets. More expensive iterations
 then consume more of the allowance automatically. Choose a logarithmic budget
 range from fresh development pilots, fix hardware and thread settings, and
-freeze that range before calibration. Do not increase a solver's allowance
-merely because its implementation does more work. Initialization, callbacks,
-linear algebra, line searches, and inner solves count toward elapsed solve time;
-diagnostic checks and trace output do not. Check time limits at supported
-boundaries and report any overshoot. Use repeated, isolated timings and check
-instrumentation overhead. The concurrent coverage pilot's timings cannot set
-these budgets or support speed comparisons.
+freeze that range before using it in calibration comparisons. Do not increase a
+solver's allowance merely because its implementation does more work.
+Initialization, callbacks, linear algebra, line searches, and inner solves count
+toward elapsed solve time; diagnostic checks and trace output do not. Check time
+limits at supported boundaries and report any overshoot. Use repeated, isolated
+timings and check instrumentation overhead. The concurrent coverage pilot's
+timings cannot set these budgets or support speed comparisons.
 
 Record which resource actually ended each run. A separate evaluation or
 iteration safety cap can interrupt a time-budget experiment; such a run has not
