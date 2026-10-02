@@ -577,3 +577,28 @@ git diff --check
 
 The [run manifest](runs/2026-10-02-coverage-002.toml) contains each pilot
 command, output path, and output hash.
+
+### S013: Clarify general-purpose scope and budget comparisons, 2026-10-02
+
+- Starting revision: `fd78a7e` on `convergence-defaults`; the working tree was
+  clean.
+- Scope: incorporate the user's clarification that Basin has no preferred
+  application domain and discuss comparable resource allowances without
+  confusing budgets with numerical convergence.
+- Proposal: report families separately, use equal-family summaries when needed,
+  and compare candidate stopping policies within each solver. For comparisons
+  across solvers, record common elapsed-time budget curves, time to common
+  targets, and physical evaluation work separately. Longer-budget comparisons
+  give every included solver the same opportunity.
+- Evidence: the [protocol](protocol.md) links COCO's primary methodology and
+  explains the adaptation to Basin's derivative and linear-algebra costs.
+  [D005](decisions.md#d005-use-broad-coverage-and-distinguish-budgets-from-stopping)
+  records the scope clarification and remaining proposals. No new numerical
+  experiment ran, and no existing run record or default changed.
+- Handoff: develop concrete budget ranges and numerical effect thresholds from
+  pilots. Application weights and a guessed universal cost of accuracy are not
+  required from the maintainer. Bring back an observed tradeoff if the evidence
+  leaves a consequential choice between plausible defaults.
+- Verification: Panache format/lint, local document links, and
+  `git diff --check` pass. Rust tests are not needed for this documentation-only
+  revision.

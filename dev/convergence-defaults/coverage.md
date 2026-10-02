@@ -159,6 +159,9 @@ Remaining additions include the fractional design for objective offsets,
 objective and coordinate rescaling, finite-difference derivatives, explicit
 non-finite probes, and deliberate stagnation. Add bounded least-squares cases,
 an independent stochastic family, and the global/composed family split. Validate
-finalists on the other three dense backends. The maintainer should review family
-weights, work budgets, and the material reliability/work tradeoff before
-calibration.
+finalists on the other three dense backends. Use equal-family summaries without
+application preferences, and pilot the common time budgets and separate work
+measurements described in the [protocol](protocol.md). Establish numerical
+effect thresholds from development evidence before calibration. Bring any
+remaining consequential accuracy/work tradeoff to the maintainer as a concrete
+comparison.

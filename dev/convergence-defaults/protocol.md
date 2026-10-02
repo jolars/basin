@@ -3,9 +3,13 @@
 Status: **proposed for maintainer review**, not frozen. This protocol fixes the
 measurement definitions and proposes the case mix, budgets, and selection rule
 for steps 4–6. The [Misra1a pilot](runs/2026-10-02-misra1a-001.md) checks one
-case and four solver families; it does not justify a default. The maintainer
-must review the proposed case weights and reliability/work tradeoff before a
-large calibration sweep. Record the accepted revision and decision ID here.
+case and four solver families; it does not justify a default. Basin is a
+general-purpose library with no preferred application domain. The investigation
+should establish broad coverage and expose accuracy/work tradeoffs without
+requiring application weights or a guessed universal price for accuracy. Use
+development pilots to make the remaining numerical choices concrete, then freeze
+the design before calibration. Record the accepted revision and decision ID
+here.
 
 ## Unit of comparison and independent success
 
@@ -36,6 +40,11 @@ attainment at each target and work to first attainment, including failure and
 budget exhaustion. For local methods, distinguish a different validated local
 minimum from premature termination; report both the local stationarity result
 and the gap to the chosen global reference.
+
+The target grid samples a range of achieved accuracies. Its tightest target is
+not a universal requirement for every default. Missing that target alone does
+not establish false convergence. Report accuracy at termination, work to each
+attainable target, and any additional improvement from a stricter control.
 
 Use the following additional diagnostics where mathematically applicable. All
 are recomputed after the run and excluded from solve costs.
@@ -93,6 +102,16 @@ each factor and keeps its untransformed anchor. Include fixed coordinates, rank
 deficiency, non-finite probes, and stagnation away from a solution as diagnostic
 cases.
 
+Give no application domain preferential weight. Report results by problem family
+and stratum, retaining dimension, precision, and target as separate axes. If a
+pooled summary is useful, weight distinct applicable families equally and
+normalize starts, instances, and transformed copies within each family. Adding
+ten rotations of a quadratic must not give quadratics ten times the influence.
+This convention controls duplication in the experiment; it is not an estimate of
+how often users encounter each family. Keep individual families and worst cases
+visible, and compare solvers on the same applicable cases when making a
+cross-solver claim.
+
 Partition by **whole problem family** before calibration. Every start,
 dimension, precision, and transformed copy of a family stays in the same
 partition. Reserve at least one third of families in each applicable stratum for
@@ -117,30 +136,84 @@ geometry tolerances from the candidate grid: a finite subdivision of a nonfixed
 box has positive exact radius and volume. Its setter and implementation
 discrepancy remains Q006 for a separate behavioral fix.
 
-The proposed per-case caps are `1,000 * max(n, 2)` full base-model passes for
-local methods and `10,000 * max(n, 2)` for global/population methods. An
-instrumented problem must count physical model passes inside each cost,
-gradient, residual, or finite-difference callback; raw Basin counters remain
-separate. Record family-specific overrides **before** calibration when one pass
-has a different cost. Compare policies within the same solver and case at the
-same cap, and report elapsed time as a secondary measure. An iteration cap is a
-safety limit, not an equal-work unit. Pilot stochastic policies with 20 paired
-seeds and validate finalists with 50 paired seeds. Use the same seed and initial
-population for a paired comparison. Summarize hit-rate uncertainty with Wilson
-intervals and paired work/quality differences with family-level bootstrap
-intervals. These numbers are proposals, not accepted thresholds or a license to
-omit expensive solver families.
+Separate the experiment's resource limit from a solver's numerical stopping
+policy. A budget is permission to continue, not a requirement to spend the whole
+allowance or evidence of convergence. The primary comparison for choosing a
+default is between policies of the **same solver on the same case**. Give those
+policies and the strict control the same upper allowance. If budget exhaustion
+hides their stopping behavior, extend all policies in that comparison during
+development rather than interpreting the limit as premature convergence.
 
-The proposed selection rule is lexicographic within a solver family: reject
-policies with a material increase in premature stops or false convergence at any
-attainable target; among the remaining policies, prefer a simple one in a stable
-region of the work/accuracy tradeoff. Inspect every family and worst case; a
-pooled average cannot overrule a severe regression. Record the threshold for a
-*material* reliability or work difference in the accepted protocol before
-tuning. The maintainer's input is needed here because the choice expresses
-Basin's intended reliability and computation tradeoff. Budget-driven methods may
-retain their existing behavior with evidence; they need no invented
-local-optimality test.
+For comparisons across solvers, record time to common attainable targets and
+quality at a common sequence of elapsed-time budgets. More expensive iterations
+then consume more of the allowance automatically. Choose a logarithmic budget
+range from fresh development pilots, fix hardware and thread settings, and
+freeze that range before calibration. Do not increase a solver's allowance
+merely because its implementation does more work. Initialization, callbacks,
+linear algebra, line searches, and inner solves count toward elapsed solve time;
+diagnostic checks and trace output do not. Check time limits at supported
+boundaries and report any overshoot. Use repeated, isolated timings and check
+instrumentation overhead. The concurrent coverage pilot's timings cannot set
+these budgets or support speed comparisons.
+
+Record which resource actually ended each run. A separate evaluation or
+iteration safety cap can interrupt a time-budget experiment; such a run has not
+demonstrated what that solver would achieve with the full time allowance.
+
+Also report evaluation work separately. An instrumented problem must count
+physical value and derivative passes, finite-difference probes, and other
+callback work; raw Basin counters remain separate. One Jacobian or forward
+derivative pass need not cost the same as one objective evaluation. Equal
+iteration counts or a sum of callback categories therefore do not establish
+equal work or equal time. A comparison using a combined work unit needs a
+declared cost model. Keep the underlying categories visible so results remain
+useful when user objectives are much more expensive than the cheap fixtures.
+
+Global and more general constrained methods can spend additional work on
+exploration or feasibility. Cover longer budgets where needed to observe that
+behavior, but offer the same extended budgets to every solver in a stated
+comparison. Report local stationarity, feasibility, and global target attainment
+separately. A valid local minimum is not a failed local stopping rule merely
+because another basin has a better objective. Longer runs of a global method do
+not certify global optimality. The earlier proposal of separate `1,000 * n` and
+`10,000 * n` pass caps is superseded as a cross-solver comparison rule;
+historical pilot budgets remain as recorded in their manifests.
+
+This use of target-attainment and budget curves follows the distinction in
+[COCO's performance
+assessment](https://numbbo.github.io/coco-doc/perf-assessment/). COCO emphasizes
+function evaluations and treats CPU timing separately. Here, both views matter
+because Basin supports methods with different derivative and linear-algebra
+costs. COCO also distinguishes the experiment budget from algorithm parameters
+in its [experimental
+guidance](https://coco-platform.org/getting-started/index.html). These sources
+support the measurement approach; they do not supply Basin's numerical
+thresholds or imply that an application-independent best default exists.
+
+Pilot stochastic policies with 20 paired seeds and validate finalists with 50
+paired seeds. Use the same seed and initial population for paired comparisons.
+Summarize hit-rate uncertainty with Wilson intervals and paired work/quality
+differences with family-level bootstrap intervals. These repetition counts
+remain proposals, not a license to omit expensive solver families.
+
+Select within each solver using the observed accuracy/work tradeoff. First
+investigate incorrect stopping evidence, infeasible returned solutions, and
+stops followed by substantial improvement under the strict control. Preserve the
+distinction between a numerical failure, a budget limit, a valid local solution,
+and a missed accuracy target. Among credible candidates, exclude policies that
+cost more without improving accuracy or reliability, accounting for measurement
+uncertainty. Prefer a simple policy whose behavior is stable under nearby
+settings and across families. A pooled gain cannot conceal a severe
+family-specific regression.
+
+Development pilots should establish proposed material-effect thresholds using
+reference uncertainty, repeated-run variability, target attainment, and the
+extra work of strict controls. Record their rationale before calibration. There
+is no requirement for the maintainer to guess a percentage tradeoff before
+seeing evidence. If candidates retain a consequential accuracy/work tradeoff,
+present that concrete comparison for a decision; retain the current default when
+the evidence does not justify a change. Budget-driven methods may retain their
+existing behavior with evidence and need no invented local-optimality test.
 
 ## Measurement and validation gates
 

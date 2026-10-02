@@ -51,8 +51,8 @@ changes a decision, preserve its history and link its successor.
 
 - Status: proposed, 2026-10-02; maintainer review pending.
 - Scope: the [protocol](protocol.md)'s independent quality targets, whole-family
-  partition, proposed case strata, physical model-pass budgets, paired seeds,
-  and lexicographic selection rule.
+  partition, proposed case strata, resource measurements, paired seeds, and
+  selection from the observed accuracy/work tradeoff.
 - Basis: the [step 3 evidence gates](review-step3.md#evidence-gaps-and-gates),
   [NIST's public StRD
   files](https://www.itl.nist.gov/div898/strd/nls/nls_main.shtml), and the
@@ -60,9 +60,10 @@ changes a decision, preserve its history and link its successor.
   returned quality independently of termination, but cannot set a default or
   validate the proposed resource limits.
 - Proposed choice: accept the measurement definitions and family-level
-  partition, then finalize the case weights, target grid, budgets, and a
-  numerical threshold for a material reliability/work difference in the frozen
-  case manifest before calibration.
+  partition, use equal-family summaries without application preferences, and
+  finalize the target grid, budgets, and numerical effect thresholds from
+  development evidence before calibration. D005 records the scope clarification
+  and revised resource comparison.
 - Alternatives: adjust those proposed values for Basin's intended use cases, or
   retain budget-driven stopping for methods without a justified numerical
   policy. Do not treat a one-case pilot or pooled average as sufficient.
@@ -90,6 +91,35 @@ changes a decision, preserve its history and link its successor.
   been optimized, and no success targets or solver defaults have been selected.
   D003 and the remaining measurement gates still apply.
 
+## D005: Use broad coverage and distinguish budgets from stopping
+
+- Status: the user's general-purpose scope is confirmed, 2026-10-02. The
+  measurement design below remains proposed until the protocol is frozen.
+- Basis: the user identifies no preferred application or problem family and
+  suggests comparable time allowances while recognizing that more general
+  methods may need more work. This removes the need to ask for application
+  weights or an arbitrary price for accuracy.
+- Proposed measurement: report families separately; use equal-family weights for
+  any pooled summary, normalizing related instances within a family. Compare
+  stopping policies primarily within the same solver. For cross-solver
+  comparisons, use common elapsed-time budget curves and time to common targets,
+  alongside physical callback work. Offer longer budgets consistently within
+  each comparison rather than granting an automatic multiplier by solver name.
+- Evidence: [COCO's performance
+  assessment](https://numbbo.github.io/coco-doc/perf-assessment/) distinguishes
+  target-based and budget-based measurements and explains its focus on
+  evaluation counts. The [protocol](protocol.md) adapts that framework to
+  Basin's differing callback and linear-algebra costs. No new experiment ran in
+  this session; the existing pilot timings remain unsuitable for speed
+  comparisons.
+- Consequence: the protocol now asks development pilots to establish concrete
+  resource and effect thresholds. A maintainer decision is useful when observed
+  candidates present a consequential unresolved tradeoff, rather than as a
+  prerequisite to inventing application priorities.
+- Limitation: this clarification freezes no time caps, effect thresholds,
+  accuracy targets, or solver defaults. The existing measurement and validation
+  gates remain.
+
 ## Numerical decision template
 
 For each policy decision, record the solver and variants, current and proposed
@@ -104,11 +134,11 @@ evidence; implementation and verification remain separate work.
 
   | ID   | Question                                                                                                                                                                                                                                                              | Resolve in        |
   | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-  | Q001 | Which problem families and applications should determine coverage and weights?                                                                                                                                                                                        | Steps 2 and 4     |
+  | Q001 | No application preference is intended. Verify broad solver applicability and the proposed equal-family summaries; see D005.                                                                                                                                           | Steps 2 and 4     |
   | Q002 | Which external accuracy targets and precision floors are attainable and useful for each solver family?                                                                                                                                                                | Steps 3 and 4     |
   | Q003 | The reporter's harness has not been obtained; NIST publishes all 27 cases. Which additional cases are needed for full solver coverage?                                                                                                                                | Steps 4 and 5     |
   | Q004 | Which stochastic methods should retain budget-driven termination, and how should their numerical stops be interpreted?                                                                                                                                                | Steps 3, 4, and 6 |
-  | Q005 | What experiment budgets, repetition counts, and reliability/work thresholds should guide selection?                                                                                                                                                                   | Step 4            |
+  | Q005 | Which common budget ranges, repetition counts, and effect thresholds are justified by development pilots? See D005.                                                                                                                                                   | Step 4            |
   | Q006 | Should DIRECT's documented zero radius and volume tolerances use exact-zero checks, or should their setter docs explicitly disallow zero? The current termination code gates both on a positive threshold.                                                            | Steps 2 and 7     |
   | Q007 | Resolved in the development branch: outcome-aware `Backtracking` now reports `Failed` on exhausted Armijo trials, with unit and gradient-descent regression tests. The legacy `next` method retains its step-only fallback. Verify other owning solvers' propagation. | Step 5            |
 
