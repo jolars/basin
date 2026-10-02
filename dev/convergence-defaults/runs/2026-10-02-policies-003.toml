@@ -1,0 +1,33 @@
+id = "2026-10-02-policies-003"
+status = "planned"
+purpose = "Measure recorder perturbation, stopping-policy behavior, and boundary time caps on development cases; no default selection."
+protocol = "../protocol.md (proposed, not frozen)"
+starting_revision = "3d8d102"
+source_revision = "Recorded by each phase manifest after committing the runner."
+compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
+profile = "release"
+features = "competitor-bench defaults; basin nalgebra_v0_34, faer, problems"
+backend = "Vec"
+precision = ["f32", "f64"]
+cpu = "Intel Core Ultra 7 155U; pinned to logical CPU 2"
+threads = "RAYON_NUM_THREADS, OMP_NUM_THREADS, OPENBLAS_NUM_THREADS, MKL_NUM_THREADS, BLIS_NUM_THREADS = 1"
+launch = "Prebuilt executable; serial child processes; rotate and reverse configuration order by block. Ordinary desktop services remain active."
+cases = ["Misra1a", "Chwirut2", "DanWood", "quadratic_n5_k100000000_rot1_rank5_noise0"]
+starts = "Both published/generated starts, rounded to native precision."
+partition = "development only; runner rejects validation families"
+policies = "default, probe, strict; exact checks and settings emitted in every row"
+strict = "Restart with optional approximate checks disabled; retain numerical guards. NM default and strict coincide."
+warmup = "One fresh discarded solve per case, start, solver, precision, and process."
+control_rounds = 7
+trace_rounds = 1
+control_and_trace_max_iter = 2000
+pass_limit = "None"
+budget_plan = "After controls, choose a common logarithmic range and record it before running. Strict policy for every solver; three blocks; max_iter=100000."
+quality = "Independent f64 reevaluation; signed gaps divided by absolute initial-reference gap. Observed target-grid crossings are unscored; reference uncertainty and precision floors are not yet certified."
+timing = "Recorded modes sum initialization and step durations, excluding diagnostics. Plain mode times the whole Executor. harness_seconds includes diagnostic and trace construction costs but excludes CSV and fixture/solver construction."
+schema = "convergence-policies-v1: original 30 fields plus 15 policy, budget, timing, and reference fields"
+output_directory = "target/convergence-defaults/2026-10-02-policies-003"
+build_command = "CARGO_INCREMENTAL=0 cargo build --release -p competitor-bench --bin convergence_policies"
+controls_command = "taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py controls target/convergence-defaults/2026-10-02-policies-003"
+traces_command = "taskset -c 2 python3 crates/competitor-bench/scripts/convergence_policies.py traces target/convergence-defaults/2026-10-02-policies-003"
+summarize_command = "python3 crates/competitor-bench/scripts/convergence_policies.py summarize target/convergence-defaults/2026-10-02-policies-003"

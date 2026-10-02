@@ -148,6 +148,45 @@ stopping tests, or handle typed application errors in vector fixtures, which use
 `Infallible`. Root errors retain callback counts. The full measurement gates in
 the protocol remain open.
 
+## Policy and timing probes
+
+`convergence_policies` compares the current defaults, named probes, and stricter
+controls for Nelder–Mead, L-BFGS-B, Nielsen LM, and TRF. It runs Misra1a,
+Chwirut2, DanWood, and a rotated five-dimensional quadratic with condition
+number `1e8`, using both starts and precisions. `--case` can select other
+development fixtures; validation families are rejected. The probes exercise
+available checks from [candidate-pilot.md](candidate-pilot.md), rather than
+implementing complete reference-library policies. Strict controls restart from
+the same input with optional approximate checks disabled; native numerical
+safeguards remain enabled. Nelder–Mead's default already disables those checks,
+so its default and strict policies coincide.
+
+`--mode trace` records every boundary, `--mode final` omits intermediate
+diagnostics, and `--mode plain` runs an ordinary Executor with fixture recording
+disabled. Compare timings only after returned points, stopping reports, and
+authoritative counts match. `solver_seconds` sums timed initialization and steps
+in recording modes, whereas plain mode times the whole Executor call.
+`harness_seconds` includes diagnostics and trace construction, but excludes CSV
+formatting, fixture construction, and solver construction. These controls expose
+both charged-time perturbation and the additional cost outside the budget.
+
+`--seconds` adds a time cap at published boundaries. Actual time, the largest
+timed segment, and separate time/pass limit flags retain overshoot, including on
+native stopping steps. A point published after a cap does not establish
+attainment within that cap. Plain mode rejects time/pass caps. The runner also
+emits the initial objective after rounding the start to the requested precision,
+the reference objective, and its independent reevaluation.
+
+The [serial
+driver](../../crates/competitor-bench/scripts/convergence_policies.py) builds no
+code while measuring. Its `controls`, `traces`, and `budgets` phases create
+fresh output directories, run warmups, alternate process order, and record exact
+commands and environment metadata. `summarize` checks numerical matching and
+monotone work/time, then retains per-case timing quartiles, signed gaps,
+observed target-grid crossings, and the last boundary within each budget. Grid
+crossings are descriptive observations, not scored successes: reference
+uncertainties and precision floors still require validation.
+
 ## Before calibration
 
 The expanded set is sufficient for developing and piloting the harness. Next,

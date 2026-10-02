@@ -198,6 +198,7 @@ pub struct Fixture<F> {
     pub work: Arc<Mutex<Work>>,
     lower: Vec<F>,
     upper: Vec<F>,
+    record_work: bool,
 }
 impl<F: Scalar + Real> Fixture<F> {
     pub fn new(case: Case) -> Self {
@@ -207,10 +208,20 @@ impl<F: Scalar + Real> Fixture<F> {
             work: Arc::default(),
             lower: vec![F::neg_infinity(); n],
             upper: vec![F::infinity(); n],
+            record_work: true,
         }
+    }
+    /// Disable fixture bookkeeping for the whole-executor timing control.
+    /// Mathematical callbacks and Basin's authoritative counts are unchanged.
+    pub fn without_recording(mut self) -> Self {
+        self.record_work = false;
+        self
     }
     fn value(&self, p: &[F]) -> Vec<F> {
         let r = self.case.residuals(p);
+        if !self.record_work {
+            return r;
+        }
         let mut work = self.work.lock().unwrap();
         work.value_passes += 1;
         work.observe(
@@ -221,6 +232,9 @@ impl<F: Scalar + Real> Fixture<F> {
     }
     fn derivative(&self, p: &[F]) -> (Vec<F>, Vec<F>) {
         let (r, j) = self.case.derivatives(p);
+        if !self.record_work {
+            return (r, j);
+        }
         let mut work = self.work.lock().unwrap();
         work.derivative_passes += 1;
         work.observe(
@@ -298,7 +312,10 @@ impl<F: Scalar + Real> MiniBatchGradient for Fixture<F> {
         // This deliberately evaluates the full model. Charge that physical
         // work, even though only the selected residual gradients are used.
         let (r, j) = self.derivative(p);
-        self.work.lock().unwrap().sample_derivatives += indices.len() as u64;
+        if self.record_work {
+            self.work.lock().unwrap().sample_derivatives +=
+                indices.len() as u64;
+        }
         let scale = F::from_usize(r.len()).unwrap()
             / F::from_usize(indices.len()).unwrap();
         let mut g = vec![F::zero(); p.len()];
