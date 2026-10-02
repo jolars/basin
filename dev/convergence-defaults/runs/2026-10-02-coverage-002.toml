@@ -1,0 +1,80 @@
+id = "2026-10-02-coverage-002"
+status = "complete"
+purpose = "Validate expanded fixtures and baseline recording; no default selection."
+protocol = "../protocol.md (proposed, not frozen)"
+coverage = "../coverage.md"
+starting_revision = "7065d6d4d94048d9a01f4c176352cf6447c2b301"
+working_tree = "fixture, runner, and documentation additions recorded in source hashes"
+source_hashes = "2026-10-02-coverage-002.sources.sha256"
+compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
+profile = "release"
+target = "x86_64-linux"
+features = "competitor-bench defaults; basin nalgebra_v0_34, faer, problems"
+precision = ["f32", "f64"]
+backend = "Vec for vector cases; scalar otherwise"
+partition = "development only; no --include-validation"
+case_list = "../cases.csv"
+root_cases = "../scalar-roots.csv"
+minimum_cases = "../scalar-minima.csv"
+replications = 1
+launch = "Six independent suite processes ran concurrently; elapsed times are not performance comparisons."
+seeds = "SGD: 0..19, paired across starts and precisions"
+sgd = "alpha=0.02, batch_size=1; other constructor defaults"
+max_iter = "200 for optimization; 100 by default for roots"
+max_passes = "2000 for optimization, checked at published boundaries with recorded overshoot"
+settings = "Constructor defaults except required SGD controls and external budgets"
+reference = "NIST certificates and analytic/reference answers; see coverage.md"
+derivatives = "Forward differentiation or explicit scalar derivatives; never finite-difference production gradients"
+quality = "Independent f64 reevaluation of returned parameters; no target scoring or validated precision floors"
+accounting = "Authoritative Stepper counts, physical value/derivative passes, and solver-only timing"
+schema = "convergence-boundaries-v1; convergence-roots-v1"
+build_command = "CARGO_INCREMENTAL=0 cargo build --release -p competitor-bench --bin convergence_suite --bin convergence_scalar"
+validation_command = "CARGO_INCREMENTAL=0 cargo test --release -p competitor-bench --lib --bin convergence_suite --bin convergence_scalar --bin convergence_pilot"
+
+[[runs]]
+name = "nist"
+command = "target/release/convergence_suite --suite nist > target/convergence-defaults/2026-10-02-coverage-002/nist.csv"
+output = "target/convergence-defaults/2026-10-02-coverage-002/nist.csv"
+output_sha256 = "e5b7eb4cb9c75cc2bfe0a575cb067c8db4938f6c75dd286ce8c9281aed989e0b"
+rows = 29054
+solves = 256
+
+[[runs]]
+name = "analytic"
+command = "target/release/convergence_suite --suite analytic > target/convergence-defaults/2026-10-02-coverage-002/analytic.csv"
+output = "target/convergence-defaults/2026-10-02-coverage-002/analytic.csv"
+output_sha256 = "8b09a76408e2b7ed0a865f1d182302499d3a44817fabe48cd6226d00b8ea7102"
+rows = 16713
+solves = 240
+
+[[runs]]
+name = "constraints"
+command = "target/release/convergence_suite --suite constraints > target/convergence-defaults/2026-10-02-coverage-002/constraints.csv"
+output = "target/convergence-defaults/2026-10-02-coverage-002/constraints.csv"
+output_sha256 = "3406d43924942f168dfbd14ccf66ec12db0f7be4579d87629419578702d7109f"
+rows = 272
+solves = 24
+
+[[runs]]
+name = "stochastic"
+command = "target/release/convergence_suite --suite stochastic --seeds 20 > target/convergence-defaults/2026-10-02-coverage-002/stochastic.csv"
+output = "target/convergence-defaults/2026-10-02-coverage-002/stochastic.csv"
+output_sha256 = "48e648dd5394f5a2d4796c299702090fcab2cd1fc38a911702be50a354e332e1"
+rows = 48480
+solves = 240
+
+[[runs]]
+name = "roots"
+command = "target/release/convergence_scalar > target/convergence-defaults/2026-10-02-coverage-002/roots.csv"
+output = "target/convergence-defaults/2026-10-02-coverage-002/roots.csv"
+output_sha256 = "2c62e7679fbc89e89a7372dd83d4d3a2e008e5ccc3c3b9fee4f8b23934095928"
+rows = 60
+solves = 60
+
+[[runs]]
+name = "minima"
+command = "target/release/convergence_scalar --minima > target/convergence-defaults/2026-10-02-coverage-002/minima.csv"
+output = "target/convergence-defaults/2026-10-02-coverage-002/minima.csv"
+output_sha256 = "7428346b918f53fc78774a075373fc38cce389321c5f6decc75a6bb617bb12fa"
+rows = 776
+solves = 24

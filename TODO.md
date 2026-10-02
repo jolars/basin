@@ -493,6 +493,12 @@ coverage boxes below require all of them.
   Define how missing applicable problems will be supplied; add new corpus
   problems through the project workflow.
 
+  The [coverage matrix](dev/convergence-defaults/coverage.md) now accounts for
+  all 47 solver names and adds 57 experimental fixture definitions, including
+  all 27 NIST datasets, nonlinear constraints, scalar controls, and native `f32`
+  evaluation. Proposed family partitions and the remaining strata are documented
+  there; the protocol is not yet frozen.
+
 - [ ] **5. Build a reproducible measurement harness and pilot it.** Extend
   `crates/competitor-bench` using the existing convergence traces and LM
   stopping probes. Record returned-point quality, all passing stopping
@@ -505,6 +511,11 @@ coverage boxes below require all of them.
   bracketing work. Validate the harness on analytic cases and matching
   references before running the corpus. Start with the issue's Nelder-Mead,
   L-BFGS-B, LM, and TRF cases, but retain the full coverage checklist.
+
+  The [expanded pilot](dev/convergence-defaults/runs/2026-10-02-coverage-002.md)
+  exercises 14 solver names with boundary traces, physical callback work, and
+  independent quality checks. Internal trial stages, typed vector errors, nested
+  work, and the remaining solver variants still need coverage.
 
 - [ ] **6. Calibrate by solver family and validate independently.** Compare
   current defaults, reference policies, and a small logarithmic sweep of

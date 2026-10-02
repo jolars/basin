@@ -1,0 +1,9 @@
+case,family,partition,precision,reference,intervals
+"root_simple","root_square","development","f32","1.4142135623730951","[[0.0, 2.0], [1.0, 3.0]]"
+"root_scaled","root_square","development","f32","1.4142135623730951","[[0.0, 2.0], [1.0, 3.0]]"
+"root_multiple","flat_polynomial","development","f32","1","[[-0.2, 2.0], [0.8, 3.0]]"
+"root_sine","trigonometric","validation","f32","3.141592653589793","[[2.5, 4.0], [2.0, 3.5]]"
+"root_simple","root_square","development","f64","1.4142135623730951","[[0.0, 2.0], [1.0, 3.0]]"
+"root_scaled","root_square","development","f64","1.4142135623730951","[[0.0, 2.0], [1.0, 3.0]]"
+"root_multiple","flat_polynomial","development","f64","1","[[-0.2, 2.0], [0.8, 3.0]]"
+"root_sine","trigonometric","validation","f64","3.141592653589793","[[2.5, 4.0], [2.0, 3.5]]"

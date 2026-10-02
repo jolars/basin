@@ -1,5 +1,8 @@
 # Run records
 
+The [expanded coverage pilot](2026-10-02-coverage-002.md) records development
+cases from the 57 experimental fixtures, both precisions, and 14 solver names.
+
 The [Misra1a pilot](2026-10-02-misra1a-001.md) is the first focused numerical
 run. This directory also establishes conventions for the later harness and
 experiments.

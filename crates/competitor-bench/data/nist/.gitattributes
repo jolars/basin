@@ -1,0 +1,2 @@
+# Preserve the downloaded source bytes, including line endings and whitespace.
+*.dat -text -diff

@@ -58,6 +58,14 @@ misclassification in the summary.
 
 ## Cases and partition
 
+The [coverage matrix](coverage.md) and generated [vector case list](cases.csv)
+now supply the first implementation of these strata. All 27 NIST datasets,
+analytic least-squares controls, nonlinear constraints, scalar cases, and native
+`f32` evaluation are available in `competitor-bench`. The [expanded baseline
+pilot](runs/2026-10-02-coverage-002.md) uses development families only. The
+matrix identifies missing variants and solver wiring; it does not freeze the
+partition, establish precision floors, or authorize default selection.
+
 The first focused pilot uses NIST StRD Misra1a with both published starts, its
 14 observations, certified parameters, and certified residual sum of squares.
 NIST publishes the

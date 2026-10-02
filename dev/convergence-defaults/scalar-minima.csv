@@ -1,0 +1,7 @@
+case,family,partition,precision,reference,intervals
+"minimum_quadratic","quadratic","development","f32","0.25","[[-1.0, 2.0], [0.0, 3.0]]"
+"minimum_flat","flat_polynomial","development","f32","0.25","[[-1.0, 2.0], [0.0, 3.0]]"
+"minimum_exponential","scalar_exponential","validation","f32","0","[[-2.0, 1.0], [-1.0, 3.0]]"
+"minimum_quadratic","quadratic","development","f64","0.25","[[-1.0, 2.0], [0.0, 3.0]]"
+"minimum_flat","flat_polynomial","development","f64","0.25","[[-1.0, 2.0], [0.0, 3.0]]"
+"minimum_exponential","scalar_exponential","validation","f64","0","[[-2.0, 1.0], [-1.0, 3.0]]"

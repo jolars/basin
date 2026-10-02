@@ -66,8 +66,29 @@ changes a decision, preserve its history and link its successor.
 - Alternatives: adjust those proposed values for Basin's intended use cases, or
   retain budget-driven stopping for methods without a justified numerical
   policy. Do not treat a one-case pilot or pooled average as sufficient.
-- Limitation: the full recorder and case manifest do not exist yet. Acceptance
-  of this protocol would authorize measurement, not any solver default change.
+- Limitation: the [coverage matrix](coverage.md) now supplies fixtures and
+  baseline entry points, but precision floors, candidate policies, the full
+  recorder, and remaining solver wiring are not frozen. Acceptance of this
+  protocol would authorize measurement, not any solver default change.
+
+## D004: Broaden the experimental fixtures
+
+- Status: accepted implementation scope, 2026-10-02, following the user's
+  request to broaden coverage before the experiments.
+- Scope: preserve all 27 NIST source files and add analytic least-squares,
+  constrained, scalar, and stochastic controls under `competitor-bench`, with
+  native `f32` and `f64` evaluation and two starts or intervals each.
+- Evidence: the [coverage matrix](coverage.md), generated case lists, and
+  [development pilot](runs/2026-10-02-coverage-002.md) record 57 definitions and
+  executable coverage of 14 solver names. Tests check certificates, derivatives,
+  reference feasibility, seed reproducibility, and recorder accounting.
+- Consequence: keep these diagnostic fixtures outside Basin's public corpus. The
+  original Misra1a pilot remains available at its original entry point. The
+  expanded NIST runner uses the published unconstrained problems, without the
+  first pilot's additional finite bounds.
+- Limitation: family partitions remain proposed, validation families have not
+  been optimized, and no success targets or solver defaults have been selected.
+  D003 and the remaining measurement gates still apply.
 
 ## Numerical decision template
 

@@ -20,7 +20,11 @@ solver names. The [candidate and evidence review](review-step3.md) records the
 remaining gaps and gates before large sweeps. The [protocol](protocol.md) now
 contains a concrete proposal for maintainer review, and the [Misra1a
 pilot](runs/2026-10-02-misra1a-001.md) supplies the first focused numerical
-evidence. No solver policies have been selected or independently validated.
+evidence. The [coverage matrix](coverage.md) now documents 57 experimental
+fixture definitions, native `f32`/`f64` evaluation, proposed family partitions,
+and executable coverage of 14 solver names. The [expanded
+pilot](runs/2026-10-02-coverage-002.md) exercises development cases only. No
+solver policies have been selected or independently validated.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -35,37 +39,52 @@ evidence. No solver policies have been selected or independently validated.
 
 ## Records
 
+- [Experiment coverage](coverage.md): fixture strata, proposed family splits, a
+  47-name applicability matrix, runnable entry points, and remaining gaps.
+
 - [Inventory](inventory.md): initial coverage, audit fields, and completion
   requirements for each solver and relevant variant.
+
 - [Dependencies](dependencies.md): source audit of line searches, bracketers,
   and inner model stops.
+
 - [Reference pilot](reference-pilot.md): first versioned stopping-formula
   comparison for Nelder-Mead, bounded L-BFGS, LM, and TRF, including LM and TRF
   observation stages.
+
 - [Pilot candidates](candidate-pilot.md): testable policy alternatives and
   variant distinctions for the four pilot families; no selected defaults.
+
 - [First-order references and candidates](reference-first-order.md): versioned
   SciPy, Ceres, and NLopt comparisons and testable policies for first-order,
   Newton, Gauss–Newton, and SLSQP names; named evidence gaps remain.
+
 - [Scalar references and candidates](reference-scalar.md): versioned SciPy
   comparisons and testable bracket, position, and derivative policies for all
   three scalar minimizers and five root solvers.
+
 - [Derivative-free local references and
   candidates](reference-derivative-free.md): versioned PDFO, PRIMA, SciPy,
   NLopt, NOMAD, and Solis–Wets comparisons for Powell-model methods, MADS, and
   Solis–Wets.
+
 - [Global and population references and candidates](reference-global.md):
   versioned SciPy and pycma comparisons, primary research, and explicit
   budget-driven controls for all nine names.
+
 - [Constrained and composed references and candidates](reference-composed.md):
   log-barrier and augmented-Lagrangian checks, basin hopping, injections, and
   local-search chains with separate inner and outer stop owners.
+
 - [Step 3 review](review-step3.md): 47-name coverage, candidate interpretation,
   evidence gaps, and gates before large sweeps.
+
 - [Protocol](protocol.md): proposed success definitions, case strata, budgets,
   and selection rule. It awaits maintainer review before a large sweep.
+
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
+
 - [Run records](runs/README.md): the first NIST pilot, conventions for tracked
   manifests, and concise results. Bulk traces belong in
   `target/convergence-defaults/`, which the repository already ignores.
@@ -501,3 +520,60 @@ panache format --check dev/convergence-defaults TODO.md
 panache lint dev/convergence-defaults TODO.md
 git diff --check
 ```
+
+### S012: Broaden fixtures and validate the recorder, 2026-10-02
+
+- Starting revision: `7065d6d4d94048d9a01f4c176352cf6447c2b301` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: implement the requested coverage expansion in `competitor-bench`,
+  preserve all 27 NIST datasets, add native-precision analytic, constrained,
+  scalar, and stochastic controls, and record baseline runs.
+- Evidence: the [coverage matrix](coverage.md) accounts for all 47 solver names
+  and documents 57 fixture definitions. Generated case lists include both starts
+  or intervals and references. The [expanded
+  pilot](runs/2026-10-02-coverage-002.md) contains 844 development solves across
+  14 names, both precisions, and 20 paired SGD seeds.
+- Decisions: D004 records the authorized fixture expansion. D003 remains
+  proposed; no numerical defaults, success thresholds, precision floors, or
+  final case weights have been selected. Validation families remain unused for
+  optimization.
+- Validation: 16 focused tests, workspace all-target/all-feature clippy,
+  rustfmt, Panache format/lint, checksums, local links, case-list regeneration,
+  CSV schema/partition checks, and `git diff --check` pass. Certificate and
+  derivative tests cover all NIST datasets. Recorder tests cover initialization,
+  fused calls, a failed partial step with rejected trial work, pass budgets, and
+  agreement with an ordinary Executor run.
+- Environment: disk space ran out while verification was in progress. Cleaning
+  this project's generated debug artifacts with
+  `cargo clean -p basin --profile dev` recovered space; inputs and raw
+  experiment records were retained. The affected new runner source was restored,
+  rebuilt, tested, and rerun before recording final hashes.
+- Open questions: the [coverage gaps](coverage.md#before-calibration),
+  attainable targets, protocol choices, and existing solver-specific gates
+  remain. Vector fixtures use `Vec`; internal trial stages, typed application
+  errors, and composed solver accounting are not yet fully covered.
+- Handoff: the maintainer should review the proposed family weights, resource
+  budgets, and material reliability/work tradeoff in the
+  [protocol](protocol.md). Implementation can then continue with
+  attainable-target checks, remaining solver wiring, and the explicitly
+  identified missing families before calibration. No further broad,
+  undifferentiated corpus expansion is needed to begin that work.
+
+Commands run from the repository root:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --release -p competitor-bench --lib --bin convergence_suite --bin convergence_scalar --bin convergence_pilot
+CARGO_INCREMENTAL=0 cargo build --release -p competitor-bench --bin convergence_suite --bin convergence_scalar
+CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets --all-features -- -D warnings
+target/release/convergence_suite --list > dev/convergence-defaults/cases.csv
+target/release/convergence_scalar --list > dev/convergence-defaults/scalar-roots.csv
+target/release/convergence_scalar --minima --list > dev/convergence-defaults/scalar-minima.csv
+cargo fmt --all -- --check
+panache format --check dev/convergence-defaults TODO.md crates/competitor-bench/data/nist/README.md
+panache lint dev/convergence-defaults TODO.md crates/competitor-bench/data/nist/README.md
+sha256sum --check dev/convergence-defaults/runs/2026-10-02-coverage-002.sources.sha256
+git diff --check
+```
+
+The [run manifest](runs/2026-10-02-coverage-002.toml) contains each pilot
+command, output path, and output hash.
