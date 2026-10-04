@@ -7,9 +7,10 @@
     "scripts": {
         "build:wasm": "wasm-pack build ../crates/basin-wasm --target web --out-name basin_wasm --out-dir ../../web/src/lib/basin-wasm",
         "dev": "pnpm run build:wasm && vite dev",
-        "build": "pnpm run build:wasm && vite build",
+        "build": "pnpm run build:wasm && vite build && node scripts/build-markdown.mjs",
         "preview": "vite preview",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+        "test:markdown": "node --test scripts/html-to-markdown.test.js worker/markdown-negotiation.test.js",
         "format": "biome check --write --linter-enabled=false . && prettier --write \"**/*.svelte\"",
         "format:check": "biome check --linter-enabled=false . && prettier --check \"**/*.svelte\"",
         "lint": "biome lint .",
@@ -29,6 +30,7 @@
         "@types/node": "^26.6.2",
         "@types/prismjs": "^1.26.6",
         "mdsvex": "^0.12.8",
+        "node-html-markdown": "^2.0.0",
         "prettier": "^3.9.8",
         "prettier-plugin-svelte": "^4.1.1",
         "prismjs": "^1.30.0",
@@ -41,6 +43,7 @@
         "typescript": "^7.0.2",
         "unplugin-icons": "^24.0.0",
         "vite": "^8.3.0",
-        "vite-plugin-wasm": "^3.4.0"
+        "vite-plugin-wasm": "^3.4.0",
+        "wrangler": "^4.147.0"
     }
 }

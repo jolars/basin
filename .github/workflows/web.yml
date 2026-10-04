@@ -66,6 +66,10 @@ jobs:
         # not.)
         run: pnpm run build
 
+      - name: Test Markdown negotiation
+        working-directory: web
+        run: pnpm run test:markdown
+
       # Check API links against this revision, including APIs that have not
       # reached docs.rs yet. Only the site's HTML is scanned for links.
       - name: Build API link targets

@@ -1,0 +1,12 @@
+{
+    "name": "basin-markdown-negotiation",
+    "main": "./markdown-negotiation.js",
+    "compatibility_date": "2026-10-04",
+    "workers_dev": false,
+    "routes": [
+        { "pattern": "basin.rs/", "zone_name": "basin.rs" },
+        { "pattern": "basin.rs/docs/*", "zone_name": "basin.rs" },
+        { "pattern": "basin.rs/benchmarks/*", "zone_name": "basin.rs" },
+        { "pattern": "basin.rs/visualizer/*", "zone_name": "basin.rs" }
+    ]
+}
