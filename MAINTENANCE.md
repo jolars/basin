@@ -81,11 +81,21 @@ Before merging the first stable 2.0 release PR:
 The Website workflow builds and checks both branches. Deployment starts from a
 published release, after its GitHub metadata exists. Only a stable
 `vMAJOR.MINOR.PATCH` tag that is currently marked Latest may deploy to
-<https://basin.rs/>. A 2.0 prerelease or a later 1.x maintenance release cannot
-replace the current stable documentation. Deployments are serialized and recheck
-Latest immediately before deploying.
+<https://basin.rs/> on Cloudflare Workers. A 2.0 prerelease or a later 1.x
+maintenance release cannot replace the current stable documentation. Deployments
+are serialized and recheck Latest immediately before deploying.
 
-To redeploy, manually run the Website workflow with the current stable release
-tag selected. Dispatching it on a branch only builds and checks the site. Older
-tags that predate this policy retain their original workflows; do not rerun
-their deployments after moving to a newer release line.
+The build job uploads the checked static site as an artifact. The deployment
+job publishes that artifact and the Worker together, using the
+`cloudflare-workers` environment. It needs the `CLOUDFLARE_API_TOKEN` repository
+secret and `CLOUDFLARE_ACCOUNT_ID` repository variable. See the
+[hosting guide](web/worker/README.md) for local preview, credentials, and domain
+migration. Keep the deployment workflow and Worker configuration synchronized
+between `main` and `v1`.
+
+To redeploy, manually run the Website workflow on `main` or `v1` and set
+`release_tag` to the current stable tag. The workflow builds the tagged site's
+sources with the selected branch's hosting tools, then rechecks Latest before
+publishing. Leave the input empty to build and check the selected branch
+without deploying. Tags that already contain the Workers workflow can also be
+dispatched directly. Do not rerun older tags' GitHub Pages deployment workflows.

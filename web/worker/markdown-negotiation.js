@@ -1,5 +1,3 @@
-import fallbackPages from "../.svelte-kit/markdown-pages.generated.js";
-
 function acceptsMarkdown(value) {
     return (
         value?.split(",").some((part) => {
@@ -24,78 +22,50 @@ function varyOnAccept(headers) {
 }
 
 export default {
-    async fetch(request) {
+    async fetch(request, env) {
         const url = new URL(request.url);
-        const isPage =
-            url.pathname.endsWith("/") || url.pathname.endsWith("/index.html");
-        if (
-            !isPage ||
-            !["GET", "HEAD"].includes(request.method) ||
-            !acceptsMarkdown(request.headers.get("Accept"))
-        ) {
-            const response = await fetch(request);
-            if (!isPage) return response;
-            const headers = new Headers(response.headers);
-            varyOnAccept(headers);
-            return new Response(response.body, {
-                status: response.status,
-                headers,
-            });
+        if (url.hostname === "www.basin.rs") {
+            url.hostname = "basin.rs";
+            url.protocol = "https:";
+            return Response.redirect(url, 308);
         }
 
-        url.pathname = url.pathname.replace(/(?:index\.html)?$/, "index.md");
-        const markdown = await fetch(
-            new Request(url, { method: request.method }),
-        );
-        if (!markdown.ok) {
-            const response = await fetch(
-                request.method === "HEAD"
-                    ? new Request(request.url, { method: "GET" })
-                    : request,
-            );
-            const headers = new Headers(response.headers);
-            varyOnAccept(headers);
-            const route = new URL(request.url).pathname.replace(
-                /index\.html$/,
-                "",
-            );
-            const body = fallbackPages[route];
-            if (response.ok && body) {
+        // Let asset routing canonicalize non-trailing-slash URLs before
+        // negotiating, so relative links resolve the same way in both formats.
+        const isPage = url.pathname.endsWith("/");
+        if (
+            isPage &&
+            ["GET", "HEAD"].includes(request.method) &&
+            acceptsMarkdown(request.headers.get("Accept"))
+        ) {
+            url.pathname += "index.md";
+            const markdown = await env.ASSETS.fetch(new Request(url, request));
+            if (markdown.ok || markdown.status === 304) {
+                const headers = new Headers(markdown.headers);
                 headers.set("Content-Type", "text/markdown; charset=utf-8");
-                headers.delete("Content-Length");
-                headers.delete("Content-Encoding");
-                headers.delete("ETag");
-                headers.delete("Last-Modified");
+                varyOnAccept(headers);
+                if (request.method === "HEAD" || markdown.status === 304) {
+                    return new Response(null, {
+                        status: markdown.status,
+                        headers,
+                    });
+                }
+                const body = await markdown.text();
                 headers.set(
                     "x-markdown-tokens",
                     String(Math.ceil(body.length / 4)),
                 );
-                return new Response(request.method === "HEAD" ? null : body, {
-                    status: response.status,
-                    headers,
-                });
+                return new Response(body, { status: markdown.status, headers });
             }
-            return new Response(
-                request.method === "HEAD" ? null : response.body,
-                {
-                    status: response.status,
-                    headers,
-                },
-            );
         }
 
-        const headers = new Headers(markdown.headers);
-        headers.set("Content-Type", "text/markdown; charset=utf-8");
-        headers.delete("Content-Length");
-        headers.delete("Content-Encoding");
-        headers.delete("ETag");
-        headers.delete("Last-Modified");
+        const response = await env.ASSETS.fetch(request);
+        if (!isPage) return response;
+        const headers = new Headers(response.headers);
         varyOnAccept(headers);
-        if (request.method === "HEAD") {
-            return new Response(null, { status: markdown.status, headers });
-        }
-        const body = await markdown.text();
-        headers.set("x-markdown-tokens", String(Math.ceil(body.length / 4)));
-        return new Response(body, { status: markdown.status, headers });
+        return new Response(response.body, {
+            status: response.status,
+            headers,
+        });
     },
 };
