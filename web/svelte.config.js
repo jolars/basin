@@ -3,9 +3,8 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import { escapeSvelte, mdsvex } from "mdsvex";
 import { createHighlighter } from "shiki";
 
-// GitHub Pages serves repo sites under `<user>.github.io/<repo>/`. Set
-// the prefix via `BASIN_BASE_PATH` when deploying (`/basin` for Pages,
-// empty for `npm run dev`/`preview` and any custom-domain deploy).
+// Production serves basin.rs at the root. Alternate deployments can set
+// BASIN_BASE_PATH when they need a URL prefix.
 const base = process.env.BASIN_BASE_PATH ?? "";
 
 // Build-time syntax highlighter. Shiki runs only during preprocess/prerender
@@ -60,8 +59,8 @@ const config = {
         // Every linked route is prerendered to its own `index.html`, so
         // docs/landing ship real HTML (SEO + fast load) — this is NOT SPA
         // mode (no `index.html` catch-all). The `404.html` fallback is the
-        // one client-rendered page: GitHub Pages serves it for unmatched
-        // paths, giving a styled not-found instead of Pages' default.
+        // one client-rendered page: Workers serves it with a 404 status
+        // for unmatched paths.
         adapter: adapter({ fallback: "404.html" }),
         paths: { base },
         prerender: { entries: ["*"] },

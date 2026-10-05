@@ -10,6 +10,11 @@ on:
   schedule:
     - cron: "23 6 * * 1"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Stable tag to redeploy with this workflow (leave empty to check the selected ref)'
+        type: string
+        required: false
 
 # Builds on different release lines do not cancel each other.
 concurrency:
@@ -19,10 +24,36 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HOSTING_DIRECTORY: ${{ inputs.release_tag != '' && '.hosting/web' || 'web' }}
     permissions:
       contents: read
     steps:
+      - name: Validate requested release
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        run: |
+          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          if [[ ! "$REQUESTED_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$REQUESTED_TAG" != "$latest_tag" ]]; then
+            echo "Only the current stable release ($latest_tag) can be redeployed."
+            exit 1
+          fi
+
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.sha }}
+
+      # Older tags retain their original deployment configuration. Use the
+      # selected workflow revision's hosting tools when redeploying them.
+      - name: Check out hosting tools
+        if: inputs.release_tag != ''
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .hosting
+          sparse-checkout: web
 
       - name: Install Rust
         run: |
@@ -31,7 +62,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          # Pages builds don't share a cache with the per-feature CI matrix.
+          # Website builds don't share a cache with the per-feature CI matrix.
           key: web-wasm
 
       - name: Install wasm-pack
@@ -60,11 +91,19 @@ jobs:
 
       - name: Build site
         working-directory: web
-        # No BASIN_BASE_PATH: the site is served at the root of the apex
-        # custom domain (basin.rs), so kit.paths.base stays empty. (Repo
-        # Pages sites under /<repo>/ would set it; the custom domain does
-        # not.)
         run: pnpm run build
+
+      - name: Prepare release for Workers
+        if: inputs.release_tag != ''
+        working-directory: .hosting/web
+        run: |
+          pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+          cp -R "$GITHUB_WORKSPACE/web/build" build
+          node scripts/build-markdown.mjs
+
+      - name: Test Markdown negotiation
+        working-directory: ${{ env.HOSTING_DIRECTORY }}
+        run: pnpm run test:markdown
 
       # Check API links against this revision, including APIs that have not
       # reached docs.rs yet. Only the site's HTML is scanned for links.
@@ -84,49 +123,78 @@ jobs:
           output: ${{ runner.temp }}/lychee-report.md
           fail: true
 
-      - name: Add .nojekyll
-        run: touch web/build/.nojekyll
+      - name: Validate Worker deployment
+        working-directory: ${{ env.HOSTING_DIRECTORY }}
+        run: pnpm run deploy:check
 
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: >-
           (github.event_name == 'release' && !github.event.release.prerelease) ||
-          (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
+          (github.event_name == 'workflow_dispatch' && (startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''))
         with:
-          path: web/build
+          name: website
+          path: ${{ env.HOSTING_DIRECTORY }}/build
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
 
   deploy:
     needs: build
     if: >-
       (github.event_name == 'release' && !github.event.release.prerelease) ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
+      (github.event_name == 'workflow_dispatch' && (startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''))
     runs-on: ubuntu-latest
     concurrency:
-      group: github-pages
+      group: cloudflare-workers
       cancel-in-progress: false
     permissions:
       contents: read
-      pages: write
-      id-token: write
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: cloudflare-workers
+      url: https://basin.rs/
     steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: website
+          path: web/build
+
       # Check after waiting for other deployments so an older build cannot
       # replace the documentation for a newer stable release.
       - name: Select the current stable release
         id: stable
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
-          if [[ "$GITHUB_REF" == refs/tags/* &&
-                "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ &&
-                "$GITHUB_REF_NAME" == "$latest_tag" ]]; then
+          if [[ "$DEPLOY_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ &&
+                "$DEPLOY_TAG" == "$latest_tag" ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping deployment of $GITHUB_REF_NAME; current stable release is $latest_tag."
+            echo "Skipping deployment of $DEPLOY_TAG; current stable release is $latest_tag."
           fi
-      - id: deployment
+      - name: Deploy to Cloudflare Workers
         if: steps.stable.outputs.deploy == 'true'
-        uses: actions/deploy-pages@v5
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm run deploy

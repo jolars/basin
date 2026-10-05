@@ -1,0 +1,19 @@
+{
+    "$schema": "./node_modules/wrangler/config-schema.json",
+    "name": "basin-web",
+    "main": "./worker/markdown-negotiation.js",
+    "compatibility_date": "2026-10-05",
+    "workers_dev": false,
+    "preview_urls": false,
+    "routes": [
+        { "pattern": "basin.rs", "custom_domain": true },
+        { "pattern": "www.basin.rs", "custom_domain": true }
+    ],
+    "assets": {
+        "directory": "./build",
+        "binding": "ASSETS",
+        "html_handling": "force-trailing-slash",
+        "not_found_handling": "404-page",
+        "run_worker_first": true
+    }
+}

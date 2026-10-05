@@ -339,7 +339,7 @@ The workspace manifest is at the repo root (shared lockfile) with three members:
 
 - `crates/basin`: the library.
 - `crates/basin-wasm`: `wasm-bindgen` JS bindings consumed by the Svelte and
-  Tailwind visualizer in `web/` (deployed to GitHub Pages). `web/` is its own
+  Tailwind visualizer in `web/` (deployed to Cloudflare Workers). `web/` is its own
   node project, **not** a Cargo workspace member.
 - `crates/competitor-bench`: benchmarks against competing libraries.
 

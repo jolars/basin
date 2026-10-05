@@ -5,6 +5,7 @@
 # install unless they're explicitly approved here.
 allowBuilds:
   esbuild: true
+  workerd: true
 
 # Don't auto-run a deps-status `pnpm install` before every `pnpm run <script>`.
 # That implicit install re-evaluates the supply-chain freshness gate
