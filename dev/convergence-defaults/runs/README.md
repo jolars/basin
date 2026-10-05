@@ -3,6 +3,12 @@
 No numerical runs have been recorded. This directory establishes the record
 conventions for the later harness and experiments.
 
+Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
+harness pilot. Input snapshots are assembled, but reference certificates and
+executable model adapters are not yet validated. A manifest must state whether
+its purpose is verifier validation, a pilot, calibration, or sealed validation.
+Record protocol amendments and whether outcomes were already observed.
+
 Use a stable run ID such as `YYYY-MM-DD-family-NNN`. Keep the manifest in
 `<run-id>.toml` and a concise interpretation in `<run-id>.md`. Commit small case
 definitions and configuration files needed for reproduction alongside them.
@@ -25,6 +31,17 @@ Before execution, record:
 - Every stopping setting, algorithm variant, initialization choice, execution
   budget, external quality target, reference value, and scaling convention.
 - Output paths, measurement schema version, and verification/accounting rules.
+- Reference intervals and provenance, coordinate/objective/constraint scales,
+  native-precision witnesses, uncertainty bounds, target eligibility, and
+  reasons for missing or inapplicable cases. Link NIST inputs to their snapshot
+  hashes.
+- Explicit family weights and partition membership, complete materialized seed
+  lists and RNG versions, and candidate IDs/formulas/units. Preserve paired
+  starts and initialization states. Record whether validation outcomes remain
+  sealed.
+- Both logical evaluation categories and physical leaf-call accounting, nested
+  budget enforcement, censoring rules, observation stages, and returned-point
+  versus sampled-trial semantics.
 
 After execution, record completion status, failures or partial execution, actual
 case coverage, output hashes, and validation commands and results. Retain failed

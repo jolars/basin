@@ -1,0 +1,909 @@
+{
+  "protocol": "CDP-1",
+  "retrieved": "2026-10-05",
+  "source_index": "https://www.itl.nist.gov/div898/strd/nls/nls_main.shtml",
+  "normalization": "ASCII; LF line endings; trailing whitespace removed; final newline retained. Decimal strings preserve published precision.",
+  "status": "Input snapshots and both starts assembled; executable model adapters and reference certificates pending step 5.",
+  "datasets": [
+    {
+      "id": "Bennett5",
+      "family": "nist-power",
+      "partition": "development",
+      "path": "Bennett5.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Bennett5.dat",
+      "source_sha256": "b34d160605b959c301d13aac6627b693743d32ad98a6c4f830a3f728cdff0f52",
+      "snapshot_sha256": "e2be71fffe2a78821361ff3e71eef4549df7015911e3e8e893f3914829872ab4",
+      "parameters": 3,
+      "observations": 154,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "-2000",
+        "50",
+        "0.8"
+      ],
+      "start2": [
+        "-1500",
+        "45",
+        "0.85"
+      ],
+      "certified_parameters": [
+        "-2.5235058043E+03",
+        "4.6736564644E+01",
+        "9.3218483193E-01"
+      ],
+      "certified_rss": "5.2404744073E-04"
+    },
+    {
+      "id": "BoxBOD",
+      "family": "nist-misra",
+      "partition": "development",
+      "path": "BoxBOD.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/BoxBOD.dat",
+      "source_sha256": "fc44fbed04e3be16df6498e722d4c8aedfd0af210110bc396d9f99acecd77e21",
+      "snapshot_sha256": "406992ecdd177696e45662e927ad26947d9f3b095e02537d50fc880f982d720a",
+      "parameters": 2,
+      "observations": 6,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "1",
+        "1"
+      ],
+      "start2": [
+        "100",
+        "0.75"
+      ],
+      "certified_parameters": [
+        "2.1380940889E+02",
+        "5.4723748542E-01"
+      ],
+      "certified_rss": "1.1680088766E+03"
+    },
+    {
+      "id": "Chwirut1",
+      "family": "nist-chwirut",
+      "partition": "validation",
+      "path": "Chwirut1.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Chwirut1.dat",
+      "source_sha256": "d9a055dfe5af71a8754c00f073ef00f8fed2e3fd1c6fd20cea8fd62d7cc3ed84",
+      "snapshot_sha256": "a934a583464358c8cb3f67d27a016c15ab90dadfbf5303079b33dd284134b55b",
+      "parameters": 3,
+      "observations": 214,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "0.1",
+        "0.01",
+        "0.02"
+      ],
+      "start2": [
+        "0.15",
+        "0.008",
+        "0.010"
+      ],
+      "certified_parameters": [
+        "1.9027818370E-01",
+        "6.1314004477E-03",
+        "1.0530908399E-02"
+      ],
+      "certified_rss": "2.3844771393E+03"
+    },
+    {
+      "id": "Chwirut2",
+      "family": "nist-chwirut",
+      "partition": "validation",
+      "path": "Chwirut2.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Chwirut2.dat",
+      "source_sha256": "c37e5522a34f9a57e18d7d10f8736202eabc0c33b8e7ad0010e618db04b57411",
+      "snapshot_sha256": "968142c6f5427d87b1fed1e1bfc8cfce1f7ae8c6b89d3fbfb4960d7ced3c1e11",
+      "parameters": 3,
+      "observations": 54,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "0.1",
+        "0.01",
+        "0.02"
+      ],
+      "start2": [
+        "0.15",
+        "0.008",
+        "0.010"
+      ],
+      "certified_parameters": [
+        "1.6657666537E-01",
+        "5.1653291286E-03",
+        "1.2150007096E-02"
+      ],
+      "certified_rss": "5.1304802941E+02"
+    },
+    {
+      "id": "DanWood",
+      "family": "nist-power",
+      "partition": "development",
+      "path": "DanWood.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/DanWood.dat",
+      "source_sha256": "5eae83de8b34e34c631a5738d640183b0628913e728437ae77f066e832186e24",
+      "snapshot_sha256": "e8d05d54bc3646796cf8d5291c5e39c826049df4771587263357d76c18c393c2",
+      "parameters": 2,
+      "observations": 6,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "1",
+        "5"
+      ],
+      "start2": [
+        "0.7",
+        "4"
+      ],
+      "certified_parameters": [
+        "7.6886226176E-01",
+        "3.8604055871E+00"
+      ],
+      "certified_rss": "4.3173084083E-03"
+    },
+    {
+      "id": "ENSO",
+      "family": "nist-periodic",
+      "partition": "validation",
+      "path": "ENSO.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/ENSO.dat",
+      "source_sha256": "0c644f45b0e586cb1bb0613bad68f63c704efadacd086e768468d33d83f3e5d9",
+      "snapshot_sha256": "f27b059fb680f986a0eb44a54fa4705bff1bd2ba4b0214bb680c19e2d66f2972",
+      "parameters": 9,
+      "observations": 168,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "11.0",
+        "3.0",
+        "0.5",
+        "40.0",
+        "-0.7",
+        "-1.3",
+        "25.0",
+        "-0.3",
+        "1.4"
+      ],
+      "start2": [
+        "10.0",
+        "3.0",
+        "0.5",
+        "44.0",
+        "-1.5",
+        "0.5",
+        "26.0",
+        "-0.1",
+        "1.5"
+      ],
+      "certified_parameters": [
+        "1.0510749193E+01",
+        "3.0762128085E+00",
+        "5.3280138227E-01",
+        "4.4311088700E+01",
+        "-1.6231428586E+00",
+        "5.2554493756E-01",
+        "2.6887614440E+01",
+        "2.1232288488E-01",
+        "1.4966870418E+00"
+      ],
+      "certified_rss": "7.8853978668E+02"
+    },
+    {
+      "id": "Eckerle4",
+      "family": "nist-gaussian",
+      "partition": "validation",
+      "path": "Eckerle4.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Eckerle4.dat",
+      "source_sha256": "8ec2133b29a0a7cecbfccd51f7c61ee432f73c460bf5ce7106d672642e57a61e",
+      "snapshot_sha256": "b91c6505f0f0c8504e1b4c87b2a043368a8e18bd5ecb5efeb7a0fb346e9a3e10",
+      "parameters": 3,
+      "observations": 35,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "1",
+        "10",
+        "500"
+      ],
+      "start2": [
+        "1.5",
+        "5",
+        "450"
+      ],
+      "certified_parameters": [
+        "1.5543827178E+00",
+        "4.0888321754E+00",
+        "4.5154121844E+02"
+      ],
+      "certified_rss": "1.4635887487E-03"
+    },
+    {
+      "id": "Gauss1",
+      "family": "nist-gaussian",
+      "partition": "validation",
+      "path": "Gauss1.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Gauss1.dat",
+      "source_sha256": "20d0b85ffc73681ce9bdd69c566e53969a65e0e2192c3de16ad4a1dcfdca6c27",
+      "snapshot_sha256": "c7ce799e2a6667ae682152a816e7105645d0ae50acf968339862ace9dd51e8f2",
+      "parameters": 8,
+      "observations": 250,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "97.0",
+        "0.009",
+        "100.0",
+        "65.0",
+        "20.0",
+        "70.0",
+        "178.0",
+        "16.5"
+      ],
+      "start2": [
+        "94.0",
+        "0.0105",
+        "99.0",
+        "63.0",
+        "25.0",
+        "71.0",
+        "180.0",
+        "20.0"
+      ],
+      "certified_parameters": [
+        "9.8778210871E+01",
+        "1.0497276517E-02",
+        "1.0048990633E+02",
+        "6.7481111276E+01",
+        "2.3129773360E+01",
+        "7.1994503004E+01",
+        "1.7899805021E+02",
+        "1.8389389025E+01"
+      ],
+      "certified_rss": "1.3158222432E+03"
+    },
+    {
+      "id": "Gauss2",
+      "family": "nist-gaussian",
+      "partition": "validation",
+      "path": "Gauss2.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Gauss2.dat",
+      "source_sha256": "24fe86801c35c4f86140cced68894e31d73b6ed5738cf698474144f94bae3640",
+      "snapshot_sha256": "77182830681f7b4ec1eab70e44e2e63b793022a779a40e495201ee3a4a63f618",
+      "parameters": 8,
+      "observations": 250,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "96.0",
+        "0.009",
+        "103.0",
+        "106.0",
+        "18.0",
+        "72.0",
+        "151.0",
+        "18.0"
+      ],
+      "start2": [
+        "98.0",
+        "0.0105",
+        "103.0",
+        "105.0",
+        "20.0",
+        "73.0",
+        "150.0",
+        "20.0"
+      ],
+      "certified_parameters": [
+        "9.9018328406E+01",
+        "1.0994945399E-02",
+        "1.0188022528E+02",
+        "1.0703095519E+02",
+        "2.3578584029E+01",
+        "7.2045589471E+01",
+        "1.5327010194E+02",
+        "1.9525972636E+01"
+      ],
+      "certified_rss": "1.2475282092E+03"
+    },
+    {
+      "id": "Gauss3",
+      "family": "nist-gaussian",
+      "partition": "validation",
+      "path": "Gauss3.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Gauss3.dat",
+      "source_sha256": "24842a9e795db59c2c6cbc4c11047f90faedad014f8146faa6b5555259958d6d",
+      "snapshot_sha256": "14c252a4d796a582af55f3a4fa5f4be3b32cd02798073a526cc5ced565117a03",
+      "parameters": 8,
+      "observations": 250,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "94.9",
+        "0.009",
+        "90.1",
+        "113.0",
+        "20.0",
+        "73.8",
+        "140.0",
+        "20.0"
+      ],
+      "start2": [
+        "96.0",
+        "0.0096",
+        "80.0",
+        "110.0",
+        "25.0",
+        "74.0",
+        "139.0",
+        "25.0"
+      ],
+      "certified_parameters": [
+        "9.8940368970E+01",
+        "1.0945879335E-02",
+        "1.0069553078E+02",
+        "1.1163619459E+02",
+        "2.3300500029E+01",
+        "7.3705031418E+01",
+        "1.4776164251E+02",
+        "1.9668221230E+01"
+      ],
+      "certified_rss": "1.2444846360E+03"
+    },
+    {
+      "id": "Hahn1",
+      "family": "nist-rational",
+      "partition": "validation",
+      "path": "Hahn1.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Hahn1.dat",
+      "source_sha256": "7e885af48e18a222033a66cb22b491f0f5bc761b652142c0d9b28132daf63956",
+      "snapshot_sha256": "251ab6520101c6a14d50a3f3b9472b4ab9f720852efbd735c7a3aee12a9c65f5",
+      "parameters": 7,
+      "observations": 236,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "10",
+        "-1",
+        "0.05",
+        "-0.00001",
+        "-0.05",
+        "0.001",
+        "-0.000001"
+      ],
+      "start2": [
+        "1",
+        "-0.1",
+        "0.005",
+        "-0.000001",
+        "-0.005",
+        "0.0001",
+        "-0.0000001"
+      ],
+      "certified_parameters": [
+        "1.0776351733E+00",
+        "-1.2269296921E-01",
+        "4.0863750610E-03",
+        "-1.4262662514E-06",
+        "-5.7609940901E-03",
+        "2.4053735503E-04",
+        "-1.2314450199E-07"
+      ],
+      "certified_rss": "1.5324382854E+00"
+    },
+    {
+      "id": "Kirby2",
+      "family": "nist-rational",
+      "partition": "validation",
+      "path": "Kirby2.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Kirby2.dat",
+      "source_sha256": "cbd288dd9d8586ec97ca408277d1a27ef41b19b543c158d594af189de80ae61c",
+      "snapshot_sha256": "64f9f1c525a76d0ca56de05bf8f053dcced5f91a6eeb156051dbcb5b9b81c374",
+      "parameters": 5,
+      "observations": 151,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "2",
+        "-0.1",
+        "0.003",
+        "-0.001",
+        "0.00001"
+      ],
+      "start2": [
+        "1.5",
+        "-0.15",
+        "0.0025",
+        "-0.0015",
+        "0.00002"
+      ],
+      "certified_parameters": [
+        "1.6745063063E+00",
+        "-1.3927397867E-01",
+        "2.5961181191E-03",
+        "-1.7241811870E-03",
+        "2.1664802578E-05"
+      ],
+      "certified_rss": "3.9050739624E+00"
+    },
+    {
+      "id": "Lanczos1",
+      "family": "nist-exponential-mixture",
+      "partition": "development",
+      "path": "Lanczos1.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Lanczos1.dat",
+      "source_sha256": "dc7a419a4d7e7c0891e378dcde953a3e5dd273618b64b2cee8301e51577b428a",
+      "snapshot_sha256": "42a9c2d11fd7cbfd88f9d1e56e25fc9ec8fe89a684f452feee74c0f59ede0efc",
+      "parameters": 6,
+      "observations": 24,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "1.2",
+        "0.3",
+        "5.6",
+        "5.5",
+        "6.5",
+        "7.6"
+      ],
+      "start2": [
+        "0.5",
+        "0.7",
+        "3.6",
+        "4.2",
+        "4",
+        "6.3"
+      ],
+      "certified_parameters": [
+        "9.5100000027E-02",
+        "1.0000000001E+00",
+        "8.6070000013E-01",
+        "3.0000000002E+00",
+        "1.5575999998E+00",
+        "5.0000000001E+00"
+      ],
+      "certified_rss": "1.4307867721E-25"
+    },
+    {
+      "id": "Lanczos2",
+      "family": "nist-exponential-mixture",
+      "partition": "development",
+      "path": "Lanczos2.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Lanczos2.dat",
+      "source_sha256": "be1ac732e725ef75298f082bcdedab9e2ee9395ad77d8fad2ef37c95e0421572",
+      "snapshot_sha256": "4a3aaac05a11811d36c473bb505f8c9183b4060a3586a876813bedd81290116f",
+      "parameters": 6,
+      "observations": 24,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "1.2",
+        "0.3",
+        "5.6",
+        "5.5",
+        "6.5",
+        "7.6"
+      ],
+      "start2": [
+        "0.5",
+        "0.7",
+        "3.6",
+        "4.2",
+        "4",
+        "6.3"
+      ],
+      "certified_parameters": [
+        "9.6251029939E-02",
+        "1.0057332849E+00",
+        "8.6424689056E-01",
+        "3.0078283915E+00",
+        "1.5529016879E+00",
+        "5.0028798100E+00"
+      ],
+      "certified_rss": "2.2299428125E-11"
+    },
+    {
+      "id": "Lanczos3",
+      "family": "nist-exponential-mixture",
+      "partition": "development",
+      "path": "Lanczos3.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Lanczos3.dat",
+      "source_sha256": "bc998624541c49fedee08346ee2c1d495741c4ea1dd15c052d7c743ab3cf0efe",
+      "snapshot_sha256": "1a9fc8e9adefdd5222ce99d71e640605b4093778af3b31f0f186bd1036cece09",
+      "parameters": 6,
+      "observations": 24,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "1.2",
+        "0.3",
+        "5.6",
+        "5.5",
+        "6.5",
+        "7.6"
+      ],
+      "start2": [
+        "0.5",
+        "0.7",
+        "3.6",
+        "4.2",
+        "4",
+        "6.3"
+      ],
+      "certified_parameters": [
+        "8.6816414977E-02",
+        "9.5498101505E-01",
+        "8.4400777463E-01",
+        "2.9515951832E+00",
+        "1.5825685901E+00",
+        "4.9863565084E+00"
+      ],
+      "certified_rss": "1.6117193594E-08"
+    },
+    {
+      "id": "MGH09",
+      "family": "nist-rational",
+      "partition": "validation",
+      "path": "MGH09.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/MGH09.dat",
+      "source_sha256": "6419da83fd9ab34615769413dc2a6d35b11372f512a9401628a1565067c51d10",
+      "snapshot_sha256": "6913c6e6f158da10d70154b6288883e81bc17f69e6092ae87ad44977552d18bf",
+      "parameters": 4,
+      "observations": 11,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "25",
+        "39",
+        "41.5",
+        "39"
+      ],
+      "start2": [
+        "0.25",
+        "0.39",
+        "0.415",
+        "0.39"
+      ],
+      "certified_parameters": [
+        "1.9280693458E-01",
+        "1.9128232873E-01",
+        "1.2305650693E-01",
+        "1.3606233068E-01"
+      ],
+      "certified_rss": "3.0750560385E-04"
+    },
+    {
+      "id": "MGH10",
+      "family": "nist-mgh10",
+      "partition": "development",
+      "path": "MGH10.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/MGH10.dat",
+      "source_sha256": "a0eb140580fdd6dcf6fba2cbbd81afa598c5226f1e6d702d1313c72a7a6e6fb4",
+      "snapshot_sha256": "f89e5ff39d3b77dcb8bd6df9c5f93ff9872350aadc902b68d718ee229c484fb4",
+      "parameters": 3,
+      "observations": 16,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "2",
+        "400000",
+        "25000"
+      ],
+      "start2": [
+        "0.02",
+        "4000",
+        "250"
+      ],
+      "certified_parameters": [
+        "5.6096364710E-03",
+        "6.1813463463E+03",
+        "3.4522363462E+02"
+      ],
+      "certified_rss": "8.7945855171E+01"
+    },
+    {
+      "id": "MGH17",
+      "family": "nist-exponential-mixture",
+      "partition": "development",
+      "path": "MGH17.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/MGH17.dat",
+      "source_sha256": "75edb5522ee639794ae1f0d0f4a1e3638e963c6854888b853e1f45cea3c2f4d7",
+      "snapshot_sha256": "8f8c6156dce64a48fd475388401d0e51fd1ab08d55e2f72978b69e7256ae3674",
+      "parameters": 5,
+      "observations": 33,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "50",
+        "150",
+        "-100",
+        "1",
+        "2"
+      ],
+      "start2": [
+        "0.5",
+        "1.5",
+        "-1",
+        "0.01",
+        "0.02"
+      ],
+      "certified_parameters": [
+        "3.7541005211E-01",
+        "1.9358469127E+00",
+        "-1.4646871366E+00",
+        "1.2867534640E-02",
+        "2.2122699662E-02"
+      ],
+      "certified_rss": "5.4648946975E-05"
+    },
+    {
+      "id": "Misra1a",
+      "family": "nist-misra",
+      "partition": "development",
+      "path": "Misra1a.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Misra1a.dat",
+      "source_sha256": "9d3194d537d9a6bbf92eb819504070923a1885d0191f40b6b3aaeedd130b98e2",
+      "snapshot_sha256": "45c8da1de19d1cd0bdcefe06e333dee7ec8b31fa5c58b4eada427a7777853650",
+      "parameters": 2,
+      "observations": 14,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "500",
+        "0.0001"
+      ],
+      "start2": [
+        "250",
+        "0.0005"
+      ],
+      "certified_parameters": [
+        "2.3894212918E+02",
+        "5.5015643181E-04"
+      ],
+      "certified_rss": "1.2455138894E-01"
+    },
+    {
+      "id": "Misra1b",
+      "family": "nist-misra",
+      "partition": "development",
+      "path": "Misra1b.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Misra1b.dat",
+      "source_sha256": "dd27e310f787dcbc2addc50b9f8e5e3b82155f732926898b1858e4d08eead6a8",
+      "snapshot_sha256": "521c50ed2063858bfa577c1413fbc07644c8425c8cd2819da004efc3c7b5c705",
+      "parameters": 2,
+      "observations": 14,
+      "predictors": 1,
+      "difficulty": "lower",
+      "start1": [
+        "500",
+        "0.0001"
+      ],
+      "start2": [
+        "300",
+        "0.0002"
+      ],
+      "certified_parameters": [
+        "3.3799746163E+02",
+        "3.9039091287E-04"
+      ],
+      "certified_rss": "7.5464681533E-02"
+    },
+    {
+      "id": "Misra1c",
+      "family": "nist-misra",
+      "partition": "development",
+      "path": "Misra1c.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Misra1c.dat",
+      "source_sha256": "012f75aa0ff112afabdff73880e324ab28e2dc267b678537611c403b959dc941",
+      "snapshot_sha256": "bf51450b3582c2bdc660fe4e7554db3210c8546b1b03429b092b6d57a5d48404",
+      "parameters": 2,
+      "observations": 14,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "500",
+        "0.0001"
+      ],
+      "start2": [
+        "600",
+        "0.0002"
+      ],
+      "certified_parameters": [
+        "6.3642725809E+02",
+        "2.0813627256E-04"
+      ],
+      "certified_rss": "4.0966836971E-02"
+    },
+    {
+      "id": "Misra1d",
+      "family": "nist-misra",
+      "partition": "development",
+      "path": "Misra1d.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Misra1d.dat",
+      "source_sha256": "4dfa39a381a5ffea3e5d9306af1bda9d53bc57226a8e6f0c19af6b9702580481",
+      "snapshot_sha256": "55a26f4017fe7580cc59692527068d29c94f95f27ca1f4472916d3ac29b663f8",
+      "parameters": 2,
+      "observations": 14,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "500",
+        "0.0001"
+      ],
+      "start2": [
+        "450",
+        "0.0003"
+      ],
+      "certified_parameters": [
+        "4.3736970754E+02",
+        "3.0227324449E-04"
+      ],
+      "certified_rss": "5.6419295283E-02"
+    },
+    {
+      "id": "Nelson",
+      "family": "nist-nelson",
+      "partition": "development",
+      "path": "Nelson.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Nelson.dat",
+      "source_sha256": "82fe77ef1a79a4441e7af5083680fc5046f9eb29b33bc2f2b76c478ecbe976d7",
+      "snapshot_sha256": "fc368adf8ac8c17658d3be390c73382398a17fd97786bcb83dd979e3c5946514",
+      "parameters": 3,
+      "observations": 128,
+      "predictors": 2,
+      "difficulty": "average",
+      "start1": [
+        "2",
+        "0.0001",
+        "-0.01"
+      ],
+      "start2": [
+        "2.5",
+        "0.000000005",
+        "-0.05"
+      ],
+      "certified_parameters": [
+        "2.5906836021E+00",
+        "5.6177717026E-09",
+        "-5.7701013174E-02"
+      ],
+      "certified_rss": "3.7976833176E+00"
+    },
+    {
+      "id": "Rat42",
+      "family": "nist-logistic",
+      "partition": "development",
+      "path": "Rat42.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Rat42.dat",
+      "source_sha256": "fc97dd1f94fbcb381495065a053e279f23588a9ceb243276f2a2c36c8225985b",
+      "snapshot_sha256": "a06bacb7113903cfbf607b5243d4525b58929172f60ac54c764a268525fdda83",
+      "parameters": 3,
+      "observations": 9,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "100",
+        "1",
+        "0.1"
+      ],
+      "start2": [
+        "75",
+        "2.5",
+        "0.07"
+      ],
+      "certified_parameters": [
+        "7.2462237576E+01",
+        "2.6180768402E+00",
+        "6.7359200066E-02"
+      ],
+      "certified_rss": "8.0565229338E+00"
+    },
+    {
+      "id": "Rat43",
+      "family": "nist-logistic",
+      "partition": "development",
+      "path": "Rat43.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Rat43.dat",
+      "source_sha256": "36f08908d0f09b1d075e3701ca567701535c58ac0d795ff68fb3c04e172c2c5d",
+      "snapshot_sha256": "5bcbb16649254975701acb2e07a5658a2248ce90cc22bc6f52e35e2a4cc0ee9e",
+      "parameters": 4,
+      "observations": 15,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "100",
+        "10",
+        "1",
+        "1"
+      ],
+      "start2": [
+        "700",
+        "5",
+        "0.75",
+        "1.3"
+      ],
+      "certified_parameters": [
+        "6.9964151270E+02",
+        "5.2771253025E+00",
+        "7.5962938329E-01",
+        "1.2792483859E+00"
+      ],
+      "certified_rss": "8.7864049080E+03"
+    },
+    {
+      "id": "Roszman1",
+      "family": "nist-roszman",
+      "partition": "validation",
+      "path": "Roszman1.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Roszman1.dat",
+      "source_sha256": "fb526231ae6b02929e3de54e072e259b3d87424089abd4b1015ffb946b1e0ab0",
+      "snapshot_sha256": "b62c19e840e9686ed11732bd45398e07efc240cb542ac11f1b7b77368f5a89e0",
+      "parameters": 4,
+      "observations": 25,
+      "predictors": 1,
+      "difficulty": "average",
+      "start1": [
+        "0.1",
+        "-0.00001",
+        "1000",
+        "-100"
+      ],
+      "start2": [
+        "0.2",
+        "-0.000005",
+        "1200",
+        "-150"
+      ],
+      "certified_parameters": [
+        "2.0196866396E-01",
+        "-6.1953516256E-06",
+        "1.2044556708E+03",
+        "-1.8134269537E+02"
+      ],
+      "certified_rss": "4.9484847331E-04"
+    },
+    {
+      "id": "Thurber",
+      "family": "nist-rational",
+      "partition": "validation",
+      "path": "Thurber.dat",
+      "url": "https://www.itl.nist.gov/div898/strd/nls/data/LINKS/DATA/Thurber.dat",
+      "source_sha256": "806b8d00a5365eff907561db796fec3af8a26a5f353297d4311fd46ed5b0146f",
+      "snapshot_sha256": "b66224bd6ec25754af5ec16f00b25ce18ccc8c09b40ebe0acf8515d01abec0a4",
+      "parameters": 7,
+      "observations": 37,
+      "predictors": 1,
+      "difficulty": "higher",
+      "start1": [
+        "1000",
+        "1000",
+        "400",
+        "40",
+        "0.7",
+        "0.3",
+        "0.03"
+      ],
+      "start2": [
+        "1300",
+        "1500",
+        "500",
+        "75",
+        "1",
+        "0.4",
+        "0.05"
+      ],
+      "certified_parameters": [
+        "1.2881396800E+03",
+        "1.4910792535E+03",
+        "5.8323836877E+02",
+        "7.5416644291E+01",
+        "9.6629502864E-01",
+        "3.9797285797E-01",
+        "4.9727297349E-02"
+      ],
+      "certified_rss": "5.6427082397E+03"
+    }
+  ]
+}

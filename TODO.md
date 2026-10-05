@@ -463,7 +463,7 @@ open; the coverage boxes below require all of them.
   review](dev/convergence-defaults/review-step3.md) covers all 47 names and
   records the evidence gates before large sweeps.
 
-- [ ] **4. Define and review the experimental protocol.** Specify success
+- [x] **4. Define and review the experimental protocol.** Specify success
   independently of each solver's stopping predicate. Use multiple objective
   accuracy targets with known or independently validated reference values,
   explicit absolute and relative scales, and attainable precision floors.
@@ -488,7 +488,13 @@ open; the coverage boxes below require all of them.
   dimensions, starts, and transformed copies in the same partition. Fix family
   weights, budgets, seeds, target grids, and selection criteria before tuning.
   Define how missing applicable problems will be supplied; add new corpus
-  problems through the project workflow.
+  problems through the project workflow. The [CDP-1
+  protocol](dev/convergence-defaults/protocol.md), [case
+  register](dev/convergence-defaults/cases.md), and [step 4
+  review](dev/convergence-defaults/review-step4.md) fix the design and record
+  gates before calibration. All 27 public NIST input datasets and both starts
+  are assembled; executable model adapters and precision certificates remain
+  step 5 work.
 
 - [ ] **5. Build a reproducible measurement harness and pilot it.** Extend
   `crates/competitor-bench` using the existing convergence traces and LM

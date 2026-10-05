@@ -42,10 +42,38 @@ changes a decision, preserve its history and link its successor.
   expectations; identical tolerance values do not establish equal accuracy.
 - Alternative rejected: selecting defaults solely from a pooled corpus score or
   copying a common tolerance value across solvers.
-- Limitation: the protocol is still a draft. This decision selects no
-  thresholds, candidates, or numerical acceptance criteria.
+- Limitation at acceptance: the protocol was still a draft. D003 now fixes the
+  experimental design; this workflow decision selects no solver defaults.
 - Follow-up: retain lasting evidence in permanent repository locations before
   deleting these temporary records in step 8.
+
+## D003: Use CDP-1 for calibration
+
+- Status: accepted experimental design, 2026-10-05; solver policies remain
+  unselected.
+- Basis: the requested step 4 definition and review, the
+  [protocol](protocol.md), [case register](cases.md), and [design
+  review](review-step4.md).
+- Scope: independent quality measures, precision eligibility, family partitions,
+  transforms, derivative/noise strata, budgets, seeds, candidate grid expansion,
+  work accounting, aggregation, and selection criteria for all solver families.
+- Rationale: a protocol fixed before candidate outcomes makes premature stops,
+  wasted work, alternate minima, and failures distinguishable and prevents
+  tuning the benchmark to a favored policy.
+- Consequence: implement and pilot CDP-1 in step 5, close its gates, and commit
+  expanded manifests and reference certificates before calibration. The NIST
+  fallback has all 27 public input snapshots and 54 starts; executable model
+  adapters and independent numerical verification remain required.
+- Alternatives rejected: using native success codes as accuracy labels, pooling
+  raw cases without family weights, dropping failures, copying `f64` constants
+  into `f32`, or changing targets/budgets after observing candidate performance.
+- Limitations: this is an author design review, not independent empirical
+  validation. Reliability/work margins are engineering choices; coverage and
+  attainable floors must be demonstrated. No numerical run or default change is
+  authorized by the completion status alone.
+- Follow-up: use G401-G408 in the review. Amend the protocol explicitly if
+  pilots expose defects, and consume holdout families if their outcomes inform
+  retuning.
 
 ## Numerical decision template
 
@@ -61,11 +89,11 @@ evidence; implementation and verification remain separate work.
 
   | ID   | Question                                                                                                                                                                                                   | Resolve in        |
   | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-  | Q001 | Which problem families and applications should determine coverage and weights?                                                                                                                             | Steps 2 and 4     |
-  | Q002 | Which external accuracy targets and precision floors are attainable and useful for each solver family?                                                                                                     | Steps 3 and 4     |
-  | Q003 | Is the reporter's NIST harness available, and which additional cases are needed for full solver coverage?                                                                                                  | Steps 2 and 4     |
+  | Q001 | Resolved by D003: case register partitions and equal family weights. Executable applicability and missing-case coverage still need G401/G408.                                                              | Steps 5 and 6     |
+  | Q002 | D003 fixes quality formulas and target grids. Which targets have independently demonstrated precision floors on each executable case?                                                                      | Step 5, G402/G403 |
+  | Q003 | No reporter harness was available in the issue on 2026-10-05. All 27 public datasets and both starts are assembled; executable NIST models and other coverage gaps remain.                                 | Step 5, G401/G404 |
   | Q004 | Which stochastic methods should retain budget-driven termination, and how should their numerical stops be interpreted?                                                                                     | Steps 3, 4, and 6 |
-  | Q005 | What experiment budgets, repetition counts, and reliability/work thresholds should guide selection?                                                                                                        | Step 4            |
+  | Q005 | Resolved by D003: fixed per-class budgets, 30 screening seeds extended to 100 for development finalists, 100 validation seeds, reliability/work margins, and amendment rules.                              | Resolved          |
   | Q006 | Should DIRECT's documented zero radius and volume tolerances use exact-zero checks, or should their setter docs explicitly disallow zero? The current termination code gates both on a positive threshold. | Steps 2 and 7     |
   | Q007 | Should `Backtracking` report `Failed` when all Armijo trials fail? It now returns an untested reduced step, and the default outcome wrapper labels it `Step`.                                              | Steps 2 and 7     |
 

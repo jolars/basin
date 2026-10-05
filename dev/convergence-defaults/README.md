@@ -17,15 +17,18 @@ Step 1 is complete. Step 2 has a first source pass for all 47 public solver
 names and key dependencies, with variant and work-accounting checks remaining.
 Step 3 has a reference survey and draft candidate policies for all 47 public
 solver names. The [candidate and evidence review](review-step3.md) records the
-remaining gaps and gates before large sweeps. No solver policies have been
-selected and no numerical experiments have run.
+remaining gaps and gates before large sweeps. Step 4 now has the reviewed [CDP-1
+protocol](protocol.md), [case partitions](cases.md), and all 27 NIST input
+datasets with both starts. The [step 4 review](review-step4.md) records the
+implementation and pilot gates. No solver policies have been selected and no
+numerical experiments have run.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
   | 1    | Branch and session records                    | Complete    |
   | 2    | Inventory of stopping behavior and variants   | In progress |
   | 3    | Reference survey and candidate policies       | Complete    |
-  | 4    | Reviewed experimental protocol                | Pending     |
+  | 4    | Reviewed experimental protocol                | Complete    |
   | 5    | Measurement harness and pilot                 | Pending     |
   | 6    | Calibration and independent validation        | Pending     |
   | 7    | Implementation and verification               | Pending     |
@@ -60,8 +63,15 @@ selected and no numerical experiments have run.
   local-search chains with separate inner and outer stop owners.
 - [Step 3 review](review-step3.md): 47-name coverage, candidate interpretation,
   evidence gaps, and gates before large sweeps.
-- [Protocol](protocol.md): experimental requirements and choices that must be
-  resolved before calibration. It remains a draft.
+- [Protocol](protocol.md): CDP-1 quality measures, precision eligibility,
+  budgets, seeds, candidate grids, aggregation, and selection rules.
+- [Case register](cases.md): corpus/NIST families, held-out partitions,
+  transformations, and explicit supply gates for missing cases and capabilities.
+- [NIST inputs](nist/manifest.json): 27 source snapshots, both starts, reference
+  strings, source/snapshot hashes, and family partitions; model adapters
+  pending.
+- [Step 4 review](review-step4.md): design checks, corrections, and gates before
+  the harness, calibration, and independent validation.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
 - [Run records](runs/README.md): conventions for tracked manifests and concise
@@ -446,3 +456,61 @@ panache format --check dev/convergence-defaults TODO.md
 panache lint dev/convergence-defaults TODO.md
 git diff --check
 ```
+
+### S011: Define and review the protocol, 2026-10-05
+
+- Starting revision: `06a8d4fd47ef93eadb515b1a4f395bc561e43120` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: finish step 4 with CDP-1, fixed corpus/NIST family partitions,
+  independent target formulas, precision eligibility, work budgets, seeds,
+  candidate grids, selection rules, and an author design review. Update run
+  conventions and mark step 4 complete while preserving downstream gates.
+- Evidence: [protocol](protocol.md), [case register](cases.md), [NIST
+  manifest](nist/manifest.json), and [review](review-step4.md). Checked
+  Moré–Wild, COCO, NIST source documentation, issue #109, all 28 corpus specs,
+  and the existing trace and LM probe. No reporter harness was available in the
+  visible issue; independently assembled all 27 NIST inputs and 54 starts.
+- Findings: native codes cannot substitute for solution quality; offsets must
+  not enlarge accuracy allowances; alternate local minima need separate
+  evidence; exact-root exits can retain wide brackets; changed continuation
+  trajectories do not establish premature termination; most corpus wrappers
+  still need native `f32` coverage. Public NIST files require
+  objective-convention and rounding checks before executable comparisons.
+- Decision: D003 accepts the experimental design. No solver default, reference
+  certificate, attainable floor, or numerical outcome was selected or measured.
+- Validation: Markdown formatting/lint, local file/anchor checks, NIST source
+  and snapshot hashes, numeric row/start counts, family membership, analytic
+  design checks, and Git whitespace checks pass. Downloaded data contain 2176
+  observations. No Rust code changed and no solver experiment ran.
+- Open work: G401-G408 in the review, remaining step 2 paths, and applicable
+  step 3 source/diagnostic gates. The protocol is complete; executable
+  manifests, model adapters, independent certificates, and harness validation
+  are not.
+- Next task: implement the step 5 verifier and work ledger on analytic fixtures,
+  validate NIST models and both starts, then pilot Nelder–Mead, L-BFGS-B, both
+  LM factorizations/damping modes, and legacy/full TRF. Freeze expanded
+  manifests before calibration and keep candidate holdout outcomes sealed.
+
+Commands run from the repository root:
+
+```sh
+git status --short
+git branch --show-current
+git log -1 --format='%H%n%s'
+gh issue view 109 --repo jolars/basin --json body,comments,url
+panache format dev/convergence-defaults TODO.md
+panache format --check dev/convergence-defaults TODO.md
+panache lint dev/convergence-defaults TODO.md
+git diff --check
+```
+
+The NIST download used
+`curl --silent --show-error --fail --location --max-time 30 --user-agent 'Mozilla/5.0'`
+against each exact manifest URL. Python's default HTTP client received HTTP 403,
+so no input was taken from that failed attempt. Source bytes were downloaded
+under ignored `target/convergence-defaults/`, validated, and normalized to LF
+with trailing whitespace removed. The manifest retains both byte hashes and
+unrounded decimal strings. Ad hoc Python checks reparsed all snapshots,
+reconciled corpus families and NIST names, checked local links/anchors, and
+exercised the protocol's analytic examples and accounting formulas. These checks
+establish input/design consistency, not solver behavior.
