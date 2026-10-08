@@ -1,14 +1,14 @@
-// Shared navigation model. `href` is a base-independent app pathname
-// (it starts with `/` and is passed through `resolve()` at the call
-// site, which prefixes the base); never hardcode `/basin`. `section`
-// is the first path segment, used for active-state matching across a
-// whole section (e.g. any `/docs/*` page lights up the "Docs" link).
+// Shared navigation model. `href` is an app path without a leading slash.
+// Calling `resolve()` prefixes the configured base, so links also work in
+// deployments under a URL prefix. `section` is the first path segment, used
+// for active-state matching across a whole section (e.g. any `/docs/*` page
+// lights up the "Docs" link).
 
-import type { Pathname } from "$app/types";
+import type { Path } from "$app/types";
 
 export type NavLink = {
     label: string;
-    href: Pathname;
+    href: Path;
     /** First path segment for active-state matching. Omit for external links. */
     section?: string;
     external?: boolean;
@@ -20,30 +20,30 @@ export type NavLink = {
 
 /** Top-level site navigation, shown in the header. */
 export const NAV_LINKS: NavLink[] = [
-    { label: "Docs", href: "/docs/getting-started/", section: "docs" },
-    { label: "Visualizer", href: "/visualizer/", section: "visualizer" },
-    { label: "Benchmarks", href: "/benchmarks/", section: "benchmarks" },
+    { label: "Docs", href: "docs/getting-started/", section: "docs" },
+    { label: "Visualizer", href: "visualizer/", section: "visualizer" },
+    { label: "Benchmarks", href: "benchmarks/", section: "benchmarks" },
 ];
 
 /** Sidebar links for the docs section. */
 export const DOCS_LINKS: NavLink[] = [
-    { label: "Overview", href: "/docs/", section: "docs" },
+    { label: "Overview", href: "docs/", section: "docs" },
     {
         label: "Getting started",
-        href: "/docs/getting-started/",
+        href: "docs/getting-started/",
         section: "docs",
     },
     {
         label: "Migrating from Argmin",
-        href: "/docs/migrating-from-argmin/",
+        href: "docs/migrating-from-argmin/",
         section: "docs",
     },
     {
         label: "Migrating convergence settings",
-        href: "/docs/migrating-convergence/",
+        href: "docs/migrating-convergence/",
         section: "docs",
     },
-    { label: "Solvers", href: "/docs/solvers/", section: "docs" },
+    { label: "Solvers", href: "docs/solvers/", section: "docs" },
 ];
 
 /**

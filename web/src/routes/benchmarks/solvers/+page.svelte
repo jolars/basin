@@ -1,8 +1,8 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
-    import ConvergenceChart from "$lib/ConvergenceChart.svelte";
-    import Seo from "$lib/Seo.svelte";
-    import { formatDuration } from "$lib/data/benchmarks";
+    import ConvergenceChart from "#lib/ConvergenceChart.svelte";
+    import Seo from "#lib/Seo.svelte";
+    import { formatDuration } from "#lib/data/benchmarks.ts";
     import {
         BY_PROBLEM,
         SOLVER_BENCHMARKS as data,
@@ -10,7 +10,7 @@
         SOLVER_LABELS,
         SOLVER_ORDER,
         seriesFor,
-    } from "$lib/data/solvers";
+    } from "#lib/data/solvers.ts";
 
     function fmtF0(v: number): string {
         if (!Number.isFinite(v)) return "?";
@@ -29,7 +29,7 @@
     <p class="text-sm text-stone-500 dark:text-stone-400">
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/benchmarks/")}>Benchmarks</a
+            href={resolve("benchmarks/")}>Benchmarks</a
         >
         <span class="text-stone-400 dark:text-stone-600">/</span> Solvers
     </p>
@@ -131,17 +131,17 @@
     <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">
         For the basin-versus-other-libraries view, see the <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/benchmarks/competitors/")}>competitors</a
+            href={resolve("benchmarks/competitors/")}>competitors</a
         >
         axis; for backend cost on the same solvers, see the
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/benchmarks/backends/")}>backends</a
+            href={resolve("benchmarks/backends/")}>backends</a
         >
         axis. To watch the same solvers converge interactively, try the
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/visualizer/")}>visualizer</a
+            href={resolve("visualizer/")}>visualizer</a
         >.
     </p>
 </section>

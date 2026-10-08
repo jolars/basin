@@ -5,10 +5,10 @@
         SolverKind,
         Run,
         evalGrid,
-    } from "$lib/basin-wasm/basin_wasm";
-    import { problemByKind } from "$lib/problems";
-    import ContourPlot from "$lib/ContourPlot.svelte";
-    import { theme } from "$lib/theme.svelte";
+    } from "#lib/basin-wasm/basin_wasm.js";
+    import { problemByKind } from "#lib/problems.ts";
+    import ContourPlot from "#lib/ContourPlot.svelte";
+    import { theme } from "#lib/theme.svelte.ts";
     import type { RunOutput } from "./codegen";
 
     // Mirrors the playground config that drives the generated snippet, so the

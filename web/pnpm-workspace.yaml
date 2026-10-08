@@ -1,5 +1,9 @@
 # pnpm 11 reads project settings from here, not the package.json "pnpm" field.
 
+# The typescript alias in package.json keeps the compiler API that SvelteKit
+# and svelte-check require. TypeScript 7 does not expose that API.
+# https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
+
 # esbuild (pulled in by vite) ships a postinstall that links its native
 # binary; pnpm blocks dependency build scripts by default and fails the
 # install unless they're explicitly approved here.

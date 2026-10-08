@@ -6,7 +6,7 @@
     // human-readable form and the two BibTeX dialects people actually paste
     // into a manuscript. The panels are plain <pre> text rather than shiki
     // output because shiki only runs over fenced code in `.svx` (see
-    // svelte.config.js), and a copy button needs the raw string anyway.
+    // vite.config.ts), and a copy button needs the raw string anyway.
 
     const APA = `Larsson, J. (2026). Basin: Efficient and Extensible Numerical \
 Optimization in Rust (arXiv:2608.11279). arXiv. \

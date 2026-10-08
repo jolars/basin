@@ -5,13 +5,13 @@
         SolverKind,
         Run,
         evalGrid,
-    } from "$lib/basin-wasm/basin_wasm";
-    import { PROBLEMS, problemByKind, SUBOPT_TARGET } from "$lib/problems";
-    import { SOLVERS, defaultOptionValues } from "$lib/solvers";
-    import ContourPlot from "$lib/ContourPlot.svelte";
-    import CostChart from "$lib/CostChart.svelte";
-    import Controls from "$lib/Controls.svelte";
-    import { theme } from "$lib/theme.svelte";
+    } from "#lib/basin-wasm/basin_wasm.js";
+    import { PROBLEMS, problemByKind, SUBOPT_TARGET } from "#lib/problems.ts";
+    import { SOLVERS, defaultOptionValues } from "#lib/solvers.ts";
+    import ContourPlot from "#lib/ContourPlot.svelte";
+    import CostChart from "#lib/CostChart.svelte";
+    import Controls from "#lib/Controls.svelte";
+    import { theme } from "#lib/theme.svelte.ts";
 
     // Wasm boot. The viz waits on this once; everything downstream assumes
     // the module is already loaded.

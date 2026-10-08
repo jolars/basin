@@ -8,9 +8,9 @@
     import IconGithub from "~icons/simple-icons/github";
     import IconRust from "~icons/simple-icons/rust";
     import IconBook from "~icons/lucide/book-open";
-    import ThemeToggle from "$lib/ThemeToggle.svelte";
-    import { theme } from "$lib/theme.svelte";
-    import { NAV_LINKS, activeSection } from "$lib/nav";
+    import ThemeToggle from "#lib/ThemeToggle.svelte";
+    import { theme } from "#lib/theme.svelte.ts";
+    import { NAV_LINKS, activeSection } from "#lib/nav.ts";
 
     let { children } = $props();
 
@@ -91,7 +91,7 @@
         >
             <!-- Logo slot. Swap this wordmark for an <img> once a logo
                  asset lands in `static/` (e.g.
-                 `<img src={asset("/logo.svg")} alt="basin" class="h-6" />`). -->
+                 `<img src={asset("logo.svg")} alt="basin" class="h-6" />`). -->
             <a
                 href={resolve("/")}
                 class="font-semibold tracking-tight text-lg hover:text-stone-600 dark:hover:text-stone-300"

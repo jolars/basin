@@ -3,6 +3,9 @@
     "private": true,
     "version": "0.0.0",
     "type": "module",
+    "imports": {
+        "#lib/*": "./src/lib/*"
+    },
     "packageManager": "pnpm@11.5.1",
     "scripts": {
         "build:wasm": "wasm-pack build ../crates/basin-wasm --target web --out-name basin_wasm --out-dir ../../web/src/lib/basin-wasm",
@@ -43,7 +46,7 @@
         "tailwindcss": "^4.3.3",
         "tslib": "^2.6.0",
         "tsx": "^4.23.15",
-        "typescript": "^7.0.2",
+        "typescript": "npm:@typescript/typescript6@^6.0.2",
         "unplugin-icons": "^24.0.0",
         "vite": "^8.3.2",
         "vite-plugin-wasm": "^3.4.0",

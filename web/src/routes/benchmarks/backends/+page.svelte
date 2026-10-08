@@ -1,7 +1,7 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
-    import BackendChart from "$lib/BackendChart.svelte";
-    import Seo from "$lib/Seo.svelte";
+    import BackendChart from "#lib/BackendChart.svelte";
+    import Seo from "#lib/Seo.svelte";
     import {
         BACKEND_BENCHMARKS as data,
         BACKEND_COLORS,
@@ -11,7 +11,7 @@
         SOLVER_LABELS,
         backendsFor,
         type Solver,
-    } from "$lib/data/benchmarks";
+    } from "#lib/data/benchmarks.ts";
 
     // Distinct dimensions present for a (solver, problem) case, ascending.
     function dimsFor(solver: Solver, problem: string): number[] {
@@ -51,7 +51,7 @@
     <p class="text-sm text-stone-500 dark:text-stone-400">
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/benchmarks/")}>Benchmarks</a
+            href={resolve("benchmarks/")}>Benchmarks</a
         >
         <span class="text-stone-400 dark:text-stone-600">/</span> Backends
     </p>
@@ -103,7 +103,7 @@
     <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">
         To watch these solvers converge interactively, try the <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/visualizer/")}>visualizer</a
+            href={resolve("visualizer/")}>visualizer</a
         >.
     </p>
 </section>
