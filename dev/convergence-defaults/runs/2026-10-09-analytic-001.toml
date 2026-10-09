@@ -1,0 +1,87 @@
+run_id = "2026-10-09-analytic-001"
+purpose = "verifier-validation"
+status = "planned"
+protocol = "CDP-1"
+source_revision = "35128808152050be4dd12dd034f231fe65f39328"
+branch = "convergence-defaults"
+working_directory = "/home/jola/projects/basin"
+schema = 1
+output_directory = "target/convergence-defaults/2026-10-09-analytic-001"
+features = "competitor-bench defaults; no parallel or basin-latest"
+backend = "Vec"
+precisions = ["f64", "f32"]
+compiler = "rustc 1.89.0 (29483883e 2025-08-04); LLVM 20.1.7; x86_64-unknown-linux-gnu"
+profile = "release; thin LTO; codegen-units=1"
+hardware = "Intel Core Ultra 7 155U; 14 logical CPUs; Linux x86_64"
+solver_threads = 1
+repetitions = 1
+seed = "not applicable: deterministic analytic validation"
+family = "quadratic"
+partition = "development"
+family_weight = 1.0
+candidate_holdout_outcomes = "sealed; no holdout cases run"
+sweep_eligible = false
+protocol_amendments = []
+deviations = ["60-second boundary wall guard for tiny diagnostic fixtures; no process timeout", "caps 2 and 4 intentionally exercise budget failures"]
+reference_implementation = "none; exact analytic witness and independently checked measurement fixtures"
+reference = "analytic: nonnegative sum of two squares; exact optimum (1,-2), value 0"
+objective_interval = [0.0, 0.0]
+reference_uncertainty = 0.0
+native_witness = [1.0, -2.0]
+witness_uncertainty = 0.0
+parameter_uncertainty = 0.0
+dimension = 2
+free_dimension = 2
+start = [4.0, 3.0]
+lower = [-8.0, -8.0]
+upper = [8.0, 8.0]
+coordinate_scales = [1.0, 1.0]
+objective_absolute_scale = 1.0
+objective_initial_gap = 17.0
+objective_scale = 17.0
+objective_multiplier = 1.0
+objective_offset = 0.0
+objective_convention = "0.5*((x0-1)^2+(x1+2)^2)"
+require_parameter = true
+quality_target_f64 = 1e-6
+quality_target_f32 = 1e-3
+eligibility = "eligible: exact dyadic native witness checked before solves; no transferable claim for other cases"
+iteration_cap = 10000
+wall_guard_seconds = 60
+leaf_cap = 6000
+budget_rule = "reserve before each physical leaf; shared cap for nested work; denied calls uncharged"
+verification_rule = "independent unshifted formula after timer; one verification per published row and sampled objective row"
+returned_point_rule = "native Stopped outcome only; typed errors retain previous published history but no final point"
+diagnostics = "native termination reports retained; failing clauses and native LM/TRF trial operands unavailable"
+commands = [
+  "CARGO_TARGET_DIR=target/convergence-defaults/build cargo build -p competitor-bench --release --bin verify_convergence",
+  "RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 target/convergence-defaults/build/release/verify_convergence --output-dir target/convergence-defaults/2026-10-09-analytic-001",
+  "python dev/convergence-defaults/check-analytic.py target/convergence-defaults/2026-10-09-analytic-001",
+]
+
+[thread_environment]
+RAYON_NUM_THREADS = "1"
+OMP_NUM_THREADS = "1"
+OPENBLAS_NUM_THREADS = "1"
+
+[policies]
+nm_f64_paired = "standard coefficients; default initial simplex; absolute size AND cost spread <=1e-6"
+nm_f32_paired = "standard coefficients; default initial simplex; absolute size AND cost spread <=1e-3"
+nm_f64_default = "standard coefficients; no numerical convergence; leaf cap6000"
+nm_f64_init_cap = "default settings; diagnostic leaf cap2"
+nm_f64_step_cap = "default settings; diagnostic leaf cap4"
+lbfgsb_analytic = "native default projected gradient <=1e-10; MoreThuente defaults; memory10; curvature epsilon native scalar"
+lbfgsb_f64_central = "same default policy; FiniteDiff central, machine precision, adaptive representable steps"
+lbfgsb_f64_forward = "same default policy; FiniteDiff forward, machine precision, adaptive representable steps"
+
+[sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"dev/convergence-defaults/protocol.md" = "cc8bb93343e8929dd9e5026d16564800270cfa64dbd392ae49aab1720615b545"
+"crates/competitor-bench/src/convergence.rs" = "594a8d3143359f6bc3d46bf695b2b14ad1e7ae833f15f800c1ebdbdb00c84855"
+"crates/competitor-bench/src/convergence/ledger.rs" = "62ef3d29304fa1ad96fa1a721663753ac3fb65178998ad08626f4108135bc17f"
+"crates/competitor-bench/src/convergence/quality.rs" = "3247305c921f2d6f33167f44426909ae21e082c143fdf76eb880dfb1a6d03f13"
+"crates/competitor-bench/src/convergence/fixtures.rs" = "24c9146f2779ece1f71cab07275881e1c15553e539cd8ee4c72f6721133eaf69"
+"crates/competitor-bench/src/convergence/runner.rs" = "67df7cef50b70b1bdb16c57deb005debcec1b69bbe8e7fe6db4d1fd8a3714c2f"
+"crates/competitor-bench/src/bin/verify_convergence.rs" = "b133a987b0950731245f4c4ea81f4db7525818415230a883798e992660ac22cb"
+"crates/competitor-bench/tests/convergence_measurement.rs" = "f98ba077678270d0137fb8cfe6c8482cae6e7589b6d58dbd5b869444c9bad701"
+"dev/convergence-defaults/check-analytic.py" = "58237eea1da0ed8fa6ce808412a1bccb1d5f18d53efd016ff8adbb5be1ba7877"
