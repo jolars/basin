@@ -395,22 +395,28 @@ def main():
                     measures[cache] = quality(case, certificate, eligibility, list(map(D.from_float, numbers(text))), emitted[label])
                 return measures[cache]
             pubs = grouped['publications'][run['id']]; leaves = grouped['leaves'][run['id']]
-            pub_measures = [measure_point(p['point']) for p in pubs]
-            sample_measures = [measure_point(c['point']) if c['outcome'] == 'Completed' else None for c in leaves]
+            parameters = {}
+            def possible(text, q):
+                if not all(map(math.isfinite, numbers(text))):
+                    return False
+                if text not in parameters:
+                    parameters[text] = parameter_error(certificate, list(map(D.from_float, numbers(text))))
+                return parameters[text] <= I(q).sqrt().lo
+            last_quality = measure_point(pubs[-1]['point']) if pubs else None
             targets = []
             for target in eligibility['targets']:
                 q = D(target['q']); eligible_target = target['status'] == 'eligible'
                 def passed(m):
                     return eligible_target and m is not None and not failed_clauses(m, q)
-                first = next((p['work'] for p, m in zip(pubs, pub_measures) if passed(m)), None)
-                sampled = next((c['work'] for c, m in zip(leaves, sample_measures) if passed(m)), None)
-                returned = run['returned'] == 'true' and bool(pub_measures) and passed(pub_measures[-1])
+                first = next((p['work'] for p in pubs if eligible_target and possible(p['point'], q) and passed(measure_point(p['point']))), None)
+                sampled = next((c['work'] for c in leaves if eligible_target and c['outcome'] == 'Completed' and possible(c['point'], q) and passed(measure_point(c['point']))), None)
+                returned = run['returned'] == 'true' and passed(last_quality)
                 targets.append(dict(q=target['q'], eligibility=target['status'], first_publication_work=first,
                                     first_sample_work=sampled, returned_pass=returned))
             report['runs'].append(dict(id=run['id'], dataset=run['dataset'], precision=run['precision'], start=run['start'], route=run['route'],
                 outcome=run['outcome'], work=int(run['work']), returned=run['returned'] == 'true',
-                last_published_quality=pub_measures[-1] if pub_measures else None,
-                returned_quality=pub_measures[-1] if run['returned'] == 'true' and pub_measures else None, targets=targets))
+                last_published_quality=last_quality,
+                returned_quality=last_quality if run['returned'] == 'true' else None, targets=targets))
             print(f'checked {run["id"]}', file=sys.stderr, flush=True)
         report['verification_sha256'] = {name: hashlib.sha256((args.directory / name).read_bytes()).hexdigest() for name in ('verification-points.csv', 'verification-native.csv')}
         report['verification_points'] = len(points)
@@ -418,7 +424,7 @@ def main():
         report['reference_register_sha256'] = hashlib.sha256((ROOT / 'nist-reference-eligibility.json').read_bytes()).hexdigest()
         report['quality_limitations'] = ['local references do not prove global optimality or either-start basin membership',
             'targets marked reference-pending are withheld', 'native probe arithmetic screens cover these tested points only',
-            'parameter gate >0.1 excludes points that cannot pass any frozen joint target',
+            'parameter gates exclude points that cannot pass the joint target being tested; last publications always receive full quality verification',
             'finite differences, robust losses, transformed cases, and other backends remain outside this run']
     report['input_sha256'] = {name: hashlib.sha256((args.directory / f'{name}.csv').read_bytes()).hexdigest()
                             for name in ('runs', 'publications', 'leaves', 'native', 'checks')}

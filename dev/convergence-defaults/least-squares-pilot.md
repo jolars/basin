@@ -78,8 +78,9 @@ ordinals identify attempted work separately from publication work.
 accounting, acceptance, actual and predicted decrease, full TRF radius updates,
 rich native criterion operands, and all passing termination predicates. Full
 TRF's model prediction uses independently differentiated source formulas. The
-identity checks allow 4096 native unit roundoffs and explicitly bound underflow
-of squared-step products before damping rescales them. That allowance checks
+identity checks scale 4096 native unit roundoffs by absolute operation terms,
+including cancellation within dot products. They explicitly bound underflow of
+squared-step products before damping rescales them. That allowance checks
 integrity, not accuracy or convergence certification.
 
 Quality verification uses independent 100-digit outward-rounded intervals and
