@@ -140,8 +140,8 @@ def quality(case, certificate, eligibility, point, emitted):
                    objective_uncertainty=str(((I(reference.width()) + conversion_f + max(arithmetic_f, screen_f)) / scale).hi),
                    stationarity_uncertainty=str(max(((I(a) + max(b, c) + g.width()) * s / scale).hi
                        for a, b, c, g, s in zip(conversion_g, arithmetic_g, screens_g, exact.g, coordinate))),
-                   parameter_uncertainty=str(max((I(I(*box).width()) / s).hi
-                       for box, s in zip(certificate['parameter_box'], coordinate))),
+                   parameter_uncertainty=str(max((I(box.width()) / s).hi
+                       for branch in branches(certificate) for box, s in zip(branch, coordinate))),
                    independent_cost_interval=exact.v.json(), native_verification_cost=emitted['cost'])
     if exact.v.hi < reference.lo:
         # A local reference need not be the best minimum reached by this start.
@@ -235,7 +235,8 @@ def verify(directory):
                 # Native squared-step products can underflow before damping rescales them.
                 subnormal = 2 ** (-149 if run['precision'] == 'f32' else -1074)
                 lost_products = abs(float(o['damping'])) * subnormal * len(h) * max([1] + list(map(abs, diagonal)))
-                require(close(float(o['predicted']), predicted, unit) or abs(float(o['predicted']) - predicted) <= lost_products, f'{identifier}: predicted decrease')
+                prediction_scale = (abs(float(o['damping'])) * sum(abs(d * v * v) for d, v in zip(diagonal, h)) + sum(abs(v * w) for v, w in zip(h, g))) / 2
+                require(close(float(o['predicted']), predicted, unit, prediction_scale) or abs(float(o['predicted']) - predicted) <= lost_products, f'{identifier}: predicted decrease')
                 expected_ratio = actual / float(o['predicted']) if float(o['predicted']) > 0 else 0.0
                 require(close(float(o['ratio']), expected_ratio, unit, (abs(base) + abs(trial)) / max(abs(float(o['predicted'])), 1e-300)), f'{identifier}: safeguarded ratio')
                 accepted = float(o['ratio']) > 0
@@ -247,7 +248,8 @@ def verify(directory):
                 jh = [sum(j[k] * d * v for k, d, v in zip(free, scale, h)) for j in rows]
                 terms = [v * w for v, w in zip(g, h)] + [v * v / 2 for v in jh] + [c * v * v / 2 for c, v in zip(curvature, h)]
                 predicted = -sum(terms)
-                require(close(float(o['predicted']), predicted, unit, sum(map(abs, terms))), f'{identifier}: independent TRF model decrease')
+                prediction_scale = sum(abs(v * w) for v, w in zip(g, h)) + sum(sum(abs(j[k] * d * v) for k, d, v in zip(free, scale, h)) ** 2 / 2 for j in rows) + sum(abs(c * v * v) / 2 for c, v in zip(curvature, h))
+                require(close(float(o['predicted']), predicted, unit, prediction_scale), f'{identifier}: independent TRF model decrease')
                 accepted = math.isfinite(trial) and actual > 0
                 if math.isfinite(trial):
                     require(close(float(o['ratio']), actual / float(o['predicted']), unit, (abs(base) + abs(trial)) / float(o['predicted'])), f'{identifier}: TRF ratio')

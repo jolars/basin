@@ -32,6 +32,16 @@ class Arithmetic(unittest.TestCase):
                 self.assertLess(pilot.parameter_error(certificate, point), pilot.D('1e-49'))
 
 
+class Roundoff(unittest.TestCase):
+    def test_cancellation_uses_absolute_operation_terms(self):
+        unit = 2 ** -53
+        terms = [2 ** 53, 1.0, -(2 ** 53)]
+        rounded = sum(terms)
+        exact = float(sum(map(pilot.D.from_float, terms)))
+        self.assertFalse(pilot.close(rounded, exact, unit))
+        self.assertTrue(pilot.close(rounded, exact, unit, sum(map(abs, terms))))
+
+
 class Evidence(unittest.TestCase):
     directory = None
 
