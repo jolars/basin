@@ -1,11 +1,18 @@
 run_id = "2026-10-09-bounded-trf-001"
 purpose = "analytic-bounded-full-trf-measurement"
-status = "planned"
+status = "completed"
 starting_revision = "ce22b005c16b07fad119688a9163c42d5969e509"
-source_revision = "commit containing this planned manifest"
+source_revision = "e2c9a6abf54dbf2ba94cb169e7679ff0262d77d4"
 protocol = "CDP-1 measurement pilot; no calibration"
 output_directory = "target/convergence-defaults/2026-10-09-bounded-trf-001"
 backend = "nalgebra 0.34.2; regression tests also use 0.35.0"
+compiler = "rustc 1.89.0"
+profile = "dev; debug=0; incremental=0; instrumented, unoptimized"
+execution = "serial deterministic; no RNG"
+architecture = "x86_64"
+working_directory = "/home/jola/projects/basin"
+schema = 1
+features = "competitor-bench defaults"
 precisions = ["f64", "f32"]
 routes = ["trf_full"]
 fixtures = ["box_active", "box_mixed_fixed", "box_all_fixed", "box_stationary"]
@@ -26,3 +33,20 @@ commands = [
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-bounded-trf-001/bounded --output target/convergence-defaults/2026-10-09-bounded-trf-001/report.json",
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-bounded-trf-001/bounded"
 ]
+
+verification_correction = "Verifier-only: retain good-quality failed/stalled returns; mutation controls select an actual converged row. Solve source and CSVs unchanged."
+
+[output_sha256]
+"bounded/checks.csv" = "73c9f271a23d292df62e762e17bd70665b7df41523439983ecbcb8376495dc59"
+"bounded/leaves.csv" = "29f59831ac8c79758c14c71ec5fef8562068bbd66b4468415c6bc93fd2deea5d"
+"bounded/native.csv" = "d9ea434fef294a9178901f08ebba620ed8dc2f7aa199181d0dec1bd0a9c81059"
+"bounded/publications.csv" = "959c8f0f546ca48057bc25060f3ffdf06195170f54ca1a6bc2d0d698c6ca44c0"
+"bounded/runs.csv" = "e85a2263389ae60e546632ee11f09740c4f44a5b83fe40b831c4ec53fb172c83"
+"report.json" = "67abfd5e662daa058b9901f1c7a561d83010dcb32e70dbf3bf46ca1cd123db30"
+
+[source_sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"crates/competitor-bench/src/convergence/least_squares.rs" = "4bfc41d503f100a6431abae132848874c31f62210ad2e0a439f2f493e7671a32"
+"crates/competitor-bench/src/bin/verify_least_squares.rs" = "0713de2d2b11a41df1073425aba16b9139f9a245253edb36c27940e9a88a74a9"
+"dev/convergence-defaults/check-least-squares.py" = "0eb1438cf663ae85e9821a08693cf95e798497a1d6a02e9d7a770c2dd51fab51"
+"dev/convergence-defaults/test-least-squares.py" = "e2b226ca6a60d8836c5158e0282c49f4b4655c6b64656854294cc2ab717e249b"

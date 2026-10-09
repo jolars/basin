@@ -16,6 +16,9 @@ trial diagnostics, 80 analytic checks, and 360 development NIST solves across
 six routes and both precisions. Its quality verification uses the frozen local
 references; numerical policies remain unselected.
 
+The [bounded full-TRF analytic pilot](2026-10-09-bounded-trf-001.md) adds 32
+active-bound, fixed-coordinate, stationary-control, and budget checks.
+
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
 harness pilot. A manifest must state whether its purpose is verifier validation,
 a pilot, calibration, or sealed validation. Record protocol amendments and

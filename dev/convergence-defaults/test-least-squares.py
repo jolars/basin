@@ -47,6 +47,8 @@ class BoxQuality(unittest.TestCase):
         run = dict(dataset='box_active', precision='f64', returned='true', outcome='converged')
         good = dict(point='0.5;-0.5', cost='0.25')
         pilot.box_quality(run, [good])
+        for outcome in ('failed', 'stalled'):
+            self.assertTrue(pilot.box_quality(dict(run, outcome=outcome), [good])['quality_passed'])
         for bad in (dict(point='0.6;-0.5', cost='0.205'),
                     dict(point='0.1;-0.1', cost='0.81'),
                     dict(point='0.5;-0.5', cost='0.5')):
@@ -70,7 +72,7 @@ class Evidence(unittest.TestCase):
         changes = [
             ('runs', lambda rows: rows[0].update(work='99999')),
             ('runs', lambda rows: rows[0].update(residual_evals='99999')),
-            ('runs', lambda rows: rows[0].update(criteria='orthogonality')),
+            ('runs', lambda rows: next(r for r in rows if r['outcome'] == 'converged').update(criteria='orthogonality')),
             ('native', lambda rows: next(r for r in rows if r['accepted'] == 'true').update(accepted='false')),
             ('native', lambda rows: next(r for r in rows if r['published'] == 'true').update(residual_work='1')),
             ('checks', lambda rows: next(r for r in rows if r['passed'] == 'true').update(value='99999')),

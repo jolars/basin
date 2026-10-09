@@ -33,8 +33,10 @@ as do finite-difference eligibility and holdout references. The [LM/TRF
 measurement pilot](runs/2026-10-09-least-squares-001.md) adds opt-in native
 diagnostics and 360 measured development NIST solves across six routes in both
 precisions. Bounded and robust cases, other backends, complete inner work, and
-other families remain open. No solver policies have been selected and
-calibration has not started.
+other families remain open. The [bounded full-TRF analytic
+pilot](runs/2026-10-09-bounded-trf-001.md) adds active bounds, mixed and
+all-fixed coordinates, budget interruptions, and a stationary nonminimum
+control. No solver policies have been selected and calibration has not started.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -948,3 +950,26 @@ The final quality pass performs 11,253 independent native probes and 3,670
 interval quality evaluations outside the solve ledger and timer. Bulk traces
 remain under the ignored run directory; the retained summary and manifest remain
 sufficient to inspect outcomes and reproduce the measurements.
+
+### S017: Extend bounded full-TRF measurements, 2026-10-09
+
+- Starting revision: `ce22b005c16b07fad119688a9163c42d5969e509`, clean working
+  tree on `convergence-defaults`.
+- Scope: analytic active-bound, mixed-fixed, all-fixed, and stationary
+  nonminimum full-TRF controls in both precisions, with caps 0, 1, 2, and 4000.
+- Freeze and evidence: source/planned manifest `e2c9a6a` preceded run
+  [2026-10-09-bounded-trf-001](runs/2026-10-09-bounded-trf-001.md). Its manifest
+  records commands and hashes; the retained report includes all 32 outcomes.
+- Findings: both unrestricted identity `f64` solves converge. Accurate `f32`
+  returns retain native failure and stall outcomes. All-fixed solves skip the
+  Jacobian; stationary nonminimum controls converge but fail minimum quality.
+  Four accepted trials denied their Jacobian request remain unpublished.
+- Validation: 17 measurement tests on each nalgebra version, six Python tests
+  with seven mutation controls, workspace all-target/all-feature clippy with
+  warnings denied, Rust formatting, and documentation checks.
+- Correction: returned quality must not require native convergence. The
+  verifier-only correction preserves original solve evidence and settings.
+- Decisions: none; step 5 remains open and holdout outcomes remain sealed.
+- Next task: robust-loss LM/TRF analytic fixtures with independently known
+  minima and gradients. Legacy bounded TRF, other backends, derivatives,
+  transformations, rank deficiency, and full inner work retain their gates.

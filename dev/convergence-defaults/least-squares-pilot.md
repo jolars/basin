@@ -136,3 +136,12 @@ Local reference certificates prove neither global optimality nor start-basin
 membership. Poor returned quality alone cannot establish premature termination
 at the intended basin. Step 5 remains open for the other solver families and
 these additional gates.
+
+## Bounded analytic extension
+
+The [bounded full-TRF run](runs/2026-10-09-bounded-trf-001.md) adds a `bounded`
+runner phase with active-bound, mixed-fixed, all-fixed, and stationary
+nonminimum fixtures in both precisions. The same five CSVs and independent
+checker retain native outcomes separately from analytic returned quality. Its
+manifest gives commands and source/output hashes. This extension covers full TRF
+only; legacy bounded TRF and robust losses remain open.

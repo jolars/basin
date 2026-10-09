@@ -1,0 +1,576 @@
+{
+  "schema": 1,
+  "purpose": "least-squares-measurement-pilot",
+  "status": "passed",
+  "statistics": {
+    "runs": 32,
+    "outcome_initialization_error": 8,
+    "model_observations": 49,
+    "attempted_trials": 37,
+    "budget_denied_trials": 4,
+    "failing_checks": 35,
+    "outcome_callback_error": 8,
+    "accepted_trials": 29,
+    "published_trials": 25,
+    "accepted_unpublished_trials": 4,
+    "nonfinite_trials": 0,
+    "passing_checks": 8,
+    "outcome_converged": 14,
+    "outcome_failed": 1,
+    "rejected_trials": 4,
+    "outcome_stalled": 1,
+    "structural_checks": 6
+  },
+  "native_integrity_allowance": "4096 native unit roundoffs plus a bound for underflow before damping rescales squared steps; identities, not accuracy certificates",
+  "solve_timing": "instrumented, unoptimized; no speed comparison",
+  "policies_selected": false,
+  "verification_outside_solve_ledger": true,
+  "holdout_candidate_outcomes": "sealed",
+  "runs": [
+    {
+      "id": "box_active-f64-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_active-f32-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_active-f64-1-trf_full-bounded_default-1",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "1",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_active-f32-1-trf_full-bounded_default-1",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "1",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_active-f64-1-trf_full-bounded_default-2",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "2",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_active-f32-1-trf_full-bounded_default-2",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "2",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_active-f64-1-trf_full-bounded_default-4000",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "13",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.4999999999960682,
+          -0.4999999999960682
+        ],
+        "reference": [
+          0.5,
+          -0.5
+        ],
+        "parameter_error": 3.931799330558761e-12,
+        "projected_kkt": 3.931799330558761e-12,
+        "quality_limit": 1e-06,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_active-f32-1-trf_full-bounded_default-4000",
+      "outcome": "failed",
+      "criteria": "",
+      "work": "13",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.4999999403953552,
+          -0.4999999403953552
+        ],
+        "reference": [
+          0.5,
+          -0.5
+        ],
+        "parameter_error": 5.960464477539063e-08,
+        "projected_kkt": 5.960464477539063e-08,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_mixed_fixed-f64-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_mixed_fixed-f32-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_mixed_fixed-f64-1-trf_full-bounded_default-1",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "1",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_mixed_fixed-f32-1-trf_full-bounded_default-1",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "1",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_mixed_fixed-f64-1-trf_full-bounded_default-2",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "2",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_mixed_fixed-f32-1-trf_full-bounded_default-2",
+      "outcome": "callback_error",
+      "criteria": "",
+      "work": "2",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_mixed_fixed-f64-1-trf_full-bounded_default-4000",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "15",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.9999999999965832
+        ],
+        "reference": [
+          0.25,
+          -1.0
+        ],
+        "parameter_error": 3.4168223805863818e-12,
+        "projected_kkt": 3.4168223805863818e-12,
+        "quality_limit": 1e-06,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_mixed_fixed-f32-1-trf_full-bounded_default-4000",
+      "outcome": "stalled",
+      "criteria": "",
+      "work": "17",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.999998152256012
+        ],
+        "reference": [
+          0.25,
+          -1.0
+        ],
+        "parameter_error": 1.8477439880371094e-06,
+        "projected_kkt": 1.8477439880371094e-06,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_all_fixed-f64-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_all_fixed-f32-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_all_fixed-f64-1-trf_full-bounded_default-1",
+      "outcome": "converged",
+      "criteria": "no_free_parameters",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.25
+        ],
+        "reference": [
+          0.25,
+          -0.25
+        ],
+        "parameter_error": 0.0,
+        "projected_kkt": 0.0,
+        "quality_limit": 1e-06,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_all_fixed-f32-1-trf_full-bounded_default-1",
+      "outcome": "converged",
+      "criteria": "no_free_parameters",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.25
+        ],
+        "reference": [
+          0.25,
+          -0.25
+        ],
+        "parameter_error": 0.0,
+        "projected_kkt": 0.0,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_all_fixed-f64-1-trf_full-bounded_default-2",
+      "outcome": "converged",
+      "criteria": "no_free_parameters",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.25
+        ],
+        "reference": [
+          0.25,
+          -0.25
+        ],
+        "parameter_error": 0.0,
+        "projected_kkt": 0.0,
+        "quality_limit": 1e-06,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_all_fixed-f32-1-trf_full-bounded_default-2",
+      "outcome": "converged",
+      "criteria": "no_free_parameters",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.25
+        ],
+        "reference": [
+          0.25,
+          -0.25
+        ],
+        "parameter_error": 0.0,
+        "projected_kkt": 0.0,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_all_fixed-f64-1-trf_full-bounded_default-4000",
+      "outcome": "converged",
+      "criteria": "no_free_parameters",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.25
+        ],
+        "reference": [
+          0.25,
+          -0.25
+        ],
+        "parameter_error": 0.0,
+        "projected_kkt": 0.0,
+        "quality_limit": 1e-06,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_all_fixed-f32-1-trf_full-bounded_default-4000",
+      "outcome": "converged",
+      "criteria": "no_free_parameters",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.25,
+          -0.25
+        ],
+        "reference": [
+          0.25,
+          -0.25
+        ],
+        "parameter_error": 0.0,
+        "projected_kkt": 0.0,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "box_stationary-f64-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_stationary-f32-1-trf_full-bounded_default-0",
+      "outcome": "initialization_error",
+      "criteria": "",
+      "work": "0",
+      "denied": "1",
+      "returned": "false",
+      "quality": null
+    },
+    {
+      "id": "box_stationary-f64-1-trf_full-bounded_default-1",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.0,
+          -1.0
+        ],
+        "references": [
+          [
+            -1.0,
+            -1.0
+          ],
+          [
+            1.0,
+            -1.0
+          ]
+        ],
+        "parameter_error": 1.0,
+        "objective_gap": 1.5,
+        "projected_kkt": 0.0,
+        "quality_passed": false,
+        "classification": "stationary-nonminimum"
+      }
+    },
+    {
+      "id": "box_stationary-f32-1-trf_full-bounded_default-1",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.0,
+          -1.0
+        ],
+        "references": [
+          [
+            -1.0,
+            -1.0
+          ],
+          [
+            1.0,
+            -1.0
+          ]
+        ],
+        "parameter_error": 1.0,
+        "objective_gap": 1.5,
+        "projected_kkt": 0.0,
+        "quality_passed": false,
+        "classification": "stationary-nonminimum"
+      }
+    },
+    {
+      "id": "box_stationary-f64-1-trf_full-bounded_default-2",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.0,
+          -1.0
+        ],
+        "references": [
+          [
+            -1.0,
+            -1.0
+          ],
+          [
+            1.0,
+            -1.0
+          ]
+        ],
+        "parameter_error": 1.0,
+        "objective_gap": 1.5,
+        "projected_kkt": 0.0,
+        "quality_passed": false,
+        "classification": "stationary-nonminimum"
+      }
+    },
+    {
+      "id": "box_stationary-f32-1-trf_full-bounded_default-2",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.0,
+          -1.0
+        ],
+        "references": [
+          [
+            -1.0,
+            -1.0
+          ],
+          [
+            1.0,
+            -1.0
+          ]
+        ],
+        "parameter_error": 1.0,
+        "objective_gap": 1.5,
+        "projected_kkt": 0.0,
+        "quality_passed": false,
+        "classification": "stationary-nonminimum"
+      }
+    },
+    {
+      "id": "box_stationary-f64-1-trf_full-bounded_default-4000",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.0,
+          -1.0
+        ],
+        "references": [
+          [
+            -1.0,
+            -1.0
+          ],
+          [
+            1.0,
+            -1.0
+          ]
+        ],
+        "parameter_error": 1.0,
+        "objective_gap": 1.5,
+        "projected_kkt": 0.0,
+        "quality_passed": false,
+        "classification": "stationary-nonminimum"
+      }
+    },
+    {
+      "id": "box_stationary-f32-1-trf_full-bounded_default-4000",
+      "outcome": "converged",
+      "criteria": "scaled_gradient",
+      "work": "1",
+      "denied": "0",
+      "returned": "true",
+      "quality": {
+        "point": [
+          0.0,
+          -1.0
+        ],
+        "references": [
+          [
+            -1.0,
+            -1.0
+          ],
+          [
+            1.0,
+            -1.0
+          ]
+        ],
+        "parameter_error": 1.0,
+        "objective_gap": 1.5,
+        "projected_kkt": 0.0,
+        "quality_passed": false,
+        "classification": "stationary-nonminimum"
+      }
+    }
+  ],
+  "input_sha256": {
+    "runs": "e85a2263389ae60e546632ee11f09740c4f44a5b83fe40b831c4ec53fb172c83",
+    "publications": "959c8f0f546ca48057bc25060f3ffdf06195170f54ca1a6bc2d0d698c6ca44c0",
+    "leaves": "29f59831ac8c79758c14c71ec5fef8562068bbd66b4468415c6bc93fd2deea5d",
+    "native": "d9ea434fef294a9178901f08ebba620ed8dc2f7aa199181d0dec1bd0a9c81059",
+    "checks": "73c9f271a23d292df62e762e17bd70665b7df41523439983ecbcb8376495dc59"
+  }
+}

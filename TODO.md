@@ -518,9 +518,11 @@ remain open; the coverage boxes below require all applicable stages.
   analytic target combinations; nine `f32` targets remain pending. The [LM/TRF
   measurement pilot](dev/convergence-defaults/least-squares-pilot.md) now covers
   both factorizations and damping modes, legacy TRF, and full TRF on the
-  development NIST subset in both precisions. Bounded and robust cases,
-  additional backends, full inner-work accounting, and other solver families
-  retain their gates.
+  development NIST subset in both precisions. The [bounded full-TRF analytic
+  extension](dev/convergence-defaults/runs/2026-10-09-bounded-trf-001.md) adds
+  active bounds, fixed coordinates, and a stationary nonminimum control. Robust
+  losses, legacy bounded TRF, additional backends, full inner-work accounting,
+  and other solver families retain their gates.
 
 - [ ] **6. Calibrate by solver family and validate independently.** Compare
   current defaults, reference policies, and a small logarithmic sweep of
