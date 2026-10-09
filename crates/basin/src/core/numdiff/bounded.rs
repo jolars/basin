@@ -37,6 +37,15 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// for `F = f64` or `f32`. Jacobians use each vector's [`DenseMatrixFromFn`]
 /// matrix type; the constraint trait's `Matrix` must match it.
 ///
+/// # Solver stopping tolerances
+///
+/// As with [`FiniteDiff`], choose the solver's gradient stopping tolerance to
+/// account for derivative error in the problem's units. Bounds keep probes
+/// inside the domain; they do not eliminate truncation or rounding error.
+/// In particular, a first-order stencil near a bound can be less accurate than
+/// an interior central stencil. Native `f32` arithmetic generally needs a
+/// larger tolerance than `f64`. See [`Lbfgs`](crate::Lbfgs) for an example.
+///
 /// # Examples
 /// ```
 /// use basin::{BoundedFiniteDiff, CostFunction, Gradient};

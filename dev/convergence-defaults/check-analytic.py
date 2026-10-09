@@ -17,6 +17,8 @@ def rows(path):
 
 
 def main():
+    configured = len(sys.argv) == 3 and sys.argv[2] == "--forward-configured"
+    assert len(sys.argv) == 2 or configured, "usage: check-analytic.py <directory> [--forward-configured]"
     directory = Path(sys.argv[1])
     summaries = rows(directory / "summary.csv")
     expected = {
@@ -24,6 +26,9 @@ def main():
         "lbfgsb-f32-default", "lbfgsb-f64-central", "lbfgsb-f64-forward",
         "nm-f64-default", "nm-f64-init-cap", "nm-f64-step-cap",
     }
+    if configured:
+        expected.remove("lbfgsb-f64-forward")
+        expected.add("lbfgsb-f64-forward-configured")
     assert {row["case"] for row in summaries} == expected
     assert len(summaries) == len(expected)
     retained = []
@@ -54,10 +59,15 @@ def main():
             assert summary["outcome"].startswith("Stopped("), name
             assert summary["returned_target_status"] == "Some(Passed)", name
             assert recommendations[-1]["stage"].startswith("Stop("), name
+            if name == "lbfgsb-f64-forward-configured":
+                assert "termination: Converged(" in summary["outcome"], name
+                assert "BoundClippedGradient" in summary["outcome"], name
+            elif name == "lbfgsb-f64-forward":
+                assert "termination: Failed(" in summary["outcome"], name
         if name != "nm-f64-init-cap":
             counts = {key: int(value) for key, value in re.findall(r"(\w+_evals): (\d+)", summary["logical_counts"])}
             assert len(counts) == 6, name
-            if name.endswith("central") or name.endswith("forward"):
+            if name.endswith("central") or name.startswith("lbfgsb-f64-forward"):
                 probes = 4 if name.endswith("central") else 3
                 assert work == counts["cost_evals"] + probes * counts["gradient_evals"], name
             else:

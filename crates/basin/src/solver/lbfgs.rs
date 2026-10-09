@@ -143,6 +143,46 @@ use self::subsm::subsm;
 /// provide additional stopping tests, but do not replace the existing
 /// gradient check. A small cost or step change does not establish stationarity.
 ///
+/// ## Numerical gradients
+///
+/// With [`FiniteDiff`](crate::FiniteDiff) or
+/// [`BoundedFiniteDiff`](crate::BoundedFiniteDiff), account for derivative error
+/// when choosing the gradient threshold. For the `f64` quadratic below, forward
+/// differences produce a gradient infinity norm of about `1.49e-8` at the exact
+/// minimum. The default `1e-10` threshold cannot accept that point, and the
+/// subsequent line search fails. An explicit `1e-7` threshold stops there with
+/// the correct convergence report. This value applies to this example; choose
+/// and verify the tolerance for your objective, precision, and stencil.
+///
+/// ```
+/// use basin::{BoxConstraints, CostFunction, Executor, FiniteDiff,
+///     FirstOrderState, Lbfgs, Termination};
+/// use basin::core::numdiff::Method;
+///
+/// struct Quadratic { lower: Vec<f64>, upper: Vec<f64> }
+/// impl CostFunction for Quadratic {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = std::convert::Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+///         Ok(0.5 * ((x[0] - 1.0).powi(2) + (x[1] + 2.0).powi(2)))
+///     }
+/// }
+/// impl BoxConstraints for Quadratic {
+///     fn lower(&self) -> &Vec<f64> { &self.lower }
+///     fn upper(&self) -> &Vec<f64> { &self.upper }
+/// }
+/// let problem = Quadratic { lower: vec![-8.0; 2], upper: vec![8.0; 2] };
+/// let result = Executor::new(
+///     FiniteDiff::new(problem).gradient_method(Method::Forward),
+///     Lbfgs::new().with_absolute_projected_gradient_tolerance(1e-7),
+///     FirstOrderState::new(vec![4.0, 3.0]),
+/// ).max_iter(100).run().unwrap();
+/// assert!(matches!(result.report.termination, Termination::Converged(_)));
+/// assert_eq!(result.param(), &vec![1.0, -2.0]);
+/// assert_eq!(result.cost(), 0.0);
+/// ```
+///
 /// # Backends
 ///
 /// Generic over any parameter type implementing

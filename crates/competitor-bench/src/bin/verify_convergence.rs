@@ -143,7 +143,11 @@ fn emit<F: Scalar>(
     Ok(())
 }
 
-fn analytic_f64(directory: &Path, summary: &mut File) -> io::Result<()> {
+fn analytic_f64(
+    directory: &Path,
+    summary: &mut File,
+    forward_tolerance: Option<f64>,
+) -> io::Result<()> {
     let start = vec![4.0, 3.0];
     let ledger = WorkLedger::new(6000);
     let p = Quadratic::<f64>::new(ledger.clone());
@@ -185,25 +189,25 @@ fn analytic_f64(directory: &Path, summary: &mut File) -> io::Result<()> {
         let ledger = WorkLedger::new(6000);
         let p = Quadratic::<f64>::new(ledger.clone());
         let fd = FiniteDiff::new(p.clone()).gradient_method(method);
+        let mut solver = Lbfgs::new();
+        if name == "forward" {
+            if let Some(tolerance) = forward_tolerance {
+                solver = solver
+                    .with_absolute_projected_gradient_tolerance(tolerance);
+            }
+        }
         let m = measure(
-            Executor::new(
-                fd,
-                Lbfgs::new(),
-                FirstOrderState::new(start.clone()),
-            )
-            .max_iter(10000),
+            Executor::new(fd, solver, FirstOrderState::new(start.clone()))
+                .max_iter(10000),
             &ledger,
             Duration::from_secs(60),
         );
-        emit(
-            directory,
-            &format!("lbfgsb-f64-{name}"),
-            "f64",
-            &p,
-            &start,
-            &m,
-            summary,
-        )?;
+        let id = if name == "forward" && forward_tolerance.is_some() {
+            "lbfgsb-f64-forward-configured".to_owned()
+        } else {
+            format!("lbfgsb-f64-{name}")
+        };
+        emit(directory, &id, "f64", &p, &start, &m, summary)?;
     }
     for (id, cap) in [
         ("nm-f64-default", 6000),
@@ -264,10 +268,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     if args.next().as_deref() != Some("--output-dir") {
         return Err(
-            "usage: verify_convergence --output-dir <new-directory>".into()
+            "usage: verify_convergence --output-dir <new-directory> [--forward-tolerance <positive-value>]".into()
         );
     }
     let directory = args.next().ok_or("missing output directory")?;
+    let forward_tolerance = match args.next().as_deref() {
+        None => None,
+        Some("--forward-tolerance") => {
+            let tolerance: f64 =
+                args.next().ok_or("missing forward tolerance")?.parse()?;
+            if !tolerance.is_finite() || tolerance <= 0.0 {
+                return Err(
+                    "forward tolerance must be finite and positive".into()
+                );
+            }
+            Some(tolerance)
+        }
+        Some(_) => return Err("unexpected argument".into()),
+    };
     if args.next().is_some() {
         return Err("unexpected argument".into());
     }
@@ -285,7 +303,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         summary,
         "schema,case,precision,cap,physical_work,denied,outcome,logical_counts,returned_target_status,last_published_target_status,first_attainment_work,verification_calls,instrumented_elapsed_ns,last_published_point"
     )?;
-    analytic_f64(directory, &mut summary)?;
+    analytic_f64(directory, &mut summary, forward_tolerance)?;
     analytic_f32(directory, &mut summary)?;
     Ok(())
 }
