@@ -20,8 +20,11 @@ solver names. The [candidate and evidence review](review-step3.md) records the
 remaining gaps and gates before large sweeps. Step 4 now has the reviewed [CDP-1
 protocol](protocol.md), [case partitions](cases.md), and all 27 NIST input
 datasets with both starts. The [step 4 review](review-step4.md) records the
-implementation and pilot gates. No solver policies have been selected and no
-numerical experiments have run.
+implementation and pilot gates. Step 5 has an initial [analytic measurement
+harness](harness.md) and a [nine-run validation
+record](runs/2026-10-09-analytic-001.md), with verifier/accounting checks in
+both native precisions. NIST adapters and the full LM/TRF pilot remain pending.
+No solver policies have been selected and calibration has not started.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -29,7 +32,7 @@ numerical experiments have run.
   | 2    | Inventory of stopping behavior and variants   | In progress |
   | 3    | Reference survey and candidate policies       | Complete    |
   | 4    | Reviewed experimental protocol                | Complete    |
-  | 5    | Measurement harness and pilot                 | Pending     |
+  | 5    | Measurement harness and pilot                 | In progress |
   | 6    | Calibration and independent validation        | Pending     |
   | 7    | Implementation and verification               | Pending     |
   | 8    | Complete coverage and permanent documentation | Pending     |
@@ -72,6 +75,8 @@ numerical experiments have run.
   pending.
 - [Step 4 review](review-step4.md): design checks, corrections, and gates before
   the harness, calibration, and independent validation.
+- [Analytic harness](harness.md): measurement API, CSV schema, analytic
+  fixtures, commands, and remaining diagnostic/coverage limitations.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
 - [Run records](runs/README.md): conventions for tracked manifests and concise
@@ -514,3 +519,83 @@ unrounded decimal strings. Ad hoc Python checks reparsed all snapshots,
 reconciled corpus families and NIST names, checked local links/anchors, and
 exercised the protocol's analytic examples and accounting formulas. These checks
 establish input/design consistency, not solver behavior.
+
+### S012: Validate the analytic measurement layer, 2026-10-09
+
+- Starting revision: `0ea3a6d566580f3e2adcef9eb9608b5f00c84b3c` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: first step 5 implementation in `competitor-bench`: physical leaf-call
+  ledger with a shared exact cap, smooth/box and scalar-root quality predicates,
+  published-point measurement runner, native-scalar quadratic fixtures, CSV
+  output, and independent artifact checks. Production solvers and defaults did
+  not change.
+- Evidence: [harness](harness.md), 16 integration tests, and
+  [2026-10-09-analytic-001](runs/2026-10-09-analytic-001.md). Source was
+  committed at `35128808152050be4dd12dd034f231fe65f39328`, and the planned
+  manifest/checker at `c11acfe952564a520ec18f8bef08b2e8ed88a7d6`, before the
+  recorded release execution. All nine runs and 19 CSV files pass schema, work,
+  stage, quality, and authoritative-count reconciliation checks. Output hashes
+  are tracked.
+- Findings: fused analytic L-BFGS-B uses two physical calls for four logical
+  categories; finite differences expand gradient requests into individual
+  counted probes. Forward-difference L-BFGS-B returns the exact witness with a
+  line-search failure code. Default NM reaches the designated target at 71
+  calls, then continues to its 6000-call physical cap; typed interruption leaves
+  a passing prior recommendation but no final returned checkpoint. Caps at 2 and
+  4 correctly distinguish incomplete initialization from interrupted steps.
+- Decisions: no solver policy selected and no protocol amended. The first
+  measurement layer is validated on analytic fixtures only. Step 5 remains in
+  progress, and G401-G408 remain open for their full scope.
+- Validation: all 16 tests pass with default features and with
+  `parallel,basin-latest`; workspace all-target/all-feature clippy passes with
+  warnings denied; rustfmt, documentation formatting/lint, manifest/hash, local
+  link, and whitespace checks pass. The run checker independently parses the
+  emitted artifacts and confirms no physical overshoot and no solve charge for
+  verification. Every published point has zero bound violation.
+- Development corrections: the initial native-f32 test omitted
+  `BoundedFiniteDiff`'s base evaluation; its expected physical total was
+  corrected from 6 to 7 after checking the adapter. The CSV summary placeholder
+  count and clippy findings were corrected before committing source. Initial
+  shared-target builds hit NLopt CMake compiler-cache conflicts with background
+  checks; the isolated `target/convergence-defaults/build` directory resolved
+  them. Those failed builds are not numerical runs.
+- Open work: NIST residual models/Jacobians and published RSS checks; native
+  LM/TRF rejected-trial operands and acceptance diagnostics; general constrained
+  KKT certificates; precision eligibility beyond this exact analytic fixture;
+  all backend versions; remaining solver/variant and composed accounting paths;
+  process-level wall timeouts for broad sweeps. Passing native report evidence
+  is preserved; unavailable failing-clause data is not inferred.
+- Next task: validate executable NIST adapters against all observations, both
+  starts, analytic Jacobians, and published reference rounding, then extend the
+  pilot through both LM factorizations/damping modes and legacy/full TRF. Keep
+  holdout candidate outcomes sealed and freeze expanded cases before
+  calibration.
+
+Commands run from the repository root after source corrections:
+
+```sh
+cargo fmt --all -- --check
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p competitor-bench --test convergence_measurement
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p competitor-bench --test convergence_measurement \
+  --features parallel,basin-latest
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo build -p competitor-bench --release --bin verify_convergence
+RAYON_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  target/convergence-defaults/build/release/verify_convergence \
+  --output-dir target/convergence-defaults/2026-10-09-analytic-001
+python dev/convergence-defaults/check-analytic.py \
+  target/convergence-defaults/2026-10-09-analytic-001
+panache format dev/convergence-defaults TODO.md
+panache format --check dev/convergence-defaults TODO.md
+panache lint dev/convergence-defaults TODO.md
+git diff --check
+```
+
+The manifest/hash and local link checks use the tracked file sets and formulas
+described in the run record. Small ad hoc Python checks confirmed TOML parsing,
+all source/output SHA-256 values, and zero published bound violations. No
+candidate performance on holdout families was evaluated.

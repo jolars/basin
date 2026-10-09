@@ -1,7 +1,10 @@
 # Run records
 
-No numerical runs have been recorded. This directory establishes the record
-conventions for the later harness and experiments.
+The first recorded run is [2026-10-09-analytic-001](2026-10-09-analytic-001.md):
+nine analytic measurement checks, including native `f32`/`f64`, finite
+differences, and exact budget interruptions. This is verifier validation, not
+calibration or default selection. Its [manifest](2026-10-09-analytic-001.toml)
+records the planned source/inputs and completed output hashes.
 
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
 harness pilot. Input snapshots are assembled, but reference certificates and

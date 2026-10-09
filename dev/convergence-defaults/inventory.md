@@ -218,6 +218,12 @@ an external implementation. Other `Pending` fields make no claim of completion.
 Aliases retain their own rows because callers see those names and may configure
 different modes through the defining type.
 
+The [first analytic measurement validation](runs/2026-10-09-analytic-001.md)
+exercises standard unbounded Nelder-Mead and bounded L-BFGS in native `f32` and
+`f64`, plus f64 finite differences. Its single-family checks validate the
+harness, not a candidate's calibration or all variants. Experiment fields below
+therefore remain pending for policy selection.
+
 The [pilot reference comparison](reference-pilot.md) and [draft pilot
 candidates](candidate-pilot.md) cover Nelder-Mead, bounded and unbounded L-BFGS,
 both LM factorizations and damping modes, and both TRF implementations.

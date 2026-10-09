@@ -389,13 +389,14 @@ a certificate of global optimality.
 Progress: the [inventory](dev/convergence-defaults/inventory.md) has an initial
 source-checked stopping record for all 47 public solver names, and the
 [dependency audit](dev/convergence-defaults/dependencies.md) covers line
-searches, bracketers, and principal subproblems. A [versioned reference
-pilot](dev/convergence-defaults/reference-pilot.md) has expanded to
-[first-order](dev/convergence-defaults/reference-first-order.md) and
-[scalar](dev/convergence-defaults/reference-scalar.md) and [derivative-free
-local](dev/convergence-defaults/reference-derivative-free.md) comparisons.
-Remaining candidate policies, experiments, decisions, and verification remain
-open; the coverage boxes below require all of them.
+searches, bracketers, and principal subproblems. Reference surveys and draft
+candidate policies cover all 47 names; the reviewed [CDP-1
+protocol](dev/convergence-defaults/protocol.md) fixes the experimental design.
+Step 5 has an initial [measurement harness](dev/convergence-defaults/harness.md)
+and [nine analytic validation
+runs](dev/convergence-defaults/runs/2026-10-09-analytic-001.md). NIST model
+adapters, full pilots, calibration, solver decisions, and verification remain
+open; the coverage boxes below require all applicable stages.
 
 - [x] **1. Establish the branch and durable session records.** Created the
   `convergence-defaults` branch and temporary development documents under
