@@ -19,6 +19,10 @@ references; numerical policies remain unselected.
 The [bounded full-TRF analytic pilot](2026-10-09-bounded-trf-001.md) adds 32
 active-bound, fixed-coordinate, stationary-control, and budget checks.
 
+The [robust-loss LM/TRF pilot](2026-10-09-robust-ls-001.md) adds 352 analytic
+measurements and independent robust model/quality checks, with paired default
+continuations for explicit LM relative probes.
+
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
 harness pilot. A manifest must state whether its purpose is verifier validation,
 a pilot, calibration, or sealed validation. Record protocol amendments and

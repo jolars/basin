@@ -32,11 +32,14 @@ and 321 of 330 analytic target combinations. Nine `f32` targets remain pending,
 as do finite-difference eligibility and holdout references. The [LM/TRF
 measurement pilot](runs/2026-10-09-least-squares-001.md) adds opt-in native
 diagnostics and 360 measured development NIST solves across six routes in both
-precisions. Bounded and robust cases, other backends, complete inner work, and
-other families remain open. The [bounded full-TRF analytic
+precisions. Remaining bound and loss variants, other backends, complete inner
+work, and other families remain open. The [bounded full-TRF analytic
 pilot](runs/2026-10-09-bounded-trf-001.md) adds active bounds, mixed and
 all-fixed coordinates, budget interruptions, and a stationary nonminimum
-control. No solver policies have been selected and calibration has not started.
+control. The [robust-loss LM/TRF pilot](runs/2026-10-09-robust-ls-001.md) adds
+352 analytic measurements with Huber, soft-L1, and Cauchy losses, independent
+robust model checks, and paired default continuations. No solver policies have
+been selected and calibration has not started.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -95,6 +98,8 @@ control. No solver policies have been selected and calibration has not started.
 - [Least-squares pilot](least-squares-pilot.md): six native routes, trial
   diagnostics, callback accounting, independent point quality, and reproducible
   analytic and development NIST measurements.
+- [Robust-loss pilot](runs/2026-10-09-robust-ls-001.md): analytic robust
+  objectives, gradients, models, and default continuations across LM/TRF.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
 - [Run records](runs/README.md): conventions for tracked manifests and concise
@@ -973,3 +978,41 @@ sufficient to inspect outcomes and reproduce the measurements.
 - Next task: robust-loss LM/TRF analytic fixtures with independently known
   minima and gradients. Legacy bounded TRF, other backends, derivatives,
   transformations, rank deficiency, and full inner work retain their gates.
+
+### S018: Measure robust-loss LM/TRF, 2026-10-09
+
+- Starting revision: `30ebdbc`, clean tree on `convergence-defaults`.
+- Scope: Huber outliers at two scales, Huber transition, symmetric soft-L1,
+  Cauchy negative curvature, non-finite trials, and an active robust bound; both
+  precisions and six native routes, with only TRF on the bounded case.
+- Freeze: source/planned manifest `f0c6d05` precedes run
+  [2026-10-09-robust-ls-001](runs/2026-10-09-robust-ls-001.md). Verifier-only
+  corrections and continuation checks are frozen in `68c6a28`. The manifest
+  records commands and source/output hashes; solve source and CSVs are
+  unchanged.
+- Evidence: all 38 unrestricted default `f64` cases converge with good
+  measurement quality. Of 38 `f32` controls, 34 return good points (16
+  converged, 18 stalled); four legacy TRF budget errors have good last
+  publications but no returned points. These four runs include 15,894 non-finite
+  predictions.
+- Stopping finding: all 48 explicit LM relative probes report convergence; four
+  Nielsen/Cauchy probes fail independent quality. Default continuations share
+  their exact callback prefixes and reach the analytic minimum. Tiny accepted
+  steps under large damping pass both model reduction and step tests.
+- Accounting: 18,069 physical calls and 232 denials reconcile per run with
+  authoritative counters. Fourteen accepted trials denied their Jacobian remain
+  unpublished. No cost callbacks or logical cost requests occur.
+- Verification: 29 Rust measurement tests on each nalgebra version; 12 Python
+  tests with 12 robust corruption controls; previous analytic and bounded
+  checker/test passes; workspace all-target/all-feature clippy with warnings
+  denied, Rust formatting, and documentation/link/hash checks.
+- Corrections: prediction roundoff includes unsummed robust gradient terms
+  involved in QR cancellation and scalar-product underflow. Non-finite
+  predictions remain non-finite rejected decisions. Mutation controls target
+  completed decisions. Last publications stay separate from returned quality.
+- Decisions: none. Step 5 remains open; no solver default, safeguard,
+  calibration policy, or holdout outcome changed.
+- Next task: investigate legacy TRF finite-model/no-progress safeguards and
+  robust step/model-reduction composition before affected sweeps. Other losses,
+  backends, derivatives, larger and fixed-coordinate robust cases, precision
+  certificates, and full inner work retain their gates.

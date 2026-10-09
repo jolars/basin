@@ -62,7 +62,12 @@ report them separately from convergence. For robust objectives, retain the
 existing absolute gradient control and assess Basin's robust normalized gradient
 test separately. MINPACK's residual-angle rule does not define a robust-loss
 candidate. Any model reduction criterion in that mode needs a separate
-model-agreement and quality check.
+model-agreement and quality check. The [robust analytic
+pilot](runs/2026-10-09-robust-ls-001.md) demonstrates that tiny accepted steps
+under large Nielsen damping can pass both optional model-reduction and
+trial-step tests on Cauchy while the robust gradient remains large. Paired
+default continuations reach the known minimum. Review this composition before
+sweeping robust candidates; the explicit measurement probes select no policy.
 
 ## Trust-region reflective least squares
 

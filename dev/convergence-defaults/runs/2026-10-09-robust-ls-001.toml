@@ -1,8 +1,8 @@
 run_id = "2026-10-09-robust-ls-001"
 purpose = "analytic-robust-least-squares-measurement"
-status = "planned"
-starting_revision = "30ebdbc"
-source_revision = "commit containing this planned manifest"
+status = "completed"
+starting_revision = "30ebdbc4b49da8d1078d8aa14bc5fe7a7760a18c"
+source_revision = "f0c6d0518ba30cc3bfdea2b6a5458d8e61bcf8ca"
 protocol = "CDP-1 measurement pilot; no calibration or corpus eligibility certificate"
 output_directory = "target/convergence-defaults/2026-10-09-robust-ls-001"
 backend = "nalgebra 0.34.2; regression tests also use 0.35.0"
@@ -38,6 +38,27 @@ policies_selected = false
 commands = [
   "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/nist-reference-build cargo build -p competitor-bench --bin verify_least_squares",
   "timeout 120s target/nist-reference-build/debug/verify_least_squares --phase robust --output target/convergence-defaults/2026-10-09-robust-ls-001/robust",
-  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-robust-ls-001/robust --output target/convergence-defaults/2026-10-09-robust-ls-001/report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-robust-ls-001/robust --output target/convergence-defaults/2026-10-09-robust-ls-001/report-final.json",
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-robust-ls-001/robust"
 ]
+
+verification_revision = "68c6a28337ca2fbb78172159617438e84a79f9e0"
+verification_corrections = "Absolute unsummed robust gradient terms for QR model identity roundoff; scalar-product subnormal bounds; retain and reject nonfinite predictions; assess last publications separately; compare common callback prefixes with default controls."
+
+[output_sha256]
+"robust/checks.csv" = "f93525f90c2bdc5d865e4bbee67ef715f18918c41a442a49acb2ca8728c7369a"
+"robust/leaves.csv" = "4c26712a8cd89e4b4872b341869ef59161ae22fc98c3e778e174e9cb95806cd8"
+"robust/native.csv" = "5a8f37b743ee8bfbc1362ec514c07364771c55bef2be179227c393035e1f501c"
+"robust/publications.csv" = "8d0a385a9cbe59bca1205342c6c44463ffb97326b98c9376867c585d9b9aeec3"
+"robust/runs.csv" = "d174ef8de5013bf7b697976c6a18f8be5b39c8b65cea8c504627e9a8b6204cc1"
+"report.json" = "9595c0d01817574e23d957e8cb5073682e977e526a441693560e1fdb4da7e178"
+"report-checked.json" = "457c9cc8fea21231c4e16a09f0ba3909899b2b76a23a724aad2c69615b05e13b"
+"report-final.json" = "457c9cc8fea21231c4e16a09f0ba3909899b2b76a23a724aad2c69615b05e13b"
+
+[source_sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"crates/competitor-bench/src/convergence/least_squares.rs" = "8465e57ad65477990f7046c5fc8fe554fc3284ecdccd40b03d343e2effbb6999"
+"crates/competitor-bench/src/bin/verify_least_squares.rs" = "61e670150d5c2ad9b80b25e855ec7d41bd201f7230d622d842b68bd8d6e065db"
+"crates/competitor-bench/tests/least_squares_measurement.rs" = "6cd478530c75d562fcbfe847a92ad53778f8b838b949ef671d7863ce42344a12"
+"dev/convergence-defaults/check-least-squares.py" = "ba80971abd93af4a4d2c852305fb9a81826654d4c267e535c17b26049dff317d"
+"dev/convergence-defaults/test-least-squares.py" = "3f1e754ec8bb3c0ed65c78b890794b273f997ce78a7d8c5a507d0d8fe74091fa"

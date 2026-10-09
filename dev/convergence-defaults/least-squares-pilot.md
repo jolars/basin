@@ -145,3 +145,15 @@ nonminimum fixtures in both precisions. The same five CSVs and independent
 checker retain native outcomes separately from analytic returned quality. Its
 manifest gives commands and source/output hashes. This extension covers full TRF
 only; legacy bounded TRF and robust losses remain open.
+
+## Robust analytic extension
+
+The [robust-loss run](runs/2026-10-09-robust-ls-001.md) adds a `robust` phase:
+Huber at two scales, soft-L1, and Cauchy, with independently known minima and
+robust gradients. Seven fixtures cover outliers, the Huber transition, negative
+curvature, non-finite trials, and an active bound. The six unconstrained routes
+and two bounded TRF routes retain default policies separately from explicit LM
+relative probes. The checker verifies robust model operands and callback
+prefixes against default controls, and labels robust orthogonality separately.
+Errors retain independent last-publication checks without returned quality. The
+manifest records 352 solves, exact commands, and source/output hashes.
