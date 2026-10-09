@@ -77,9 +77,8 @@ Nelder-Mead, and exact initialization/step budget interruptions.
 
 For the forward-difference quadratic, pass `--forward-tolerance 1e-7` after
 `--output-dir <new-directory>` to configure the bounded L-BFGS gradient test
-explicitly. This replaces the forward case with
-`lbfgsb-f64-forward-configured`; all other cases keep their settings. Validate
-that output with
+explicitly. This replaces the forward case with `lbfgsb-f64-forward-configured`;
+all other cases keep their settings. Validate that output with
 `python dev/convergence-defaults/check-analytic.py <new-directory> --forward-configured`.
 Without the option, the strict default remains the control. The configured
 threshold addresses this fixture's derivative bias, not a general default.

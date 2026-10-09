@@ -75,6 +75,29 @@ changes a decision, preserve its history and link its successor.
   pilots expose defects, and consume holdout families if their outcomes inform
   retuning.
 
+## D004: Make the analytic forward-difference setting explicit
+
+- Status: accepted fixture configuration and documentation fix, 2026-10-09; no
+  solver default selected.
+- Basis: the requested fix following S012's forward-difference finding and the
+  [paired validation](runs/2026-10-09-forward-001.md).
+- Scope: the unit-scale analytic quadratic, bounded L-BFGS, and forward
+  finite-difference gradients. Preserve the strict default as a control.
+- Rationale: at the exact minimum, the native `f64` approximate gradient norm is
+  `1.49e-8`, above the solver's `1e-10` stopping threshold. Explicit `1e-7`
+  stops with convergence after 8 physical calls; the strict control fails its
+  line search after 112. The return and the first eight calls are identical.
+- Consequence: add an explicit probe option, permanent numerical-gradient
+  guidance, a compiling example, and regression coverage for both precisions and
+  all supported dense backend versions.
+- Alternatives rejected: automatically calling the native failure convergence or
+  loosening the general default using this one fixture.
+- Limitations: extreme scaling did not support comparable solve accuracy;
+  witness bias alone is not a general gradient-error bound. This is no
+  calibration or independent holdout evidence.
+- Follow-up: establish derivative accuracy and attainable solver thresholds in
+  each pilot stratum before calibration, including NIST and LM/TRF variants.
+
 ## Numerical decision template
 
 For each policy decision, record the solver and variants, current and proposed

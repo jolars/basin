@@ -23,8 +23,10 @@ datasets with both starts. The [step 4 review](review-step4.md) records the
 implementation and pilot gates. Step 5 has an initial [analytic measurement
 harness](harness.md) and a [nine-run validation
 record](runs/2026-10-09-analytic-001.md), with verifier/accounting checks in
-both native precisions. NIST adapters and the full LM/TRF pilot remain pending.
-No solver policies have been selected and calibration has not started.
+both native precisions. A [forward-difference configuration
+fix](runs/2026-10-09-forward-001.md) now covers the analytic stopping mismatch.
+NIST adapters and the full LM/TRF pilot remain pending. No solver policies have
+been selected and calibration has not started.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -599,3 +601,75 @@ The manifest/hash and local link checks use the tracked file sets and formulas
 described in the run record. Small ad hoc Python checks confirmed TOML parsing,
 all source/output SHA-256 values, and zero published bound violations. No
 candidate performance on holdout families was evaluated.
+
+### S013: Fix the forward-difference fixture, 2026-10-09
+
+- Starting revision: `4640a5db73a5078cef1030b990873d834f92bb36` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: address the forward-difference and bounded L-BFGS stopping mismatch
+  found in S012. Add regression coverage, explicit fixture configuration, and
+  permanent rustdoc explaining derivative accuracy and solver tolerances.
+- Source: `a73c8a5`; the planned comparison manifest was committed at `33c43f0`
+  before execution. The [run record](runs/2026-10-09-forward-001.md) and
+  [manifest](runs/2026-10-09-forward-001.toml) retain commands, inputs, source
+  hashes, native outcomes, and output hashes.
+- Evidence: paired runs from the same release binary passed independent checks
+  for 18 cases and 38 CSVs. The forward stencil's exact-witness gradient norm is
+  `1.4901161193847656e-8`. Explicit threshold `1e-7` stops at the exact minimum
+  with convergence after 8 physical calls, versus 112 and line-search failure
+  for the strict `1e-10` control. The first eight leaf calls and published
+  history before stopping match. The other eight control fixtures match except
+  elapsed time. This is work reduction, not a timing claim.
+- Decision: D004 accepts the explicit fixture setting and documentation. No
+  general solver default or numerical safeguard changes; calibration and holdout
+  outcomes remain unopened. Step 5 remains in progress.
+- Validation: all 23 focused regression checks pass across both precisions and
+  every supported Vec, nalgebra, ndarray, and faer version. The routine Basin
+  suite, including doctests, passes, as do all 16 measurement tests, workspace
+  all-target/all-feature clippy with warnings denied, rustfmt, and public
+  documentation. The new L-BFGS rustdoc example also passes independently.
+- Development corrections: an initial scaled-solve assertion exposed `f32`
+  line-search failure and failed `f64` parameter accuracy at multiplier `1e-8`.
+  Scaled tests now check witness derivative bias only; solve tests establish
+  unit-scale accuracy. One redundant constructor closure was removed after
+  clippy flagged it. Neither correction changed a numerical safeguard.
+- Open work and next task: validate executable NIST residual models and analytic
+  Jacobians against both starts and published RSS, establish derivative accuracy
+  and precision eligibility, and extend the measurement pilot through both LM
+  factorizations/damping modes and legacy/full TRF. Freeze expanded cases and
+  close pilot gates before calibration.
+
+Verification commands from the repository root:
+
+```sh
+cargo fmt --all -- --check
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p basin --test finite_diff_stopping \
+  --features nalgebra_v0_32,nalgebra_v0_33,nalgebra_v0_34,nalgebra_v0_35,ndarray_v0_15,ndarray_v0_16,ndarray_v0_17,faer_v0_22,faer_v0_23,faer_v0_24,parallel
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p basin --doc solver::lbfgs \
+  --features nalgebra,ndarray,faer,problems,parallel
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p competitor-bench --test convergence_measurement
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo doc --no-deps -p basin \
+  --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde
+panache format --check TODO.md dev/convergence-defaults/README.md \
+  dev/convergence-defaults/decisions.md dev/convergence-defaults/harness.md \
+  dev/convergence-defaults/runs/2026-10-09-forward-001.md
+panache lint TODO.md dev/convergence-defaults/README.md \
+  dev/convergence-defaults/decisions.md dev/convergence-defaults/harness.md \
+  dev/convergence-defaults/runs/2026-10-09-forward-001.md
+git diff --check
+```
+
+The run manifest lists the build, both executions, the per-run independent
+checks, and the paired comparison command. Raw artifacts and check logs live
+under ignored `target/convergence-defaults/`. Source hashes describe the frozen
+source revision, including the pre-run layout of `harness.md`; its post-run
+formatting change only rewraps prose. Ad hoc checks verified frozen source
+hashes through `git show`, output hashes, and local links.

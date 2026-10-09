@@ -394,9 +394,11 @@ candidate policies cover all 47 names; the reviewed [CDP-1
 protocol](dev/convergence-defaults/protocol.md) fixes the experimental design.
 Step 5 has an initial [measurement harness](dev/convergence-defaults/harness.md)
 and [nine analytic validation
-runs](dev/convergence-defaults/runs/2026-10-09-analytic-001.md). NIST model
-adapters, full pilots, calibration, solver decisions, and verification remain
-open; the coverage boxes below require all applicable stages.
+runs](dev/convergence-defaults/runs/2026-10-09-analytic-001.md), plus an
+explicit [forward-difference stopping
+configuration](dev/convergence-defaults/runs/2026-10-09-forward-001.md). NIST
+model adapters, full pilots, calibration, solver decisions, and verification
+remain open; the coverage boxes below require all applicable stages.
 
 - [x] **1. Establish the branch and durable session records.** Created the
   `convergence-defaults` branch and temporary development documents under
