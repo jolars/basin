@@ -496,8 +496,8 @@ remain open; the coverage boxes below require all applicable stages.
   register](dev/convergence-defaults/cases.md), and [step 4
   review](dev/convergence-defaults/review-step4.md) fix the design and record
   gates before calibration. All 27 public NIST input datasets and both starts
-  are assembled; executable model adapters and precision certificates remain
-  step 5 work.
+  are assembled; executable model adapters are validated in step 5, while
+  reference refinement and precision certificates remain open.
 
 - [ ] **5. Build a reproducible measurement harness and pilot it.** Extend
   `crates/competitor-bench` using the existing convergence traces and LM

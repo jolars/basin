@@ -113,12 +113,13 @@ Step 5 must implement and verify the 27 models, data parsing, analytic
 Jacobians, objective conventions, and reference rounding intervals. Nelson fits
 a transformed response; Roszman1 requires the published arctangent branch and
 its stated value of pi. Check every implementation's RSS at the published
-parameters and derivative checks away from the optimum. Source data and start
-extraction do not yet validate an executable model. Use printed rounding
-intervals, never parameter standard deviations, as numerical reference
-uncertainty. Published best-available optima are not proofs that all starts
-reach the same minimum. Retain the original 54-run report as a separate
-reproduction table; family weighting governs selection.
+parameters and derivative checks away from the optimum. The [executable-model
+validation](nist-models.md) covers these formulas and analytic derivatives in
+both native precisions; reference refinement and precision certificates remain
+open. Use printed rounding intervals, never parameter standard deviations, as
+numerical reference uncertainty. Published best-available optima are not proofs
+that all starts reach the same minimum. Retain the original 54-run report as a
+separate reproduction table; family weighting governs selection.
 
 Treat identifiable NIST and ExponentialFit instances as parameter-recovery
 strata requiring the parameter test. Verify rank and known model symmetries

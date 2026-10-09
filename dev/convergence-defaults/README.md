@@ -25,8 +25,10 @@ harness](harness.md) and a [nine-run validation
 record](runs/2026-10-09-analytic-001.md), with verifier/accounting checks in
 both native precisions. A [forward-difference configuration
 fix](runs/2026-10-09-forward-001.md) now covers the analytic stopping mismatch.
-NIST adapters and the full LM/TRF pilot remain pending. No solver policies have
-been selected and calibration has not started.
+The [NIST analytic adapters](nist-models.md) now pass independent model
+validation in both precisions. Reference refinement, precision certification,
+and the full LM/TRF pilot remain pending. No solver policies have been selected
+and calibration has not started.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -673,3 +675,75 @@ under ignored `target/convergence-defaults/`. Source hashes describe the frozen
 source revision, including the pre-run layout of `harness.md`; its post-run
 formatting change only rewraps prose. Ad hoc checks verified frozen source
 hashes through `git show`, output hashes, and local links.
+
+### S014: Validate executable NIST models, 2026-10-09
+
+- Starting revision: `998871a15d76b61005107a743a436db56e9d4668` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: benchmark-only adapters for all 27 frozen NIST formulas, 2176
+  observations, both primary starts, and printed reference points. Add
+  hand-derived analytic Jacobians, native `f32`/`f64` evaluations, half-RSS cost
+  and gradient adapters, and printed decimal rounding widths. Preserve family
+  partitions, Nelson's log response, and Roszman1's principal arctangent branch.
+- Evidence: [model documentation](nist-models.md) and the [validation
+  report](nist-model-validation.json) record 13,056 independently checked CSV
+  rows and 77,670 derivative values. The standard-library Decimal checker uses
+  independent formulas and 100-digit arithmetic. Source hashes identify this
+  working-tree validation; it is not a committed calibration freeze or a solver
+  run. The CSV and complete check output live under ignored
+  `target/convergence-defaults/`.
+- Rounding finding: Lanczos1's RSS at the exact printed parameters is about
+  `3.98336e-21`, versus published optimum RSS `1.43079e-25`. The local parameter
+  rounding screen admits this discrepancy, but does not provide an interval
+  certificate. Independent reference refinement remains necessary.
+- Verification: all eight NIST integration tests pass with default features and
+  with `parallel,basin-latest`, covering nalgebra 0.34 and 0.35 in both
+  precisions. All 16 existing measurement tests pass. Workspace all-target and
+  all-feature clippy passes with warnings denied, as do rustfmt, documentation
+  formatting/lint, and whitespace checks. Independent elementary-function checks
+  pass; a deliberately corrupted response is rejected by the checker.
+- Development corrections: native finite-difference tests needed multiple
+  stencil sizes and parameter-relative scales for narrow Gaussian peaks and tiny
+  rational coefficients. The independent checker needed 100-digit arithmetic for
+  tiny Gaussian derivatives, absolute phase-error allowances at trigonometric
+  zeros, and explicit rational cancellation amplification. These corrections
+  affect validation arithmetic, not solver policies.
+- Gates: executable-model validation covers part of G404. Independent reference
+  refinement and rigorous precision certificates remain open; full G404 and G403
+  are not closed. No candidate policy, holdout solver outcome, default,
+  numerical safeguard, or protocol amendment was evaluated or selected.
+- Next task: establish reference and precision eligibility for development NIST
+  cases, then extend the measured pilot through both LM factorizations and
+  damping modes, legacy TRF, and full TRF. Validate rejected-trial diagnostics
+  and accounting before interpreting stopping outcomes.
+
+Reproduction and verification commands from the repository root:
+
+```sh
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p competitor-bench --test nist_models --test convergence_measurement
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo test -p competitor-bench --test nist_models \
+  --features parallel,basin-latest
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo run -p competitor-bench --bin verify_nist -- \
+  --output target/convergence-defaults/nist-models-002.csv
+python dev/convergence-defaults/check-nist.py \
+  target/convergence-defaults/nist-models-002.csv \
+  > target/convergence-defaults/nist-models-002-check.json
+CARGO_TARGET_DIR=target/convergence-defaults/build \
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
+panache format --check TODO.md dev/convergence-defaults/README.md \
+  dev/convergence-defaults/cases.md dev/convergence-defaults/harness.md \
+  dev/convergence-defaults/nist-models.md
+panache lint TODO.md dev/convergence-defaults/README.md \
+  dev/convergence-defaults/cases.md dev/convergence-defaults/harness.md \
+  dev/convergence-defaults/nist-models.md
+git diff --check
+```
+
+The output command requires a new filename when rerun. The first intermediate
+CSV preceded the schema/family columns; only the final schema 1 CSV appears in
+this report. Failed checker executions during arithmetic validation are not
+solver runs or candidate outcomes.

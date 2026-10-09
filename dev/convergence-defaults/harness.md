@@ -95,8 +95,9 @@ The runner checks a wall limit between steps. It cannot interrupt a blocked
 callback or initialization; a process-level timeout is still needed for broad
 sweeps. Callback panics are outside its typed-error contract.
 
-Executable NIST adapters, residual conventions, general feasibility/KKT checks,
-independent precision certificates for nonanalytic models, all claimed backend
-versions, and the remaining variant audit still block affected pilots or sweeps.
-There is no holdout candidate evaluation, reference implementation comparison,
-default selection, or protocol amendment in this initial implementation.
+The [NIST model layer](nist-models.md) validates executable adapters and
+residual conventions separately. General feasibility/KKT checks, independent
+precision certificates for nonanalytic models, all claimed backend versions, and
+the remaining variant audit still block affected pilots or sweeps. There is no
+holdout candidate evaluation, reference implementation comparison, default
+selection, or protocol amendment in this initial implementation.

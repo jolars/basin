@@ -3,7 +3,7 @@
   "retrieved": "2026-10-05",
   "source_index": "https://www.itl.nist.gov/div898/strd/nls/nls_main.shtml",
   "normalization": "ASCII; LF line endings; trailing whitespace removed; final newline retained. Decimal strings preserve published precision.",
-  "status": "Input snapshots and both starts assembled; executable model adapters and reference certificates pending step 5.",
+  "status": "Input snapshots, both starts, and executable analytic model adapters validated; independent reference refinement and precision certificates pending step 5.",
   "datasets": [
     {
       "id": "Bennett5",
