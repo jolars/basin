@@ -180,7 +180,7 @@ ROBUST_CASES = {
 }
 
 
-def robust_values(run, point):
+def robust_values(run, point, absolute_gradient=False):
     loss, model, scale, _, _ = ROBUST_CASES[run['dataset']]
     x = D.from_float(point[0])
     if model == 'outlier':
@@ -211,10 +211,12 @@ def robust_values(run, point):
             curvatures.append((1 - z) / (1 + z) ** 2)
     epsilon = D(2) ** (-23 if run['precision'] == 'f32' else -52)
     rows = [[float(max(c, epsilon).sqrt() * j)] for c, j in zip(curvatures, jacobian)]
-    return float(sum(costs)), float(sum(d * j for d, j in zip(derivatives, jacobian))), rows
+    gradient_terms = [d * j for d, j in zip(derivatives, jacobian)]
+    gradient = sum(map(abs, gradient_terms)) if absolute_gradient else sum(gradient_terms)
+    return float(sum(costs)), float(gradient), rows
 
 
-def robust_quality(run, pubs):
+def robust_quality(run, pubs, last_publication=False):
     _, _, _, reference, bounds = ROBUST_CASES[run['dataset']]
     unit = 2 ** (-24 if run['precision'] == 'f32' else -53)
     for p in pubs:
@@ -224,7 +226,7 @@ def robust_quality(run, pubs):
             require(float(bounds[0]) <= x[0] <= float(bounds[1]), 'robust feasibility')
         cost, _, _ = robust_values(run, x)
         require(close(float(p['cost']), cost, unit), 'robust independent published objective')
-    if run['returned'] != 'true':
+    if not pubs or (run['returned'] != 'true' and not last_publication):
         return None
     x = numbers(pubs[-1]['point'])
     cost, gradient, _ = robust_values(run, x)
@@ -368,8 +370,15 @@ def verify(directory):
                     rows = robust_values(run, base_point)[2]
                     independent = -sum(v * w for v, w in zip(g, h)) - sum((row[0] * h[0]) ** 2 for row in rows) / 2 - sum(c * v * v for c, v in zip(curvature, h)) / 2
                     independent_scale = sum(abs(v * w) for v, w in zip(g, h)) + sum((row[0] * h[0]) ** 2 for row in rows) / 2 + sum(abs(c * v * v) / 2 for c, v in zip(curvature, h))
-                    require(close(float(o['predicted']), independent, unit, independent_scale), f'{identifier}: independent robust model decrease')
-                    if run['dataset'] == 'robust_huber_bound':
+                    # QR forms the model RHS from scaled residuals; cancellation
+                    # there depends on the unsummed residual-gradient terms.
+                    independent_scale += abs(h[0]) * robust_values(run, base_point, absolute_gradient=True)[1]
+                    if math.isfinite(float(o['predicted'])):
+                        require(close(float(o['predicted']), independent, unit, independent_scale) or abs(float(o['predicted']) - independent) <= lost_products + 4 * subnormal, f'{identifier}: independent robust model decrease')
+                    else:
+                        require(o['accepted'] == 'false', f'{identifier}: nonfinite model prediction accepted')
+                        statistics['nonfinite_model_predictions'] += 1
+                    if run['dataset'] == 'robust_huber_bound' and math.isfinite(float(o['predicted'])):
                         predicted = independent
                         prediction_scale = independent_scale
                 require(close(float(o['predicted']), predicted, unit, prediction_scale) or abs(float(o['predicted']) - predicted) <= lost_products, f'{identifier}: predicted decrease')
@@ -501,8 +510,20 @@ def main():
                     for route in lm_routes:
                         expected.add((d, p, 4000, route, 'robust_relative_probe'))
         require(len(runs) == 352 and {(r['dataset'], r['precision'], int(r['cap']), r['route'], r['policy']) for r in runs} == expected, 'robust route coverage')
+        defaults = {(r['dataset'], r['precision'], r['route']): r for r in runs if r['policy'] == 'robust_default' and r['cap'] == '4000'}
         for run in runs:
-            report['runs'].append(dict({k: run[k] for k in ('id', 'outcome', 'criteria', 'work', 'denied', 'returned')}, quality=robust_quality(run, grouped['publications'][run['id']])))
+            pubs = grouped['publications'][run['id']]
+            record = dict({k: run[k] for k in ('id', 'outcome', 'criteria', 'work', 'denied', 'returned')},
+                          quality=robust_quality(run, pubs), last_publication_quality=robust_quality(run, pubs, last_publication=True))
+            if run['policy'] == 'robust_relative_probe':
+                control = defaults[run['dataset'], run['precision'], run['route']]
+                probe_leaves = grouped['leaves'][run['id']]
+                control_leaves = grouped['leaves'][control['id']]
+                require(all(all(a[k] == b[k] for k in ('kind', 'point', 'outcome')) for a, b in zip(probe_leaves, control_leaves)), 'relative probe changes pre-stop callbacks')
+                control_quality = robust_quality(control, grouped['publications'][control['id']])
+                record['paired_default'] = dict(common_prefix_work=min(len(probe_leaves), len(control_leaves)), probe_stops_before_default=len(probe_leaves) < len(control_leaves), id=control['id'], outcome=control['outcome'], work=control['work'], quality=control_quality,
+                    improvement=record['quality']['cost'] - control_quality['cost'] if record['quality'] and control_quality else None)
+            report['runs'].append(record)
     elif is_box:
         require(len(runs) == 32 and {(r['dataset'], r['precision'], int(r['cap']), r['route'], r['policy']) for r in runs} ==
                 {(d, p, c, 'trf_full', 'bounded_default') for d in BOX_CASES for p in ('f32', 'f64') for c in (0, 1, 2, 4000)}, 'bounded coverage')

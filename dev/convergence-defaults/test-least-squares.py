@@ -63,6 +63,21 @@ class BoxQuality(unittest.TestCase):
 
 
 class RobustReference(unittest.TestCase):
+    def test_qr_prediction_allowance_includes_unsummed_gradient_terms(self):
+        unit = 2**-53
+        h = 1.3314095455969066e-7
+        gradient = -2.663114961887203e-7
+        independent = -gradient*h - h*h
+        observed = 1.773045301903516e-14
+        summed = abs(gradient*h) + h*h
+        self.assertFalse(pilot.close(observed, independent, unit, summed))
+        self.assertTrue(pilot.close(observed, independent, unit, summed + abs(h)*2))
+
+    def test_subnormal_product_rounding_allowance(self):
+        observed, independent = 0., 1.5468596943914052e-45
+        self.assertFalse(pilot.close(observed, independent, 2**-24, 5.1609820902990446e-42))
+        self.assertLess(abs(observed-independent), 4 * 2**-149)
+
     def test_known_minima_and_bound_kkt(self):
         for name, (_, _, _, reference, bounds) in pilot.ROBUST_CASES.items():
             run = dict(dataset=name, precision='f64')
@@ -103,6 +118,9 @@ class RobustReference(unittest.TestCase):
         self.assertTrue(result['quality_passed'])
         result = pilot.robust_quality(dict(run, outcome='converged'), [dict(point='0', cost='7.5')])
         self.assertFalse(result['quality_passed'])
+        error_run = dict(run, returned='false', outcome='callback_error')
+        self.assertIsNone(pilot.robust_quality(error_run, [dict(point='.5', cost='7.25')]))
+        self.assertTrue(pilot.robust_quality(error_run, [dict(point='.5', cost='7.25')], last_publication=True)['quality_passed'])
         with self.assertRaises(ValueError):
             pilot.robust_quality(run, [dict(point='.5', cost='28.375')])
 
@@ -123,6 +141,14 @@ class Evidence(unittest.TestCase):
             ('checks', lambda rows: next(r for r in rows if r['passed'] == 'true').update(value='99999')),
             ('leaves', lambda rows: rows[0].update(kind='Cost')),
         ]
+        if pilot.load(self.directory, 'runs')[0]['dataset'] in pilot.ROBUST_CASES:
+            changes.extend([
+                ('publications', lambda rows: next(r for r in rows if r['cost']).update(cost='99999')),
+                ('native', lambda rows: next(r for r in rows if r['gradient']).update(gradient='99999')),
+                ('native', lambda rows: next(r for r in rows if r['trial_cost']).update(trial_cost='99999')),
+                ('native', lambda rows: next(r for r in rows if r['trial_cost'] and r['predicted'] and pilot.math.isfinite(float(r['predicted']))).update(predicted='99999')),
+                ('native', lambda rows: next(r for r in rows if r['predicted'] and not pilot.math.isfinite(float(r['predicted']))).update(accepted='true')),
+            ])
         for name, change in changes:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
                 directory = Path(temp)
