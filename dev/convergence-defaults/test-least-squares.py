@@ -147,8 +147,9 @@ class Evidence(unittest.TestCase):
                 ('native', lambda rows: next(r for r in rows if r['gradient']).update(gradient='99999')),
                 ('native', lambda rows: next(r for r in rows if r['trial_cost']).update(trial_cost='99999')),
                 ('native', lambda rows: next(r for r in rows if r['trial_cost'] and r['predicted'] and pilot.math.isfinite(float(r['predicted']))).update(predicted='99999')),
-                ('native', lambda rows: next(r for r in rows if r['predicted'] and not pilot.math.isfinite(float(r['predicted']))).update(accepted='true')),
             ])
+            if any(r['predicted'] and not pilot.math.isfinite(float(r['predicted'])) for r in pilot.load(self.directory, 'native')):
+                changes.append(('native', lambda rows: next(r for r in rows if r['predicted'] and not pilot.math.isfinite(float(r['predicted']))).update(accepted='true')))
         for name, change in changes:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
                 directory = Path(temp)

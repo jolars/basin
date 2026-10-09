@@ -1,0 +1,18 @@
+run_id = "2026-10-09-trf-finite-model-001"
+purpose = "regression recheck after legacy TRF finite-model safeguard"
+status = "planned"
+source_revision = "24cb364b0d6a4c0a8da1eddfdaba320732a08f2b"
+protocol = "CDP-1 measurement recheck; no calibration"
+baseline_manifest = "dev/convergence-defaults/runs/2026-10-09-robust-ls-001.toml"
+output_directory = "target/convergence-defaults/2026-10-09-trf-finite-model-001"
+configuration = "identical 352-case robust phase, native defaults and relative probes, two precisions, six routes; no target or budget changes"
+verification = "independent robust checker; compare every callback prefix with frozen baseline and preserve failure versus returned quality"
+backend = "nalgebra 0.34.2"
+holdout_candidate_outcomes = "sealed"
+policies_selected = false
+commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/nist-reference-build cargo build -p competitor-bench --bin verify_least_squares",
+  "timeout 120s target/nist-reference-build/debug/verify_least_squares --phase robust --output target/convergence-defaults/2026-10-09-trf-finite-model-001/robust",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-trf-finite-model-001/robust --output target/convergence-defaults/2026-10-09-trf-finite-model-001/report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-trf-finite-model-001/robust"
+]
