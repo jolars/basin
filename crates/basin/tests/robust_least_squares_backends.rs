@@ -7,7 +7,7 @@ use basin::{
     GaussNewton, LevenbergMarquardt, LevenbergMarquardtQr, LmDamping, Trf,
     TrustRegionReflective,
 };
-use robust_backend::{Location, check};
+use robust_backend::{Location, check, check_nonfinite_damping};
 
 macro_rules! check_solvers {
     ($v:ty, $m:ty, $f:ty, $make:expr, $matrix:expr, $dense:ident) => {{
@@ -44,6 +44,9 @@ macro_rules! check_solvers {
                 .with_absolute_scaled_gradient_tolerance(gradient),
             tolerance,
         );
+        check_nonfinite_damping(fit.clone(), Trf::<V, M, F>::default().with_tau(F::INFINITY));
+        // Disable convergence to exercise damping escalation after finite rejections.
+        check_nonfinite_damping(fit.clone(), Trf::<V, M, F>::default().with_absolute_scaled_gradient_tolerance(None));
         $dense!(fit, tolerance, gradient);
     }};
 }
