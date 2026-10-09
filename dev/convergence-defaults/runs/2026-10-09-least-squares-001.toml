@@ -1,6 +1,6 @@
 run_id = "2026-10-09-least-squares-001"
 purpose = "development-least-squares-measurement-pilot"
-status = "planned"
+status = "completed"
 protocol = "CDP-1"
 source_revision = "0ed083cc1829acdc24264535ec4e773a5516dff8"
 branch = "convergence-defaults"
@@ -65,6 +65,22 @@ commands = [
   "PYTHONDONTWRITEBYTECODE=1 timeout 60m python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-least-squares-001/nist --output target/convergence-defaults/2026-10-09-least-squares-001/nist-report.json --probe target/nist-reference-build/debug/verify_nist_witness"
 ]
 
+execution_revision = "dd013755e0ec3a23956c15cfc132740bb50a93ee"
+verification_revision = "25cbcf759896f240aa9d8eae4839c46f29d04c71"
+retained_report = "dev/convergence-defaults/least-squares-results.json"
+validation_status = "passed: 80 analytic and 360 NIST solves, native decisions/accounting, 11253 independent native probes, 3670 interval quality evaluations"
+actual_verification_command = "PYTHONDONTWRITEBYTECODE=1 timeout 60m python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-least-squares-001/nist-checked --output target/convergence-defaults/2026-10-09-least-squares-001/nist-report.json --probe target/nist-reference-build/debug/verify_nist_witness"
+verification_corrections = ["The first NIST identity check rejected a cancellation-sensitive Bennett5 QR dot product at sequence 546. The corrected allowance uses absolute operation terms; its multiplier and all quality targets are unchanged.", "Parameter uncertainty now bounds all certified parameter-symmetry branches.", "An initial quality pass was manually terminated after native validation to apply target-specific parameter screening. Its raw inputs and verification probes remain retained. No solver run was interrupted or changed.", "Final verification uses identical hard-linked raw solve CSVs in nist-checked, creates fresh native probe files, and preserves the initial nist outputs."]
+verification_tests = "39 competitor tests on nalgebra 0.34; 15 new diagnostics tests plus prior 24 tests on nalgebra 0.35; four Python tests including seven negative controls"
+rust_validation = "pure-Rust solver suite, focused non-finite evidence checks, workspace all-target/all-feature clippy with warnings denied, rustfmt, rustdoc, and both WASM builds passed"
+native_nist_outcomes = "101 converged, 177 stalled, 40 failed, 8 iteration limits, 34 callback budget errors; no wall limits"
+physical_nist_work = 372015
+nist_denied_requests = 34
+designated_returned_f64 = "163/180 eligible"
+designated_returned_f32 = "115/174 eligible; six designated route cases withheld for Nelson start2"
+converged_missing_eligible_designated_target = 4
+quality_notes = "Native convergence does not certify external accuracy; local reference certificates do not establish start-basin membership. No premature-termination classification or policy selection is made."
+
 [lm]
 absolute_gradient_tolerance = "1e-8"
 orthogonality_tolerance = "disabled"
@@ -111,3 +127,33 @@ checks = ["orthogonality", "model_reduction", "trial_step", "trust_radius when a
 "crates/basin/src/solver/levenberg_marquardt/stopping.rs" = "be48b6d9c9141f09e392e23751c24abfac203146885093f4d655063909c504ea"
 "crates/basin/src/solver/trf.rs" = "0fef2b65e1d884f8da48bb9c400ba64fbb0db9f7e09b33f8182173394f6c48f6"
 "crates/basin/src/solver/trust_region_reflective.rs" = "a117bc63ebbd36b9612a8d21b7a0385ddf91d1d9dfa68517cc0e1e1825bad434"
+
+[verification_sha256]
+"dev/convergence-defaults/check-least-squares.py" = "215d61dd56e4621d518c2033d0147a08c44c3d401a43cdc101cd16ebd671ce7d"
+"dev/convergence-defaults/test-least-squares.py" = "03946cb0ab3924cf025b8afb5f2b7b903741c941283ac245517dee7f74a4d662"
+
+[output_sha256]
+"analytic-report.json" = "f07c86a1229190774c077f80aac7a1fe790db959dc4f18ccf00e3f0f17e6a952"
+"nist-report.json" = "5879af7d017e5073d6a5d6a38ce4d12b3c2de613ac0a8e1b81f695b88ff7a2e2"
+"analytic/checks.csv" = "e88a05826d5b2e9364f12fc4882d44784fd7e0c4ab31d7e64373d9d93aceb009"
+"analytic/leaves.csv" = "d694eccde6af8dbb9fce2701d5ae25abf629c3e31fda2fab94386cdcb75a90e0"
+"analytic/native.csv" = "6e9caca3cd68c96ff18d79fcde80c66eee42570ec11fd538f655170f61f57e1a"
+"analytic/publications.csv" = "d4b1c14f631406d138facc30861fa8e6ffd6d242b89772d13da2b1076d934f6e"
+"analytic/runs.csv" = "9eb409c9ff43c7d11eda8c51c6efebb41e6f0af761def151f73d3017d9c81aa4"
+"nist/checks.csv" = "f3a927c60eb1ea46c4af1eab66ec4bfef05f1ae8ab64f16fb8b0c1e0a0d54f5b"
+"nist/leaves.csv" = "6bdfe4e34f6b9258027a2450935ad027ed052e5c7ab22a3288b4f47444d5f0a1"
+"nist/native.csv" = "90c1d7b228c2bf7d06fc796036cf7f5f4594375bf9e41bb6788ddfb8fcacbfae"
+"nist/publications.csv" = "802c9d349566b10e7f279941122fa090ee43f0b3b2e8e29271c59bee00b32166"
+"nist/runs.csv" = "df0559f921f1c78228fc452027e6d58e7209e76fc0f218a9c3b99465157ed099"
+"nist/verification-native.csv" = "1b96faee763f22ac6278f2bf3ed9bc7abf1f8a77b0df4c50981027459055355a"
+"nist/verification-points.csv" = "863140c6eff56be5eb8849486805b3ad0ba4509f39dfb02eea7ae49ae1eed4f4"
+"nist-checked/checks.csv" = "f3a927c60eb1ea46c4af1eab66ec4bfef05f1ae8ab64f16fb8b0c1e0a0d54f5b"
+"nist-checked/leaves.csv" = "6bdfe4e34f6b9258027a2450935ad027ed052e5c7ab22a3288b4f47444d5f0a1"
+"nist-checked/native.csv" = "90c1d7b228c2bf7d06fc796036cf7f5f4594375bf9e41bb6788ddfb8fcacbfae"
+"nist-checked/publications.csv" = "802c9d349566b10e7f279941122fa090ee43f0b3b2e8e29271c59bee00b32166"
+"nist-checked/runs.csv" = "df0559f921f1c78228fc452027e6d58e7209e76fc0f218a9c3b99465157ed099"
+"nist-checked/verification-native.csv" = "1b96faee763f22ac6278f2bf3ed9bc7abf1f8a77b0df4c50981027459055355a"
+"nist-checked/verification-points.csv" = "863140c6eff56be5eb8849486805b3ad0ba4509f39dfb02eea7ae49ae1eed4f4"
+
+[retained_sha256]
+"dev/convergence-defaults/least-squares-results.json" = "9caf5ec15056a60f1ce6dd9430b04ccb797cc08880d4f6a7a80cf0ba7323f640"

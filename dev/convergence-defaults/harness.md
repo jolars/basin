@@ -23,6 +23,10 @@ implement the entire case register or authorize calibration.
   termination reports. Typed initialization errors expose no logical counters or
   returned point. Typed step errors preserve readable counters and the previous
   published recommendation; the consumed state is not a final checkpoint.
+- `least_squares.rs` extends the runner to LM and both TRF implementations,
+  pairing native model/trial observations with callbacks and publications. The
+  [least-squares pilot](least-squares-pilot.md) documents its separate CSV
+  schema, analytic validation, and independent NIST quality checks.
 - `fixtures.rs` supplies a native `f32`/`f64` quadratic with exact dyadic
   optimum `(1,-2)`. Its independently evaluated objective excludes additive
   offsets. These benchmark fixtures do not add public corpus problems.
@@ -85,11 +89,14 @@ threshold addresses this fixture's derivative bias, not a general default.
 
 ## Remaining gates
 
-This covers an initial subset of G402/G405, not their completion. Unit fixtures
-exercise rejected trials and nested budgets, but do not establish correct native
-LM/TRF trial diagnostics or every composed adapter's count roll-up. Passing
-predicates in native termination reports are retained; failing clauses, trial
-acceptance decisions, and unavailable model operands are not reconstructed.
+This covers a subset of G402/G405, not their completion. The initial runner
+retains passing predicates in termination reports. The [least-squares
+extension](least-squares-pilot.md) now records failing and disabled comparisons,
+native accepted/rejected trials, and callback accounting for six analytic LM/TRF
+routes in both precisions. Its unconstrained development NIST run verifies
+returned quality independently. Bounded and robust diagnostics, other backends,
+pre-trial failed model attempts, and complete composed-adapter accounting remain
+open.
 
 The runner checks a wall limit between steps. It cannot interrupt a blocked
 callback or initialization; a process-level timeout is still needed for broad

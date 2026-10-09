@@ -11,6 +11,11 @@ adds 15 validated local references and native analytic eligibility records. All
 27 model adapters are validated; holdout references and remaining
 precision/derivative certificates retain their gates.
 
+The [LM/TRF measurement pilot](2026-10-09-least-squares-001.md) adds native
+trial diagnostics, 80 analytic checks, and 360 development NIST solves across
+six routes and both precisions. Its quality verification uses the frozen local
+references; numerical policies remain unselected.
+
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
 harness pilot. A manifest must state whether its purpose is verifier validation,
 a pilot, calibration, or sealed validation. Record protocol amendments and

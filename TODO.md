@@ -515,8 +515,12 @@ remain open; the coverage boxes below require all applicable stages.
   The analytic measurement foundation, all 27 NIST model adapters, and the
   [development reference preflight](dev/convergence-defaults/nist-reference.md)
   are implemented. The preflight certifies 15 local references and 321 of 330
-  analytic target combinations; nine `f32` targets remain pending. The full
-  LM/TRF trial-diagnostic and accounting pilot remains open.
+  analytic target combinations; nine `f32` targets remain pending. The [LM/TRF
+  measurement pilot](dev/convergence-defaults/least-squares-pilot.md) now covers
+  both factorizations and damping modes, legacy TRF, and full TRF on the
+  development NIST subset in both precisions. Bounded and robust cases,
+  additional backends, full inner-work accounting, and other solver families
+  retain their gates.
 
 - [ ] **6. Calibrate by solver family and validate independently.** Compare
   current defaults, reference policies, and a small logarithmic sweep of

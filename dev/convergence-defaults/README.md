@@ -29,8 +29,12 @@ The [NIST analytic adapters](nist-models.md) now pass independent model
 validation in both precisions. The [development reference
 preflight](runs/2026-10-09-nist-reference-001.md) certifies 15 local references
 and 321 of 330 analytic target combinations. Nine `f32` targets remain pending,
-as do finite-difference eligibility, holdout references, and the full LM/TRF
-pilot. No solver policies have been selected and calibration has not started.
+as do finite-difference eligibility and holdout references. The [LM/TRF
+measurement pilot](runs/2026-10-09-least-squares-001.md) adds opt-in native
+diagnostics and 360 measured development NIST solves across six routes in both
+precisions. Bounded and robust cases, other backends, complete inner work, and
+other families remain open. No solver policies have been selected and
+calibration has not started.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -86,6 +90,9 @@ pilot. No solver policies have been selected and calibration has not started.
   the harness, calibration, and independent validation.
 - [Analytic harness](harness.md): measurement API, CSV schema, analytic
   fixtures, commands, and remaining diagnostic/coverage limitations.
+- [Least-squares pilot](least-squares-pilot.md): six native routes, trial
+  diagnostics, callback accounting, independent point quality, and reproducible
+  analytic and development NIST measurements.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
 - [Run records](runs/README.md): conventions for tracked manifests and concise
@@ -850,3 +857,94 @@ rerun, use new paths and its source revision. Raw neighbor records remain in the
 ignored full report; all certificates, eligibility decisions, and selected
 witnesses are retained in Git. The negative-control checker was added after
 source freeze and only validates evidence; its hash is retained separately.
+
+### S016: Measure native LM/TRF trials and development NIST, 2026-10-09
+
+- Starting revision: `12f4ced202a17ee87857710e77604ec773b2154e` on
+  `convergence-defaults`, with a clean working tree.
+- Scope: opt-in solver-owned model/trial observations for normal-equation and
+  pivoted-QR LM with both damping modes, legacy TRF, and full TRF. Connect them
+  to physical callbacks, authoritative counts, and publication boundaries.
+  Preserve native defaults and safeguards. Run analytic validation before the
+  unconstrained development NIST pilot in both precisions.
+- Freeze: source `0ed083c` and planned manifest `dd01375` precede retained run
+  `2026-10-09-least-squares-001`. Verifier-only corrections are frozen in
+  `bbcde7a` and `25cbcf7`; the solver source and measured CSVs are unchanged.
+- Evidence: the [run summary](runs/2026-10-09-least-squares-001.md),
+  [manifest](runs/2026-10-09-least-squares-001.toml), [method
+  documentation](least-squares-pilot.md), and [retained
+  report](least-squares-results.json) preserve 80 analytic checks, 360 NIST
+  solves, all outcomes and target grids, and independent point verification.
+  Designated returned quality passes in 163/180 eligible `f64` and 115/174
+  eligible `f32` cases. Six Nelson start 2 route cases remain withheld at the
+  designated `f32` target. Four convergence reports miss eligible designated
+  quality; local reference/start-basin limits prevent a premature-stop claim.
+- Accounting: 372,015 physical calls reconcile with 339,799 residual and 32,610
+  Jacobian requests, 360 fused initializations, and 34 budget denials.
+  Residual-derived objectives add no cost request. NIST native observations
+  retain 32,250 accepted publications, 307,157 rejections, 139 non-finite
+  trials, and 32 denied trial callbacks. Analytic caps demonstrate that a native
+  acceptance followed by Jacobian denial creates no publication or returned
+  point.
+- Verification: the pure-Rust solver suite and focused non-finite evidence
+  checks pass. All 39 competitor checks pass on nalgebra 0.34 and 0.35 across
+  focused commands. Four Python tests include seven mutation controls and
+  independent first-order/full-Hessian AD agreement for every development model.
+  Workspace all-target/all-feature clippy denies warnings. Rustfmt, rustdoc,
+  default/no-default WASM builds, documentation format/lint, local links, and
+  whitespace checks pass.
+- Development corrections: model-prediction roundoff bounds need absolute terms
+  within cancelling dot products; native squared steps can underflow before
+  damping rescales them. Parameter uncertainty must cover symmetry branches. An
+  initial corpus quality pass was stopped after native validation to use
+  provable target-specific parameter screens. Original outputs and probe files
+  remain retained, with fresh final verification under `nist-checked/`. These
+  corrections change no numerical setting, target, or protocol rule.
+- Decisions: none. No holdout solver outcome, policy, default, safeguard, or
+  protocol amendment was selected. Native convergence remains distinct from
+  external point quality. Full TRF failures and legacy TRF budget errors retain
+  their original classification even when a published point attained a target.
+  Step 5 remains in progress.
+- Next task: extend analytic diagnostics and accounting to bound-active and
+  fixed-coordinate TRF and robust-loss LM/TRF, using independently known KKT or
+  robust references. Then close remaining backend, derivative, inner-work,
+  transformed-case, and reference-branch gates before affected candidate sweeps.
+
+Reproduction commands are frozen in the run manifest. Core verification used:
+
+```sh
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo test -p competitor-bench --test least_squares_measurement \
+  --test nist_models --test convergence_measurement
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo test -p competitor-bench --features basin-latest \
+  --test least_squares_measurement --test nist_models --test convergence_measurement
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo doc --no-deps -p basin \
+  --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/least-squares-wasm \
+  cargo build --target wasm32-unknown-unknown
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/least-squares-wasm \
+  cargo build --target wasm32-unknown-unknown --no-default-features
+cargo fmt --all -- --check
+PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py \
+  target/convergence-defaults/2026-10-09-least-squares-001/analytic
+git diff --check
+```
+
+The default-feature run uses nalgebra 0.34.2; `basin-latest` tests use 0.35.0.
+The final quality pass performs 11,253 independent native probes and 3,670
+interval quality evaluations outside the solve ledger and timer. Bulk traces
+remain under the ignored run directory; the retained summary and manifest remain
+sufficient to inspect outcomes and reproduce the measurements.
