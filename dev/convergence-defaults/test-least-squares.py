@@ -62,6 +62,51 @@ class BoxQuality(unittest.TestCase):
         self.assertEqual(result['objective_gap'], 1.5)
 
 
+class RobustReference(unittest.TestCase):
+    def test_known_minima_and_bound_kkt(self):
+        for name, (_, _, _, reference, bounds) in pilot.ROBUST_CASES.items():
+            run = dict(dataset=name, precision='f64')
+            cost, gradient, _ = pilot.robust_values(run, [float(reference)])
+            if bounds:
+                self.assertLess(gradient, 0)
+            else:
+                self.assertEqual(gradient, 0)
+            for delta in (-.01, .01):
+                x = float(reference) + delta
+                if bounds and not float(bounds[0]) <= x <= float(bounds[1]):
+                    continue
+                trial_cost, trial_gradient, _ = pilot.robust_values(run, [x])
+                self.assertGreater(trial_cost, cost, name)
+                if bounds is None:
+                    self.assertGreater(trial_gradient * delta, 0, name)
+
+    def test_gradient_matches_independent_objective_difference(self):
+        for name in pilot.ROBUST_CASES:
+            run = dict(dataset=name, precision='f64')
+            x = .1
+            h = 1e-5
+            _, gradient, _ = pilot.robust_values(run, [x])
+            plus = pilot.robust_values(run, [x + h])[0]
+            minus = pilot.robust_values(run, [x - h])[0]
+            self.assertAlmostEqual(gradient, (plus-minus)/(2*h), delta=1e-8)
+
+    def test_curvature_safeguards_are_precision_specific(self):
+        for precision, epsilon in [('f64', 2**-52), ('f32', 2**-23)]:
+            _, _, rows = pilot.robust_values(dict(dataset='robust_cauchy', precision=precision), [-1.])
+            self.assertAlmostEqual(rows[0][0]**2, epsilon, delta=epsilon*1e-14)
+            _, _, rows = pilot.robust_values(dict(dataset='robust_huber_outlier', precision=precision), [.5])
+            self.assertAlmostEqual(rows[2][0]**2, epsilon, delta=epsilon*1e-14)
+
+    def test_quality_keeps_poor_and_failed_returns(self):
+        run = dict(dataset='robust_huber_outlier', precision='f64', returned='true', policy='robust_default', outcome='failed')
+        result = pilot.robust_quality(run, [dict(point='.5', cost='7.25')])
+        self.assertTrue(result['quality_passed'])
+        result = pilot.robust_quality(dict(run, outcome='converged'), [dict(point='0', cost='7.5')])
+        self.assertFalse(result['quality_passed'])
+        with self.assertRaises(ValueError):
+            pilot.robust_quality(run, [dict(point='.5', cost='28.375')])
+
+
 class Evidence(unittest.TestCase):
     directory = None
 

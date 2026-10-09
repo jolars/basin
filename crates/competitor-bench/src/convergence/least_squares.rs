@@ -26,11 +26,117 @@ pub enum AnalyticModel {
     Linear,
     /// Identity residuals with target (1, -1), for box KKT checks.
     BoxLinear,
+    /// Two inliers and one outlier distinguish robust from squared-loss minima.
+    RobustOutlier,
+    /// Symmetric residuals give a known smooth robust minimum.
+    RobustSymmetric,
     /// A stationary maximum in the first coordinate, to separate stops from quality.
     BoxStationary,
     Nonzero,
     NonFiniteTrial,
 }
+
+/// Loss dispatch retains the production adapter and its native safeguards.
+#[derive(Clone, Copy, Debug)]
+pub enum PilotLoss {
+    Huber,
+    SoftL1,
+    Cauchy,
+}
+impl<F: Scalar> basin::LossFunction<F> for PilotLoss {
+    fn evaluate(&self, z: F) -> basin::LossEvaluation<F> {
+        match self {
+            Self::Huber => basin::HuberLoss.evaluate(z),
+            Self::SoftL1 => basin::SoftL1Loss.evaluate(z),
+            Self::Cauchy => basin::CauchyLoss.evaluate(z),
+        }
+    }
+    fn evaluate_scaled(&self, r: F, scale: F) -> basin::LossEvaluation<F> {
+        match self {
+            Self::Huber => basin::HuberLoss.evaluate_scaled(r, scale),
+            Self::SoftL1 => basin::SoftL1Loss.evaluate_scaled(r, scale),
+            Self::Cauchy => basin::CauchyLoss.evaluate_scaled(r, scale),
+        }
+    }
+}
+
+/// Unit-scale analytic cases are measurement controls, not calibration targets.
+#[derive(Clone, Copy, Debug)]
+pub struct RobustFixture {
+    pub name: &'static str,
+    pub model: AnalyticModel,
+    pub loss: PilotLoss,
+    pub scale: f64,
+    pub start: f64,
+    pub reference: f64,
+    pub bounds: Option<(f64, f64)>,
+}
+
+pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
+    RobustFixture {
+        name: "robust_huber_outlier",
+        model: AnalyticModel::RobustOutlier,
+        loss: PilotLoss::Huber,
+        scale: 1.,
+        start: 0.1,
+        reference: 0.5,
+        bounds: None,
+    },
+    RobustFixture {
+        name: "robust_huber_scaled",
+        model: AnalyticModel::RobustOutlier,
+        loss: PilotLoss::Huber,
+        scale: 0.5,
+        start: 0.1,
+        reference: 0.25,
+        bounds: None,
+    },
+    RobustFixture {
+        name: "robust_soft_l1",
+        model: AnalyticModel::RobustSymmetric,
+        loss: PilotLoss::SoftL1,
+        scale: 1.,
+        start: 0.1,
+        reference: 0.,
+        bounds: None,
+    },
+    RobustFixture {
+        name: "robust_cauchy",
+        model: AnalyticModel::Linear,
+        loss: PilotLoss::Cauchy,
+        scale: 1.,
+        start: -1.,
+        reference: 1.,
+        bounds: None,
+    },
+    RobustFixture {
+        name: "robust_huber_kink",
+        model: AnalyticModel::Linear,
+        loss: PilotLoss::Huber,
+        scale: 0.5,
+        start: 0.5,
+        reference: 1.,
+        bounds: None,
+    },
+    RobustFixture {
+        name: "robust_nonfinite",
+        model: AnalyticModel::NonFiniteTrial,
+        loss: PilotLoss::SoftL1,
+        scale: 1.,
+        start: 0.1,
+        reference: 1.,
+        bounds: None,
+    },
+    RobustFixture {
+        name: "robust_huber_bound",
+        model: AnalyticModel::RobustOutlier,
+        loss: PilotLoss::Huber,
+        scale: 0.5,
+        start: 0.1,
+        reference: 0.125,
+        bounds: Some((0., 0.125)),
+    },
+];
 
 #[derive(Clone, Debug)]
 pub enum Model<F: Scalar> {
@@ -92,6 +198,21 @@ impl<F: Scalar> Instrumented<F> {
                     DMatrix::from_fn(rows, x.len(), |i, k| j[i][k]),
                 )
             }
+            Model::Analytic(AnalyticModel::RobustOutlier) => (
+                DVector::from_vec(vec![
+                    x[0],
+                    x[0],
+                    x[0] - F::from_f64(8.).unwrap(),
+                ]),
+                DMatrix::from_element(3, 1, F::one()),
+            ),
+            Model::Analytic(AnalyticModel::RobustSymmetric) => (
+                DVector::from_vec(vec![
+                    x[0] - F::from_f64(2.).unwrap(),
+                    x[0] + F::from_f64(2.).unwrap(),
+                ]),
+                DMatrix::from_element(2, 1, F::one()),
+            ),
             Model::Analytic(AnalyticModel::BoxLinear) => (
                 DVector::from_vec(vec![x[0] - F::one(), x[1] + F::one()]),
                 DMatrix::identity(2, 2),
@@ -109,7 +230,10 @@ impl<F: Scalar> Instrumented<F> {
             Model::Analytic(model) => {
                 let d = x[0] - F::one();
                 let (r, j) = match model {
-                    AnalyticModel::BoxLinear | AnalyticModel::BoxStationary => {
+                    AnalyticModel::RobustOutlier
+                    | AnalyticModel::RobustSymmetric
+                    | AnalyticModel::BoxLinear
+                    | AnalyticModel::BoxStationary => {
                         unreachable!()
                     }
                     AnalyticModel::Linear => (d, F::one()),
@@ -229,14 +353,14 @@ fn recommendation<F: Scalar>(
 }
 
 /// Controls and errors preserve the same ownership rules as the original runner.
-pub fn measure<F, So>(
-    executor: Executor<Instrumented<F>, PointState<DVector<F>, F>, So>,
+pub fn measure<F, P, So>(
+    executor: Executor<P, PointState<DVector<F>, F>, So>,
     ledger: &WorkLedger,
     wall_cap: Duration,
 ) -> Measured<F>
 where
     F: Scalar,
-    So: Solver<Instrumented<F>, PointState<DVector<F>, F>, Error = OracleError>
+    So: Solver<P, PointState<DVector<F>, F>, Error = OracleError>
         + LeastSquaresDiagnostics<F>,
 {
     let start = Instant::now();

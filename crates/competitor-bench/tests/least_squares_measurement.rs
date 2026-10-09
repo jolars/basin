@@ -329,3 +329,130 @@ macro_rules! bounded_checks {
 }
 bounded_checks!(bounded64, f64);
 bounded_checks!(bounded32, f32);
+
+macro_rules! robust_checks {
+    ($name:ident, $f:ty, $solver:expr, $bounded:expr) => {
+        #[test]
+        fn $name() {
+            use competitor_bench::convergence::least_squares::ROBUST_FIXTURES;
+            for fixture in ROBUST_FIXTURES {
+                if fixture.bounds.is_some() && !$bounded {
+                    continue;
+                }
+                let run = |enabled, cap| {
+                    let ledger = WorkLedger::new(cap);
+                    let mut raw = Instrumented::<$f>::analytic(
+                        fixture.model,
+                        ledger.clone(),
+                    );
+                    if let Some((lo, hi)) = fixture.bounds {
+                        raw = raw.with_bounds(vec![lo as $f], vec![hi as $f]);
+                    }
+                    let problem =
+                        basin::RobustLeastSquares::new(raw, fixture.loss)
+                            .with_scale(fixture.scale as $f);
+                    measure(
+                        Executor::new(
+                            problem,
+                            $solver.with_trial_diagnostics(enabled),
+                            PointState::new(DVector::from_element(
+                                1,
+                                fixture.start as $f,
+                            )),
+                        )
+                        .max_iter(10000),
+                        &ledger,
+                        Duration::from_secs(10),
+                    )
+                };
+                let plain = run(false, 4000);
+                let traced = run(true, 4000);
+                assert!(plain.native.is_empty());
+                assert!(!traced.native.is_empty());
+                assert_eq!(plain.run.counts, traced.run.counts);
+                assert_eq!(
+                    format!("{:?}", plain.run.outcome),
+                    format!("{:?}", traced.run.outcome)
+                );
+                assert_eq!(plain.run.ledger.work(), traced.run.ledger.work());
+                assert_eq!(
+                    plain.run.recommendations.len(),
+                    traced.run.recommendations.len()
+                );
+                for (a, b) in plain
+                    .run
+                    .recommendations
+                    .iter()
+                    .zip(&traced.run.recommendations)
+                {
+                    assert_eq!(a.point, b.point);
+                    assert_eq!(a.solver_cost, b.solver_cost);
+                    assert_eq!(a.counts, b.counts);
+                }
+                for cap in 0..=2 {
+                    let limited = run(true, cap);
+                    assert_eq!(limited.run.ledger.work(), cap);
+                    assert!(limited.run.returned().is_none());
+                    assert_eq!(limited.run.ledger.denied, 1);
+                }
+            }
+        }
+    };
+}
+macro_rules! robust_precision {
+    ($f:ty, $n:ident, $t:ident, $qn:ident, $qt:ident, $legacy:ident, $full:ident) => {
+        robust_checks!(
+            $n,
+            $f,
+            LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default(),
+            false
+        );
+        robust_checks!(
+            $t,
+            $f,
+            LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default()
+                .with_damping(LmDamping::TrustRegion),
+            false
+        );
+        robust_checks!(
+            $qn,
+            $f,
+            LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default()
+                .with_pivoted_qr(),
+            false
+        );
+        robust_checks!(
+            $qt,
+            $f,
+            LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default()
+                .with_pivoted_qr()
+                .with_damping(LmDamping::TrustRegion),
+            false
+        );
+        robust_checks!(
+            $legacy,
+            $f,
+            Trf::<DVector<$f>, DMatrix<$f>, $f>::default(),
+            true
+        );
+        robust_checks!($full, $f, TrustRegionReflective::<$f>::new(), true);
+    };
+}
+robust_precision!(
+    f64,
+    robust_lm64,
+    robust_trust64,
+    robust_qr64,
+    robust_qt64,
+    robust_legacy64,
+    robust_full64
+);
+robust_precision!(
+    f32,
+    robust_lm32,
+    robust_trust32,
+    robust_qr32,
+    robust_qt32,
+    robust_legacy32,
+    robust_full32
+);

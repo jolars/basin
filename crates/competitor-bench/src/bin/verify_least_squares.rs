@@ -1,10 +1,13 @@
 //! Fixed-policy development pilot; independent verification runs afterward.
 use basin::{
     ConvergenceEvidence, ConvergenceTest, Executor, LevenbergMarquardt,
-    LmDamping, PointState, Scalar, Termination, Trf, TrustRegionReflective,
+    LmDamping, PointState, RobustLeastSquares, Scalar, Termination, Trf,
+    TrustRegionReflective,
 };
 use competitor_bench::convergence::{
-    least_squares::{AnalyticModel, Instrumented, Measured, measure},
+    least_squares::{
+        AnalyticModel, Instrumented, Measured, ROBUST_FIXTURES, measure,
+    },
     ledger::WorkLedger,
     nist::datasets,
     runner::RunOutcome,
@@ -51,6 +54,7 @@ fn predicate(test: &ConvergenceTest) -> &'static str {
     match test {
         ConvergenceTest::AbsoluteGradientInfinity => "absolute_gradient",
         ConvergenceTest::GradientOrthogonality => "orthogonality",
+        ConvergenceTest::RobustGradientOrthogonality => "robust_orthogonality",
         ConvergenceTest::RelativeModelReduction => "model_reduction",
         ConvergenceTest::RelativeTrialStep => "trial_step",
         ConvergenceTest::RelativeTrustRadius => "trust_radius",
@@ -263,7 +267,13 @@ impl Files {
                 let mut fields = vec![
                     id.into(),
                     o.sequence.to_string(),
-                    check.name.into(),
+                    if dataset.starts_with("robust_")
+                        && check.name == "orthogonality"
+                    {
+                        "robust_orthogonality".into()
+                    } else {
+                        check.name.into()
+                    },
                     opt(check.tolerance),
                     check.passed.map(|p| p.to_string()).unwrap_or_default(),
                 ];
@@ -339,11 +349,22 @@ macro_rules! precision {
                     let ledger = WorkLedger::new(cap);
                     let mut p = problem.clone(); p.ledger = ledger.clone();
                     let solver = $solver.with_trial_diagnostics(true);
-                    let executor = Executor::new(p, solver, PointState::new(DVector::from_vec(x.clone()))).max_iter(10_000);
-                    let result = measure(executor, &ledger, Duration::from_secs(600));
+                    let state = PointState::new(DVector::from_vec(x.clone()));
+                    let result = if policy.starts_with("robust_") {
+                        let fixture = ROBUST_FIXTURES.iter().find(|f| f.name == dataset).unwrap();
+                        let p = RobustLeastSquares::new(p, fixture.loss).with_scale(fixture.scale as $f);
+                        measure(Executor::new(p, solver, state).max_iter(10_000), &ledger, Duration::from_secs(600))
+                    } else {
+                        measure(Executor::new(p, solver, state).max_iter(10_000), &ledger, Duration::from_secs(600))
+                    };
                     let id = format!("{dataset}-{precision}-{start}-{}-{policy}-{cap}", $name);
                     files.emit(Labels { id: &id, dataset, precision, start, route: $name, policy }, result)?;
                 }};
+            }
+            if dataset == "robust_huber_bound" {
+                route!("trf_legacy", Trf::<DVector<$f>, DMatrix<$f>, $f>::default());
+                route!("trf_full", TrustRegionReflective::<$f>::new());
+                return Ok(());
             }
             if policy == "bounded_default" {
                 route!("trf_full", TrustRegionReflective::<$f>::new());
@@ -351,7 +372,7 @@ macro_rules! precision {
             }
             let lm = |damping| {
                 let mut s = LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default().with_damping(damping);
-                if policy == "relative_probe" {
+                if policy == "relative_probe" || policy == "robust_relative_probe" {
                     let tol: $f = if precision == "f32" { 1e-4 } else { 1e-8 };
                     s = s.with_absolute_gradient_tolerance(0.0).with_gradient_orthogonality_tolerance(tol)
                         .with_relative_model_reduction_tolerance(tol).with_relative_step_tolerance(tol)
@@ -363,7 +384,7 @@ macro_rules! precision {
             route!("lm_normal_trust", lm(LmDamping::TrustRegion));
             route!("lm_qr_nielsen", lm(LmDamping::Nielsen).with_pivoted_qr());
             route!("lm_qr_trust", lm(LmDamping::TrustRegion).with_pivoted_qr());
-            if policy != "relative_probe" {
+            if policy != "relative_probe" && policy != "robust_relative_probe" {
                 route!("trf_legacy", Trf::<DVector<$f>, DMatrix<$f>, $f>::default());
                 route!("trf_full", TrustRegionReflective::<$f>::new());
             }
@@ -379,9 +400,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     if args.len() != 5
         || args[1] != "--phase"
         || args[3] != "--output"
-        || !matches!(args[2].as_str(), "analytic" | "bounded" | "nist")
+        || !matches!(
+            args[2].as_str(),
+            "analytic" | "bounded" | "robust" | "nist"
+        )
     {
-        return Err("usage: verify_least_squares --phase analytic|bounded|nist --output <new-directory>".into());
+        return Err("usage: verify_least_squares --phase analytic|bounded|robust|nist --output <new-directory>".into());
     }
     let mut files = Files::new(Path::new(&args[4]))?;
     if args[2] == "analytic" {
@@ -510,6 +534,53 @@ fn main() -> Result<(), Box<dyn Error>> {
                     cap,
                     "bounded_default",
                 )?;
+            }
+        }
+    } else if args[2] == "robust" {
+        for fixture in ROBUST_FIXTURES {
+            let policies: &[&str] = if fixture.bounds.is_some() {
+                &["robust_default"]
+            } else {
+                &["robust_default", "robust_relative_probe"]
+            };
+            for &policy in policies {
+                let caps: &[u64] = if policy == "robust_default" {
+                    &[0, 1, 2, 4000]
+                } else {
+                    &[4000]
+                };
+                for &cap in caps {
+                    let mut p64 = Instrumented::analytic(
+                        fixture.model,
+                        WorkLedger::new(cap),
+                    );
+                    let mut p32 = Instrumented::analytic(
+                        fixture.model,
+                        WorkLedger::new(cap),
+                    );
+                    if let Some((lo, hi)) = fixture.bounds {
+                        p64 = p64.with_bounds(vec![lo], vec![hi]);
+                        p32 = p32.with_bounds(vec![lo as f32], vec![hi as f32]);
+                    }
+                    run64(
+                        &mut files,
+                        fixture.name,
+                        1,
+                        vec![fixture.start],
+                        p64,
+                        cap,
+                        policy,
+                    )?;
+                    run32(
+                        &mut files,
+                        fixture.name,
+                        1,
+                        vec![fixture.start as f32],
+                        p32,
+                        cap,
+                        policy,
+                    )?;
+                }
             }
         }
     } else {

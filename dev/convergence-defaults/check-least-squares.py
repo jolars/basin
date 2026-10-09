@@ -169,6 +169,76 @@ def require(test, message):
         raise ValueError(message)
 
 
+ROBUST_CASES = {
+    'robust_huber_outlier': ('huber', 'outlier', D(1), D('.5'), None),
+    'robust_huber_scaled': ('huber', 'outlier', D('.5'), D('.25'), None),
+    'robust_soft_l1': ('soft_l1', 'symmetric', D(1), D(0), None),
+    'robust_cauchy': ('cauchy', 'linear', D(1), D(1), None),
+    'robust_huber_kink': ('huber', 'linear', D('.5'), D(1), None),
+    'robust_nonfinite': ('soft_l1', 'nonfinite', D(1), D(1), None),
+    'robust_huber_bound': ('huber', 'outlier', D('.5'), D('.125'), (D(0), D('.125'))),
+}
+
+
+def robust_values(run, point):
+    loss, model, scale, _, _ = ROBUST_CASES[run['dataset']]
+    x = D.from_float(point[0])
+    if model == 'outlier':
+        residuals, jacobian = [x, x, x - 8], [D(1)] * 3
+    elif model == 'symmetric':
+        residuals, jacobian = [x - 2, x + 2], [D(1)] * 2
+    elif model == 'nonfinite':
+        if x < 0 or x > D.from_float(native('1.1', run['precision'])):
+            return math.inf, math.nan, []
+        residuals, jacobian = [1 + (x - 1) ** 2], [2 * (x - 1)]
+    else:
+        residuals, jacobian = [x - 1], [D(1)]
+    costs, derivatives, curvatures = [], [], []
+    for r in residuals:
+        if loss == 'huber':
+            costs.append(r * r / 2 if abs(r) <= scale else scale * (abs(r) - scale / 2))
+            derivatives.append(r if abs(r) <= scale else scale.copy_sign(r))
+            curvatures.append(D(1) if abs(r) <= scale else D(0))
+        elif loss == 'soft_l1':
+            root = (1 + (r / scale) ** 2).sqrt()
+            costs.append(r * r / (root + 1))
+            derivatives.append(r / root)
+            curvatures.append(1 / root ** 3)
+        else:
+            z = (r / scale) ** 2
+            costs.append(scale ** 2 * (1 + z).ln() / 2)
+            derivatives.append(r / (1 + z))
+            curvatures.append((1 - z) / (1 + z) ** 2)
+    epsilon = D(2) ** (-23 if run['precision'] == 'f32' else -52)
+    rows = [[float(max(c, epsilon).sqrt() * j)] for c, j in zip(curvatures, jacobian)]
+    return float(sum(costs)), float(sum(d * j for d, j in zip(derivatives, jacobian))), rows
+
+
+def robust_quality(run, pubs):
+    _, _, _, reference, bounds = ROBUST_CASES[run['dataset']]
+    unit = 2 ** (-24 if run['precision'] == 'f32' else -53)
+    for p in pubs:
+        x = numbers(p['point'])
+        require(len(x) == 1, 'robust point dimension')
+        if bounds:
+            require(float(bounds[0]) <= x[0] <= float(bounds[1]), 'robust feasibility')
+        cost, _, _ = robust_values(run, x)
+        require(close(float(p['cost']), cost, unit), 'robust independent published objective')
+    if run['returned'] != 'true':
+        return None
+    x = numbers(pubs[-1]['point'])
+    cost, gradient, _ = robust_values(run, x)
+    reference_cost, _, _ = robust_values(run, [float(reference)])
+    kkt = abs(gradient) if bounds is None else abs(x[0] - min(float(bounds[1]), max(float(bounds[0]), x[0] - gradient)))
+    error = abs(x[0] - float(reference))
+    limit = 1e-3 if run['precision'] == 'f32' else 1e-6
+    if run['policy'] == 'robust_relative_probe':
+        limit = 2e-2 if run['precision'] == 'f32' else 1e-4
+    return dict(point=x, reference=float(reference), cost=cost, reference_cost=reference_cost,
+                objective_gap=cost-reference_cost, gradient=gradient, stationarity=kkt,
+                parameter_error=error, quality_limit=limit, quality_passed=error <= limit and kkt <= limit)
+
+
 BOX_CASES = {
     'box_active': ([0., -.5], [.5, 0.]),
     'box_mixed_fixed': ([.25, -2.], [.25, 0.]),
@@ -218,6 +288,8 @@ def verify(directory):
     cases = {c['id']: c for c in datasets()}
     jacobian_cache = {}
     def independent_jacobian(run, point):
+        if run['dataset'] in ROBUST_CASES:
+            return robust_values(run, point)[2]
         if run['dataset'] == 'box_stationary':
             return [[-2 * point[0], 0.], [0., 1.]]
         if run['dataset'] in BOX_CASES:
@@ -249,7 +321,21 @@ def verify(directory):
         require([int(o['sequence']) for o in observations] == sorted({int(o['sequence']) for o in observations}), f'{identifier}: duplicate sequence')
         keyed = {o['sequence']: o for o in observations}
         leaf_keyed = {c['work']: c for c in leaves}
+        robust = run['dataset'] in ROBUST_CASES
+        if robust:
+            robust_quality(run, pubs)
         for o in observations:
+            if robust and o['gradient']:
+                base_point = next((numbers(p['point']) for p in reversed(pubs) if int(p['work']) <= int(o['work_before'])), None)
+                require(base_point is not None, f'{identifier}: robust base publication')
+                base_cost, gradient, rows = robust_values(run, base_point)
+                require(close(float(o['base_cost']), base_cost, unit), f'{identifier}: robust base objective')
+                expected = gradient
+                if run['route'] == 'trf_full' and o['trial'] == 'true':
+                    expected *= numbers(o['coordinate_scale'])[0]
+                require(len(numbers(o['gradient'])) == 1 and close(numbers(o['gradient'])[0], expected, unit, max(1., abs(expected))), f'{identifier}: independent robust gradient')
+                if run['route'].startswith('lm_') and o['trial'] != 'true':
+                    require(close(numbers(o['diagonal'])[0], sum(row[0] ** 2 for row in rows), unit), f'{identifier}: safeguarded robust model diagonal')
             if o['trial'] != 'true':
                 statistics['model_observations'] += 1
                 continue
@@ -265,6 +351,9 @@ def verify(directory):
                 statistics['failed_trial_callbacks'] += 1
                 continue
             base = float(o['base_cost']); trial = float(o['trial_cost'])
+            if robust:
+                expected_cost, _, _ = robust_values(run, numbers(leaf['point']))
+                require(close(trial, expected_cost, unit), f'{identifier}: robust trial objective')
             h, g, diagonal, curvature = [numbers(o[k]) for k in ('step', 'gradient', 'diagonal', 'curvature')]
             actual = base - trial - (sum(c * v * v for c, v in zip(curvature, h)) / 2 if run['route'] == 'trf_legacy' else 0)
             if o['actual']:
@@ -275,6 +364,14 @@ def verify(directory):
                 subnormal = 2 ** (-149 if run['precision'] == 'f32' else -1074)
                 lost_products = abs(float(o['damping'])) * subnormal * len(h) * max([1] + list(map(abs, diagonal)))
                 prediction_scale = (abs(float(o['damping'])) * sum(abs(d * v * v) for d, v in zip(diagonal, h)) + sum(abs(v * w) for v, w in zip(h, g))) / 2
+                if robust:
+                    rows = robust_values(run, base_point)[2]
+                    independent = -sum(v * w for v, w in zip(g, h)) - sum((row[0] * h[0]) ** 2 for row in rows) / 2 - sum(c * v * v for c, v in zip(curvature, h)) / 2
+                    independent_scale = sum(abs(v * w) for v, w in zip(g, h)) + sum((row[0] * h[0]) ** 2 for row in rows) / 2 + sum(abs(c * v * v) / 2 for c, v in zip(curvature, h))
+                    require(close(float(o['predicted']), independent, unit, independent_scale), f'{identifier}: independent robust model decrease')
+                    if run['dataset'] == 'robust_huber_bound':
+                        predicted = independent
+                        prediction_scale = independent_scale
                 require(close(float(o['predicted']), predicted, unit, prediction_scale) or abs(float(o['predicted']) - predicted) <= lost_products, f'{identifier}: predicted decrease')
                 expected_ratio = actual / float(o['predicted']) if float(o['predicted']) > 0 else 0.0
                 require(close(float(o['ratio']), expected_ratio, unit, (abs(base) + abs(trial)) / max(abs(float(o['predicted'])), 1e-300)), f'{identifier}: safeguarded ratio')
@@ -324,7 +421,7 @@ def verify(directory):
                 o = keyed[c['sequence']]
                 if c['name'] == 'absolute_gradient':
                     require(close(float(value), max(map(abs, numbers(o['gradient']))), unit), f'{identifier}: gradient evidence')
-                if c['name'] == 'orthogonality':
+                if c['name'] in ('orthogonality', 'robust_orthogonality'):
                     o = keyed[c['sequence']]
                     g = numbers(o['gradient']); diag = numbers(o['diagonal']); rnorm = math.sqrt(2 * float(o['base_cost']))
                     quotient = max((abs(v) / math.sqrt(d) / rnorm if v and d and rnorm else 0 for v, d in zip(g, diag)), default=0)
@@ -342,7 +439,13 @@ def verify(directory):
                             raw[0] = -2 * x[0] * (2 - x[0] ** 2)
                         require(all(close(v, raw[i], unit) for v, i in zip(g, free)) and len(g) == len(free), f'{identifier}: independent free gradient')
                         metric = max((abs(raw[i]) * (upper[i] - x[i] if raw[i] < 0 else x[i] - lower[i]) for i in free), default=0)
-                    require(close(float(value), metric, unit), f'{identifier}: scaled-gradient evidence')
+                    if robust and run['route'] == 'trf_full':
+                        x = next(numbers(p['point']) for p in reversed(pubs) if int(p['work']) <= int(o['work_before']))
+                        _, raw, _ = robust_values(run, x)
+                        bounds = ROBUST_CASES[run['dataset']][4]
+                        v = 1. if bounds is None or raw == 0 else float(bounds[1]) - x[0] if raw < 0 else x[0] - float(bounds[0])
+                        metric = abs(raw) * v
+                    require(close(float(value), metric, unit, 1. if robust else None), f'{identifier}: scaled-gradient evidence')
                 if c['name'] in ('trial_step', 'trust_radius'):
                     if c['name'] == 'trial_step':
                         require(close(float(value), math.hypot(*numbers(o['step'])), unit), f'{identifier}: step evidence')
@@ -384,8 +487,23 @@ def main():
     nist_cases = {c['id']: c for c in datasets()}
     is_nist = all(r['dataset'] in nist_cases for r in runs)
     is_box = all(r['dataset'] in BOX_CASES for r in runs)
-    require(is_nist or is_box or all(r['dataset'] in ('linear', 'linear_budget', 'nonzero', 'nonfinite') for r in runs), 'mixed or unsupported phase')
-    if is_box:
+    is_robust = all(r['dataset'] in ROBUST_CASES for r in runs)
+    require(is_nist or is_box or is_robust or all(r['dataset'] in ('linear', 'linear_budget', 'nonzero', 'nonfinite') for r in runs), 'mixed or unsupported phase')
+    if is_robust:
+        lm_routes = ('lm_normal_nielsen', 'lm_normal_trust', 'lm_qr_nielsen', 'lm_qr_trust')
+        expected = set()
+        for d, (_, _, _, _, bounds) in ROBUST_CASES.items():
+            for p in ('f32', 'f64'):
+                for cap in (0, 1, 2, 4000):
+                    for route in (('trf_legacy', 'trf_full') if bounds else lm_routes + ('trf_legacy', 'trf_full')):
+                        expected.add((d, p, cap, route, 'robust_default'))
+                if bounds is None:
+                    for route in lm_routes:
+                        expected.add((d, p, 4000, route, 'robust_relative_probe'))
+        require(len(runs) == 352 and {(r['dataset'], r['precision'], int(r['cap']), r['route'], r['policy']) for r in runs} == expected, 'robust route coverage')
+        for run in runs:
+            report['runs'].append(dict({k: run[k] for k in ('id', 'outcome', 'criteria', 'work', 'denied', 'returned')}, quality=robust_quality(run, grouped['publications'][run['id']])))
+    elif is_box:
         require(len(runs) == 32 and {(r['dataset'], r['precision'], int(r['cap']), r['route'], r['policy']) for r in runs} ==
                 {(d, p, c, 'trf_full', 'bounded_default') for d in BOX_CASES for p in ('f32', 'f64') for c in (0, 1, 2, 4000)}, 'bounded coverage')
         for run in runs:

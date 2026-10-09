@@ -1,0 +1,43 @@
+run_id = "2026-10-09-robust-ls-001"
+purpose = "analytic-robust-least-squares-measurement"
+status = "planned"
+starting_revision = "30ebdbc"
+source_revision = "commit containing this planned manifest"
+protocol = "CDP-1 measurement pilot; no calibration or corpus eligibility certificate"
+output_directory = "target/convergence-defaults/2026-10-09-robust-ls-001"
+backend = "nalgebra 0.34.2; regression tests also use 0.35.0"
+compiler = "rustc 1.89.0"
+profile = "dev; debug=0; incremental=0; instrumented, unoptimized"
+execution = "serial deterministic; no RNG"
+architecture = "x86_64"
+working_directory = "/home/jola/projects/basin"
+schema = 1
+features = "competitor-bench defaults"
+precisions = ["f64", "f32"]
+routes = ["lm_normal_nielsen", "lm_normal_trust", "lm_qr_nielsen", "lm_qr_trust", "trf_legacy", "trf_full"]
+fixtures = ["robust_huber_outlier", "robust_huber_scaled", "robust_soft_l1", "robust_cauchy", "robust_huber_kink", "robust_nonfinite", "robust_huber_bound"]
+fixture_source = "ROBUST_FIXTURES in crates/competitor-bench/src/convergence/least_squares.rs"
+physical_caps = [0, 1, 2, 4000]
+iteration_cap = 10000
+wall_guard_seconds_per_solve = 600
+external_guard = "timeout 120s for the complete pilot"
+solves = 352
+bounded_routes = ["trf_legacy", "trf_full"]
+policy = "robust_default: all native defaults; robust_relative_probe: LM absolute gradient 0, orthogonality/model-reduction/step/radius tolerances 1e-8 f64 or 1e-4 f32, cap 4000, unconstrained cases only"
+losses = ["Huber scales 1 and 0.5", "soft-L1 scale 1", "Cauchy scale 1"]
+derivatives = "analytic raw residual Jacobians; production RobustLeastSquares adapter and precision-specific curvature safeguards"
+references = "Huber outlier x=scale/2; soft-L1 symmetric x=0; one-residual Cauchy/Huber/nonfinite models x=1; bound-active Huber x=0.125"
+quality_limits = "default parameter and projected KKT errors <=1e-6 f64 or <=1e-3 f32; explicit relative probes <=1e-4 f64 or <=2e-2 f32; unit-scale measurement checks, not calibrated thresholds"
+verification = "independent 100-digit Decimal loss/objective/derivatives; robust gradients, safeguarded model predictions, returned quality, physical/logical ledgers, publication boundaries; outside solve work and time"
+native_identity_allowance = "existing 4096 unit roundoffs and squared-step underflow bounds; absolute terms for cancellation, not an accuracy certificate"
+inner_work = "model solves leading to residual trials; full TRF subproblem calls only; pre-trial failures and secular-search iterations remain open"
+partition = "analytic development fixtures only"
+holdout_candidate_outcomes = "sealed"
+sweep_eligible = false
+policies_selected = false
+commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/nist-reference-build cargo build -p competitor-bench --bin verify_least_squares",
+  "timeout 120s target/nist-reference-build/debug/verify_least_squares --phase robust --output target/convergence-defaults/2026-10-09-robust-ls-001/robust",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-robust-ls-001/robust --output target/convergence-defaults/2026-10-09-robust-ls-001/report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-robust-ls-001/robust"
+]
