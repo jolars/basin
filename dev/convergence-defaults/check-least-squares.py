@@ -169,6 +169,42 @@ def require(test, message):
         raise ValueError(message)
 
 
+BOX_CASES = {
+    'box_active': ([0., -.5], [.5, 0.]),
+    'box_mixed_fixed': ([.25, -2.], [.25, 0.]),
+    'box_stationary': ([-1., -2.], [1., 0.]),
+    'box_all_fixed': ([.25, -.25], [.25, -.25]),
+}
+
+
+def box_quality(run, pubs):
+    lower, upper = BOX_CASES[run['dataset']]
+    target = [min(hi, max(lo, t)) for lo, hi, t in zip(lower, upper, [1., -1.])]
+    for p in pubs:
+        x = numbers(p['point'])
+        require(len(x) == 2 and all(lo <= v <= hi for v, lo, hi in zip(x, lower, upper)), 'box publication feasibility')
+        residual = [D.from_float(x[0]) - 1, D.from_float(x[1]) + 1]
+        if run['dataset'] == 'box_stationary':
+            residual[0] = 2 - D.from_float(x[0]) ** 2
+        cost = sum(v * v for v in residual) / 2
+        unit = 2 ** (-24 if run['precision'] == 'f32' else -53)
+        require(close(float(p['cost']), float(cost), unit), 'box independent objective')
+    if run['returned'] != 'true':
+        require(run['outcome'] in ('initialization_error', 'callback_error'), 'box budget outcome')
+        return None
+    x = numbers(pubs[-1]['point'])
+    if run['dataset'] == 'box_stationary':
+        require(x == [0., -1.] and run['criteria'] == 'scaled_gradient' and run['outcome'] == 'converged', 'stationary negative control')
+        return dict(point=x, references=[[-1., -1.], [1., -1.]], parameter_error=1., objective_gap=1.5, projected_kkt=0., quality_passed=False, classification='stationary-nonminimum')
+    error = max(abs(v - t) for v, t in zip(x, target))
+    # Projection with a unit step is an independent box KKT residual.
+    kkt = max(abs(v - min(hi, max(lo, t))) for v, t, lo, hi in zip(x, [1., -1.], lower, upper))
+    limit = 1e-3 if run['precision'] == 'f32' else 1e-6
+    require(error <= limit and kkt <= limit, 'box returned quality')
+    require(run['outcome'] == 'converged', 'box successful outcome')
+    return dict(point=x, reference=target, parameter_error=error, projected_kkt=kkt, quality_limit=limit)
+
+
 def verify(directory):
     runs = load(directory, 'runs')
     grouped = {}
@@ -183,6 +219,10 @@ def verify(directory):
     cases = {c['id']: c for c in datasets()}
     jacobian_cache = {}
     def independent_jacobian(run, point):
+        if run['dataset'] == 'box_stationary':
+            return [[-2 * point[0], 0.], [0., 1.]]
+        if run['dataset'] in BOX_CASES:
+            return [[1., 0.], [0., 1.]]
         if run['dataset'] not in cases:
             return [[1.0 if run['dataset'].startswith('linear') else 2 * (point[0] - 1)]]
         key = run['dataset'], run['precision'], tuple(point)
@@ -267,6 +307,11 @@ def verify(directory):
             statistics['nonfinite_trials'] += not math.isfinite(trial)
         for c in checks:
             require(c['sequence'] in keyed, f'{identifier}: orphan check')
+            if c['name'] == 'no_free_parameters':
+                require(c['evidence'] == 'no_free_parameters' and c['passed'] == 'true' and not c['tolerance'], f'{identifier}: structural evidence')
+                require(not keyed[c['sequence']]['free'], f'{identifier}: structural free coordinates')
+                statistics['structural_checks'] += 1
+                continue
             if not c['tolerance']:
                 require(not c['passed'] and not c['evidence'], f'{identifier}: disabled comparison')
                 statistics['disabled_checks'] += 1
@@ -288,7 +333,17 @@ def verify(directory):
                 if c['name'] == 'scaled_gradient':
                     g = numbers(o['gradient']); diag = numbers(o['diagonal'])
                     metric = max((abs(v) / d for v, d in zip(g, diag)), default=0) if diag else max(map(abs, g), default=0)
-                    require(close(float(value), metric, unit), f'{identifier}: unbounded scaled-gradient evidence')
+                    if run['dataset'] in BOX_CASES and run['route'] == 'trf_full':
+                        x = next(numbers(p['point']) for p in reversed(pubs) if int(p['work']) <= int(o['work_before']))
+                        lower, upper = BOX_CASES[run['dataset']]
+                        free = [i for i in range(2) if lower[i] != upper[i]]
+                        require([int(i) for i in o['free'].split(';') if i] == free, f'{identifier}: free-coordinate map')
+                        raw = [x[0] - 1, x[1] + 1]
+                        if run['dataset'] == 'box_stationary':
+                            raw[0] = -2 * x[0] * (2 - x[0] ** 2)
+                        require(all(close(v, raw[i], unit) for v, i in zip(g, free)) and len(g) == len(free), f'{identifier}: independent free gradient')
+                        metric = max((abs(raw[i]) * (upper[i] - x[i] if raw[i] < 0 else x[i] - lower[i]) for i in free), default=0)
+                    require(close(float(value), metric, unit), f'{identifier}: scaled-gradient evidence')
                 if c['name'] in ('trial_step', 'trust_radius'):
                     if c['name'] == 'trial_step':
                         require(close(float(value), math.hypot(*numbers(o['step'])), unit), f'{identifier}: step evidence')
@@ -329,8 +384,18 @@ def main():
                   verification_outside_solve_ledger=True, holdout_candidate_outcomes='sealed', runs=[])
     nist_cases = {c['id']: c for c in datasets()}
     is_nist = all(r['dataset'] in nist_cases for r in runs)
-    require(is_nist or all(r['dataset'] in ('linear', 'linear_budget', 'nonzero', 'nonfinite') for r in runs), 'mixed or unsupported phase')
-    if not is_nist:
+    is_box = all(r['dataset'] in BOX_CASES for r in runs)
+    require(is_nist or is_box or all(r['dataset'] in ('linear', 'linear_budget', 'nonzero', 'nonfinite') for r in runs), 'mixed or unsupported phase')
+    if is_box:
+        require(len(runs) == 32 and {(r['dataset'], r['precision'], int(r['cap']), r['route'], r['policy']) for r in runs} ==
+                {(d, p, c, 'trf_full', 'bounded_default') for d in BOX_CASES for p in ('f32', 'f64') for c in (0, 1, 2, 4000)}, 'bounded coverage')
+        for run in runs:
+            pubs = grouped['publications'][run['id']]
+            quality = box_quality(run, pubs)
+            if run['dataset'] == 'box_all_fixed' and int(run['cap']) > 0:
+                require(run['criteria'] == 'no_free_parameters' and int(run['work']) == 1 and int(run['jacobian_evals']) == 0, 'all-fixed callback contract')
+            report['runs'].append(dict({k: run[k] for k in ('id', 'outcome', 'criteria', 'work', 'denied', 'returned')}, quality=quality))
+    elif not is_nist:
         require(len(runs) == 80, 'analytic route coverage')
         for run in runs:
             pubs = grouped['publications'][run['id']]

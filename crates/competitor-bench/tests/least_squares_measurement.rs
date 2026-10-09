@@ -233,3 +233,99 @@ fn split_initialization_charges_two_physical_calls_and_preserves_logical_counts(
         0
     );
 }
+
+macro_rules! bounded_checks {
+    ($name:ident, $f:ty) => {
+        #[test]
+        fn $name() {
+            for (lower, upper, start, target) in [
+                (
+                    vec![0., -0.5],
+                    vec![0.5, 0.],
+                    vec![0.1, -0.1],
+                    vec![0.5, -0.5],
+                ),
+                (
+                    vec![0.25, -2.],
+                    vec![0.25, 0.],
+                    vec![0.25, -0.1],
+                    vec![0.25, -1.],
+                ),
+                (
+                    vec![0.25, -0.25],
+                    vec![0.25, -0.25],
+                    vec![0.25, -0.25],
+                    vec![0.25, -0.25],
+                ),
+            ] {
+                let run = |enabled| {
+                    let ledger = WorkLedger::new(4000);
+                    let problem = Instrumented::<$f>::analytic(
+                        AnalyticModel::BoxLinear,
+                        ledger.clone(),
+                    )
+                    .with_bounds(lower.clone(), upper.clone());
+                    measure(
+                        Executor::new(
+                            problem,
+                            TrustRegionReflective::<$f>::new()
+                                .with_trial_diagnostics(enabled),
+                            PointState::new(DVector::from_vec(start.clone())),
+                        )
+                        .max_iter(1000),
+                        &ledger,
+                        Duration::from_secs(10),
+                    )
+                };
+                let plain = run(false);
+                let traced = run(true);
+                assert_eq!(plain.run.counts, traced.run.counts);
+                assert_eq!(
+                    format!("{:?}", plain.run.outcome),
+                    format!("{:?}", traced.run.outcome)
+                );
+                assert_eq!(plain.run.ledger.work(), traced.run.ledger.work());
+                assert_eq!(
+                    plain.run.recommendations.len(),
+                    traced.run.recommendations.len()
+                );
+                for (a, b) in plain
+                    .run
+                    .recommendations
+                    .iter()
+                    .zip(&traced.run.recommendations)
+                {
+                    assert_eq!(a.point, b.point);
+                    assert_eq!(a.solver_cost, b.solver_cost);
+                    assert_eq!(a.counts, b.counts);
+                    for (i, &v) in b.point.iter().enumerate() {
+                        assert!(v >= lower[i] as f64 && v <= upper[i] as f64);
+                    }
+                }
+                let returned = traced.run.returned().unwrap();
+                for (v, t) in returned.point.iter().zip(&target) {
+                    assert!(
+                        (v - *t as f64).abs()
+                            <= if stringify!($f) == "f32" {
+                                1e-3
+                            } else {
+                                1e-6
+                            }
+                    );
+                }
+                if lower == upper {
+                    assert_eq!(traced.run.ledger.work(), 1);
+                    assert_eq!(traced.run.counts.unwrap().jacobian_evals, 0);
+                    assert!(traced.native.iter().any(|r| {
+                        r.observation.checks.iter().any(|c| {
+                            c.name == "no_free_parameters"
+                                && c.passed == Some(true)
+                        })
+                    }));
+                }
+            }
+        }
+    };
+}
+bounded_checks!(bounded64, f64);
+bounded_checks!(bounded32, f32);

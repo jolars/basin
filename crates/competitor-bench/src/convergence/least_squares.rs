@@ -24,6 +24,10 @@ use super::runner::{
 #[derive(Clone, Copy, Debug)]
 pub enum AnalyticModel {
     Linear,
+    /// Identity residuals with target (1, -1), for box KKT checks.
+    BoxLinear,
+    /// A stationary maximum in the first coordinate, to separate stops from quality.
+    BoxStationary,
     Nonzero,
     NonFiniteTrial,
 }
@@ -63,6 +67,13 @@ impl<F: Scalar> Instrumented<F> {
             upper: DVector::from_element(1, F::infinity()),
         }
     }
+    /// Set fixture bounds without changing its residual model or ledger.
+    pub fn with_bounds(mut self, lower: Vec<F>, upper: Vec<F>) -> Self {
+        assert_eq!(lower.len(), upper.len());
+        self.lower = DVector::from_vec(lower);
+        self.upper = DVector::from_vec(upper);
+        self
+    }
     fn values(
         &self,
         x: &DVector<F>,
@@ -81,9 +92,26 @@ impl<F: Scalar> Instrumented<F> {
                     DMatrix::from_fn(rows, x.len(), |i, k| j[i][k]),
                 )
             }
+            Model::Analytic(AnalyticModel::BoxLinear) => (
+                DVector::from_vec(vec![x[0] - F::one(), x[1] + F::one()]),
+                DMatrix::identity(2, 2),
+            ),
+            Model::Analytic(AnalyticModel::BoxStationary) => (
+                DVector::from_vec(vec![
+                    F::from_f64(2.).unwrap() - x[0] * x[0],
+                    x[1] + F::one(),
+                ]),
+                DMatrix::from_diagonal(&DVector::from_vec(vec![
+                    -F::from_f64(2.).unwrap() * x[0],
+                    F::one(),
+                ])),
+            ),
             Model::Analytic(model) => {
                 let d = x[0] - F::one();
                 let (r, j) = match model {
+                    AnalyticModel::BoxLinear | AnalyticModel::BoxStationary => {
+                        unreachable!()
+                    }
                     AnalyticModel::Linear => (d, F::one()),
                     AnalyticModel::Nonzero => {
                         (F::one() + d * d, F::from_f64(2.).unwrap() * d)

@@ -42,6 +42,24 @@ class Roundoff(unittest.TestCase):
         self.assertTrue(pilot.close(rounded, exact, unit, sum(map(abs, terms))))
 
 
+class BoxQuality(unittest.TestCase):
+    def test_box_rejects_infeasible_and_inaccurate_returns(self):
+        run = dict(dataset='box_active', precision='f64', returned='true', outcome='converged')
+        good = dict(point='0.5;-0.5', cost='0.25')
+        pilot.box_quality(run, [good])
+        for bad in (dict(point='0.6;-0.5', cost='0.205'),
+                    dict(point='0.1;-0.1', cost='0.81'),
+                    dict(point='0.5;-0.5', cost='0.5')):
+            with self.assertRaises(ValueError):
+                pilot.box_quality(run, [bad])
+
+    def test_stationary_stop_fails_minimum_quality(self):
+        run = dict(dataset='box_stationary', precision='f64', returned='true', outcome='converged', criteria='scaled_gradient')
+        result = pilot.box_quality(run, [dict(point='0;-1', cost='2')])
+        self.assertFalse(result['quality_passed'])
+        self.assertEqual(result['objective_gap'], 1.5)
+
+
 class Evidence(unittest.TestCase):
     directory = None
 

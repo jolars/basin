@@ -1,0 +1,28 @@
+run_id = "2026-10-09-bounded-trf-001"
+purpose = "analytic-bounded-full-trf-measurement"
+status = "planned"
+starting_revision = "ce22b005c16b07fad119688a9163c42d5969e509"
+source_revision = "commit containing this planned manifest"
+protocol = "CDP-1 measurement pilot; no calibration"
+output_directory = "target/convergence-defaults/2026-10-09-bounded-trf-001"
+backend = "nalgebra 0.34.2; regression tests also use 0.35.0"
+precisions = ["f64", "f32"]
+routes = ["trf_full"]
+fixtures = ["box_active", "box_mixed_fixed", "box_all_fixed", "box_stationary"]
+physical_caps = [0, 1, 2, 4000]
+solves = 32
+policy = "native defaults; no tolerance changes"
+derivatives = "analytic identity; stationary control has diagonal (-2*x0, 1)"
+reference = "identity residual target (1,-1) projected onto box; stationary control minima (+/-1,-1)"
+quality_limits = "unit-scale parameter and projected KKT errors <=1e-6 f64, <=1e-3 f32; diagnostic checks only, no calibrated targets"
+negative_control = "stationary point (0,-1), half-RSS 2 versus global constrained minimum 0.5; convergence must remain distinct from minimum quality"
+verification = "independent Decimal residual/objective and analytic box KKT; outside solve ledger and timer"
+inner_work = "existing subproblem-call counters; internal secular iterations and pre-trial failures remain open"
+holdout_candidate_outcomes = "sealed"
+sweep_eligible = false
+commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/nist-reference-build cargo build -p competitor-bench --bin verify_least_squares",
+  "timeout 60s target/nist-reference-build/debug/verify_least_squares --phase bounded --output target/convergence-defaults/2026-10-09-bounded-trf-001/bounded",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-bounded-trf-001/bounded --output target/convergence-defaults/2026-10-09-bounded-trf-001/report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-bounded-trf-001/bounded"
+]

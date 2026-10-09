@@ -345,6 +345,10 @@ macro_rules! precision {
                     files.emit(Labels { id: &id, dataset, precision, start, route: $name, policy }, result)?;
                 }};
             }
+            if policy == "bounded_default" {
+                route!("trf_full", TrustRegionReflective::<$f>::new());
+                return Ok(());
+            }
             let lm = |damping| {
                 let mut s = LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default().with_damping(damping);
                 if policy == "relative_probe" {
@@ -375,9 +379,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     if args.len() != 5
         || args[1] != "--phase"
         || args[3] != "--output"
-        || !matches!(args[2].as_str(), "analytic" | "nist")
+        || !matches!(args[2].as_str(), "analytic" | "bounded" | "nist")
     {
-        return Err("usage: verify_least_squares --phase analytic|nist --output <new-directory>".into());
+        return Err("usage: verify_least_squares --phase analytic|bounded|nist --output <new-directory>".into());
     }
     let mut files = Files::new(Path::new(&args[4]))?;
     if args[2] == "analytic" {
@@ -455,6 +459,59 @@ fn main() -> Result<(), Box<dyn Error>> {
             4000,
             "relative_probe",
         )?;
+    } else if args[2] == "bounded" {
+        for (name, lower, upper, x) in [
+            ("box_active", vec![0., -0.5], vec![0.5, 0.], vec![0.1, -0.1]),
+            (
+                "box_mixed_fixed",
+                vec![0.25, -2.],
+                vec![0.25, 0.],
+                vec![0.25, -0.1],
+            ),
+            (
+                "box_all_fixed",
+                vec![0.25, -0.25],
+                vec![0.25, -0.25],
+                vec![0.25, -0.25],
+            ),
+            (
+                "box_stationary",
+                vec![-1., -2.],
+                vec![1., 0.],
+                vec![0., -1.],
+            ),
+        ] {
+            let model = if name == "box_stationary" {
+                AnalyticModel::BoxStationary
+            } else {
+                AnalyticModel::BoxLinear
+            };
+            for cap in [0, 1, 2, 4000] {
+                run64(
+                    &mut files,
+                    name,
+                    1,
+                    x.clone(),
+                    Instrumented::analytic(model, WorkLedger::new(cap))
+                        .with_bounds(lower.clone(), upper.clone()),
+                    cap,
+                    "bounded_default",
+                )?;
+                run32(
+                    &mut files,
+                    name,
+                    1,
+                    x.iter().map(|v| *v as f32).collect(),
+                    Instrumented::analytic(model, WorkLedger::new(cap))
+                        .with_bounds(
+                            lower.iter().map(|v| *v as f32).collect(),
+                            upper.iter().map(|v| *v as f32).collect(),
+                        ),
+                    cap,
+                    "bounded_default",
+                )?;
+            }
+        }
     } else {
         for dataset in datasets()?
             .into_iter()
