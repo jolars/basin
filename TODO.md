@@ -523,9 +523,11 @@ remain open; the coverage boxes below require all applicable stages.
   active bounds, fixed coordinates, and a stationary nonminimum control. The
   [robust-loss pilot](dev/convergence-defaults/runs/2026-10-09-robust-ls-001.md)
   adds Huber, soft-L1, and Cauchy measurements with known minima and paired
-  default continuations. Legacy TRF finite-model safeguards, robust stopping
-  composition, remaining loss/constraint variants, additional backends, full
-  inner-work accounting, and other solver families retain their gates.
+  default continuations. The [legacy TRF finite-model safeguard
+  recheck](dev/convergence-defaults/runs/2026-10-09-trf-finite-model-001.md)
+  removes repeated non-finite predictions, with main and 1.x fixes proposed.
+  Robust stopping composition, remaining loss/constraint variants, additional
+  backends, full inner-work accounting, and other solver families retain gates.
 
 - [ ] **6. Calibrate by solver family and validate independently.** Compare
   current defaults, reference policies, and a small logarithmic sweep of

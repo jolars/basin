@@ -39,7 +39,10 @@ all-fixed coordinates, budget interruptions, and a stationary nonminimum
 control. The [robust-loss LM/TRF pilot](runs/2026-10-09-robust-ls-001.md) adds
 352 analytic measurements with Huber, soft-L1, and Cauchy losses, independent
 robust model checks, and paired default continuations. No solver policies have
-been selected and calibration has not started.
+been selected and calibration has not started. The [legacy TRF safeguard
+recheck](runs/2026-10-09-trf-finite-model-001.md) eliminates repeated non-finite
+model predictions without changing any final published point or cost; main and
+1.x fixes are proposed in draft PRs.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -1016,3 +1019,33 @@ sufficient to inspect outcomes and reproduce the measurements.
   robust step/model-reduction composition before affected sweeps. Other losses,
   backends, derivatives, larger and fixed-coordinate robust cases, precision
   certificates, and full inner work retain their gates.
+
+### S019: Fix and backport legacy TRF non-finite models, 2026-10-09
+
+- Starting revision: `7882623`, clean tree on `convergence-defaults`.
+- Scope: stop before solving with non-finite damping or evaluating a non-finite
+  trial model. Preserve current point, cost, counts, caches, and completed
+  iteration count; retain convergence defaults and finite rejections.
+- Fix: `24cb364` adds guards and regression checks across dense and sparse
+  backends in both precisions, with a downstream Jacobian prediction check.
+- Evidence: planned manifest `cbb646a` precedes
+  [2026-10-09-trf-finite-model-001](runs/2026-10-09-trf-finite-model-001.md).
+  All 352 cases verify independently. Every callback trace matches its baseline
+  prefix; every final published point and cost is identical. Exactly four `f32`
+  legacy TRF budget errors become returned numerical failures after 20, 20, 22,
+  and 44 calls, eliminating 15,894 non-finite predictions.
+- Backports: clean main commit `250f59e` is draft [PR
+  #116](https://github.com/jolars/basin/pull/116). Compatible 1.x commit
+  `a8dd82c`, cherry-picked with provenance and adapted to its existing state and
+  failure enum, is draft [PR #117](https://github.com/jolars/basin/pull/117).
+  Main should merge first. No release bookkeeping, dependency, or public API
+  changed on 1.x.
+- Verification: full pure-Rust solver suites and all-target/all-feature clippy
+  pass on all three branches. Rustdoc and both WASM configurations pass on the
+  convergence and 1.x branches. Rust formatting, robust checker/tests, baseline
+  corruption controls, exact comparison, documentation, links, and hashes pass.
+- Decisions: correctness safeguard only. Step 5 remains open. No numerical
+  tolerance, candidate policy, or holdout outcome selected.
+- Next task: review robust step/model-reduction composition using the unchanged
+  Cauchy controls before affected sweeps. Remaining variants, backends,
+  derivatives, reference certificates, and complete inner work retain gates.

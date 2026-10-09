@@ -1,6 +1,6 @@
 run_id = "2026-10-09-trf-finite-model-001"
 purpose = "regression recheck after legacy TRF finite-model safeguard"
-status = "planned"
+status = "completed"
 source_revision = "24cb364b0d6a4c0a8da1eddfdaba320732a08f2b"
 protocol = "CDP-1 measurement recheck; no calibration"
 baseline_manifest = "dev/convergence-defaults/runs/2026-10-09-robust-ls-001.toml"
@@ -10,9 +10,36 @@ verification = "independent robust checker; compare every callback prefix with f
 backend = "nalgebra 0.34.2"
 holdout_candidate_outcomes = "sealed"
 policies_selected = false
+comparison_checker = "dev/convergence-defaults/check-trf-finite-model.py"
+main_pr = "https://github.com/jolars/basin/pull/116"
+v1_pr = "https://github.com/jolars/basin/pull/117"
+main_revision = "250f59e1f2a2f167f5d94ab17d9f3095ba4564bf"
+v1_revision = "a8dd82cd4acb2af60d92b0e2c9cc341ccbf464c6"
 commands = [
   "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/nist-reference-build cargo build -p competitor-bench --bin verify_least_squares",
   "timeout 120s target/nist-reference-build/debug/verify_least_squares --phase robust --output target/convergence-defaults/2026-10-09-trf-finite-model-001/robust",
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-trf-finite-model-001/robust --output target/convergence-defaults/2026-10-09-trf-finite-model-001/report.json",
-  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-trf-finite-model-001/robust"
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-trf-finite-model-001/robust",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-trf-finite-model.py target/convergence-defaults/2026-10-09-robust-ls-001/robust target/convergence-defaults/2026-10-09-trf-finite-model-001/robust --report target/convergence-defaults/2026-10-09-trf-finite-model-001/report.json --output target/convergence-defaults/2026-10-09-trf-finite-model-001/comparison.json"
 ]
+
+[source_sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"crates/basin/src/solver/trf.rs" = "c95884d44598fbc370aa096606ec892dd6e413e5147a184e9df6aa8789b0e473"
+"crates/basin/tests/robust_least_squares_backends.rs" = "a2c1d8ca2f196c615258522559ce4293c0ccb9ef4b2bb3da41a811a34c1d258a"
+"crates/basin/tests/support/robust_backend.rs" = "70538017699cac3e9337b47baed4516370d2f8f9239cfd3df88d195d55e98b05"
+"crates/basin/tests/trf_custom_jacobian.rs" = "785f08997d55073428f88ddef64ec58fb364280d4b44b9259d08b0f9d11ef813"
+"crates/competitor-bench/src/bin/verify_least_squares.rs" = "61e670150d5c2ad9b80b25e855ec7d41bd201f7230d622d842b68bd8d6e065db"
+"crates/competitor-bench/src/convergence/least_squares.rs" = "8465e57ad65477990f7046c5fc8fe554fc3284ecdccd40b03d343e2effbb6999"
+"dev/convergence-defaults/check-least-squares.py" = "ba80971abd93af4a4d2c852305fb9a81826654d4c267e535c17b26049dff317d"
+"dev/convergence-defaults/check-trf-finite-model.py" = "feef325aeef4604222098a016cae2a4cb418080910767e3cf0106a236eedc9cb"
+"dev/convergence-defaults/test-least-squares.py" = "f18bfcaf3a6083ed8c1a7e60e433f2b562aa72361be07ec6e44b47f06283eb0f"
+
+[output_sha256]
+"robust/checks.csv" = "8159831c5cf14f48b183ae83f301334a58f082e5cba9dc40b42db518ff2ff896"
+"robust/leaves.csv" = "8a98421c2d7069555d1f288cccdb6d65be0500f6a3e6cce1e1e96140348c9de9"
+"robust/native.csv" = "6acfe7bea89851cd62675b404776cf9a49e0ed24095d9670231d5f33c2456c44"
+"robust/publications.csv" = "c9b53f06459e6d050c2927a3200bc919efa4bd92651c756a7e08dcfd2ffa8a47"
+"robust/runs.csv" = "1265429119f9e3e27956560a3b1b427dcc713288788b28b03d873a1430d823bc"
+"report.json" = "4a160917c66c6a0dee9df9fdd066615ce2a7fe59e8c95606fb2bb5ba2a1d3594"
+"comparison.json" = "c2f58f337924892140e86d123b91cbf035b3b5cc29c8d0339267ba75cfa4c162"

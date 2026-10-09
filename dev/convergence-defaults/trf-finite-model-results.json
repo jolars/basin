@@ -1,0 +1,118 @@
+{
+  "purpose": "legacy-trf-finite-model-regression",
+  "runs": 352,
+  "unchanged_outcomes": 348,
+  "changed": [
+    {
+      "id": "robust_huber_outlier-f32-1-trf_legacy-robust_default-4000",
+      "old_work": 4000,
+      "new_work": 20,
+      "point": [
+        0.499600350856781
+      ],
+      "quality": {
+        "point": [
+          0.499600350856781
+        ],
+        "reference": 0.5,
+        "cost": 7.250000159719438,
+        "reference_cost": 7.25,
+        "objective_gap": 1.597194376756761e-07,
+        "gradient": -0.0007992982864379883,
+        "stationarity": 0.0007992982864379883,
+        "parameter_error": 0.00039964914321899414,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "robust_huber_scaled-f32-1-trf_legacy-robust_default-4000",
+      "old_work": 4000,
+      "new_work": 20,
+      "point": [
+        0.24985012412071228
+      ],
+      "quality": {
+        "point": [
+          0.24985012412071228
+        ],
+        "reference": 0.25,
+        "cost": 3.812500022462779,
+        "reference_cost": 3.8125,
+        "objective_gap": 2.2462779192267135e-08,
+        "gradient": -0.00029975175857543945,
+        "stationarity": 0.00029975175857543945,
+        "parameter_error": 0.00014987587928771973,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "robust_soft_l1-f32-1-trf_legacy-robust_default-4000",
+      "old_work": 4000,
+      "new_work": 22,
+      "point": [
+        1.773587428033352e-06
+      ],
+      "quality": {
+        "point": [
+          1.773587428033352e-06
+        ],
+        "reference": 0.0,
+        "cost": 2.4721359549998607,
+        "reference_cost": 2.4721359549995796,
+        "objective_gap": 2.8110846983508964e-13,
+        "gradient": 3.172689642500267e-07,
+        "stationarity": 3.172689642500267e-07,
+        "parameter_error": 1.773587428033352e-06,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    },
+    {
+      "id": "robust_nonfinite-f32-1-trf_legacy-robust_default-4000",
+      "old_work": 4000,
+      "new_work": 44,
+      "point": [
+        0.9998762607574463
+      ],
+      "quality": {
+        "point": [
+          0.9998762607574463
+        ],
+        "reference": 1.0,
+        "cost": 0.41421357319988994,
+        "reference_cost": 0.41421356237309503,
+        "objective_gap": 1.0826794905050008e-08,
+        "gradient": -0.0001749937163569314,
+        "stationarity": 0.0001749937163569314,
+        "parameter_error": 0.00012373924255371094,
+        "quality_limit": 0.001,
+        "quality_passed": true
+      }
+    }
+  ],
+  "all_callback_prefixes_equal": true,
+  "all_final_published_points_and_costs_equal": true,
+  "old_physical_calls": 18069,
+  "new_physical_calls": 2175,
+  "statistics": {
+    "runs": 352,
+    "outcome_initialization_error": 76,
+    "model_observations": 1371,
+    "attempted_trials": 1333,
+    "budget_denied_trials": 96,
+    "failing_checks": 2389,
+    "disabled_checks": 2799,
+    "outcome_callback_error": 152,
+    "accepted_trials": 738,
+    "published_trials": 724,
+    "accepted_unpublished_trials": 14,
+    "nonfinite_trials": 86,
+    "passing_checks": 118,
+    "outcome_converged": 102,
+    "rejected_trials": 499,
+    "outcome_stalled": 18,
+    "outcome_failed": 4
+  }
+}
