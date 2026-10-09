@@ -264,14 +264,33 @@ where
     F: Scalar,
     V: Clone + NormInfinity<F> + NormSquared<F> + ScaleInPlace<F>,
 {
-    let (hs, hn) = norm_parts(h).expect("a passing step test has finite data");
-    let (xs, xn) = norm_parts(x).expect("a passing step test has finite data");
-    crate::ConvergenceEvidence::FactoredUpperBound {
+    try_step_evidence(h, x, tolerance)
+        .expect("a passing predicate has finite evidence")
+}
+
+pub(super) fn try_step_evidence<V, F>(
+    h: &V,
+    x: &V,
+    tolerance: F,
+) -> Option<crate::ConvergenceEvidence<F>>
+where
+    F: Scalar,
+    V: Clone + NormInfinity<F> + NormSquared<F> + ScaleInPlace<F>,
+{
+    let (hs, hn) = norm_parts(h)?;
+    let (xs, xn) = norm_parts(x)?;
+    if [hs, hn, xs, xn, tolerance]
+        .iter()
+        .any(|value| !value.is_finite() || *value < F::zero())
+    {
+        return None;
+    }
+    Some(crate::ConvergenceEvidence::FactoredUpperBound {
         value: binary_product(&[hs, hn]),
         bound: binary_product(&[tolerance, xs, xn]),
         tolerance,
         reference: Some(binary_product(&[xs, xn])),
-    }
+    })
 }
 
 pub(super) fn radius_evidence<V, F>(
@@ -284,11 +303,31 @@ where
     F: Scalar,
     V: ComponentZip<F>,
 {
-    let (exponent, sum) = weighted_norm_parts(x, d)
-        .expect("a passing radius test has finite data");
+    try_radius_evidence(radius, x, d, tolerance)
+        .expect("a passing predicate has finite evidence")
+}
+
+pub(super) fn try_radius_evidence<V, F>(
+    radius: F,
+    x: &V,
+    d: &V,
+    tolerance: F,
+) -> Option<crate::ConvergenceEvidence<F>>
+where
+    F: Scalar,
+    V: ComponentZip<F>,
+{
+    if !radius.is_finite()
+        || radius < F::zero()
+        || !tolerance.is_finite()
+        || tolerance < F::zero()
+    {
+        return None;
+    }
+    let (exponent, sum) = weighted_norm_parts(x, d)?;
     let mut bound = binary_product(&[tolerance, sum.sqrt()]);
     bound.exponent += exponent;
-    crate::ConvergenceEvidence::FactoredUpperBound {
+    Some(crate::ConvergenceEvidence::FactoredUpperBound {
         value: binary_product(&[radius]),
         bound,
         tolerance,
@@ -296,7 +335,7 @@ where
             significand: sum.sqrt(),
             exponent,
         }),
-    }
+    })
 }
 
 pub(super) fn orthogonality_evidence<V, F>(
@@ -314,13 +353,50 @@ where
         + ScaleInPlace<F>
         + ComponentZip<F>,
 {
-    let (scale, norm) = robust_cost.map_or_else(
-        || {
-            norm_parts(r)
-                .expect("a passing orthogonality test has finite residuals")
-        },
-        |cost| (cost.sqrt(), F::from_f64(2.).unwrap().sqrt()),
-    );
+    try_orthogonality_evidence(g, d, r, robust_cost, tolerance)
+        .expect("a passing predicate has finite evidence")
+}
+
+pub(super) fn try_orthogonality_evidence<V, F>(
+    g: &V,
+    d: &V,
+    r: &V,
+    robust_cost: Option<F>,
+    tolerance: F,
+) -> Option<crate::ConvergenceEvidence<F>>
+where
+    F: Scalar,
+    V: Clone
+        + NormInfinity<F>
+        + NormSquared<F>
+        + ScaleInPlace<F>
+        + ComponentZip<F>,
+{
+    let (scale, norm) = if let Some(cost) = robust_cost {
+        if !cost.is_finite() || cost < F::zero() {
+            return None;
+        }
+        (cost.sqrt(), F::from_f64(2.).unwrap().sqrt())
+    } else {
+        norm_parts(r)?
+    };
+    if [scale, norm, tolerance]
+        .iter()
+        .any(|value| !value.is_finite() || *value < F::zero())
+    {
+        return None;
+    }
+    if !g.all_zip(d, |value, square| {
+        value.is_finite()
+            && square.is_finite()
+            && square >= F::zero()
+            && (value == F::zero()
+                || (scale > F::zero()
+                    && norm > F::zero()
+                    && square > F::zero()))
+    }) {
+        return None;
+    }
     let mut maximum = crate::BinaryValue {
         significand: F::zero(),
         exponent: 0,
@@ -342,17 +418,47 @@ where
         }
         true
     });
-    crate::ConvergenceEvidence::FactoredUpperBound {
+    Some(crate::ConvergenceEvidence::FactoredUpperBound {
         value: maximum,
         bound: binary_product(&[tolerance]),
         tolerance,
         reference: Some(binary_product(&[scale, norm])),
-    }
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failing_diagnostics_keep_finite_evidence_and_omit_invalid_operands() {
+        assert!(try_step_evidence(&vec![1.], &vec![2.], 0.1).is_some());
+        assert!(try_step_evidence(&vec![f64::NAN], &vec![2.], 0.1).is_none());
+        assert!(
+            try_radius_evidence(f64::INFINITY, &vec![2.], &vec![1.], 0.1)
+                .is_none()
+        );
+        assert!(
+            try_orthogonality_evidence(
+                &vec![1.],
+                &vec![0.],
+                &vec![1.],
+                None,
+                0.1
+            )
+            .is_none()
+        );
+        assert!(
+            try_orthogonality_evidence(
+                &vec![1.],
+                &vec![1.],
+                &vec![1.],
+                None,
+                0.1
+            )
+            .is_some()
+        );
+    }
 
     macro_rules! extreme_weighted_norms {
         ($name:ident, $scalar:ty, $power:expr) => {

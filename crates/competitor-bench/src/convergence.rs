@@ -5,6 +5,7 @@
 //! separate validation gates. Instrumented elapsed time is diagnostic only.
 
 pub mod fixtures;
+pub mod least_squares;
 pub mod ledger;
 pub mod nist;
 pub mod quality;

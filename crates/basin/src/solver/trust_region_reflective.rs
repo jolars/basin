@@ -1,4 +1,7 @@
 //! Dense trust-region-reflective nonlinear least squares.
+use super::least_squares_diagnostics::{
+    LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
+};
 
 mod step;
 
@@ -176,11 +179,18 @@ pub struct TrustRegionReflective<F: Scalar = f64> {
     max_subproblem_iterations: usize,
     work: Option<Work<F>>,
     native_convergence: Vec<NativeConvergenceTest>,
+    trace: Option<Trace<F>>,
 }
 
 impl<F: Scalar> NativeConvergenceDiagnostics for TrustRegionReflective<F> {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         &self.native_convergence
+    }
+}
+
+impl<F: Scalar> LeastSquaresDiagnostics<F> for TrustRegionReflective<F> {
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
@@ -202,7 +212,18 @@ impl<F: Scalar> TrustRegionReflective<F> {
             max_subproblem_iterations: 50,
             work: None,
             native_convergence: Vec::new(),
+            trace: None,
         }
+    }
+
+    /// Enable native model and trial observations (disabled by default).
+    ///
+    /// Recording adds allocations but no problem evaluations. Fresh runs reset
+    /// observations; exact continuation preserves their sequence. Model checks
+    /// occur at boundaries, and trial batches can include multiple rejections.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.trace = enabled.then(Trace::default);
+        self
     }
 
     /// Set `max |v ⊙ Jᵀr|` tolerance over free coordinates (default `1e-8`).
@@ -388,13 +409,16 @@ where
     type Error = <P as Residual>::Error;
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn check_convergence(
         &mut self,
         _problem: &Problem<P>,
-        _state: &PointState<V, F>,
+        state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
-        self.check_native_convergence()
+        self.check_native_convergence(state.cost())
     }
     fn init(
         &mut self,
@@ -428,13 +452,16 @@ where
     type Error = <P as Residual>::Error;
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn check_convergence(
         &mut self,
         _problem: &Problem<RobustLeastSquares<P, L, F>>,
-        _state: &PointState<V, F>,
+        state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
-        self.check_native_convergence()
+        self.check_native_convergence(state.cost())
     }
     fn init(
         &mut self,
@@ -467,6 +494,9 @@ impl<F: Scalar> TrustRegionReflective<F> {
         E: BoundedEvaluation<V, M, F>,
     {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
         self.work = None;
         let mut state = state;
         state.reset();
@@ -689,13 +719,36 @@ impl<F: Scalar> TrustRegionReflective<F> {
             {
                 break;
             }
+            let trial_record = self.trace.as_mut().map(|trace| {
+                let mut row = LeastSquaresObservation::model(old_cost);
+                row.trial = true;
+                row.step = h.clone();
+                row.gradient = model.g.clone();
+                row.curvature = model.c.clone();
+                row.coordinate_scale = model.d.clone();
+                row.free = work.free.clone();
+                row.radius_before = Some(work.radius);
+                row.predicted_reduction = Some(predicted);
+                row.model_solves = 1;
+                trace.push(row)
+            });
             let raw_r = problem.residual(&trial)?;
             let r = vector(&raw_r);
             assert_eq!(r.len(), m, "residual shape changed during solve");
             let new_cost = problem.cost(&raw_r, |_| cost(&r));
+            if let Some(index) = trial_record {
+                self.trace.as_mut().unwrap().observations[index].trial_cost =
+                    Some(new_cost);
+            }
             if !new_cost.is_finite() || r.iter().any(|x| !x.is_finite()) {
                 work.equal_cost_rejection = false;
                 work.radius = number::<F>(0.25) * length;
+                if let Some(index) = trial_record {
+                    let row =
+                        &mut self.trace.as_mut().unwrap().observations[index];
+                    row.accepted = Some(false);
+                    row.radius_after = Some(work.radius);
+                }
                 continue;
             }
             let actual = old_cost - new_cost;
@@ -703,6 +756,13 @@ impl<F: Scalar> TrustRegionReflective<F> {
             let ratio = actual / predicted;
             work.radius =
                 update_radius(work.radius, length, ratio).min(F::max_value());
+            if let Some(index) = trial_record {
+                let row = &mut self.trace.as_mut().unwrap().observations[index];
+                row.actual_reduction = Some(actual);
+                row.gain_ratio = Some(ratio);
+                row.accepted = Some(actual > F::zero());
+                row.radius_after = Some(work.radius);
+            }
             if actual > F::zero() {
                 let j = problem.jacobian(&trial)?;
                 let Some((model_r, j)) = problem.model(&raw_r, j) else {
@@ -775,8 +835,47 @@ impl<F: Scalar> TrustRegionReflective<F> {
         }
     }
 
-    fn check_native_convergence(&mut self) -> Option<Termination<F>> {
+    fn check_native_convergence(
+        &mut self,
+        base_cost: F,
+    ) -> Option<Termination<F>> {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.clear();
+            if let Some(work) = &self.work {
+                let mut row = LeastSquaresObservation::model(base_cost);
+                row.gradient = work.gradient.clone();
+                row.free = work.free.clone();
+                row.radius_before = Some(work.radius);
+                if work.free.is_empty() && !work.failed {
+                    row.checks.push(LeastSquaresCheck {
+                        name: "no_free_parameters",
+                        tolerance: None,
+                        passed: Some(true),
+                        evidence: Some(
+                            crate::ConvergenceEvidence::NoFreeParameters,
+                        ),
+                    });
+                } else {
+                    row.checks.push(LeastSquaresCheck {
+                        name: "scaled_gradient",
+                        tolerance: self.gradient_tolerance,
+                        passed: self
+                            .gradient_tolerance
+                            .map(|t| !work.failed && work.optimality <= t),
+                        evidence: self.gradient_tolerance.map(|tolerance| {
+                            crate::ConvergenceEvidence::UpperBound {
+                                value: work.optimality,
+                                bound: tolerance,
+                                tolerance,
+                                reference: None,
+                            }
+                        }),
+                    });
+                }
+                trace.push(row);
+            }
+        }
         let test = self.convergence_test()?;
         self.native_convergence.push(test);
         Some(self.convergence_report(test))

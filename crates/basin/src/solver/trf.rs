@@ -14,6 +14,10 @@ use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
 
+use super::least_squares_diagnostics::{
+    LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
+};
+
 /// Levenberg-Marquardt with Coleman–Li box scaling (simplified TRF)
 /// for nonlinear least-squares problems `min ½‖r(x)‖²` subject to
 /// `lower ≤ x ≤ upper`. The first n-D box-constrained NLLS solver in
@@ -169,7 +173,7 @@ use crate::{
 /// `Residual` + `Jacobian` least-squares pattern; `Trf` additionally
 /// requires the problem to implement `BoxConstraints` and is constructed
 /// with `Trf::new()`.
-pub struct Trf<V, M, F = f64> {
+pub struct Trf<V, M, F: Scalar = f64> {
     tol_grad: Option<F>,
     tau: F,
     rstep: F,
@@ -191,6 +195,14 @@ pub struct Trf<V, M, F = f64> {
     j_cache: Option<M>,
     model_r_cache: Option<V>,
     failed: bool,
+    trace: Option<Trace<F>>,
+    trace_vector: Option<fn(&V) -> Vec<F>>,
+}
+
+impl<V, M, F: Scalar> LeastSquaresDiagnostics<F> for Trf<V, M, F> {
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.trace.as_ref().map_or(&[], |trace| &trace.observations)
+    }
 }
 
 impl<V, M, F: Scalar> Default for Trf<V, M, F> {
@@ -208,6 +220,8 @@ impl<V, M, F: Scalar> Default for Trf<V, M, F> {
             j_cache: None,
             model_r_cache: None,
             failed: false,
+            trace: None,
+            trace_vector: None,
         }
     }
 }
@@ -222,6 +236,21 @@ impl<V, M> Trf<V, M> {
 }
 
 impl<V, M, F: Scalar> Trf<V, M, F> {
+    /// Enable native model and trial observations (disabled by default).
+    ///
+    /// Recording requires indexed vectors but adds no problem evaluations.
+    /// Fresh initialization resets observations; exact continuation preserves them.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self
+    where
+        V: VectorLen + VectorIndex<F>,
+    {
+        self.trace = enabled.then(Trace::default);
+        self.trace_vector = enabled.then_some(|v: &V| {
+            (0..v.vec_len()).map(|i| v.get_scalar(i)).collect()
+        });
+        self
+    }
+
     /// Configure the Coleman-Li scaled gradient infinity norm.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
@@ -404,6 +433,9 @@ where
             self.rstep,
         );
 
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
         self.failed = false;
         self.rejected_step = false;
         self.r_cache = None;
@@ -455,6 +487,9 @@ where
         problem: &mut E,
         mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
+        if let Some(trace) = &mut self.trace {
+            trace.clear();
+        }
         // Use cached `r`/`J` when available (set by init or by the
         // previous accept-or-reject branch). Only count an eval when the
         // cache misses.
@@ -511,6 +546,28 @@ where
             &mut c_diag,
         );
 
+        if let Some(trace) = &mut self.trace {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            let collect = self.trace_vector.unwrap();
+            row.gradient = collect(&g);
+            row.diagonal = collect(&d_sq);
+            row.curvature = collect(&c_diag);
+            let value = g.cl_kkt_inf_norm(&d_sq);
+            row.checks.push(LeastSquaresCheck {
+                name: "scaled_gradient",
+                tolerance: self.tol_grad,
+                passed: self.tol_grad.map(|t| value <= t),
+                evidence: self.tol_grad.map(|tolerance| {
+                    crate::ConvergenceEvidence::UpperBound {
+                        value,
+                        bound: tolerance,
+                        tolerance,
+                        reference: None,
+                    }
+                }),
+            });
+            trace.push(row);
+        }
         // First-order optimality: ‖v ⊙ Jᵀr‖_∞ ≤ tol_grad, equal to
         // `max_i |g_i| / d_sq_i` in our representation (since
         // `d_sq[i] = 1/|v_i|`). Goes to zero at any KKT point, interior
@@ -613,6 +670,18 @@ where
         // Trial step.
         let mut x_trial = state.param().clone();
         x_trial.scaled_add(alpha, &h);
+        let trial_record = self.trace.as_mut().map(|trace| {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            let collect = self.trace_vector.unwrap();
+            row.trial = true;
+            row.step = collect(&h).into_iter().map(|x| alpha * x).collect();
+            row.gradient = collect(&g);
+            row.diagonal = collect(&d_sq);
+            row.curvature = collect(&c_diag);
+            row.damping = Some(mu);
+            row.model_solves = attempts + 1;
+            trace.push(row)
+        });
         let r_trial = problem.residual(&x_trial)?;
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
@@ -642,6 +711,14 @@ where
             F::zero()
         };
 
+        if let Some(index) = trial_record {
+            let row = &mut self.trace.as_mut().unwrap().observations[index];
+            row.trial_cost = Some(f_trial);
+            row.actual_reduction = Some(actual);
+            row.predicted_reduction = Some(predicted);
+            row.gain_ratio = Some(rho);
+            row.accepted = Some(rho > F::zero());
+        }
         if rho > F::zero() {
             self.rejected_step = false;
             // Accept. Update x and cost; adapt μ via Nielsen smooth

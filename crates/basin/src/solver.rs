@@ -51,6 +51,7 @@ pub mod gradient_descent;
 /// Nocedal's L-BFGS-B v3.0). `Lbfgsb` is a type alias for
 /// `Lbfgs<V, F, Bounded>`.
 pub mod lbfgs;
+pub mod least_squares_diagnostics;
 /// Levenberg-Marquardt solver for nonlinear least squares with
 /// Nielsen 1999 damping update.
 pub mod levenberg_marquardt;

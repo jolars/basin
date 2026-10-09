@@ -17,6 +17,11 @@ use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
 
+use super::least_squares_diagnostics::{
+    LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
+    vector,
+};
+
 mod damping;
 mod stopping;
 use damping::{scaled_norm, trust_region_step, update_radius};
@@ -279,7 +284,7 @@ pub enum LmDamping {
 /// assert!((result.param()[1] - 2.0).abs() < 1e-6);
 /// # }
 /// ```
-pub struct LevenbergMarquardt<V, M, F = f64> {
+pub struct LevenbergMarquardt<V, M, F: Scalar = f64> {
     tol_grad: Option<F>,
     tol_grad_rel: Option<F>,
     tol_cost_rel: Option<F>,
@@ -308,11 +313,22 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     jtr_cache: Option<V>,
     failed: bool,
     native_convergence: Vec<NativeConvergenceTest>,
+    trace: Option<Trace<F>>,
 }
 
-impl<V, M, F> NativeConvergenceDiagnostics for LevenbergMarquardt<V, M, F> {
+impl<V, M, F: Scalar> NativeConvergenceDiagnostics
+    for LevenbergMarquardt<V, M, F>
+{
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         &self.native_convergence
+    }
+}
+
+impl<V, M, F: Scalar> LeastSquaresDiagnostics<F>
+    for LevenbergMarquardt<V, M, F>
+{
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
@@ -356,7 +372,18 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             jtr_cache: None,
             failed: false,
             native_convergence: Vec::new(),
+            trace: None,
         }
+    }
+
+    /// Enable native model and trial observations (disabled by default).
+    ///
+    /// Recording adds allocations and arithmetic but no problem evaluations.
+    /// Fresh runs reset observations; exact continuation preserves the sequence.
+    /// Read each batch with [`LeastSquaresDiagnostics::least_squares_observations`].
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.trace = enabled.then(Trace::default);
+        self
     }
 
     /// Configure the infinity norm of J-transpose times residual.
@@ -576,6 +603,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,
@@ -626,6 +656,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,
@@ -672,6 +705,9 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         self.failed = false;
         self.rejected_step = false;
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
         self.r_cache = None;
         self.model_cache = None;
         self.jtr_cache = None;
@@ -745,6 +781,9 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             + Clone,
     {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.clear();
+        }
         if self.failed {
             return Ok(crate::SolverStep::from((
                 state,
@@ -829,6 +868,39 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 orthogonality_converged(&g, &diag_cur, &r, tol)
             }
         });
+        if let Some(trace) = &mut self.trace {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            row.gradient = vector(&g);
+            row.diagonal = vector(&diag_cur);
+            row.checks.push(LeastSquaresCheck {
+                name: "absolute_gradient",
+                tolerance: self.tol_grad,
+                passed: self.tol_grad.map(|_| abs_converged),
+                evidence: self.tol_grad.map(|tolerance| {
+                    crate::ConvergenceEvidence::UpperBound {
+                        value: g.norm_infinity(),
+                        bound: tolerance,
+                        tolerance,
+                        reference: None,
+                    }
+                }),
+            });
+            row.checks.push(LeastSquaresCheck {
+                name: "orthogonality",
+                tolerance: self.tol_grad_rel,
+                passed: self.tol_grad_rel.map(|_| rel_converged),
+                evidence: self.tol_grad_rel.and_then(|tolerance| {
+                    stopping::try_orthogonality_evidence(
+                        &g,
+                        &diag_cur,
+                        &r,
+                        E::ROBUST.then_some(state.cost()),
+                        tolerance,
+                    )
+                }),
+            });
+            trace.push(row);
+        }
         if abs_converged || rel_converged {
             let absolute = abs_converged.then(|| {
                 Termination::upper_bound(
@@ -894,6 +966,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let two = F::from_f64(2.0).unwrap();
         let half = F::from_f64(0.5).unwrap();
         let one_third = F::from_f64(1.0 / 3.0).unwrap();
+        let mut model_solves = 0;
         let step = if self.damping == LmDamping::TrustRegion {
             let radius = self.radius.expect("trust radius not initialized");
             let mut scaled_gradient = g.clone();
@@ -904,12 +977,16 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 &mut mu,
                 self.max_inner_attempts,
                 gradient_norm,
-                |mu| Model::solve(&a, &g, &d, mu, rank_tolerance),
+                |mu| {
+                    model_solves += 1;
+                    Model::solve(&a, &g, &d, mu, rank_tolerance)
+                },
                 |h| scaled_norm(h, &d),
             )
         } else {
             let mut attempts = 0;
             loop {
+                model_solves += 1;
                 match Model::solve(&a, &g, &d, mu, rank_tolerance) {
                     Ok(step) => break Ok(step),
                     Err(failure) => {
@@ -952,6 +1029,18 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
 
         let mut x_trial = state.param().clone();
         x_trial.scaled_add(F::one(), &h);
+        let trial_record = self.trace.as_mut().map(|trace| {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            row.trial = true;
+            row.step = vector(&h);
+            row.gradient = vector(&g);
+            row.diagonal = vector(&d);
+            row.damping = Some(mu);
+            row.radius_before = self.radius;
+            row.model_solves = model_solves;
+            row.predicted_reduction = Some(l_diff);
+            trace.push(row)
+        });
         let r_trial = problem.residual(&x_trial)?;
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
@@ -1045,6 +1134,49 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let step_rel_converged = self
             .tol_step_rel
             .is_some_and(|tol| relative_step_converged(&h, state.param(), tol));
+        if let Some(index) = trial_record {
+            let row = &mut self.trace.as_mut().unwrap().observations[index];
+            row.trial_cost = Some(f_trial);
+            row.actual_reduction = Some(actual_diff);
+            row.gain_ratio = Some(rho);
+            row.accepted = Some(rho > F::zero());
+            row.radius_after = self.radius;
+            row.checks.push(LeastSquaresCheck {
+                name: "model_reduction",
+                tolerance: self.tol_cost_rel,
+                passed: self.tol_cost_rel.map(|_| cost_rel_converged),
+                evidence: self.tol_cost_rel.map(|tolerance| {
+                    crate::ConvergenceEvidence::ModelReduction {
+                        actual: actual_diff,
+                        predicted: l_diff,
+                        reference_cost: prev_cost,
+                        gain_ratio: rho,
+                        tolerance,
+                    }
+                }),
+            });
+            row.checks.push(LeastSquaresCheck {
+                name: "trial_step",
+                tolerance: self.tol_step_rel,
+                passed: self.tol_step_rel.map(|_| step_rel_converged),
+                evidence: self.tol_step_rel.and_then(|tolerance| {
+                    stopping::try_step_evidence(&h, state.param(), tolerance)
+                }),
+            });
+            row.checks.push(LeastSquaresCheck {
+                name: "trust_radius",
+                tolerance: radius_tolerance,
+                passed: radius_tolerance.map(|_| radius_rel_converged),
+                evidence: radius_tolerance.and_then(|tolerance| {
+                    stopping::try_radius_evidence(
+                        self.radius.unwrap(),
+                        state.param(),
+                        self.diag.as_ref().unwrap(),
+                        tolerance,
+                    )
+                }),
+            });
+        }
         if cost_rel_converged || step_rel_converged || radius_rel_converged {
             let model = cost_rel_converged.then(|| {
                 Termination::converged(crate::ConvergenceCriterion {
@@ -1277,6 +1409,14 @@ impl<V, M: FactorizePivotedQr<V, F>, F: Scalar> NativeConvergenceDiagnostics
     }
 }
 
+impl<V, M: FactorizePivotedQr<V, F>, F: Scalar> LeastSquaresDiagnostics<F>
+    for LevenbergMarquardtQr<V, M, F>
+{
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.inner.least_squares_observations()
+    }
+}
+
 impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Select pivoted QR while preserving configuration and resetting caches.
     ///
@@ -1295,6 +1435,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
                 tol_step_rel: self.tol_step_rel,
                 tol_radius_rel: self.tol_radius_rel,
                 numerical_no_progress: self.numerical_no_progress,
+                trace: self.trace.map(|_| Trace::default()),
                 tau: self.tau,
                 damping: self.damping,
                 initial_step_bound: self.initial_step_bound,
@@ -1324,6 +1465,12 @@ where
             inner: LevenbergMarquardt::defaults(),
             rank_tolerance: None,
         }
+    }
+
+    /// Enable [`LevenbergMarquardt::with_trial_diagnostics`] on the QR route.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner = self.inner.with_trial_diagnostics(enabled);
+        self
     }
 
     /// Configure the relative rank tolerance.
@@ -1452,6 +1599,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.inner.native_convergence.clear();
+        if let Some(trace) = &mut self.inner.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,
@@ -1501,6 +1651,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.inner.native_convergence.clear();
+        if let Some(trace) = &mut self.inner.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,
