@@ -1,0 +1,113 @@
+run_id = "2026-10-09-least-squares-001"
+purpose = "development-least-squares-measurement-pilot"
+status = "planned"
+protocol = "CDP-1"
+source_revision = "0ed083cc1829acdc24264535ec4e773a5516dff8"
+branch = "convergence-defaults"
+working_directory = "/home/jola/projects/basin"
+output_directory = "target/convergence-defaults/2026-10-09-least-squares-001"
+schema = 1
+features = "competitor-bench defaults; no parallel or basin-latest"
+backend = "nalgebra 0.34.2"
+precisions = ["f64", "f32"]
+compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
+python = "3.14.7"
+architecture = "x86_64"
+logical_cpus = 14
+execution = "serial deterministic solves; no RNG or repetitions"
+profile = "dev; unoptimized; debug=0; incremental=0; instrumented, not performance evidence"
+partition = "development"
+datasets = 15
+primary_starts = 30
+routes = ["lm_normal_nielsen", "lm_normal_trust", "lm_qr_nielsen", "lm_qr_trust", "trf_legacy", "trf_full"]
+analytic_solves = 80
+nist_solves = 360
+analytic_fixtures = ["linear residual x-1", "nonzero residual 1+(x-1)^2", "nonfinite trial outside [0,1.1]", "linear physical caps 0/1/2", "LM relative measurement probes"]
+analytic_start = 0.1
+analytic_physical_cap = 4000
+corpus_physical_cap = "2000*(n+1)"
+iteration_cap = 10000
+wall_guard_seconds_per_solve = 600
+external_guard = "timeout 60m per solve phase; timeout 60m for independent NIST verification"
+initialization = "published NIST start1/start2, preserving original coordinates and objective"
+bounds = "infinite; unconstrained NIST problem, also for TRF"
+derivative_mode = "native analytic; no finite differences"
+loss = "quadratic half-RSS; Nelson residual in log-response space"
+reference_register = "dev/convergence-defaults/nist-reference-eligibility.json"
+reference_classification = "validated-local; no global or start-basin membership claim"
+quality = "CDP-1 joint objective, stationarity, and solution-set parameter error, with tenfold tested-point uncertainty margins"
+quality_target_f64 = ["1e-2", "1e-4", "1e-6", "1e-8", "1e-10", "1e-12"]
+quality_target_f32 = ["1e-2", "1e-3", "1e-4", "1e-5", "1e-6"]
+designated_target_f64 = "1e-6"
+designated_target_f32 = "1e-3"
+reference_pending = "nine frozen f32 target combinations retained and withheld from target scores"
+scales = "frozen reference-register coordinate and objective scales; no outcome-dependent changes"
+parameter_symmetries = "Lanczos pair permutations and MGH17 pair exchange"
+family_weights = "equal under CDP-1; report by family and route without selecting a pooled winner"
+policy = "default controls on corpus; analytic relative probes are measurement fixtures only"
+candidate_policies = "none"
+holdout_candidate_outcomes = "sealed"
+previous_observation = "analytic exploratory measurement validation only; no NIST solver outcome observed before freeze"
+verification = "post-solve independent interval source evaluation and native witness probe; no solve work or timer charge"
+physical_accounting = "one residual vector or Jacobian is one leaf; fused residual/Jacobian is one leaf; denied requests consume no leaf"
+logical_accounting = "authoritative requests include denied requests and both categories of fusion; residual-derived objectives add no CostFunction request"
+native_integrity_allowance = "4096 unit roundoffs plus squared-step underflow bound; not an accuracy certificate"
+inner_work = "model solves leading to residual trials; full TRF subproblem calls only; pre-trial model failures and secular iterations remain a gate"
+publication = "accepted trial is not published until all required callbacks succeed; errors have only last publication, no returned point"
+sweep_eligible = false
+protocol_amendments = []
+commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/nist-reference-build cargo build -p competitor-bench --bin verify_least_squares --bin verify_nist_witness",
+  "timeout 60m target/nist-reference-build/debug/verify_least_squares --phase analytic --output target/convergence-defaults/2026-10-09-least-squares-001/analytic",
+  "python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-least-squares-001/analytic --output target/convergence-defaults/2026-10-09-least-squares-001/analytic-report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-09-least-squares-001/analytic",
+  "timeout 60m target/nist-reference-build/debug/verify_least_squares --phase nist --output target/convergence-defaults/2026-10-09-least-squares-001/nist",
+  "PYTHONDONTWRITEBYTECODE=1 timeout 60m python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-09-least-squares-001/nist --output target/convergence-defaults/2026-10-09-least-squares-001/nist-report.json --probe target/nist-reference-build/debug/verify_nist_witness"
+]
+
+[lm]
+absolute_gradient_tolerance = "1e-8"
+orthogonality_tolerance = "disabled"
+relative_model_reduction_tolerance = "disabled"
+relative_step_tolerance = "disabled"
+relative_trust_radius_tolerance = "disabled"
+numerical_no_progress = true
+tau = "1e-3"
+initial_step_bound = "100"
+max_inner_attempts = 50
+qr_relative_rank_tolerance = "automatic default"
+
+[legacy_trf]
+absolute_scaled_gradient_tolerance = "1e-8"
+tau = "1e-3"
+relative_step_safeguard = "1e-10"
+theta = "0.99995"
+max_inner_attempts = 50
+
+[full_trf]
+absolute_scaled_gradient_tolerance = "1e-8"
+initial_radius = "automatic"
+rank_tolerance = "automatic"
+max_inner_attempts = 50
+max_subproblem_iterations = 50
+
+[analytic_relative_probe]
+absolute_gradient_tolerance = "exact zero"
+f64_relative_tolerances = "1e-8"
+f32_relative_tolerances = "1e-4"
+checks = ["orthogonality", "model_reduction", "trial_step", "trust_radius when applicable"]
+
+[sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"dev/convergence-defaults/protocol.md" = "cc8bb93343e8929dd9e5026d16564800270cfa64dbd392ae49aab1720615b545"
+"dev/convergence-defaults/nist/manifest.json" = "1a95cb5bb911286b6013810e507a0b97372c235d5c2d079609cdc0b52e0b6b11"
+"dev/convergence-defaults/nist-reference-eligibility.json" = "6fc3a4b4c1c7ddb4f294b189ea0a15a3a0f9884d590a64d5648b4cf6e649855c"
+"dev/convergence-defaults/check-least-squares.py" = "e3c3c27469bbb98a31d9a77368a90f994453745f7a62d5751ded5afc4e640f61"
+"dev/convergence-defaults/test-least-squares.py" = "847f9c5f73a255781d0df72f8984c762da97970b0f9877c83de722179f1915fa"
+"crates/competitor-bench/src/bin/verify_least_squares.rs" = "3e262397eed8b6b3fcfda76bbac4b8d9989c9b8adc2e3fcb8a719f0e3357bae1"
+"crates/competitor-bench/src/convergence/least_squares.rs" = "237039b776b49dc4ae4cadf939c5a5cb2fb8155152ee0446555e3bc4f9596c59"
+"crates/basin/src/solver/least_squares_diagnostics.rs" = "6bf7813eef588ed1f3cc7ff041f55c5b7b9e7739c78cacaa60701444ac585f73"
+"crates/basin/src/solver/levenberg_marquardt.rs" = "543a981cb1318e1fd42494779191d3c523b412455c5fd1213e1982424ca29800"
+"crates/basin/src/solver/levenberg_marquardt/stopping.rs" = "be48b6d9c9141f09e392e23751c24abfac203146885093f4d655063909c504ea"
+"crates/basin/src/solver/trf.rs" = "0fef2b65e1d884f8da48bb9c400ba64fbb0db9f7e09b33f8182173394f6c48f6"
+"crates/basin/src/solver/trust_region_reflective.rs" = "a117bc63ebbd36b9612a8d21b7a0385ddf91d1d9dfa68517cc0e1e1825bad434"
