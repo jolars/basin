@@ -6,11 +6,15 @@ differences, and exact budget interruptions. This is verifier validation, not
 calibration or default selection. Its [manifest](2026-10-09-analytic-001.toml)
 records the planned source/inputs and completed output hashes.
 
+The [development NIST reference preflight](2026-10-09-nist-reference-001.md)
+adds 15 validated local references and native analytic eligibility records. All
+27 model adapters are validated; holdout references and remaining
+precision/derivative certificates retain their gates.
+
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
-harness pilot. Input snapshots are assembled, but reference certificates and
-executable model adapters are not yet validated. A manifest must state whether
-its purpose is verifier validation, a pilot, calibration, or sealed validation.
-Record protocol amendments and whether outcomes were already observed.
+harness pilot. A manifest must state whether its purpose is verifier validation,
+a pilot, calibration, or sealed validation. Record protocol amendments and
+whether outcomes were already observed.
 
 Use a stable run ID such as `YYYY-MM-DD-family-NNN`. Keep the manifest in
 `<run-id>.toml` and a concise interpretation in `<run-id>.md`. Commit small case

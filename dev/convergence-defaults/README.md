@@ -26,9 +26,11 @@ record](runs/2026-10-09-analytic-001.md), with verifier/accounting checks in
 both native precisions. A [forward-difference configuration
 fix](runs/2026-10-09-forward-001.md) now covers the analytic stopping mismatch.
 The [NIST analytic adapters](nist-models.md) now pass independent model
-validation in both precisions. Reference refinement, precision certification,
-and the full LM/TRF pilot remain pending. No solver policies have been selected
-and calibration has not started.
+validation in both precisions. The [development reference
+preflight](runs/2026-10-09-nist-reference-001.md) certifies 15 local references
+and 321 of 330 analytic target combinations. Nine `f32` targets remain pending,
+as do finite-difference eligibility, holdout references, and the full LM/TRF
+pilot. No solver policies have been selected and calibration has not started.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -75,8 +77,11 @@ and calibration has not started.
 - [Case register](cases.md): corpus/NIST families, held-out partitions,
   transformations, and explicit supply gates for missing cases and capabilities.
 - [NIST inputs](nist/manifest.json): 27 source snapshots, both starts, reference
-  strings, source/snapshot hashes, and family partitions; model adapters
-  pending.
+  strings, source/snapshot hashes, and family partitions; analytic model
+  adapters validated in both precisions.
+- [NIST reference preflight](nist-reference.md): independent local reference
+  refinement, interval certificates, native witnesses, and frozen analytic
+  eligibility for development families.
 - [Step 4 review](review-step4.md): design checks, corrections, and gates before
   the harness, calibration, and independent validation.
 - [Analytic harness](harness.md): measurement API, CSV schema, analytic
@@ -747,3 +752,101 @@ The output command requires a new filename when rerun. The first intermediate
 CSV preceded the schema/family columns; only the final schema 1 CSV appears in
 this report. Failed checker executions during arithmetic validation are not
 solver runs or candidate outcomes.
+
+### S015: Certify development NIST references and witnesses, 2026-10-09
+
+- Starting revision: `e7b9a467281968a18613801921a4dd326f6d2c1e` on
+  `convergence-defaults`; the working tree was clean.
+- Scope: independent reference refinement and analytic precision eligibility for
+  the 15 development NIST datasets in six families. Add 100-digit Decimal
+  interval arithmetic, second-order AD, full-Hessian Newton refinement,
+  independent Gauss–Newton refinement, Krawczyk inclusion, and positive interval
+  LDL checks. Evaluate rounded references, coordinate neighbors, and both starts
+  with the existing native `Nist<f32>`/`Nist<f64>` adapter. No Basin solver ran.
+- Freeze: source commit `6f3ab0f` and planned-manifest commit `9a11eb3` preceded
+  retained run `2026-10-09-nist-reference-001`. Its
+  [manifest](runs/2026-10-09-nist-reference-001.toml) records exact revisions,
+  input/source hashes, configuration, and output hashes.
+- Evidence: the [run summary](runs/2026-10-09-nist-reference-001.md), [method
+  documentation](nist-reference.md), and [retained
+  report](nist-reference-eligibility.json) preserve 15 strict local minimum
+  certificates, 294 native evaluations, 60 precision/start records, and all 330
+  target combinations. Analytic witness eligibility covers 321 targets; nine
+  `f32` targets remain `reference-pending` for MGH10 or Nelson. All `f64`
+  targets pass. Nelson start 2 remains uncertified at designated `f32` target
+  `1e-3`, because its stationarity uncertainty lacks the tenfold margin.
+- Reference finding: Lanczos1's refined local RSS is about `1.430786772078e-25`,
+  consistent with published RSS, while RSS at printed parameter midpoints
+  remains about `3.98336e-21`. The refined interval supplies reference
+  uncertainty. All 15 refined RSS intervals overlap their published rounding
+  intervals.
+- Verification: six analytic Python tests, all 24 existing NIST/measurement Rust
+  tests, and eight negative controls pass. Workspace all-target/all-feature
+  clippy denies warnings; rustfmt, documentation formatting/lint, and whitespace
+  checks pass. Negative controls cover altered evidence, independent native-cost
+  consistency, holdout rejection, and output overwrite refusal.
+- Development corrections: mixed interval/AD operands needed reflected operator
+  dispatch. The rounding screen now uses actual objective/gradient accumulation
+  terms; independent interval comparisons separately bound cancellation. These
+  corrections changed no target grid, threshold, family partition, or protocol.
+  Disk exhaustion and removal of an earlier generated build directory
+  interrupted preliminary Rust checks. Verification completed in a separate
+  build with debug information and incremental compilation disabled.
+- Gates: the analytic development subset of G403 and development reference
+  refinement in G404 are covered; the complete gates remain open. Witness errors
+  are bounded only at tested points. Pending targets, finite-difference bias,
+  holdout references, start-basin classification, conditioning metadata,
+  transformed cases, and full backend coverage remain separate work. No global
+  reference claim, candidate policy, holdout solver outcome, default, numerical
+  safeguard, or protocol amendment was selected. Step 5 remains in progress.
+- Next task: connect the frozen development references and eligibility to the
+  measured pilot through both LM factorizations/damping modes, legacy TRF, and
+  full TRF. Validate rejected-trial diagnostics and evaluation accounting before
+  interpreting stopping outcomes. Keep uncertified targets visible and out of
+  target scores.
+
+Reproduction and verification commands from the repository root:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python \
+  dev/convergence-defaults/reference-tools/test_reference.py
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo test -p competitor-bench --test nist_models --test convergence_measurement
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo build -p competitor-bench --bin verify_nist_witness
+python dev/convergence-defaults/reference-tools/preflight.py prepare \
+  target/convergence-defaults/2026-10-09-nist-reference-001
+target/nist-reference-build/debug/verify_nist_witness \
+  --points target/convergence-defaults/2026-10-09-nist-reference-001/points.csv \
+  --output target/convergence-defaults/2026-10-09-nist-reference-001/native.csv
+python dev/convergence-defaults/reference-tools/preflight.py check \
+  target/convergence-defaults/2026-10-09-nist-reference-001 \
+  --output dev/convergence-defaults/nist-reference-eligibility.json
+python dev/convergence-defaults/check-nist-reference.py \
+  target/convergence-defaults/2026-10-09-nist-reference-001 \
+  dev/convergence-defaults/nist-reference-eligibility.json \
+  --probe target/nist-reference-build/debug/verify_nist_witness
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
+  CARGO_TARGET_DIR=target/nist-reference-build \
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
+panache format --check TODO.md dev/convergence-defaults/README.md \
+  dev/convergence-defaults/cases.md dev/convergence-defaults/harness.md \
+  dev/convergence-defaults/nist-models.md dev/convergence-defaults/nist-reference.md \
+  dev/convergence-defaults/runs/README.md \
+  dev/convergence-defaults/runs/2026-10-09-nist-reference-001.md
+panache lint TODO.md dev/convergence-defaults/README.md \
+  dev/convergence-defaults/cases.md dev/convergence-defaults/harness.md \
+  dev/convergence-defaults/nist-models.md dev/convergence-defaults/nist-reference.md \
+  dev/convergence-defaults/runs/README.md \
+  dev/convergence-defaults/runs/2026-10-09-nist-reference-001.md
+git diff --check
+```
+
+The preflight refuses existing preparation directories and output reports. For a
+rerun, use new paths and its source revision. Raw neighbor records remain in the
+ignored full report; all certificates, eligibility decisions, and selected
+witnesses are retained in Git. The negative-control checker was added after
+source freeze and only validates evidence; its hash is retained separately.

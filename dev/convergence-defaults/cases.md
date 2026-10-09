@@ -115,8 +115,10 @@ a transformed response; Roszman1 requires the published arctangent branch and
 its stated value of pi. Check every implementation's RSS at the published
 parameters and derivative checks away from the optimum. The [executable-model
 validation](nist-models.md) covers these formulas and analytic derivatives in
-both native precisions; reference refinement and precision certificates remain
-open. Use printed rounding intervals, never parameter standard deviations, as
+both native precisions. The [development reference preflight](nist-reference.md)
+supplies 15 local minimum certificates and analytic native target eligibility;
+holdout references and remaining precision/derivative certificates retain their
+gates. Use printed rounding intervals, never parameter standard deviations, as
 numerical reference uncertainty. Published best-available optima are not proofs
 that all starts reach the same minimum. Retain the original 54-run report as a
 separate reproduction table; family weighting governs selection.

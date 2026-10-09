@@ -512,6 +512,12 @@ remain open; the coverage boxes below require all applicable stages.
   references before running the corpus. Start with the issue's Nelder-Mead,
   L-BFGS-B, LM, and TRF cases, but retain the full coverage checklist.
 
+  The analytic measurement foundation, all 27 NIST model adapters, and the
+  [development reference preflight](dev/convergence-defaults/nist-reference.md)
+  are implemented. The preflight certifies 15 local references and 321 of 330
+  analytic target combinations; nine `f32` targets remain pending. The full
+  LM/TRF trial-diagnostic and accounting pilot remains open.
+
 - [ ] **6. Calibrate by solver family and validate independently.** Compare
   current defaults, reference policies, and a small logarithmic sweep of
   defensible candidates. Vary enabled criteria and composition as well as

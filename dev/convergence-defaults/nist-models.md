@@ -82,14 +82,16 @@ before collecting the next solver pilot.
 
 ## Remaining gates
 
-The executable-model portion of G404 is covered. Independent reference
-refinement where needed, rigorous precision certificates, native witnesses,
-target eligibility, derivative-bias eligibility for finite differences, and
-identifiability checks remain open. G403 and the full G404 gate remain open.
-These checks select no defaults and authorize no candidate sweep.
+The executable-model portion of G404 is covered. The [development reference
+preflight](nist-reference.md) now supplies local minimum and identifiability
+certificates for 15 models, native witnesses, and analytic eligibility for 321
+of 330 target combinations. Nine `f32` targets remain uncertified. Holdout
+references, derivative-bias eligibility for finite differences, start-basin
+classification, and other precision/backend strata remain open. G403 and the
+full G404 gate remain open. These checks select no defaults and authorize no
+candidate sweep.
 
-Next, establish reference and precision eligibility for the development NIST
-models, then connect them to the measured LM/TRF pilot. Cross both LM
-factorizations with both damping modes, retain legacy and full TRF as separate
-strata, and validate rejected-trial diagnostics and evaluation accounting before
-interpreting stopping outcomes.
+Next, connect the development references to the measured LM/TRF pilot. Cross
+both LM factorizations with both damping modes, retain legacy and full TRF as
+separate strata, and validate rejected-trial diagnostics and evaluation
+accounting before interpreting stopping outcomes.

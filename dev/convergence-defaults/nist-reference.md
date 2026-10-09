@@ -7,6 +7,11 @@ does not solve from those starts. Holdout candidate outcomes remain sealed. This
 preflight supplies local reference certificates and analytic native-precision
 witnesses for step 5, not calibrated stopping policies.
 
+The [frozen run](runs/2026-10-09-nist-reference-001.md) certifies 321 of 330
+target combinations. Its [retained report](nist-reference-eligibility.json)
+preserves the reference certificates, native witnesses, scales, and nine pending
+`f32` targets.
+
 ## Reference checks
 
 All reference arithmetic uses 100 decimal digits and the frozen decimal input
@@ -78,9 +83,9 @@ preflight.
 
 ## Reproduction
 
-The [planned run manifest](runs/2026-10-09-nist-reference-001.toml) fixes the
-source, configuration, inputs, commands, and output locations. Run from the
-repository root with new output paths:
+The [run manifest](runs/2026-10-09-nist-reference-001.toml) fixes the source,
+configuration, inputs, commands, and output locations. Run from the repository
+root with new output paths:
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python \
@@ -96,6 +101,10 @@ target/nist-reference-build/debug/verify_nist_witness \
 python dev/convergence-defaults/reference-tools/preflight.py check \
   target/convergence-defaults/<new-reference-run> \
   --output target/convergence-defaults/<new-reference-run>/summary.json
+python dev/convergence-defaults/check-nist-reference.py \
+  target/convergence-defaults/<new-reference-run> \
+  target/convergence-defaults/<new-reference-run>/summary.json \
+  --probe target/nist-reference-build/debug/verify_nist_witness
 ```
 
 Preparation snapshots source hashes. Checking refuses changed sources, inputs,

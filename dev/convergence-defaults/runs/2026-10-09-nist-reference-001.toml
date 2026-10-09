@@ -1,6 +1,6 @@
 run_id = "2026-10-09-nist-reference-001"
 purpose = "development-reference-and-analytic-witness-preflight"
-status = "planned"
+status = "completed"
 protocol = "CDP-1"
 source_revision = "6f3ab0f14f08e69491fb43419b8d278b07ca6822"
 branch = "convergence-defaults"
@@ -48,6 +48,17 @@ sweep_eligible = false
 protocol_amendments = []
 commands = ["PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/reference-tools/test_reference.py", "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/nist-reference-build cargo build -p competitor-bench --bin verify_nist_witness", "python dev/convergence-defaults/reference-tools/preflight.py prepare target/convergence-defaults/2026-10-09-nist-reference-001", "target/nist-reference-build/debug/verify_nist_witness --points target/convergence-defaults/2026-10-09-nist-reference-001/points.csv --output target/convergence-defaults/2026-10-09-nist-reference-001/native.csv", "python dev/convergence-defaults/reference-tools/preflight.py check target/convergence-defaults/2026-10-09-nist-reference-001 --output dev/convergence-defaults/nist-reference-eligibility.json"]
 
+execution_revision = "9a11eb3280e78b7cd00f8d4a0d971e32b087b161"
+validation_status = "passed: 15 reference certificates, 294 native points, 321 eligible targets, eight negative controls"
+precision_start_cases = 60
+target_combinations = 330
+eligible_target_combinations = 321
+reference_pending_target_combinations = 9
+eligible_designated_f64 = 30
+eligible_designated_f32 = 29
+validation_command = "python dev/convergence-defaults/check-nist-reference.py target/convergence-defaults/2026-10-09-nist-reference-001 dev/convergence-defaults/nist-reference-eligibility.json --probe target/nist-reference-build/debug/verify_nist_witness"
+verification_notes = ["Six analytic Python tests and 24 Rust integration tests pass; workspace all-target/all-feature clippy denies warnings.", "Disk exhaustion and removal of an earlier generated build directory interrupted preliminary Rust checks; separate target/nist-reference-build succeeded.", "No solver policy or holdout candidate outcome was evaluated."]
+
 [sha256]
 "dev/convergence-defaults/check-nist.py" = "54707266a9012b54ca5b8ce699fae42878ed8a999f16a2bbd71327b25120ea74"
 "dev/convergence-defaults/nist/manifest.json" = "1a95cb5bb911286b6013810e507a0b97372c235d5c2d079609cdc0b52e0b6b11"
@@ -62,3 +73,14 @@ commands = ["PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/reference
 "crates/competitor-bench/src/convergence/nist/inputs.rs" = "0b1daf81daff786dcfcc0add4a010c88cf117041a8eef6af68a4d31410c56ba3"
 "crates/competitor-bench/src/convergence/nist/models.rs" = "b32cd8aa41c50cebe346d90d1fb740926290d1be2107bf933701275e79fbc41e"
 "dev/convergence-defaults/nist-reference.md" = "84006ad7f464cecb6989189845d83afe2bfa585d01e28f790ffd1100ebddc703"
+
+[output_sha256]
+"full-report.json" = "7e7c9d921f01b8f8dd2bf588bf7308d43347f52033f59889c3010fe6401556e2"
+"native.csv" = "2e1700f4cdbaa501150d8a16dc9c899b8d9349940f7a22185b074e9b7f8c8593"
+"points.csv" = "dabdc835c3c5c1c4b44e7a28ac4af39d833ec70ad19f9b4fb288c883189eada8"
+"references.json" = "11525e95d95ddbb9670243473398341c1b04a0a4a0e3405aeef3ac3689daac5e"
+"validation.json" = "ae67b2e7088395f7340ddf0be49fe315b7273220d1c065ccd7e5258b8b78079c"
+
+[retained_sha256]
+"dev/convergence-defaults/nist-reference-eligibility.json" = "6fc3a4b4c1c7ddb4f294b189ea0a15a3a0f9884d590a64d5648b4cf6e649855c"
+"dev/convergence-defaults/check-nist-reference.py" = "2630556c3e2d31ead5764966c1181b0d4ab7ad7d1a4dd7245386a6764f704970"
