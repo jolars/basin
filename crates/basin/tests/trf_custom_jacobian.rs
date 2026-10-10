@@ -3,15 +3,15 @@ use std::convert::Infallible;
 use basin::{
     AddDiagonalVectorInPlace, BoxConstraints, CostFunction, Executor,
     GramMatrix, Jacobian, LinearSolveError, LinearSolveSpd, MatTransposeVec,
-    MaxDiagonal, Residual, TerminationReason, Trf,
+    MaxDiagonal, Residual, State, TerminationReason, Trf,
 };
 
 #[derive(Clone)]
-struct ScalarMatrix(f64);
+struct ScalarMatrix(f64, bool);
 
 impl GramMatrix for ScalarMatrix {
     fn gram(&self) -> Self {
-        Self(self.0 * self.0)
+        Self(self.0 * self.0, self.1)
     }
 }
 
@@ -25,6 +25,9 @@ impl MatTransposeVec<Vec<f64>> for ScalarMatrix {
 impl LinearSolveSpd<Vec<f64>> for ScalarMatrix {
     fn solve_spd(&self, b: &Vec<f64>) -> Result<Vec<f64>, LinearSolveError> {
         assert_eq!(b.len(), 1);
+        if self.1 {
+            return Ok(vec![f64::MAX / 4.0]);
+        }
         if self.0 <= 0.0 {
             return Err(LinearSolveError::NotPositiveDefinite);
         }
@@ -48,6 +51,7 @@ impl MaxDiagonal for ScalarMatrix {
 struct BoundedResidual {
     lower: Vec<f64>,
     upper: Vec<f64>,
+    invalid_step: bool,
 }
 
 impl CostFunction for BoundedResidual {
@@ -74,7 +78,7 @@ impl Jacobian for BoundedResidual {
     type Jacobian = ScalarMatrix;
 
     fn jacobian(&self, _x: &Vec<f64>) -> Result<ScalarMatrix, Self::Error> {
-        Ok(ScalarMatrix(1.0))
+        Ok(ScalarMatrix(1.0, self.invalid_step))
     }
 }
 
@@ -93,6 +97,7 @@ fn trf_accepts_a_downstream_jacobian_type() {
     let problem = BoundedResidual {
         lower: vec![-10.0],
         upper: vec![10.0],
+        invalid_step: false,
     };
 
     let result = Executor::from_start(
@@ -106,4 +111,29 @@ fn trf_accepts_a_downstream_jacobian_type() {
 
     assert_eq!(result.reason, TerminationReason::SolverConverged);
     assert!((result.param()[0] - 2.0).abs() < 1e-8);
+}
+
+#[test]
+fn nonfinite_trial_model_stops_before_residual_evaluation() {
+    let problem = BoundedResidual {
+        lower: vec![f64::NEG_INFINITY],
+        upper: vec![f64::INFINITY],
+        invalid_step: true,
+    };
+    let mut stepper = Executor::from_start(
+        problem,
+        Trf::<Vec<f64>, ScalarMatrix>::new(),
+        vec![0.0],
+    )
+    .into_stepper()
+    .unwrap();
+    let counts = *stepper.counts();
+    let outcome = stepper.step().unwrap();
+    let basin::StepOutcome::Stopped(report) = outcome else {
+        panic!("a non-finite prediction must stop legacy TRF");
+    };
+    assert_eq!(report, TerminationReason::SolverFailed);
+    assert_eq!(stepper.state().param(), &vec![0.0]);
+    assert_eq!(stepper.state().cost(), 2.0);
+    assert_eq!(*stepper.counts(), counts);
 }
