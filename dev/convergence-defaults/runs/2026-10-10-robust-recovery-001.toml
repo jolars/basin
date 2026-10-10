@@ -1,0 +1,75 @@
+run_id = "2026-10-10-robust-recovery-001"
+purpose = "paired robust Nielsen curvature recovery; step 5 safeguard recheck"
+status = "planned"
+source_revision = "1f63614792d33f99cd1e18e8ec5d84bdd01acf0c"
+starting_revision = "8b53b5c"
+protocol = "CDP-1 measurement extension; no amendment, calibration, or default selection"
+output_directory = "target/convergence-defaults/2026-10-10-robust-recovery-001"
+backend = "nalgebra 0.34.2"
+compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
+architecture = "x86_64"
+build_profile = "dev, debug=0, incremental=0; instrumented timing is not compared"
+execution = "single-threaded solver routes, analytic derivatives, deterministic starts; seeds and timing comparisons are inapplicable"
+configuration = "unchanged 504 full-budget ablations and 216 budget interruptions, plus the original 336 ablations"
+fixtures = "ROBUST_EXTENDED_FIXTURES; arctangent scalar, plus all four built-in losses on full-rank and rank-deficient four-parameter models"
+dimensions = "scalar: n=1 m=1 rank=1; full-rank: n=4 m=12 rank=4; rank-deficient: n=4 m=8 rank=2"
+models = "full-rank: each d=x-target has residuals d,2d,-d; rank-deficient: sums x0+x1-1 and x2+x3+1 have residuals d,2d,-d, plus constant residuals 2,-2"
+starts = "scalar [-1]; full-rank [-1,1,-0.5,0.5]; rank-deficient [-0.5,-0.5,0.5,0.5]"
+references = "scalar [1]; full-rank [1,-1,0.5,-0.5]; rank-deficient set x0+x1=1 and x2+x3=-1, representative [0.5,0.5,-0.5,-0.5]"
+reference_provenance = "analytic global minima: every variable-dependent loss term increases with squared residual; constant residuals leave the minimizer set unchanged"
+precision = "native f32 and f64; dyadic starts, coefficients, and reference witnesses are exactly representable; complete arithmetic uncertainty and CDP-1 eligibility certificates remain gated"
+constraints_and_transformations = "unbounded, unit coordinate and loss scales, no added transformations"
+derivatives = "analytic; one fused initialization callback is one physical call and two logical requests; no finite-difference work"
+partition = "development analytic controls; no held-out solver outcomes"
+budgets = "4000 physical callbacks, 10000 completed iterations, 600-second boundary wall guard, 120-second external process guard; default-gradient interruptions at caps 0,1,2"
+thresholds = "relative probes: 1e-8 f64, 1e-4 f32; exact-zero absolute gradient retained; default control: absolute gradient 1e-8"
+quality = "same independent stationarity and parameter limits for every configuration: 1e-6 f64, 1e-3 f32; rank-deficient parameter error is infinity-norm distance to the affine minimizer set"
+composition = "unchanged native OR tests; conjunction and acceptance/gain-ratio filters diagnosed only at terminal trials"
+verification = "independent 100-digit robust objectives, gradients, and safeguarded models; arctangent uses half-angle reduction and an alternating series; identity roundoff screens are not precision certificates"
+accounting = "physical residual/Jacobian callback ledger, logical categories, native model solves, rejected trials, publications, terminal stage, and all passing tests; verification outside solve ledger and timer"
+schema = "five existing CSV files; retained checker JSON schema 1; raw traces under target"
+holdout_candidate_outcomes = "sealed"
+policies_selected = false
+features = "competitor-bench defaults; nalgebra 0.34; no basin-latest or parallel"
+python = "3.14.7"
+logical_cpus = 24
+algorithm_change = "robust Nielsen only: before updating monotone diagonal D, multiply mu by min_j(D_old[j]/max(D_old[j],diag_cur[j])); two square-root factors avoid ratio underflow; a zero product uses the smallest positive normal scalar value"
+previous_outcomes = "four inaccurate f32 Nielsen stalls already observed; focused recovery regressions passed before freeze; no new retained paired pilot outcomes observed"
+comparison = "all 360 trust-region runs and 108 Nielsen early-budget runs must match all five CSV tables, excluding elapsed time; four failed default-gradient controls must recover, with the first changed damping matching diagonal compensation"
+quality_gate = "all 72 runs under each of default-gradient, normalized-gradient, and radius/exact-gradient controls must satisfy the unchanged independent quality checks; retain native convergence/stall classifications"
+previous_directory = "target/convergence-defaults/2026-10-10-robust-extended-001/extended"
+retained_report = "dev/convergence-defaults/robust-recovery-results.json"
+commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo build -p competitor-bench --bin verify_least_squares",
+  "timeout 120s target/robust-stopping-build/debug/verify_least_squares --phase robust-extended --output target/convergence-defaults/2026-10-10-robust-recovery-001/extended",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-robust-stopping.py target/convergence-defaults/2026-10-10-robust-recovery-001/extended --extended --recovery-from target/convergence-defaults/2026-10-10-robust-extended-001/extended --output target/convergence-defaults/2026-10-10-robust-recovery-001/report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-robust-stopping.py target/convergence-defaults/2026-10-10-robust-recovery-001/extended --extended",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-recovery-001/extended",
+  "timeout 120s target/robust-stopping-build/debug/verify_least_squares --phase robust-stopping --output target/convergence-defaults/2026-10-10-robust-recovery-001/original",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-robust-stopping.py target/convergence-defaults/2026-10-10-robust-recovery-001/original --output target/convergence-defaults/2026-10-10-robust-recovery-001/original-report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-robust-stopping.py target/convergence-defaults/2026-10-10-robust-recovery-001/original",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-recovery-001/original",
+]
+
+[source_sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"crates/competitor-bench/src/bin/verify_least_squares.rs" = "cc4e4ba5e895c8eaf2e5c557e8071e637bec38479f16255e1e0cdedf235c0441"
+"crates/competitor-bench/src/convergence/least_squares.rs" = "d57a76ace927538b5cbec4449fabc721b7d37acba6542f7f30ce3058b3792d64"
+"crates/competitor-bench/tests/least_squares_measurement.rs" = "4b75b9b746b0b9ae53f4ab363096b6419c293c04f114fe745f1c7f9f2df4037b"
+"dev/convergence-defaults/check-least-squares.py" = "520af5299542c6358d59227ea2f41453b48a8311892542f8004279ffbb6b326e"
+"dev/convergence-defaults/check-robust-stopping.py" = "5c31965a7ad9d78d3d621c6b4cec546ffb69373add50562cdd1dde1e8e45cc12"
+"dev/convergence-defaults/test-least-squares.py" = "04e1514738e1f6ebe80423cdb26546ad9212a01b5366f062eb40db5a9a0a9e8b"
+"dev/convergence-defaults/test-robust-stopping.py" = "b35662d8d07d0aa77584fcb594e1deb149adcc78d9ce5c4b8a2b5501819a4be7"
+"crates/basin/src/core/least_squares/losses.rs" = "7b6bb769f73c02eb38f00fe3ee948ba9c18381e339c2bf061c6d1cc2871fa090"
+"crates/basin/src/core/least_squares/evaluation.rs" = "cadfdfb058d703a9ae3746e43b5074cd11ab77542901cf5264be5a7af61da331"
+"crates/basin/src/solver/levenberg_marquardt.rs" = "1692a242e098b7deb4ac82e3d1df439b827f54dd8b9eb29cc1a18e86311d20c2"
+"crates/basin/src/solver/levenberg_marquardt/damping.rs" = "b5127a04e90603231483bbf2475baa041db471efce0119cc580abe6c9a6a56a3"
+"crates/basin/src/solver/levenberg_marquardt/stopping.rs" = "be48b6d9c9141f09e392e23751c24abfac203146885093f4d655063909c504ea"
+"crates/basin/tests/levenberg_marquardt_robust_recovery.rs" = "cf8853b160c264a2aac6da1e7a84d4043e7bc55767e3b6a15817d4ce85e707aa"
+
+[previous_sha256]
+"runs.csv" = "90392e2500f3aa0bb598579d14155965b6b7ce42fa77326cd4f517ab12837dcf"
+"publications.csv" = "ec99f8c8c48baf6a5ad5148c4e4c5e95aae27e10bfe37010567e1154e6c8b7f1"
+"leaves.csv" = "7a7d1492dedcd76df7c32a4819b8e170b71982384ffd99b4bd2829c2d5c09cac"
+"native.csv" = "04670d1fabf536aafac6dc755d795839ac8af88ac0df66f22d2ff3921bba0f24"
+"checks.csv" = "343d8ff176c6972ee5fb4ee01afe68a96a8b3c675d9098486d0356b7f05d2f9b"
