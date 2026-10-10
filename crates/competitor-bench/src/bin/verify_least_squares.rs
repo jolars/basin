@@ -6,8 +6,8 @@ use basin::{
 };
 use competitor_bench::convergence::{
     least_squares::{
-        AnalyticModel, Instrumented, Measured, ROBUST_FIXTURES,
-        RobustStoppingPolicy, measure,
+        AnalyticModel, Instrumented, Measured, ROBUST_EXTENDED_FIXTURES,
+        ROBUST_FIXTURES, RobustStoppingPolicy, measure, robust_fixture,
     },
     ledger::WorkLedger,
     nist::datasets,
@@ -352,7 +352,7 @@ macro_rules! precision {
                     let solver = $solver.with_trial_diagnostics(true);
                     let state = PointState::new(DVector::from_vec(x.clone()));
                     let result = if policy.starts_with("robust_") {
-                        let fixture = ROBUST_FIXTURES.iter().find(|f| f.name == dataset).unwrap();
+                        let fixture = robust_fixture(dataset).unwrap();
                         let p = RobustLeastSquares::new(p, fixture.loss).with_scale(fixture.scale as $f);
                         measure(Executor::new(p, solver, state).max_iter(10_000), &ledger, Duration::from_secs(600))
                     } else {
@@ -405,10 +405,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         || args[3] != "--output"
         || !matches!(
             args[2].as_str(),
-            "analytic" | "bounded" | "robust" | "robust-stopping" | "nist"
+            "analytic"
+                | "bounded"
+                | "robust"
+                | "robust-stopping"
+                | "robust-extended"
+                | "nist"
         )
     {
-        return Err("usage: verify_least_squares --phase analytic|bounded|robust|robust-stopping|nist --output <new-directory>".into());
+        return Err("usage: verify_least_squares --phase analytic|bounded|robust|robust-stopping|robust-extended|nist --output <new-directory>".into());
     }
     let mut files = Files::new(Path::new(&args[4]))?;
     if args[2] == "analytic" {
@@ -539,28 +544,48 @@ fn main() -> Result<(), Box<dyn Error>> {
                 )?;
             }
         }
-    } else if args[2] == "robust-stopping" {
-        for fixture in ROBUST_FIXTURES.iter().filter(|f| f.bounds.is_none()) {
+    } else if matches!(args[2].as_str(), "robust-stopping" | "robust-extended")
+    {
+        let fixtures = if args[2] == "robust-extended" {
+            &ROBUST_EXTENDED_FIXTURES[..]
+        } else {
+            &ROBUST_FIXTURES[..]
+        };
+        for fixture in fixtures.iter().filter(|f| f.bounds.is_none()) {
             for policy in RobustStoppingPolicy::ALL {
-                let cap = 4000;
-                run64(
-                    &mut files,
-                    fixture.name,
-                    1,
-                    vec![fixture.start],
-                    Instrumented::analytic(fixture.model, WorkLedger::new(cap)),
-                    cap,
-                    policy.name(),
-                )?;
-                run32(
-                    &mut files,
-                    fixture.name,
-                    1,
-                    vec![fixture.start as f32],
-                    Instrumented::analytic(fixture.model, WorkLedger::new(cap)),
-                    cap,
-                    policy.name(),
-                )?;
+                let caps: &[u64] = if args[2] == "robust-extended"
+                    && policy == RobustStoppingPolicy::DefaultGradient
+                {
+                    &[0, 1, 2, 4000]
+                } else {
+                    &[4000]
+                };
+                for &cap in caps {
+                    run64(
+                        &mut files,
+                        fixture.name,
+                        1,
+                        fixture.start.to_vec(),
+                        Instrumented::analytic(
+                            fixture.model,
+                            WorkLedger::new(cap),
+                        ),
+                        cap,
+                        policy.name(),
+                    )?;
+                    run32(
+                        &mut files,
+                        fixture.name,
+                        1,
+                        fixture.start.iter().map(|v| *v as f32).collect(),
+                        Instrumented::analytic(
+                            fixture.model,
+                            WorkLedger::new(cap),
+                        ),
+                        cap,
+                        policy.name(),
+                    )?;
+                }
             }
         }
     } else if args[2] == "robust" {
@@ -593,7 +618,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         &mut files,
                         fixture.name,
                         1,
-                        vec![fixture.start],
+                        fixture.start.to_vec(),
                         p64,
                         cap,
                         policy,
@@ -602,7 +627,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         &mut files,
                         fixture.name,
                         1,
-                        vec![fixture.start as f32],
+                        fixture.start.iter().map(|v| *v as f32).collect(),
                         p32,
                         cap,
                         policy,

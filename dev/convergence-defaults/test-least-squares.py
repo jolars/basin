@@ -63,6 +63,66 @@ class BoxQuality(unittest.TestCase):
 
 
 class RobustReference(unittest.TestCase):
+    def test_decimal_arctangent(self):
+        for value in ('0', '.001', '.1', '1', '4', '1e20'):
+            self.assertAlmostEqual(float(pilot.decimal_atan(pilot.D(value))), pilot.math.atan(float(value)), delta=3e-16)
+        quarter_pi = pilot.D('0.785398163397448309615660845819875721049292349843776455243736148076954101571552249657008706335529266995537')
+        self.assertLess(abs(pilot.decimal_atan(pilot.D(1)) - quarter_pi), pilot.D('1e-98'))
+
+    def test_extended_minima_and_identifiable_directions(self):
+        for name, (loss, model, _, reference, _) in pilot.ROBUST_EXTENDED_CASES.items():
+            run = dict(dataset=name, precision='f64')
+            point = list(map(float, reference))
+            cost, gradient, _ = pilot.robust_values(run, point)
+            self.assertEqual(gradient, [0.] * len(point), name)
+            if model == 'rank4':
+                expected = {'huber': 3., 'soft_l1': 2 * (5 ** .5 - 1), 'cauchy': pilot.math.log(5), 'arctan': pilot.math.atan(4)}[loss]
+                self.assertAlmostEqual(cost, expected, delta=3e-16)
+                flat = [2., -1., 3., -4.]
+                shifted_cost, shifted_gradient, _ = pilot.robust_values(run, flat)
+                self.assertEqual(shifted_cost, cost)
+                self.assertEqual(shifted_gradient, gradient)
+                result = pilot.robust_quality(dict(run, returned='true', policy='robust_default'),
+                                              [dict(point='2;-1;3;-4', cost=str(cost))])
+                self.assertEqual(result['parameter_error'], 0.)
+                self.assertTrue(result['quality_passed'])
+            else:
+                self.assertEqual(cost, 0.)
+            for k in range(len(point)):
+                for delta in (-.01, .01):
+                    perturbed = point.copy()
+                    perturbed[k] += delta
+                    trial_cost, trial_gradient, _ = pilot.robust_values(run, perturbed)
+                    self.assertGreater(trial_cost, cost, name)
+                    self.assertGreater(trial_gradient[k] * delta, 0, name)
+
+    def test_extended_gradient_matches_objective_difference(self):
+        for name in pilot.ROBUST_EXTENDED_CASES:
+            run = dict(dataset=name, precision='f64')
+            point = [-.75] if name == 'robust_arctan' else [-.75, .25, .75, -.25]
+            _, gradient, rows = pilot.robust_values(run, point)
+            self.assertTrue(all(len(row) == len(point) for row in rows))
+            for k, derivative in enumerate(gradient):
+                h = 1e-5
+                plus, minus = point.copy(), point.copy()
+                plus[k] += h
+                minus[k] -= h
+                difference = (pilot.robust_values(run, plus)[0] - pilot.robust_values(run, minus)[0]) / (2 * h)
+                self.assertAlmostEqual(derivative, difference, delta=2e-8, msg=name)
+
+    def test_arctangent_negative_curvature_and_rank_quality(self):
+        for precision, epsilon in [('f64', 2**-52), ('f32', 2**-23)]:
+            _, _, rows = pilot.robust_values(dict(dataset='robust_arctan', precision=precision), [-1.])
+            self.assertAlmostEqual(rows[0][0]**2, epsilon, delta=epsilon*1e-14)
+        run = dict(dataset='robust_cauchy_rank4', precision='f64', returned='true', policy='robust_default')
+        point = [2., -1., 3., -3.75]
+        cost = pilot.robust_values(run, point)[0]
+        result = pilot.robust_quality(run, [dict(point='2;-1;3;-3.75', cost=str(cost))])
+        self.assertEqual(result['parameter_error'], .125)
+        self.assertFalse(result['quality_passed'])
+        with self.assertRaises(ValueError):
+            pilot.robust_quality(run, [dict(point='0;0', cost=str(cost))])
+
     def test_qr_prediction_allowance_includes_unsummed_gradient_terms(self):
         unit = 2**-53
         h = 1.3314095455969066e-7
@@ -83,9 +143,9 @@ class RobustReference(unittest.TestCase):
             run = dict(dataset=name, precision='f64')
             cost, gradient, _ = pilot.robust_values(run, [float(reference)])
             if bounds:
-                self.assertLess(gradient, 0)
+                self.assertLess(gradient[0], 0)
             else:
-                self.assertEqual(gradient, 0)
+                self.assertEqual(gradient, [0])
             for delta in (-.01, .01):
                 x = float(reference) + delta
                 if bounds and not float(bounds[0]) <= x <= float(bounds[1]):
@@ -93,7 +153,7 @@ class RobustReference(unittest.TestCase):
                 trial_cost, trial_gradient, _ = pilot.robust_values(run, [x])
                 self.assertGreater(trial_cost, cost, name)
                 if bounds is None:
-                    self.assertGreater(trial_gradient * delta, 0, name)
+                    self.assertGreater(trial_gradient[0] * delta, 0, name)
 
     def test_gradient_matches_independent_objective_difference(self):
         for name in pilot.ROBUST_CASES:
@@ -103,7 +163,7 @@ class RobustReference(unittest.TestCase):
             _, gradient, _ = pilot.robust_values(run, [x])
             plus = pilot.robust_values(run, [x + h])[0]
             minus = pilot.robust_values(run, [x - h])[0]
-            self.assertAlmostEqual(gradient, (plus-minus)/(2*h), delta=1e-8)
+            self.assertAlmostEqual(gradient[0], (plus-minus)/(2*h), delta=1e-8)
 
     def test_curvature_safeguards_are_precision_specific(self):
         for precision, epsilon in [('f64', 2**-52), ('f32', 2**-23)]:
@@ -141,7 +201,7 @@ class Evidence(unittest.TestCase):
             ('checks', lambda rows: next(r for r in rows if r['passed'] == 'true').update(value='99999')),
             ('leaves', lambda rows: rows[0].update(kind='Cost')),
         ]
-        if pilot.load(self.directory, 'runs')[0]['dataset'] in pilot.ROBUST_CASES:
+        if pilot.load(self.directory, 'runs')[0]['dataset'] in pilot.ALL_ROBUST_CASES:
             changes.extend([
                 ('publications', lambda rows: next(r for r in rows if r['cost']).update(cost='99999')),
                 ('native', lambda rows: next(r for r in rows if r['gradient']).update(gradient='99999')),

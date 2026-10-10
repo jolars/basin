@@ -30,6 +30,10 @@ pub enum AnalyticModel {
     RobustOutlier,
     /// Symmetric residuals give a known smooth robust minimum.
     RobustSymmetric,
+    /// Four identifiable coordinates, each with three linear residuals.
+    RobustLinear4,
+    /// Two identifiable sums and two flat directions, with constant residuals.
+    RobustRankDeficient4,
     /// A stationary maximum in the first coordinate, to separate stops from quality.
     BoxStationary,
     Nonzero,
@@ -42,6 +46,7 @@ pub enum PilotLoss {
     Huber,
     SoftL1,
     Cauchy,
+    Arctan,
 }
 impl<F: Scalar> basin::LossFunction<F> for PilotLoss {
     fn evaluate(&self, z: F) -> basin::LossEvaluation<F> {
@@ -49,6 +54,7 @@ impl<F: Scalar> basin::LossFunction<F> for PilotLoss {
             Self::Huber => basin::HuberLoss.evaluate(z),
             Self::SoftL1 => basin::SoftL1Loss.evaluate(z),
             Self::Cauchy => basin::CauchyLoss.evaluate(z),
+            Self::Arctan => basin::ArctanLoss.evaluate(z),
         }
     }
     fn evaluate_scaled(&self, r: F, scale: F) -> basin::LossEvaluation<F> {
@@ -56,6 +62,7 @@ impl<F: Scalar> basin::LossFunction<F> for PilotLoss {
             Self::Huber => basin::HuberLoss.evaluate_scaled(r, scale),
             Self::SoftL1 => basin::SoftL1Loss.evaluate_scaled(r, scale),
             Self::Cauchy => basin::CauchyLoss.evaluate_scaled(r, scale),
+            Self::Arctan => basin::ArctanLoss.evaluate_scaled(r, scale),
         }
     }
 }
@@ -67,8 +74,9 @@ pub struct RobustFixture {
     pub model: AnalyticModel,
     pub loss: PilotLoss,
     pub scale: f64,
-    pub start: f64,
-    pub reference: f64,
+    pub start: &'static [f64],
+    /// A representative minimum; rank-deficient models have a minimizer set.
+    pub reference: &'static [f64],
     pub bounds: Option<(f64, f64)>,
 }
 
@@ -78,8 +86,8 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
         model: AnalyticModel::RobustOutlier,
         loss: PilotLoss::Huber,
         scale: 1.,
-        start: 0.1,
-        reference: 0.5,
+        start: &[0.1],
+        reference: &[0.5],
         bounds: None,
     },
     RobustFixture {
@@ -87,8 +95,8 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
         model: AnalyticModel::RobustOutlier,
         loss: PilotLoss::Huber,
         scale: 0.5,
-        start: 0.1,
-        reference: 0.25,
+        start: &[0.1],
+        reference: &[0.25],
         bounds: None,
     },
     RobustFixture {
@@ -96,8 +104,8 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
         model: AnalyticModel::RobustSymmetric,
         loss: PilotLoss::SoftL1,
         scale: 1.,
-        start: 0.1,
-        reference: 0.,
+        start: &[0.1],
+        reference: &[0.],
         bounds: None,
     },
     RobustFixture {
@@ -105,8 +113,8 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
         model: AnalyticModel::Linear,
         loss: PilotLoss::Cauchy,
         scale: 1.,
-        start: -1.,
-        reference: 1.,
+        start: &[-1.],
+        reference: &[1.],
         bounds: None,
     },
     RobustFixture {
@@ -114,8 +122,8 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
         model: AnalyticModel::Linear,
         loss: PilotLoss::Huber,
         scale: 0.5,
-        start: 0.5,
-        reference: 1.,
+        start: &[0.5],
+        reference: &[1.],
         bounds: None,
     },
     RobustFixture {
@@ -123,8 +131,8 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
         model: AnalyticModel::NonFiniteTrial,
         loss: PilotLoss::SoftL1,
         scale: 1.,
-        start: 0.1,
-        reference: 1.,
+        start: &[0.1],
+        reference: &[1.],
         bounds: None,
     },
     RobustFixture {
@@ -132,11 +140,96 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
         model: AnalyticModel::RobustOutlier,
         loss: PilotLoss::Huber,
         scale: 0.5,
-        start: 0.1,
-        reference: 0.125,
+        start: &[0.1],
+        reference: &[0.125],
         bounds: Some((0., 0.125)),
     },
 ];
+
+/// Larger controls keep all losses on identical full-rank and rank-deficient models.
+pub const ROBUST_EXTENDED_FIXTURES: [RobustFixture; 9] = [
+    RobustFixture {
+        name: "robust_arctan",
+        model: AnalyticModel::Linear,
+        loss: PilotLoss::Arctan,
+        scale: 1.,
+        start: &[-1.],
+        reference: &[1.],
+        bounds: None,
+    },
+    extended_fixture(
+        "robust_huber_linear4",
+        AnalyticModel::RobustLinear4,
+        PilotLoss::Huber,
+    ),
+    extended_fixture(
+        "robust_soft_l1_linear4",
+        AnalyticModel::RobustLinear4,
+        PilotLoss::SoftL1,
+    ),
+    extended_fixture(
+        "robust_cauchy_linear4",
+        AnalyticModel::RobustLinear4,
+        PilotLoss::Cauchy,
+    ),
+    extended_fixture(
+        "robust_arctan_linear4",
+        AnalyticModel::RobustLinear4,
+        PilotLoss::Arctan,
+    ),
+    extended_fixture(
+        "robust_huber_rank4",
+        AnalyticModel::RobustRankDeficient4,
+        PilotLoss::Huber,
+    ),
+    extended_fixture(
+        "robust_soft_l1_rank4",
+        AnalyticModel::RobustRankDeficient4,
+        PilotLoss::SoftL1,
+    ),
+    extended_fixture(
+        "robust_cauchy_rank4",
+        AnalyticModel::RobustRankDeficient4,
+        PilotLoss::Cauchy,
+    ),
+    extended_fixture(
+        "robust_arctan_rank4",
+        AnalyticModel::RobustRankDeficient4,
+        PilotLoss::Arctan,
+    ),
+];
+
+const fn extended_fixture(
+    name: &'static str,
+    model: AnalyticModel,
+    loss: PilotLoss,
+) -> RobustFixture {
+    let (start, reference): (&[f64], &[f64]) = match model {
+        AnalyticModel::RobustLinear4 => {
+            (&[-1., 1., -0.5, 0.5], &[1., -1., 0.5, -0.5])
+        }
+        AnalyticModel::RobustRankDeficient4 => {
+            (&[-0.5, -0.5, 0.5, 0.5], &[0.5, 0.5, -0.5, -0.5])
+        }
+        _ => panic!("expected a four-parameter robust model"),
+    };
+    RobustFixture {
+        name,
+        model,
+        loss,
+        scale: 1.,
+        start,
+        reference,
+        bounds: None,
+    }
+}
+
+pub fn robust_fixture(name: &str) -> Option<&'static RobustFixture> {
+    ROBUST_FIXTURES
+        .iter()
+        .chain(ROBUST_EXTENDED_FIXTURES.iter())
+        .find(|fixture| fixture.name == name)
+}
 
 /// Fixed stopping ablations retain the algorithm and its numerical safeguards.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,12 +329,18 @@ impl<F: Scalar> Instrumented<F> {
         }
     }
     pub fn analytic(model: AnalyticModel, ledger: WorkLedger) -> Self {
+        let n = match model {
+            AnalyticModel::RobustLinear4
+            | AnalyticModel::RobustRankDeficient4 => 4,
+            AnalyticModel::BoxLinear | AnalyticModel::BoxStationary => 2,
+            _ => 1,
+        };
         Self {
             model: Model::Analytic(model),
             ledger,
             fused: true,
-            lower: DVector::from_element(1, F::neg_infinity()),
-            upper: DVector::from_element(1, F::infinity()),
+            lower: DVector::from_element(n, F::neg_infinity()),
+            upper: DVector::from_element(n, F::infinity()),
         }
     }
     /// Set fixture bounds without changing its residual model or ledger.
@@ -284,6 +383,43 @@ impl<F: Scalar> Instrumented<F> {
                 ]),
                 DMatrix::from_element(2, 1, F::one()),
             ),
+            Model::Analytic(
+                model @ (AnalyticModel::RobustLinear4
+                | AnalyticModel::RobustRankDeficient4),
+            ) => {
+                let rank_deficient =
+                    matches!(model, AnalyticModel::RobustRankDeficient4);
+                let differences = if rank_deficient {
+                    vec![x[0] + x[1] - F::one(), x[2] + x[3] + F::one()]
+                } else {
+                    [1., -1., 0.5, -0.5]
+                        .iter()
+                        .enumerate()
+                        .map(|(k, target)| x[k] - F::from_f64(*target).unwrap())
+                        .collect()
+                };
+                let rows =
+                    differences.len() * 3 + if rank_deficient { 2 } else { 0 };
+                let mut residual = DVector::zeros(rows);
+                let mut jacobian = DMatrix::zeros(rows, 4);
+                for (k, difference) in differences.into_iter().enumerate() {
+                    for (i, weight) in [1., 2., -1.].iter().enumerate() {
+                        let weight = F::from_f64(*weight).unwrap();
+                        residual[3 * k + i] = weight * difference;
+                        if rank_deficient {
+                            jacobian[(3 * k + i, 2 * k)] = weight;
+                            jacobian[(3 * k + i, 2 * k + 1)] = weight;
+                        } else {
+                            jacobian[(3 * k + i, k)] = weight;
+                        }
+                    }
+                }
+                if rank_deficient {
+                    residual[rows - 2] = F::from_f64(2.).unwrap();
+                    residual[rows - 1] = -F::from_f64(2.).unwrap();
+                }
+                (residual, jacobian)
+            }
             Model::Analytic(AnalyticModel::BoxLinear) => (
                 DVector::from_vec(vec![x[0] - F::one(), x[1] + F::one()]),
                 DMatrix::identity(2, 2),
@@ -303,6 +439,8 @@ impl<F: Scalar> Instrumented<F> {
                 let (r, j) = match model {
                     AnalyticModel::RobustOutlier
                     | AnalyticModel::RobustSymmetric
+                    | AnalyticModel::RobustLinear4
+                    | AnalyticModel::RobustRankDeficient4
                     | AnalyticModel::BoxLinear
                     | AnalyticModel::BoxStationary => {
                         unreachable!()

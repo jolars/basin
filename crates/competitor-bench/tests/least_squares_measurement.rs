@@ -415,8 +415,13 @@ macro_rules! robust_checks {
     ($name:ident, $f:ty, $solver:expr, $bounded:expr) => {
         #[test]
         fn $name() {
-            use competitor_bench::convergence::least_squares::ROBUST_FIXTURES;
-            for fixture in ROBUST_FIXTURES {
+            use competitor_bench::convergence::least_squares::{
+                ROBUST_EXTENDED_FIXTURES, ROBUST_FIXTURES,
+            };
+            for fixture in ROBUST_FIXTURES
+                .iter()
+                .chain(ROBUST_EXTENDED_FIXTURES.iter())
+            {
                 if fixture.bounds.is_some() && !$bounded {
                     continue;
                 }
@@ -436,9 +441,12 @@ macro_rules! robust_checks {
                         Executor::new(
                             problem,
                             $solver.with_trial_diagnostics(enabled),
-                            PointState::new(DVector::from_element(
-                                1,
-                                fixture.start as $f,
+                            PointState::new(DVector::from_vec(
+                                fixture
+                                    .start
+                                    .iter()
+                                    .map(|v| *v as $f)
+                                    .collect(),
                             )),
                         )
                         .max_iter(10000),
@@ -537,3 +545,43 @@ robust_precision!(
     robust_legacy32,
     robust_full32
 );
+
+macro_rules! extended_model_checks {
+    ($name:ident, $f:ty) => {
+        #[test]
+        fn $name() {
+            use basin::{Jacobian, Residual};
+            use competitor_bench::convergence::least_squares::ROBUST_EXTENDED_FIXTURES;
+            for fixture in ROBUST_EXTENDED_FIXTURES {
+                let problem = Instrumented::<$f>::analytic(fixture.model, WorkLedger::new(100));
+                let reference = DVector::from_vec(fixture.reference.iter().map(|v| *v as $f).collect());
+                let residual = problem.residual(&reference).unwrap();
+                let jacobian = problem.jacobian(&reference).unwrap();
+                let (rows, rank) = match fixture.model {
+                    AnalyticModel::RobustLinear4 => (12, 4),
+                    AnalyticModel::RobustRankDeficient4 => (8, 2),
+                    _ => (1, 1),
+                };
+                assert_eq!(residual.len(), rows);
+                assert_eq!(jacobian.shape(), (rows, reference.len()));
+                let singular = jacobian.clone().svd(false, false).singular_values;
+                assert_eq!(singular.iter().filter(|v| **v > 1e-5).count(), rank);
+                if rank == 2 {
+                    let shifted = &reference + DVector::from_vec(vec![1.5, -1.5, 3.5, -3.5]);
+                    assert_eq!(problem.residual(&shifted).unwrap(), residual);
+                    assert_eq!(residual[6], 2.);
+                    assert_eq!(residual[7], -2.);
+                } else {
+                    assert!(residual.iter().all(|v| *v == 0.));
+                }
+                let start = DVector::from_vec(fixture.start.iter().map(|v| *v as $f).collect());
+                let direction = DVector::from_element(start.len(), 0.125);
+                let difference = problem.residual(&(&start + &direction)).unwrap() - problem.residual(&start).unwrap();
+                let expected = jacobian * direction;
+                assert!((&difference - expected).norm() < 1e-5);
+            }
+        }
+    };
+}
+extended_model_checks!(extended_models64, f64);
+extended_model_checks!(extended_models32, f32);

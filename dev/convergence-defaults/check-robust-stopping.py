@@ -21,6 +21,8 @@ POLICIES = {
     'robust_radius_probe': {'trust_radius'},
 }
 ROUTES = ('lm_normal_nielsen', 'lm_normal_trust', 'lm_qr_nielsen', 'lm_qr_trust')
+EXTENDED_STARTS = {name: ([-1.] if name == 'robust_arctan' else [-.5, -.5, .5, .5] if '_rank4' in name else [-1., 1., -.5, .5])
+                   for name in pilot.ROBUST_EXTENDED_CASES}
 
 
 def quality(run, publications):
@@ -51,20 +53,28 @@ def terminal_trial(observations, checks):
                 ratio_above_quarter_model_and_step=both and float(last['ratio']) > .25)
 
 
-def verify(directory):
+def verify(directory, extended=False):
     runs, grouped, statistics = pilot.verify(directory)
-    expected = {(dataset, precision, route, policy) for dataset, case in pilot.ROBUST_CASES.items()
-                if case[4] is None for precision in ('f32', 'f64') for route in ROUTES for policy in POLICIES}
+    cases = pilot.ROBUST_EXTENDED_CASES if extended else pilot.ROBUST_CASES
+    expected = {(dataset, precision, route, policy, str(cap)) for dataset, case in cases.items()
+                if case[4] is None for precision in ('f32', 'f64') for route in ROUTES for policy in POLICIES
+                for cap in ((0, 1, 2, 4000) if extended and policy == 'robust_gradient_default' else (4000,))}
     pilot.require(len(runs) == len(expected) and
-                  {(r['dataset'], r['precision'], r['route'], r['policy']) for r in runs} == expected,
+                  {(r['dataset'], r['precision'], r['route'], r['policy'], r['cap']) for r in runs} == expected,
                   'robust stopping coverage')
-    pilot.require(all(r['cap'] == '4000' and r['start'] == '1' for r in runs), 'robust stopping caps and starts')
+    pilot.require(all(r['start'] == '1' for r in runs), 'robust stopping starts')
     defaults = {(r['dataset'], r['precision'], r['route']): r for r in runs
-                if r['policy'] == 'robust_gradient_default'}
+                if r['policy'] == 'robust_gradient_default' and r['cap'] == '4000'}
     summary = {name: Counter() for name in POLICIES}
+    budget_summary = Counter()
     records = []
     for run in runs:
         identifier = run['id']
+        if extended and run['cap'] != '0':
+            leaves = grouped['leaves'][identifier]
+            pilot.require(leaves and pilot.numbers(leaves[0]['point']) == EXTENDED_STARTS[run['dataset']] and
+                          leaves[0]['kind'] == 'ResidualJacobian' and leaves[0]['outcome'] == 'Completed',
+                          'extended fixture initialization changed')
         checks = grouped['checks'][identifier]
         observations = grouped['native'][identifier]
         enabled = POLICIES[run['policy']]
@@ -99,22 +109,23 @@ def verify(directory):
         premature = (point_quality is not None and not point_quality['quality_passed'] and
                      control_quality is not None and control_quality['quality_passed'] and
                      int(run['work']) < int(control['work']) and run['outcome'] == 'converged')
-        trial = terminal_trial(observations, checks)
-        record = dict({k: run[k] for k in ('id', 'dataset', 'precision', 'route', 'policy', 'outcome', 'criteria', 'work', 'denied', 'returned')},
-                      quality=point_quality, terminal_trial=trial, confirmed_premature=premature,
+        trial = terminal_trial(observations, checks) if observations else None
+        record = dict({k: run[k] for k in ('id', 'dataset', 'precision', 'route', 'policy', 'cap', 'outcome', 'stage', 'criteria', 'work', 'denied', 'returned', 'cost_evals', 'residual_evals', 'jacobian_evals')},
+                      quality=point_quality, last_publication_quality=pilot.robust_quality(dict(run, policy='robust_default'), pubs, last_publication=True),
+                      terminal_trial=trial, confirmed_premature=premature,
                       paired_default=dict(id=control['id'], work=control['work'], outcome=control['outcome'],
                                           common_prefix_work=prefix, quality=control_quality,
                                           available_improvement=point_quality['cost'] - control_quality['cost']
                                           if point_quality is not None and control_quality is not None else None))
-        counts = summary[run['policy']]
+        counts = summary[run['policy']] if run['cap'] == '4000' else budget_summary
         counts['runs'] += 1
         counts[run['outcome']] += 1
         counts['quality_passed'] += bool(point_quality and point_quality['quality_passed'])
         counts['confirmed_premature'] += premature
         counts['work'] += int(run['work'])
         records.append(record)
-    return dict(schema=1, purpose='robust-lm-stopping-ablation', status='passed', policies_selected=False,
-                holdout_candidate_outcomes='sealed', statistics=statistics, summary=summary, runs=records,
+    return dict(schema=1, purpose='robust-lm-extended-controls' if extended else 'robust-lm-stopping-ablation', status='passed', policies_selected=False,
+                holdout_candidate_outcomes='sealed', statistics=statistics, summary=summary, budget_summary=budget_summary, runs=records,
                 quality='common unit-scale parameter and gradient limits: 1e-6 f64, 1e-3 f32; not CDP-1 eligibility certificates',
                 composition='conjunction and acceptance/ratio filters evaluated only at measured terminal trials; no new solver policy implemented',
                 solve_timing='instrumented, unoptimized; no speed comparison', verification_outside_solve_ledger=True)
@@ -150,8 +161,10 @@ def main():
     parser.add_argument('directory', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--baseline', type=Path)
+    parser.add_argument('--extended', action='store_true', help='verify the larger, rank-deficient, and arctangent controls')
     args = parser.parse_args()
-    report = verify(args.directory)
+    pilot.require(not (args.extended and args.baseline), 'original baseline does not contain the extended fixtures')
+    report = verify(args.directory, args.extended)
     if args.baseline:
         report['baseline_reproduction'] = verify_baseline(args.directory, args.baseline)
     with args.output.open('x') as file:

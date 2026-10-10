@@ -46,11 +46,12 @@ class Composition(unittest.TestCase):
 
 class Evidence(unittest.TestCase):
     directory = None
+    extended = False
 
     def test_records_and_mutation_controls(self):
         if self.directory is None:
             self.skipTest('provide a robust stopping output directory')
-        stopping.verify(self.directory)
+        stopping.verify(self.directory, self.extended)
         mutations = [
             ('runs', lambda rows: rows.pop()),
             ('runs', lambda rows: rows[0].update(cap='4001')),
@@ -59,6 +60,12 @@ class Evidence(unittest.TestCase):
             ('checks', lambda rows: next(r for r in rows if r['name'] == 'absolute_gradient').update(tolerance='1', bound='1')),
             ('checks', lambda rows: next(r for r in rows if r['evidence'] == 'model_reduction' and r['passed'] == 'true').update(actual='0')),
         ]
+        if self.extended:
+            mutations.extend([
+                ('publications', lambda rows: next(r for r in rows if '_rank4-' in r['id']).update(point='0;0;0;0')),
+                ('native', lambda rows: next(r for r in rows if '_linear4-' in r['id'] and r['gradient']).update(gradient='0')),
+                ('native', lambda rows: next(r for r in rows if '_rank4-' in r['id'] and r['diagonal']).update(diagonal='0;0;0;0')),
+            ])
         for name, mutation in mutations:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
@@ -71,10 +78,13 @@ class Evidence(unittest.TestCase):
                     writer.writeheader()
                     writer.writerows(rows)
                 with self.assertRaises(ValueError):
-                    stopping.verify(directory)
+                    stopping.verify(directory, self.extended)
 
 
 if __name__ == '__main__':
+    if '--extended' in sys.argv:
+        sys.argv.remove('--extended')
+        Evidence.extended = True
     if len(sys.argv) == 2:
         Evidence.directory = Path(sys.argv.pop())
     unittest.main()

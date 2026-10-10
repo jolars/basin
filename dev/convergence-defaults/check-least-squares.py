@@ -180,19 +180,68 @@ ROBUST_CASES = {
 }
 
 
+# Kept separate so the original pilot and ablation retain their frozen coverage.
+ROBUST_EXTENDED_CASES = {
+    'robust_arctan': ('arctan', 'linear', D(1), [D(1)], None),
+    **{f'robust_{loss}_linear4': (loss, 'linear4', D(1), list(map(D, ['1', '-1', '.5', '-.5'])), None)
+       for loss in ('huber', 'soft_l1', 'cauchy', 'arctan')},
+    **{f'robust_{loss}_rank4': (loss, 'rank4', D(1), list(map(D, ['.5', '.5', '-.5', '-.5'])), None)
+       for loss in ('huber', 'soft_l1', 'cauchy', 'arctan')},
+}
+ALL_ROBUST_CASES = dict(ROBUST_CASES, **ROBUST_EXTENDED_CASES)
+
+
+def decimal_atan(value):
+    """Half-angle reduction and an alternating series at 100-digit precision.
+
+    Reduction bounds the series argument by 0.1; the first omitted term bounds
+    truncation before Decimal rounding. This is an identity screen, not an
+    outward-rounded precision certificate.
+    """
+    require(value >= 0, 'arctangent expects a nonnegative squared residual')
+    factor = 1
+    while value > D('.1'):
+        value = value / (1 + (1 + value * value).sqrt())
+        factor *= 2
+    total, term, denominator = value, value, 1
+    while True:
+        term *= -value * value
+        denominator += 2
+        addition = term / denominator
+        total += addition
+        if abs(addition) < D(10) ** (-PRECISION - 5):
+            return factor * total
+
+
 def robust_values(run, point, absolute_gradient=False):
-    loss, model, scale, _, _ = ROBUST_CASES[run['dataset']]
-    x = D.from_float(point[0])
-    if model == 'outlier':
-        residuals, jacobian = [x, x, x - 8], [D(1)] * 3
-    elif model == 'symmetric':
-        residuals, jacobian = [x - 2, x + 2], [D(1)] * 2
-    elif model == 'nonfinite':
-        if x < 0 or x > D.from_float(native('1.1', run['precision'])):
-            return math.inf, math.nan, []
-        residuals, jacobian = [1 + (x - 1) ** 2], [2 * (x - 1)]
+    loss, model, scale, _, _ = ALL_ROBUST_CASES[run['dataset']]
+    x = list(map(D.from_float, point))
+    if model in ('linear4', 'rank4'):
+        require(len(x) == 4, 'robust point dimension')
+        differences = ([x[0] + x[1] - 1, x[2] + x[3] + 1] if model == 'rank4'
+                       else [a - b for a, b in zip(x, map(D, ['1', '-1', '.5', '-.5']))])
+        residuals, jacobian = [], []
+        for k, difference in enumerate(differences):
+            for weight in map(D, ['1', '2', '-1']):
+                residuals.append(weight * difference)
+                jacobian.append([weight if (j // 2 == k if model == 'rank4' else j == k) else D(0)
+                                 for j in range(4)])
+        if model == 'rank4':
+            residuals.extend([D(2), D(-2)])
+            jacobian.extend([[D(0)] * 4 for _ in range(2)])
     else:
-        residuals, jacobian = [x - 1], [D(1)]
+        require(len(x) == 1, 'robust point dimension')
+        x = x[0]
+        if model == 'outlier':
+            residuals, jacobian = [x, x, x - 8], [[D(1)]] * 3
+        elif model == 'symmetric':
+            residuals, jacobian = [x - 2, x + 2], [[D(1)]] * 2
+        elif model == 'nonfinite':
+            if x < 0 or x > D.from_float(native('1.1', run['precision'])):
+                return math.inf, [math.nan], []
+            residuals, jacobian = [1 + (x - 1) ** 2], [[2 * (x - 1)]]
+        else:
+            residuals, jacobian = [x - 1], [[D(1)]]
     costs, derivatives, curvatures = [], [], []
     for r in residuals:
         if loss == 'huber':
@@ -204,41 +253,54 @@ def robust_values(run, point, absolute_gradient=False):
             costs.append(r * r / (root + 1))
             derivatives.append(r / root)
             curvatures.append(1 / root ** 3)
-        else:
+        elif loss == 'cauchy':
             z = (r / scale) ** 2
             costs.append(scale ** 2 * (1 + z).ln() / 2)
             derivatives.append(r / (1 + z))
             curvatures.append((1 - z) / (1 + z) ** 2)
+        else:
+            require(loss == 'arctan', 'unknown robust loss')
+            z = (r / scale) ** 2
+            costs.append(scale ** 2 * decimal_atan(z) / 2)
+            derivatives.append(r / (1 + z * z))
+            curvatures.append((1 - 3 * z * z) / (1 + z * z) ** 2)
     epsilon = D(2) ** (-23 if run['precision'] == 'f32' else -52)
-    rows = [[float(max(c, epsilon).sqrt() * j)] for c, j in zip(curvatures, jacobian)]
-    gradient_terms = [d * j for d, j in zip(derivatives, jacobian)]
-    gradient = sum(map(abs, gradient_terms)) if absolute_gradient else sum(gradient_terms)
-    return float(sum(costs)), float(gradient), rows
+    rows = [[float(max(c, epsilon).sqrt() * j) for j in row] for c, row in zip(curvatures, jacobian)]
+    terms = [[d * row[k] for d, row in zip(derivatives, jacobian)] for k in range(len(point))]
+    gradient = [float(sum(map(abs, column)) if absolute_gradient else sum(column)) for column in terms]
+    return float(sum(costs)), gradient, rows
 
 
 def robust_quality(run, pubs, last_publication=False):
-    _, _, _, reference, bounds = ROBUST_CASES[run['dataset']]
+    _, model, _, reference, bounds = ALL_ROBUST_CASES[run['dataset']]
+    reference_point = list(map(float, reference)) if isinstance(reference, list) else [float(reference)]
     unit = 2 ** (-24 if run['precision'] == 'f32' else -53)
     for p in pubs:
         x = numbers(p['point'])
-        require(len(x) == 1, 'robust point dimension')
+        require(len(x) == len(reference_point) and all(map(math.isfinite, x)), 'robust point dimension or finiteness')
         if bounds:
             require(float(bounds[0]) <= x[0] <= float(bounds[1]), 'robust feasibility')
         cost, _, _ = robust_values(run, x)
-        require(close(float(p['cost']), cost, unit), 'robust independent published objective')
+        require(math.isfinite(cost) and close(float(p['cost']), cost, unit), 'robust independent published objective')
     if not pubs or (run['returned'] != 'true' and not last_publication):
         return None
     x = numbers(pubs[-1]['point'])
     cost, gradient, _ = robust_values(run, x)
-    reference_cost, _, _ = robust_values(run, [float(reference)])
-    kkt = abs(gradient) if bounds is None else abs(x[0] - min(float(bounds[1]), max(float(bounds[0]), x[0] - gradient)))
-    error = abs(x[0] - float(reference))
+    reference_cost, _, _ = robust_values(run, reference_point)
+    kkt = max(map(abs, gradient)) if bounds is None else abs(x[0] - min(float(bounds[1]), max(float(bounds[0]), x[0] - gradient[0])))
+    # Each identifiable sum can be corrected by splitting its error equally.
+    error = (max(abs(x[0] + x[1] - 1), abs(x[2] + x[3] + 1)) / 2 if model == 'rank4'
+             else max(abs(a - b) for a, b in zip(x, reference_point)))
     limit = 1e-3 if run['precision'] == 'f32' else 1e-6
     if run['policy'] == 'robust_relative_probe':
         limit = 2e-2 if run['precision'] == 'f32' else 1e-4
-    return dict(point=x, reference=float(reference), cost=cost, reference_cost=reference_cost,
-                objective_gap=cost-reference_cost, gradient=gradient, stationarity=kkt,
-                parameter_error=error, quality_limit=limit, quality_passed=error <= limit and kkt <= limit)
+    result = dict(point=x, reference=reference_point if len(x) > 1 else reference_point[0], cost=cost, reference_cost=reference_cost,
+                  objective_gap=cost-reference_cost, gradient=gradient if len(x) > 1 else gradient[0], stationarity=kkt,
+                  parameter_error=error, quality_limit=limit, quality_passed=error <= limit and kkt <= limit)
+    if model == 'rank4':
+        result.update(parameter_metric='infinity-norm distance to the affine minimizer set',
+                      minimizer_set=['x0 + x1 = 1', 'x2 + x3 = -1'])
+    return result
 
 
 BOX_CASES = {
@@ -290,7 +352,7 @@ def verify(directory):
     cases = {c['id']: c for c in datasets()}
     jacobian_cache = {}
     def independent_jacobian(run, point):
-        if run['dataset'] in ROBUST_CASES:
+        if run['dataset'] in ALL_ROBUST_CASES:
             return robust_values(run, point)[2]
         if run['dataset'] == 'box_stationary':
             return [[-2 * point[0], 0.], [0., 1.]]
@@ -323,7 +385,7 @@ def verify(directory):
         require([int(o['sequence']) for o in observations] == sorted({int(o['sequence']) for o in observations}), f'{identifier}: duplicate sequence')
         keyed = {o['sequence']: o for o in observations}
         leaf_keyed = {c['work']: c for c in leaves}
-        robust = run['dataset'] in ROBUST_CASES
+        robust = run['dataset'] in ALL_ROBUST_CASES
         if robust:
             robust_quality(run, pubs)
         for o in observations:
@@ -334,10 +396,10 @@ def verify(directory):
                 require(close(float(o['base_cost']), base_cost, unit), f'{identifier}: robust base objective')
                 expected = gradient
                 if run['route'] == 'trf_full' and o['trial'] == 'true':
-                    expected *= numbers(o['coordinate_scale'])[0]
-                require(len(numbers(o['gradient'])) == 1 and close(numbers(o['gradient'])[0], expected, unit, max(1., abs(expected))), f'{identifier}: independent robust gradient')
+                    expected = [g * d for g, d in zip(expected, numbers(o['coordinate_scale']))]
+                require(len(numbers(o['gradient'])) == len(expected) and all(close(a, b, unit, max(1., abs(b))) for a, b in zip(numbers(o['gradient']), expected)), f'{identifier}: independent robust gradient')
                 if run['route'].startswith('lm_') and o['trial'] != 'true':
-                    require(close(numbers(o['diagonal'])[0], sum(row[0] ** 2 for row in rows), unit), f'{identifier}: safeguarded robust model diagonal')
+                    require(len(numbers(o['diagonal'])) == len(expected) and all(close(a, sum(row[k] ** 2 for row in rows), unit) for k, a in enumerate(numbers(o['diagonal']))), f'{identifier}: safeguarded robust model diagonal')
             if o['trial'] != 'true':
                 statistics['model_observations'] += 1
                 continue
@@ -368,11 +430,11 @@ def verify(directory):
                 prediction_scale = (abs(float(o['damping'])) * sum(abs(d * v * v) for d, v in zip(diagonal, h)) + sum(abs(v * w) for v, w in zip(h, g))) / 2
                 if robust:
                     rows = robust_values(run, base_point)[2]
-                    independent = -sum(v * w for v, w in zip(g, h)) - sum((row[0] * h[0]) ** 2 for row in rows) / 2 - sum(c * v * v for c, v in zip(curvature, h)) / 2
-                    independent_scale = sum(abs(v * w) for v, w in zip(g, h)) + sum((row[0] * h[0]) ** 2 for row in rows) / 2 + sum(abs(c * v * v) / 2 for c, v in zip(curvature, h))
+                    independent = -sum(v * w for v, w in zip(g, h)) - sum(sum(j * v for j, v in zip(row, h)) ** 2 for row in rows) / 2 - sum(c * v * v for c, v in zip(curvature, h)) / 2
+                    independent_scale = sum(abs(v * w) for v, w in zip(g, h)) + sum(sum(j * v for j, v in zip(row, h)) ** 2 for row in rows) / 2 + sum(abs(c * v * v) / 2 for c, v in zip(curvature, h))
                     # QR forms the model RHS from scaled residuals; cancellation
                     # there depends on the unsummed residual-gradient terms.
-                    independent_scale += abs(h[0]) * robust_values(run, base_point, absolute_gradient=True)[1]
+                    independent_scale += sum(abs(v) * a for v, a in zip(h, robust_values(run, base_point, absolute_gradient=True)[1]))
                     if math.isfinite(float(o['predicted'])):
                         require(close(float(o['predicted']), independent, unit, independent_scale) or abs(float(o['predicted']) - independent) <= lost_products + 4 * subnormal, f'{identifier}: independent robust model decrease')
                     else:
