@@ -585,3 +585,44 @@ macro_rules! extended_model_checks {
 }
 extended_model_checks!(extended_models64, f64);
 extended_model_checks!(extended_models32, f32);
+
+macro_rules! rank_deficient_recovery {
+    ($name:ident, $f:ty) => {
+        #[test]
+        fn $name() {
+            use competitor_bench::convergence::least_squares::{robust_fixture, PilotLoss};
+            for name in ["robust_huber_rank4", "robust_arctan_rank4"] {
+                let fixture = robust_fixture(name).unwrap();
+                macro_rules! check {
+                    ($solver:expr) => {{
+                        let ledger = WorkLedger::new(4000);
+                        let raw = Instrumented::<$f>::analytic(fixture.model, ledger.clone());
+                        let problem = basin::RobustLeastSquares::new(raw, fixture.loss);
+                        let measured = measure(
+                            Executor::new(problem, $solver.with_trial_diagnostics(true),
+                                PointState::new(DVector::from_vec(fixture.start.iter().map(|v| *v as $f).collect())))
+                                .max_iter(10000),
+                            &ledger, Duration::from_secs(10));
+                        let returned = measured.run.returned().unwrap();
+                        let limit = if stringify!($f) == "f32" { 1e-3 } else { 1e-6 };
+                        for pair in 0..2 {
+                            let target = if pair == 0 { 1. } else { -1. };
+                            let error = returned.point[2 * pair] + returned.point[2 * pair + 1] - target;
+                            assert!(error.abs() / 2. <= limit, "{name}: {error:?}");
+                            let gradient = match fixture.loss {
+                                PilotLoss::Huber => 6. * error,
+                                PilotLoss::Arctan => 2. * error / (1. + error.powi(4)) + 4. * error / (1. + 16. * error.powi(4)),
+                                _ => unreachable!(),
+                            };
+                            assert!(gradient.abs() <= limit, "{name}: {gradient:?}");
+                        }
+                    }};
+                }
+                check!(LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default());
+                check!(LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default().with_pivoted_qr());
+            }
+        }
+    };
+}
+rank_deficient_recovery!(rank_deficient_recovery32, f32);
+rank_deficient_recovery!(rank_deficient_recovery64, f64);

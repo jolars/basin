@@ -43,6 +43,20 @@ class Composition(unittest.TestCase):
             self.assertEqual(result['quality_limit'], 1e-6)
             self.assertFalse(result['quality_passed'])
 
+    def test_recovery_checks_the_first_changed_damping(self):
+        accepted = dict(trial='true', accepted='true', diagonal='1e-7;1e-7')
+        model = dict(trial='false', accepted='', diagonal='1;1')
+        trial = dict(sequence='4', trial='true', accepted='false', diagonal='1;1',
+                     gradient='1;1', base_cost='2', damping='1000000', step='1e-7;1e-7')
+        after = dict(trial, damping='0.1', step='0.1;0.1')
+        before = [accepted, model, trial]
+        self.assertAlmostEqual(stopping.recovery_transition(before, [accepted, model, after], 'f32')['diagonal_ratio'], 1e-7)
+        for change in (dict(damping='1'), dict(gradient='0;0'), dict(diagonal='2;2')):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                stopping.recovery_transition(before, [accepted, model, dict(after, **change)], 'f32')
+        with self.assertRaises(ValueError):
+            stopping.recovery_transition(before, before, 'f32')
+
     def test_reproduction_checks_every_csv_except_time(self):
         with tempfile.TemporaryDirectory() as temporary:
             paths = [Path(temporary) / name for name in ('before', 'after')]

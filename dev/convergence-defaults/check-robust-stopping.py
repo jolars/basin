@@ -175,6 +175,72 @@ def verify_baseline(directory, baseline):
     return dict(runs=352, matching_ablation_controls=matched, all_control_callbacks_publications_and_native_records_equal=True)
 
 
+def recovery_transition(before, after, precision):
+    differences = [j for j, (a, b) in enumerate(zip(before, after)) if a != b]
+    pilot.require(bool(differences), 'missing damping recovery transition')
+    index = differences[0]
+    old, new = before[index], after[index]
+    pilot.require(index >= 2 and old['trial'] == new['trial'] == 'true' and
+                  old['diagonal'] == new['diagonal'] and old['gradient'] == new['gradient'] and
+                  old['base_cost'] == new['base_cost'] and before[index - 2]['accepted'] == 'true',
+                  'recovery changed before the accepted curvature transition')
+    previous = pilot.numbers(before[index - 2]['diagonal'])
+    current = pilot.numbers(old['diagonal'])
+    pilot.require(len(previous) == len(current) and all(x > 0 for x in previous) and
+                  all(y >= x for x, y in zip(previous, current)), 'invalid recovery diagonal growth')
+    ratio = min(x / y for x, y in zip(previous, current))
+    expected = float(old['damping']) * ratio
+    unit = 2 ** (-24 if precision == 'f32' else -53)
+    pilot.require(0 < ratio < 1e-5 and
+                  abs(float(new['damping']) - expected) <= 32 * unit * expected,
+                  'recovery damping does not compensate for diagonal growth')
+    return dict(sequence=old['sequence'], diagonal_ratio=ratio,
+                previous_diagonal=previous, new_diagonal=current,
+                damping_before=float(old['damping']), damping_after=float(new['damping']),
+                step_before=pilot.numbers(old['step']), step_after=pilot.numbers(new['step']))
+
+
+def verify_recovery(directory, previous, report):
+    old_report = verify(previous, extended=True)
+    old = {r['id']: r for r in old_report['runs']}
+    pilot.require(set(old) == {r['id'] for r in report['runs']}, 'recovery comparison coverage')
+    tables = ('runs', 'publications', 'leaves', 'native', 'checks')
+    unchanged = {r['id'] for r in report['runs'] if r['route'].endswith('trust') or r['cap'] != '4000'}
+    matched = {}
+    for table in tables:
+        before = [{k: v for k, v in row.items() if k != 'elapsed_seconds'}
+                  for row in pilot.load(previous, table) if row['id'] in unchanged]
+        after = [{k: v for k, v in row.items() if k != 'elapsed_seconds'}
+                 for row in pilot.load(directory, table) if row['id'] in unchanged]
+        pilot.require(before == after, f'unaffected recovery control {table} changed')
+        matched[table] = len(after)
+    pilot.require(len(unchanged) == 468, 'unaffected recovery control coverage')
+    expected = {(loss, route) for loss in ('robust_huber_rank4', 'robust_arctan_rank4')
+                for route in ('lm_normal_nielsen', 'lm_qr_nielsen')}
+    failures = [r for r in old_report['runs'] if r['policy'] == 'robust_gradient_default' and
+                r['cap'] == '4000' and not r['quality']['quality_passed']]
+    pilot.require({(r['dataset'], r['route']) for r in failures} == expected and len(failures) == 4 and
+                  all(r['precision'] == 'f32' and r['outcome'] == 'stalled' for r in failures),
+                  'previous four stalls changed')
+    native_before = pilot.load(previous, 'native')
+    native_after = pilot.load(directory, 'native')
+    recovered = []
+    for run in report['runs']:
+        before = old[run['id']]
+        if before not in failures:
+            continue
+        pilot.require(run['quality']['quality_passed'], 'rank-deficient stall was not recovered')
+        transition = recovery_transition([r for r in native_before if r['id'] == run['id']],
+                                         [r for r in native_after if r['id'] == run['id']], run['precision'])
+        recovered.append(dict(id=run['id'], before={k: before[k] for k in ('outcome', 'work', 'quality')},
+                              after={k: run[k] for k in ('outcome', 'work', 'quality')}, transition=transition))
+    for policy in ('robust_gradient_default', 'robust_gradient_probe', 'robust_radius_probe'):
+        pilot.require(report['summary'][policy]['quality_passed'] == 72, 'gradient control recovery quality')
+    return dict(previous_summary=old_report['summary'], recovered=recovered,
+                unchanged_runs=len(unchanged), unchanged_records=matched,
+                unaffected_records_equal_except_elapsed_time=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
@@ -182,10 +248,14 @@ def main():
     parser.add_argument('--baseline', type=Path)
     parser.add_argument('--previous', type=Path, help='compare all original ablation CSV records, excluding elapsed time')
     parser.add_argument('--extended', action='store_true', help='verify the larger, rank-deficient, and arctangent controls')
+    parser.add_argument('--recovery-from', type=Path, help='verify recovery against the frozen extended controls')
     args = parser.parse_args()
     pilot.require(not (args.extended and args.baseline), 'original baseline does not contain the extended fixtures')
     pilot.require(not (args.extended and args.previous), 'original ablation does not contain the extended fixtures')
     report = verify(args.directory, args.extended)
+    if args.recovery_from:
+        pilot.require(args.extended, 'recovery comparison requires extended controls')
+        report['recovery'] = verify_recovery(args.directory, args.recovery_from, report)
     if args.baseline:
         report['baseline_reproduction'] = verify_baseline(args.directory, args.baseline)
     if args.previous:

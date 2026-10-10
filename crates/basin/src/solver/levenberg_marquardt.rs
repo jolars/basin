@@ -24,7 +24,9 @@ use super::least_squares_diagnostics::{
 
 mod damping;
 mod stopping;
-use damping::{scaled_norm, trust_region_step, update_radius};
+use damping::{
+    rescale_robust_damping, scaled_norm, trust_region_step, update_radius,
+};
 use stopping::{
     all_finite, finite_unchanged_trial, orthogonality_converged,
     relative_step_converged, relative_trust_radius_converged,
@@ -233,6 +235,13 @@ pub enum LmDamping {
 /// with either damping strategy. The adapter supplies the safeguarded
 /// Gauss–Newton model. Reported costs, actual reductions, and convergence
 /// use the robust objective and its gradient.
+///
+/// With Nielsen damping, growth of the robust model's diagonal scaling `D`
+/// rescales `μ` by `min_j(D_old[j] / D_new[j])`, where
+/// `D_new[j] = max(D_old[j], diag(J_modelᵀ J_model)[j])`. This prevents a
+/// curvature change from abruptly amplifying the effective damping `μD`.
+/// The adjustment is a Basin safeguard for the varying robust model; the
+/// usual gain-ratio update and trial acceptance still apply.
 ///
 /// Heavy damping can produce a tiny accepted step and tiny model reduction
 /// while the robust gradient remains large. Enabling both progress tests does
@@ -966,12 +975,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             .diag
             .take()
             .expect("diag not set: Solver::init must run before next_iter");
-        d.component_max_assign(&diag_cur);
-
         let mut mu = self
             .mu
             .expect("mu not set: Solver::init must run before next_iter");
         let mut nu = self.nu;
+        if E::ROBUST && self.damping == LmDamping::Nielsen {
+            mu = rescale_robust_damping(mu, &d, &diag_cur);
+        }
+        d.component_max_assign(&diag_cur);
 
         // Increase damping when the model solve reports recoverable rank loss.
         let two = F::from_f64(2.0).unwrap();

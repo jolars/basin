@@ -1,7 +1,47 @@
 use super::ModelSolveError;
 use crate::core::math::{
-    ComponentMulAssign, Dot, NormInfinity, Scalar, ScaleInPlace,
+    ComponentMulAssign, ComponentZip, Dot, NormInfinity, Scalar, ScaleInPlace,
 };
+
+pub(super) fn rescale_robust_damping<V, F>(
+    mu: F,
+    previous: &V,
+    current: &V,
+) -> F
+where
+    F: Scalar,
+    V: ComponentZip<F>,
+{
+    if !mu.is_finite() || mu <= F::zero() {
+        return mu;
+    }
+    let mut root_ratio = F::one();
+    let valid = previous.all_zip(current, |old, new| {
+        if !old.is_finite()
+            || old <= F::zero()
+            || !new.is_finite()
+            || new < F::zero()
+        {
+            return false;
+        }
+        if new > old {
+            root_ratio = root_ratio.min(old.sqrt() / new.sqrt());
+        }
+        true
+    });
+    if !valid || root_ratio == F::one() {
+        return mu;
+    }
+    // Keep mu*D from jumping when a robust model leaves clipped curvature.
+    // Two square-root factors retain a representable damping value when the
+    // diagonal ratio itself underflows before multiplication by mu.
+    let rescaled = (mu * root_ratio) * root_ratio;
+    if rescaled == F::zero() {
+        F::min_positive_value()
+    } else {
+        rescaled
+    }
+}
 
 pub(super) fn scaled_norm<V, F>(x: &V, d: &V) -> F
 where
@@ -184,6 +224,56 @@ pub(super) fn update_radius<F: Scalar>(
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn robust_scaling_preserves_effective_damping_under_uniform_growth() {
+        for scale in [1e-100_f64, 1., 1e100] {
+            let old = vec![2. * scale, 3. * scale];
+            let new = vec![8. * scale, 12. * scale];
+            let mu = rescale_robust_damping(20., &old, &new);
+            assert!((mu - 5.).abs() < 1e-14);
+            for (old, new) in old.iter().zip(&new) {
+                assert!((mu * new / (20. * old) - 1.).abs() < 1e-14);
+            }
+        }
+    }
+
+    #[test]
+    fn robust_scaling_limits_each_component_without_changing_invalid_inputs() {
+        let old = vec![1., 4., 10.];
+        let new = vec![16., 8., 0.];
+        assert_eq!(rescale_robust_damping(32., &old, &new), 2.);
+        assert_eq!(rescale_robust_damping(32., &old, &vec![0., 2., 5.]), 32.);
+        for mu in [0., -1., f64::INFINITY] {
+            assert_eq!(rescale_robust_damping(mu, &old, &new), mu);
+        }
+        assert!(rescale_robust_damping(f64::NAN, &old, &new).is_nan());
+        for value in [0., -1., f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                rescale_robust_damping(32., &vec![1., value], &vec![16., 8.]),
+                32.
+            );
+        }
+        for value in [-1., f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                rescale_robust_damping(32., &vec![1., 4.], &vec![16., value]),
+                32.
+            );
+        }
+    }
+
+    #[test]
+    fn robust_scaling_retains_representable_products_across_extreme_ratios() {
+        let old = vec![f64::from_bits(1)];
+        let new = vec![f64::MAX];
+        let rescaled = rescale_robust_damping(f64::MAX, &old, &new);
+        assert_eq!(rescaled, f64::from_bits(1));
+        let old = vec![f32::from_bits(1)];
+        let new = vec![f32::MAX];
+        let rescaled = rescale_robust_damping(f32::MAX, &old, &new);
+        assert_eq!(rescaled, f32::from_bits(1));
+        assert!(rescale_robust_damping(f32::MIN_POSITIVE, &old, &new) > 0.);
+    }
 
     #[test]
     fn scaled_norm_avoids_spurious_square_overflow_and_underflow() {
