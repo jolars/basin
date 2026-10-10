@@ -27,6 +27,11 @@ The [legacy TRF safeguard recheck](2026-10-09-trf-finite-model-001.md) removes
 repeated non-finite predictions while preserving all final publications, with
 main and 1.x draft fixes.
 
+The [robust LM stopping review](2026-10-10-robust-stopping-001.md) adds 336
+predicate ablations and reproduces the robust baseline. It isolates premature
+progress stops, verifies matched gradient continuations, and records the limits
+of conjunction and model-agreement filters without selecting a default.
+
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
 harness pilot. A manifest must state whether its purpose is verifier validation,
 a pilot, calibration, or sealed validation. Record protocol amendments and

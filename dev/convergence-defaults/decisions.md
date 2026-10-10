@@ -98,6 +98,39 @@ changes a decision, preserve its history and link its successor.
 - Follow-up: establish derivative accuracy and attainable solver thresholds in
   each pilot stratum before calibration, including NIST and LM/TRF variants.
 
+## D005: Screen robust LM progress tests against stationarity
+
+- Status: accepted pilot interpretation and screening restriction, 2026-10-10;
+  no solver default or replacement composition selected.
+- Basis: the requested next step following S019 and the [336-run stopping
+  review](runs/2026-10-10-robust-stopping-001.md), with independently verified
+  points and matching default callback prefixes.
+- Scope: the six unbounded analytic robust fixtures, four LM routes, and both
+  precisions on nalgebra 0.34. Backend regressions separately verify the
+  existing gradient control on all dense backends and supported sparse paths.
+- Rationale: model-only and step-only tests each reproduce the four severe
+  Nielsen/Cauchy stops. Both tests pass on accepted, published trials with gain
+  ratios above 0.25, despite large robust gradients. Default continuations reach
+  the known minimum. Six other model-reduction stops miss the stricter common
+  quality checks on the non-finite-domain fixture.
+- Consequence: keep the absolute-gradient default as the control. Do not carry
+  the demonstrated progress-only probes into robust calibration as admissible
+  candidates without a stationarity or independently validated accuracy guard.
+  Document the OR composition and the limits of progress tests. Normalized
+  robust gradients remain a separate candidate with zero-residual limitations.
+- Alternatives rejected for these controls: merely requiring both model and step
+  tests, accepting only published trials, or adding gain ratio above 0.25. All
+  would still pass at the same four Cauchy stops. This terminal-predicate
+  comparison does not implement or calibrate a new conjunction API.
+- Limitations: small development fixtures, unit-scale measurement quality,
+  incomplete precision certificates, and no held-out selection. Gradient
+  thresholds still require scale and accuracy evidence. Good stalled points
+  remain stalled outcomes. The result does not justify changing ordinary
+  least-squares semantics or selecting general robust defaults.
+- Follow-up: add larger and rank-deficient robust controls and arctangent loss,
+  then assess stationarity guards and derivative/backend coverage before
+  affected sweeps. Step 5 remains open.
+
 ## Numerical decision template
 
 For each policy decision, record the solver and variants, current and proposed

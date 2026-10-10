@@ -228,6 +228,13 @@ The [pilot reference comparison](reference-pilot.md) and [draft pilot
 candidates](candidate-pilot.md) cover Nelder-Mead, bounded and unbounded L-BFGS,
 both LM factorizations and damping modes, and both TRF implementations.
 
+The [robust LM stopping review](runs/2026-10-10-robust-stopping-001.md) now
+supplies measured predicate ablations and matching gradient continuations for
+the two LM names.
+[D005](decisions.md#d005-screen-robust-lm-progress-tests-against-stationarity)
+records the limited pilot restriction. Full calibration, variant coverage, and
+solver dispositions remain pending in the tracker.
+
   | Public name                 | Defining source                                                                                | Current stop                                                                          | Reference match | Candidate | Experiment | Decision | Implementation | Verification |
   | --------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------- | --------- | ---------- | -------- | -------------- | ------------ |
   | `Brent`                     | [brent.rs](../../crates/basin/src/solver/brent.rs)                                             | Source checked; [scalar record above](#scalar-stopping-records)                       | Pending         | Draft     | Pending    | Pending  | Pending        | Pending      |

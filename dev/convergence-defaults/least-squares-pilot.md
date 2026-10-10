@@ -157,3 +157,15 @@ relative probes. The checker verifies robust model operands and callback
 prefixes against default controls, and labels robust orthogonality separately.
 Errors retain independent last-publication checks without returned quality. The
 manifest records 352 solves, exact commands, and source/output hashes.
+
+## Robust stopping composition review
+
+The [stopping ablation](runs/2026-10-10-robust-stopping-001.md) adds the
+`robust-stopping` phase: seven public-builder configurations, six unbounded
+robust fixtures, four LM routes, and both precisions. Its separate checker
+verifies fixed settings, common independent quality thresholds, and matched
+default callback prefixes. Both gradient configurations return good points in
+all 48 cases; severe Cauchy progress stops survive conjunction and
+acceptance/model-agreement filters. The run selects no default. Larger robust
+problems, other losses, derivative modes, precision eligibility, and full inner
+work remain open.

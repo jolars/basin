@@ -42,7 +42,14 @@ robust model checks, and paired default continuations. No solver policies have
 been selected and calibration has not started. The [legacy TRF safeguard
 recheck](runs/2026-10-09-trf-finite-model-001.md) eliminates repeated non-finite
 model predictions without changing any final published point or cost; main and
-1.x fixes are proposed in draft PRs.
+1.x fixes are proposed in draft PRs. The [robust LM stopping
+review](runs/2026-10-10-robust-stopping-001.md) adds 336 ablations and
+reproduces the 352-case robust baseline. Both gradient configurations pass
+common point quality on all 48 cases; progress-only settings have confirmed
+premature stops. Pairing model and step tests or requiring accepted trials and
+good model agreement does not prevent the four severe Cauchy stops. Public
+guidance and backend regressions cover the existing gradient control; broad
+policy selection and remaining robust coverage stay open.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -103,6 +110,9 @@ model predictions without changing any final published point or cost; main and
   analytic and development NIST measurements.
 - [Robust-loss pilot](runs/2026-10-09-robust-ls-001.md): analytic robust
   objectives, gradients, models, and default continuations across LM/TRF.
+- [Robust LM stopping review](runs/2026-10-10-robust-stopping-001.md): isolated
+  predicates, matched gradient continuations, and limits of progress
+  conjunctions and model-agreement filters.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
 - [Run records](runs/README.md): conventions for tracked manifests and concise
@@ -1049,3 +1059,51 @@ sufficient to inspect outcomes and reproduce the measurements.
 - Next task: review robust step/model-reduction composition using the unchanged
   Cauchy controls before affected sweeps. Remaining variants, backends,
   derivatives, reference certificates, and complete inner work retain gates.
+
+### S020: Review robust LM stopping composition, 2026-10-10
+
+- Starting revision: `68b96a8`, clean tree on `convergence-defaults`.
+- Scope: seven stopping configurations on six unbounded robust fixtures, four LM
+  routes, and both native precisions. Isolate model reduction, trial step,
+  normalized gradient, and radius tests while retaining the existing default
+  gradient control and numerical safeguards.
+- Freeze: source `2a5e89e` and planned manifest `510d5db` precede
+  [2026-10-10-robust-stopping-001](runs/2026-10-10-robust-stopping-001.md).
+  Verifier corrections, public guidance, and permanent backend checks are in
+  `6f2aec3`. The manifest records source/output hashes and exact commands.
+- Evidence: 336 ablations and a 352-case baseline reproduction. Every ablation
+  shares its common callback prefix with its default continuation. All 96
+  default and combined-relative controls match baseline callbacks, publications,
+  native observations, checks, counts, and outcomes exactly. The baseline also
+  agrees with all previously recorded outcomes, including the four known
+  legacy-TRF corrections.
+- Findings: model-only and step-only tests each reproduce the four severe
+  Nielsen/Cauchy stops. Both tests pass on accepted, published trials with gain
+  ratios above 0.25, so pairing them or adding those filters still stops
+  prematurely. Default and normalized-gradient configurations pass common point
+  quality on all 48 cases each. Six additional model-reduction stops on the
+  non-finite-domain fixture miss the stricter common quality thresholds; these
+  are separate accuracy findings. Good stalled points retain their native
+  classification.
+- Guidance: public LM and QR rustdoc explain progress versus stationarity and
+  gradient-only configurations. Permanent negative-curvature Cauchy controls
+  verify default-gradient recovery across dense and supported sparse backends,
+  both precisions, and both LM damping modes.
+- Validation: all 37 measurement tests pass on nalgebra 0.34 and 0.35. Four
+  composition tests include six corruption controls; all 12 existing checker
+  tests pass on the ablation and baseline. The full pure-Rust solver suite,
+  workspace all-target/all-feature clippy with warnings denied, rustdoc,
+  formatting, and documentation checks pass.
+- Corrections: native radius evidence is unavailable on non-finite trials, so
+  the verifier recognizes its documented observation eligibility. A generic
+  backend test needed an explicit state constructor. These corrections change no
+  measured solver code, settings, targets, or raw CSVs.
+- Decision:
+  [D005](decisions.md#d005-screen-robust-lm-progress-tests-against-stationarity)
+  restricts the demonstrated progress-only candidates. No replacement
+  composition or general default selected; calibration remains pending and
+  holdout outcomes remain sealed. Step 5 stays open.
+- Next task: larger and rank-deficient robust controls and arctangent loss,
+  followed by stationarity guards, derivative modes, remaining backend versions,
+  precision eligibility, transformations, and full inner-work measurements
+  before affected candidate sweeps.

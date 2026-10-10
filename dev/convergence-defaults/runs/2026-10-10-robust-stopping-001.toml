@@ -1,12 +1,14 @@
 run_id = "2026-10-10-robust-stopping-001"
 purpose = "robust LM stopping composition ablation; measurement review, not calibration"
-status = "planned"
+status = "completed"
 source_revision = "2a5e89ece0cf55cf52eabea414487038681461b3"
 starting_revision = "68b96a8"
 protocol = "CDP-1 measurement extension; no amendment or default selection"
 output_directory = "target/convergence-defaults/2026-10-10-robust-stopping-001"
 backend = "nalgebra 0.34.2"
 compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
+execution = "single-threaded solver routes, analytic derivatives, deterministic starts; seeds and timing comparisons are inapplicable"
+architecture = "x86_64"
 build_profile = "dev, debug=0, incremental=0; instrumented timing is not compared"
 configuration = "336 solves: six unbounded analytic robust fixtures, four LM routes, two native precisions, seven stopping configurations"
 fixtures = "ROBUST_FIXTURES excluding bounds; unchanged models, starts, losses, scales, and analytic references"
@@ -30,6 +32,20 @@ commands = [
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-stopping-001/baseline",
 ]
 
+verification_revision = "6f2aec3b216469ffabed7e7d8049fc75417d2865"
+planned_manifest_revision = "510d5db"
+retained_report = "dev/convergence-defaults/robust-stopping-results.json"
+verification_commands = [
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-robust-stopping.py target/convergence-defaults/2026-10-10-robust-stopping-001/stopping --baseline target/convergence-defaults/2026-10-10-robust-stopping-001/baseline --output target/convergence-defaults/2026-10-10-robust-stopping-001/checked-report.json",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p competitor-bench --test least_squares_measurement",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p competitor-bench --features basin-latest --test least_squares_measurement",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p basin --features nalgebra_v0_34,ndarray,faer --test robust_least_squares_backends",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo clippy --workspace --all-targets --all-features -- -D warnings",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo doc --no-deps -p basin --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde",
+  "cargo fmt --all -- --check",
+]
+
 [source_sha256]
 "Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
 "crates/competitor-bench/src/bin/verify_least_squares.rs" = "5f047cd92d6f4d1bb7fb553db100b4bf55055e905aafec1c161ddc73a47ef485"
@@ -41,3 +57,32 @@ commands = [
 "dev/convergence-defaults/check-robust-stopping.py" = "c452c7d3b0af99dfb03fa392b2c7a458a9834347718362e9b74136ada501cf93"
 "dev/convergence-defaults/test-least-squares.py" = "f18bfcaf3a6083ed8c1a7e60e433f2b562aa72361be07ec6e44b47f06283eb0f"
 "dev/convergence-defaults/test-robust-stopping.py" = "4edc07a57e9a096d647060165868165b694cdd9f8a67a6b11eeeaa60a1b6b8cb"
+
+"crates/basin/src/core/least_squares.rs" = "cbb0700fc5c7191468a84cd0e5b147f23fae7510edf9b75d5d32540f59eaaa11"
+"crates/basin/src/core/least_squares/losses.rs" = "7b6bb769f73c02eb38f00fe3ee948ba9c18381e339c2bf061c6d1cc2871fa090"
+"crates/basin/src/core/least_squares/evaluation.rs" = "cadfdfb058d703a9ae3746e43b5074cd11ab77542901cf5264be5a7af61da331"
+
+[verification_sha256]
+"dev/convergence-defaults/check-robust-stopping.py" = "8eaaa38560ad3885bca8de9b476e9ac401b74d3c3454ef62c4c10d638d0c59d4"
+"dev/convergence-defaults/test-robust-stopping.py" = "4edc07a57e9a096d647060165868165b694cdd9f8a67a6b11eeeaa60a1b6b8cb"
+"crates/basin/src/solver/levenberg_marquardt.rs" = "7225b55621c83aaf6d1a98fc320f1b29b41a7d91356873ff8153fda90597eccb"
+"crates/basin/tests/support/robust_backend.rs" = "32e7eab57fb9655882bfabe6e53268d1a9fdc7af6cabae78153d7d3da9c7d158"
+"crates/basin/tests/robust_least_squares_backends.rs" = "5a760be52686c7045ad088794fb4a6aea88912649e8fe13a033f0ce42557523c"
+
+[output_sha256]
+"baseline/checks.csv" = "8159831c5cf14f48b183ae83f301334a58f082e5cba9dc40b42db518ff2ff896"
+"baseline/leaves.csv" = "8a98421c2d7069555d1f288cccdb6d65be0500f6a3e6cce1e1e96140348c9de9"
+"baseline/native.csv" = "6acfe7bea89851cd62675b404776cf9a49e0ed24095d9670231d5f33c2456c44"
+"baseline/publications.csv" = "c9b53f06459e6d050c2927a3200bc919efa4bd92651c756a7e08dcfd2ffa8a47"
+"baseline/runs.csv" = "5e4972cd721ac127dcfaa3b7cfb784cd27820c15b053ed571f2659ff9b65d7fd"
+"baseline-report.json" = "a2d00249cf5745a880496d31a20d49c7a3770202d8285dabf8b9aacbb404a512"
+"checked-report.json" = "a047ef96fa0df0385d0a3af984b09260e1b37fb2664a8d49f9292f3e6a7025db"
+"report.json" = "4766fdc074f9f273ec0df94a122ac304469bd18d6165635ac8a12dbd6bdd582f"
+"stopping/checks.csv" = "db4c3533145a4190fc404d230892ac75f8aeb04498a429134443c07969684c55"
+"stopping/leaves.csv" = "0d7cc9e649fc744a0019b123a1eff04f88aaaeb9b72ac12e390dd66c64f990c3"
+"stopping/native.csv" = "a978ea85a90070e12d20395f832430a2bfacef2f31b26f472b69f281a214dbb5"
+"stopping/publications.csv" = "7020b6a0f4a810242d2a21afb9431a2e580e4d8e4e14d0de3bc1f917c4b82f0c"
+"stopping/runs.csv" = "1c7abace07bc4f6876b9de3b39dbc67548f4d10920ce43cd30d50f23ff5ed495"
+
+[retained_sha256]
+"dev/convergence-defaults/robust-stopping-results.json" = "a047ef96fa0df0385d0a3af984b09260e1b37fb2664a8d49f9292f3e6a7025db"

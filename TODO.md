@@ -392,13 +392,15 @@ source-checked stopping record for all 47 public solver names, and the
 searches, bracketers, and principal subproblems. Reference surveys and draft
 candidate policies cover all 47 names; the reviewed [CDP-1
 protocol](dev/convergence-defaults/protocol.md) fixes the experimental design.
-Step 5 has an initial [measurement harness](dev/convergence-defaults/harness.md)
-and [nine analytic validation
-runs](dev/convergence-defaults/runs/2026-10-09-analytic-001.md), plus an
-explicit [forward-difference stopping
-configuration](dev/convergence-defaults/runs/2026-10-09-forward-001.md). NIST
-model adapters, full pilots, calibration, solver decisions, and verification
-remain open; the coverage boxes below require all applicable stages.
+Step 5 has an [analytic measurement
+harness](dev/convergence-defaults/harness.md), all 27 NIST model adapters,
+development reference certificates, and [LM/TRF
+pilots](dev/convergence-defaults/least-squares-pilot.md) covering unconstrained,
+bounded, and robust cases. The [robust LM stopping
+review](dev/convergence-defaults/runs/2026-10-10-robust-stopping-001.md)
+isolates premature progress stops with matched gradient continuations. Full
+pilots, calibration, solver decisions, and verification remain open; the
+coverage boxes below require all applicable stages.
 
 - [x] **1. Establish the branch and durable session records.** Created the
   `convergence-defaults` branch and temporary development documents under
@@ -525,9 +527,14 @@ remain open; the coverage boxes below require all applicable stages.
   adds Huber, soft-L1, and Cauchy measurements with known minima and paired
   default continuations. The [legacy TRF finite-model safeguard
   recheck](dev/convergence-defaults/runs/2026-10-09-trf-finite-model-001.md)
-  removes repeated non-finite predictions, with main and 1.x fixes proposed.
-  Robust stopping composition, remaining loss/constraint variants, additional
-  backends, full inner-work accounting, and other solver families retain gates.
+  removes repeated non-finite predictions, with main and 1.x fixes proposed. The
+  [robust LM stopping
+  review](dev/convergence-defaults/runs/2026-10-10-robust-stopping-001.md) adds
+  336 ablations: neither paired progress tests nor accepted trials with good
+  model agreement prevent the Cauchy stops. Gradient controls return good points
+  on all measured fixtures. Remaining robust variants and stationarity guards,
+  additional backends, full inner-work accounting, and other solver families
+  retain gates.
 
 - [ ] **6. Calibrate by solver family and validate independently.** Compare
   current defaults, reference policies, and a small logarithmic sweep of

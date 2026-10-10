@@ -68,6 +68,15 @@ under large Nielsen damping can pass both optional model-reduction and
 trial-step tests on Cauchy while the robust gradient remains large. Paired
 default continuations reach the known minimum. Review this composition before
 sweeping robust candidates; the explicit measurement probes select no policy.
+The [stopping composition review](runs/2026-10-10-robust-stopping-001.md)
+isolates model-only and step-only stops and verifies their exact callback
+prefixes against gradient continuations. Both predicates pass at the same
+accepted Cauchy trials with good gain ratios, so a conjunction or
+acceptance/model-agreement filter alone cannot fix those stops. Apply
+[D005](decisions.md#d005-screen-robust-lm-progress-tests-against-stationarity)
+before carrying robust progress candidates into calibration. Keep the absolute
+gradient default as the control and assess normalized gradients separately,
+including their zero-residual behavior.
 
 ## Trust-region reflective least squares
 
