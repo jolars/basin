@@ -9,6 +9,7 @@ import argparse
 from collections import Counter, defaultdict
 import csv
 from decimal import Decimal as D, getcontext
+from functools import lru_cache
 import hashlib
 import itertools
 import json
@@ -213,8 +214,9 @@ def decimal_atan(value):
             return factor * total
 
 
-def robust_values(run, point, absolute_gradient=False):
-    loss, model, scale, _, _ = ALL_ROBUST_CASES[run['dataset']]
+@lru_cache(maxsize=16384)
+def robust_components(dataset, precision, point):
+    loss, model, scale, _, _ = ALL_ROBUST_CASES[dataset]
     x = list(map(D.from_float, point))
     if model in ('linear4', 'rank4'):
         require(len(x) == 4, 'robust point dimension')
@@ -237,8 +239,8 @@ def robust_values(run, point, absolute_gradient=False):
         elif model == 'symmetric':
             residuals, jacobian = [x - 2, x + 2], [[D(1)]] * 2
         elif model == 'nonfinite':
-            if x < 0 or x > D.from_float(native('1.1', run['precision'])):
-                return math.inf, [math.nan], []
+            if x < 0 or x > D.from_float(native('1.1', precision)):
+                return math.inf, [math.nan], [], [math.nan], math.inf
             residuals, jacobian = [1 + (x - 1) ** 2], [[2 * (x - 1)]]
         else:
             residuals, jacobian = [x - 1], [[D(1)]]
@@ -264,11 +266,25 @@ def robust_values(run, point, absolute_gradient=False):
             costs.append(scale ** 2 * decimal_atan(z) / 2)
             derivatives.append(r / (1 + z * z))
             curvatures.append((1 - 3 * z * z) / (1 + z * z) ** 2)
-    epsilon = D(2) ** (-23 if run['precision'] == 'f32' else -52)
+    epsilon = D(2) ** (-23 if precision == 'f32' else -52)
     rows = [[float(max(c, epsilon).sqrt() * j) for j in row] for c, row in zip(curvatures, jacobian)]
     terms = [[d * row[k] for d, row in zip(derivatives, jacobian)] for k in range(len(point))]
-    gradient = [float(sum(map(abs, column)) if absolute_gradient else sum(column)) for column in terms]
-    return float(sum(costs)), gradient, rows
+    gradient = [float(sum(column)) for column in terms]
+    absolute_gradient = [float(sum(map(abs, column))) for column in terms]
+    model_residual_norm = float(sum(d * d / max(c, epsilon) for d, c in zip(derivatives, curvatures)).sqrt())
+    return float(sum(costs)), gradient, rows, absolute_gradient, model_residual_norm
+
+
+def robust_values(run, point, absolute_gradient=False):
+    cost, gradient, rows, absolute, _ = robust_components(run['dataset'], run['precision'], tuple(point))
+    return cost, absolute if absolute_gradient else gradient, rows
+
+
+def qr_projection_scale(run, point, step):
+    _, _, rows, _, rhs_norm = robust_components(run['dataset'], run['precision'], tuple(point))
+    # QR projects the clipped model residual through Householder transforms.
+    # Its error scales with the full RHS, including components orthogonal to J.
+    return math.hypot(*step) * math.sqrt(sum(j * j for row in rows for j in row)) * rhs_norm
 
 
 def robust_quality(run, pubs, last_publication=False):
@@ -435,6 +451,11 @@ def verify(directory):
                     # QR forms the model RHS from scaled residuals; cancellation
                     # there depends on the unsummed residual-gradient terms.
                     independent_scale += sum(abs(v) * a for v, a in zip(h, robust_values(run, base_point, absolute_gradient=True)[1]))
+                    if run['route'].startswith('lm_qr_'):
+                        independent_scale += qr_projection_scale(run, base_point, h)
+                        discrepancy = abs(float(o['predicted']) - independent)
+                        if math.isfinite(discrepancy) and not close(float(o['predicted']), independent, unit):
+                            statistics['qr_model_discrepancies_above_local_roundoff'] += 1
                     if math.isfinite(float(o['predicted'])):
                         require(close(float(o['predicted']), independent, unit, independent_scale) or abs(float(o['predicted']) - independent) <= lost_products + 4 * subnormal, f'{identifier}: independent robust model decrease')
                     else:

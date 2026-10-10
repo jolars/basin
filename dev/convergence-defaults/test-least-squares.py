@@ -123,6 +123,16 @@ class RobustReference(unittest.TestCase):
         with self.assertRaises(ValueError):
             pilot.robust_quality(run, [dict(point='0;0', cost=str(cost))])
 
+    def test_qr_projection_roundoff_uses_clipped_rhs(self):
+        run = dict(dataset='robust_huber_linear4', precision='f64')
+        point = [1.6494017565635213, -1.6494017565635208, -.4999999999999982, .4999999999999982]
+        step = [-4.35064215424544e-8, 4.3506421617627035e-8, 5.2754183593327415e-8, -5.275418338529763e-8]
+        observed, independent = 7.090717309744541e-7, 7.090717312665235e-7
+        unit = 2 ** -53
+        self.assertFalse(pilot.close(observed, independent, unit, 1.4181434905879226e-6))
+        self.assertTrue(pilot.close(observed, independent, unit, pilot.qr_projection_scale(run, point, step)))
+        self.assertFalse(pilot.close(99999., independent, unit, pilot.qr_projection_scale(run, point, step)))
+
     def test_qr_prediction_allowance_includes_unsummed_gradient_terms(self):
         unit = 2**-53
         h = 1.3314095455969066e-7

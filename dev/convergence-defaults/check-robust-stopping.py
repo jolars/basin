@@ -111,6 +111,10 @@ def verify(directory, extended=False):
                      int(run['work']) < int(control['work']) and run['outcome'] == 'converged')
         trial = terminal_trial(observations, checks) if observations else None
         record = dict({k: run[k] for k in ('id', 'dataset', 'precision', 'route', 'policy', 'cap', 'outcome', 'stage', 'criteria', 'work', 'denied', 'returned', 'cost_evals', 'residual_evals', 'jacobian_evals')},
+                      completed_iterations=int(pubs[-1]['iteration']) if pubs and run['returned'] == 'true' else None,
+                      last_published_iteration=int(pubs[-1]['iteration']) if pubs else None,
+                      physical_calls_by_kind=Counter(leaf['kind'] for leaf in grouped['leaves'][identifier]),
+                      native_model_solves=sum(int(o['model_solves']) for o in observations),
                       quality=point_quality, last_publication_quality=pilot.robust_quality(dict(run, policy='robust_default'), pubs, last_publication=True),
                       terminal_trial=trial, confirmed_premature=premature,
                       paired_default=dict(id=control['id'], work=control['work'], outcome=control['outcome'],
@@ -129,6 +133,21 @@ def verify(directory, extended=False):
                 quality='common unit-scale parameter and gradient limits: 1e-6 f64, 1e-3 f32; not CDP-1 eligibility certificates',
                 composition='conjunction and acceptance/ratio filters evaluated only at measured terminal trials; no new solver policy implemented',
                 solve_timing='instrumented, unoptimized; no speed comparison', verification_outside_solve_ledger=True)
+
+
+def verify_reproduction(directory, previous):
+    matched = {}
+    for name in ('runs', 'leaves', 'publications', 'native', 'checks'):
+        after = pilot.load(directory, name)
+        before = pilot.load(previous, name)
+        # The instrumented clock is not expected to reproduce bit for bit.
+        pilot.require(len(after) == len(before) and all(
+            {k: v for k, v in a.items() if k != 'elapsed_seconds'} ==
+            {k: v for k, v in b.items() if k != 'elapsed_seconds'} for a, b in zip(after, before)),
+            f'original ablation {name} changed')
+        matched[name] = len(after)
+    pilot.require(matched['runs'] == 336, 'original ablation reproduction coverage')
+    return dict(runs=336, records=matched, all_original_records_equal_except_elapsed_time=True)
 
 
 def verify_baseline(directory, baseline):
@@ -161,12 +180,16 @@ def main():
     parser.add_argument('directory', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--baseline', type=Path)
+    parser.add_argument('--previous', type=Path, help='compare all original ablation CSV records, excluding elapsed time')
     parser.add_argument('--extended', action='store_true', help='verify the larger, rank-deficient, and arctangent controls')
     args = parser.parse_args()
     pilot.require(not (args.extended and args.baseline), 'original baseline does not contain the extended fixtures')
+    pilot.require(not (args.extended and args.previous), 'original ablation does not contain the extended fixtures')
     report = verify(args.directory, args.extended)
     if args.baseline:
         report['baseline_reproduction'] = verify_baseline(args.directory, args.baseline)
+    if args.previous:
+        report['original_reproduction'] = verify_reproduction(args.directory, args.previous)
     with args.output.open('x') as file:
         json.dump(report, file, indent=2, allow_nan=False)
         file.write('\n')
