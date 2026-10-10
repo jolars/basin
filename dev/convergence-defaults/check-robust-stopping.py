@@ -4,6 +4,7 @@ import argparse
 from collections import Counter
 import importlib.util
 import json
+import math
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location('pilot', Path(__file__).with_name('check-least-squares.py'))
@@ -77,6 +78,12 @@ def verify(directory):
                 wanted = pilot.native('1e-8', run['precision']) if run['policy'] == 'robust_gradient_default' else 0.
             else:
                 wanted = tol if name in enabled and not (name == 'trust_radius' and run['route'].endswith('nielsen')) else None
+                if name == 'trust_radius':
+                    observation = keyed[check['sequence']]
+                    finite_trial = all(observation[k] and math.isfinite(float(observation[k]))
+                                       for k in ('base_cost', 'trial_cost', 'actual', 'predicted', 'ratio'))
+                    if not finite_trial:
+                        wanted = None
             pilot.require((float(check['tolerance']) if check['tolerance'] else None) == wanted,
                           f'{identifier}: frozen stopping configuration')
             if name == 'model_reduction' and check['evidence']:
@@ -113,12 +120,40 @@ def verify(directory):
                 solve_timing='instrumented, unoptimized; no speed comparison', verification_outside_solve_ledger=True)
 
 
+def verify_baseline(directory, baseline):
+    runs, grouped, _ = pilot.verify(directory)
+    previous, old_grouped, _ = pilot.verify(baseline)
+    pilot.require(len(previous) == 352, 'baseline route coverage')
+    previous = {r['id']: r for r in previous}
+    matched = 0
+    for run in runs:
+        if run['policy'] not in ('robust_gradient_default', 'robust_relative_probe'):
+            continue
+        old_id = run['id'].replace('robust_gradient_default', 'robust_default')
+        pilot.require(old_id in previous, 'missing baseline control')
+        before = previous[old_id]
+        pilot.require(all(run[k] == before[k] for k in
+                          ('outcome', 'criteria', 'work', 'denied', 'returned', 'cost_evals', 'residual_evals', 'jacobian_evals')),
+                      'baseline control outcome changed')
+        for name in grouped:
+            after_rows, before_rows = grouped[name][run['id']], old_grouped[name][old_id]
+            pilot.require(len(after_rows) == len(before_rows) and
+                          all(all(a[k] == b[k] for k in a if k != 'id') for a, b in zip(after_rows, before_rows)),
+                          f'baseline control {name} changed')
+        matched += 1
+    pilot.require(matched == 96, 'baseline control count')
+    return dict(runs=352, matching_ablation_controls=matched, all_control_callbacks_publications_and_native_records_equal=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--baseline', type=Path)
     args = parser.parse_args()
     report = verify(args.directory)
+    if args.baseline:
+        report['baseline_reproduction'] = verify_baseline(args.directory, args.baseline)
     with args.output.open('x') as file:
         json.dump(report, file, indent=2, allow_nan=False)
         file.write('\n')

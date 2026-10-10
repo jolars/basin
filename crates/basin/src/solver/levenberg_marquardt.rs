@@ -234,6 +234,17 @@ pub enum LmDamping {
 /// Gauss–Newton model. Reported costs, actual reductions, and convergence
 /// use the robust objective and its gradient.
 ///
+/// Heavy damping can produce a tiny accepted step and tiny model reduction
+/// while the robust gradient remains large. Enabling both progress tests does
+/// not require stationarity: they combine with OR, and even their conjunction
+/// can pass far from a minimum. A positive gain ratio does not resolve this.
+/// When stationarity is required, use gradient tests alone and leave native
+/// step, model-reduction, trust-radius, and observed progress checks disabled.
+/// The default absolute gradient test follows this configuration; choose its
+/// threshold for the objective and parameter scales. The robust normalized
+/// gradient test is an alternative, not an accuracy certificate, and can require
+/// an exact zero near a zero-residual minimum.
+///
 /// For an ordinary residual problem, `state.cost` carries the LM convention
 /// `½‖r‖²`, derived from the
 /// residual the solver evaluates itself. The bound on `P` is
@@ -1349,6 +1360,8 @@ where
 ///
 /// [`RobustLeastSquares`] supplies robust objectives with the same model,
 /// cost, and convergence conventions as [`LevenbergMarquardt`].
+/// Its [robust stopping guidance](LevenbergMarquardt#state-convention) also
+/// applies to this factorization.
 ///
 /// # Rank and failures
 ///
