@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.15.2](https://github.com/jolars/basin/compare/v1.15.1...v1.15.2) (2026-10-10)
+
+### Bug Fixes
+- stop non-finite legacy TRF models (#117) ([`512d0e9`](https://github.com/jolars/basin/commit/512d0e92f227197cf3cbc9fc1879b1209edc1dd0))
+
 ## [1.15.1](https://github.com/jolars/basin/compare/v1.15.0...v1.15.1) (2026-09-29)
 
 ### Bug Fixes
