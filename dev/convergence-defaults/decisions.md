@@ -162,6 +162,50 @@ changes a decision, preserve its history and link its successor.
   nonlinear robust models, derivatives, bounds/fixed coordinates, backend
   versions, and precision eligibility before affected sweeps. Step 5 stays open.
 
+## D007: Preserve effective damping through robust curvature growth
+
+- Status: implemented safeguard, verified on development controls, 2026-10-10;
+  no convergence default or stationarity guard calibrated.
+- Basis: the requested recovery following D006 and the [paired
+  recheck](runs/2026-10-10-robust-recovery-002.md), with a separately retained
+  [rejected correction](runs/2026-10-10-robust-recovery-001.md).
+- Scope: robust Nielsen LM, both dense factorizations and supported
+  normal-equation sparse paths, native `f32` and `f64`. The measured pilot uses
+  nalgebra 0.34; permanent regressions cover all supported backend releases.
+- Formula: before updating the monotone diagonal, set
+  `D_new[j] = max(D_old[j], diag_cur[j])` and
+  `mu_new = mu_old * max_j(D_old[j]/D_new[j])`. Two square-root factors preserve
+  representable products across extreme ratios; zero products receive a positive
+  scalar floor. Invalid operands retain the existing failure path. The
+  gain-ratio update, rejection escalation, and native no-progress safeguard
+  still apply.
+- Rationale: curvature recovery can multiply the diagonal by about eight million
+  after Nielsen damping accumulates against clipped curvature. Compensation for
+  growth shared by every coordinate removes that abrupt change while retaining
+  each coordinate's previous effective damping, up to arithmetic roundoff.
+- Rejected alternative: the smallest ratio compensates for the fastest-growing
+  diagonal but removes damping from coordinates whose curvature stays clipped.
+  It recovers the original four failures while introducing four full-rank
+  arctangent escapes. The unchanged quality gate rejects those returns.
+- Evidence: each gradient configuration passes all 72 extended and 48 original
+  returned-point quality checks. The four formerly inaccurate default returns
+  reach accurate points but still terminate as stalled, with objective gaps
+  below native objective spacing. All 468 unaffected extended and 168 original
+  trust-region runs preserve complete traces, excluding elapsed time.
+- Consequence: close D006's demonstrated accuracy-recovery gap. Preserve
+  numerical no-progress classification, default absolute-gradient settings, and
+  D005's progress-policy screen. Eighteen extended combined-relative returns
+  remain premature; ten satisfy both progress tests on accepted trials with gain
+  ratio above 0.25. No tolerance is loosened to claim convergence.
+- Limitations: linear development models, unit scales, analytic derivatives, no
+  held-out outcomes, and incomplete precision certificates. Common-growth
+  compensation leaves unequal diagonal growth and rounded objective reductions
+  as possible causes of stagnation. This is a Basin robust-model safeguard that
+  extends Nielsen's update, not a general convergence guarantee.
+- Follow-up: stationarity guards and nonlinear robust controls, derivative and
+  constraint modes, backend measurements, precision eligibility, and complete
+  inner-work accounting before affected sweeps. Step 5 remains open.
+
 ## Numerical decision template
 
 For each policy decision, record the solver and variants, current and proposed

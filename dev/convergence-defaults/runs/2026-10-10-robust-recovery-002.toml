@@ -1,6 +1,6 @@
 run_id = "2026-10-10-robust-recovery-002"
 purpose = "paired robust Nielsen curvature recovery; step 5 safeguard recheck"
-status = "planned"
+status = "completed"
 source_revision = "d009a095fc8ef3df6cd56bc9fa876a2d42252abd"
 starting_revision = "97ea26e"
 protocol = "CDP-1 measurement extension; no amendment, calibration, or default selection"
@@ -52,6 +52,27 @@ commands = [
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-recovery-002/original",
 ]
 
+planned_manifest_revision = "f121c10"
+actual_coverage = "504 full-budget extended ablations, 216 interruptions, 336 original ablations; all outcomes retained"
+result = "each gradient configuration passes 72/72 extended and 48/48 original quality checks; all four previously inaccurate f32 returns are accurate but retain stalled classification; 18 extended combined-relative premature returns remain"
+unaffected_comparison = "all five tables match except elapsed time for 468 extended and 168 original trust-region controls"
+validation = "36 backend regression tests covering 320 solves across every supported dense backend version and supported sparse paths in both precisions; 43 measurement tests each on nalgebra 0.34 and 0.35; 17 independent checker and six stopping/recovery tests on both phases; full pure-Rust suite, workspace clippy, rustdoc, both WASM builds, formatting, and Markdown checks pass"
+report_assembly = "final-report.json contains report.json plus original_summary, original_statistics, original_trust_reproduction, source and planned manifest revisions, interpretation, rejected run ID, and all ten input hashes; copied unchanged to retained_report"
+verification_commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p basin --features nalgebra_v0_32,nalgebra_v0_33,nalgebra_v0_34,nalgebra_v0_35,ndarray_v0_15,ndarray_v0_16,ndarray_v0_17,faer_v0_22,faer_v0_23,faer_v0_24 --test levenberg_marquardt_robust_recovery",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p basin --lib solver::levenberg_marquardt::damping::tests --features nalgebra,ndarray,faer",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p basin --features nalgebra,ndarray,faer,problems,parallel",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p competitor-bench --test least_squares_measurement",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo test -p competitor-bench --features basin-latest --test least_squares_measurement",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo clippy --workspace --all-targets --all-features -- -D warnings",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo doc --no-deps -p basin --features nalgebra-lapack,ndarray-blas,faer,parallel,problems,serde",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo build --target wasm32-unknown-unknown",
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo build --target wasm32-unknown-unknown --no-default-features",
+  "cargo fmt --all -- --check",
+  "panache format --check TODO.md MIGRATING.md dev/convergence-defaults/README.md dev/convergence-defaults/decisions.md dev/convergence-defaults/least-squares-pilot.md dev/convergence-defaults/runs/README.md dev/convergence-defaults/runs/2026-10-10-robust-recovery-001.md dev/convergence-defaults/runs/2026-10-10-robust-recovery-002.md",
+  "panache lint TODO.md MIGRATING.md dev/convergence-defaults/README.md dev/convergence-defaults/decisions.md dev/convergence-defaults/least-squares-pilot.md dev/convergence-defaults/runs/README.md dev/convergence-defaults/runs/2026-10-10-robust-recovery-001.md dev/convergence-defaults/runs/2026-10-10-robust-recovery-002.md",
+]
+
 [source_sha256]
 "Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
 "crates/competitor-bench/src/bin/verify_least_squares.rs" = "cc4e4ba5e895c8eaf2e5c557e8071e637bec38479f16255e1e0cdedf235c0441"
@@ -74,3 +95,22 @@ commands = [
 "leaves.csv" = "7a7d1492dedcd76df7c32a4819b8e170b71982384ffd99b4bd2829c2d5c09cac"
 "native.csv" = "04670d1fabf536aafac6dc755d795839ac8af88ac0df66f22d2ff3921bba0f24"
 "checks.csv" = "343d8ff176c6972ee5fb4ee01afe68a96a8b3c675d9098486d0356b7f05d2f9b"
+
+[output_sha256]
+"report.json" = "63d4cdae52a444f6ab9190208c23007c468548017e265dca933343a395e1700c"
+"original-report.json" = "f6110c6bad6b2c732bafaa848af0c39de1c3ac9f971c096e63ea91b2205c670d"
+"final-report.json" = "828c11656dad4a34351554d688b94713e1f9e182952fadca6f801899f81ae57c"
+"rust-tests.log" = "bcb8b145c3ea00646b94046113c32bee71f6bb17dc4e52541fe6d30bb4526be5"
+"extended/runs.csv" = "ff125d6ce7f9a68ab9a1a99322156867970edb37071e98f252028aaf2c35eeee"
+"extended/publications.csv" = "8147247336a2cded9f193497edf76c242e93bf4a19cfcee97d36817289958dad"
+"extended/leaves.csv" = "b444474e9c27f14874021e7a928cac5df43656846377cbd29b3dd8875975c03c"
+"extended/native.csv" = "9a0d1c0127b2189572204c2b71296ef0ac54d39565b9d2abb238b5f01574f615"
+"extended/checks.csv" = "f24321503dd91c36d0080a910d75580679853efdb1e6d82cb66b0428e8b4e8e7"
+"original/runs.csv" = "cdf33da0b98271aa7308b0fe4e0c124c7fde659c1db0029335cfcc5df5638749"
+"original/publications.csv" = "cb895ea1bb90e643d3df706ab77a27e3db2473b912754795ce60c1049e0b613b"
+"original/leaves.csv" = "e6ddf57c146b702d81135699794624e4d95fe3974e7718777003f3e95a3563e1"
+"original/native.csv" = "bb6e0156a305b115f3c78ec0af5fc68d8523bfc2934183f916f8ab8f8c4c0eb7"
+"original/checks.csv" = "cd369c16650e9287777b54dcefcfe76c209e88eddac832d487797f3c01992cd6"
+
+[retained_sha256]
+"dev/convergence-defaults/robust-recovery-results.json" = "828c11656dad4a34351554d688b94713e1f9e182952fadca6f801899f81ae57c"

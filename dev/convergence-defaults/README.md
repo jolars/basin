@@ -54,7 +54,12 @@ controls](runs/2026-10-10-robust-extended-001.md) add all four built-in losses
 on full-rank and rank-deficient four-parameter models and scalar arctangent.
 Their 504 ablations confirm 24 premature combined-relative stops; 216 exact
 budget interruptions pass. Gradient controls expose four inaccurate `f32`
-Nielsen stalls, retaining a recovery gate before stationarity-guard calibration.
+Nielsen stalls. The [paired recovery
+recheck](runs/2026-10-10-robust-recovery-002.md) restores accurate points in all
+four cases and passes 72/72 quality checks under each gradient control. It
+preserves native stalls near the objective's precision limit and 18 confirmed
+premature combined-relative returns. Stationarity guards and remaining robust
+coverage still precede calibration.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -121,6 +126,9 @@ Nielsen stalls, retaining a recovery gate before stationarity-guard calibration.
 - [Larger robust controls](runs/2026-10-10-robust-extended-001.md): all built-in
   losses, identifiable parameter quality under rank deficiency, and a measured
   Nielsen recovery gap in `f32`.
+- [Robust Nielsen recovery](runs/2026-10-10-robust-recovery-002.md):
+  conservative damping compensation, the rejected alternative, accurate returned
+  points, preserved native stalls, and exact unaffected controls.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
 - [Run records](runs/README.md): conventions for tracked manifests and concise
@@ -1153,3 +1161,43 @@ sufficient to inspect outcomes and reproduce the measurements.
   stalls before calibrating stationarity-guarded progress. Remaining nonlinear
   robust models, derivatives, bounds/fixed coordinates, transformations, backend
   measurements, precision certificates, and complete inner work retain gates.
+
+### S022: Recover robust Nielsen accuracy without hiding stalls, 2026-10-10
+
+- Starting revision: `8b53b5c`, clean tree on `convergence-defaults`.
+- Cause: robust curvature recovery increases the monotone diagonal by about
+  eight million while retaining accumulated Nielsen damping. Effective damping
+  jumps, and the next step rounds away at an inaccurate point.
+- Rejected attempt: source `1f63614` and planned manifest `97ea26e` preceded
+  [recovery-001](runs/2026-10-10-robust-recovery-001.md). Smallest-ratio
+  compensation recovers the four original stalls but introduces four full-rank
+  arctangent escapes. The unchanged 72/72 quality gate rejects it. Retained
+  evidence includes its failed outcomes and independent checks.
+- Final freeze: source `d009a09` and planned manifest `f121c10` preceded
+  [recovery-002](runs/2026-10-10-robust-recovery-002.md). Largest-ratio
+  compensation accounts only for growth shared by every coordinate, preserving
+  effective damping in coordinates whose curvature remains clipped.
+- Evidence: 720 extended runs and 336 original ablations. Each gradient control
+  passes 72/72 extended and 48/48 original quality checks. The four recovered
+  default returns still report stalled, with accurate points and objective gaps
+  below native objective spacing. All 468 extended trust-region and early-budget
+  controls, and 168 original trust-region controls, match all five tables except
+  elapsed time. No callback, accounting, or convergence setting changes.
+- Remaining failures: 18 extended combined-relative premature returns, including
+  ten accepted trials passing both progress tests with gain ratio above 0.25.
+  Six original combined-relative returns also miss the quality checks. No
+  replacement convergence composition or threshold selected.
+- Validation: 36 permanent tests cover 320 solves on every supported dense
+  backend release and supported sparse paths in both precisions, including mixed
+  curvature. All 43 measurement tests pass on nalgebra 0.34 and 0.35. Both
+  output sets pass 17 independent checker and six stopping/recovery tests. Full
+  pure-Rust tests, workspace clippy, rustdoc, both WASM builds, and formatting
+  checks pass.
+- Decision:
+  [D007](decisions.md#d007-preserve-effective-damping-through-robust-curvature-growth)
+  closes D006's demonstrated accuracy-recovery gate and retains native numerical
+  no-progress classifications. Holdout outcomes remain sealed; step 5 stays
+  open.
+- Next task: stationarity guards and nonlinear robust controls, followed by
+  derivative, constraint, backend measurement, precision, and complete
+  inner-work coverage before affected calibration sweeps.

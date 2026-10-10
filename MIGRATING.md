@@ -1025,6 +1025,8 @@ The LM and legacy `Trf` type declarations now require `F: Scalar`, consistent
 with their existing implementations. Generic wrappers naming these types must
 declare the same bound; their `F = f64` defaults remain available.
 
+## Robust LM damping
+
 For robust LM with Nielsen damping, an increase in the safeguarded model's
 scaling diagonal now reduces the damping parameter by the largest ratio of old
 to new diagonal entries. This compensates for growth shared by every coordinate

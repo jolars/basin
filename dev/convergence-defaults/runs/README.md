@@ -38,6 +38,14 @@ full-rank and rank-deficient four-parameter models, and scalar arctangent. They
 confirm broader premature progress stops and retain four inaccurate `f32`
 Nielsen stalls as a recovery gate.
 
+The [paired Nielsen recovery recheck](2026-10-10-robust-recovery-002.md)
+restores accurate points in all four previously poor returns and passes 72/72
+quality checks under each gradient control. It preserves native
+precision-limited stalls and exact unaffected traces. The [rejected first
+correction](2026-10-10-robust-recovery-001.md) retains its four new full-rank
+arctangent escapes and failed quality gate. Progress-only calibration remains
+blocked by premature returns on the corrected trajectories.
+
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
 harness pilot. A manifest must state whether its purpose is verifier validation,
 a pilot, calibration, or sealed validation. Record protocol amendments and

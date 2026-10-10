@@ -539,8 +539,13 @@ coverage boxes below require all applicable stages.
   all four losses on full-rank and rank-deficient four-parameter models, scalar
   arctangent, 504 ablations, and 216 budget interruptions. They confirm 24
   combined-relative premature stops and expose four inaccurate `f32` Nielsen
-  stalls under gradient controls. Recovering these rank-deficient stalls
-  precedes stationarity-guard calibration; step 5 remains open.
+  stalls under gradient controls. The [paired Nielsen recovery
+  recheck](dev/convergence-defaults/runs/2026-10-10-robust-recovery-002.md)
+  restores accurate points in all four cases and passes 72/72 quality checks
+  under each gradient control. Native precision-limited stalls remain explicit;
+  18 premature combined-relative stops still require stationarity guards.
+  Nonlinear robust controls and remaining coverage precede calibration; step 5
+  stays open.
 
 - [ ] **6. Calibrate by solver family and validate independently.** Compare
   current defaults, reference policies, and a small logarithmic sweep of

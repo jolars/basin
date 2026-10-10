@@ -189,3 +189,14 @@ QR projection roundoff with large clipped model residuals; independent quality
 limits and solver trajectories remain unchanged. Recovering the measured Nielsen
 stalls precedes guarded-policy calibration. Derivative, constraint, backend,
 precision, and complete inner-work gates remain open.
+
+The [paired recovery recheck](runs/2026-10-10-robust-recovery-002.md) uses
+`--recovery-from <extended-directory>` alongside `--extended`. It verifies exact
+unaffected trust-region and early-budget traces, the first changed damping at
+each failed control's curvature transition, and the unchanged quality gate.
+Conservative compensation restores accurate returned points in all four cases;
+each gradient configuration passes 72/72 extended and 48/48 original checks.
+Native precision-limited stalls remain stalled. The rejected global correction
+and its four new full-rank escapes are retained separately. Eighteen extended
+combined-relative premature returns still require stationarity guards before
+calibration.
