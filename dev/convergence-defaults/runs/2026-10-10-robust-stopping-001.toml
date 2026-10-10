@@ -1,0 +1,43 @@
+run_id = "2026-10-10-robust-stopping-001"
+purpose = "robust LM stopping composition ablation; measurement review, not calibration"
+status = "planned"
+source_revision = "2a5e89ece0cf55cf52eabea414487038681461b3"
+starting_revision = "68b96a8"
+protocol = "CDP-1 measurement extension; no amendment or default selection"
+output_directory = "target/convergence-defaults/2026-10-10-robust-stopping-001"
+backend = "nalgebra 0.34.2"
+compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
+build_profile = "dev, debug=0, incremental=0; instrumented timing is not compared"
+configuration = "336 solves: six unbounded analytic robust fixtures, four LM routes, two native precisions, seven stopping configurations"
+fixtures = "ROBUST_FIXTURES excluding bounds; unchanged models, starts, losses, scales, and analytic references"
+derivatives = "analytic"
+partition = "existing development analytic controls; no held-out solver outcomes"
+budgets = "4000 physical callbacks, 10000 completed iterations, 600-second boundary wall guard, 120-second external process guard"
+thresholds = "relative probes: 1e-8 f64, 1e-4 f32; exact-zero absolute gradient retained; default control: absolute gradient 1e-8"
+quality = "common independent parameter and robust-gradient limits: 1e-6 f64, 1e-3 f32; unit scales; measurement checks, not CDP-1 eligibility certificates"
+composition = "native tests combine with OR; model AND step and acceptance/ratio filters checked only at terminal native decisions"
+verification = "independent 100-digit robust objectives and gradients; native operands, stages, all passing predicates, logical/physical counts, and paired callback prefixes"
+holdout_candidate_outcomes = "sealed"
+policies_selected = false
+commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo build -p competitor-bench --bin verify_least_squares",
+  "timeout 120s target/robust-stopping-build/debug/verify_least_squares --phase robust-stopping --output target/convergence-defaults/2026-10-10-robust-stopping-001/stopping",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-robust-stopping.py target/convergence-defaults/2026-10-10-robust-stopping-001/stopping --output target/convergence-defaults/2026-10-10-robust-stopping-001/report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-robust-stopping.py target/convergence-defaults/2026-10-10-robust-stopping-001/stopping",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-stopping-001/stopping",
+  "timeout 120s target/robust-stopping-build/debug/verify_least_squares --phase robust --output target/convergence-defaults/2026-10-10-robust-stopping-001/baseline",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-least-squares.py target/convergence-defaults/2026-10-10-robust-stopping-001/baseline --output target/convergence-defaults/2026-10-10-robust-stopping-001/baseline-report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-stopping-001/baseline",
+]
+
+[source_sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"crates/competitor-bench/src/bin/verify_least_squares.rs" = "5f047cd92d6f4d1bb7fb553db100b4bf55055e905aafec1c161ddc73a47ef485"
+"crates/competitor-bench/src/convergence/least_squares.rs" = "e847b1f430da7fa333fff1201ce64b5dbb09abb1d07a1f66c1178d79ff8a711e"
+"crates/competitor-bench/tests/least_squares_measurement.rs" = "4e4f6a889ad6925d4c086ab1e256ec0af74835a33cc508380d16a89c06f5f604"
+"crates/basin/src/solver/levenberg_marquardt.rs" = "543a981cb1318e1fd42494779191d3c523b412455c5fd1213e1982424ca29800"
+"crates/basin/src/solver/levenberg_marquardt/stopping.rs" = "be48b6d9c9141f09e392e23751c24abfac203146885093f4d655063909c504ea"
+"dev/convergence-defaults/check-least-squares.py" = "ba80971abd93af4a4d2c852305fb9a81826654d4c267e535c17b26049dff317d"
+"dev/convergence-defaults/check-robust-stopping.py" = "c452c7d3b0af99dfb03fa392b2c7a458a9834347718362e9b74136ada501cf93"
+"dev/convergence-defaults/test-least-squares.py" = "f18bfcaf3a6083ed8c1a7e60e433f2b562aa72361be07ec6e44b47f06283eb0f"
+"dev/convergence-defaults/test-robust-stopping.py" = "4edc07a57e9a096d647060165868165b694cdd9f8a67a6b11eeeaa60a1b6b8cb"
