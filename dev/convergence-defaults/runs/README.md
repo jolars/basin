@@ -32,6 +32,12 @@ predicate ablations and reproduces the robust baseline. It isolates premature
 progress stops, verifies matched gradient continuations, and records the limits
 of conjunction and model-agreement filters without selecting a default.
 
+The [larger robust controls](2026-10-10-robust-extended-001.md) add 504
+ablations and 216 budget interruptions across all four built-in losses,
+full-rank and rank-deficient four-parameter models, and scalar arctangent. They
+confirm broader premature progress stops and retain four inaccurate `f32`
+Nielsen stalls as a recovery gate.
+
 Use [CDP-1](../protocol.md) and the [case register](../cases.md) for the first
 harness pilot. A manifest must state whether its purpose is verifier validation,
 a pilot, calibration, or sealed validation. Record protocol amendments and

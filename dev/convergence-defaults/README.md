@@ -49,7 +49,12 @@ common point quality on all 48 cases; progress-only settings have confirmed
 premature stops. Pairing model and step tests or requiring accepted trials and
 good model agreement does not prevent the four severe Cauchy stops. Public
 guidance and backend regressions cover the existing gradient control; broad
-policy selection and remaining robust coverage stay open.
+policy selection and remaining robust coverage stay open. The [larger robust
+controls](runs/2026-10-10-robust-extended-001.md) add all four built-in losses
+on full-rank and rank-deficient four-parameter models and scalar arctangent.
+Their 504 ablations confirm 24 premature combined-relative stops; 216 exact
+budget interruptions pass. Gradient controls expose four inaccurate `f32`
+Nielsen stalls, retaining a recovery gate before stationarity-guard calibration.
 
   | Step | Deliverable                                   | Status      |
   | ---- | --------------------------------------------- | ----------- |
@@ -113,6 +118,9 @@ policy selection and remaining robust coverage stay open.
 - [Robust LM stopping review](runs/2026-10-10-robust-stopping-001.md): isolated
   predicates, matched gradient continuations, and limits of progress
   conjunctions and model-agreement filters.
+- [Larger robust controls](runs/2026-10-10-robust-extended-001.md): all built-in
+  losses, identifiable parameter quality under rank deficiency, and a measured
+  Nielsen recovery gap in `f32`.
 - [Decisions](decisions.md): agreed direction, proposals, evidence, and open
   questions. Numerical decisions remain pending.
 - [Run records](runs/README.md): conventions for tracked manifests and concise
@@ -1107,3 +1115,41 @@ sufficient to inspect outcomes and reproduce the measurements.
   followed by stationarity guards, derivative modes, remaining backend versions,
   precision eligibility, transformations, and full inner-work measurements
   before affected candidate sweeps.
+
+### S021: Extend robust controls and retain recovery failures, 2026-10-10
+
+- Starting revision: `b7f4ab5`, clean tree on `convergence-defaults`.
+- Scope: scalar arctangent and all four built-in robust losses on full-rank and
+  rank-deficient four-parameter models. Retain the seven stopping
+  configurations, four LM routes, both precisions, analytic derivatives, and
+  unit scales.
+- Freeze: source `aa8e078` and planned manifest `43e518e` precede
+  [2026-10-10-robust-extended-001](runs/2026-10-10-robust-extended-001.md).
+  Verifier correction `57a30d5` changes no solver code, setting, or solve CSV.
+- Evidence: 504 full-budget ablations, 216 exact callback-budget interruptions,
+  and 336 original ablations reproduced with identical outcomes, callbacks,
+  publications, observations, and checks, excluding elapsed time. Independent
+  rank-deficient quality measures distance to the minimizer set, with explicit
+  nullspace checks.
+- Findings: 24 combined-relative stops are confirmed premature. Of these, 22
+  pass model and step tests on accepted, published trials with gain ratios above
+  0.25. Both gradient configurations pass 68 of 72 point-quality checks. Their
+  four poor points are Nielsen `f32` stalls on rank-deficient Huber/arctangent
+  models under both factorizations, with substantial gradients and steps that
+  round away. Trust-region damping passes these same fixtures.
+- Correction: the independent model-identity checker accounts for QR projection
+  roundoff with large clipped residuals. Native operands and formula checks stay
+  intact, and 789 discrepancies above local relative roundoff remain recorded.
+  This screen supplies no precision or model-solve accuracy certificate.
+- Validation: all 39 measurement tests pass on nalgebra 0.34 and 0.35. All 17
+  independent checker tests and five stopping/reproduction tests pass, including
+  twenty CSV corruption controls. Workspace all-target/all-feature clippy with
+  warnings denied, Rust formatting, and documentation checks pass.
+- Decision:
+  [D006](decisions.md#d006-extend-robust-controls-and-gate-nielsen-recovery)
+  extends the progress-test screen and retains the measured recovery gate. No
+  default or guarded policy selected; holdout outcomes remain sealed.
+- Next task: investigate and recover the four rank-deficient Nielsen `f32`
+  stalls before calibrating stationarity-guarded progress. Remaining nonlinear
+  robust models, derivatives, bounds/fixed coordinates, transformations, backend
+  measurements, precision certificates, and complete inner work retain gates.

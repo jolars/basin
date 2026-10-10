@@ -169,3 +169,23 @@ all 48 cases; severe Cauchy progress stops survive conjunction and
 acceptance/model-agreement filters. The run selects no default. Larger robust
 problems, other losses, derivative modes, precision eligibility, and full inner
 work remain open.
+
+## Larger and rank-deficient robust controls
+
+The [extended controls](runs/2026-10-10-robust-extended-001.md) add the
+`robust-extended` phase. Nine fixtures cover scalar arctangent and all four
+built-in losses on four-parameter full-rank and rank-deficient models. The
+separate stopping checker accepts `--extended` to verify 504 ablations and 216
+budget interruptions. It measures vector gradients, model predictions, and
+distance to the rank-deficient minimizer set, preserving valid nullspace motion.
+The original `robust` and `robust-stopping` coverage remains frozen. The
+stopping checker can compare the original ablation's five CSVs with a prior
+output using `--previous <directory>`, excluding elapsed time.
+
+The extended controls confirm 24 premature combined-relative stops and expose
+four inaccurate `f32` Nielsen stalls under both gradient configurations.
+Trust-region damping passes those fixtures. A verifier correction accounts for
+QR projection roundoff with large clipped model residuals; independent quality
+limits and solver trajectories remain unchanged. Recovering the measured Nielsen
+stalls precedes guarded-policy calibration. Derivative, constraint, backend,
+precision, and complete inner-work gates remain open.

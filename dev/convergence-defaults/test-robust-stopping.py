@@ -43,6 +43,23 @@ class Composition(unittest.TestCase):
             self.assertEqual(result['quality_limit'], 1e-6)
             self.assertFalse(result['quality_passed'])
 
+    def test_reproduction_checks_every_csv_except_time(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = [Path(temporary) / name for name in ('before', 'after')]
+            for path in paths:
+                path.mkdir()
+                for name in ('runs', 'leaves', 'publications', 'native', 'checks'):
+                    with (path / f'{name}.csv').open('w', newline='') as file:
+                        writer = csv.DictWriter(file, fieldnames=['id', 'point', 'elapsed_seconds'])
+                        writer.writeheader()
+                        writer.writerows(dict(id=str(k), point='1', elapsed_seconds=str(paths.index(path)))
+                                         for k in range(336 if name == 'runs' else 1))
+            self.assertEqual(stopping.verify_reproduction(paths[1], paths[0])['runs'], 336)
+            with (paths[1] / 'leaves.csv').open('w') as file:
+                file.write('id,point,elapsed_seconds\n0,2,1\n')
+            with self.assertRaises(ValueError):
+                stopping.verify_reproduction(paths[1], paths[0])
+
 
 class Evidence(unittest.TestCase):
     directory = None

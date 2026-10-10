@@ -131,6 +131,37 @@ changes a decision, preserve its history and link its successor.
   then assess stationarity guards and derivative/backend coverage before
   affected sweeps. Step 5 remains open.
 
+## D006: Extend robust controls and gate Nielsen recovery
+
+- Status: accepted measurement interpretation and recovery gate, 2026-10-10; no
+  solver default or guarded progress policy selected.
+- Basis: the [504-ablation extension](runs/2026-10-10-robust-extended-001.md),
+  216 budget interruptions, and exact reproduction of the original 336-run
+  ablation's five CSV files, excluding elapsed time.
+- Scope: scalar arctangent and all four built-in losses on four-parameter
+  full-rank and rank-deficient models, four LM routes, both precisions, and
+  nalgebra 0.34. Independent quality uses distance to the known minimizer set
+  under rank deficiency.
+- Rationale: 24 combined-relative stops are confirmed premature by matching
+  successful default continuations. Of these, 22 satisfy both model and step
+  tests on accepted, published trials with gain ratios above 0.25. Progress
+  conjunction and these filters remain insufficient on the enlarged controls.
+- Recovery evidence: default and normalized-gradient controls each pass 68 of 72
+  quality checks. Four Nielsen `f32` runs on rank-deficient Huber and arctangent
+  models stall with substantial gradients and rounded-away steps. Trust-region
+  damping passes those same fixtures. The stalls are failures, and four poor
+  progress returns with poor controls remain unconfirmed.
+- Consequence: extend D005's screening restriction to these measured models.
+  Investigate the Nielsen recovery gap before calibrating a guarded progress
+  policy; rejecting false convergence alone cannot restore a usable step.
+- Limitations: linear development controls, unit scales, analytic derivatives,
+  and no held-out outcomes or complete precision certificates. QR model checks
+  include a projection roundoff screen, not a model-solve accuracy certificate.
+  Other backends are tested for observation integrity but not measured here.
+- Follow-up: recover the four `f32` stalls, then assess stationarity guards,
+  nonlinear robust models, derivatives, bounds/fixed coordinates, backend
+  versions, and precision eligibility before affected sweeps. Step 5 stays open.
+
 ## Numerical decision template
 
 For each policy decision, record the solver and variants, current and proposed
