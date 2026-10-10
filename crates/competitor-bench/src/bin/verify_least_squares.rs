@@ -6,7 +6,8 @@ use basin::{
 };
 use competitor_bench::convergence::{
     least_squares::{
-        AnalyticModel, Instrumented, Measured, ROBUST_FIXTURES, measure,
+        AnalyticModel, Instrumented, Measured, ROBUST_FIXTURES,
+        RobustStoppingPolicy, measure,
     },
     ledger::WorkLedger,
     nist::datasets,
@@ -372,8 +373,10 @@ macro_rules! precision {
             }
             let lm = |damping| {
                 let mut s = LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default().with_damping(damping);
-                if policy == "relative_probe" || policy == "robust_relative_probe" {
-                    let tol: $f = if precision == "f32" { 1e-4 } else { 1e-8 };
+                let tol: $f = if precision == "f32" { 1e-4 } else { 1e-8 };
+                if let Some(probe) = RobustStoppingPolicy::from_name(policy) {
+                    s = probe.configure(s, tol);
+                } else if policy == "relative_probe" {
                     s = s.with_absolute_gradient_tolerance(0.0).with_gradient_orthogonality_tolerance(tol)
                         .with_relative_model_reduction_tolerance(tol).with_relative_step_tolerance(tol)
                         .with_relative_trust_radius_tolerance(tol);
@@ -384,7 +387,7 @@ macro_rules! precision {
             route!("lm_normal_trust", lm(LmDamping::TrustRegion));
             route!("lm_qr_nielsen", lm(LmDamping::Nielsen).with_pivoted_qr());
             route!("lm_qr_trust", lm(LmDamping::TrustRegion).with_pivoted_qr());
-            if policy != "relative_probe" && policy != "robust_relative_probe" {
+            if policy != "relative_probe" && RobustStoppingPolicy::from_name(policy).is_none() {
                 route!("trf_legacy", Trf::<DVector<$f>, DMatrix<$f>, $f>::default());
                 route!("trf_full", TrustRegionReflective::<$f>::new());
             }
@@ -402,10 +405,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         || args[3] != "--output"
         || !matches!(
             args[2].as_str(),
-            "analytic" | "bounded" | "robust" | "nist"
+            "analytic" | "bounded" | "robust" | "robust-stopping" | "nist"
         )
     {
-        return Err("usage: verify_least_squares --phase analytic|bounded|robust|nist --output <new-directory>".into());
+        return Err("usage: verify_least_squares --phase analytic|bounded|robust|robust-stopping|nist --output <new-directory>".into());
     }
     let mut files = Files::new(Path::new(&args[4]))?;
     if args[2] == "analytic" {
@@ -533,6 +536,30 @@ fn main() -> Result<(), Box<dyn Error>> {
                         ),
                     cap,
                     "bounded_default",
+                )?;
+            }
+        }
+    } else if args[2] == "robust-stopping" {
+        for fixture in ROBUST_FIXTURES.iter().filter(|f| f.bounds.is_none()) {
+            for policy in RobustStoppingPolicy::ALL {
+                let cap = 4000;
+                run64(
+                    &mut files,
+                    fixture.name,
+                    1,
+                    vec![fixture.start],
+                    Instrumented::analytic(fixture.model, WorkLedger::new(cap)),
+                    cap,
+                    policy.name(),
+                )?;
+                run32(
+                    &mut files,
+                    fixture.name,
+                    1,
+                    vec![fixture.start as f32],
+                    Instrumented::analytic(fixture.model, WorkLedger::new(cap)),
+                    cap,
+                    policy.name(),
                 )?;
             }
         }

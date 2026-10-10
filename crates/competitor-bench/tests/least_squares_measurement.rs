@@ -5,7 +5,7 @@ use basin::{
     TrustRegionReflective,
 };
 use competitor_bench::convergence::least_squares::{
-    AnalyticModel, Instrumented, measure,
+    AnalyticModel, Instrumented, RobustStoppingPolicy, measure,
 };
 use competitor_bench::convergence::ledger::WorkLedger;
 use competitor_bench::convergence::runner::RunOutcome;
@@ -121,6 +121,87 @@ macro_rules! precision {
 }
 precision!(f64, lm64, trust64, qr64, qr_trust64, legacy64, full64);
 precision!(f32, lm32, trust32, qr32, qr_trust32, legacy32, full32);
+
+macro_rules! stopping_ablation {
+    ($name:ident, $f:ty, $solver_name:ident, $solver:expr) => {
+        #[test]
+        fn $name() {
+            let run = |policy: RobustStoppingPolicy| {
+                let ledger = WorkLedger::new(4000);
+                let $solver_name = policy.configure(
+                    LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default(
+                    ),
+                    if <$f>::EPSILON > 1e-10 { 1e-4 } else { 1e-8 },
+                );
+                measure(
+                    Executor::from_start(
+                        basin::RobustLeastSquares::new(
+                            Instrumented::analytic(
+                                AnalyticModel::Linear,
+                                ledger.clone(),
+                            ),
+                            basin::CauchyLoss,
+                        ),
+                        ($solver).with_trial_diagnostics(true),
+                        DVector::<$f>::from_element(1, -1.),
+                    )
+                    .max_iter(10_000),
+                    &ledger,
+                    Duration::from_secs(10),
+                )
+            };
+            let control = run(RobustStoppingPolicy::DefaultGradient);
+            assert!(
+                (control.run.returned().unwrap().point[0] - 1.).abs() < 1e-6
+            );
+            for policy in RobustStoppingPolicy::ALL {
+                let probe = run(policy);
+                for (a, b) in
+                    probe.run.ledger.calls.iter().zip(&control.run.ledger.calls)
+                {
+                    assert_eq!(a.kind, b.kind);
+                    assert_eq!(a.point, b.point);
+                    assert_eq!(a.outcome, b.outcome);
+                }
+                assert!(probe.run.returned().is_some());
+                if policy == RobustStoppingPolicy::NormalizedGradient {
+                    assert!(
+                        (probe.run.returned().unwrap().point[0] - 1.).abs()
+                            < 1e-6
+                    );
+                }
+            }
+        }
+    };
+}
+stopping_ablation!(stopping_normal64, f64, s, s);
+stopping_ablation!(stopping_normal32, f32, s, s);
+stopping_ablation!(
+    stopping_trust64,
+    f64,
+    s,
+    s.with_damping(LmDamping::TrustRegion)
+);
+stopping_ablation!(
+    stopping_trust32,
+    f32,
+    s,
+    s.with_damping(LmDamping::TrustRegion)
+);
+stopping_ablation!(stopping_qr64, f64, s, s.with_pivoted_qr());
+stopping_ablation!(stopping_qr32, f32, s, s.with_pivoted_qr());
+stopping_ablation!(
+    stopping_qr_trust64,
+    f64,
+    s,
+    s.with_pivoted_qr().with_damping(LmDamping::TrustRegion)
+);
+stopping_ablation!(
+    stopping_qr_trust32,
+    f32,
+    s,
+    s.with_pivoted_qr().with_damping(LmDamping::TrustRegion)
+);
 
 #[test]
 fn accepted_trial_before_jacobian_denial_is_not_published() {

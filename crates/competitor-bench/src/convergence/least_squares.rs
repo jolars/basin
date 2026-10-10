@@ -138,6 +138,77 @@ pub const ROBUST_FIXTURES: [RobustFixture; 7] = [
     },
 ];
 
+/// Fixed stopping ablations retain the algorithm and its numerical safeguards.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RobustStoppingPolicy {
+    DefaultGradient,
+    AllRelative,
+    ModelReduction,
+    TrialStep,
+    ModelOrStep,
+    NormalizedGradient,
+    TrustRadius,
+}
+
+impl RobustStoppingPolicy {
+    pub const ALL: [Self; 7] = [
+        Self::DefaultGradient,
+        Self::AllRelative,
+        Self::ModelReduction,
+        Self::TrialStep,
+        Self::ModelOrStep,
+        Self::NormalizedGradient,
+        Self::TrustRadius,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::DefaultGradient => "robust_gradient_default",
+            Self::AllRelative => "robust_relative_probe",
+            Self::ModelReduction => "robust_model_probe",
+            Self::TrialStep => "robust_step_probe",
+            Self::ModelOrStep => "robust_model_step_probe",
+            Self::NormalizedGradient => "robust_gradient_probe",
+            Self::TrustRadius => "robust_radius_probe",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|policy| policy.name() == name)
+    }
+
+    pub fn configure<V, M, F: Scalar>(
+        self,
+        solver: basin::LevenbergMarquardt<V, M, F>,
+        tolerance: F,
+    ) -> basin::LevenbergMarquardt<V, M, F> {
+        if self == Self::DefaultGradient {
+            return solver;
+        }
+        // Keep exact stationarity enabled when isolating a relative predicate.
+        let mut solver = solver.with_absolute_gradient_tolerance(F::zero());
+        if matches!(self, Self::AllRelative | Self::NormalizedGradient) {
+            solver = solver.with_gradient_orthogonality_tolerance(tolerance);
+        }
+        if matches!(
+            self,
+            Self::AllRelative | Self::ModelReduction | Self::ModelOrStep
+        ) {
+            solver = solver.with_relative_model_reduction_tolerance(tolerance);
+        }
+        if matches!(
+            self,
+            Self::AllRelative | Self::TrialStep | Self::ModelOrStep
+        ) {
+            solver = solver.with_relative_step_tolerance(tolerance);
+        }
+        if matches!(self, Self::AllRelative | Self::TrustRadius) {
+            solver = solver.with_relative_trust_radius_tolerance(tolerance);
+        }
+        solver
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Model<F: Scalar> {
     Nist(Box<Nist<F>>),
