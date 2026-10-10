@@ -1,0 +1,55 @@
+run_id = "2026-10-10-robust-extended-001"
+purpose = "larger, rank-deficient, and arctangent robust LM controls; step 5 measurement pilot"
+status = "planned"
+source_revision = "aa8e0784993a01af1fb171e6438b6c9919af9655"
+starting_revision = "b7f4ab5"
+protocol = "CDP-1 measurement extension; no amendment, calibration, or default selection"
+output_directory = "target/convergence-defaults/2026-10-10-robust-extended-001"
+backend = "nalgebra 0.34.2"
+compiler = "rustc 1.89.0 (29483883e 2025-08-04)"
+architecture = "x86_64"
+build_profile = "dev, debug=0, incremental=0; instrumented timing is not compared"
+execution = "single-threaded solver routes, analytic derivatives, deterministic starts; seeds and timing comparisons are inapplicable"
+configuration = "504 full-budget ablations and 216 exact budget interruptions: nine fixtures, four LM routes, two precisions, seven stopping configurations"
+fixtures = "ROBUST_EXTENDED_FIXTURES; arctangent scalar, plus all four built-in losses on full-rank and rank-deficient four-parameter models"
+dimensions = "scalar: n=1 m=1 rank=1; full-rank: n=4 m=12 rank=4; rank-deficient: n=4 m=8 rank=2"
+models = "full-rank: each d=x-target has residuals d,2d,-d; rank-deficient: sums x0+x1-1 and x2+x3+1 have residuals d,2d,-d, plus constant residuals 2,-2"
+starts = "scalar [-1]; full-rank [-1,1,-0.5,0.5]; rank-deficient [-0.5,-0.5,0.5,0.5]"
+references = "scalar [1]; full-rank [1,-1,0.5,-0.5]; rank-deficient set x0+x1=1 and x2+x3=-1, representative [0.5,0.5,-0.5,-0.5]"
+reference_provenance = "analytic global minima: every variable-dependent loss term increases with squared residual; constant residuals leave the minimizer set unchanged"
+precision = "native f32 and f64; dyadic starts, coefficients, and reference witnesses are exactly representable; complete arithmetic uncertainty and CDP-1 eligibility certificates remain gated"
+constraints_and_transformations = "unbounded, unit coordinate and loss scales, no added transformations"
+derivatives = "analytic; one fused initialization callback is one physical call and two logical requests; no finite-difference work"
+partition = "development analytic controls; no held-out solver outcomes"
+budgets = "4000 physical callbacks, 10000 completed iterations, 600-second boundary wall guard, 120-second external process guard; default-gradient interruptions at caps 0,1,2"
+thresholds = "relative probes: 1e-8 f64, 1e-4 f32; exact-zero absolute gradient retained; default control: absolute gradient 1e-8"
+quality = "same independent stationarity and parameter limits for every configuration: 1e-6 f64, 1e-3 f32; rank-deficient parameter error is infinity-norm distance to the affine minimizer set"
+composition = "unchanged native OR tests; conjunction and acceptance/gain-ratio filters diagnosed only at terminal trials"
+verification = "independent 100-digit robust objectives, gradients, and safeguarded models; arctangent uses half-angle reduction and an alternating series; identity roundoff screens are not precision certificates"
+accounting = "physical residual/Jacobian callback ledger, logical categories, native model solves, rejected trials, publications, terminal stage, and all passing tests; verification outside solve ledger and timer"
+schema = "five existing CSV files; retained checker JSON schema 1; raw traces under target"
+holdout_candidate_outcomes = "sealed"
+policies_selected = false
+commands = [
+  "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo build -p competitor-bench --bin verify_least_squares",
+  "timeout 120s target/robust-stopping-build/debug/verify_least_squares --phase robust-extended --output target/convergence-defaults/2026-10-10-robust-extended-001/extended",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-robust-stopping.py target/convergence-defaults/2026-10-10-robust-extended-001/extended --extended --output target/convergence-defaults/2026-10-10-robust-extended-001/report.json",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-robust-stopping.py target/convergence-defaults/2026-10-10-robust-extended-001/extended --extended",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-extended-001/extended",
+  "timeout 120s target/robust-stopping-build/debug/verify_least_squares --phase robust-stopping --output target/convergence-defaults/2026-10-10-robust-extended-001/original",
+  "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/check-robust-stopping.py target/convergence-defaults/2026-10-10-robust-extended-001/original --output target/convergence-defaults/2026-10-10-robust-extended-001/original-report.json",
+]
+
+[source_sha256]
+"Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
+"crates/competitor-bench/src/bin/verify_least_squares.rs" = "cc4e4ba5e895c8eaf2e5c557e8071e637bec38479f16255e1e0cdedf235c0441"
+"crates/competitor-bench/src/convergence/least_squares.rs" = "d57a76ace927538b5cbec4449fabc721b7d37acba6542f7f30ce3058b3792d64"
+"crates/competitor-bench/tests/least_squares_measurement.rs" = "70d9b338420383576c4a3f9ea5b9738b74b72e52e489f3feb5f93eacbebc8bbc"
+"dev/convergence-defaults/check-least-squares.py" = "4354b3d6c2647dad9a86fbd9599c0aef068c6f571366ebd3801398f7d1c8a5b1"
+"dev/convergence-defaults/check-robust-stopping.py" = "877cb47b560f0b1d196b1ea0611d67c2eba8d4c1c7c5f086eaba64fd003b121c"
+"dev/convergence-defaults/test-least-squares.py" = "ca15decb589c1b5702bfe550bcde546d9e18c1c43fe8d8d4b0911c58b2e494bf"
+"dev/convergence-defaults/test-robust-stopping.py" = "0630872b73f34231f94b1870a8e4ffd7820cab2d099a60c53c1658e0b3b716a4"
+"crates/basin/src/core/least_squares/losses.rs" = "7b6bb769f73c02eb38f00fe3ee948ba9c18381e339c2bf061c6d1cc2871fa090"
+"crates/basin/src/core/least_squares/evaluation.rs" = "cadfdfb058d703a9ae3746e43b5074cd11ab77542901cf5264be5a7af61da331"
+"crates/basin/src/solver/levenberg_marquardt.rs" = "7225b55621c83aaf6d1a98fc320f1b29b41a7d91356873ff8153fda90597eccb"
+"crates/basin/src/solver/levenberg_marquardt/stopping.rs" = "be48b6d9c9141f09e392e23751c24abfac203146885093f4d655063909c504ea"
