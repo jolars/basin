@@ -78,3 +78,45 @@ where
         (result.cost() - F::from_f64(28.0 / 3.0).unwrap()).abs() < tolerance
     );
 }
+
+pub fn check_nonfinite_damping<V, M, F, S>(fit: Location<V, M, F>, solver: S)
+where
+    F: Scalar,
+    V: Clone + VectorIndex<F> + VectorLen,
+    M: Clone,
+    S: Solver<
+            RobustLeastSquares<Location<V, M, F>, HuberLoss, F>,
+            PointState<V, F>,
+            Error = Infallible,
+        >,
+{
+    use basin::{State, StepOutcome};
+    let start = (fit.make)(&[F::zero()]);
+    let mut stepper = Executor::new(
+        RobustLeastSquares::new(fit, HuberLoss),
+        solver,
+        PointState::new(start),
+    )
+    .max_iter(200)
+    .into_stepper()
+    .unwrap();
+    for _ in 0..200 {
+        let point: Vec<_> = (0..stepper.state().param().vec_len())
+            .map(|i| stepper.state().param().get_scalar(i))
+            .collect();
+        let cost = stepper.state().cost();
+        let counts = *stepper.counts();
+        let iteration = stepper.state().iter();
+        if let StepOutcome::Stopped(report) = stepper.step().unwrap() {
+            assert_eq!(report.code(), TerminationCode::SolverFailed);
+            assert_eq!(stepper.state().cost(), cost);
+            assert_eq!(*stepper.counts(), counts);
+            assert_eq!(stepper.state().iter(), iteration);
+            for (i, value) in point.iter().enumerate() {
+                assert_eq!(stepper.state().param().get_scalar(i), *value);
+            }
+            return;
+        }
+    }
+    panic!("non-finite damping did not stop legacy TRF");
+}

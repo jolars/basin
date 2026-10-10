@@ -128,6 +128,8 @@ use crate::{
 /// or [`with_relative_step_tolerance`](Self::with_relative_step_tolerance)
 /// when additional observed checks are appropriate. These checks do not
 /// replace the gradient test or establish stationarity when progress stalls.
+/// Non-finite damping or trial-model predictions stop with a numerical failure
+/// before evaluating another trial, preserving the current point and cost.
 /// Execution budgets belong on the executor. The gradient is computed inside
 /// TRF; [`PointState`] does not expose a [`GradientState`](crate::GradientState).
 ///
@@ -553,6 +555,20 @@ where
             .mu
             .expect("mu not set: Solver::init must run before next_iter");
         let mut nu = self.nu;
+        macro_rules! fail_model {
+            ($message:literal) => {{
+                self.failed = true;
+                self.mu = Some(mu);
+                self.nu = nu;
+                self.r_cache = Some(r);
+                self.j_cache = Some(j);
+                self.model_r_cache = model_r;
+                return Ok(crate::SolverStep::stopped(
+                    state,
+                    Termination::numerical_failure($message),
+                ));
+            }};
+        }
 
         // Inner damping loop: solve (J^TJ + diag(c) + μ·diag(d_sq)) h = −g.
         // The damped, scaled Gram is SPD by construction for μ > 0; the
@@ -564,6 +580,11 @@ where
         let h;
         let mut attempts: u32 = 0;
         loop {
+            // Some backends can return a zero step from an infinite diagonal
+            // without reporting a linear-solve error.
+            if !mu.is_finite() || !nu.is_finite() {
+                fail_model!("Legacy TRF produced non-finite damping.");
+            }
             let mut a_damped = m.clone();
             // damping_vec = c + μ · d_sq.
             let mut damping_vec = c_diag.clone();
@@ -610,14 +631,6 @@ where
             self.theta * tau_max
         };
 
-        // Trial step.
-        let mut x_trial = state.param().clone();
-        x_trial.scaled_add(alpha, &h);
-        let r_trial = problem.residual(&x_trial)?;
-        let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
-
-        let prev_cost = state.cost();
-
         // BCL gain ratio with the C-correction (eq. ψ_k from
         // `source.marker.md:138`). Numerator is "actual reduction in
         // M-model": Δf − ½ s^T C s. Denominator is the predicted
@@ -634,6 +647,20 @@ where
             + half * alpha * alpha * mu * dh_norm_sq;
         let half_s_t_c_s =
             half * alpha * alpha * h.weighted_norm_squared(&c_diag);
+        if !alpha.is_finite()
+            || !predicted.is_finite()
+            || !half_s_t_c_s.is_finite()
+        {
+            fail_model!("Legacy TRF produced a non-finite trial model.");
+        }
+
+        // Trial step.
+        let mut x_trial = state.param().clone();
+        x_trial.scaled_add(alpha, &h);
+        let r_trial = problem.residual(&x_trial)?;
+        let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
+
+        let prev_cost = state.cost();
         let actual = prev_cost - f_trial - half_s_t_c_s;
 
         let rho = if predicted > F::zero() {
