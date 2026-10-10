@@ -1,8 +1,8 @@
 <script lang="ts">
     import { asset, resolve } from "$app/paths";
     import IconGithub from "~icons/simple-icons/github";
-    import Seo from "$lib/Seo.svelte";
-    import Playground from "$lib/playground/Playground.svelte";
+    import Seo from "#lib/Seo.svelte";
+    import Playground from "#lib/playground/Playground.svelte";
 
     const features = [
         {
@@ -50,12 +50,12 @@
     class="max-w-screen-2xl mx-auto px-4 md:px-8 pt-16 pb-12 md:pt-24 md:pb-16 flow-root"
 >
     <img
-        src={asset("/logo.svg")}
+        src={asset("logo.svg")}
         alt="Visualization of optimization trajectories on the Rosenbrock function, a common test problem in optimization."
         class="mx-auto mb-8 w-3/4 max-w-sm h-auto md:float-right md:mx-0 md:mb-4 md:ml-10 md:w-2/5 md:max-w-sm dark:hidden"
     />
     <img
-        src={asset("/logo-dark.svg")}
+        src={asset("logo-dark.svg")}
         alt="Visualization of optimization trajectories on the Rosenbrock function, a common test problem in optimization."
         class="hidden dark:block mx-auto mb-8 w-3/4 max-w-sm h-auto md:float-right md:mx-0 md:mb-4 md:ml-10 md:w-2/5 md:max-w-sm"
     />
@@ -78,13 +78,13 @@
     </p>
     <div class="mt-8 flex flex-wrap gap-3">
         <a
-            href={resolve("/docs/getting-started/")}
+            href={resolve("docs/getting-started/")}
             class="px-5 py-2.5 rounded-lg bg-stone-900 text-white font-medium hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white transition-colors"
         >
             Get started
         </a>
         <a
-            href={resolve("/visualizer/")}
+            href={resolve("visualizer/")}
             class="px-5 py-2.5 rounded-lg border border-stone-300 dark:border-stone-700 font-medium hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
         >
             Open the visualizer
@@ -108,7 +108,7 @@
         please see the
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/visualizer/")}>visualizer</a
+            href={resolve("visualizer/")}>visualizer</a
         >.
     </p>
 </section>

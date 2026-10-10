@@ -15,7 +15,7 @@
     content: '';
 }
 
-/* Shiki (build-time fence highlighting in svelte.config.js) emits dual-theme
+/* Shiki (build-time fence highlighting in vite.config.ts) emits dual-theme
  * CSS variables with `defaultColor: false`: `--shiki-light`/`--shiki-dark` per
  * token. Map them to the active theme here; the `.dark span` rule needs `span`
  * specificity to beat the light-mode `.shiki span` rule, so both sides target

@@ -1,5 +1,7 @@
 {
-    "extends": "./.svelte-kit/tsconfig.json",
+    "extends": "$app/tsconfig",
+    "include": ["src", "test", "tests", "*.ts", "*.js"],
+    "exclude": ["src/service-worker", "src/lib/basin-wasm/**/*.js"],
     "compilerOptions": {
         "allowJs": true,
         "checkJs": true,

@@ -1,8 +1,8 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
     import { page } from "$app/state";
-    import { DOCS_LINKS } from "$lib/nav";
-    import Seo from "$lib/Seo.svelte";
+    import { DOCS_LINKS } from "#lib/nav.ts";
+    import Seo from "#lib/Seo.svelte";
 
     let { children } = $props();
 

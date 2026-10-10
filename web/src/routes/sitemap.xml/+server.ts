@@ -29,7 +29,7 @@ function routePaths(): string[] {
 
 // `export const prerender = true` makes the static adapter emit
 // `build/sitemap.xml`; the `prerender.entries: ['*']` crawl in
-// svelte.config.js reaches it even though nothing links to it.
+// vite.config.ts reaches it even though nothing links to it.
 export const prerender = true;
 
 export function GET() {

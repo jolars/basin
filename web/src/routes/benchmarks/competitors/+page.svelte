@@ -1,7 +1,7 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
-    import ConvergenceChart from "$lib/ConvergenceChart.svelte";
-    import Seo from "$lib/Seo.svelte";
+    import ConvergenceChart from "#lib/ConvergenceChart.svelte";
+    import Seo from "#lib/Seo.svelte";
     import {
         COMPETITOR_BENCHMARKS as data,
         COMPETITOR_CASES,
@@ -11,7 +11,7 @@
         SOLVER_LABELS,
         librariesFor,
         type Solver,
-    } from "$lib/data/competitors";
+    } from "#lib/data/competitors.ts";
 
     // One convergence trace per library present for a case: suboptimality vs
     // wall-clock time, the curve each library actually walked.
@@ -39,7 +39,7 @@
     <p class="text-sm text-stone-500 dark:text-stone-400">
         <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/benchmarks/")}>Benchmarks</a
+            href={resolve("benchmarks/")}>Benchmarks</a
         >
         <span class="text-stone-400 dark:text-stone-600">/</span> Competitors
     </p>
@@ -127,7 +127,7 @@
     <p class="mt-6 text-sm text-stone-500 dark:text-stone-400">
         To watch basin's solvers converge interactively, try the <a
             class="underline decoration-dotted hover:text-stone-900 dark:hover:text-stone-100"
-            href={resolve("/visualizer/")}>visualizer</a
+            href={resolve("visualizer/")}>visualizer</a
         >.
     </p>
 </section>

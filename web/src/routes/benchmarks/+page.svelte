@@ -1,27 +1,27 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
-    import type { Pathname } from "$app/types";
-    import Seo from "$lib/Seo.svelte";
+    import type { Path } from "$app/types";
+    import Seo from "#lib/Seo.svelte";
 
     // The three-axis overview. Each card links to its subpage.
     const axes: {
         title: string;
-        href: Pathname;
+        href: Path;
         body: string;
     }[] = [
         {
             title: "Backends",
-            href: "/benchmarks/backends/",
+            href: "benchmarks/backends/",
             body: "A curated set of solver and problem pairs across the Vec, nalgebra, ndarray, and faer backends.",
         },
         {
             title: "Solvers",
-            href: "/benchmarks/solvers/",
+            href: "benchmarks/solvers/",
             body: "Head-to-head runs of optimizers on different problems, showing suboptimality against wall-clock time under a fixed time budget per run.",
         },
         {
             title: "Competitors",
-            href: "/benchmarks/competitors/",
+            href: "benchmarks/competitors/",
             body: "Basin compared against argmin, gomez, slsqp, and NLopt on matched problems.",
         },
     ];

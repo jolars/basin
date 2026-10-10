@@ -1,5 +1,9 @@
 # pnpm 11 reads project settings from here, not the package.json "pnpm" field.
 
+# The typescript alias in package.json keeps the compiler API that SvelteKit
+# and svelte-check require. TypeScript 7 does not expose that API.
+# https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
+
 # esbuild (pulled in by vite) ships a postinstall that links its native
 # binary; pnpm blocks dependency build scripts by default and fails the
 # install unless they're explicitly approved here.
@@ -13,3 +17,13 @@ allowBuilds:
 # bump makes `pnpm dev` / `pnpm run build` fail until the package ages out.
 # Installs stay explicit (`pnpm install`), where the gate still applies.
 verifyDepsBeforeRun: false
+
+# Keep transitive dependencies above their security fixes even when upstream
+# packages pin older versions (Miniflare and Tailwind's typography plugin).
+overrides:
+  # https://github.com/advisories/GHSA-rj75-hqrm-r3gf
+  'postcss-selector-parser@<7.1.6': ^7.1.6
+  # https://github.com/advisories/GHSA-wq5f-xc86-pv6w
+  'sharp@<0.35.5': ^0.35.5
+  # https://github.com/advisories/GHSA-68fv-2mgg-jv7q
+  'source-map-js@<1.2.2': ^1.2.2
