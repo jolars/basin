@@ -6,16 +6,25 @@ use basin::{
 };
 use std::convert::Infallible;
 
-struct RankDeficient<V, M, F> {
+struct LinearModel<V, M, F> {
     make: fn(&[F]) -> V,
     jacobian: M,
+    rank_deficient: bool,
 }
 
-impl<V: VectorIndex<F>, M, F: Scalar> Residual for RankDeficient<V, M, F> {
+impl<V: VectorIndex<F>, M, F: Scalar> Residual for LinearModel<V, M, F> {
     type Param = V;
     type Output = V;
     type Error = Infallible;
     fn residual(&self, x: &V) -> Result<V, Self::Error> {
+        if !self.rank_deficient {
+            let mut residuals = Vec::with_capacity(12);
+            for (j, target) in [1., -1., 0.5, -0.5].into_iter().enumerate() {
+                let d = x.get_scalar(j) - F::from_f64(target).unwrap();
+                residuals.extend([d, F::from_f64(2.).unwrap() * d, -d]);
+            }
+            return Ok((self.make)(&residuals));
+        }
         let a = x.get_scalar(0) + x.get_scalar(1) - F::one();
         let b = x.get_scalar(2) + x.get_scalar(3) + F::one();
         let two = F::from_f64(2.).unwrap();
@@ -23,9 +32,7 @@ impl<V: VectorIndex<F>, M, F: Scalar> Residual for RankDeficient<V, M, F> {
     }
 }
 
-impl<V: VectorIndex<F>, M: Clone, F: Scalar> Jacobian
-    for RankDeficient<V, M, F>
-{
+impl<V: VectorIndex<F>, M: Clone, F: Scalar> Jacobian for LinearModel<V, M, F> {
     type Jacobian = M;
     fn jacobian(&self, _: &V) -> Result<M, Self::Error> {
         Ok(self.jacobian.clone())
@@ -33,6 +40,7 @@ impl<V: VectorIndex<F>, M: Clone, F: Scalar> Jacobian
 }
 
 fn check<V, M, F, L, S>(
+    rank_deficient: bool,
     make: fn(&[F]) -> V,
     matrix: M,
     loss: L,
@@ -44,18 +52,23 @@ fn check<V, M, F, L, S>(
     M: Clone,
     L: LossFunction<F>,
     S: Solver<
-            basin::RobustLeastSquares<RankDeficient<V, M, F>, L, F>,
+            basin::RobustLeastSquares<LinearModel<V, M, F>, L, F>,
             PointState<V, F>,
             Error = Infallible,
         >,
 {
     let half = F::from_f64(0.5).unwrap();
-    let start = make(&[-half, -half, half, half]);
+    let start = if rank_deficient {
+        make(&[-half, -half, half, half])
+    } else {
+        make(&[-F::one(), F::one(), -half, half])
+    };
     let result = Executor::new(
         basin::RobustLeastSquares::new(
-            RankDeficient {
+            LinearModel {
                 make,
                 jacobian: matrix,
+                rank_deficient,
             },
             loss,
         ),
@@ -76,7 +89,17 @@ fn check<V, M, F, L, S>(
             1e-6
         })
         .unwrap();
-    for pair in 0..2 {
+    if !rank_deficient {
+        for (j, target) in [1., -1., 0.5, -0.5].into_iter().enumerate() {
+            let error =
+                result.param().get_scalar(j) - F::from_f64(target).unwrap();
+            assert!(
+                F::from_f64(6.).unwrap() * error.abs() <= tolerance,
+                "{error:?}"
+            );
+        }
+    }
+    for pair in 0..if rank_deficient { 2 } else { 0 } {
         let target = if pair == 0 { F::one() } else { -F::one() };
         let error = result.param().get_scalar(2 * pair)
             + result.param().get_scalar(2 * pair + 1)
@@ -101,20 +124,46 @@ fn entry<F: Scalar>(row: usize, column: usize) -> F {
     }
 }
 
+fn full_entry<F: Scalar>(row: usize, column: usize) -> F {
+    if column == row / 3 {
+        F::from_f64([1., 2., -1.][row % 3]).unwrap()
+    } else {
+        F::zero()
+    }
+}
+
 macro_rules! dense_checks {
-    ($v:ty, $m:ty, $f:ty, $make:expr, $matrix:expr) => {{
+    ($v:ty, $m:ty, $f:ty, $make:expr, $matrix:expr, $full_matrix:expr) => {{
         type V = $v;
         type M = $m;
         type F = $f;
         let make: fn(&[F]) -> V = $make;
         let matrix: M = $matrix;
+        let full_matrix: M = $full_matrix;
         for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
             let solver = || {
                 LevenbergMarquardt::<V, M, F>::default().with_damping(damping)
             };
-            check(make, matrix.clone(), HuberLoss, 3., solver());
-            check(make, matrix.clone(), ArctanLoss, 4_f64.atan(), solver());
+            check(false, make, full_matrix.clone(), ArctanLoss, 0., solver());
             check(
+                false,
+                make,
+                full_matrix.clone(),
+                ArctanLoss,
+                0.,
+                solver().with_pivoted_qr(),
+            );
+            check(true, make, matrix.clone(), HuberLoss, 3., solver());
+            check(
+                true,
+                make,
+                matrix.clone(),
+                ArctanLoss,
+                4_f64.atan(),
+                solver(),
+            );
+            check(
+                true,
                 make,
                 matrix.clone(),
                 HuberLoss,
@@ -122,6 +171,7 @@ macro_rules! dense_checks {
                 solver().with_pivoted_qr(),
             );
             check(
+                true,
                 make,
                 matrix.clone(),
                 ArctanLoss,
@@ -144,7 +194,14 @@ macro_rules! vec_checks {
                 basin::DenseMatrix<$f>,
                 $f,
                 |x| x.to_vec(),
-                basin::DenseMatrix::from_row_slice(8, 4, &entries)
+                basin::DenseMatrix::from_row_slice(8, 4, &entries),
+                basin::DenseMatrix::from_row_slice(
+                    12,
+                    4,
+                    &(0..12)
+                        .flat_map(|i| (0..4).map(move |j| full_entry(i, j)))
+                        .collect::<Vec<$f>>()
+                )
             );
         }
     };
@@ -168,7 +225,8 @@ macro_rules! nalgebra_checks {
                             DMatrix<$f>,
                             $f,
                             DVector::from_column_slice,
-                            DMatrix::from_fn(8, 4, entry)
+                            DMatrix::from_fn(8, 4, entry),
+                            DMatrix::from_fn(12, 4, full_entry)
                         );
                     }
                     #[test]
@@ -195,6 +253,7 @@ macro_rules! nalgebra_checks {
                                 .with_damping(damping)
                             };
                             check(
+                                true,
                                 DVector::from_column_slice,
                                 matrix.clone(),
                                 HuberLoss,
@@ -202,6 +261,7 @@ macro_rules! nalgebra_checks {
                                 solver(),
                             );
                             check(
+                                true,
                                 DVector::from_column_slice,
                                 matrix.clone(),
                                 ArctanLoss,
@@ -241,7 +301,11 @@ macro_rules! ndarray_checks {
                             Array2<$f>,
                             $f,
                             |x| Array1::from_vec(x.to_vec()),
-                            Array2::from_shape_fn((8, 4), |(i, j)| entry(i, j))
+                            Array2::from_shape_fn((8, 4), |(i, j)| entry(i, j)),
+                            Array2::from_shape_fn(
+                                (12, 4),
+                                |(i, j)| full_entry(i, j)
+                            )
                         );
                     }
                 };
@@ -274,7 +338,8 @@ macro_rules! faer_checks {
                             Mat<$f>,
                             $f,
                             |x| Col::from_fn(x.len(), |i| x[i]),
-                            Mat::from_fn(8, 4, entry)
+                            Mat::from_fn(8, 4, entry),
+                            Mat::from_fn(12, 4, full_entry)
                         );
                     }
                     #[test]
@@ -305,6 +370,7 @@ macro_rules! faer_checks {
                             let make =
                                 |x: &[$f]| Col::from_fn(x.len(), |i| x[i]);
                             check(
+                                true,
                                 make,
                                 matrix.clone(),
                                 HuberLoss,
@@ -312,6 +378,7 @@ macro_rules! faer_checks {
                                 solver(),
                             );
                             check(
+                                true,
                                 make,
                                 matrix.clone(),
                                 ArctanLoss,

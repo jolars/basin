@@ -15,7 +15,7 @@ where
     if !mu.is_finite() || mu <= F::zero() {
         return mu;
     }
-    let mut root_ratio = F::one();
+    let mut root_ratio = F::zero();
     let valid = previous.all_zip(current, |old, new| {
         if !old.is_finite()
             || old <= F::zero()
@@ -24,15 +24,15 @@ where
         {
             return false;
         }
-        if new > old {
-            root_ratio = root_ratio.min(old.sqrt() / new.sqrt());
-        }
+        root_ratio = root_ratio.max(old.sqrt() / old.max(new).sqrt());
         true
     });
-    if !valid || root_ratio == F::one() {
+    if !valid || root_ratio == F::zero() || root_ratio == F::one() {
         return mu;
     }
-    // Keep mu*D from jumping when a robust model leaves clipped curvature.
+    // Compensate only for growth shared by every coordinate. A global reduction
+    // based on the fastest-growing diagonal would remove effective damping
+    // from still-clipped coordinates and can send redescending losses to infinity.
     // Two square-root factors retain a representable damping value when the
     // diagonal ratio itself underflows before multiplication by mu.
     let rescaled = (mu * root_ratio) * root_ratio;
@@ -239,10 +239,16 @@ mod tests {
     }
 
     #[test]
-    fn robust_scaling_limits_each_component_without_changing_invalid_inputs() {
-        let old = vec![1., 4., 10.];
+    fn robust_scaling_preserves_damping_in_each_coordinate() {
+        let old = vec![1.0_f64, 4., 10.];
         let new = vec![16., 8., 0.];
-        assert_eq!(rescale_robust_damping(32., &old, &new), 2.);
+        assert_eq!(rescale_robust_damping(32., &old, &new), 32.);
+        let new = vec![16., 8., 40.];
+        let mu = rescale_robust_damping(32., &old, &new);
+        assert!((mu - 16.).abs() < 1e-14);
+        for (old, new) in old.iter().zip(&new) {
+            assert!(mu * new / (32. * old) >= 1. - 8. * f64::EPSILON);
+        }
         assert_eq!(rescale_robust_damping(32., &old, &vec![0., 2., 5.]), 32.);
         for mu in [0., -1., f64::INFINITY] {
             assert_eq!(rescale_robust_damping(mu, &old, &new), mu);

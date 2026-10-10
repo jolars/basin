@@ -188,7 +188,7 @@ def recovery_transition(before, after, precision):
     current = pilot.numbers(old['diagonal'])
     pilot.require(len(previous) == len(current) and all(x > 0 for x in previous) and
                   all(y >= x for x, y in zip(previous, current)), 'invalid recovery diagonal growth')
-    ratio = min(x / y for x, y in zip(previous, current))
+    ratio = max(x / y for x, y in zip(previous, current))
     expected = float(old['damping']) * ratio
     unit = 2 ** (-24 if precision == 'f32' else -53)
     pilot.require(0 < ratio < 1e-5 and

@@ -1,0 +1,1977 @@
+{
+  "schema": 1,
+  "purpose": "rejected robust Nielsen global damping correction",
+  "status": "rejected",
+  "source_revision": "1f63614",
+  "planned_manifest_revision": "97ea26e",
+  "statistics": {
+    "runs": 720,
+    "outcome_initialization_error": 72,
+    "model_observations": 10867,
+    "attempted_trials": 10600,
+    "budget_denied_trials": 144,
+    "failing_checks": 23384,
+    "disabled_checks": 29176,
+    "outcome_callback_error": 144,
+    "rejected_trials": 4245,
+    "published_trials": 6211,
+    "accepted_unpublished_trials": 0,
+    "nonfinite_trials": 0,
+    "accepted_trials": 6211,
+    "passing_checks": 542,
+    "outcome_converged": 469,
+    "qr_model_discrepancies_above_local_roundoff": 448,
+    "outcome_stalled": 35
+  },
+  "summary": {
+    "robust_gradient_default": {
+      "runs": 72,
+      "converged": 60,
+      "quality_passed": 68,
+      "confirmed_premature": 0,
+      "work": 2498,
+      "stalled": 12
+    },
+    "robust_relative_probe": {
+      "runs": 72,
+      "converged": 72,
+      "quality_passed": 62,
+      "confirmed_premature": 6,
+      "work": 2296
+    },
+    "robust_model_probe": {
+      "runs": 72,
+      "converged": 72,
+      "quality_passed": 62,
+      "confirmed_premature": 6,
+      "work": 2391
+    },
+    "robust_step_probe": {
+      "runs": 72,
+      "converged": 72,
+      "quality_passed": 68,
+      "confirmed_premature": 0,
+      "work": 2371
+    },
+    "robust_model_step_probe": {
+      "runs": 72,
+      "converged": 72,
+      "quality_passed": 62,
+      "confirmed_premature": 6,
+      "work": 2299
+    },
+    "robust_gradient_probe": {
+      "runs": 72,
+      "converged": 69,
+      "quality_passed": 68,
+      "confirmed_premature": 0,
+      "work": 2477,
+      "stalled": 3
+    },
+    "robust_radius_probe": {
+      "runs": 72,
+      "converged": 52,
+      "quality_passed": 68,
+      "confirmed_premature": 0,
+      "work": 2604,
+      "stalled": 20
+    }
+  },
+  "budget_summary": {
+    "runs": 216,
+    "initialization_error": 72,
+    "quality_passed": 0,
+    "confirmed_premature": 0,
+    "work": 216,
+    "callback_error": 144
+  },
+  "recovered": [
+    {
+      "before": {
+        "id": "robust_huber_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_huber_rank4",
+        "precision": "f32",
+        "route": "lm_normal_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "16",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "13",
+        "jacobian_evals": "4",
+        "completed_iterations": 11,
+        "last_published_iteration": 11,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 12,
+          "Jacobian": 3
+        },
+        "native_model_solves": 12,
+        "quality": {
+          "point": [
+            0.5579424500465393,
+            0.5579425096511841,
+            -0.5579424500465393,
+            -0.5579425096511841
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.080575943304858,
+          "reference_cost": 3.0,
+          "objective_gap": 0.08057594330485784,
+          "gradient": [
+            0.6953097581863403,
+            0.6953097581863403,
+            -0.6953097581863403,
+            -0.6953097581863403
+          ],
+          "stationarity": 0.6953097581863403,
+          "parameter_error": 0.057942479848861694,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.5579424500465393,
+            0.5579425096511841,
+            -0.5579424500465393,
+            -0.5579425096511841
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.080575943304858,
+          "reference_cost": 3.0,
+          "objective_gap": 0.08057594330485784,
+          "gradient": [
+            0.6953097581863403,
+            0.6953097581863403,
+            -0.6953097581863403,
+            -0.6953097581863403
+          ],
+          "stationarity": 0.6953097581863403,
+          "parameter_error": 0.057942479848861694,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "24",
+          "base_cost": 3.080575942993164,
+          "trial_cost": 3.080575942993164,
+          "actual": 0.0,
+          "predicted": 4.3586972253706335e-08,
+          "gain_ratio": 0.0,
+          "damping": 7394502.5,
+          "step": [
+            -1.5671776765202594e-08,
+            -1.5671774988845755e-08,
+            1.5671776765202594e-08,
+            1.5671774988845755e-08
+          ],
+          "base_gradient": [
+            0.695310115814209,
+            0.695310115814209,
+            -0.695310115814209,
+            -0.695310115814209
+          ],
+          "diagonal": [
+            6.0,
+            6.0,
+            6.0,
+            6.0
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_huber_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+          "work": "16",
+          "outcome": "stalled",
+          "common_prefix_work": 16,
+          "quality": {
+            "point": [
+              0.5579424500465393,
+              0.5579425096511841,
+              -0.5579424500465393,
+              -0.5579425096511841
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 3.080575943304858,
+            "reference_cost": 3.0,
+            "objective_gap": 0.08057594330485784,
+            "gradient": [
+              0.6953097581863403,
+              0.6953097581863403,
+              -0.6953097581863403,
+              -0.6953097581863403
+            ],
+            "stationarity": 0.6953097581863403,
+            "parameter_error": 0.057942479848861694,
+            "quality_limit": 0.001,
+            "quality_passed": false,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      },
+      "after": {
+        "id": "robust_huber_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_huber_rank4",
+        "precision": "f32",
+        "route": "lm_normal_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "29",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "22",
+        "jacobian_evals": "8",
+        "completed_iterations": 20,
+        "last_published_iteration": 20,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 21,
+          "Jacobian": 7
+        },
+        "native_model_solves": 21,
+        "quality": {
+          "point": [
+            0.5000017285346985,
+            0.5000017881393433,
+            -0.5000017285346985,
+            -0.5000017881393433
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.000000000074202,
+          "reference_cost": 3.0,
+          "objective_gap": 7.420197789542726e-11,
+          "gradient": [
+            2.110004425048828e-05,
+            2.110004425048828e-05,
+            -2.110004425048828e-05,
+            -2.110004425048828e-05
+          ],
+          "stationarity": 2.110004425048828e-05,
+          "parameter_error": 1.7583370208740234e-06,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.5000017285346985,
+            0.5000017881393433,
+            -0.5000017285346985,
+            -0.5000017881393433
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.000000000074202,
+          "reference_cost": 3.0,
+          "objective_gap": 7.420197789542726e-11,
+          "gradient": [
+            2.110004425048828e-05,
+            2.110004425048828e-05,
+            -2.110004425048828e-05,
+            -2.110004425048828e-05
+          ],
+          "stationarity": 2.110004425048828e-05,
+          "parameter_error": 1.7583370208740234e-06,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "42",
+          "base_cost": 3.0,
+          "trial_cost": 3.0,
+          "actual": 0.0,
+          "predicted": 5.243649481637136e-13,
+          "gain_ratio": 0.0,
+          "damping": 582.3814086914062,
+          "step": [
+            -6.119766915446689e-09,
+            -6.119767359535899e-09,
+            6.119766915446689e-09,
+            6.119767359535899e-09
+          ],
+          "base_gradient": [
+            2.1457672119140625e-05,
+            2.1457672119140625e-05,
+            -2.1457672119140625e-05,
+            -2.1457672119140625e-05
+          ],
+          "diagonal": [
+            6.0,
+            6.0,
+            6.0,
+            6.0
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_huber_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+          "work": "29",
+          "outcome": "stalled",
+          "common_prefix_work": 29,
+          "quality": {
+            "point": [
+              0.5000017285346985,
+              0.5000017881393433,
+              -0.5000017285346985,
+              -0.5000017881393433
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 3.000000000074202,
+            "reference_cost": 3.0,
+            "objective_gap": 7.420197789542726e-11,
+            "gradient": [
+              2.110004425048828e-05,
+              2.110004425048828e-05,
+              -2.110004425048828e-05,
+              -2.110004425048828e-05
+            ],
+            "stationarity": 2.110004425048828e-05,
+            "parameter_error": 1.7583370208740234e-06,
+            "quality_limit": 0.001,
+            "quality_passed": true,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      }
+    },
+    {
+      "before": {
+        "id": "robust_huber_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_huber_rank4",
+        "precision": "f32",
+        "route": "lm_qr_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "16",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "13",
+        "jacobian_evals": "4",
+        "completed_iterations": 11,
+        "last_published_iteration": 11,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 12,
+          "Jacobian": 3
+        },
+        "native_model_solves": 12,
+        "quality": {
+          "point": [
+            0.5579427480697632,
+            0.5579428672790527,
+            -0.5579425096511841,
+            -0.5579425692558289
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.080576482074175,
+          "reference_cost": 3.0,
+          "objective_gap": 0.080576482074175,
+          "gradient": [
+            0.6953136920928955,
+            0.6953136920928955,
+            -0.6953104734420776,
+            -0.6953104734420776
+          ],
+          "stationarity": 0.6953136920928955,
+          "parameter_error": 0.05794280767440796,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.5579427480697632,
+            0.5579428672790527,
+            -0.5579425096511841,
+            -0.5579425692558289
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.080576482074175,
+          "reference_cost": 3.0,
+          "objective_gap": 0.080576482074175,
+          "gradient": [
+            0.6953136920928955,
+            0.6953136920928955,
+            -0.6953104734420776,
+            -0.6953104734420776
+          ],
+          "stationarity": 0.6953136920928955,
+          "parameter_error": 0.05794280767440796,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "24",
+          "base_cost": 3.0805764198303223,
+          "trial_cost": 3.0805764198303223,
+          "actual": 0.0,
+          "predicted": 4.358717120567235e-08,
+          "gain_ratio": 0.0,
+          "damping": 7394503.5,
+          "step": [
+            -1.567185137218985e-08,
+            -1.567185137218985e-08,
+            1.5671767883418397e-08,
+            1.5671767883418397e-08
+          ],
+          "base_gradient": [
+            0.6953136920928955,
+            0.6953136920928955,
+            -0.695310115814209,
+            -0.695310115814209
+          ],
+          "diagonal": [
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_huber_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+          "work": "16",
+          "outcome": "stalled",
+          "common_prefix_work": 16,
+          "quality": {
+            "point": [
+              0.5579427480697632,
+              0.5579428672790527,
+              -0.5579425096511841,
+              -0.5579425692558289
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 3.080576482074175,
+            "reference_cost": 3.0,
+            "objective_gap": 0.080576482074175,
+            "gradient": [
+              0.6953136920928955,
+              0.6953136920928955,
+              -0.6953104734420776,
+              -0.6953104734420776
+            ],
+            "stationarity": 0.6953136920928955,
+            "parameter_error": 0.05794280767440796,
+            "quality_limit": 0.001,
+            "quality_passed": false,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      },
+      "after": {
+        "id": "robust_huber_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_huber_rank4",
+        "precision": "f32",
+        "route": "lm_qr_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "29",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "22",
+        "jacobian_evals": "8",
+        "completed_iterations": 20,
+        "last_published_iteration": 20,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 21,
+          "Jacobian": 7
+        },
+        "native_model_solves": 21,
+        "quality": {
+          "point": [
+            0.5000016689300537,
+            0.5000017881393433,
+            -0.5000016689300537,
+            -0.5000017285346985
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.0000000000704823,
+          "reference_cost": 3.0,
+          "objective_gap": 7.048228667372314e-11,
+          "gradient": [
+            2.0742416381835938e-05,
+            2.0742416381835938e-05,
+            -2.0384788513183594e-05,
+            -2.0384788513183594e-05
+          ],
+          "stationarity": 2.0742416381835938e-05,
+          "parameter_error": 1.7285346984863281e-06,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.5000016689300537,
+            0.5000017881393433,
+            -0.5000016689300537,
+            -0.5000017285346985
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 3.0000000000704823,
+          "reference_cost": 3.0,
+          "objective_gap": 7.048228667372314e-11,
+          "gradient": [
+            2.0742416381835938e-05,
+            2.0742416381835938e-05,
+            -2.0384788513183594e-05,
+            -2.0384788513183594e-05
+          ],
+          "stationarity": 2.0742416381835938e-05,
+          "parameter_error": 1.7285346984863281e-06,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "42",
+          "base_cost": 3.0,
+          "trial_cost": 3.0,
+          "actual": 0.0,
+          "predicted": 4.733850572820331e-13,
+          "gain_ratio": 0.0,
+          "damping": 582.3814086914062,
+          "step": [
+            -5.915774980991273e-09,
+            -5.915775869169693e-09,
+            5.711782158357437e-09,
+            5.711782158357437e-09
+          ],
+          "base_gradient": [
+            2.0742416381835938e-05,
+            2.0742416381835938e-05,
+            -2.002716064453125e-05,
+            -2.002716064453125e-05
+          ],
+          "diagonal": [
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_huber_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+          "work": "29",
+          "outcome": "stalled",
+          "common_prefix_work": 29,
+          "quality": {
+            "point": [
+              0.5000016689300537,
+              0.5000017881393433,
+              -0.5000016689300537,
+              -0.5000017285346985
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 3.0000000000704823,
+            "reference_cost": 3.0,
+            "objective_gap": 7.048228667372314e-11,
+            "gradient": [
+              2.0742416381835938e-05,
+              2.0742416381835938e-05,
+              -2.0384788513183594e-05,
+              -2.0384788513183594e-05
+            ],
+            "stationarity": 2.0742416381835938e-05,
+            "parameter_error": 1.7285346984863281e-06,
+            "quality_limit": 0.001,
+            "quality_passed": true,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      }
+    },
+    {
+      "before": {
+        "id": "robust_arctan_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_arctan_rank4",
+        "precision": "f32",
+        "route": "lm_normal_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "16",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "14",
+        "jacobian_evals": "3",
+        "completed_iterations": 12,
+        "last_published_iteration": 12,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 13,
+          "Jacobian": 2
+        },
+        "native_model_solves": 13,
+        "quality": {
+          "point": [
+            0.4978317320346832,
+            0.4978317320346832,
+            -0.4978317320346832,
+            -0.4978317320346832
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3259304969311523,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 0.00011283326311972708,
+          "gradient": [
+            -0.026019215482583055,
+            -0.026019215482583055,
+            0.026019215482583055,
+            0.026019215482583055
+          ],
+          "stationarity": 0.026019215482583055,
+          "parameter_error": 0.0021682679653167725,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.4978317320346832,
+            0.4978317320346832,
+            -0.4978317320346832,
+            -0.4978317320346832
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3259304969311523,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 0.00011283326311972708,
+          "gradient": [
+            -0.026019215482583055,
+            -0.026019215482583055,
+            0.026019215482583055,
+            0.026019215482583055
+          ],
+          "stationarity": 0.026019215482583055,
+          "parameter_error": 0.0021682679653167725,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "26",
+          "base_cost": 1.3259305953979492,
+          "trial_cost": 1.3259305953979492,
+          "actual": 0.0,
+          "predicted": 1.71721803443603e-10,
+          "gain_ratio": 0.0,
+          "damping": 2628277.5,
+          "step": [
+            1.6499523969315533e-09,
+            1.6499523969315533e-09,
+            -1.6499523969315533e-09,
+            -1.6499523969315533e-09
+          ],
+          "base_gradient": [
+            -0.02601921558380127,
+            -0.02601921558380127,
+            0.02601921558380127,
+            0.02601921558380127
+          ],
+          "diagonal": [
+            6.0,
+            6.0,
+            6.0,
+            6.0
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_arctan_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+          "work": "16",
+          "outcome": "stalled",
+          "common_prefix_work": 16,
+          "quality": {
+            "point": [
+              0.4978317320346832,
+              0.4978317320346832,
+              -0.4978317320346832,
+              -0.4978317320346832
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 1.3259304969311523,
+            "reference_cost": 1.3258176636680326,
+            "objective_gap": 0.00011283326311972708,
+            "gradient": [
+              -0.026019215482583055,
+              -0.026019215482583055,
+              0.026019215482583055,
+              0.026019215482583055
+            ],
+            "stationarity": 0.026019215482583055,
+            "parameter_error": 0.0021682679653167725,
+            "quality_limit": 0.001,
+            "quality_passed": false,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      },
+      "after": {
+        "id": "robust_arctan_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_arctan_rank4",
+        "precision": "f32",
+        "route": "lm_normal_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "26",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "22",
+        "jacobian_evals": "5",
+        "completed_iterations": 20,
+        "last_published_iteration": 20,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 21,
+          "Jacobian": 4
+        },
+        "native_model_solves": 21,
+        "quality": {
+          "point": [
+            0.4999854266643524,
+            0.4999854266643524,
+            -0.4999854266643524,
+            -0.4999854266643524
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3258176687652032,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 5.0971706855307275e-09,
+          "gradient": [
+            -0.0001748800277709961,
+            -0.0001748800277709961,
+            0.0001748800277709961,
+            0.0001748800277709961
+          ],
+          "stationarity": 0.0001748800277709961,
+          "parameter_error": 1.4573335647583008e-05,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.4999854266643524,
+            0.4999854266643524,
+            -0.4999854266643524,
+            -0.4999854266643524
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3258176687652032,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 5.0971706855307275e-09,
+          "gradient": [
+            -0.0001748800277709961,
+            -0.0001748800277709961,
+            0.0001748800277709961,
+            0.0001748800277709961
+          ],
+          "stationarity": 0.0001748800277709961,
+          "parameter_error": 1.4573335647583008e-05,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "42",
+          "base_cost": 1.3258177042007446,
+          "trial_cost": 1.3258177042007446,
+          "actual": 0.0,
+          "predicted": 2.7925605621328953e-13,
+          "gain_ratio": 0.0,
+          "damping": 73007.703125,
+          "step": [
+            3.9921638217421673e-10,
+            3.9921638217421673e-10,
+            -3.9921638217421673e-10,
+            -3.9921638217421673e-10
+          ],
+          "base_gradient": [
+            -0.0001748800277709961,
+            -0.0001748800277709961,
+            0.0001748800277709961,
+            0.0001748800277709961
+          ],
+          "diagonal": [
+            6.0,
+            6.0,
+            6.0,
+            6.0
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_arctan_rank4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+          "work": "26",
+          "outcome": "stalled",
+          "common_prefix_work": 26,
+          "quality": {
+            "point": [
+              0.4999854266643524,
+              0.4999854266643524,
+              -0.4999854266643524,
+              -0.4999854266643524
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 1.3258176687652032,
+            "reference_cost": 1.3258176636680326,
+            "objective_gap": 5.0971706855307275e-09,
+            "gradient": [
+              -0.0001748800277709961,
+              -0.0001748800277709961,
+              0.0001748800277709961,
+              0.0001748800277709961
+            ],
+            "stationarity": 0.0001748800277709961,
+            "parameter_error": 1.4573335647583008e-05,
+            "quality_limit": 0.001,
+            "quality_passed": true,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      }
+    },
+    {
+      "before": {
+        "id": "robust_arctan_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_arctan_rank4",
+        "precision": "f32",
+        "route": "lm_qr_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "16",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "14",
+        "jacobian_evals": "3",
+        "completed_iterations": 12,
+        "last_published_iteration": 12,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 13,
+          "Jacobian": 2
+        },
+        "native_model_solves": 13,
+        "quality": {
+          "point": [
+            0.49783217906951904,
+            0.4978324770927429,
+            -0.49783143401145935,
+            -0.49783140420913696
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3259304822033626,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 0.00011281853533007258,
+          "gradient": [
+            -0.026012062925349053,
+            -0.026012062925349053,
+            0.02602297057513084,
+            0.02602297057513084
+          ],
+          "stationarity": 0.02602297057513084,
+          "parameter_error": 0.0021685808897018433,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.49783217906951904,
+            0.4978324770927429,
+            -0.49783143401145935,
+            -0.49783140420913696
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3259304822033626,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 0.00011281853533007258,
+          "gradient": [
+            -0.026012062925349053,
+            -0.026012062925349053,
+            0.02602297057513084,
+            0.02602297057513084
+          ],
+          "stationarity": 0.02602297057513084,
+          "parameter_error": 0.0021685808897018433,
+          "quality_limit": 0.001,
+          "quality_passed": false,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "26",
+          "base_cost": 1.3259305953979492,
+          "trial_cost": 1.3259305953979492,
+          "actual": 0.0,
+          "predicted": 1.7170107002861812e-10,
+          "gain_ratio": 0.0,
+          "damping": 2628269.5,
+          "step": [
+            1.6495036447849998e-09,
+            1.6495037558073022e-09,
+            -1.65020652698189e-09,
+            -1.65020652698189e-09
+          ],
+          "base_gradient": [
+            -0.026012063026428223,
+            -0.026012063026428223,
+            0.026023149490356445,
+            0.026023149490356445
+          ],
+          "diagonal": [
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_arctan_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+          "work": "16",
+          "outcome": "stalled",
+          "common_prefix_work": 16,
+          "quality": {
+            "point": [
+              0.49783217906951904,
+              0.4978324770927429,
+              -0.49783143401145935,
+              -0.49783140420913696
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 1.3259304822033626,
+            "reference_cost": 1.3258176636680326,
+            "objective_gap": 0.00011281853533007258,
+            "gradient": [
+              -0.026012062925349053,
+              -0.026012062925349053,
+              0.02602297057513084,
+              0.02602297057513084
+            ],
+            "stationarity": 0.02602297057513084,
+            "parameter_error": 0.0021685808897018433,
+            "quality_limit": 0.001,
+            "quality_passed": false,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      },
+      "after": {
+        "id": "robust_arctan_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+        "dataset": "robust_arctan_rank4",
+        "precision": "f32",
+        "route": "lm_qr_nielsen",
+        "policy": "robust_gradient_default",
+        "cap": "4000",
+        "outcome": "stalled",
+        "stage": "Step { completed: false }",
+        "criteria": "",
+        "work": "26",
+        "denied": "0",
+        "returned": "true",
+        "cost_evals": "0",
+        "residual_evals": "22",
+        "jacobian_evals": "5",
+        "completed_iterations": 20,
+        "last_published_iteration": 20,
+        "physical_calls_by_kind": {
+          "ResidualJacobian": 1,
+          "Residual": 21,
+          "Jacobian": 4
+        },
+        "native_model_solves": 21,
+        "quality": {
+          "point": [
+            0.4999852776527405,
+            0.49998557567596436,
+            -0.4999854266643524,
+            -0.49998539686203003
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3258176687704177,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 5.102385181032787e-09,
+          "gradient": [
+            -0.0001748800277709961,
+            -0.0001748800277709961,
+            0.00017505884170532227,
+            0.00017505884170532227
+          ],
+          "stationarity": 0.00017505884170532227,
+          "parameter_error": 1.4588236808776855e-05,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "last_publication_quality": {
+          "point": [
+            0.4999852776527405,
+            0.49998557567596436,
+            -0.4999854266643524,
+            -0.49998539686203003
+          ],
+          "reference": [
+            0.5,
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "cost": 1.3258176687704177,
+          "reference_cost": 1.3258176636680326,
+          "objective_gap": 5.102385181032787e-09,
+          "gradient": [
+            -0.0001748800277709961,
+            -0.0001748800277709961,
+            0.00017505884170532227,
+            0.00017505884170532227
+          ],
+          "stationarity": 0.00017505884170532227,
+          "parameter_error": 1.4588236808776855e-05,
+          "quality_limit": 0.001,
+          "quality_passed": true,
+          "parameter_metric": "infinity-norm distance to the affine minimizer set",
+          "minimizer_set": [
+            "x0 + x1 = 1",
+            "x2 + x3 = -1"
+          ]
+        },
+        "terminal_trial": {
+          "sequence": "42",
+          "base_cost": 1.3258177042007446,
+          "trial_cost": 1.3258177042007446,
+          "actual": 0.0,
+          "predicted": 2.7982851496036187e-13,
+          "gain_ratio": 0.0,
+          "damping": 73007.484375,
+          "step": [
+            3.9921752015281697e-10,
+            3.992175479083926e-10,
+            -4.0003389489839947e-10,
+            -4.000339504095507e-10
+          ],
+          "base_gradient": [
+            -0.0001748800277709961,
+            -0.0001748800277709961,
+            0.00017523765563964844,
+            0.00017523765563964844
+          ],
+          "diagonal": [
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158,
+            6.000000476837158
+          ],
+          "accepted": false,
+          "published": false,
+          "passing": [],
+          "model_and_step": false,
+          "accepted_model_and_step": false,
+          "ratio_above_quarter_model_and_step": false
+        },
+        "confirmed_premature": false,
+        "paired_default": {
+          "id": "robust_arctan_rank4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+          "work": "26",
+          "outcome": "stalled",
+          "common_prefix_work": 26,
+          "quality": {
+            "point": [
+              0.4999852776527405,
+              0.49998557567596436,
+              -0.4999854266643524,
+              -0.49998539686203003
+            ],
+            "reference": [
+              0.5,
+              0.5,
+              -0.5,
+              -0.5
+            ],
+            "cost": 1.3258176687704177,
+            "reference_cost": 1.3258176636680326,
+            "objective_gap": 5.102385181032787e-09,
+            "gradient": [
+              -0.0001748800277709961,
+              -0.0001748800277709961,
+              0.00017505884170532227,
+              0.00017505884170532227
+            ],
+            "stationarity": 0.00017505884170532227,
+            "parameter_error": 1.4588236808776855e-05,
+            "quality_limit": 0.001,
+            "quality_passed": true,
+            "parameter_metric": "infinity-norm distance to the affine minimizer set",
+            "minimizer_set": [
+              "x0 + x1 = 1",
+              "x2 + x3 = -1"
+            ]
+          },
+          "available_improvement": 0.0
+        }
+      }
+    }
+  ],
+  "regressed": [
+    {
+      "id": "robust_arctan_linear4-f64-1-lm_normal_nielsen-robust_gradient_default-4000",
+      "dataset": "robust_arctan_linear4",
+      "precision": "f64",
+      "route": "lm_normal_nielsen",
+      "policy": "robust_gradient_default",
+      "cap": "4000",
+      "outcome": "converged",
+      "stage": "Step { completed: false }",
+      "criteria": "absolute_gradient",
+      "work": "35",
+      "denied": "0",
+      "returned": "true",
+      "cost_evals": "0",
+      "residual_evals": "24",
+      "jacobian_evals": "12",
+      "completed_iterations": 23,
+      "last_published_iteration": 23,
+      "physical_calls_by_kind": {
+        "ResidualJacobian": 1,
+        "Residual": 23,
+        "Jacobian": 11
+      },
+      "native_model_solves": 23,
+      "quality": {
+        "point": [
+          97533048577596.56,
+          -97533048577596.56,
+          0.5000000003910843,
+          -0.5000000003910843
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.71238898038469,
+        "reference_cost": 0.0,
+        "objective_gap": 4.71238898038469,
+        "gradient": [
+          2.4250858677893533e-42,
+          -2.4250858677893533e-42,
+          2.3465056564475617e-09,
+          -2.3465056564475617e-09
+        ],
+        "stationarity": 2.3465056564475617e-09,
+        "parameter_error": 97533048577595.56,
+        "quality_limit": 1e-06,
+        "quality_passed": false
+      },
+      "last_publication_quality": {
+        "point": [
+          97533048577596.56,
+          -97533048577596.56,
+          0.5000000003910843,
+          -0.5000000003910843
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.71238898038469,
+        "reference_cost": 0.0,
+        "objective_gap": 4.71238898038469,
+        "gradient": [
+          2.4250858677893533e-42,
+          -2.4250858677893533e-42,
+          2.3465056564475617e-09,
+          -2.3465056564475617e-09
+        ],
+        "stationarity": 2.3465056564475617e-09,
+        "parameter_error": 97533048577595.56,
+        "quality_limit": 1e-06,
+        "quality_passed": false
+      },
+      "terminal_trial": null,
+      "confirmed_premature": false,
+      "paired_default": {
+        "id": "robust_arctan_linear4-f64-1-lm_normal_nielsen-robust_gradient_default-4000",
+        "work": "35",
+        "outcome": "converged",
+        "common_prefix_work": 35,
+        "quality": {
+          "point": [
+            97533048577596.56,
+            -97533048577596.56,
+            0.5000000003910843,
+            -0.5000000003910843
+          ],
+          "reference": [
+            1.0,
+            -1.0,
+            0.5,
+            -0.5
+          ],
+          "cost": 4.71238898038469,
+          "reference_cost": 0.0,
+          "objective_gap": 4.71238898038469,
+          "gradient": [
+            2.4250858677893533e-42,
+            -2.4250858677893533e-42,
+            2.3465056564475617e-09,
+            -2.3465056564475617e-09
+          ],
+          "stationarity": 2.3465056564475617e-09,
+          "parameter_error": 97533048577595.56,
+          "quality_limit": 1e-06,
+          "quality_passed": false
+        },
+        "available_improvement": 0.0
+      }
+    },
+    {
+      "id": "robust_arctan_linear4-f64-1-lm_qr_nielsen-robust_gradient_default-4000",
+      "dataset": "robust_arctan_linear4",
+      "precision": "f64",
+      "route": "lm_qr_nielsen",
+      "policy": "robust_gradient_default",
+      "cap": "4000",
+      "outcome": "converged",
+      "stage": "Step { completed: false }",
+      "criteria": "absolute_gradient",
+      "work": "35",
+      "denied": "0",
+      "returned": "true",
+      "cost_evals": "0",
+      "residual_evals": "24",
+      "jacobian_evals": "12",
+      "completed_iterations": 23,
+      "last_published_iteration": 23,
+      "physical_calls_by_kind": {
+        "ResidualJacobian": 1,
+        "Residual": 23,
+        "Jacobian": 11
+      },
+      "native_model_solves": 23,
+      "quality": {
+        "point": [
+          97533048577596.45,
+          -97533048577596.48,
+          0.5000000003910843,
+          -0.5000000003910843
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.71238898038469,
+        "reference_cost": 0.0,
+        "objective_gap": 4.71238898038469,
+        "gradient": [
+          2.4250858677893612e-42,
+          -2.425085867789359e-42,
+          2.3465056564475617e-09,
+          -2.3465056564475617e-09
+        ],
+        "stationarity": 2.3465056564475617e-09,
+        "parameter_error": 97533048577595.48,
+        "quality_limit": 1e-06,
+        "quality_passed": false
+      },
+      "last_publication_quality": {
+        "point": [
+          97533048577596.45,
+          -97533048577596.48,
+          0.5000000003910843,
+          -0.5000000003910843
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.71238898038469,
+        "reference_cost": 0.0,
+        "objective_gap": 4.71238898038469,
+        "gradient": [
+          2.4250858677893612e-42,
+          -2.425085867789359e-42,
+          2.3465056564475617e-09,
+          -2.3465056564475617e-09
+        ],
+        "stationarity": 2.3465056564475617e-09,
+        "parameter_error": 97533048577595.48,
+        "quality_limit": 1e-06,
+        "quality_passed": false
+      },
+      "terminal_trial": null,
+      "confirmed_premature": false,
+      "paired_default": {
+        "id": "robust_arctan_linear4-f64-1-lm_qr_nielsen-robust_gradient_default-4000",
+        "work": "35",
+        "outcome": "converged",
+        "common_prefix_work": 35,
+        "quality": {
+          "point": [
+            97533048577596.45,
+            -97533048577596.48,
+            0.5000000003910843,
+            -0.5000000003910843
+          ],
+          "reference": [
+            1.0,
+            -1.0,
+            0.5,
+            -0.5
+          ],
+          "cost": 4.71238898038469,
+          "reference_cost": 0.0,
+          "objective_gap": 4.71238898038469,
+          "gradient": [
+            2.4250858677893612e-42,
+            -2.425085867789359e-42,
+            2.3465056564475617e-09,
+            -2.3465056564475617e-09
+          ],
+          "stationarity": 2.3465056564475617e-09,
+          "parameter_error": 97533048577595.48,
+          "quality_limit": 1e-06,
+          "quality_passed": false
+        },
+        "available_improvement": 0.0
+      }
+    },
+    {
+      "id": "robust_arctan_linear4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+      "dataset": "robust_arctan_linear4",
+      "precision": "f32",
+      "route": "lm_normal_nielsen",
+      "policy": "robust_gradient_default",
+      "cap": "4000",
+      "outcome": "stalled",
+      "stage": "Step { completed: false }",
+      "criteria": "",
+      "work": "28",
+      "denied": "0",
+      "returned": "true",
+      "cost_evals": "0",
+      "residual_evals": "22",
+      "jacobian_evals": "7",
+      "completed_iterations": 20,
+      "last_published_iteration": 20,
+      "physical_calls_by_kind": {
+        "ResidualJacobian": 1,
+        "Residual": 21,
+        "Jacobian": 6
+      },
+      "native_model_solves": 21,
+      "quality": {
+        "point": [
+          0.9999532103538513,
+          -0.9999532103538513,
+          -11113.7509765625,
+          11113.7509765625
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.712388975305612,
+        "reference_cost": 0.0,
+        "objective_gap": 4.712388975305612,
+        "gradient": [
+          -0.00028073787689208984,
+          0.00028073787689208984,
+          -1.6388602411692164e-12,
+          1.6388602411692164e-12
+        ],
+        "stationarity": 0.00028073787689208984,
+        "parameter_error": 11114.2509765625,
+        "quality_limit": 0.001,
+        "quality_passed": false
+      },
+      "last_publication_quality": {
+        "point": [
+          0.9999532103538513,
+          -0.9999532103538513,
+          -11113.7509765625,
+          11113.7509765625
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.712388975305612,
+        "reference_cost": 0.0,
+        "objective_gap": 4.712388975305612,
+        "gradient": [
+          -0.00028073787689208984,
+          0.00028073787689208984,
+          -1.6388602411692164e-12,
+          1.6388602411692164e-12
+        ],
+        "stationarity": 0.00028073787689208984,
+        "parameter_error": 11114.2509765625,
+        "quality_limit": 0.001,
+        "quality_passed": false
+      },
+      "terminal_trial": {
+        "sequence": "42",
+        "base_cost": 4.71238899230957,
+        "trial_cost": 4.71238899230957,
+        "actual": 0.0,
+        "predicted": 1.510436415698424e-12,
+        "gain_ratio": 0.0,
+        "damping": 17391.65625,
+        "step": [
+          2.690195843868537e-09,
+          -2.690195843868537e-09,
+          1.317390918575967e-10,
+          -1.317390918575967e-10
+        ],
+        "base_gradient": [
+          -0.00028073787689208984,
+          0.00028073787689208984,
+          -1.638860163029332e-12,
+          1.638860163029332e-12
+        ],
+        "diagonal": [
+          6.0,
+          6.0,
+          7.152556804612686e-07,
+          7.152556804612686e-07
+        ],
+        "accepted": false,
+        "published": false,
+        "passing": [],
+        "model_and_step": false,
+        "accepted_model_and_step": false,
+        "ratio_above_quarter_model_and_step": false
+      },
+      "confirmed_premature": false,
+      "paired_default": {
+        "id": "robust_arctan_linear4-f32-1-lm_normal_nielsen-robust_gradient_default-4000",
+        "work": "28",
+        "outcome": "stalled",
+        "common_prefix_work": 28,
+        "quality": {
+          "point": [
+            0.9999532103538513,
+            -0.9999532103538513,
+            -11113.7509765625,
+            11113.7509765625
+          ],
+          "reference": [
+            1.0,
+            -1.0,
+            0.5,
+            -0.5
+          ],
+          "cost": 4.712388975305612,
+          "reference_cost": 0.0,
+          "objective_gap": 4.712388975305612,
+          "gradient": [
+            -0.00028073787689208984,
+            0.00028073787689208984,
+            -1.6388602411692164e-12,
+            1.6388602411692164e-12
+          ],
+          "stationarity": 0.00028073787689208984,
+          "parameter_error": 11114.2509765625,
+          "quality_limit": 0.001,
+          "quality_passed": false
+        },
+        "available_improvement": 0.0
+      }
+    },
+    {
+      "id": "robust_arctan_linear4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+      "dataset": "robust_arctan_linear4",
+      "precision": "f32",
+      "route": "lm_qr_nielsen",
+      "policy": "robust_gradient_default",
+      "cap": "4000",
+      "outcome": "stalled",
+      "stage": "Step { completed: false }",
+      "criteria": "",
+      "work": "28",
+      "denied": "0",
+      "returned": "true",
+      "cost_evals": "0",
+      "residual_evals": "22",
+      "jacobian_evals": "7",
+      "completed_iterations": 20,
+      "last_published_iteration": 20,
+      "physical_calls_by_kind": {
+        "ResidualJacobian": 1,
+        "Residual": 21,
+        "Jacobian": 6
+      },
+      "native_model_solves": 21,
+      "quality": {
+        "point": [
+          0.9999532103538513,
+          -0.9999532103538513,
+          -11113.76953125,
+          11113.8134765625
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.712388975305744,
+        "reference_cost": 0.0,
+        "objective_gap": 4.712388975305744,
+        "gradient": [
+          -0.00028073787689208984,
+          0.00028073787689208984,
+          -1.638852033210399e-12,
+          1.6388325935265723e-12
+        ],
+        "stationarity": 0.00028073787689208984,
+        "parameter_error": 11114.3134765625,
+        "quality_limit": 0.001,
+        "quality_passed": false
+      },
+      "last_publication_quality": {
+        "point": [
+          0.9999532103538513,
+          -0.9999532103538513,
+          -11113.76953125,
+          11113.8134765625
+        ],
+        "reference": [
+          1.0,
+          -1.0,
+          0.5,
+          -0.5
+        ],
+        "cost": 4.712388975305744,
+        "reference_cost": 0.0,
+        "objective_gap": 4.712388975305744,
+        "gradient": [
+          -0.00028073787689208984,
+          0.00028073787689208984,
+          -1.638852033210399e-12,
+          1.6388325935265723e-12
+        ],
+        "stationarity": 0.00028073787689208984,
+        "parameter_error": 11114.3134765625,
+        "quality_limit": 0.001,
+        "quality_passed": false
+      },
+      "terminal_trial": {
+        "sequence": "42",
+        "base_cost": 4.71238899230957,
+        "trial_cost": 4.71238899230957,
+        "actual": 0.0,
+        "predicted": 1.5104486671829731e-12,
+        "gain_ratio": 0.0,
+        "damping": 17391.51171875,
+        "step": [
+          2.6902180483290294e-09,
+          -2.6902176042398196e-09,
+          1.3132933629478316e-10,
+          -1.3157666622909403e-10
+        ],
+        "base_gradient": [
+          -0.00028073787689208984,
+          0.00028073787689208984,
+          -1.6388522483534729e-12,
+          1.6388327327143681e-12
+        ],
+        "diagonal": [
+          6.000000476837158,
+          6.000000476837158,
+          7.152557373046875e-07,
+          7.152557373046875e-07
+        ],
+        "accepted": false,
+        "published": false,
+        "passing": [],
+        "model_and_step": false,
+        "accepted_model_and_step": false,
+        "ratio_above_quarter_model_and_step": false
+      },
+      "confirmed_premature": false,
+      "paired_default": {
+        "id": "robust_arctan_linear4-f32-1-lm_qr_nielsen-robust_gradient_default-4000",
+        "work": "28",
+        "outcome": "stalled",
+        "common_prefix_work": 28,
+        "quality": {
+          "point": [
+            0.9999532103538513,
+            -0.9999532103538513,
+            -11113.76953125,
+            11113.8134765625
+          ],
+          "reference": [
+            1.0,
+            -1.0,
+            0.5,
+            -0.5
+          ],
+          "cost": 4.712388975305744,
+          "reference_cost": 0.0,
+          "objective_gap": 4.712388975305744,
+          "gradient": [
+            -0.00028073787689208984,
+            0.00028073787689208984,
+            -1.638852033210399e-12,
+            1.6388325935265723e-12
+          ],
+          "stationarity": 0.00028073787689208984,
+          "parameter_error": 11114.3134765625,
+          "quality_limit": 0.001,
+          "quality_passed": false
+        },
+        "available_improvement": 0.0
+      }
+    }
+  ],
+  "original_summary": {
+    "robust_gradient_default": {
+      "runs": 48,
+      "converged": 33,
+      "quality_passed": 48,
+      "confirmed_premature": 0,
+      "work": 795,
+      "stalled": 15
+    },
+    "robust_relative_probe": {
+      "runs": 48,
+      "converged": 48,
+      "quality_passed": 42,
+      "confirmed_premature": 6,
+      "work": 610
+    },
+    "robust_model_probe": {
+      "runs": 48,
+      "converged": 48,
+      "quality_passed": 42,
+      "confirmed_premature": 6,
+      "work": 636
+    },
+    "robust_step_probe": {
+      "runs": 48,
+      "converged": 48,
+      "quality_passed": 48,
+      "confirmed_premature": 0,
+      "work": 822
+    },
+    "robust_model_step_probe": {
+      "runs": 48,
+      "converged": 48,
+      "quality_passed": 42,
+      "confirmed_premature": 6,
+      "work": 618
+    },
+    "robust_gradient_probe": {
+      "runs": 48,
+      "converged": 36,
+      "quality_passed": 48,
+      "confirmed_premature": 0,
+      "work": 847,
+      "stalled": 12
+    },
+    "robust_radius_probe": {
+      "runs": 48,
+      "stalled": 18,
+      "quality_passed": 48,
+      "confirmed_premature": 0,
+      "work": 902,
+      "converged": 30
+    }
+  },
+  "failure": "Gradient control recovery quality gate rejected 68/72 instead of 72/72; full-rank arctangent escaped in coordinates whose curvature stayed clipped.",
+  "policies_selected": false,
+  "holdout_candidate_outcomes": "sealed"
+}

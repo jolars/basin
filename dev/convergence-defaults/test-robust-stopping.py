@@ -56,6 +56,12 @@ class Composition(unittest.TestCase):
                 stopping.recovery_transition(before, [accepted, model, dict(after, **change)], 'f32')
         with self.assertRaises(ValueError):
             stopping.recovery_transition(before, before, 'f32')
+        accepted = dict(accepted, diagonal='1e-7;2e-7')
+        before = [accepted, model, trial]
+        after = dict(after, damping='0.2')
+        self.assertAlmostEqual(stopping.recovery_transition(before, [accepted, model, after], 'f32')['diagonal_ratio'], 2e-7)
+        with self.assertRaises(ValueError):
+            stopping.recovery_transition(before, [accepted, model, dict(after, damping='0.1')], 'f32')
 
     def test_reproduction_checks_every_csv_except_time(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,6 +1,6 @@
 run_id = "2026-10-10-robust-recovery-001"
 purpose = "paired robust Nielsen curvature recovery; step 5 safeguard recheck"
-status = "planned"
+status = "completed-rejected"
 source_revision = "1f63614792d33f99cd1e18e8ec5d84bdd01acf0c"
 starting_revision = "8b53b5c"
 protocol = "CDP-1 measurement extension; no amendment, calibration, or default selection"
@@ -38,7 +38,7 @@ previous_outcomes = "four inaccurate f32 Nielsen stalls already observed; focuse
 comparison = "all 360 trust-region runs and 108 Nielsen early-budget runs must match all five CSV tables, excluding elapsed time; four failed default-gradient controls must recover, with the first changed damping matching diagonal compensation"
 quality_gate = "all 72 runs under each of default-gradient, normalized-gradient, and radius/exact-gradient controls must satisfy the unchanged independent quality checks; retain native convergence/stall classifications"
 previous_directory = "target/convergence-defaults/2026-10-10-robust-extended-001/extended"
-retained_report = "dev/convergence-defaults/robust-recovery-results.json"
+retained_report = "dev/convergence-defaults/robust-recovery-rejected-results.json"
 commands = [
   "CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/robust-stopping-build cargo build -p competitor-bench --bin verify_least_squares",
   "timeout 120s target/robust-stopping-build/debug/verify_least_squares --phase robust-extended --output target/convergence-defaults/2026-10-10-robust-recovery-001/extended",
@@ -50,6 +50,13 @@ commands = [
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-robust-stopping.py target/convergence-defaults/2026-10-10-robust-recovery-001/original",
   "PYTHONDONTWRITEBYTECODE=1 python dev/convergence-defaults/test-least-squares.py target/convergence-defaults/2026-10-10-robust-recovery-001/original",
 ]
+
+planned_manifest_revision = "97ea26e"
+result = "all four original rank-deficient stalls recovered, but four full-rank arctangent default controls regress; each gradient configuration remains 68/72; global fastest-growth compensation rejected"
+failed_command = "paired recovery checker reached the unchanged 72/72 quality gate and raised ValueError: gradient control recovery quality"
+actual_coverage = "720 extended runs and 336 original runs, all measured; unpaired accounting/quality checkers and negative controls pass"
+validation = "36 backend recovery tests, 41 measurement tests, full pure-Rust suite, workspace clippy, rustdoc, and default WASM pass for the initial correction; the larger pilot rejects its numerical quality"
+report_assembly = "retained JSON contains complete summary/statistics, all four recovered default cases and four regressed default cases; bulk traces and all run records remain reproducible from the frozen source"
 
 [source_sha256]
 "Cargo.lock" = "5263a825ac1578c736d619e172722bc6d396f45bebe78b763fcc020b381dd337"
@@ -73,3 +80,20 @@ commands = [
 "leaves.csv" = "7a7d1492dedcd76df7c32a4819b8e170b71982384ffd99b4bd2829c2d5c09cac"
 "native.csv" = "04670d1fabf536aafac6dc755d795839ac8af88ac0df66f22d2ff3921bba0f24"
 "checks.csv" = "343d8ff176c6972ee5fb4ee01afe68a96a8b3c675d9098486d0356b7f05d2f9b"
+
+[output_sha256]
+"unpaired-report.json" = "4704ded03c95e49c05dffd24d16b672b9971147ffef181bb5b8d26bfc25b2863"
+"original-report.json" = "f6110c6bad6b2c732bafaa848af0c39de1c3ac9f971c096e63ea91b2205c670d"
+"extended/runs.csv" = "799c6258e2ed27c1868a76d4cef5d8e676550ba0d9532e40f1d902e8c6b499b1"
+"extended/publications.csv" = "52351bf3bd929d33ded0caef0852755a3705d2c4aabcb7575694a2e6d0510c4b"
+"extended/leaves.csv" = "1f0d97a43a744cc679dc436b4b05e2d061c500ad8b5c4c875e2412af47666a55"
+"extended/native.csv" = "b81da38cc2a97073e1e93e16a2b2a92228c6bd964babdc5e7e7f1cf2048c30a5"
+"extended/checks.csv" = "7b5e3264ebee622c0ff2066b78af63762cd2ad6ce314328a665b4c14cf481a7c"
+"original/runs.csv" = "40557782c95d184d494f63ad45d0602c7e7deff16ff6a8e64c20e67f6d820b0a"
+"original/publications.csv" = "cb895ea1bb90e643d3df706ab77a27e3db2473b912754795ce60c1049e0b613b"
+"original/leaves.csv" = "e6ddf57c146b702d81135699794624e4d95fe3974e7718777003f3e95a3563e1"
+"original/native.csv" = "bb6e0156a305b115f3c78ec0af5fc68d8523bfc2934183f916f8ab8f8c4c0eb7"
+"original/checks.csv" = "cd369c16650e9287777b54dcefcfe76c209e88eddac832d487797f3c01992cd6"
+
+[retained_sha256]
+"dev/convergence-defaults/robust-recovery-rejected-results.json" = "45e4fd031b08afa2d908e12ca61a9d9068255b494c3defbab5b2e22374998180"

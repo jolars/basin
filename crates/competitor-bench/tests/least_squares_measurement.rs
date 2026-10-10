@@ -626,3 +626,63 @@ macro_rules! rank_deficient_recovery {
 }
 rank_deficient_recovery!(rank_deficient_recovery32, f32);
 rank_deficient_recovery!(rank_deficient_recovery64, f64);
+
+macro_rules! mixed_curvature_recovery {
+    ($name:ident, $f:ty) => {
+        #[test]
+        fn $name() {
+            let fixture =
+                competitor_bench::convergence::least_squares::robust_fixture(
+                    "robust_arctan_linear4",
+                )
+                .unwrap();
+            macro_rules! check {
+                ($solver:expr) => {{
+                    let ledger = WorkLedger::new(4000);
+                    let raw = Instrumented::<$f>::analytic(
+                        fixture.model,
+                        ledger.clone(),
+                    );
+                    let problem =
+                        basin::RobustLeastSquares::new(raw, fixture.loss);
+                    let measured = measure(
+                        Executor::new(
+                            problem,
+                            $solver.with_trial_diagnostics(true),
+                            PointState::new(DVector::from_vec(
+                                fixture
+                                    .start
+                                    .iter()
+                                    .map(|v| *v as $f)
+                                    .collect(),
+                            )),
+                        )
+                        .max_iter(10000),
+                        &ledger,
+                        Duration::from_secs(10),
+                    );
+                    let returned = measured.run.returned().unwrap();
+                    let limit =
+                        if stringify!($f) == "f32" { 1e-3 } else { 1e-6 };
+                    for (x, target) in
+                        returned.point.iter().zip([1., -1., 0.5, -0.5])
+                    {
+                        assert!(
+                            (x - target).abs() * 6. <= limit,
+                            "{returned:?}"
+                        );
+                    }
+                }};
+            }
+            check!(
+                LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default()
+            );
+            check!(
+                LevenbergMarquardt::<DVector<$f>, DMatrix<$f>, $f>::default()
+                    .with_pivoted_qr()
+            );
+        }
+    };
+}
+mixed_curvature_recovery!(mixed_curvature_recovery32, f32);
+mixed_curvature_recovery!(mixed_curvature_recovery64, f64);

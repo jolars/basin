@@ -237,9 +237,11 @@ pub enum LmDamping {
 /// use the robust objective and its gradient.
 ///
 /// With Nielsen damping, growth of the robust model's diagonal scaling `D`
-/// rescales `μ` by `min_j(D_old[j] / D_new[j])`, where
+/// rescales `μ` by `max_j(D_old[j] / D_new[j])`, where
 /// `D_new[j] = max(D_old[j], diag(J_modelᵀ J_model)[j])`. This prevents a
-/// curvature change from abruptly amplifying the effective damping `μD`.
+/// common curvature increase from abruptly amplifying the effective damping
+/// `μD`, while retaining at least the previous damping in every coordinate.
+/// If any diagonal entry stays unchanged, `μ` stays unchanged as well.
 /// The adjustment is a Basin safeguard for the varying robust model; the
 /// usual gain-ratio update and trial acceptance still apply.
 ///

@@ -1026,9 +1026,9 @@ with their existing implementations. Generic wrappers naming these types must
 declare the same bound; their `F = f64` defaults remain available.
 
 For robust LM with Nielsen damping, an increase in the safeguarded model's
-scaling diagonal now reduces the damping parameter by the smallest ratio of old
-to new diagonal entries. This prevents the effective damping from jumping when
-clipped robust curvature becomes positive, recovering previously inaccurate
-`f32` stalls. Normal equations and pivoted QR share this adjustment. Existing
-settings and convergence comparisons still apply; robust Nielsen trajectories
-and callback counts can change.
+scaling diagonal now reduces the damping parameter by the largest ratio of old
+to new diagonal entries. This compensates for growth shared by every coordinate
+while preserving effective damping in coordinates whose curvature stays clipped,
+recovering previously inaccurate `f32` stalls. Normal equations and pivoted QR
+share this adjustment. Existing settings and convergence comparisons still
+apply; robust Nielsen trajectories and callback counts can change.
