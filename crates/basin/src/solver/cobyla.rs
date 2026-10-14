@@ -192,6 +192,20 @@ impl<V, F: Scalar> Cobyla<V, F> {
         self.work.as_ref().map(|work| work.rho())
     }
 
+    /// Copy the current linear-model simplex and penalty scale.
+    ///
+    /// Returns the trust radius, final resolution, absolute simplex points,
+    /// stored model costs, and penalty parameter. Model costs include the
+    /// native safeguards for non-finite objective values. This snapshot performs no
+    /// callbacks and changes no model, filter, or radius schedule.
+    /// Returns `None` before successful initialization.
+    #[allow(clippy::type_complexity)]
+    pub fn geometry_diagnostics(
+        &self,
+    ) -> Option<(F, F, Vec<Vec<F>>, Vec<F>, F)> {
+        self.work.as_ref().map(|work| work.geometry_diagnostics())
+    }
+
     /// Stop when the observed radius or step size is <= the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an

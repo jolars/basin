@@ -28,10 +28,6 @@ where
             free.push(i);
         }
     }
-    assert!(
-        !free.is_empty(),
-        "GBNM requires at least one free coordinate"
-    );
     free
 }
 

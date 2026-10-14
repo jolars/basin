@@ -100,8 +100,9 @@ use super::cma_es::{
 /// [`mean`](Self::mean) and [`sigma`](Self::sigma) for the live distribution.
 /// Configure [`with_absolute_distribution_size_tolerance`](Self::with_absolute_distribution_size_tolerance)
 /// for TolX (`σ · max_i d_i < tolerance`), disabled by default. `None` disables
-/// the test; zero never satisfies its strict inequality. The test reads the
-/// solver's distribution. Budgets use the six raw evaluation categories.
+/// the test; zero tests exact collapse, while positive thresholds use a strict
+/// inequality. The test reads the solver's distribution. Budgets use the six raw
+/// evaluation categories.
 ///
 /// Fresh runs reset the distribution, penalty history, RNG, progress, and counts.
 /// Exact continuation retains the solver, progress, and counts together and
@@ -214,6 +215,29 @@ impl<V, M, F: Scalar> BoundedCmaEs<V, M, F> {
     /// The current overall step size, available after initialization.
     pub fn sigma(&self) -> Option<F> {
         self.work.as_ref().map(|work| work.sigma)
+    }
+
+    /// Borrow the live genotype distribution after initialization.
+    ///
+    /// Axes and paths describe the unrepaired distribution, while progress
+    /// contains clipped phenotypes. Reading this view performs no evaluations
+    /// and changes no model, penalty, or sampling schedule. See
+    /// [`super::cma_es::diagnostics::DistributionRef`] for boundary semantics.
+    pub fn distribution(
+        &self,
+    ) -> Option<super::cma_es::diagnostics::DistributionRef<'_, V, M, F>> {
+        self.work.as_ref().map(|work| {
+            super::cma_es::diagnostics::DistributionRef {
+                mean: &work.m,
+                sigma: work.sigma,
+                distribution_tolerance: self.distribution_tolerance,
+                covariance: &work.c,
+                principal_axis_stds: &work.d,
+                covariance_path: &work.p_c,
+                step_size_path: &work.p_sigma,
+                generation: work.generation,
+            }
+        })
     }
 
     /// Unrepaired samples in recombination order, available after initialization.
@@ -740,7 +764,10 @@ where
         let tolerance = self.distribution_tolerance?;
         let work = self.work.as_ref()?;
         let metric = work.sigma * work.max_axis_std();
-        (metric.is_finite() && metric < tolerance).then(|| {
+        (metric.is_finite()
+            && (metric < tolerance
+                || (tolerance == F::zero() && metric == F::zero())))
+        .then(|| {
             Termination::upper_bound(
                 crate::ConvergenceTest::DistributionSize,
                 metric,

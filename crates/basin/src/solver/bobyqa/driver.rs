@@ -176,6 +176,25 @@ impl<F: Scalar> BobyqaWork<F> {
         Ok((work, best_x, best_f))
     }
 
+    pub(crate) fn geometry_diagnostics(
+        &self,
+    ) -> (F, F, Vec<Vec<F>>, Vec<F>, Vec<F>) {
+        let points = (0..self.model.m())
+            .map(|k| {
+                (0..self.model.n())
+                    .map(|i| self.model.x0()[i] + self.model.xpt_row(k)[i])
+                    .collect()
+            })
+            .collect();
+        (
+            self.delta,
+            self.rho_end,
+            points,
+            self.model.fval.clone(),
+            self.model.gradient_at_opt(),
+        )
+    }
+
     /// The current trust-region radius `ρ`.
     pub(crate) fn rho(&self) -> F {
         self.rho

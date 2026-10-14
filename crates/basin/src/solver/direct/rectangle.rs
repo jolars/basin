@@ -369,3 +369,62 @@ impl<F: Scalar> Scaled<F> {
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod stopping_tests {
+    use super::*;
+    use crate::{BoxConstraints, CostFunction, Direct, PointState, Solver};
+    use std::convert::Infallible;
+
+    struct FlatBox<F>(Vec<F>, Vec<F>);
+    impl<F: Scalar> CostFunction for FlatBox<F> {
+        type Param = Vec<F>;
+        type Output = F;
+        type Error = Infallible;
+        fn cost(&self, _: &Vec<F>) -> Result<F, Infallible> {
+            Ok(F::zero())
+        }
+    }
+    impl<F: Scalar> BoxConstraints for FlatBox<F> {
+        fn lower(&self) -> &Vec<F> {
+            &self.0
+        }
+        fn upper(&self) -> &Vec<F> {
+            &self.1
+        }
+    }
+
+    fn check<F: Scalar + Send + Sync>() {
+        let mut rectangle =
+            Rectangle::new(vec![F::from_f64(0.5).unwrap()], F::zero());
+        rectangle.depths[0] = 2_000;
+        let mut work =
+            Work::new(vec![(F::zero(), F::one())], vec![0], rectangle);
+        for _ in 0..2_000 {
+            work.thirds
+                .push(*work.thirds.last().unwrap() / F::from_f64(3.0).unwrap());
+        }
+        work.consider(0);
+        assert_eq!(work.radius(&work.rectangles[0]), F::zero());
+        let mut solver =
+            Direct::new().with_absolute_radius_tolerance(F::zero());
+        solver.work = Some(work);
+        let state = PointState::new(vec![F::from_f64(0.5).unwrap()]);
+        let termination =
+            <Direct<F> as Solver<FlatBox<F>, _>>::terminate(&solver, &state);
+        assert!(termination.unwrap().is_converged());
+        let solver = solver
+            .with_absolute_radius_tolerance(None)
+            .with_relative_volume_tolerance(F::zero());
+        assert!(
+            <Direct<F> as Solver<FlatBox<F>, _>>::terminate(&solver, &state)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn zero_radius_is_distinct_from_disabled_and_volume_underflow() {
+        check::<f64>();
+        check::<f32>();
+    }
+}

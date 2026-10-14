@@ -20,6 +20,8 @@ impl<CG, CX, CC, CT, So, F: Scalar>
     forward_setting!(BarrierMethod, mu0, mu0: F);
     forward_setting!(BarrierMethod, with_reduction, reduction: F);
     forward_setting!(BarrierMethod, with_absolute_duality_gap_tolerance, tol: impl Into<Option<F>>);
+    forward_setting!(BarrierMethod, with_absolute_stationarity_tolerance, tol: impl Into<Option<F>>);
+    forward_setting!(BarrierMethod, with_relative_stationarity_tolerance, tol: impl Into<Option<F>>);
     forward_setting!(BarrierMethod, with_absolute_phase_one_gap_tolerance, phase_one_tol: F);
     forward_setting!(BarrierMethod, with_inner_max_iter, inner_max_iter: u64);
 }
@@ -424,6 +426,8 @@ impl<CG, CX, CC, CT, So, V, F: Scalar>
     forward_setting!(AugmentedLagrangianMethod, with_rho_increase, rho_increase: F);
     forward_setting!(AugmentedLagrangianMethod, with_feasibility_decrease, feasibility_decrease: F);
     forward_setting!(AugmentedLagrangianMethod, with_absolute_feasibility_tolerance, tol: impl Into<Option<F>>);
+    forward_setting!(AugmentedLagrangianMethod, with_absolute_stationarity_tolerance, tol: impl Into<Option<F>>);
+    forward_setting!(AugmentedLagrangianMethod, with_relative_stationarity_tolerance, tol: impl Into<Option<F>>);
     forward_setting!(AugmentedLagrangianMethod, with_inner_max_iter, inner_max_iter: u64);
 }
 

@@ -81,6 +81,8 @@ where
 {
     cma: BoundedCmaEs<V, M, F>,
     inner: InnerExecutor<I::State, I>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
     k: usize,
     c_y_override: Option<F>,
 }
@@ -100,6 +102,7 @@ where
             inner: InnerExecutor::new(inner).max_iter(50),
             k: 1,
             c_y_override: None,
+            inner_diagnostics: None,
         }
     }
 
@@ -136,6 +139,21 @@ where
         self
     }
 
+    /// Enable owned inner stopping reports and count snapshots. Disabled by default.
+    /// Fresh initialization clears records; exact continuation retains them.
+    pub fn with_inner_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner_diagnostics = enabled.then(Vec::new);
+        self
+    }
+
+    /// Inner reports consumed during this outer run, in dispatch order.
+    /// A callback error retains counts and has no returned report.
+    pub fn inner_diagnostics(
+        &self,
+    ) -> &[crate::core::inner::diagnostics::Record<F>] {
+        self.inner_diagnostics.as_deref().unwrap_or(&[])
+    }
+
     /// Inner solver iteration budget per outer generation (default `50`).
     pub fn with_inner_max_iter(self, n: u64) -> Self {
         let Self {
@@ -143,12 +161,14 @@ where
             inner,
             k,
             c_y_override,
+            inner_diagnostics,
         } = self;
         Self {
             cma,
             inner: inner.max_iter(n),
             k,
             c_y_override,
+            inner_diagnostics,
         }
     }
 
@@ -172,12 +192,14 @@ where
             inner,
             k,
             c_y_override,
+            inner_diagnostics,
         } = self;
         Self {
             cma,
             inner: inner.stop_when_factory(make),
             k,
             c_y_override,
+            inner_diagnostics,
         }
     }
 }
@@ -219,6 +241,9 @@ where
         problem: &mut Problem<P>,
         state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        if let Some(records) = &mut self.inner_diagnostics {
+            records.clear();
+        }
         self.cma.init(problem, state)
     }
 
@@ -252,7 +277,17 @@ where
             //    shares the outer wrapper, so its evals flow into the
             //    outer's EvalCounts transparently.
             let inner_result: OptimizationResult<I::State> =
-                self.inner.run(problem, inner_state)?;
+                crate::core::inner::diagnostics::run(
+                    &mut self.inner_diagnostics,
+                    problem,
+                    crate::core::inner::diagnostics::Context {
+                        outer_iteration: state.iter(),
+                        member: Some(i),
+                        resumed: false,
+                        initial_scale: Some(sigma),
+                    },
+                    |problem| self.inner.run(problem, inner_state),
+                )?;
 
             // 4. Failure routing: bubble SolverFailed only.
             if !inner_result

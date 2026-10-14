@@ -10,6 +10,7 @@ use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, RngExt, SeedableRng};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, SimplexProgress, State};
+use crate::core::termination::Termination;
 use crate::solver::{NelderMead, Projected, Unbounded};
 
 mod geometry;
@@ -113,7 +114,8 @@ struct BoxGeometry<'a, V> {
 ///
 /// Equal lower and upper bounds pin a coordinate. Pinned coordinates are
 /// excluded from simplex geometry, density calculations, and convergence
-/// tests. At least one coordinate must remain free.
+/// tests. An all-fixed box evaluates its sole feasible point once and stops
+/// structurally; a non-finite value at that point reports failure.
 ///
 /// # Numerical behavior
 ///
@@ -180,6 +182,7 @@ pub struct Gbnm<V, F: Scalar = f64> {
     rng: ChaCha8Rng,
     seed: u64,
     simplex: Option<SimplexProgress<V, F>>,
+    fixed_box: bool,
     search_starts: Vec<V>,
     local_optima: Vec<(V, F)>,
     restart: GbnmRestart,
@@ -207,6 +210,7 @@ impl<V, F: Scalar> Gbnm<V, F> {
             rng: ChaCha8Rng::seed_from_u64(seed),
             seed,
             simplex: None,
+            fixed_box: false,
             search_starts: Vec::new(),
             local_optima: Vec::new(),
             restart: GbnmRestart::Probabilistic,
@@ -576,11 +580,17 @@ where
         state.reset();
         self.rng = ChaCha8Rng::seed_from_u64(self.seed);
         self.simplex = None;
+        self.fixed_box = free.is_empty();
         self.search_starts.clear();
         self.local_optima.clear();
         self.restart_count = 0;
         self.restart = GbnmRestart::Probabilistic;
         self.restart_center = None;
+        if self.fixed_box {
+            let cost = problem.cost(&center)?;
+            state.replace(center, cost);
+            return Ok(state);
+        }
         self.install_restart(
             problem,
             state,
@@ -600,6 +610,12 @@ where
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        if self.fixed_box {
+            let termination =
+                <Self as Solver<P, PointState<V, F>>>::terminate(self, &state)
+                    .expect("an initialized fixed box has a terminal outcome");
+            return Ok(crate::SolverStep::stopped(state, termination));
+        }
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let free = free_coordinates(&lower, &upper);
@@ -695,6 +711,25 @@ where
             },
         )?;
         Ok(crate::SolverStep::from((state, None)))
+    }
+
+    fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
+        self.fixed_box.then(|| {
+            if state.cost().is_finite() {
+                Termination::custom(
+                    "gbnm.fixed_box",
+                    "The box has exactly one feasible point with a finite objective.",
+                    vec![crate::Measurement {
+                        name: "cost".into(),
+                        value: state.cost(),
+                    }],
+                )
+            } else {
+                Termination::numerical_failure(
+                    "GBNM's sole feasible point has a non-finite objective.",
+                )
+            }
+        })
     }
 }
 

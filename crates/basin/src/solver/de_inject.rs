@@ -173,6 +173,8 @@ where
 {
     de: De<F>,
     inner: InnerExecutor<I::State, I>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
     k: usize,
     refine_every: u64,
     _phantom: PhantomData<V>,
@@ -193,6 +195,7 @@ where
             inner: InnerExecutor::new(inner).max_iter(50),
             k: 1,
             refine_every: 1,
+            inner_diagnostics: None,
             _phantom: PhantomData,
         }
     }
@@ -223,6 +226,21 @@ where
         self
     }
 
+    /// Enable owned inner stopping reports and count snapshots. Disabled by default.
+    /// Fresh initialization clears records; exact continuation retains them.
+    pub fn with_inner_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner_diagnostics = enabled.then(Vec::new);
+        self
+    }
+
+    /// Inner reports consumed during this outer run, in dispatch order.
+    /// A callback error retains counts and has no returned report.
+    pub fn inner_diagnostics(
+        &self,
+    ) -> &[crate::core::inner::diagnostics::Record<F>] {
+        self.inner_diagnostics.as_deref().unwrap_or(&[])
+    }
+
     /// Inner solver iteration budget per refinement (default `50`).
     pub fn with_inner_max_iter(self, n: u64) -> Self {
         let Self {
@@ -230,6 +248,7 @@ where
             inner,
             k,
             refine_every,
+            inner_diagnostics,
             _phantom,
         } = self;
         Self {
@@ -237,6 +256,7 @@ where
             inner: inner.max_iter(n),
             k,
             refine_every,
+            inner_diagnostics,
             _phantom,
         }
     }
@@ -252,6 +272,7 @@ where
             inner,
             k,
             refine_every,
+            inner_diagnostics,
             _phantom,
         } = self;
         Self {
@@ -259,6 +280,7 @@ where
             inner: inner.stop_when_factory(make),
             k,
             refine_every,
+            inner_diagnostics,
             _phantom,
         }
     }
@@ -307,6 +329,9 @@ where
         problem: &mut Problem<P>,
         state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        if let Some(records) = &mut self.inner_diagnostics {
+            records.clear();
+        }
         // Delegate the initial population sampling to vanilla DE; the
         // injection layer kicks in from `next_iter` onward.
         self.de.init(problem, state)
@@ -355,7 +380,17 @@ where
             //    EvalCounts transparently and PopulationProgress
             //    preserves each category without folding it into cost calls.
             let inner_result: OptimizationResult<I::State> =
-                self.inner.run(problem, inner_state)?;
+                crate::core::inner::diagnostics::run(
+                    &mut self.inner_diagnostics,
+                    problem,
+                    crate::core::inner::diagnostics::Context {
+                        outer_iteration: state.iter(),
+                        member: Some(i),
+                        resumed: false,
+                        initial_scale: Some(F::one()),
+                    },
+                    |problem| self.inner.run(problem, inner_state),
+                )?;
 
             // 5. Failure routing: bubble SolverFailed only (composition
             //    contract 3). MaxIter / tolerances / SolverConverged are

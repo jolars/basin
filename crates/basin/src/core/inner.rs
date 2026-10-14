@@ -7,6 +7,8 @@
 //! application hooks. Evaluation aggregation and failure routing follow the
 //! composition contracts below.
 
+pub mod diagnostics;
+
 use crate::core::executor::OptimizationResult;
 use crate::core::math::Scalar;
 use crate::core::problem::Problem;

@@ -139,6 +139,29 @@ pub struct Direct<F: Scalar = f64> {
     work: Option<Work<F>>,
 }
 
+/// Borrowed geometry of the live incumbent rectangle after a DIRECT sweep.
+///
+/// Available after initialization when a usable incumbent exists. Reading this
+/// view performs no evaluations and changes no partition. The center and depths
+/// cover only free coordinates in the unit box. A hard error can interrupt a
+/// sweep and does not promise a coherent checkpoint. Fresh initialization resets
+/// the partition; exact solver-aware continuation retains it.
+#[derive(Clone, Copy, Debug)]
+pub struct RectangleRef<'a, F: Scalar = f64> {
+    /// Original coordinate indices participating in normalized geometry.
+    pub free_coordinates: &'a [usize],
+    /// Center in normalized free coordinates.
+    pub center: &'a [F],
+    /// Per-coordinate trisection depths.
+    pub depths: &'a [usize],
+    /// Euclidean half-diagonal in normalized free coordinates.
+    pub radius: F,
+    /// Sum of the trisection depths, defining relative volume as `3^-level`.
+    pub level: u64,
+    /// Number of rectangles retained in the partition.
+    pub rectangle_count: usize,
+}
+
 impl<F: Scalar> Default for Direct<F> {
     fn default() -> Self {
         Self {
@@ -151,6 +174,19 @@ impl<F: Scalar> Default for Direct<F> {
 }
 
 impl<F: Scalar> Direct<F> {
+    /// Borrow the current incumbent's normalized rectangle geometry.
+    pub fn best_rectangle(&self) -> Option<RectangleRef<'_, F>> {
+        let work = self.work.as_ref()?;
+        let rectangle = &work.rectangles[work.best?];
+        Some(RectangleRef {
+            free_coordinates: &work.active,
+            center: &rectangle.center,
+            depths: &rectangle.depths,
+            radius: work.radius(rectangle),
+            level: rectangle.level(),
+            rectangle_count: work.rectangles.len(),
+        })
+    }
     /// Construct original DIRECT with epsilon `1e-4`, normalized radius
     /// tolerance `1e-6`, and no volume tolerance.
     pub fn new() -> Self {
@@ -329,19 +365,16 @@ where
             ));
         }
         let radius = work.radius(rectangle);
-        let radius_small = self.radius_tolerance.is_some_and(|t| {
-            t > F::zero() && radius > F::zero() && radius <= t
-        });
+        let radius_small = self.radius_tolerance.is_some_and(|t| radius <= t);
         let volume_small = self.volume_tolerance.is_some_and(|t| {
-            t > F::zero()
-                && F::from_u64(rectangle.level()).unwrap()
-                    * F::from_f64(3.0).unwrap().ln()
-                    >= -t.ln()
+            F::from_u64(rectangle.level()).unwrap()
+                * F::from_f64(3.0).unwrap().ln()
+                >= -t.ln()
         });
         let radius_report = radius_small.then(|| {
             Termination::custom(
                 "direct.radius",
-                "The positive scaled best-rectangle radius is <= the positive tolerance.",
+                "The scaled best-rectangle radius is <= the configured tolerance, including exact zero.",
                 vec![
                     crate::Measurement {
                         name: "radius".into(),
@@ -357,7 +390,7 @@ where
         let volume_report = volume_small.then(|| {
             Termination::custom(
                 "direct.volume",
-                "level * ln(3) >= -ln(volume_tolerance), with volume_tolerance > 0.",
+                "level * ln(3) >= -ln(volume_tolerance); a zero threshold requires a truly zero volume, not underflow.",
                 vec![
                     crate::Measurement {
                         name: "level".into(),

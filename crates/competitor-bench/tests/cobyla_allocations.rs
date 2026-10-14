@@ -90,6 +90,7 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
         initial_callbacks: Cell<usize>,
         start: Cell<(usize, usize)>,
         end: Cell<(usize, usize)>,
+        report_copy: Cell<(usize, usize)>,
     }
     struct Quadratic(Rc<Counts>);
     impl CostFunction for Quadratic {
@@ -124,9 +125,19 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
         fn observe_final(
             &mut self,
             _: &SelectedState<Vec<f64>>,
-            _: &basin::TerminationReport,
+            report: &basin::TerminationReport,
         ) {
             self.0.end.set(REQUESTS.get());
+            // Measure the actual owned report after closing the solver interval.
+            // Its construction and the stepper's retained copy belong to final
+            // reporting, rather than repeated trial-buffer allocation.
+            let before = REQUESTS.get();
+            let copied = std::hint::black_box(report.clone());
+            let after = REQUESTS.get();
+            self.0
+                .report_copy
+                .set((after.0 - before.0, after.1 - before.1));
+            drop(copied);
         }
     }
 
@@ -144,12 +155,24 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
     .unwrap();
     let (start_requests, start_bytes) = counts.start.get();
     let (end_requests, end_bytes) = counts.end.get();
+    let (report_requests, report_bytes) = counts.report_copy.get();
     let calls = counts.callbacks.get() - counts.initial_callbacks.get();
+    eprintln!(
+        "public quadratic: {} allocation requests, {} bytes, {calls} constraint calls; one report copy: {report_requests} requests, {report_bytes} bytes",
+        end_requests - start_requests,
+        end_bytes - start_bytes,
+    );
     // Each constraint callback and its public adapter allocate one five-element
     // vector each. Eight resolution reductions allocate fcratio's two row-range
-    // vectors. Reject renewed per-iteration trial or geometry-step allocation.
-    assert!(end_requests - start_requests <= 2 * calls + 16);
-    assert!(end_bytes - start_bytes <= (2 * calls + 16) * 5 * size_of::<f64>());
+    // vectors. Account separately for the two owned final reports, while
+    // rejecting renewed per-iteration trial or geometry-step allocation.
+    assert!(
+        end_requests - start_requests <= 2 * calls + 16 + 2 * report_requests
+    );
+    assert!(
+        end_bytes - start_bytes
+            <= (2 * calls + 16) * 5 * size_of::<f64>() + 2 * report_bytes
+    );
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert_eq!(result.cost_evals(), 61);
     assert_eq!(counts.callbacks.get(), 61);

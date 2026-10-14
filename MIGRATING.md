@@ -127,6 +127,52 @@ choose any convergence test. For `BarrierMethod`, configure gradient
 convergence if Phase I must certify that a constraint system has no strict
 interior; an inner iteration budget alone cannot establish that certificate.
 
+Both outer methods now independently check the consumed surrogate gradient,
+including when the inner solver is derivative-free or stops at its budget. The
+absolute stationarity tolerance defaults to `1e-8`; the relative tolerance
+defaults to `1e-3` times the infinity norm at the surrogate's starting point.
+Either stationarity test must pass alongside the outer feasibility or gap test.
+The same guard applies to optional outer progress tests. These checks use the
+multipliers, penalty, or barrier weight that defined the consumed solve, before
+the outer update. They add up to two counted gradient callbacks per consumed
+result. Inner diagnostics retain the inner run's own counts.
+
+Configure these checks with `with_absolute_stationarity_tolerance` and
+`with_relative_stationarity_tolerance`. Zero requests exact stationarity.
+Disable both checks with `None` to recover the former feasibility/gap-only
+behavior, which can report success after an inaccurate inner solve. Custom
+parameter storage now also needs `NormInfinity<F>`; every supported dense
+backend release already supplies it.
+
+Barrier Phase II now retries the same weight after an unfinished centering
+solve. It retains the first gradient reference across these segments and exact
+continuation, then starts a new reference after changing the weight. Loosely
+minimized subproblems remain usable, but merely shrinking the continuation
+parameter no longer produces outer success. Choose a gap and inner resolution
+that can be attained together, especially near active bounds.
+
+`Backtracking` now returns `LineSearchOutcome::Failed` when no evaluated trial
+satisfies Armijo. Its legacy `next` method returns zero on failure. Previously,
+exhaustion returned an untested reduced step as accepted. Typed callback errors
+still propagate unchanged. DIRECT's zero radius threshold now accepts a zero
+computed radius, while its logarithmic volume test keeps positive volumes from
+becoming zero through underflow. CMA's positive TolX thresholds retain their
+strict comparison, and a zero threshold now accepts an exactly zero computed
+distribution-size metric. GBNM evaluates an all-fixed box once and returns a
+structural result instead of panicking. BrentDerivative keeps trials inside its
+bracket even when a composed policy suppresses native width termination.
+
+LM and its pivoted-QR route now offer
+`with_absolute_progress_gradient_tolerance(Some(tolerance))` to require a
+stationary retained point before a relative model-reduction, step, or radius
+stop. The guard is disabled by default. The existing independent gradient tests
+still combine with those guarded progress tests using OR. An accepted trial
+needs one counted Jacobian callback for the guard; a veto caches that model for
+continuation. A rejected trial reuses its base gradient. Guarded reports use
+custom `lm.guarded_*` predicates with both progress and gradient measurements.
+Choose the absolute threshold for the objective and parameter units and
+derivative accuracy; it does not establish parameter recovery.
+
 Basin 2.0 removes the deprecated setter aliases below. Replace each call with
 the named method on the same solver or line search. The replacement keeps the
 algorithm's setting and default unless noted here.
@@ -993,3 +1039,56 @@ of silently discarding them; ordinary iteration, evaluation, and time budgets
 remain serializable. Do not assume solver payload compatibility across major
 versions. Follow the [checkpoint migration instructions](#checkpoint-files) when
 moving a saved run from 1.x to 2.0.
+
+## Optional least-squares trial observations
+
+`GaussNewton`, LM, pivoted-QR LM, legacy `Trf`, and `TrustRegionReflective` now offer
+`with_trial_diagnostics(true)`. Import
+`basin::solver::least_squares_diagnostics::LeastSquaresDiagnostics` to read
+`least_squares_observations()` from the solver between stepper calls. Recording
+is disabled by default and adds no problem evaluations. It does allocate vectors
+and evaluate diagnostic operands, so instrumented elapsed times include that
+work.
+
+Each batch records native model checks and attempted residual trials, including
+failing and disabled convergence comparisons, acceptance decisions, damping,
+radii, native steps, and model-solve counts. A callback error can leave a trial
+incomplete; an accepted trial can still fail its subsequent Jacobian callback
+before the executor publishes a new iterate. Use the executor's state and report
+to identify published and returned points.
+
+Fresh initialization clears observations and resets their sequence. Exact
+checkpoint continuation preserves the sequence. Execution controls can stop
+before a new solver decision, leaving the preceding batch intact; deduplicate by
+sequence number. Read batches after every step because later native observations
+replace the preceding batch. Structural `no_free_parameters` checks have no
+tolerance. Legacy `Trf`'s opt-in builder requires `VectorLen` and
+`VectorIndex<F>` without adding those bounds to ordinary solves.
+
+The LM and legacy `Trf` type declarations now require `F: Scalar`, consistent
+with their existing implementations. Generic wrappers naming these types must
+declare the same bound; their `F = f64` defaults remain available.
+`GaussNewton<V, M, F = f64>` now requires `F: Scalar` on its type declaration so its
+owned observations retain native precision. Explicit `f32` type declarations
+must supply the third parameter, for example
+`GaussNewton<Vec<f32>, DenseMatrix<f32>, f32>`. Ordinary inferred construction
+remains available. Its trace records unconditional full steps separately from
+accepted/rejected trust-region trials.
+
+`BasinHopping`, both CMA injection methods, `DeInject`, and `MaLsCh` offer
+`with_inner_diagnostics(true)` and `inner_diagnostics()`. These optional records
+retain each actual inner report, the outer member/segment context, and shared
+problem counts before and after dispatch. Hard callback errors retain counts
+without promising a returned state. Fresh initialization clears the records;
+exact continuation and serialized solver checkpoints retain them. These
+reports describe inner completion and never certify outer convergence.
+
+## Robust LM damping
+
+For robust LM with Nielsen damping, an increase in the safeguarded model's
+scaling diagonal now reduces the damping parameter by the largest ratio of old
+to new diagonal entries. This compensates for growth shared by every coordinate
+while preserving effective damping in coordinates whose curvature stays clipped,
+recovering previously inaccurate `f32` stalls. Normal equations and pivoted QR
+share this adjustment. Existing settings and convergence comparisons still
+apply; robust Nielsen trajectories and callback counts can change.

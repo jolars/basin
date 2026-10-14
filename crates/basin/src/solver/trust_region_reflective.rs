@@ -1,5 +1,10 @@
 //! Dense trust-region-reflective nonlinear least squares.
+use super::least_squares_diagnostics::{
+    LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
+};
 
+#[cfg(test)]
+mod accounting;
 mod step;
 
 use crate::core::constraint::BoxConstraints;
@@ -176,11 +181,18 @@ pub struct TrustRegionReflective<F: Scalar = f64> {
     max_subproblem_iterations: usize,
     work: Option<Work<F>>,
     native_convergence: Vec<NativeConvergenceTest>,
+    trace: Option<Trace<F>>,
 }
 
 impl<F: Scalar> NativeConvergenceDiagnostics for TrustRegionReflective<F> {
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         &self.native_convergence
+    }
+}
+
+impl<F: Scalar> LeastSquaresDiagnostics<F> for TrustRegionReflective<F> {
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
@@ -202,7 +214,18 @@ impl<F: Scalar> TrustRegionReflective<F> {
             max_subproblem_iterations: 50,
             work: None,
             native_convergence: Vec::new(),
+            trace: None,
         }
+    }
+
+    /// Enable native model and trial observations (disabled by default).
+    ///
+    /// Recording adds allocations but no problem evaluations. Fresh runs reset
+    /// observations; exact continuation preserves their sequence. Model checks
+    /// occur at boundaries, and trial batches can include multiple rejections.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.trace = enabled.then(Trace::default);
+        self
     }
 
     /// Set `max |v ⊙ Jᵀr|` tolerance over free coordinates (default `1e-8`).
@@ -388,13 +411,16 @@ where
     type Error = <P as Residual>::Error;
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn check_convergence(
         &mut self,
         _problem: &Problem<P>,
-        _state: &PointState<V, F>,
+        state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
-        self.check_native_convergence()
+        self.check_native_convergence(state.cost())
     }
     fn init(
         &mut self,
@@ -428,13 +454,16 @@ where
     type Error = <P as Residual>::Error;
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn check_convergence(
         &mut self,
         _problem: &Problem<RobustLeastSquares<P, L, F>>,
-        _state: &PointState<V, F>,
+        state: &PointState<V, F>,
     ) -> Option<Termination<F>> {
-        self.check_native_convergence()
+        self.check_native_convergence(state.cost())
     }
     fn init(
         &mut self,
@@ -467,6 +496,9 @@ impl<F: Scalar> TrustRegionReflective<F> {
         E: BoundedEvaluation<V, M, F>,
     {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
         self.work = None;
         let mut state = state;
         state.reset();
@@ -589,9 +621,27 @@ impl<F: Scalar> TrustRegionReflective<F> {
             ))
         };
         if work.failed {
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "construction",
+                    "invalid_initial_model",
+                );
+                trace.observations[index].gradient = work.gradient.clone();
+                trace.observations[index].radius_before = Some(work.radius);
+            }
             return Ok(crate::SolverStep::from((state, failed())));
         }
         let Some(model) = work.model(state.param()) else {
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "construction",
+                    "invalid_scaling",
+                );
+                trace.observations[index].gradient = work.gradient.clone();
+                trace.observations[index].radius_before = Some(work.radius);
+            }
             work.failed = true;
             return Ok(crate::SolverStep::from((state, failed())));
         };
@@ -603,6 +653,19 @@ impl<F: Scalar> TrustRegionReflective<F> {
             augmented[(m + i) * n + i] = model.c[i].sqrt();
         }
         let Some(svd) = DenseSvd::factor(m + n, n, augmented) else {
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "construction",
+                    "factorization_failed",
+                );
+                let row = &mut trace.observations[index];
+                row.gradient = model.g.clone();
+                row.curvature = model.c.clone();
+                row.coordinate_scale = model.d.clone();
+                row.free = work.free.clone();
+                row.radius_before = Some(work.radius);
+            }
             work.failed = true;
             return Ok(crate::SolverStep::from((state, failed())));
         };
@@ -616,12 +679,31 @@ impl<F: Scalar> TrustRegionReflective<F> {
         let theta = number::<F>(0.995).max(F::one() - work.optimality);
         let old_cost = state.cost();
         for _ in 0..self.max_inner_attempts {
-            let Some(p) = svd.trust_step(
+            let result = svd.trust_step(
                 &rhs,
                 work.radius,
                 self.rank_tolerance,
                 self.max_subproblem_iterations,
-            ) else {
+            );
+            self.trace.as_mut().map(|trace| {
+                let mut row = LeastSquaresObservation::model(old_cost);
+                row.event = "subproblem";
+                row.outcome =
+                    Some(if result.is_some() { "solved" } else { "failed" });
+                row.model_solves = 1;
+                row.radius_before = Some(work.radius);
+                row.radius_after = Some(work.radius);
+                row.gradient = model.g.clone();
+                row.curvature = model.c.clone();
+                row.coordinate_scale = model.d.clone();
+                row.free = work.free.clone();
+                if let Some(p) = &result {
+                    row.step = p.clone();
+                    row.step_norm = Some(norm(p));
+                }
+                trace.push(row)
+            });
+            let Some(p) = result else {
                 break;
             };
             let (mut h, _) = model.select(
@@ -657,6 +739,25 @@ impl<F: Scalar> TrustRegionReflective<F> {
             }
             let length = norm(&h);
             let predicted = -model.value(&h);
+            let selection_record = self.trace.as_mut().map(|trace| {
+                let mut row = LeastSquaresObservation::model(old_cost);
+                row.event = "selection";
+                row.outcome = Some("selected");
+                row.radius_before = Some(work.radius);
+                row.radius_after = Some(work.radius);
+                row.step = h.clone();
+                row.step_norm = Some(length);
+                row.predicted_reduction = Some(predicted);
+                row.gradient = model.g.clone();
+                row.curvature = model.c.clone();
+                row.coordinate_scale = model.d.clone();
+                row.free = work.free.clone();
+                row.arithmetic = vec![
+                    ("coordinate_roundoff", roundoff),
+                    ("feasible", if feasible { F::one() } else { F::zero() }),
+                ];
+                trace.push(row)
+            });
             // Equal costs alone do not establish convergence. Once radius
             // contraction also loses every parameter change to rounding,
             // preserve the last accepted point as a numerical stop.
@@ -668,6 +769,10 @@ impl<F: Scalar> TrustRegionReflective<F> {
                     .zip(&x)
                     .all(|(&i, &x)| trial.get_scalar(i) == x)
             {
+                if let Some(index) = selection_record {
+                    self.trace.as_mut().unwrap().observations[index].outcome =
+                        Some("unchanged_after_rejection");
+                }
                 return Ok(crate::SolverStep::from((
                     state,
                     Some(Termination::numerical_stall(
@@ -681,21 +786,64 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 || !predicted.is_finite()
                 || predicted <= F::zero()
             {
+                if let Some(index) = selection_record {
+                    self.trace.as_mut().unwrap().observations[index].outcome =
+                        Some("invalid_trial_model");
+                }
                 break;
             }
             if length - work.radius
                 > number::<F>(64.0) * F::epsilon() * work.radius
                     + number::<F>(4.0) * roundoff
             {
+                if let Some(index) = selection_record {
+                    self.trace.as_mut().unwrap().observations[index].outcome =
+                        Some("outside_radius");
+                }
                 break;
             }
-            let raw_r = problem.residual(&trial)?;
+            let trial_record = self.trace.as_mut().map(|trace| {
+                let mut row = LeastSquaresObservation::model(old_cost);
+                row.event = "trial";
+                row.trial = true;
+                row.step = h.clone();
+                row.gradient = model.g.clone();
+                row.curvature = model.c.clone();
+                row.coordinate_scale = model.d.clone();
+                row.free = work.free.clone();
+                row.radius_before = Some(work.radius);
+                row.predicted_reduction = Some(predicted);
+                row.step_norm = Some(length);
+                row.model_solves = 1;
+                trace.push(row)
+            });
+            let raw_r = match problem.residual(&trial) {
+                Ok(r) => r,
+                Err(error) => {
+                    if let Some(index) = trial_record {
+                        self.trace.as_mut().unwrap().observations[index]
+                            .outcome = Some("callback_failed");
+                    }
+                    return Err(error);
+                }
+            };
             let r = vector(&raw_r);
             assert_eq!(r.len(), m, "residual shape changed during solve");
             let new_cost = problem.cost(&raw_r, |_| cost(&r));
+            if let Some(index) = trial_record {
+                self.trace.as_mut().unwrap().observations[index].trial_cost =
+                    Some(new_cost);
+            }
             if !new_cost.is_finite() || r.iter().any(|x| !x.is_finite()) {
                 work.equal_cost_rejection = false;
                 work.radius = number::<F>(0.25) * length;
+                if let Some(index) = trial_record {
+                    let row =
+                        &mut self.trace.as_mut().unwrap().observations[index];
+                    row.accepted = Some(false);
+                    row.outcome = Some("nonfinite_residual");
+                    row.radius_after = Some(work.radius);
+                }
                 continue;
             }
             let actual = old_cost - new_cost;
@@ -703,14 +851,49 @@ impl<F: Scalar> TrustRegionReflective<F> {
             let ratio = actual / predicted;
             work.radius =
                 update_radius(work.radius, length, ratio).min(F::max_value());
+            if let Some(index) = trial_record {
+                let row = &mut self.trace.as_mut().unwrap().observations[index];
+                row.actual_reduction = Some(actual);
+                row.gain_ratio = Some(ratio);
+                row.accepted = Some(actual > F::zero());
+                row.outcome = Some(if actual > F::zero() {
+                    "accepted"
+                } else {
+                    "rejected"
+                });
+                row.radius_after = Some(work.radius);
+            }
             if actual > F::zero() {
-                let j = problem.jacobian(&trial)?;
+                let j = match problem.jacobian(&trial) {
+                    Ok(j) => j,
+                    Err(error) => {
+                        if let Some(index) = trial_record {
+                            self.trace.as_mut().unwrap().observations[index]
+                                .outcome = Some("accepted_jacobian_failed");
+                        }
+                        return Err(error);
+                    }
+                };
                 let Some((model_r, j)) = problem.model(&raw_r, j) else {
+                    if let Some(trace) = &mut self.trace {
+                        trace.event(
+                            old_cost,
+                            "construction",
+                            "invalid_accepted_model",
+                        );
+                    }
                     break;
                 };
                 let Some(j) =
                     jacobian(&j, m, state.param().vec_len(), &work.free)
                 else {
+                    if let Some(trace) = &mut self.trace {
+                        trace.event(
+                            old_cost,
+                            "construction",
+                            "invalid_accepted_jacobian",
+                        );
+                    }
                     break;
                 };
                 work.residual = model_r.map_or(r, |r| vector(&r));
@@ -718,11 +901,25 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 state.replace(trial, new_cost);
                 work.failed = !work.update_gradient()
                     || work.model(state.param()).is_none();
+                if work.failed {
+                    if let Some(trace) = &mut self.trace {
+                        trace.event(
+                            state.cost(),
+                            "construction",
+                            "invalid_retained_model",
+                        );
+                    }
+                }
                 return Ok(crate::SolverStep::from((
                     state,
                     if work.failed { failed() } else { None },
                 )));
             }
+        }
+        if let Some(trace) = &mut self.trace {
+            let index =
+                trace.event(old_cost, "damping_search", "no_step_published");
+            trace.observations[index].radius_after = Some(work.radius);
         }
         work.failed = true;
         Ok(crate::SolverStep::from((state, failed())))
@@ -775,8 +972,47 @@ impl<F: Scalar> TrustRegionReflective<F> {
         }
     }
 
-    fn check_native_convergence(&mut self) -> Option<Termination<F>> {
+    fn check_native_convergence(
+        &mut self,
+        base_cost: F,
+    ) -> Option<Termination<F>> {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.clear();
+            if let Some(work) = &self.work {
+                let mut row = LeastSquaresObservation::model(base_cost);
+                row.gradient = work.gradient.clone();
+                row.free = work.free.clone();
+                row.radius_before = Some(work.radius);
+                if work.free.is_empty() && !work.failed {
+                    row.checks.push(LeastSquaresCheck {
+                        name: "no_free_parameters",
+                        tolerance: None,
+                        passed: Some(true),
+                        evidence: Some(
+                            crate::ConvergenceEvidence::NoFreeParameters,
+                        ),
+                    });
+                } else {
+                    row.checks.push(LeastSquaresCheck {
+                        name: "scaled_gradient",
+                        tolerance: self.gradient_tolerance,
+                        passed: self
+                            .gradient_tolerance
+                            .map(|t| !work.failed && work.optimality <= t),
+                        evidence: self.gradient_tolerance.map(|tolerance| {
+                            crate::ConvergenceEvidence::UpperBound {
+                                value: work.optimality,
+                                bound: tolerance,
+                                tolerance,
+                                reference: None,
+                            }
+                        }),
+                    });
+                }
+                trace.push(row);
+            }
+        }
         let test = self.convergence_test()?;
         self.native_convergence.push(test);
         Some(self.convergence_report(test))

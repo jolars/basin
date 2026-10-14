@@ -1,5 +1,9 @@
 use core::marker::PhantomData;
 
+/// Opt-in native simplex trial records.
+pub mod diagnostics;
+use diagnostics::{Trace, Trial, TrialKind};
+
 use crate::core::constraint::BoxConstraints;
 use crate::core::math::{
     ClampInPlace, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
@@ -104,6 +108,8 @@ use crate::core::state::SimplexProgress;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NelderMead<V, F: Scalar = f64, Mode = Unbounded> {
     scratch: Vec<V>,
+    #[cfg_attr(feature = "serde", serde(skip, default = "Trace::default"))]
+    trace: Trace<V, F>,
     config: ParamConfig<F>,
     /// Resolved parameters; populated by `init` once the dimension is known.
     params: Option<Params<F>>,
@@ -181,6 +187,11 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
             config: ParamConfig::Standard,
             params: None,
             scratch: Vec::new(),
+            trace: Trace {
+                enabled: false,
+                sequence: 0,
+                trials: Vec::new(),
+            },
             _mode: PhantomData,
         }
     }
@@ -194,6 +205,11 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
             config: ParamConfig::Adaptive,
             params: None,
             scratch: Vec::new(),
+            trace: Trace {
+                enabled: false,
+                sequence: 0,
+                trials: Vec::new(),
+            },
             _mode: PhantomData,
         }
     }
@@ -215,6 +231,11 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
             }),
             params: None,
             scratch: Vec::new(),
+            trace: Trace {
+                enabled: false,
+                sequence: 0,
+                trials: Vec::new(),
+            },
             _mode: PhantomData,
         }
     }
@@ -230,12 +251,28 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
             config: self.config,
             params: self.params,
             scratch: self.scratch,
+            trace: self.trace,
             _mode: PhantomData,
         }
     }
 }
 
 impl<V, Mode, F: Scalar> NelderMead<V, F, Mode> {
+    /// Record the most recent iteration's native trial attempts. Disabled by default.
+    /// Fresh initialization resets ordinals; exact continuation retains them.
+    /// Execution controls can leave an earlier batch intact. Getters make no callbacks.
+    /// Diagnostic settings and records are omitted from serde checkpoints.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.trace.enabled = enabled;
+        self.trace.trials.clear();
+        self
+    }
+
+    /// Native attempts from the most recent iteration, including callback errors.
+    pub fn trial_observations(&self) -> &[Trial<V, F>] {
+        &self.trace.trials
+    }
+
     fn resolve(config: ParamConfig<F>, n: usize) -> Params<F> {
         assert!(n >= 1, "NelderMead requires at least a 1-D problem");
         match config {
@@ -327,6 +364,7 @@ fn next_iter_inner<P, V, F, Proj>(
     mut state: SimplexProgress<V, F>,
     p: Params<F>,
     scratch: &mut [V],
+    trace: &mut Trace<V, F>,
     project: &Proj,
 ) -> Result<crate::SolverStep<SimplexProgress<V, F>>, P::Error>
 where
@@ -335,6 +373,7 @@ where
     V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
     Proj: Fn(&P, &mut V),
 {
+    trace.trials.clear();
     let m = state.vertices.len();
     let n = m - 1;
     let worst = m - 1;
@@ -357,9 +396,10 @@ where
     // Reflection: x_r = x_bar + α(x_bar − x_{n+1}) = (1+α)·x_bar − α·x_{n+1}
     affine_into(x_r, x_bar, &state.vertices[worst], -p.alpha);
     project(problem.inner(), x_r);
-    let fr = problem.cost(x_r)?;
+    let fr = trace.evaluate(problem, x_r, TrialKind::Reflection)?;
 
     if f1 <= fr && fr < fn_ {
+        trace.accept(0, true);
         // Accept reflection.
         std::mem::swap(&mut state.vertices[worst], x_r);
         state.costs[worst] = fr;
@@ -367,7 +407,10 @@ where
         // Try expansion: x_e = x_bar + β(x_r − x_bar).
         affine_into(x_alt, x_bar, x_r, p.beta);
         project(problem.inner(), x_alt);
-        let fe = problem.cost(x_alt)?;
+        let fe = trace.evaluate(problem, x_alt, TrialKind::Expansion)?;
+        let expanded = fe < fr;
+        trace.accept(0, !expanded);
+        trace.accept(1, expanded);
         if fe < fr {
             std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = fe;
@@ -380,24 +423,30 @@ where
         // x_oc = x_bar + γ(x_r − x_bar).
         affine_into(x_alt, x_bar, x_r, p.gamma);
         project(problem.inner(), x_alt);
-        let foc = problem.cost(x_alt)?;
+        trace.accept(0, false);
+        let foc =
+            trace.evaluate(problem, x_alt, TrialKind::OutsideContraction)?;
+        trace.accept(1, foc <= fr);
         if foc <= fr {
             std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = foc;
         } else {
-            shrink_inner(problem, &mut state, p.delta, project)?;
+            shrink_inner(problem, &mut state, p.delta, project, trace)?;
         }
     } else {
         // fr ≥ f_{n+1}: inside contraction.
         // x_ic = x_bar − γ(x_bar − x_{n+1}) = (1−γ)·x_bar + γ·x_{n+1}.
         affine_into(x_alt, x_bar, &state.vertices[worst], p.gamma);
         project(problem.inner(), x_alt);
-        let fic = problem.cost(x_alt)?;
+        trace.accept(0, false);
+        let fic =
+            trace.evaluate(problem, x_alt, TrialKind::InsideContraction)?;
+        trace.accept(1, fic < fnp1);
         if fic < fnp1 {
             std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = fic;
         } else {
-            shrink_inner(problem, &mut state, p.delta, project)?;
+            shrink_inner(problem, &mut state, p.delta, project, trace)?;
         }
     }
 
@@ -410,6 +459,7 @@ fn shrink_inner<P, V, F, Proj>(
     state: &mut SimplexProgress<V, F>,
     delta: F,
     project: &Proj,
+    trace: &mut Trace<V, F>,
 ) -> Result<(), P::Error>
 where
     F: Scalar,
@@ -425,12 +475,13 @@ where
     let one = F::one();
     let (best_slice, rest) = state.vertices.split_at_mut(1);
     let best = &best_slice[0];
-    for (v, c) in rest.iter_mut().zip(&mut state.costs[1..]) {
+    for (i, (v, c)) in rest.iter_mut().zip(&mut state.costs[1..]).enumerate() {
         // Multiply v by δ in place, then add (1−δ)·best; finally project.
         v.scale_in_place(delta);
         v.scaled_add(one - delta, best);
         project(problem.inner(), v);
-        *c = problem.cost(v)?;
+        *c = trace.evaluate(problem, v, TrialKind::Shrink(i + 1))?;
+        trace.accept(trace.trials.len().saturating_sub(1), true);
     }
     Ok(())
 }
@@ -449,6 +500,8 @@ where
         mut state: SimplexProgress<V, F>,
     ) -> Result<SimplexProgress<V, F>, Self::Error> {
         state.reset();
+        self.trace.trials.clear();
+        self.trace.sequence = 0;
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
         self.scratch = vec![state.vertices[0].clone(); 3];
@@ -469,6 +522,7 @@ where
             state,
             p,
             &mut self.scratch,
+            &mut self.trace,
             &|_: &P, _: &mut V| {},
         )
     }
@@ -488,6 +542,8 @@ where
         mut state: SimplexProgress<V, F>,
     ) -> Result<SimplexProgress<V, F>, Self::Error> {
         state.reset();
+        self.trace.trials.clear();
+        self.trace.sequence = 0;
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
         // Project every initial vertex once so iter-0 termination
@@ -517,6 +573,7 @@ where
             state,
             p,
             &mut self.scratch,
+            &mut self.trace,
             &|problem: &P, v: &mut V| {
                 v.clamp_in_place(problem.lower(), problem.upper())
             },

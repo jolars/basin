@@ -58,6 +58,8 @@ fn derivative_free_inner_uses_its_own_convergence_settings() {
                 .with_absolute_simplex_size_tolerance(1e-8)
                 .with_absolute_simplex_cost_tolerance(1e-10),
         )
+        // The gap must remain attainable at this simplex resolution near the wall.
+        .with_absolute_duality_gap_tolerance(1e-4)
         .with_inner_max_iter(200),
         PointState::new(vec![0.0, 0.0]),
     )

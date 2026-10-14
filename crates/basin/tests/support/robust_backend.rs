@@ -1,7 +1,7 @@
 use basin::{
-    BoxConstraints, CostFunction, Executor, HuberLoss, Jacobian, PointState,
-    Residual, RobustLeastSquares, Scalar, Solver, TerminationCode, VectorIndex,
-    VectorLen,
+    BoxConstraints, CauchyLoss, CostFunction, Executor, HuberLoss, Jacobian,
+    PointState, Residual, RobustLeastSquares, Scalar, Solver, TerminationCode,
+    VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -47,6 +47,67 @@ impl<V, M, F: Scalar> BoxConstraints for Location<V, M, F> {
     fn upper(&self) -> &V {
         &self.upper
     }
+}
+
+pub struct CauchyLocation<V, M, F> {
+    make: fn(&[F]) -> V,
+    jacobian: M,
+}
+
+impl<V: VectorIndex<F>, M, F: Scalar> Residual for CauchyLocation<V, M, F> {
+    type Param = V;
+    type Output = V;
+    type Error = Infallible;
+
+    fn residual(&self, x: &V) -> Result<V, Infallible> {
+        Ok((self.make)(&[x.get_scalar(0) - F::one(); 4]))
+    }
+}
+
+impl<V: VectorIndex<F>, M: Clone, F: Scalar> Jacobian
+    for CauchyLocation<V, M, F>
+{
+    type Jacobian = M;
+
+    fn jacobian(&self, _: &V) -> Result<M, Infallible> {
+        Ok(self.jacobian.clone())
+    }
+}
+
+pub fn check_cauchy_gradient<V, M, F, S>(fit: Location<V, M, F>, solver: S)
+where
+    F: Scalar,
+    V: Clone + VectorIndex<F> + VectorLen,
+    M: Clone,
+    S: Solver<
+            RobustLeastSquares<CauchyLocation<V, M, F>, CauchyLoss, F>,
+            PointState<V, F>,
+            Error = Infallible,
+        >,
+{
+    // Negative initial curvature forces damping recovery before stationarity.
+    let start = (fit.make)(&[-F::one()]);
+    let result = Executor::new(
+        RobustLeastSquares::new(
+            CauchyLocation {
+                make: fit.make,
+                jacobian: fit.jacobian,
+            },
+            CauchyLoss,
+        ),
+        solver,
+        PointState::new(start),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
+    assert_eq!(result.report.code(), TerminationCode::SolverConverged);
+    let error = result.param().get_scalar(0) - F::one();
+    let gradient =
+        F::from_f64(4.).unwrap() * error / (F::one() + error * error);
+    assert!(error.abs() < F::from_f64(1e-6).unwrap());
+    assert!(gradient.abs() < F::from_f64(1e-7).unwrap());
+    assert!(result.cost() < F::from_f64(1e-12).unwrap());
 }
 
 pub fn check<V, M, F, S>(fit: Location<V, M, F>, solver: S, tolerance: F)

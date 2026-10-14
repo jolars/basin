@@ -269,6 +269,8 @@ fn feasible_initialization_seeds_outer_change_checks() {
     let solver = BarrierMethod::with_inner_solver(GradientDescent::new(0.0))
         .with_inner_max_iter(1)
         .with_absolute_duality_gap_tolerance(None)
+        .with_absolute_stationarity_tolerance(None)
+        .with_relative_stationarity_tolerance(None)
         .with_absolute_cost_change_tolerance(0.0);
     let result = Executor::from_start(Inequality::new(1), solver, vec![0.0])
         .max_iter(3)

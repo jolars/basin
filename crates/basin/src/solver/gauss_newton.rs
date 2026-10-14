@@ -1,3 +1,6 @@
+use super::least_squares_diagnostics::{
+    LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
+};
 use crate::core::inner::InitialState;
 use crate::core::least_squares::evaluation::{Evaluation, NllsStep};
 use crate::core::math::{
@@ -90,7 +93,7 @@ use crate::{
 /// implement `Residual` + `Jacobian`, then drive a `PointState` through
 /// the `Executor`, swapping `LevenbergMarquardt::new()` for
 /// `GaussNewton::new()`.
-pub struct GaussNewton<V, M, F = f64> {
+pub struct GaussNewton<V, M, F: Scalar = f64> {
     tol_grad: Option<F>,
 
     // Residual and Jacobian caches across iterations. `r_cache` is set
@@ -102,6 +105,14 @@ pub struct GaussNewton<V, M, F = f64> {
     j_cache: Option<M>,
     model_r_cache: Option<V>,
     failed: bool,
+    trace: Option<Trace<F>>,
+    trace_vector: Option<fn(&V) -> Vec<F>>,
+}
+
+impl<V, M, F: Scalar> LeastSquaresDiagnostics<F> for GaussNewton<V, M, F> {
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.trace.as_ref().map_or(&[], |trace| &trace.observations)
+    }
 }
 
 impl<V, M, F: Scalar> Default for GaussNewton<V, M, F> {
@@ -112,6 +123,8 @@ impl<V, M, F: Scalar> Default for GaussNewton<V, M, F> {
             j_cache: None,
             model_r_cache: None,
             failed: false,
+            trace: None,
+            trace_vector: None,
         }
     }
 }
@@ -125,6 +138,23 @@ impl<V, M> GaussNewton<V, M> {
 }
 
 impl<V, M, F: Scalar> GaussNewton<V, M, F> {
+    /// Enable native model, Cholesky, and full-step observations.
+    ///
+    /// Recording is disabled by default and performs no problem callbacks.
+    /// Fresh initialization resets the sequence; exact continuation preserves it.
+    /// A full step has no decrease-based acceptance test. Its publication and
+    /// independent quality must be checked separately from its dispatch.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self
+    where
+        V: VectorLen + VectorIndex<F>,
+    {
+        self.trace = enabled.then(Trace::default);
+        self.trace_vector = enabled.then_some(|v: &V| {
+            (0..v.vec_len()).map(|i| v.get_scalar(i)).collect()
+        });
+        self
+    }
+
     /// Configure the infinity norm of J-transpose times residual.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
@@ -214,6 +244,9 @@ where
         mut state: PointState<V, F>,
     ) -> Result<PointState<V, F>, E::Error> {
         state.reset();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
         // Seed cost so iter-0 termination criteria see a populated
         // state. Both `r(x₀)` and `J(x₀)` are stashed so the first
         // `next_iter` doesn't re-evaluate them at the same point.
@@ -228,6 +261,9 @@ where
         );
         let Some((model_r, j)) = problem.model(&r, j) else {
             self.failed = true;
+            if let Some(trace) = &mut self.trace {
+                trace.event(state.cost(), "construction", "invalid_model");
+            }
             return Ok(state);
         };
         self.r_cache = Some(r);
@@ -241,7 +277,13 @@ where
         problem: &mut E,
         mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
+        if let Some(trace) = &mut self.trace {
+            trace.clear();
+        }
         if self.failed {
+            if let Some(trace) = &mut self.trace {
+                trace.event(state.cost(), "construction", "invalid_model");
+            }
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::numerical_failure(
@@ -259,6 +301,13 @@ where
                 let j = problem.jacobian(state.param())?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
+                    if let Some(trace) = &mut self.trace {
+                        trace.event(
+                            state.cost(),
+                            "construction",
+                            "invalid_model",
+                        );
+                    }
                     return Ok(crate::SolverStep::from((
                         state,
                         Some(Termination::numerical_failure(
@@ -275,6 +324,15 @@ where
         let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
         if !problem.valid_vector(&g) {
             self.failed = true;
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "construction",
+                    "invalid_gradient",
+                );
+                trace.observations[index].gradient =
+                    self.trace_vector.unwrap()(&g);
+            }
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::numerical_failure(
@@ -282,7 +340,26 @@ where
                 )),
             )));
         }
-        if self.tol_grad.is_some_and(|tol| g.norm_infinity() <= tol) {
+        let gradient_norm = g.norm_infinity();
+        if let Some(trace) = &mut self.trace {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            row.gradient = self.trace_vector.unwrap()(&g);
+            row.checks.push(LeastSquaresCheck {
+                name: "absolute_gradient",
+                tolerance: self.tol_grad,
+                passed: self.tol_grad.map(|tol| gradient_norm <= tol),
+                evidence: self.tol_grad.map(|tolerance| {
+                    crate::ConvergenceEvidence::UpperBound {
+                        value: gradient_norm,
+                        bound: tolerance,
+                        tolerance,
+                        reference: None,
+                    }
+                }),
+            });
+            trace.push(row);
+        }
+        if self.tol_grad.is_some_and(|tol| gradient_norm <= tol) {
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             self.model_r_cache = model_r;
@@ -290,7 +367,7 @@ where
                 state,
                 Some(Termination::upper_bound(
                     crate::ConvergenceTest::AbsoluteGradientInfinity,
-                    g.norm_infinity(),
+                    gradient_norm,
                     self.tol_grad.unwrap(),
                     self.tol_grad.unwrap(),
                     None,
@@ -304,7 +381,27 @@ where
         let gram = j.gram();
         let mut neg_g = g;
         neg_g.neg_in_place();
-        let delta = match gram.solve_spd(&neg_g) {
+        let solved = gram.solve_spd(&neg_g);
+        if let Some(trace) = &mut self.trace {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            row.event = "subproblem";
+            row.outcome = Some(if solved.is_ok() {
+                "solved"
+            } else {
+                "factorization_failed"
+            });
+            row.model_solves = 1;
+            row.gradient = self.trace_vector.unwrap()(&neg_g)
+                .into_iter()
+                .map(|v| -v)
+                .collect();
+            if let Ok(delta) = &solved {
+                row.step = self.trace_vector.unwrap()(delta);
+                row.step_norm = Some(delta.norm_squared().sqrt());
+            }
+            trace.push(row);
+        }
+        let delta = match solved {
             Ok(d) => d,
             Err(_) => {
                 // State unchanged on Cholesky failure; restore caches
@@ -327,12 +424,42 @@ where
         // `J(x_new)` is not computed, so `j_cache` stays empty.
         let mut param = state.param().clone();
         param.scaled_add(F::one(), &delta);
-        let r_new = problem.residual(&param)?;
-        state.replace(
-            param,
-            problem
-                .cost(&r_new, |r| F::from_f64(0.5).unwrap() * r.norm_squared()),
-        );
+        let trial = self.trace.as_mut().map(|trace| {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            row.event = "trial";
+            row.outcome = Some("callback_pending");
+            row.trial = true;
+            row.step = self.trace_vector.unwrap()(&delta);
+            row.gradient = self.trace_vector.unwrap()(&neg_g)
+                .into_iter()
+                .map(|v| -v)
+                .collect();
+            row.step_norm = Some(delta.norm_squared().sqrt());
+            row.predicted_reduction = Some(
+                -row.gradient
+                    .iter()
+                    .zip(&row.step)
+                    .fold(F::zero(), |sum, (g, d)| sum + *g * *d)
+                    / F::from_f64(2.).unwrap(),
+            );
+            trace.push(row)
+        });
+        let r_new = problem.residual(&param).inspect_err(|_| {
+            if let Some(index) = trial {
+                self.trace.as_mut().unwrap().observations[index].outcome =
+                    Some("callback_failed");
+            }
+        })?;
+        let trial_cost = problem
+            .cost(&r_new, |r| F::from_f64(0.5).unwrap() * r.norm_squared());
+        if let Some(index) = trial {
+            let row = &mut self.trace.as_mut().unwrap().observations[index];
+            row.outcome = Some("unconditional_full_step");
+            row.trial_cost = Some(trial_cost);
+            row.actual_reduction = Some(row.base_cost - trial_cost);
+            row.accepted = Some(true);
+        }
+        state.replace(param, trial_cost);
         self.r_cache = Some(r_new);
         self.j_cache = None;
 

@@ -5,12 +5,37 @@ use crate::core::constraint::LinearEqualityConstraints;
 use crate::core::executor::run_loop_with_control;
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
-    Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+    Dot, MatTransposeVec, MatVec, NormInfinity, NormSquared, Scalar,
+    ScaleInPlace, ScaledAdd,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, SelectedState, State};
 use crate::core::termination::Termination;
+
+/// Owned evidence from the most recent attempted augmented-Lagrangian solve.
+///
+/// The multiplier and penalty define the surrogate before the outer update.
+/// A hard callback error retains its seed and counts without a returned state.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AugmentedLagrangianInnerDiagnostics<V, F: Scalar = f64> {
+    /// Penalty that defined the attempted subproblem.
+    pub rho: F,
+    /// Multiplier vector before the outer multiplier or penalty update.
+    pub lambda: V,
+    /// Seed passed to the fresh inner state.
+    pub start: V,
+    /// Published inner point on a clean return.
+    pub returned: Option<V>,
+    /// Authoritative inner outcome on a clean return.
+    pub report: Option<crate::TerminationReport<F>>,
+    /// Raw categories charged during the native inner run, including failed
+    /// calls, but excluding independent outer stationarity verification.
+    pub counts: crate::EvalCounts,
+    /// Whether the attempted inner run aborted with a typed callback error.
+    pub hard_error: bool,
+}
 
 /// Augmented-Lagrangian method for `min f(x) s.t. A x = b`, the
 /// equality-constrained analogue of the log-barrier
@@ -58,7 +83,7 @@ use crate::core::termination::Termination;
 /// repeat:
 ///   x ← argmin_x L_ρ(x, λ)            # inner solver, warm-started at x
 ///   c ← A x − b
-///   if ‖c‖ ≤ tol: stop (SolverConverged)
+///   if ‖c‖ ≤ tol and surrogate stationarity passes: stop
 ///   if ‖c‖ ≤ feasibility_decrease · ‖c_prev‖:
 ///       λ ← λ + ρ c                    # sufficient feasibility improvement
 ///   else:
@@ -67,21 +92,26 @@ use crate::core::termination::Termination;
 ///
 /// # Termination
 ///
-/// The outer feasibility test `‖A x − b‖ ≤ tol` is solver-specific and lives
-/// on the solver (tenet 3): it fires via [`terminate`](Solver::terminate) as
-/// [`SolverConverged`](crate::TerminationCode::SolverConverged). Optimality is the
-/// inner solve's job: a gradient-based inner solver can drive
-/// `‖∇_x L_ρ‖` down, while a derivative-free solver uses its own convergence
-/// test. The outer feasibility stop alone does not certify stationarity if
-/// the inner solve exhausted its iteration budget. Pair
-/// with the executor's [`max_iter`](crate::Executor::max_iter) as a safety net.
+/// Outer convergence requires `‖A x − b‖₂ ≤ tol` (default `1e-8`) and
+/// sufficient surrogate stationarity at the returned inner point. The latter
+/// requires `‖∇L_ρ‖∞ ≤ 1e-8` or a reduction to `1e-3` times its norm at the
+/// inner starting point. Configure these with
+/// [`with_absolute_stationarity_tolerance`](Self::with_absolute_stationarity_tolerance)
+/// and [`with_relative_stationarity_tolerance`](Self::with_relative_stationarity_tolerance).
+/// Both gradients use the same pre-update multipliers and penalty. These are
+/// local numerical tests, not guarantees of objective or parameter accuracy.
+/// Keep an executor [`max_iter`](crate::Executor::max_iter) budget.
 ///
-/// The outer [`SelectedState`] reports the original objective and the residual
-/// norm `‖A x − b‖`, without advertising a gradient. The true objective gradient
-/// generally does not vanish at a constrained optimum; the inner solver tests
-/// the surrogate's gradient. Optional outer cost- and step-change checks run
-/// only once the residual meets the feasibility tolerance (exact zero when
-/// that tolerance is disabled).
+/// The checks also apply to derivative-free and budget-limited inners. An
+/// arbitrary inner convergence label cannot replace the independent gradient
+/// check. Disable both stationarity settings with `None` to recover the former
+/// feasibility-only behavior; zero requests exact stationarity. Up to two
+/// additional gradient callbacks per consumed result are counted as outer
+/// verification work, separately from the native inner diagnostics.
+///
+/// The outer [`SelectedState`] reports the original objective and residual
+/// norm without advertising an objective gradient. Optional outer cost- and
+/// step-change tests require both feasibility and surrogate stationarity.
 ///
 /// Incumbent selection first prefers feasible points, using the configured
 /// tolerance, and then lower objectives among feasible points. Before finding
@@ -101,9 +131,9 @@ use crate::core::termination::Termination;
 /// then reevaluates the objective and constraint residual. Each inner solve
 /// also starts fresh. Exact solver-aware checkpoints retain the outer model,
 /// selected incumbent, and all six raw evaluation categories. State-only
-/// snapshots start a new solve. The outer no longer evaluates an unused true
-/// objective gradient; inner gradient calls remain charged separately in
-/// `state.counts().gradient_evals`. Adapter work is merged even on hard errors.
+/// snapshots start a new solve. Inner and stationarity-verification gradient
+/// calls remain charged in `state.counts().gradient_evals`. Adapter work is
+/// merged even on hard errors.
 /// With `serde`, solver-aware serialization is available when the inner solver,
 /// parameter, and scalar types support it.
 ///
@@ -114,8 +144,9 @@ use crate::core::termination::Termination;
 /// those two ops: `Vec<F>` with [`DenseMatrix`](crate::DenseMatrix),
 /// nalgebra `DVector<F>`/`DMatrix<F>`, ndarray `Array1<F>`/`Array2<F>`, and
 /// faer `Col<F>`/`Mat<F>`, with `F = f64` (default) or `f32`. Vectors need
-/// [`ScaledAdd<F>`], [`ScaleInPlace<F>`], [`Dot<F>`], [`NormSquared<F>`], and
-/// `Clone`. The chosen inner solver can impose additional capabilities.
+/// [`ScaledAdd<F>`], [`ScaleInPlace<F>`], [`Dot<F>`], [`NormSquared<F>`],
+/// [`NormInfinity<F>`], and `Clone`. The chosen inner solver can impose
+/// additional capabilities.
 ///
 /// # Composition
 ///
@@ -140,6 +171,10 @@ pub struct AugmentedLagrangianMethod<So, V, F: Scalar = f64> {
     rho_increase: F,
     feasibility_decrease: F,
     tol: Option<F>,
+    stationarity_tol: Option<F>,
+    relative_stationarity_tol: Option<F>,
+    stationarity_initial_norm: F,
+    stationarity_norm: F,
     /// Multiplier estimate `λ ∈ ℝᵐ`; populated in [`init`](Solver::init) with
     /// a zero vector shaped like `b`, then carried across outer iterations.
     lambda: Option<V>,
@@ -148,6 +183,9 @@ pub struct AugmentedLagrangianMethod<So, V, F: Scalar = f64> {
     c_norm: F,
     /// `‖c(x)‖` of the previous outer iteration, for the `ρ`-increase test.
     c_norm_prev: F,
+    #[cfg_attr(feature = "serde", serde(default))]
+    inner_diagnostics: bool,
+    last_inner: Option<AugmentedLagrangianInnerDiagnostics<V, F>>,
 }
 
 impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
@@ -166,14 +204,39 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
             rho_increase: F::from_f64(10.0).unwrap(),
             feasibility_decrease: F::from_f64(0.25).unwrap(),
             tol: Some(F::from_f64(1e-8).unwrap()),
+            stationarity_tol: Some(F::from_f64(1e-8).unwrap()),
+            relative_stationarity_tol: Some(F::from_f64(1e-3).unwrap()),
+            stationarity_initial_norm: F::infinity(),
+            stationarity_norm: F::infinity(),
             lambda: None,
             c_norm: F::infinity(),
             c_norm_prev: F::infinity(),
+            inner_diagnostics: false,
+            last_inner: None,
         }
     }
 }
 
 impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
+    /// Retain the last attempted inner run and the surrogate's defining stage.
+    ///
+    /// Disabled by default. Enabling this copies diagnostic vectors and reports
+    /// without changing inner capabilities, controls, or stopping behavior.
+    pub fn with_inner_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner_diagnostics = enabled;
+        if !enabled {
+            self.last_inner = None;
+        }
+        self
+    }
+
+    /// Last attempted inner run, or `None` before an enabled attempt.
+    pub fn inner_diagnostics(
+        &self,
+    ) -> Option<&AugmentedLagrangianInnerDiagnostics<V, F>> {
+        self.last_inner.as_ref()
+    }
+
     /// Initial penalty parameter `ρ` (default `10.0`).
     ///
     /// # Panics
@@ -228,6 +291,41 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
         self
     }
 
+    /// Require `‖∇L_ρ(x, λ)‖∞` at the returned inner point to be at most this
+    /// tolerance before outer convergence (default `1e-8`).
+    ///
+    /// Uses the penalty and multipliers that defined the inner problem, before
+    /// their outer update. This independent check also applies to derivative-free
+    /// and budget-limited inners. Together with the relative guard, it adds up to
+    /// two gradient evaluations per consumed result. `None` disables this
+    /// absolute test; zero requests exact stationarity.
+    /// The guard also applies to optional outer cost- and step-change tests.
+    pub fn with_absolute_stationarity_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.stationarity_tol =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
+    /// Require the returned surrogate-gradient infinity norm to be at most
+    /// this fraction of its norm at the inner starting point (default `1e-3`).
+    ///
+    /// Both norms use the same surrogate parameters before the outer update.
+    /// Absolute and relative stationarity tests combine with OR. At least one
+    /// must pass before outer convergence.
+    /// `None` disables this relative test; zero requests exact stationarity.
+    /// Disable both stationarity tests to recover feasibility-only stopping.
+    pub fn with_relative_stationarity_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.relative_stationarity_tol =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// Iteration budget for each inner subproblem solve (default `50`).
     ///
     /// As with the barrier, a first-order inner solver on the (increasingly
@@ -248,6 +346,15 @@ impl<So, V, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
 }
 
 impl<So, V: Clone, F: Scalar> AugmentedLagrangianMethod<So, V, F> {
+    fn stationarity_satisfied(&self) -> bool {
+        crate::core::convergence::stationarity_within_tolerance(
+            self.stationarity_norm,
+            self.stationarity_initial_norm,
+            self.stationarity_tol,
+            self.relative_stationarity_tol,
+        )
+    }
+
     fn select_incumbent(&self, state: &mut SelectedState<V, F>) {
         let (_, cost, violation) =
             state.current().expect("evaluated outer point");
@@ -293,7 +400,12 @@ where
         + Gradient<Gradient = V>
         + LinearEqualityConstraints<Param = V, Matrix = M>,
     M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<F> + Dot<F> + NormSquared<F> + ScaleInPlace<F> + Clone,
+    V: ScaledAdd<F>
+        + Dot<F>
+        + NormSquared<F>
+        + NormInfinity<F>
+        + ScaleInPlace<F>
+        + Clone,
     So: WarmStart<V>
         + for<'a> Solver<
             AugmentedLagrangian<'a, P, V, F>,
@@ -313,6 +425,9 @@ where
         self.rho = self.rho0;
         self.c_norm = F::infinity();
         self.c_norm_prev = F::infinity();
+        self.stationarity_norm = F::infinity();
+        self.stationarity_initial_norm = F::infinity();
+        self.last_inner = None;
 
         // λ ← 0 ∈ ℝᵐ. Clone `b` for the right shape (m entries), then zero it:
         // backend-generic with no "zeros_like" in the math layer. No
@@ -336,6 +451,8 @@ where
         problem: &mut Problem<P>,
         mut state: SelectedState<V, F>,
     ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
+        self.stationarity_norm = F::infinity();
+        self.stationarity_initial_norm = F::infinity();
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
         // *separate* inner state seeded (warm-started) at the current
         // iterate. Fresh criteria each call satisfies the statelessness
@@ -348,6 +465,9 @@ where
         ));
         let mut control = crate::core::run_control::RunControl::new()
             .max_iter(self.inner_max_iter);
+        let diagnostic_start = self
+            .inner_diagnostics
+            .then(|| (state.param().clone(), lambda.clone()));
         let inner_state = self.inner_solver.seed(state.param());
         let result = run_loop_with_control(
             &mut al_wrapper,
@@ -362,8 +482,42 @@ where
         // (still held by `al_wrapper`) doesn't collide with the
         // `counts_mut` reborrow.
         let inner_counts = *al_wrapper.counts();
-        problem.counts_mut().add(&inner_counts);
+        let stationarity = result
+            .as_ref()
+            .ok()
+            .filter(|r| {
+                (self.stationarity_tol.is_some()
+                    || self.relative_stationarity_tol.is_some())
+                    && r.report.termination.can_continue_as_inner(
+                        crate::PartialResultPolicy::Consume,
+                    )
+            })
+            .map(|r| {
+                let initial =
+                    al_wrapper.gradient(state.param())?.norm_infinity();
+                let final_norm =
+                    al_wrapper.gradient(r.state.param())?.norm_infinity();
+                Ok::<_, Self::Error>((initial, final_norm))
+            })
+            .transpose();
+        let total_counts = *al_wrapper.counts();
+        problem.counts_mut().add(&total_counts);
+        self.last_inner = diagnostic_start.map(|(start, lambda)| {
+            AugmentedLagrangianInnerDiagnostics {
+                rho: self.rho,
+                lambda,
+                start,
+                returned: result.as_ref().ok().map(|r| r.state.param().clone()),
+                report: result.as_ref().ok().map(|r| r.report.clone()),
+                counts: inner_counts,
+                hard_error: result.is_err(),
+            }
+        });
         let result = result?;
+        if let Some((initial, final_norm)) = stationarity? {
+            self.stationarity_initial_norm = initial;
+            self.stationarity_norm = final_norm;
+        }
 
         if !result
             .report
@@ -378,14 +532,23 @@ where
             )));
         }
 
-        // The outer record reports the original objective and feasibility;
-        // gradients used by the surrogate remain inner-solver work.
+        // Publish a coherent original objective and feasibility pair only after
+        // checking both independently of the surrogate's stopping report.
         let candidate = result.state.param();
         let cost = problem.cost(candidate)?;
         let mut c = problem.inner().a().matvec(candidate);
         c.scaled_add(-F::one(), problem.inner().b());
+        let c_norm = c.norm_squared().sqrt();
+        if !cost.is_finite() || !c_norm.is_finite() {
+            return Ok(crate::SolverStep::stopped(
+                state,
+                Termination::numerical_failure(
+                    "The augmented-Lagrangian solve returned a non-finite original objective or equality residual.",
+                ),
+            ));
+        }
         self.c_norm_prev = self.c_norm;
-        self.c_norm = c.norm_squared().sqrt();
+        self.c_norm = c_norm;
         state.replace(candidate.clone(), cost, self.c_norm);
         self.select_incumbent(&mut state);
 
@@ -405,29 +568,67 @@ where
     }
 
     fn should_check_iterate_change(&self) -> bool {
-        self.c_norm.is_finite() && self.c_norm <= self.tol.unwrap_or(F::zero())
+        self.stationarity_satisfied()
+            && self.c_norm.is_finite()
+            && self.c_norm <= self.tol.unwrap_or(F::zero())
     }
 
     fn terminate(
         &self,
         _state: &SelectedState<V, F>,
     ) -> Option<Termination<F>> {
-        // Feasibility bound ‖A x − b‖ from the most recent solve. Optimality
-        // is handled by the inner solve driving ‖∇L_ρ‖ down.
-        if self.tol.is_some_and(|tol| self.c_norm <= tol) {
+        if self.stationarity_satisfied()
+            && self.tol.is_some_and(|tol| self.c_norm <= tol)
+        {
+            let mut measurements = vec![
+                crate::Measurement {
+                    name: "residual_norm".into(),
+                    value: self.c_norm,
+                },
+                crate::Measurement {
+                    name: "tolerance".into(),
+                    value: self.tol.unwrap(),
+                },
+            ];
+            if let Some(tolerance) = self.stationarity_tol {
+                measurements.extend([
+                    crate::Measurement {
+                        name: "stationarity_norm".into(),
+                        value: self.stationarity_norm,
+                    },
+                    crate::Measurement {
+                        name: "stationarity_tolerance".into(),
+                        value: tolerance,
+                    },
+                ]);
+            }
+            if let Some(tolerance) = self.relative_stationarity_tol {
+                if self.stationarity_tol.is_none() {
+                    measurements.push(crate::Measurement {
+                        name: "stationarity_norm".into(),
+                        value: self.stationarity_norm,
+                    });
+                }
+                measurements.extend([
+                    crate::Measurement {
+                        name: "relative_stationarity_tolerance".into(),
+                        value: tolerance,
+                    },
+                    crate::Measurement {
+                        name: "initial_stationarity_norm".into(),
+                        value: self.stationarity_initial_norm,
+                    },
+                ]);
+            }
             Some(Termination::custom(
                 "augmented_lagrangian.feasibility",
-                "The norm of the equality residual is at most the outer feasibility tolerance.",
-                vec![
-                    crate::Measurement {
-                        name: "residual_norm".into(),
-                        value: self.c_norm,
-                    },
-                    crate::Measurement {
-                        name: "tolerance".into(),
-                        value: self.tol.unwrap(),
-                    },
-                ],
+                concat!(
+                    "residual_norm <= tolerance AND (the finite surrogate-gradient infinity norm ",
+                    "meets an enabled absolute stationarity bound OR its relative bound times ",
+                    "the finite initial norm). The two stationarity tests combine with OR; ",
+                    "disabling both bypasses their guard."
+                ),
+                measurements,
             ))
         } else {
             None

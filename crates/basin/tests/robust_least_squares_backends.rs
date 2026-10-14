@@ -7,7 +7,9 @@ use basin::{
     GaussNewton, LevenbergMarquardt, LevenbergMarquardtQr, LmDamping, Trf,
     TrustRegionReflective,
 };
-use robust_backend::{Location, check, check_nonfinite_damping};
+use robust_backend::{
+    Location, check, check_cauchy_gradient, check_nonfinite_damping,
+};
 
 macro_rules! check_solvers {
     ($v:ty, $m:ty, $f:ty, $make:expr, $matrix:expr, $dense:ident) => {{
@@ -37,6 +39,10 @@ macro_rules! check_solvers {
                     .with_absolute_gradient_tolerance(gradient),
                 tolerance,
             );
+            check_cauchy_gradient(
+                fit.clone(),
+                LevenbergMarquardt::<V, M, F>::default().with_damping(damping),
+            );
         }
         check(
             fit.clone(),
@@ -60,6 +66,10 @@ macro_rules! dense_solvers {
                     .with_damping(damping)
                     .with_absolute_gradient_tolerance($grad),
                 $tol,
+            );
+            check_cauchy_gradient(
+                $fit.clone(),
+                LevenbergMarquardtQr::new().with_damping(damping),
             );
         }
         check(

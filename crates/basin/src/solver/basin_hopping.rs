@@ -358,6 +358,8 @@ pub struct BasinHopping<
     // also came from a failed solve. Set by `init`, updated on every accept.
     incumbent_success: bool,
     pending_stop: Option<Termination<F>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
 }
 
 impl<I, V, F> BasinHopping<I, V, F, RandomDisplacement<F>, Metropolis<F>>
@@ -392,6 +394,7 @@ where
             naccept: 0,
             incumbent_success: true,
             pending_stop: None,
+            inner_diagnostics: None,
         }
     }
 
@@ -448,6 +451,7 @@ where
             naccept: self.naccept,
             incumbent_success: self.incumbent_success,
             pending_stop: self.pending_stop,
+            inner_diagnostics: self.inner_diagnostics,
         }
     }
 
@@ -471,6 +475,7 @@ where
             naccept: self.naccept,
             incumbent_success: self.incumbent_success,
             pending_stop: self.pending_stop,
+            inner_diagnostics: self.inner_diagnostics,
         }
     }
 
@@ -539,6 +544,21 @@ where
         self
     }
 
+    /// Enable owned inner stopping reports and count snapshots. Disabled by default.
+    /// Fresh initialization clears records; exact continuation retains them.
+    pub fn with_inner_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner_diagnostics = enabled.then(Vec::new);
+        self
+    }
+
+    /// Inner reports consumed during this outer run, in dispatch order.
+    /// A callback error retains counts and has no returned report.
+    pub fn inner_diagnostics(
+        &self,
+    ) -> &[crate::core::inner::diagnostics::Record<F>] {
+        self.inner_diagnostics.as_deref().unwrap_or(&[])
+    }
+
     /// Add a factory creating fresh application-stop history for each inner run.
     pub fn inner_stop_when_factory<Mk, CheckFn>(mut self, make: Mk) -> Self
     where
@@ -591,11 +611,24 @@ where
         self.naccept = 0;
         self.accepted_iterate = true;
         self.pending_stop = None;
+        if let Some(records) = &mut self.inner_diagnostics {
+            records.clear();
+        }
         // Relax the starting point once so the Metropolis walk begins from a
         // local minimum (the `Ẽ` value of x0). Same-problem composition, so
         // the inner's evals flow into the outer wrapper transparently.
         let seeded = self.inner.solver().seed(state.param());
-        let result = self.inner.run(problem, seeded)?;
+        let result = crate::core::inner::diagnostics::run(
+            &mut self.inner_diagnostics,
+            problem,
+            crate::core::inner::diagnostics::Context {
+                outer_iteration: state.iter(),
+                member: None,
+                resumed: false,
+                initial_scale: None,
+            },
+            |problem| self.inner.run(problem, seeded),
+        )?;
         state.replace(result.state.param().clone(), result.state.cost());
         // Record whether the initial relaxation succeeded so the first hop's
         // acceptance guard has a faithful incumbent-success flag (a hard `Err`
@@ -626,7 +659,17 @@ where
         // matching SciPy (which keeps walking past a failed local solve). Clean
         // stops (converged, max-iter, tolerance) leave the candidate successful.
         let seeded = self.inner.solver().seed(&x_trial);
-        let result = self.inner.run(problem, seeded)?;
+        let result = crate::core::inner::diagnostics::run(
+            &mut self.inner_diagnostics,
+            problem,
+            crate::core::inner::diagnostics::Context {
+                outer_iteration: state.iter(),
+                member: None,
+                resumed: false,
+                initial_scale: None,
+            },
+            |problem| self.inner.run(problem, seeded),
+        )?;
         if matches!(
             result.report.termination,
             Termination::Cancelled | Termination::Application(_)

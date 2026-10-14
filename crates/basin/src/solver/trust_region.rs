@@ -36,6 +36,7 @@
 //! [`HessianProduct`](crate::core::problem::HessianProduct) impl and never
 //! forms a matrix.
 
+pub mod diagnostics;
 pub mod dogleg;
 pub mod more_sorensen;
 pub mod steihaug;
@@ -463,6 +464,8 @@ pub struct TrustRegion<Sub = Steihaug, F: Scalar = f64, Mode = ExactHessian> {
     eta: F,
     max_inner: u32,
     rejected_step: bool,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    trials: Option<Vec<diagnostics::Trial<F>>>,
     mode: PhantomData<Mode>,
 }
 
@@ -523,6 +526,7 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F, MatrixFree> {
             eta: F::from_f64(0.125).unwrap(),
             max_inner: 10,
             rejected_step: false,
+            trials: None,
             mode: PhantomData,
         }
     }
@@ -540,12 +544,24 @@ impl<Sub, F: Scalar> TrustRegion<Sub, F> {
             eta: F::from_f64(0.125).unwrap(),
             max_inner: 10,
             rejected_step: false,
+            trials: None,
             mode: PhantomData,
         }
     }
 }
 
 impl<Sub, F: Scalar, Mode> TrustRegion<Sub, F, Mode> {
+    /// Enable native trial records without changing the numerical policy.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.trials = enabled.then(Vec::new);
+        self
+    }
+
+    /// Native inner attempts, including incomplete callback phases.
+    pub fn trial_observations(&self) -> &[diagnostics::Trial<F>] {
+        self.trials.as_deref().unwrap_or(&[])
+    }
+
     /// Current trust radius, retained by solver-aware results and checkpoints.
     pub fn radius(&self) -> F {
         self.radius
@@ -634,12 +650,13 @@ where
 /// once per inner radius reduction at the *same* iterate `x`.
 /// The final tuple element reports whether a step was accepted, so rejected
 /// iterations cannot trigger the generic iterate-change checks.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn tr_next_iter<P, V, F>(
     radius: &mut F,
     max_radius: F,
     eta: F,
     max_inner: u32,
+    trials: &mut Option<Vec<diagnostics::Trial<F>>>,
     problem: &mut Problem<P>,
     mut state: FirstOrderState<V, F>,
     mut attempt: impl FnMut(
@@ -663,11 +680,37 @@ where
     let two = F::from_f64(2.0).unwrap();
 
     for _ in 0..max_inner {
+        if let Some(records) = trials.as_mut() {
+            records.push(diagnostics::Trial {
+                sequence: records.len() as u64 + 1,
+                phase: diagnostics::Phase::Subproblem,
+                radius_before: *radius,
+                radius_after: None,
+                gradient_norm_squared: g.norm_squared(),
+                step_norm_squared: None,
+                predicted_reduction: None,
+                trial_cost: None,
+                ratio: None,
+                hit_boundary: None,
+                eta,
+                counts_before: *problem.counts(),
+                counts_after: *problem.counts(),
+            });
+        }
         let step = attempt(problem, state.param(), &g, *radius)?;
+        if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+            record.step_norm_squared = Some(step.d.norm_squared());
+            record.predicted_reduction = Some(step.predicted_reduction);
+            record.hit_boundary = Some(step.hit_boundary);
+            record.counts_after = *problem.counts();
+        }
 
         // Non-finite model data or subproblem arithmetic makes the step
         // untrustworthy, regardless of the gradient norm.
         if !step.predicted_reduction.is_finite() {
+            if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+                record.phase = diagnostics::Phase::InvalidModel;
+            }
             state
                 .set_evaluation(cost_old, g)
                 .expect("gradient dimension differs from parameter");
@@ -685,6 +728,9 @@ where
         // checked before next_iter; only a zero norm establishes
         // convergence here without adding an implicit tolerance.
         if step.predicted_reduction <= F::zero() {
+            if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+                record.phase = diagnostics::Phase::NoProgress;
+            }
             let reason = if g.norm_squared() == F::zero() {
                 Termination::custom(
                     "trust_region.zero_gradient",
@@ -707,7 +753,14 @@ where
 
         let mut trial = state.param().clone();
         trial.scaled_add(F::one(), &step.d);
+        if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+            record.phase = diagnostics::Phase::TrialEvaluation;
+        }
         let cost_trial = problem.cost(&trial)?;
+        if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+            record.trial_cost = Some(cost_trial);
+            record.counts_after = *problem.counts();
+        }
 
         let rho = (cost_old - cost_trial) / step.predicted_reduction;
         let step_norm = step.d.norm_squared().sqrt();
@@ -734,11 +787,24 @@ where
             };
         }
 
+        if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+            record.ratio = Some(rho);
+            record.radius_after = Some(*radius);
+            record.phase = if rho > eta {
+                diagnostics::Phase::GradientRefresh
+            } else {
+                diagnostics::Phase::Rejected
+            };
+        }
         if rho > eta {
             // Accept: move to the trial point and refresh the gradient
             // there (second-order information is recomputed by the next
             // iteration).
             let g_new = problem.gradient(&trial)?;
+            if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
+                record.phase = diagnostics::Phase::Accepted;
+                record.counts_after = *problem.counts();
+            }
             state
                 .replace(trial, cost_trial, g_new)
                 .expect("gradient dimension differs from parameter");
@@ -779,6 +845,9 @@ where
         state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
         self.rejected_step = false;
+        if let Some(records) = self.trials.as_mut() {
+            records.clear();
+        }
         tr_init(&mut self.radius, self.initial_radius, problem, state)
     }
 
@@ -797,6 +866,7 @@ where
             self.max_radius,
             self.eta,
             self.max_inner,
+            &mut self.trials,
             problem,
             state,
             |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
@@ -828,6 +898,9 @@ where
         state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
         self.rejected_step = false;
+        if let Some(records) = self.trials.as_mut() {
+            records.clear();
+        }
         tr_init(&mut self.radius, self.initial_radius, problem, state)
     }
 
@@ -847,6 +920,7 @@ where
             self.max_radius,
             self.eta,
             self.max_inner,
+            &mut self.trials,
             problem,
             state,
             |problem, x, g, radius| {
@@ -1045,6 +1119,7 @@ mod tests {
                 100.0,
                 0.125,
                 10,
+                &mut None,
                 &mut problem,
                 state,
                 |_, _, _, _| {

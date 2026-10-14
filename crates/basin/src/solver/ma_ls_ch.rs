@@ -222,6 +222,8 @@ where
     /// [`ResumableInner::seed_chain`]; its own RNG is never drawn.
     pub(crate) ls: LS,
     history: ChainHistory<LS, LS::State, F>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    inner_diagnostics: Option<Vec<crate::core::inner::diagnostics::Record<F>>>,
     _phantom: PhantomData<V>,
 }
 
@@ -254,8 +256,24 @@ where
             rng: None,
             ls,
             history: ChainHistory::default(),
+            inner_diagnostics: None,
             _phantom: PhantomData,
         }
+    }
+
+    /// Enable owned inner stopping reports and count snapshots. Disabled by default.
+    /// Fresh initialization clears records; exact continuation retains them.
+    pub fn with_inner_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner_diagnostics = enabled.then(Vec::new);
+        self
+    }
+
+    /// Inner reports consumed during this outer run, in dispatch order.
+    /// A callback error retains counts and has no returned report.
+    pub fn inner_diagnostics(
+        &self,
+    ) -> &[crate::core::inner::diagnostics::Record<F>] {
+        self.inner_diagnostics.as_deref().unwrap_or(&[])
     }
 
     /// Number of completed local-search applications for the current member at `i`.
@@ -462,6 +480,9 @@ where
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        if let Some(records) = &mut self.inner_diagnostics {
+            records.clear();
+        }
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
@@ -568,6 +589,8 @@ where
         let c_ls = c_ls.unwrap_or(0);
 
         // -- Phase 3: resume or construct the inner operator. --
+        let resumed = history.chains[c_ls].is_some();
+        let mut initial_scale = None;
         let (mut ls, inner_state, initialized) =
             match history.chains[c_ls].take() {
                 Some((ls, mut s)) => {
@@ -590,6 +613,7 @@ where
                     let scale = sigma_init_for(&state.candidates, c_ls)
                         .filter(|s| s.is_finite() && *s > F::zero())
                         .unwrap_or(self.initial_scale_fallback);
+                    initial_scale = Some(scale);
                     let derived_seed = rng.random::<u64>();
                     let (ls, state) = self.ls.seed_chain(
                         &state.candidates[c_ls],
@@ -615,12 +639,24 @@ where
             .max_iter(u64::MAX)
             .max_cost_evals(self.ls_intensity);
         ls.configure_segment(&inner_state, &mut control);
-        let inner_result = crate::core::executor::run_segment_with_control(
+        let inner_result = crate::core::inner::diagnostics::run(
+            &mut self.inner_diagnostics,
             problem,
-            inner_state,
-            &mut ls,
-            &mut control,
-            initialized,
+            crate::core::inner::diagnostics::Context {
+                outer_iteration: crate::State::iter(&state),
+                member: Some(c_ls),
+                resumed,
+                initial_scale,
+            },
+            |problem| {
+                crate::core::executor::run_segment_with_control(
+                    problem,
+                    inner_state,
+                    &mut ls,
+                    &mut control,
+                    initialized,
+                )
+            },
         )?;
 
         // -- Phase 5: route failures, write back. --

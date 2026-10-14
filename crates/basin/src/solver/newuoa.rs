@@ -167,6 +167,20 @@ impl<F: Scalar> Newuoa<F> {
         self.work.as_ref().map(|work| work.rho())
     }
 
+    /// Copy the current interpolation geometry and native model gradient.
+    ///
+    /// Returns the trust radius, effective final resolution, absolute interpolation
+    /// points, their sampled costs, and the model gradient at its best point.
+    /// This opt-in snapshot performs no callbacks and changes no model or schedule.
+    /// The gradient belongs to the interpolation model, not the true objective.
+    /// Returns `None` before successful initialization.
+    #[allow(clippy::type_complexity)]
+    pub fn geometry_diagnostics(
+        &self,
+    ) -> Option<(F, F, Vec<Vec<F>>, Vec<F>, Vec<F>)> {
+        self.work.as_ref().map(|work| work.geometry_diagnostics())
+    }
+
     /// Stop when the observed radius or step size is <= the tolerance.
     ///
     /// Disabled by default. `None` disables the test and zero requests an

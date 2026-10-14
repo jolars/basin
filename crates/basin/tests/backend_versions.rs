@@ -567,6 +567,68 @@ macro_rules! dense_checks {
         let (_, best_cost, violation) = constrained.state.best().unwrap();
         assert!(violation < 1e-4);
         assert!((best_cost - 2.0).abs() < 1e-3);
+        for barrier_mode in [false, true] {
+            let probe = Quadratic {
+                lower: make(&[-5.0, -5.0]),
+                upper: make(&[5.0, 5.0]),
+                a: <M as basin::MatrixFromDiagonal<V>>::from_diagonal(&make(
+                    &[1.0, 0.0],
+                )),
+                b: make(if barrier_mode {
+                    &[1.0, 1.0]
+                } else {
+                    &[0.0, 0.0]
+                }),
+            };
+            let start = make(&[0.0, 3.0]);
+            let code = if barrier_mode {
+                Executor::from_start(
+                    probe,
+                    basin::BarrierMethod::with_inner_solver(
+                        basin::GradientDescent::new(0.0 as F),
+                    )
+                    .with_inner_max_iter(1),
+                    start,
+                )
+                .max_iter(12)
+                .run()
+                .unwrap()
+                .report
+                .code()
+            } else {
+                Executor::from_start(
+                    probe,
+                    basin::AugmentedLagrangianMethod::with_inner_solver(
+                        basin::GradientDescent::new(0.0 as F),
+                    )
+                    .with_inner_max_iter(1),
+                    start,
+                )
+                .max_iter(12)
+                .run()
+                .unwrap()
+                .report
+                .code()
+            };
+            assert_eq!(code, basin::TerminationCode::MaxIter);
+        }
+        let mut fixed_problem = problem();
+        fixed_problem.lower = make(&[1.0, 2.0]);
+        fixed_problem.upper = fixed_problem.lower.clone();
+        let fixed = Executor::from_start(
+            fixed_problem,
+            basin::Gbnm::new(42),
+            x.clone(),
+        )
+        .max_iter(10)
+        .run()
+        .unwrap();
+        assert_eq!(
+            fixed.report.code(),
+            basin::TerminationCode::SolverConverged
+        );
+        assert_eq!(fixed.counts.cost_evals, 1);
+        assert_eq!(fixed.state.iter(), 0);
         for start in [make(&[0.0, 0.0]), x.clone()] {
             let barrier = Executor::from_start(
                 problem(),

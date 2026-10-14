@@ -37,10 +37,13 @@
 pub(crate) mod backend;
 pub(crate) mod cauchy;
 pub(crate) mod compact;
+/// Native bounded model and subproblem observations.
+pub mod diagnostics;
 pub(crate) mod formk;
 pub(crate) mod history;
 pub(crate) mod subsm;
 mod workspace;
+use diagnostics::{ModelFailure, ModelObservation, ModelPhase, Trace};
 
 use core::marker::PhantomData;
 
@@ -143,6 +146,46 @@ use self::subsm::subsm;
 /// provide additional stopping tests, but do not replace the existing
 /// gradient check. A small cost or step change does not establish stationarity.
 ///
+/// ## Numerical gradients
+///
+/// With [`FiniteDiff`](crate::FiniteDiff) or
+/// [`BoundedFiniteDiff`](crate::BoundedFiniteDiff), account for derivative error
+/// when choosing the gradient threshold. For the `f64` quadratic below, forward
+/// differences produce a gradient infinity norm of about `1.49e-8` at the exact
+/// minimum. The default `1e-10` threshold cannot accept that point, and the
+/// subsequent line search fails. An explicit `1e-7` threshold stops there with
+/// the correct convergence report. This value applies to this example; choose
+/// and verify the tolerance for your objective, precision, and stencil.
+///
+/// ```
+/// use basin::{BoxConstraints, CostFunction, Executor, FiniteDiff,
+///     FirstOrderState, Lbfgs, Termination};
+/// use basin::core::numdiff::Method;
+///
+/// struct Quadratic { lower: Vec<f64>, upper: Vec<f64> }
+/// impl CostFunction for Quadratic {
+///     type Param = Vec<f64>;
+///     type Output = f64;
+///     type Error = std::convert::Infallible;
+///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+///         Ok(0.5 * ((x[0] - 1.0).powi(2) + (x[1] + 2.0).powi(2)))
+///     }
+/// }
+/// impl BoxConstraints for Quadratic {
+///     fn lower(&self) -> &Vec<f64> { &self.lower }
+///     fn upper(&self) -> &Vec<f64> { &self.upper }
+/// }
+/// let problem = Quadratic { lower: vec![-8.0; 2], upper: vec![8.0; 2] };
+/// let result = Executor::new(
+///     FiniteDiff::new(problem).gradient_method(Method::Forward),
+///     Lbfgs::new().with_absolute_projected_gradient_tolerance(1e-7),
+///     FirstOrderState::new(vec![4.0, 3.0]),
+/// ).max_iter(100).run().unwrap();
+/// assert!(matches!(result.report.termination, Termination::Converged(_)));
+/// assert_eq!(result.param(), &vec![1.0, -2.0]);
+/// assert_eq!(result.cost(), 0.0);
+/// ```
+///
 /// # Backends
 ///
 /// Generic over any parameter type implementing
@@ -163,6 +206,8 @@ use self::subsm::subsm;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lbfgs<V, F: Scalar = f64, Mode = Bounded, S = MoreThuente<F>> {
     history: Option<History<V, F>>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    trace: Trace<F>,
     line_search: S,
     /// Fortran `dr ≤ epsmch · ddum` curvature-skip threshold
     /// (`lbfgsb.f:875`). Defaults to `F::epsilon()`. Consulted
@@ -237,6 +282,7 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
             tol_pg: Some(F::from_f64(1e-10).unwrap()),
             m_capacity: 10,
             history: None,
+            trace: Trace::default(),
             _mode: PhantomData,
         }
     }
@@ -267,6 +313,10 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
             tol_pg: self.tol_pg,
             m_capacity: self.m_capacity,
             history: None,
+            trace: Trace {
+                enabled: self.trace.enabled,
+                ..Trace::default()
+            },
             _mode: PhantomData,
         }
     }
@@ -285,12 +335,37 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Unbounded, S> {
             tol_pg: self.tol_pg,
             m_capacity: self.m_capacity,
             history: None,
+            trace: Trace {
+                enabled: self.trace.enabled,
+                ..Trace::default()
+            },
             _mode: PhantomData,
         }
     }
 }
 
 impl<V, Mode, S, F: Scalar> Lbfgs<V, F, Mode, S> {
+    /// Record bounded model phases without extra callbacks. Disabled by default.
+    /// Fresh initialization resets sequence numbers; exact continuation retains them.
+    /// Each native step replaces the batch. Execution controls can retain older records.
+    /// This option does not enable diagnostics on a custom line search.
+    /// Diagnostic settings and records are omitted from serde checkpoints.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.trace.enabled = enabled;
+        self.trace.observations.clear();
+        self
+    }
+
+    /// Latest bounded model phases, including failures before a restart.
+    pub fn model_observations(&self) -> &[ModelObservation<F>] {
+        &self.trace.observations
+    }
+
+    /// Borrow the configured search to inspect its native diagnostic records.
+    pub fn line_search(&self) -> &S {
+        &self.line_search
+    }
+
     /// Set the relative threshold for accepting a curvature update.
     /// This is an algorithm safeguard, not an optimization stopping test.
     pub fn with_relative_curvature_tolerance(mut self, epsilon: F) -> Self {
@@ -341,6 +416,8 @@ where
         mut state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
         state.reset();
+        self.trace.observations.clear();
+        self.trace.sequence = 0;
         self.line_search.reset();
         self.history = Some(History::new(self.m_capacity));
         let history = self.history.as_mut().unwrap();
@@ -373,11 +450,20 @@ where
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        self.trace.observations.clear();
         // Take the gradient and cost cached at the current `param`;
         // restore them on early exits.
         let (f_old, g_v) = state
             .take_evaluation()
             .expect("L-BFGS requires initialized progress");
+        if self.trace.enabled {
+            self.trace.context = [
+                state.param().as_float_slice().to_vec(),
+                g_v.as_float_slice().to_vec(),
+                problem.inner().lower().as_float_slice().to_vec(),
+                problem.inner().upper().as_float_slice().to_vec(),
+            ];
+        }
         let history = self
             .history
             .as_mut()
@@ -452,6 +538,24 @@ where
                     &mut work.wa_wbp,
                     &mut work.wa_v,
                 );
+                self.trace.record(
+                    ModelPhase::Cauchy,
+                    cauchy_res.is_ok(),
+                    cauchy_res
+                        .as_ref()
+                        .err()
+                        .map(|_| ModelFailure::SingularMiddleMatrix),
+                    restart_budget,
+                    *problem.counts(),
+                    m,
+                    &history.ws,
+                    &history.wy,
+                    &history.sy,
+                    &history.ss,
+                    history.theta,
+                    work,
+                    None,
+                );
                 if cauchy_res.is_err() {
                     if try_restart(history, &mut restart_budget) {
                         continue;
@@ -485,8 +589,8 @@ where
 
             // Minimize over the free-variable subspace.
             if nfree > 0 && col > 0 {
-                if wrk
-                    && formk(
+                let factor_result = if wrk {
+                    formk(
                         &mut work.wn,
                         &mut work.wn1,
                         m,
@@ -503,8 +607,30 @@ where
                         work.iupdat,
                         updatd,
                     )
-                    .is_err()
-                {
+                } else {
+                    Ok(())
+                };
+                if wrk {
+                    self.trace.record(
+                        ModelPhase::FactorK,
+                        factor_result.is_ok(),
+                        factor_result.as_ref().err().map(|e| match e {
+                            self::formk::FormkError::NotPositiveDefiniteFirst => ModelFailure::NotPositiveDefiniteFirst,
+                            self::formk::FormkError::NotPositiveDefiniteSecond => ModelFailure::NotPositiveDefiniteSecond,
+                        }),
+                        restart_budget,
+                        *problem.counts(),
+                        m,
+                        &history.ws,
+                        &history.wy,
+                        &history.sy,
+                        &history.ss,
+                        history.theta,
+                        work,
+                        None,
+                    );
+                }
+                if factor_result.is_err() {
                     if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
@@ -522,7 +648,7 @@ where
 
                 // cmprlb: r = −Z'B(z − x) − Z'g, indexed by the free
                 // subspace.
-                if cmprlb(
+                let reduced_result = cmprlb(
                     state.param().as_float_slice(),
                     g_v.as_float_slice(),
                     &work.z,
@@ -539,9 +665,26 @@ where
                     col,
                     theta,
                     m,
-                )
-                .is_err()
-                {
+                );
+                self.trace.record(
+                    ModelPhase::ReducedGradient,
+                    reduced_result.is_ok(),
+                    reduced_result
+                        .as_ref()
+                        .err()
+                        .map(|_| ModelFailure::SingularMiddleMatrix),
+                    restart_budget,
+                    *problem.counts(),
+                    m,
+                    &history.ws,
+                    &history.wy,
+                    &history.sy,
+                    &history.ss,
+                    history.theta,
+                    work,
+                    None,
+                );
+                if reduced_result.is_err() {
                     if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
@@ -574,6 +717,23 @@ where
                     m,
                     col,
                     theta,
+                );
+                self.trace.record(
+                    ModelPhase::Subspace,
+                    subsm_res.is_ok(),
+                    subsm_res.as_ref().err().map(|_| ModelFailure::SingularK),
+                    restart_budget,
+                    *problem.counts(),
+                    m,
+                    &history.ws,
+                    &history.wy,
+                    &history.sy,
+                    &history.ss,
+                    history.theta,
+                    work,
+                    subsm_res.as_ref().ok().map(|s| {
+                        *s == self::subsm::SubsmStatus::BoundEncountered
+                    }),
                 );
                 if subsm_res.is_err() {
                     if try_restart(history, &mut restart_budget) {
@@ -686,6 +846,23 @@ where
                 None
             };
 
+            self.trace.record(
+                ModelPhase::SelectedPoint,
+                accepted.is_some(),
+                accepted
+                    .is_none()
+                    .then_some(ModelFailure::UnusableSelectedPoint),
+                restart_budget,
+                *problem.counts(),
+                m,
+                &history.ws,
+                &history.wy,
+                &history.sy,
+                &history.ss,
+                history.theta,
+                work,
+                None,
+            );
             let Some((param_new, evaluation)) = accepted else {
                 // Restart with cleared history when compact-form state exists.
                 if history.ws.is_empty() {
@@ -758,16 +935,33 @@ where
 
                     // Rebuild T = θ SᵀS + L D⁻¹ Lᵀ. On failure, reset.
                     let new_col = history.ws.len();
-                    if formt(
+                    let factor_result = formt(
                         history.theta,
                         &history.sy,
                         &history.ss,
                         new_col,
                         m,
                         &mut work.wt,
-                    )
-                    .is_err()
-                    {
+                    );
+                    self.trace.record(
+                        ModelPhase::FactorT,
+                        factor_result.is_ok(),
+                        factor_result
+                            .as_ref()
+                            .err()
+                            .map(|_| ModelFailure::NotPositiveDefiniteT),
+                        restart_budget,
+                        *problem.counts(),
+                        m,
+                        &history.ws,
+                        &history.wy,
+                        &history.sy,
+                        &history.ss,
+                        history.theta,
+                        work,
+                        None,
+                    );
+                    if factor_result.is_err() {
                         // Reset history; the next iter starts fresh.
                         history.ws.clear();
                         history.wy.clear();
@@ -815,6 +1009,8 @@ where
         mut state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
         state.reset();
+        self.trace.observations.clear();
+        self.trace.sequence = 0;
         self.line_search.reset();
         self.history = Some(History::new(self.m_capacity));
         let (cost, grad) = problem.cost_and_gradient(state.param())?;

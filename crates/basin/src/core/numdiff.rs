@@ -116,6 +116,19 @@ pub enum Method {
 /// [`ConstraintJacobian`] requires the constraint matrix type to match that
 /// backend's dense matrix. Use [`BoundedFiniteDiff`] for `f32` first derivatives.
 ///
+/// # Solver stopping tolerances
+///
+/// The synthesized gradient has truncation and rounding error, so it can be
+/// nonzero at an exact minimum. Choose the solver's gradient stopping tolerance
+/// to account for that error in the problem's units. A threshold below the
+/// derivative error can cause extra evaluations or a line-search failure even
+/// after reaching an accurate solution. Central differences often reduce
+/// truncation error, but do not guarantee a particular stopping accuracy.
+/// [`function_precision`](Self::function_precision) controls probe step sizes;
+/// it is not a bound on gradient error. Objective scaling, curvature, parameter
+/// magnitudes, and evaluation noise also affect that error. See
+/// [`Lbfgs`](crate::Lbfgs) for a forward-difference stopping example.
+///
 /// # Examples
 ///
 /// Run a gradient solver against a problem that only implements

@@ -7,6 +7,8 @@ use crate::line_search::{
 /// Backtracking line search satisfying the Armijo condition only
 /// (Nocedal & Wright §3.1). Halves the trial step until
 /// `f(x + α d) ≤ f(x) + c · α · ∇f(x)ᵀd`.
+/// Exhaustion reports [`LineSearchOutcome::Failed`]; the legacy
+/// [`LineSearch::next`] method returns zero on failure.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Backtracking<F = f64> {
     /// Initial trial step. Default `1.0`.
@@ -79,20 +81,52 @@ where
         gradient: &V,
         direction: &V,
     ) -> Result<F, Self::Error> {
+        self.next_with_outcome(problem, param, cost, gradient, direction)
+            .map(|outcome| match outcome {
+                LineSearchOutcome::Step(alpha) => alpha,
+                LineSearchOutcome::Failed => F::zero(),
+            })
+    }
+
+    fn next_with_outcome(
+        &mut self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+    ) -> Result<LineSearchOutcome<F>, Self::Error> {
         // Armijo: f(x + α d) ≤ f(x) + c α (∇f · d). For a descent direction,
         // `g_dot_d` is negative, so the threshold drops with α.
         let g_dot_d = gradient.dot(direction);
         let mut alpha = self.alpha_init;
+        let valid = cost.is_finite()
+            && g_dot_d.is_finite()
+            && g_dot_d <= F::zero()
+            && alpha.is_finite()
+            && alpha > F::zero()
+            && F::zero() < self.rho
+            && self.rho < F::one()
+            && F::zero() < self.c
+            && self.c < F::one();
+        if !valid {
+            return Ok(LineSearchOutcome::Failed);
+        }
         for _ in 0..self.max_iter {
+            if alpha <= F::zero() {
+                break;
+            }
             let mut trial = param.clone();
             trial.scaled_add(alpha, direction);
             let trial_cost = problem.cost(&trial)?;
-            if trial_cost <= cost + self.c * alpha * g_dot_d {
-                return Ok(alpha);
+            if trial_cost.is_finite()
+                && trial_cost <= cost + self.c * alpha * g_dot_d
+            {
+                return Ok(LineSearchOutcome::Step(alpha));
             }
             alpha = alpha * self.rho;
         }
-        Ok(alpha)
+        Ok(LineSearchOutcome::Failed)
     }
 
     fn next_with_bounds(
@@ -118,6 +152,64 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct RejectEveryTrial<F>(F);
+
+    impl<F: Scalar> CostFunction for RejectEveryTrial<F> {
+        type Param = Vec<F>;
+        type Output = F;
+        type Error = std::convert::Infallible;
+
+        fn cost(&self, _: &Vec<F>) -> Result<F, Self::Error> {
+            Ok(self.0)
+        }
+    }
+
+    fn exhausted_outcomes<F: Scalar>() {
+        let x = vec![F::zero()];
+        let gradient = vec![-F::one()];
+        let direction = vec![F::one()];
+        for cap in [0, 5] {
+            let mut problem = Problem::new(RejectEveryTrial(F::one()));
+            let mut search = Backtracking::<F>::new().max_iter(cap);
+            assert_eq!(
+                search
+                    .next_with_outcome(
+                        &mut problem,
+                        &x,
+                        F::zero(),
+                        &gradient,
+                        &direction,
+                    )
+                    .unwrap(),
+                LineSearchOutcome::Failed,
+            );
+            assert_eq!(problem.counts().cost_evals, u64::from(cap));
+
+            let mut problem = Problem::new(RejectEveryTrial(F::infinity()));
+            assert_eq!(
+                search
+                    .next_with_bounds(
+                        &mut problem,
+                        &x,
+                        F::zero(),
+                        &gradient,
+                        &direction,
+                        LineSearchBounds::new(F::one(), F::one()),
+                    )
+                    .unwrap()
+                    .outcome,
+                LineSearchOutcome::Failed,
+            );
+            assert_eq!(problem.counts().cost_evals, u64::from(cap));
+        }
+    }
+
+    #[test]
+    fn exhaustion_reports_failure_in_both_search_modes() {
+        exhausted_outcomes::<f64>();
+        exhausted_outcomes::<f32>();
+    }
 
     /// 1D quadratic via Vec<f64>: f(x) = (x[0] − 3)². Min at x = 3,
     /// ∇f = 2(x − 3).
@@ -191,17 +283,10 @@ mod tests {
     }
 
     #[test]
-    fn caps_at_max_iter_when_armijo_never_holds() {
-        // Wrong-sign direction: gᵀd > 0, so f increases with α and Armijo
-        // (with descent-direction assumption) is unsatisfiable. Backtrack
-        // burns max_iter cost evals and returns the smallest α tried.
+    fn legacy_next_rejects_an_ascent_direction_without_trials() {
         let mut ls = Backtracking::new().max_iter(5);
         let (alpha, cost_evals) = run(&mut ls, &[0.0], &[-6.0], &[-6.0]);
-        assert_eq!(cost_evals, 5);
-        // α reduced 5 times by ρ=0.5 from 1.0 → 1/32.
-        assert!(
-            (alpha - 1.0 / 32.0).abs() < 1e-12,
-            "expected α=1/32, got {alpha}",
-        );
+        assert_eq!(cost_evals, 0);
+        assert_eq!(alpha, 0.0);
     }
 }

@@ -224,6 +224,32 @@ impl<F: Scalar> CobylaWork<F> {
         Ok((work, bx, bf))
     }
 
+    pub(crate) fn geometry_diagnostics(
+        &self,
+    ) -> (F, F, Vec<Vec<F>>, Vec<F>, F) {
+        let points = (0..=self.n)
+            .map(|k| {
+                (0..self.n)
+                    .map(|i| {
+                        self.sim[i + self.n * self.n]
+                            + if k < self.n {
+                                self.sim[i + k * self.n]
+                            } else {
+                                F::zero()
+                            }
+                    })
+                    .collect()
+            })
+            .collect();
+        (
+            self.delta,
+            self.rho_end,
+            points,
+            self.fval.clone(),
+            self.cpen,
+        )
+    }
+
     /// Current trust-region resolution `ρ`.
     pub(crate) fn rho(&self) -> F {
         self.rho

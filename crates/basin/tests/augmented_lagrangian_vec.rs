@@ -149,6 +149,8 @@ fn derivative_free_inner_uses_its_own_convergence_settings() {
                 .with_absolute_simplex_size_tolerance(1e-8)
                 .with_absolute_simplex_cost_tolerance(1e-10),
         )
+        // The simplex resolution limits attainable surrogate stationarity.
+        .with_absolute_stationarity_tolerance(1e-6)
         .with_inner_max_iter(200),
         SelectedState::new(vec![0.0, 0.0]),
     )

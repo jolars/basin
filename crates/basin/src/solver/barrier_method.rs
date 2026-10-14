@@ -6,13 +6,39 @@ use crate::core::constraint::LinearInequalityConstraints;
 use crate::core::executor::run_loop_with_control;
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
-    MatTransposeVec, MatVec, NegInPlace, NormSquared, Scalar, ScaledAdd,
-    VectorIndex, VectorLen,
+    MatTransposeVec, MatVec, NegInPlace, NormInfinity, NormSquared, Scalar,
+    ScaledAdd, VectorIndex, VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{CountsMirror, PointState, State};
 use crate::core::termination::Termination;
+
+/// Owned evidence from the most recent attempted barrier subproblem.
+///
+/// Available only when inner diagnostics are enabled. A hard callback error
+/// retains counts and the seed but supplies no recoverable returned point.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct BarrierInnerDiagnostics<F: Scalar = f64> {
+    /// Whether this attempt minimized the auxiliary Phase I objective.
+    pub phase_one: bool,
+    /// Barrier weight that defined the attempted subproblem.
+    pub mu: F,
+    /// Scheduled gap at that weight, before any continuation update.
+    pub gap: F,
+    /// Seed passed to the fresh inner state.
+    pub start: Vec<F>,
+    /// Published inner point on a clean return.
+    pub returned: Option<Vec<F>>,
+    /// Authoritative inner outcome on a clean return.
+    pub report: Option<crate::TerminationReport<F>>,
+    /// Raw categories charged during the native inner run, including failed
+    /// calls, but excluding independent outer stationarity verification.
+    pub counts: crate::EvalCounts,
+    /// Whether the attempted inner run aborted with a typed callback error.
+    pub hard_error: bool,
+}
 
 /// Two-phase log-barrier method for `min f(x) s.t. A x ≤ b`, layering a
 /// barrier on an unconstrained inner solver.
@@ -70,13 +96,14 @@ use crate::core::termination::Termination;
 /// μ ← mu0
 /// repeat:
 ///   x ← argmin φ_μ                              # Phase II
-///   if m · μ ≤ tol: stop (SolverConverged)   # log-barrier duality gap
-///   μ ← μ / reduction
+///   if centered and m · μ ≤ tol: stop         # approximate gap
+///   if centered: μ ← μ / reduction
+///   otherwise retry the current μ
 /// ```
 ///
-/// `m · μ` is the exact suboptimality bound for the log barrier (`m` =
-/// number of constraints), so the returned iterate is within `tol` of the
-/// constrained optimum.
+/// For a convex problem and an exactly centered subproblem, `m · μ` bounds
+/// objective suboptimality (`m` is the number of constraints). Numerical
+/// centering is approximate, so a small scheduled gap alone is not that bound.
 ///
 /// # Phase I
 ///
@@ -100,20 +127,29 @@ use crate::core::termination::Termination;
 ///
 /// # Termination
 ///
-/// The outer duality-gap test `m · μ ≤ tol` is solver-specific and lives on
-/// the solver (tenet 3): it fires via [`terminate`](Solver::terminate) as
-/// [`SolverConverged`](crate::TerminationCode::SolverConverged). Pair with the
-/// executor's [`max_iter`](crate::Executor::max_iter) as a safety net. A strictly feasible start uses only
-/// Phase II; an infeasible or boundary start spends additional outer
-/// iterations in Phase I. With the defaults each continuation closes its gap
-/// in roughly `log(m · mu0 / tol) / log(reduction)` outer iterations
-/// (≈ 9 for the defaults), so an outer `max_iter` of 30–50 is a practical
-/// safety budget for both phases.
+/// Outer convergence requires `m · μ ≤ tol` (default `1e-8`) and sufficient
+/// centering of the consumed Phase II subproblem. Centering requires
+/// `‖∇φ_μ‖∞ ≤ 1e-8` or a reduction to `1e-3` times its norm at the starting
+/// point for that weight. Configure the two alternatives with
+/// [`with_absolute_stationarity_tolerance`](Self::with_absolute_stationarity_tolerance)
+/// and [`with_relative_stationarity_tolerance`](Self::with_relative_stationarity_tolerance).
+/// An unfinished inner solve supplies a partial candidate and retries the same
+/// weight. Its first reference persists across segments and exact continuation.
+/// These tests do not certify global optimality or parameter accuracy.
 ///
-/// Cost- and step-change tests observe only accepted Phase II iterates.
-/// The outer [`PointState`] has no gradient capability: the original
-/// objective gradient need not vanish at a constrained optimum. Configure
-/// gradient convergence on the inner solver.
+/// The check is independent of the inner solver and adds up to two counted
+/// gradient callbacks per consumed Phase II result. Disable both stationarity
+/// settings with `None` to recover gap-only continuation and stopping. Zero
+/// requests exact stationarity. Optional cost- and step-change tests also
+/// require centering and observe only accepted Phase II points. The outer
+/// [`PointState`] has no gradient capability.
+///
+/// A strictly feasible start uses Phase II; other starts spend additional
+/// iterations in Phase I. Keep an executor [`max_iter`](crate::Executor::max_iter)
+/// budget. Centering can require several capped segments per weight, so the
+/// number of outer iterations need not equal the number of weight reductions.
+/// Choose attainable gap and centering thresholds for the inner solver,
+/// derivative accuracy, precision, and problem units.
 ///
 /// # Progress and lifecycle
 ///
@@ -128,8 +164,8 @@ use crate::core::termination::Termination;
 /// objective, and restarts the phase and barrier schedule. Each inner solve
 /// starts fresh. Exact continuation retains the phase, schedule, inner solver,
 /// progress, and all six raw evaluation categories, and skips initialization.
-/// The outer loop does not compute an unused original-objective gradient.
-/// Inner adapter evaluations remain charged even when a callback aborts.
+/// Inner and independent centering evaluations remain charged even when a
+/// callback aborts. Native inner diagnostics keep only the inner run's counts.
 ///
 /// With `serde`, solver-aware checkpoints can serialize the outer method
 /// whenever the inner solver supports serialization. Old `BasicState`
@@ -142,7 +178,7 @@ use crate::core::termination::Termination;
 /// ndarray `Array1`/`Array2`, and faer `Col`/`Mat`, with either scalar type.
 /// The outer method needs [`MatVec`] and [`MatTransposeVec`], with no linear
 /// solve. Its vector bounds are [`ScaledAdd`], [`NegInPlace`], [`VectorIndex`],
-/// [`VectorLen`], [`NormSquared`], and [`Clone`]. A custom inner solver can
+/// [`VectorLen`], [`NormSquared`], [`NormInfinity`], and [`Clone`]. A custom inner solver can
 /// impose additional capabilities.
 ///
 /// # Composition
@@ -167,12 +203,20 @@ pub struct BarrierMethod<So, F: Scalar = f64> {
     mu: F,
     reduction: F,
     tol: Option<F>,
+    stationarity_tol: Option<F>,
+    relative_stationarity_tol: Option<F>,
+    stationarity_initial_norm: F,
+    stationarity_norm: F,
+    centering_mu: Option<F>,
     phase_one_tol: F,
     /// `m · μ` of the most recent inner solve; `+∞` until the first solve
     /// so [`terminate`](Solver::terminate) cannot fire at iter 0.
     gap: F,
     phase: BarrierPhase,
     accepted_iterate: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    inner_diagnostics: bool,
+    last_inner: Option<BarrierInnerDiagnostics<F>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -266,13 +310,12 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// Build a barrier method around an unconstrained inner solver.
     ///
     /// Defaults: `mu0 = 1.0`, `reduction = 10.0`, `tol = 1e-8`,
-    /// `phase_one_tol = 1e-8`, and `inner_max_iter = 50`.
+    /// `phase_one_tol = 1e-8`, absolute stationarity tolerance `1e-8`,
+    /// relative stationarity tolerance `1e-3`, and `inner_max_iter = 50`.
     ///
-    /// The `inner_max_iter` default is intentionally modest:
-    /// [`with_inner_max_iter`](Self::with_inner_max_iter) is the dominant cost lever
-    /// (see its docs) and the outer μ-continuation tolerates loosely-centered
-    /// subproblems, so a small budget usually converges to the same point far
-    /// more cheaply than a large one.
+    /// The inner budget limits each centering segment. An unfinished segment
+    /// supplies progress, and the next segment retries the same barrier weight
+    /// until a stationarity test passes.
     /// The supplied inner solver owns its convergence settings.
     pub fn with_inner_solver(inner_solver: So) -> Self {
         Self {
@@ -282,15 +325,86 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
             mu: F::one(),
             reduction: F::from_f64(10.0).unwrap(),
             tol: Some(F::from_f64(1e-8).unwrap()),
+            stationarity_tol: Some(F::from_f64(1e-8).unwrap()),
+            relative_stationarity_tol: Some(F::from_f64(1e-3).unwrap()),
+            stationarity_initial_norm: F::infinity(),
+            stationarity_norm: F::infinity(),
+            centering_mu: None,
             phase_one_tol: F::from_f64(1e-8).unwrap(),
             gap: F::infinity(),
             phase: BarrierPhase::PhaseTwo,
             accepted_iterate: false,
+            inner_diagnostics: false,
+            last_inner: None,
         }
     }
 }
 
 impl<So, F: Scalar> BarrierMethod<So, F> {
+    fn stationarity_satisfied(&self) -> bool {
+        crate::core::convergence::stationarity_within_tolerance(
+            self.stationarity_norm,
+            self.stationarity_initial_norm,
+            self.stationarity_tol,
+            self.relative_stationarity_tol,
+        )
+    }
+
+    /// Require `‖∇φ_μ(x)‖∞` at the returned Phase II point to be at most this
+    /// tolerance before outer convergence (default `1e-8`).
+    ///
+    /// Uses the barrier weight that defined the consumed inner solve. This
+    /// independent check also applies to derivative-free and budget-limited
+    /// inners. Together with the relative guard, it adds up to two gradient
+    /// evaluations per consumed Phase II result. `None` disables this absolute
+    /// test; zero requests exact stationarity. Either the absolute or relative
+    /// test must pass before reducing the weight or declaring outer convergence.
+    /// The guard also applies to optional outer cost- and step-change tests.
+    pub fn with_absolute_stationarity_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.stationarity_tol =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
+    /// Require the returned surrogate-gradient infinity norm to be at most
+    /// this fraction of its first norm at the current weight (default `1e-3`).
+    ///
+    /// Both norms use the same surrogate parameters before the outer update.
+    /// Retries at that weight retain the first reference, including across
+    /// exact continuation.
+    /// Absolute and relative stationarity tests combine with OR. At least one
+    /// must pass before outer convergence or a barrier continuation update.
+    /// `None` disables this relative test; zero requests exact stationarity.
+    /// Disable both stationarity tests to recover gap-only continuation and stopping.
+    pub fn with_relative_stationarity_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.relative_stationarity_tol =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
+    /// Retain the last attempted inner run's owned outcome and parameter data.
+    ///
+    /// Disabled by default. Enabling this copies diagnostic coordinates and
+    /// reports without changing the subproblem, its limits, or its stopping rule.
+    pub fn with_inner_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner_diagnostics = enabled;
+        if !enabled {
+            self.last_inner = None;
+        }
+        self
+    }
+
+    /// Last attempted inner run, or `None` before an enabled attempt.
+    pub fn inner_diagnostics(&self) -> Option<&BarrierInnerDiagnostics<F>> {
+        self.last_inner.as_ref()
+    }
+
     /// Initial barrier parameter `μ` (default `1.0`).
     ///
     /// # Panics
@@ -346,15 +460,11 @@ impl<So, F: Scalar> BarrierMethod<So, F> {
     /// Iteration budget for each inner barrier-subproblem solve (default
     /// `50`).
     ///
-    /// **This is the dominant cost lever.** A first-order inner solver
-    /// (`GradientDescent`) on the ill-conditioned barrier typically exhausts
-    /// this budget rather than its own gradient convergence tolerance,
-    /// so total work scales roughly linearly with it. Because the outer
-    /// μ-continuation re-solves at each shrinking `μ`, a loosely-centered
-    /// (small-budget) subproblem usually still converges to the same point,
-    /// often an order of magnitude cheaper. Raise it for hard or higher-
-    /// dimensional problems; a Newton-class inner (future work) would center
-    /// in far fewer steps and reach its configured tolerance instead.
+    /// A capped solve supplies a partial candidate. Phase II retries the same
+    /// weight until a stationarity test passes, so a smaller segment budget can
+    /// require more outer iterations. Choose this budget together with the outer
+    /// iteration limit and attainable centering thresholds. Near active bounds,
+    /// the barrier can become ill-conditioned for a first-order inner solver.
     ///
     /// # Panics
     ///
@@ -390,6 +500,7 @@ where
         + VectorIndex<F>
         + VectorLen
         + NormSquared<F>
+        + NormInfinity<F>
         + Clone,
     So: WarmStart<V>
         + for<'a> Solver<
@@ -408,6 +519,10 @@ where
     ) -> Result<PointState<V, F>, Self::Error> {
         state.reset();
         self.accepted_iterate = false;
+        self.last_inner = None;
+        self.stationarity_norm = F::infinity();
+        self.stationarity_initial_norm = F::infinity();
+        self.centering_mu = None;
         self.mu = self.mu0;
         self.gap = F::infinity();
 
@@ -446,6 +561,7 @@ where
         mut state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.accepted_iterate = false;
+        self.stationarity_norm = F::infinity();
         if self.phase == BarrierPhase::Failed {
             return Ok(crate::SolverStep::from((
                 state,
@@ -460,6 +576,11 @@ where
                 Problem::new(LogBarrier::phase_one(problem.inner(), self.mu));
             let mut control = crate::core::run_control::RunControl::new()
                 .max_iter(self.inner_max_iter);
+            let diagnostic_start = self.inner_diagnostics.then(|| {
+                (0..state.param().vec_len())
+                    .map(|i| state.param().get_scalar(i))
+                    .collect::<Vec<_>>()
+            });
             let inner_state = self.inner_solver.seed(state.param());
             let mut phase_one_solver = StopAtStrictFeasibility {
                 inner: &mut self.inner_solver,
@@ -473,6 +594,22 @@ where
 
             let inner_counts = *barrier_wrapper.counts();
             problem.counts_mut().add(&inner_counts);
+            self.last_inner =
+                diagnostic_start.map(|start| BarrierInnerDiagnostics {
+                    phase_one: true,
+                    mu: self.mu,
+                    gap: F::from_usize(problem.inner().b().vec_len()).unwrap()
+                        * self.mu,
+                    start,
+                    returned: result.as_ref().ok().map(|r| {
+                        (0..r.state.param().vec_len())
+                            .map(|i| r.state.param().get_scalar(i))
+                            .collect()
+                    }),
+                    report: result.as_ref().ok().map(|r| r.report.clone()),
+                    counts: inner_counts,
+                    hard_error: result.is_err(),
+                });
             let result = result?;
 
             if !result
@@ -511,6 +648,15 @@ where
 
             if is_strictly_feasible {
                 let cost = problem.cost(candidate)?;
+                if !cost.is_finite() {
+                    self.phase = BarrierPhase::Failed;
+                    return Ok(crate::SolverStep::stopped(
+                        state,
+                        Termination::numerical_failure(
+                            "Phase I returned a strict point with a non-finite original objective.",
+                        ),
+                    ));
+                }
                 state.replace(candidate.clone(), cost);
                 // Phase II starts a fresh continuation schedule; Phase I's μ
                 // controls feasibility accuracy, not objective optimality.
@@ -556,6 +702,11 @@ where
             Problem::new(LogBarrier::new(problem.inner(), self.mu));
         let mut control = crate::core::run_control::RunControl::new()
             .max_iter(self.inner_max_iter);
+        let diagnostic_start = self.inner_diagnostics.then(|| {
+            (0..state.param().vec_len())
+                .map(|i| state.param().get_scalar(i))
+                .collect::<Vec<_>>()
+        });
         let inner_state = self.inner_solver.seed(state.param());
         let result = run_loop_with_control(
             &mut barrier_wrapper,
@@ -570,8 +721,55 @@ where
         // (still held by `barrier_wrapper`) doesn't collide with the
         // `counts_mut` reborrow.
         let inner_counts = *barrier_wrapper.counts();
-        problem.counts_mut().add(&inner_counts);
+        let stationarity = result
+            .as_ref()
+            .ok()
+            .filter(|r| {
+                (self.stationarity_tol.is_some()
+                    || self.relative_stationarity_tol.is_some())
+                    && r.report.termination.can_continue_as_inner(
+                        crate::PartialResultPolicy::Consume,
+                    )
+                    && strict_feasibility(problem.inner(), r.state.param())
+                        == Some(true)
+            })
+            .map(|r| {
+                // Retried segments solve the same model, so their accuracy target
+                // retains the first reference instead of tightening after each cap.
+                let initial = if self.centering_mu == Some(self.mu) {
+                    self.stationarity_initial_norm
+                } else {
+                    barrier_wrapper.gradient(state.param())?.norm_infinity()
+                };
+                let final_norm =
+                    barrier_wrapper.gradient(r.state.param())?.norm_infinity();
+                Ok::<_, Self::Error>((initial, final_norm))
+            })
+            .transpose();
+        let total_counts = *barrier_wrapper.counts();
+        problem.counts_mut().add(&total_counts);
+        self.last_inner =
+            diagnostic_start.map(|start| BarrierInnerDiagnostics {
+                phase_one: false,
+                mu: self.mu,
+                gap: F::from_usize(problem.inner().b().vec_len()).unwrap()
+                    * self.mu,
+                start,
+                returned: result.as_ref().ok().map(|r| {
+                    (0..r.state.param().vec_len())
+                        .map(|i| r.state.param().get_scalar(i))
+                        .collect()
+                }),
+                report: result.as_ref().ok().map(|r| r.report.clone()),
+                counts: inner_counts,
+                hard_error: result.is_err(),
+            });
         let result = result?;
+        if let Some((initial, final_norm)) = stationarity? {
+            self.stationarity_initial_norm = initial;
+            self.stationarity_norm = final_norm;
+            self.centering_mu = Some(self.mu);
+        }
 
         if !result
             .report
@@ -599,38 +797,87 @@ where
             )));
         }
         let cost = problem.cost(candidate)?;
+        if !cost.is_finite() {
+            self.phase = BarrierPhase::Failed;
+            return Ok(crate::SolverStep::stopped(
+                state,
+                Termination::numerical_failure(
+                    "The inner barrier solve returned a non-finite original objective.",
+                ),
+            ));
+        }
         state.replace(candidate.clone(), cost);
         self.accepted_iterate = true;
 
-        // Record the duality gap for this μ, then shrink for the next solve.
+        // Continue the same subproblem after an unfinished centering solve.
+        // Shrinking μ alone cannot turn that partial result into a gap bound.
         self.gap =
             F::from_usize(problem.inner().b().vec_len()).unwrap() * self.mu;
-        self.mu = self.mu / self.reduction;
+        if self.stationarity_satisfied() {
+            self.mu = self.mu / self.reduction;
+        }
         Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {
-        self.accepted_iterate
+        self.accepted_iterate && self.stationarity_satisfied()
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
         // Log-barrier duality-gap bound m·μ from the most recent solve.
         if self.phase == BarrierPhase::PhaseTwo
+            && self.stationarity_satisfied()
             && self.tol.is_some_and(|tol| self.gap <= tol)
         {
+            let mut measurements = vec![
+                crate::Measurement {
+                    name: "gap".into(),
+                    value: self.gap,
+                },
+                crate::Measurement {
+                    name: "tolerance".into(),
+                    value: self.tol.unwrap(),
+                },
+            ];
+            if let Some(tolerance) = self.stationarity_tol {
+                measurements.extend([
+                    crate::Measurement {
+                        name: "stationarity_norm".into(),
+                        value: self.stationarity_norm,
+                    },
+                    crate::Measurement {
+                        name: "stationarity_tolerance".into(),
+                        value: tolerance,
+                    },
+                ]);
+            }
+            if let Some(tolerance) = self.relative_stationarity_tol {
+                if self.stationarity_tol.is_none() {
+                    measurements.push(crate::Measurement {
+                        name: "stationarity_norm".into(),
+                        value: self.stationarity_norm,
+                    });
+                }
+                measurements.extend([
+                    crate::Measurement {
+                        name: "relative_stationarity_tolerance".into(),
+                        value: tolerance,
+                    },
+                    crate::Measurement {
+                        name: "initial_stationarity_norm".into(),
+                        value: self.stationarity_initial_norm,
+                    },
+                ]);
+            }
             Some(Termination::custom(
                 "barrier.duality_gap",
-                "In phase two, m * mu is at most the configured duality-gap tolerance.",
-                vec![
-                    crate::Measurement {
-                        name: "gap".into(),
-                        value: self.gap,
-                    },
-                    crate::Measurement {
-                        name: "tolerance".into(),
-                        value: self.tol.unwrap(),
-                    },
-                ],
+                concat!(
+                    "In Phase II, gap <= tolerance AND (the finite barrier-gradient infinity norm ",
+                    "meets an enabled absolute stationarity bound OR its relative bound times ",
+                    "the finite initial norm at this weight). The two stationarity tests combine ",
+                    "with OR; disabling both bypasses their guard."
+                ),
+                measurements,
             ))
         } else {
             None

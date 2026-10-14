@@ -333,16 +333,20 @@ fn pinned_coordinates_are_excluded_from_the_local_simplex() {
 }
 
 #[test]
-#[should_panic(expected = "GBNM requires at least one free coordinate")]
-fn an_all_pinned_box_is_rejected() {
+fn an_all_pinned_box_respects_the_initial_iteration_limit() {
     let problem = FlatBox {
         lower: vec![1.0, 2.0],
         upper: vec![1.0, 2.0],
     };
-    let _ =
+    let result =
         Executor::new(problem, Gbnm::new(1), PointState::new(vec![1.0, 2.0]))
             .max_iter(0)
-            .run_with_solver();
+            .run_with_solver()
+            .unwrap();
+    assert_eq!(result.report.code(), TerminationCode::MaxIter);
+    assert_eq!(result.state.cost_evals(), 1);
+    assert_eq!(result.param(), &vec![1.0, 2.0]);
+    assert!(result.solver.vertices().is_empty());
 }
 
 #[test]

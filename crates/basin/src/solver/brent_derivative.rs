@@ -263,7 +263,17 @@ where
         } else {
             -tol1
         };
-        let u = s.x + step;
+        // A composed stopping policy may continue after native width convergence.
+        // Its minimum displacement must still respect the original closed domain.
+        let u = (s.x + step).max(s.a).min(s.b);
+        if u == s.x {
+            return Ok(crate::SolverStep::stopped(
+                state,
+                Termination::numerical_stall(
+                    "BrentDerivative cannot move inside the remaining bracket.",
+                ),
+            ));
+        }
         let (fu, du) = problem.cost_and_gradient(&u)?;
 
         if fu <= s.fx {

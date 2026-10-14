@@ -102,6 +102,22 @@ pub(crate) fn optional_tolerance<F: Scalar>(
     value
 }
 
+pub(crate) fn stationarity_within_tolerance<F: Scalar>(
+    norm: F,
+    initial: F,
+    absolute: Option<F>,
+    relative: Option<F>,
+) -> bool {
+    if absolute.is_none() && relative.is_none() {
+        return true;
+    }
+    norm.is_finite()
+        && (absolute.is_some_and(|tol| norm <= tol)
+            || relative.is_some_and(|tol| {
+                initial.is_finite() && norm <= tol * initial
+            }))
+}
+
 mod sealed {
     pub trait Sealed {}
     impl Sealed for () {}

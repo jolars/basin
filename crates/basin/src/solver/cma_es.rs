@@ -9,6 +9,8 @@ use crate::core::solver::Solver;
 use crate::core::state::PopulationProgress;
 use crate::core::termination::Termination;
 
+pub mod diagnostics;
+
 pub(crate) mod workspace;
 use workspace::Distribution;
 
@@ -122,7 +124,7 @@ use workspace::Distribution;
 /// It is disabled by default and reports [`crate::TerminationCode::CmaEsTolerance`].
 /// The recommended value is `1e-12 · initial_sigma`, scaled by the largest
 /// initial axis standard deviation for anisotropic covariance. `None` disables
-/// TolX. Its strict inequality means zero never triggers it.
+/// TolX. Positive thresholds use a strict inequality; zero tests exact collapse.
 /// Use executor iteration/evaluation budgets alongside convergence.
 /// Other CMA-ES heuristics (NoEffectAxis, NoEffectCoord, ConditionCov,
 /// EqualFunValues, Stagnation, TolXUp, TolFun) are not implemented.
@@ -258,6 +260,26 @@ impl<V, M, F: Scalar> CmaEs<V, M, F> {
     /// The current overall step size, available after initialization.
     pub fn sigma(&self) -> Option<F> {
         self.work.as_ref().map(|work| work.sigma)
+    }
+
+    /// Borrow the live axes, covariance, and evolution paths after initialization.
+    ///
+    /// Reading this view performs no evaluations and changes no model or sampling
+    /// schedule. See [`diagnostics::DistributionRef`] for boundary and continuation
+    /// semantics.
+    pub fn distribution(
+        &self,
+    ) -> Option<diagnostics::DistributionRef<'_, V, M, F>> {
+        self.work.as_ref().map(|work| diagnostics::DistributionRef {
+            mean: &work.m,
+            sigma: work.sigma,
+            distribution_tolerance: self.distribution_tolerance,
+            covariance: &work.c,
+            principal_axis_stds: &work.d,
+            covariance_path: &work.p_c,
+            step_size_path: &work.p_sigma,
+            generation: work.generation,
+        })
     }
 
     /// Override the default population size. The default
@@ -732,7 +754,10 @@ where
         let tolerance = self.distribution_tolerance?;
         let work = self.work.as_ref()?;
         let metric = work.sigma * work.max_axis_std();
-        (metric.is_finite() && metric < tolerance).then(|| {
+        (metric.is_finite()
+            && (metric < tolerance
+                || (tolerance == F::zero() && metric == F::zero())))
+        .then(|| {
             Termination::upper_bound(
                 crate::ConvergenceTest::DistributionSize,
                 metric,
@@ -830,5 +855,92 @@ impl<V: VectorLen + Clone, M, F: Scalar> crate::core::inner::InitialState<V>
     type State = PopulationProgress<V, F>;
     fn seed(&self, x: &V) -> Self::State {
         PopulationProgress::from_point(x.clone())
+    }
+}
+
+#[cfg(test)]
+mod zero_tolerance_tests {
+    use super::*;
+    use crate::{
+        BoundedCmaEs, BoxConstraints, DenseMatrix, PopulationProgress,
+    };
+    use std::convert::Infallible;
+
+    struct FlatBox<F>(Vec<F>, Vec<F>);
+    impl<F: Scalar> CostFunction for FlatBox<F> {
+        type Param = Vec<F>;
+        type Output = F;
+        type Error = Infallible;
+        fn cost(&self, _: &Vec<F>) -> Result<F, Infallible> {
+            Ok(F::zero())
+        }
+    }
+    impl<F: Scalar> BoxConstraints for FlatBox<F> {
+        fn lower(&self) -> &Vec<F> {
+            &self.0
+        }
+        fn upper(&self) -> &Vec<F> {
+            &self.1
+        }
+    }
+
+    fn check<F: Scalar + Send + Sync>()
+    where
+        Vec<F>: SampleStandardNormal,
+    {
+        let mut problem =
+            Problem::new(FlatBox(vec![-F::one()], vec![F::one()]));
+        let mut solver: CmaEs<Vec<F>, DenseMatrix<F>, F> =
+            CmaEs::new(42, F::one())
+                .with_absolute_distribution_size_tolerance(F::zero());
+        let state = solver
+            .init(
+                &mut problem,
+                PopulationProgress::from_point(vec![F::zero()]),
+            )
+            .unwrap();
+        assert!(
+            <CmaEs<_, _, F> as Solver<FlatBox<F>, _>>::terminate(
+                &solver, &state
+            )
+            .is_none()
+        );
+        solver.work.as_mut().unwrap().sigma = F::zero();
+        assert!(
+            <CmaEs<_, _, F> as Solver<FlatBox<F>, _>>::terminate(
+                &solver, &state
+            )
+            .unwrap()
+            .is_converged()
+        );
+        let mut bounded: BoundedCmaEs<Vec<F>, DenseMatrix<F>, F> =
+            BoundedCmaEs::new(42, F::one())
+                .with_absolute_distribution_size_tolerance(F::zero());
+        let state = bounded
+            .init(
+                &mut problem,
+                PopulationProgress::from_point(vec![F::zero()]),
+            )
+            .unwrap();
+        assert!(
+            <BoundedCmaEs<_, _, F> as Solver<FlatBox<F>, _>>::terminate(
+                &bounded, &state
+            )
+            .is_none()
+        );
+        bounded.work.as_mut().unwrap().sigma = F::zero();
+        assert!(
+            <BoundedCmaEs<_, _, F> as Solver<FlatBox<F>, _>>::terminate(
+                &bounded, &state
+            )
+            .unwrap()
+            .is_converged()
+        );
+    }
+
+    #[test]
+    fn zero_tolx_observes_exact_distribution_collapse() {
+        check::<f64>();
+        check::<f32>();
     }
 }

@@ -1,3 +1,7 @@
+/// Native search exit predicates and bracket observations.
+pub mod diagnostics;
+use diagnostics::{Bracket, SearchExit, SearchTrial, Trace, TracedMoreThuente};
+
 use crate::core::math::{Dot, Scalar, ScaledAdd};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::line_search::{
@@ -82,6 +86,13 @@ impl<F: Scalar> Default for MoreThuente<F> {
 }
 
 impl<F: Scalar> MoreThuente<F> {
+    /// Wrap this unchanged configuration in opt-in native diagnostic storage.
+    /// Recording adds no callbacks and preserves the original configuration's
+    /// struct-literal construction and serde representation.
+    pub fn with_trial_diagnostics(self, enabled: bool) -> TracedMoreThuente<F> {
+        TracedMoreThuente::new(self).with_trial_diagnostics(enabled)
+    }
+
     /// Moré–Thuente with L-BFGS-B's `lnsrlb` defaults.
     pub fn new() -> Self {
         Self::default()
@@ -147,7 +158,7 @@ impl<F: Scalar> MoreThuente<F> {
 
 impl<F: Scalar> MoreThuente<F> {
     fn search<P, V>(
-        &mut self,
+        &self,
         problem: &mut Problem<P>,
         param: &V,
         cost: F,
@@ -158,6 +169,35 @@ impl<F: Scalar> MoreThuente<F> {
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
     {
+        self.search_recorded(
+            problem,
+            param,
+            cost,
+            gradient,
+            direction,
+            &mut Trace::default(),
+        )
+    }
+}
+
+impl<F: Scalar> MoreThuente<F> {
+    #[allow(clippy::too_many_arguments)]
+    fn search_recorded<P, V>(
+        &self,
+        problem: &mut Problem<P>,
+        param: &V,
+        cost: F,
+        gradient: &V,
+        direction: &V,
+        trace: &mut Trace<F>,
+    ) -> Result<LineSearchResult<V, F>, P::Error>
+    where
+        P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+        V: ScaledAdd<F> + Dot<F> + Clone,
+    {
+        trace.trials.clear();
+        trace.exit = None;
+        trace.selected = None;
         let zero = F::zero();
         let p5 = F::from_f64(0.5).unwrap();
         let p66 = F::from_f64(0.66).unwrap();
@@ -171,9 +211,11 @@ impl<F: Scalar> MoreThuente<F> {
         // Defensive: catch ascent direction or non-finite slope. The
         // `!is_finite()` guard routes NaN here too.
         if !ginit.is_finite() || ginit >= zero {
+            trace.record_exit(SearchExit::InvalidInitial, Some(zero));
             return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
         }
         if !(self.alpha_init >= self.stpmin && self.alpha_init <= self.stpmax) {
+            trace.record_exit(SearchExit::InvalidInitial, Some(zero));
             return Ok(LineSearchResult::new(LineSearchOutcome::Step(zero)));
         }
 
@@ -199,8 +241,42 @@ impl<F: Scalar> MoreThuente<F> {
             // Evaluate f(stp), g(stp): Fortran `task = 'FG'` callback.
             let mut trial = param.clone();
             trial.scaled_add(stp, direction);
-            let (f, g_full) = problem.cost_and_gradient(&trial)?;
-            let g = g_full.dot(direction);
+            let counts_before = *problem.counts();
+            let result = problem.cost_and_gradient(&trial);
+            let slope = result.as_ref().ok().map(|(_, g)| g.dot(direction));
+            if trace.enabled {
+                trace.trials.push(SearchTrial {
+                    step: stp,
+                    value: result
+                        .as_ref()
+                        .ok()
+                        .map(|(f, _)| [*f, slope.unwrap()]),
+                    sufficient_decrease_bound: finit + stp * gtest,
+                    curvature_bound: self.gtol * (-ginit),
+                    wolfe: None,
+                    warnings: None,
+                    before: Bracket {
+                        best: [stx, fx, gx],
+                        other: [sty, fy, gy],
+                        interval: [stmin, stmax],
+                        bracketed: brackt,
+                        stage,
+                    },
+                    update: None,
+                    interpolation_case: None,
+                    modified_function: false,
+                    counts_before,
+                    counts_after: *problem.counts(),
+                });
+            }
+            let (f, g_full) = match result {
+                Ok(value) => value,
+                Err(error) => {
+                    trace.record_exit(SearchExit::CallbackError, None);
+                    return Err(error);
+                }
+            };
+            let g = slope.unwrap();
 
             // Stage transition (Fortran lines 3572–3574).
             let ftest = finit + stp * gtest;
@@ -226,7 +302,20 @@ impl<F: Scalar> MoreThuente<F> {
             let warn_stpmin = stp == self.stpmin && (f > ftest || g >= gtest);
             let converged = f <= ftest && g.abs() <= self.gtol * (-ginit);
 
+            if trace.enabled {
+                let record = trace.trials.last_mut().unwrap();
+                record.wolfe =
+                    Some([f <= ftest, g.abs() <= self.gtol * (-ginit)]);
+                record.warnings = Some([
+                    warn_rounding,
+                    warn_no_resolution,
+                    warn_xtol,
+                    warn_stpmax,
+                    warn_stpmin,
+                ]);
+            }
             if warn_no_resolution && f > ftest {
+                trace.record_exit(SearchExit::Warning, Some(stx));
                 return Ok(LineSearchResult::new(LineSearchOutcome::Step(stx)));
             }
 
@@ -237,6 +326,14 @@ impl<F: Scalar> MoreThuente<F> {
                 || warn_stpmin
                 || converged
             {
+                trace.record_exit(
+                    if converged {
+                        SearchExit::Wolfe
+                    } else {
+                        SearchExit::Warning
+                    },
+                    Some(stp),
+                );
                 return Ok(LineSearchResult::with_evaluation(
                     stp, trial, f, g_full,
                 ));
@@ -252,7 +349,7 @@ impl<F: Scalar> MoreThuente<F> {
                 let mut gxm = gx - gtest;
                 let mut gym = gy - gtest;
 
-                dcstep::<F>(
+                let case = dcstep::<F>(
                     &mut stx,
                     &mut fxm,
                     &mut gxm,
@@ -267,12 +364,17 @@ impl<F: Scalar> MoreThuente<F> {
                     stmax,
                 );
 
+                if trace.enabled {
+                    let trial = trace.trials.last_mut().unwrap();
+                    trial.interpolation_case = Some(case);
+                    trial.modified_function = true;
+                }
                 fx = fxm + stx * gtest;
                 fy = fym + sty * gtest;
                 gx = gxm + gtest;
                 gy = gym + gtest;
             } else {
-                dcstep::<F>(
+                let case = dcstep::<F>(
                     &mut stx,
                     &mut fx,
                     &mut gx,
@@ -286,6 +388,10 @@ impl<F: Scalar> MoreThuente<F> {
                     stmin,
                     stmax,
                 );
+                if trace.enabled {
+                    trace.trials.last_mut().unwrap().interpolation_case =
+                        Some(case);
+                }
             }
 
             // Bisection if bracket width isn't shrinking (Fortran 3634–3638).
@@ -321,10 +427,23 @@ impl<F: Scalar> MoreThuente<F> {
             {
                 stp = stx;
             }
+            if trace.enabled {
+                trace.trials.last_mut().unwrap().update = Some((
+                    Bracket {
+                        best: [stx, fx, gx],
+                        other: [sty, fy, gy],
+                        interval: [stmin, stmax],
+                        bracketed: brackt,
+                        stage,
+                    },
+                    stp,
+                ));
+            }
         }
 
         // maxfev exhausted: return current best step (Armijo holds
         // at stx by invariant of dcstep, so this is a usable step).
+        trace.record_exit(SearchExit::Exhausted, Some(stx));
         Ok(LineSearchResult::new(LineSearchOutcome::Step(stx)))
     }
 }
@@ -376,7 +495,7 @@ where
         if !(max.is_finite() && max > F::zero() && self.stpmin <= max) {
             return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
         }
-        let mut search = Self {
+        let search = Self {
             alpha_init: bounds.initial.max(self.stpmin).min(max),
             stpmax: max,
             ..*self
@@ -413,7 +532,7 @@ fn dcstep<F: Scalar>(
     brackt: &mut bool,
     stpmin: F,
     stpmax: F,
-) {
+) -> u8 {
     let zero = F::zero();
     let two = F::from_f64(2.0).unwrap();
     let three = F::from_f64(3.0).unwrap();
@@ -421,9 +540,11 @@ fn dcstep<F: Scalar>(
 
     let sgnd = dp * (*dx / dx.abs());
     let stpf;
+    let case;
 
     if fp > *fx {
         // Case 1.
+        case = 1;
         let theta = three * (*fx - fp) / (*stp - *stx) + *dx + dp;
         let s = theta.abs().max(dx.abs()).max(dp.abs());
         let mut gamma = s * ((theta / s).powi(2) - (*dx / s) * (dp / s)).sqrt();
@@ -445,6 +566,7 @@ fn dcstep<F: Scalar>(
         *brackt = true;
     } else if sgnd < zero {
         // Case 2.
+        case = 2;
         let theta = three * (*fx - fp) / (*stp - *stx) + *dx + dp;
         let s = theta.abs().max(dx.abs()).max(dp.abs());
         let mut gamma = s * ((theta / s).powi(2) - (*dx / s) * (dp / s)).sqrt();
@@ -464,6 +586,7 @@ fn dcstep<F: Scalar>(
         *brackt = true;
     } else if dp.abs() < dx.abs() {
         // Case 3.
+        case = 3;
         let theta = three * (*fx - fp) / (*stp - *stx) + *dx + dp;
         let s = theta.abs().max(dx.abs()).max(dp.abs());
         // `gamma = 0` only arises if the cubic does not tend to infinity
@@ -507,6 +630,7 @@ fn dcstep<F: Scalar>(
         };
     } else {
         // Case 4.
+        case = 4;
         stpf = if *brackt {
             let theta = three * (fp - *fy) / (*sty - *stp) + *dy + dp;
             let s = theta.abs().max(dy.abs()).max(dp.abs());
@@ -543,6 +667,7 @@ fn dcstep<F: Scalar>(
     }
 
     *stp = stpf;
+    case
 }
 
 #[cfg(test)]

@@ -17,9 +17,18 @@ use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
 
+use super::least_squares_diagnostics::{
+    LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
+    vector,
+};
+
+#[cfg(test)]
+mod accounting;
 mod damping;
 mod stopping;
-use damping::{scaled_norm, trust_region_step, update_radius};
+use damping::{
+    rescale_robust_damping, scaled_norm, trust_region_step, update_radius,
+};
 use stopping::{
     all_finite, finite_unchanged_trial, orthogonality_converged,
     relative_step_converged, relative_trust_radius_converged,
@@ -229,6 +238,29 @@ pub enum LmDamping {
 /// Gauss–Newton model. Reported costs, actual reductions, and convergence
 /// use the robust objective and its gradient.
 ///
+/// With Nielsen damping, growth of the robust model's diagonal scaling `D`
+/// rescales `μ` by `max_j(D_old[j] / D_new[j])`, where
+/// `D_new[j] = max(D_old[j], diag(J_modelᵀ J_model)[j])`. This prevents a
+/// common curvature increase from abruptly amplifying the effective damping
+/// `μD`, while retaining at least the previous damping in every coordinate.
+/// If any diagonal entry stays unchanged, `μ` stays unchanged as well.
+/// The adjustment is a Basin safeguard for the varying robust model; the
+/// usual gain-ratio update and trial acceptance still apply.
+///
+/// Heavy damping can produce a tiny accepted step and tiny model reduction
+/// while the robust gradient remains large. Enabling both progress tests does
+/// not require stationarity: they combine with OR, and even their conjunction
+/// can pass far from a minimum. A positive gain ratio does not resolve this.
+/// When stationarity is required, use gradient tests alone and leave native
+/// step, model-reduction, trust-radius, and observed progress checks disabled.
+/// Alternatively, guard native relative progress tests with
+/// [`Self::with_absolute_progress_gradient_tolerance`]. The guard checks the
+/// retained point, charging and caching a new Jacobian after acceptance.
+/// The default absolute gradient test follows this configuration; choose its
+/// threshold for the objective and parameter scales. The robust normalized
+/// gradient test is an alternative, not an accuracy certificate, and can require
+/// an exact zero near a zero-residual minimum.
+///
 /// For an ordinary residual problem, `state.cost` carries the LM convention
 /// `½‖r‖²`, derived from the
 /// residual the solver evaluates itself. The bound on `P` is
@@ -279,12 +311,13 @@ pub enum LmDamping {
 /// assert!((result.param()[1] - 2.0).abs() < 1e-6);
 /// # }
 /// ```
-pub struct LevenbergMarquardt<V, M, F = f64> {
+pub struct LevenbergMarquardt<V, M, F: Scalar = f64> {
     tol_grad: Option<F>,
     tol_grad_rel: Option<F>,
     tol_cost_rel: Option<F>,
     tol_step_rel: Option<F>,
     tol_radius_rel: Option<F>,
+    tol_progress_grad: Option<F>,
     numerical_no_progress: bool,
     tau: F,
     damping: LmDamping,
@@ -308,11 +341,22 @@ pub struct LevenbergMarquardt<V, M, F = f64> {
     jtr_cache: Option<V>,
     failed: bool,
     native_convergence: Vec<NativeConvergenceTest>,
+    trace: Option<Trace<F>>,
 }
 
-impl<V, M, F> NativeConvergenceDiagnostics for LevenbergMarquardt<V, M, F> {
+impl<V, M, F: Scalar> NativeConvergenceDiagnostics
+    for LevenbergMarquardt<V, M, F>
+{
     fn native_convergence_tests(&self) -> &[NativeConvergenceTest] {
         &self.native_convergence
+    }
+}
+
+impl<V, M, F: Scalar> LeastSquaresDiagnostics<F>
+    for LevenbergMarquardt<V, M, F>
+{
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
@@ -340,6 +384,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             tol_cost_rel: None,
             tol_step_rel: None,
             tol_radius_rel: None,
+            tol_progress_grad: None,
             numerical_no_progress: true,
             tau: F::from_f64(1e-3).unwrap(),
             damping: LmDamping::Nielsen,
@@ -356,7 +401,18 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             jtr_cache: None,
             failed: false,
             native_convergence: Vec::new(),
+            trace: None,
         }
+    }
+
+    /// Enable native model and trial observations (disabled by default).
+    ///
+    /// Recording adds allocations and arithmetic but no problem evaluations.
+    /// Fresh runs reset observations; exact continuation preserves the sequence.
+    /// Read each batch with [`LeastSquaresDiagnostics::least_squares_observations`].
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.trace = enabled.then(Trace::default);
+        self
     }
 
     /// Configure the infinity norm of J-transpose times residual.
@@ -370,6 +426,40 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
         value: impl Into<Option<F>>,
     ) -> Self {
         self.tol_grad = crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
+    /// Require stationarity before a model-reduction, trial-step, or radius stop.
+    ///
+    /// When a relative progress test passes, also require the objective gradient
+    /// infinity norm at the retained point to be at most this tolerance. For
+    /// robust objectives, this is the actual loss gradient, not the gradient of
+    /// an unweighted residual sum. The progress tests still combine with OR,
+    /// and each passing test combines with this guard using AND. Independent
+    /// absolute-gradient and orthogonality stops remain sufficient on their own.
+    ///
+    /// Disabled by default. `None` disables the guard; zero requires an exactly
+    /// zero gradient. Values must be finite and nonnegative. Repeated calls
+    /// replace the setting. Configure before starting a solve.
+    ///
+    /// A rejected trial reuses its base gradient. An accepted trial needs one
+    /// counted Jacobian callback at the new point; its residual and resulting
+    /// model are cached for continuation if the guard fails. Callback errors,
+    /// invalid models, and numerical no-progress stops retain their failure or
+    /// stall classifications. Diagnostics retain the unguarded progress checks
+    /// and add `progress_gradient`; successful reports contain compound custom
+    /// criteria with both progress and gradient measurements.
+    ///
+    /// This absolute guard depends on objective and parameter units. It does
+    /// not certify parameter recovery or a global minimum. Choose its threshold
+    /// using derivative accuracy and problem scales rather than copying a
+    /// progress tolerance.
+    pub fn with_absolute_progress_gradient_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_progress_grad =
+            crate::core::convergence::optional_tolerance(value);
         self
     }
 
@@ -576,6 +666,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,
@@ -626,6 +719,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,
@@ -672,6 +768,9 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         self.failed = false;
         self.rejected_step = false;
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
         self.r_cache = None;
         self.model_cache = None;
         self.jtr_cache = None;
@@ -745,7 +844,17 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             + Clone,
     {
         self.native_convergence.clear();
+        if let Some(trace) = &mut self.trace {
+            trace.clear();
+        }
         if self.failed {
+            if let Some(trace) = &mut self.trace {
+                trace.event(
+                    state.cost(),
+                    "construction",
+                    "invalid_initial_model",
+                );
+            }
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::numerical_failure(
@@ -764,6 +873,13 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 let j = problem.jacobian(state.param())?;
                 let Some((model_r, j)) = problem.model(&r, j) else {
                     self.failed = true;
+                    if let Some(trace) = &mut self.trace {
+                        trace.event(
+                            state.cost(),
+                            "construction",
+                            "invalid_residual_model",
+                        );
+                    }
                     return Ok(crate::SolverStep::from((
                         state,
                         Some(Termination::numerical_failure(
@@ -780,6 +896,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let a = match a {
             Ok(a) => a,
             Err(error) => {
+                if let Some(trace) = &mut self.trace {
+                    let index = trace.event(
+                        state.cost(),
+                        "construction",
+                        "factorization_failed",
+                    );
+                    trace.observations[index].gradient = vector(&g);
+                }
                 self.model_cache = Some(Err(error));
                 self.r_cache = Some(r);
                 self.jtr_cache = Some(g);
@@ -800,6 +924,18 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 || !g.norm_infinity().is_finite()
                 || !problem.valid_vector(&g))
         {
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "construction",
+                    "nonfinite_model",
+                );
+                trace.observations[index].gradient = vector(&g);
+                trace.observations[index].arithmetic = vec![
+                    ("residual_square", r.norm_squared()),
+                    ("gradient_infinity", g.norm_infinity()),
+                ];
+            }
             self.model_cache = Some(Ok(a));
             self.r_cache = Some(r);
             self.jtr_cache = Some(g);
@@ -829,6 +965,39 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 orthogonality_converged(&g, &diag_cur, &r, tol)
             }
         });
+        if let Some(trace) = &mut self.trace {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            row.gradient = vector(&g);
+            row.diagonal = vector(&diag_cur);
+            row.checks.push(LeastSquaresCheck {
+                name: "absolute_gradient",
+                tolerance: self.tol_grad,
+                passed: self.tol_grad.map(|_| abs_converged),
+                evidence: self.tol_grad.map(|tolerance| {
+                    crate::ConvergenceEvidence::UpperBound {
+                        value: g.norm_infinity(),
+                        bound: tolerance,
+                        tolerance,
+                        reference: None,
+                    }
+                }),
+            });
+            row.checks.push(LeastSquaresCheck {
+                name: "orthogonality",
+                tolerance: self.tol_grad_rel,
+                passed: self.tol_grad_rel.map(|_| rel_converged),
+                evidence: self.tol_grad_rel.and_then(|tolerance| {
+                    stopping::try_orthogonality_evidence(
+                        &g,
+                        &diag_cur,
+                        &r,
+                        E::ROBUST.then_some(state.cost()),
+                        tolerance,
+                    )
+                }),
+            });
+            trace.push(row);
+        }
         if abs_converged || rel_converged {
             let absolute = abs_converged.then(|| {
                 Termination::upper_bound(
@@ -883,34 +1052,89 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             .diag
             .take()
             .expect("diag not set: Solver::init must run before next_iter");
-        d.component_max_assign(&diag_cur);
-
         let mut mu = self
             .mu
             .expect("mu not set: Solver::init must run before next_iter");
         let mut nu = self.nu;
+        if E::ROBUST && self.damping == LmDamping::Nielsen {
+            mu = rescale_robust_damping(mu, &d, &diag_cur);
+        }
+        d.component_max_assign(&diag_cur);
 
         // Increase damping when the model solve reports recoverable rank loss.
         let two = F::from_f64(2.0).unwrap();
         let half = F::from_f64(0.5).unwrap();
         let one_third = F::from_f64(1.0 / 3.0).unwrap();
+        let mut model_solves = 0;
+        let mut last_solve: Option<usize> = None;
+        let mut search_gradient = None;
         let step = if self.damping == LmDamping::TrustRegion {
             let radius = self.radius.expect("trust radius not initialized");
             let mut scaled_gradient = g.clone();
             scaled_gradient.component_div_assign(&d);
             let gradient_norm = g.dot(&scaled_gradient).sqrt();
+            search_gradient = Some(gradient_norm);
             trust_region_step(
                 radius,
                 &mut mu,
                 self.max_inner_attempts,
                 gradient_norm,
-                |mu| Model::solve(&a, &g, &d, mu, rank_tolerance),
+                |mu| {
+                    model_solves += 1;
+                    let result = Model::solve(&a, &g, &d, mu, rank_tolerance);
+                    if let Some(trace) = &mut self.trace {
+                        if let Some(index) = last_solve {
+                            trace.observations[index].damping_after = Some(mu);
+                        }
+                        let mut row =
+                            LeastSquaresObservation::model(state.cost());
+                        row.event = "subproblem";
+                        row.outcome = Some(match &result {
+                            Ok(_) => "solved",
+                            Err(ModelSolveError::Retry) => "retry",
+                            Err(ModelSolveError::Failed) => "failed",
+                        });
+                        row.damping = Some(mu);
+                        row.radius_before = self.radius;
+                        row.model_solves = 1;
+                        row.gradient = vector(&g);
+                        row.diagonal = vector(&d);
+                        if let Ok(h) = &result {
+                            row.step = vector(h);
+                            row.step_norm = Some(scaled_norm(h, &d));
+                        }
+                        last_solve = Some(trace.push(row));
+                    }
+                    result
+                },
                 |h| scaled_norm(h, &d),
             )
         } else {
             let mut attempts = 0;
             loop {
-                match Model::solve(&a, &g, &d, mu, rank_tolerance) {
+                model_solves += 1;
+                let result = Model::solve(&a, &g, &d, mu, rank_tolerance);
+                if let Some(trace) = &mut self.trace {
+                    let mut row = LeastSquaresObservation::model(state.cost());
+                    row.event = "subproblem";
+                    row.outcome = Some(match &result {
+                        Ok(_) => "solved",
+                        Err(ModelSolveError::Retry) => "retry",
+                        Err(ModelSolveError::Failed) => "failed",
+                    });
+                    row.damping = Some(mu);
+                    row.damping_after = Some(mu);
+                    row.model_solves = 1;
+                    row.gradient = vector(&g);
+                    row.diagonal = vector(&d);
+                    row.arithmetic.push(("retry_multiplier", nu));
+                    if let Ok(h) = &result {
+                        row.step = vector(h);
+                        row.step_norm = Some(scaled_norm(h, &d));
+                    }
+                    last_solve = Some(trace.push(row));
+                }
+                match result {
                     Ok(step) => break Ok(step),
                     Err(failure) => {
                         attempts += 1;
@@ -922,13 +1146,43 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                         }
                         mu = mu * nu;
                         nu = nu * two;
+                        if let (Some(trace), Some(index)) =
+                            (&mut self.trace, last_solve)
+                        {
+                            trace.observations[index].damping_after = Some(mu);
+                        }
                     }
                 }
             }
         };
+        if self.damping == LmDamping::TrustRegion {
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "damping_search",
+                    if step.is_ok() { "selected" } else { "failed" },
+                );
+                let row = &mut trace.observations[index];
+                row.damping_after = Some(mu);
+                row.arithmetic
+                    .push(("scaled_gradient_norm", search_gradient.unwrap()));
+                row.radius_before = self.radius;
+                row.radius_after = self.radius;
+                if let Some(previous) = last_solve {
+                    trace.observations[previous].damping_after = Some(mu);
+                }
+            }
+        }
         let h = match step {
             Ok(h) => h,
             Err(_) => {
+                if let (Some(trace), Some(index)) =
+                    (&mut self.trace, last_solve)
+                {
+                    if trace.observations[index].outcome == Some("retry") {
+                        trace.observations[index].outcome = Some("exhausted");
+                    }
+                }
                 self.mu = Some(mu);
                 self.nu = nu;
                 self.diag = Some(d);
@@ -952,7 +1206,30 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
 
         let mut x_trial = state.param().clone();
         x_trial.scaled_add(F::one(), &h);
-        let r_trial = problem.residual(&x_trial)?;
+        let trial_record = self.trace.as_mut().map(|trace| {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            row.event = "trial";
+            row.trial = true;
+            row.step = vector(&h);
+            row.gradient = vector(&g);
+            row.diagonal = vector(&d);
+            row.damping = Some(mu);
+            row.radius_before = self.radius;
+            row.step_norm = Some(scaled_norm(&h, &d));
+            row.model_solves = model_solves;
+            row.predicted_reduction = Some(l_diff);
+            trace.push(row)
+        });
+        let r_trial = match problem.residual(&x_trial) {
+            Ok(r) => r,
+            Err(error) => {
+                if let Some(index) = trial_record {
+                    self.trace.as_mut().unwrap().observations[index].outcome =
+                        Some("callback_failed");
+                }
+                return Err(error);
+            }
+        };
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
         let prev_cost = state.cost();
@@ -1045,7 +1322,148 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         let step_rel_converged = self
             .tol_step_rel
             .is_some_and(|tol| relative_step_converged(&h, state.param(), tol));
-        if cost_rel_converged || step_rel_converged || radius_rel_converged {
+        if let Some(index) = trial_record {
+            let row = &mut self.trace.as_mut().unwrap().observations[index];
+            row.trial_cost = Some(f_trial);
+            row.actual_reduction = Some(actual_diff);
+            row.gain_ratio = Some(rho);
+            row.accepted = Some(rho > F::zero());
+            row.radius_after = self.radius;
+            row.damping_after = Some(mu);
+            row.outcome = Some(if rho > F::zero() {
+                "accepted"
+            } else {
+                "rejected"
+            });
+            row.checks.push(LeastSquaresCheck {
+                name: "model_reduction",
+                tolerance: self.tol_cost_rel,
+                passed: self.tol_cost_rel.map(|_| cost_rel_converged),
+                evidence: self.tol_cost_rel.map(|tolerance| {
+                    crate::ConvergenceEvidence::ModelReduction {
+                        actual: actual_diff,
+                        predicted: l_diff,
+                        reference_cost: prev_cost,
+                        gain_ratio: rho,
+                        tolerance,
+                    }
+                }),
+            });
+            row.checks.push(LeastSquaresCheck {
+                name: "trial_step",
+                tolerance: self.tol_step_rel,
+                passed: self.tol_step_rel.map(|_| step_rel_converged),
+                evidence: self.tol_step_rel.and_then(|tolerance| {
+                    stopping::try_step_evidence(&h, state.param(), tolerance)
+                }),
+            });
+            row.checks.push(LeastSquaresCheck {
+                name: "trust_radius",
+                tolerance: radius_tolerance,
+                passed: radius_tolerance.map(|_| radius_rel_converged),
+                evidence: radius_tolerance.and_then(|tolerance| {
+                    stopping::try_radius_evidence(
+                        self.radius.unwrap(),
+                        state.param(),
+                        self.diag.as_ref().unwrap(),
+                        tolerance,
+                    )
+                }),
+            });
+        }
+        let progress_converged =
+            cost_rel_converged || step_rel_converged || radius_rel_converged;
+        let mut progress_gradient = None;
+        if progress_converged {
+            if let Some(tolerance) = self.tol_progress_grad {
+                if rho > F::zero() {
+                    // Acceptance invalidated the base gradient. Cache the same
+                    // model the next iteration would construct at this point.
+                    let j = match problem.jacobian(state.param()) {
+                        Ok(j) => j,
+                        Err(error) => {
+                            if let Some(index) = trial_record {
+                                self.trace.as_mut().unwrap().observations
+                                    [index]
+                                    .outcome = Some("accepted_jacobian_failed");
+                            }
+                            return Err(error);
+                        }
+                    };
+                    let retained_r = self.r_cache.as_ref().unwrap();
+                    let Some((model_r, j)) = problem.model(retained_r, j)
+                    else {
+                        self.failed = true;
+                        if let Some(trace) = &mut self.trace {
+                            trace.event(
+                                state.cost(),
+                                "construction",
+                                "invalid_retained_model",
+                            );
+                        }
+                        return Ok(
+                            crate::SolverStep::completed_with_termination(
+                                state,
+                                Termination::numerical_failure(
+                                    "The retained least-squares point has an invalid local model.",
+                                ),
+                            ),
+                        );
+                    };
+                    self.jtr_cache = Some(j.mat_transpose_vec(
+                        model_r.as_ref().unwrap_or(retained_r),
+                    ));
+                    self.model_cache = Some(Model::prepare(
+                        &j,
+                        model_r.as_ref().unwrap_or(retained_r),
+                    ));
+                }
+                let gradient = self.jtr_cache.as_ref().unwrap();
+                let valid = all_finite(gradient)
+                    && problem.valid_vector(gradient)
+                    && state.cost().is_finite()
+                    && (!E::ROBUST
+                        || all_finite(self.r_cache.as_ref().unwrap()));
+                if !valid || self.model_cache.as_ref().unwrap().is_err() {
+                    if let Some(trace) = &mut self.trace {
+                        trace.event(
+                            state.cost(),
+                            "construction",
+                            "invalid_retained_model",
+                        );
+                    }
+                    return Ok(crate::SolverStep::completed_with_termination(
+                        state,
+                        Termination::numerical_failure(
+                            "The retained least-squares point has an invalid gradient or model.",
+                        ),
+                    ));
+                }
+                let value = gradient.norm_infinity();
+                progress_gradient = Some((value, tolerance));
+                if let Some(index) = trial_record {
+                    self.trace.as_mut().unwrap().observations[index]
+                        .checks
+                        .push(LeastSquaresCheck {
+                            name: "progress_gradient",
+                            tolerance: Some(tolerance),
+                            passed: Some(value <= tolerance),
+                            evidence: Some(
+                                crate::ConvergenceEvidence::UpperBound {
+                                    value,
+                                    bound: tolerance,
+                                    tolerance,
+                                    reference: None,
+                                },
+                            ),
+                        });
+                }
+            }
+        }
+        if progress_converged
+            && progress_gradient
+                .is_none_or(|(value, tolerance)| value <= tolerance)
+        {
             let model = cost_rel_converged.then(|| {
                 Termination::converged(crate::ConvergenceCriterion {
                     test: crate::ConvergenceTest::RelativeModelReduction,
@@ -1083,6 +1501,14 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 .into_iter()
                 .chain(step)
                 .chain(radius)
+                .map(|termination| match progress_gradient {
+                    Some((value, tolerance)) => stopping::guarded_progress(
+                        termination,
+                        value,
+                        tolerance,
+                    ),
+                    None => termination,
+                })
                 .reduce(Termination::merge)
                 .unwrap();
             if cost_rel_converged {
@@ -1217,6 +1643,8 @@ where
 ///
 /// [`RobustLeastSquares`] supplies robust objectives with the same model,
 /// cost, and convergence conventions as [`LevenbergMarquardt`].
+/// Its [robust stopping guidance](LevenbergMarquardt#state-convention) also
+/// applies to this factorization.
 ///
 /// # Rank and failures
 ///
@@ -1277,6 +1705,14 @@ impl<V, M: FactorizePivotedQr<V, F>, F: Scalar> NativeConvergenceDiagnostics
     }
 }
 
+impl<V, M: FactorizePivotedQr<V, F>, F: Scalar> LeastSquaresDiagnostics<F>
+    for LevenbergMarquardtQr<V, M, F>
+{
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.inner.least_squares_observations()
+    }
+}
+
 impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// Select pivoted QR while preserving configuration and resetting caches.
     ///
@@ -1294,7 +1730,9 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
                 tol_cost_rel: self.tol_cost_rel,
                 tol_step_rel: self.tol_step_rel,
                 tol_radius_rel: self.tol_radius_rel,
+                tol_progress_grad: self.tol_progress_grad,
                 numerical_no_progress: self.numerical_no_progress,
+                trace: self.trace.map(|_| Trace::default()),
                 tau: self.tau,
                 damping: self.damping,
                 initial_step_bound: self.initial_step_bound,
@@ -1326,6 +1764,12 @@ where
         }
     }
 
+    /// Enable [`LevenbergMarquardt::with_trial_diagnostics`] on the QR route.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self {
+        self.inner = self.inner.with_trial_diagnostics(enabled);
+        self
+    }
+
     /// Configure the relative rank tolerance.
     /// Retains the algorithm's existing formula, validation, and default.
     pub fn with_relative_rank_tolerance(mut self, tol: F) -> Self {
@@ -1348,6 +1792,17 @@ where
         value: impl Into<Option<F>>,
     ) -> Self {
         self.inner = self.inner.with_absolute_gradient_tolerance(value);
+        self
+    }
+
+    /// Configure [`LevenbergMarquardt::with_absolute_progress_gradient_tolerance`]
+    /// for the QR route, including its counted retained-point Jacobian callback.
+    pub fn with_absolute_progress_gradient_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.inner =
+            self.inner.with_absolute_progress_gradient_tolerance(value);
         self
     }
 
@@ -1452,6 +1907,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.inner.native_convergence.clear();
+        if let Some(trace) = &mut self.inner.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,
@@ -1501,6 +1959,9 @@ where
     }
     fn reset_convergence(&mut self) {
         self.inner.native_convergence.clear();
+        if let Some(trace) = &mut self.inner.trace {
+            trace.reset();
+        }
     }
     fn init(
         &mut self,

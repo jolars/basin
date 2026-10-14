@@ -41,6 +41,104 @@ macro_rules! stopping_checks {
             }
 
             #[test]
+            fn progress_guard_checks_the_accepted_point_and_preserves_counts() {
+                for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+                    let run = |guard: Option<$scalar>, iterations| {
+                        Executor::from_start(
+                            Affine { scale: [1., 1.], target: [3., 0.] },
+                            ($solver)
+                                .with_damping(damping)
+                                .with_absolute_gradient_tolerance(None)
+                                .with_relative_step_tolerance(1.)
+                                .with_absolute_progress_gradient_tolerance(guard)
+                                .with_trial_diagnostics(true),
+                            ($vector_new)(&[1., 0.]),
+                        ).max_iter(iterations).run_with_solver().unwrap()
+                    };
+                    let unguarded = run(None, 1);
+                    let allowed = run(Some(0.01), 1);
+                    assert_eq!(allowed.param(), unguarded.param());
+                    assert_eq!(allowed.report.code(), TerminationCode::SolverConverged);
+                    assert_eq!(allowed.iter(), 1);
+                    assert_eq!(allowed.counts.residual_evals, 2);
+                    assert_eq!(allowed.counts.jacobian_evals, 2);
+                    let basin::Termination::Converged(convergence) = &allowed.report.termination else { panic!("expected guarded convergence") };
+                    let criterion = &convergence.criteria()[0];
+                    let basin::ConvergenceTest::Custom { key, .. } = &criterion.test else { panic!("expected compound predicate") };
+                    assert_eq!(key, "lm.guarded_trial_step");
+                    let basin::ConvergenceEvidence::Measurements(measurements) = &criterion.evidence else { panic!("expected compound operands") };
+                    let gradient = measurements.iter().find(|m| m.name == "gradient_inf").unwrap().value;
+                    assert!((gradient - (allowed.param()[0] - 3.).abs()).abs() <= 8. * <$scalar>::EPSILON);
+                    assert!(measurements.iter().any(|m| m.name == "value_exponent"));
+                    if damping == LmDamping::Nielsen {
+                        // The first accepted point is still nonstationary.
+                        let vetoed = run(Some(0.), 2);
+                        assert_eq!(vetoed.report.code(), TerminationCode::MaxIter);
+                        assert!(vetoed.param()[0] > unguarded.param()[0]);
+                        assert_eq!(vetoed.counts.residual_evals, 3);
+                        // The refreshed model is reused, not evaluated twice.
+                        assert_eq!(vetoed.counts.jacobian_evals, 3);
+                    }
+                }
+            }
+
+            #[test]
+            fn progress_guard_rejects_an_invalid_retained_gradient() {
+                struct InvalidJacobian;
+                impl Residual for InvalidJacobian {
+                    type Param = $vector;
+                    type Output = $vector;
+                    type Error = Infallible;
+                    fn residual(&self, x: &$vector) -> Result<$vector, Infallible> {
+                        Ok(($vector_new)(&[x[0] - 2., x[1]]))
+                    }
+                }
+                impl Jacobian for InvalidJacobian {
+                    type Jacobian = $matrix;
+                    fn jacobian(&self, x: &$vector) -> Result<$matrix, Infallible> {
+                        let diagonal = if x[0] > 1. { <$scalar>::NAN } else { 1. };
+                        Ok(($matrix_new)(&[diagonal, 0., 0., 1.]))
+                    }
+                }
+                let result = Executor::from_start(
+                    InvalidJacobian,
+                    ($solver)
+                        .with_damping(LmDamping::TrustRegion)
+                        .with_absolute_gradient_tolerance(None)
+                        .with_relative_step_tolerance(10.)
+                        .with_absolute_progress_gradient_tolerance(1.),
+                    ($vector_new)(&[0., 0.]),
+                ).max_iter(10).run().unwrap();
+                assert!(matches!(result.report.termination, basin::Termination::Failed(_)));
+                assert_eq!(result.state.counts().residual_evals, 2);
+                assert_eq!(result.state.counts().jacobian_evals, 2);
+                assert_eq!(result.iter(), 1);
+                assert!(result.param()[0] > 1.);
+            }
+
+            #[test]
+            fn failed_progress_guard_retains_the_no_progress_safeguard() {
+                let result = Executor::from_start(
+                    Affine { scale: [1., 1.], target: [2., 0.] },
+                    ($solver)
+                        .with_absolute_gradient_tolerance(None)
+                        .with_tau(1e30)
+                        .with_relative_step_tolerance(1.)
+                        .with_absolute_progress_gradient_tolerance(0.)
+                        .with_trial_diagnostics(true),
+                    ($vector_new)(&[1., 0.]),
+                ).max_iter(10).run_with_solver().unwrap();
+                assert_eq!(result.report.code(), TerminationCode::NumericalNoProgress);
+                assert_eq!(result.iter(), 0);
+                assert_eq!(result.param()[0], 1.);
+                assert_eq!(result.counts.residual_evals, 2);
+                assert_eq!(result.counts.jacobian_evals, 1);
+                let guard = basin::solver::least_squares_diagnostics::LeastSquaresDiagnostics::least_squares_observations(&result.solver)
+                    .iter().flat_map(|o| &o.checks).find(|c| c.name == "progress_gradient").unwrap();
+                assert_eq!(guard.passed, Some(false));
+            }
+
+            #[test]
             fn native_diagnostics_preserve_simultaneous_tests_and_stages() {
                 use NativeConvergenceTest as Test;
                 let result = Executor::from_start(

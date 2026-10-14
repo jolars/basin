@@ -14,6 +14,10 @@ use crate::{
     LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
 };
 
+use super::least_squares_diagnostics::{
+    LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
+};
+
 /// Levenberg-Marquardt with Coleman–Li box scaling (simplified TRF)
 /// for nonlinear least-squares problems `min ½‖r(x)‖²` subject to
 /// `lower ≤ x ≤ upper`. The first n-D box-constrained NLLS solver in
@@ -171,7 +175,7 @@ use crate::{
 /// `Residual` + `Jacobian` least-squares pattern; `Trf` additionally
 /// requires the problem to implement `BoxConstraints` and is constructed
 /// with `Trf::new()`.
-pub struct Trf<V, M, F = f64> {
+pub struct Trf<V, M, F: Scalar = f64> {
     tol_grad: Option<F>,
     tau: F,
     rstep: F,
@@ -193,6 +197,14 @@ pub struct Trf<V, M, F = f64> {
     j_cache: Option<M>,
     model_r_cache: Option<V>,
     failed: bool,
+    trace: Option<Trace<F>>,
+    trace_vector: Option<fn(&V) -> Vec<F>>,
+}
+
+impl<V, M, F: Scalar> LeastSquaresDiagnostics<F> for Trf<V, M, F> {
+    fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
+        self.trace.as_ref().map_or(&[], |trace| &trace.observations)
+    }
 }
 
 impl<V, M, F: Scalar> Default for Trf<V, M, F> {
@@ -210,6 +222,8 @@ impl<V, M, F: Scalar> Default for Trf<V, M, F> {
             j_cache: None,
             model_r_cache: None,
             failed: false,
+            trace: None,
+            trace_vector: None,
         }
     }
 }
@@ -224,6 +238,21 @@ impl<V, M> Trf<V, M> {
 }
 
 impl<V, M, F: Scalar> Trf<V, M, F> {
+    /// Enable native model and trial observations (disabled by default).
+    ///
+    /// Recording requires indexed vectors but adds no problem evaluations.
+    /// Fresh initialization resets observations; exact continuation preserves them.
+    pub fn with_trial_diagnostics(mut self, enabled: bool) -> Self
+    where
+        V: VectorLen + VectorIndex<F>,
+    {
+        self.trace = enabled.then(Trace::default);
+        self.trace_vector = enabled.then_some(|v: &V| {
+            (0..v.vec_len()).map(|i| v.get_scalar(i)).collect()
+        });
+        self
+    }
+
     /// Configure the Coleman-Li scaled gradient infinity norm.
     ///
     /// `None` disables the test; zero requests an exact-zero threshold.
@@ -406,6 +435,9 @@ where
             self.rstep,
         );
 
+        if let Some(trace) = &mut self.trace {
+            trace.reset();
+        }
         self.failed = false;
         self.rejected_step = false;
         self.r_cache = None;
@@ -457,10 +489,20 @@ where
         problem: &mut E,
         mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
+        if let Some(trace) = &mut self.trace {
+            trace.clear();
+        }
         // Use cached `r`/`J` when available (set by init or by the
         // previous accept-or-reject branch). Only count an eval when the
         // cache misses.
         if self.failed {
+            if let Some(trace) = &mut self.trace {
+                trace.event(
+                    state.cost(),
+                    "construction",
+                    "invalid_initial_model",
+                );
+            }
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::numerical_failure(
@@ -478,6 +520,13 @@ where
                 let j = problem.jacobian(state.param())?;
                 let Some(model) = problem.model(&r, j) else {
                     self.failed = true;
+                    if let Some(trace) = &mut self.trace {
+                        trace.event(
+                            state.cost(),
+                            "construction",
+                            "invalid_residual_model",
+                        );
+                    }
                     return Ok(crate::SolverStep::from((
                         state,
                         Some(Termination::numerical_failure(
@@ -492,6 +541,15 @@ where
         let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
         if !problem.valid_vector(&g) {
             self.failed = true;
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "construction",
+                    "invalid_gradient",
+                );
+                trace.observations[index].gradient =
+                    self.trace_vector.unwrap()(&g);
+            }
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::numerical_failure(
@@ -513,6 +571,28 @@ where
             &mut c_diag,
         );
 
+        if let Some(trace) = &mut self.trace {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            let collect = self.trace_vector.unwrap();
+            row.gradient = collect(&g);
+            row.diagonal = collect(&d_sq);
+            row.curvature = collect(&c_diag);
+            let value = g.cl_kkt_inf_norm(&d_sq);
+            row.checks.push(LeastSquaresCheck {
+                name: "scaled_gradient",
+                tolerance: self.tol_grad,
+                passed: self.tol_grad.map(|t| value <= t),
+                evidence: self.tol_grad.map(|tolerance| {
+                    crate::ConvergenceEvidence::UpperBound {
+                        value,
+                        bound: tolerance,
+                        tolerance,
+                        reference: None,
+                    }
+                }),
+            });
+            trace.push(row);
+        }
         // First-order optimality: ‖v ⊙ Jᵀr‖_∞ ≤ tol_grad, equal to
         // `max_i |g_i| / d_sq_i` in our representation (since
         // `d_sq[i] = 1/|v_i|`). Goes to zero at any KKT point, interior
@@ -556,8 +636,19 @@ where
             .expect("mu not set: Solver::init must run before next_iter");
         let mut nu = self.nu;
         macro_rules! fail_model {
-            ($message:literal) => {{
+            ($outcome:literal, $message:literal) => {{
                 self.failed = true;
+                if let Some(trace) = &mut self.trace {
+                    let index =
+                        trace.event(state.cost(), "selection", $outcome);
+                    let row = &mut trace.observations[index];
+                    row.damping = Some(mu);
+                    row.damping_after = Some(mu);
+                    row.gradient = self.trace_vector.unwrap()(&g);
+                    row.diagonal = self.trace_vector.unwrap()(&d_sq);
+                    row.curvature = self.trace_vector.unwrap()(&c_diag);
+                    row.arithmetic.push(("retry_multiplier", nu));
+                }
                 self.mu = Some(mu);
                 self.nu = nu;
                 self.r_cache = Some(r);
@@ -583,14 +674,38 @@ where
             // Some backends can return a zero step from an infinite diagonal
             // without reporting a linear-solve error.
             if !mu.is_finite() || !nu.is_finite() {
-                fail_model!("Legacy TRF produced non-finite damping.");
+                fail_model!(
+                    "nonfinite_damping",
+                    "Legacy TRF produced non-finite damping."
+                );
             }
             let mut a_damped = m.clone();
             // damping_vec = c + μ · d_sq.
             let mut damping_vec = c_diag.clone();
             damping_vec.scaled_add(mu, &d_sq);
             a_damped.add_diagonal_vector_in_place(&damping_vec);
-            match a_damped.solve_spd(&neg_g) {
+            let result = a_damped.solve_spd(&neg_g);
+            let solve_record = self.trace.as_mut().map(|trace| {
+                let mut row = LeastSquaresObservation::model(state.cost());
+                let collect = self.trace_vector.unwrap();
+                row.event = "subproblem";
+                row.outcome =
+                    Some(if result.is_ok() { "solved" } else { "retry" });
+                row.damping = Some(mu);
+                row.damping_after = Some(mu);
+                row.gradient = collect(&g);
+                row.diagonal = collect(&d_sq);
+                row.curvature = collect(&c_diag);
+                row.model_solves = 1;
+                row.arithmetic.push(("retry_multiplier", nu));
+                if let Ok(step) = &result {
+                    row.step = collect(step);
+                    row.step_norm =
+                        Some(step.weighted_norm_squared(&d_sq).sqrt());
+                }
+                trace.push(row)
+            });
+            match result {
                 Ok(step) => {
                     h = step;
                     break;
@@ -598,6 +713,10 @@ where
                 Err(_) => {
                     attempts += 1;
                     if attempts >= self.max_inner_attempts || !mu.is_finite() {
+                        if let Some(index) = solve_record {
+                            self.trace.as_mut().unwrap().observations[index]
+                                .outcome = Some("exhausted");
+                        }
                         self.mu = Some(mu);
                         self.nu = nu;
                         // State unchanged; restore both caches.
@@ -613,6 +732,10 @@ where
                     }
                     mu = mu * nu;
                     nu = nu * two;
+                    if let Some(index) = solve_record {
+                        self.trace.as_mut().unwrap().observations[index]
+                            .damping_after = Some(mu);
+                    }
                 }
             }
         }
@@ -651,13 +774,54 @@ where
             || !predicted.is_finite()
             || !half_s_t_c_s.is_finite()
         {
-            fail_model!("Legacy TRF produced a non-finite trial model.");
+            if let Some(trace) = &mut self.trace {
+                let index = trace.event(
+                    state.cost(),
+                    "selection",
+                    "nonfinite_prediction",
+                );
+                let row = &mut trace.observations[index];
+                row.predicted_reduction = Some(predicted);
+                row.arithmetic = vec![
+                    ("feasible_fraction", alpha),
+                    ("curvature_correction", half_s_t_c_s),
+                    ("step_gradient", h_t_g),
+                    ("weighted_step_square", dh_norm_sq),
+                ];
+            }
+            fail_model!(
+                "nonfinite_trial_model",
+                "Legacy TRF produced a non-finite trial model."
+            );
         }
 
         // Trial step.
         let mut x_trial = state.param().clone();
         x_trial.scaled_add(alpha, &h);
-        let r_trial = problem.residual(&x_trial)?;
+        let trial_record = self.trace.as_mut().map(|trace| {
+            let mut row = LeastSquaresObservation::model(state.cost());
+            let collect = self.trace_vector.unwrap();
+            row.event = "trial";
+            row.trial = true;
+            row.step = collect(&h).into_iter().map(|x| alpha * x).collect();
+            row.gradient = collect(&g);
+            row.diagonal = collect(&d_sq);
+            row.curvature = collect(&c_diag);
+            row.damping = Some(mu);
+            row.model_solves = attempts + 1;
+            row.step_norm = Some(alpha * dh_norm_sq.sqrt());
+            trace.push(row)
+        });
+        let r_trial = match problem.residual(&x_trial) {
+            Ok(r) => r,
+            Err(error) => {
+                if let Some(index) = trial_record {
+                    self.trace.as_mut().unwrap().observations[index].outcome =
+                        Some("callback_failed");
+                }
+                return Err(error);
+            }
+        };
         let f_trial = problem.cost(&r_trial, |r| half * r.norm_squared());
 
         let prev_cost = state.cost();
@@ -669,6 +833,14 @@ where
             F::zero()
         };
 
+        if let Some(index) = trial_record {
+            let row = &mut self.trace.as_mut().unwrap().observations[index];
+            row.trial_cost = Some(f_trial);
+            row.actual_reduction = Some(actual);
+            row.predicted_reduction = Some(predicted);
+            row.gain_ratio = Some(rho);
+            row.accepted = Some(rho > F::zero());
+        }
         if rho > F::zero() {
             self.rejected_step = false;
             // Accept. Update x and cost; adapt μ via Nielsen smooth
@@ -693,6 +865,15 @@ where
             self.model_r_cache = model_r;
         }
 
+        if let Some(index) = trial_record {
+            let row = &mut self.trace.as_mut().unwrap().observations[index];
+            row.damping_after = Some(mu);
+            row.outcome = Some(if rho > F::zero() {
+                "accepted"
+            } else {
+                "rejected"
+            });
+        }
         self.mu = Some(mu);
         self.nu = nu;
         Ok(crate::SolverStep::from((state, None)))
