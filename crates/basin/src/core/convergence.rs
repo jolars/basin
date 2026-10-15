@@ -9,7 +9,10 @@ pub use native::{NativeConvergenceDiagnostics, NativeConvergenceTest};
 
 use super::constraint::BoxConstraints;
 use super::inner::{InitialState, WarmStart};
-use super::math::{ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd};
+use super::math::{
+    ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorIndex,
+    VectorLen,
+};
 use super::problem::Problem;
 use super::solver::Solver;
 use super::state::{GradientState, SimplexState, State};
@@ -22,11 +25,12 @@ use crate::SolverStep;
 /// A solver carrying fixed, optional convergence checks.
 ///
 /// Construct this through the solver's `with_*_tolerance` setters. Setters
-/// replace the corresponding check; distinct tests combine with OR. Simplex
-/// size and cost-spread conditions form a single AND group. New checks are
-/// disabled until configured. `None` disables a check; zero is an exact-zero
-/// threshold. The original solver's algorithm controls and safeguards remain
-/// active. Settings and history accompany composed inner solves.
+/// replace the corresponding check; distinct tests combine with OR. Nelder-Mead
+/// owns its simplex size and cost-spread settings, which form an AND group.
+/// New wrapper checks are disabled until configured. `None` disables a check;
+/// zero is an exact-zero threshold. The original solver's algorithm controls
+/// and safeguards remain active. Settings and history accompany composed inner
+/// solves.
 /// Trust-region solvers skip cost- and step-change checks after rejected
 /// iterations, retaining the initial or last accepted iterate as the anchor.
 ///
@@ -469,123 +473,162 @@ where
     }
 }
 
-/// Fixed simplex-collapse settings; configured size and cost tests use AND.
-/// The cost-only form uses `Size = ()` to avoid requiring vector norms.
+/// Solver-owned simplex-collapse settings; enabled size and cost tests use AND.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SimplexChecks<F: Scalar = f64, Size = Option<F>> {
-    size: Size,
-    cost: Option<F>,
+pub struct SimplexChecks<F: Scalar = f64> {
+    pub(crate) size: Option<F>,
+    pub(crate) relative_size: Option<F>,
+    pub(crate) cost: Option<F>,
+    pub(crate) relative_cost: Option<F>,
+    initial_cost_spread: Option<F>,
 }
-impl<F: Scalar, Size: Default> From<()> for SimplexChecks<F, Size> {
+impl<F: Scalar> From<()> for SimplexChecks<F> {
     fn from(_: ()) -> Self {
         Self {
-            size: Size::default(),
-            cost: None,
-        }
-    }
-}
-impl<F: Scalar> From<SimplexChecks<F, ()>> for SimplexChecks<F> {
-    fn from(checks: SimplexChecks<F, ()>) -> Self {
-        Self {
             size: None,
-            cost: checks.cost,
+            relative_size: None,
+            cost: None,
+            relative_cost: None,
+            initial_cost_spread: None,
         }
     }
 }
-impl<F: Scalar, Size> sealed::Sealed for SimplexChecks<F, Size> {}
+impl<F: Scalar> SimplexChecks<F> {
+    pub(crate) fn nelder_mead_defaults() -> Self {
+        let absolute = F::from_f64(1e-8).unwrap();
+        // Corpus runs expose premature f32 stops with sqrt(epsilon), while
+        // tighter settings approach float-resolution stalls. Keep the f64
+        // default and allow 32 epsilon for lower-precision arithmetic.
+        let relative = F::from_f64(f64::EPSILON.sqrt())
+            .unwrap()
+            .max(F::from_f64(32.0).unwrap() * F::epsilon());
+        Self {
+            size: Some(absolute),
+            relative_size: Some(relative),
+            cost: Some(absolute),
+            relative_cost: Some(relative),
+            initial_cost_spread: None,
+        }
+    }
 
-fn simplex_cost_within_tolerance<F: Scalar>(costs: &[F], tolerance: F) -> bool {
-    let Some(&best) = costs.first() else {
-        return false;
-    };
-    costs
-        .iter()
-        .all(|&cost| cost.is_finite() && (cost - best).abs() <= tolerance)
+    pub(crate) fn reset(&mut self) {
+        self.initial_cost_spread = None;
+    }
+
+    pub(crate) fn capture_initial_cost_spread(&mut self, costs: &[F]) {
+        if self.initial_cost_spread.is_none() {
+            self.initial_cost_spread = simplex_cost_spread(costs);
+        }
+    }
+}
+impl<F: Scalar> sealed::Sealed for SimplexChecks<F> {}
+
+fn simplex_cost_spread<F: Scalar>(costs: &[F]) -> Option<F> {
+    let &best = costs.first()?;
+    costs.iter().try_fold(F::zero(), |spread, &cost| {
+        let difference = (cost - best).abs();
+        (cost.is_finite() && difference.is_finite())
+            .then(|| spread.max(difference))
+    })
 }
 
-impl<P, S, F> Check<P, S> for SimplexChecks<F, ()>
-where
-    F: Scalar,
-    S: SimplexState<Float = F>,
-{
-    fn reset(&mut self) {}
-    fn check(
-        &mut self,
-        _: &Problem<P>,
-        state: &S,
-    ) -> Option<Termination<S::Float>> {
-        let tolerance = self.cost?;
-        if !simplex_cost_within_tolerance(state.costs(), tolerance) {
-            return None;
-        }
-        let best = state.costs()[0];
-        let value = state
-            .costs()
-            .iter()
-            .fold(F::zero(), |max, &cost| max.max((cost - best).abs()));
-        Some(Termination::converged(ConvergenceCriterion {
-            test: ConvergenceTest::Simplex,
-            evidence: ConvergenceEvidence::Simplex {
-                size: None,
-                cost_spread: Some(Threshold { value, tolerance }),
-            },
-        }))
+fn simplex_threshold<F: Scalar>(
+    value: F,
+    absolute: Option<F>,
+    relative: Option<F>,
+    reference: F,
+) -> Option<Threshold<F>> {
+    let relative_bound = relative.map_or(F::zero(), |tol| tol * reference);
+    if !value.is_finite()
+        || !reference.is_finite()
+        || !relative_bound.is_finite()
+        || absolute
+            .into_iter()
+            .chain(relative)
+            .any(|tol| !tol.is_finite() || tol < F::zero())
+    {
+        return None;
     }
+    let tolerance = absolute.unwrap_or(F::zero()).max(relative_bound);
+    (value <= tolerance).then_some(Threshold {
+        value,
+        tolerance,
+        absolute_tolerance: absolute,
+        relative_tolerance: relative,
+        reference: relative.map(|_| reference),
+    })
 }
 
 impl<P, S, F> Check<P, S> for SimplexChecks<F>
 where
     F: Scalar,
     S: SimplexState<Float = F>,
-    S::Param: Clone + ScaledAdd<F> + NormInfinity<F>,
+    S::Param: VectorLen + VectorIndex<F>,
 {
-    fn reset(&mut self) {}
+    fn reset(&mut self) {
+        self.reset();
+    }
     fn check(
         &mut self,
         _: &Problem<P>,
         state: &S,
     ) -> Option<Termination<S::Float>> {
-        if self.size.is_none() && self.cost.is_none() {
+        let check_size = self.size.is_some() || self.relative_size.is_some();
+        let check_cost = self.cost.is_some() || self.relative_cost.is_some();
+        if !check_size && !check_cost {
             return None;
         }
-        if !simplex_cost_within_tolerance(
-            state.costs(),
-            self.cost.unwrap_or(F::infinity()),
-        ) {
+        if state.vertices().len() != state.costs().len() {
             return None;
         }
-        let mut max_distance = F::zero();
-        if let Some(tolerance) = self.size {
+        let spread = simplex_cost_spread(state.costs())?;
+        let initial_spread = *self.initial_cost_spread.get_or_insert(spread);
+        let cost_spread = if check_cost {
+            Some(simplex_threshold(
+                spread,
+                self.cost,
+                self.relative_cost,
+                state.costs()[0].abs().max(initial_spread),
+            )?)
+        } else {
+            None
+        };
+        let size = if check_size {
             let best = state.vertices().first()?;
+            let mut norm = F::zero();
+            let mut max_distance = F::zero();
             for vertex in state.vertices() {
-                let mut difference = vertex.clone();
-                difference.scaled_add(-F::one(), best);
-                let distance = difference.norm_infinity();
-                max_distance = max_distance.max(distance);
-                if !distance.is_finite() || distance > tolerance {
+                if vertex.vec_len() != best.vec_len() {
                     return None;
                 }
+                for j in 0..best.vec_len() {
+                    let anchor = best.get_scalar(j);
+                    let coordinate = vertex.get_scalar(j);
+                    let distance = (coordinate - anchor).abs();
+                    if !anchor.is_finite()
+                        || !coordinate.is_finite()
+                        || !distance.is_finite()
+                    {
+                        return None;
+                    }
+                    norm = norm.max(anchor.abs());
+                    max_distance = max_distance.max(distance);
+                }
             }
-        }
-        let best = state.costs()[0];
-        let spread = state
-            .costs()
-            .iter()
-            .fold(F::zero(), |max, &cost| max.max((cost - best).abs()));
+            Some(simplex_threshold(
+                max_distance,
+                self.size,
+                self.relative_size,
+                norm,
+            )?)
+        } else {
+            None
+        };
         Some(Termination::converged(ConvergenceCriterion {
             test: ConvergenceTest::Simplex,
-            evidence: ConvergenceEvidence::Simplex {
-                size: self.size.map(|tolerance| Threshold {
-                    value: max_distance,
-                    tolerance,
-                }),
-                cost_spread: self.cost.map(|tolerance| Threshold {
-                    value: spread,
-                    tolerance,
-                }),
-            },
+            evidence: ConvergenceEvidence::Simplex { size, cost_spread },
         }))
     }
 }
@@ -854,56 +897,6 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
 }
 
 impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
-    fn set_absolute_simplex_size_tolerance<F: Scalar>(
-        self,
-        value: impl Into<Option<F>>,
-    ) -> ConfiguredSolver<So, G, X, C, SimplexChecks<F>>
-    where
-        T: Into<SimplexChecks<F>>,
-    {
-        let mut slot: SimplexChecks<F> = self.simplex.into();
-        slot.size = optional_tolerance(value);
-        ConfiguredSolver {
-            solver: self.solver,
-            gradient: self.gradient,
-            step: self.step,
-            cost: self.cost,
-            simplex: slot,
-        }
-    }
-}
-
-impl<So, G, X, C> ConfiguredSolver<So, G, X, C> {
-    fn set_absolute_simplex_cost_tolerance<F: Scalar>(
-        self,
-        value: impl Into<Option<F>>,
-    ) -> ConfiguredSolver<So, G, X, C, SimplexChecks<F, ()>> {
-        ConfiguredSolver {
-            solver: self.solver,
-            gradient: self.gradient,
-            step: self.step,
-            cost: self.cost,
-            simplex: SimplexChecks {
-                size: (),
-                cost: optional_tolerance(value),
-            },
-        }
-    }
-}
-
-impl<So, G, X, C, F: Scalar, Size>
-    ConfiguredSolver<So, G, X, C, SimplexChecks<F, Size>>
-{
-    fn set_absolute_simplex_cost_tolerance(
-        mut self,
-        value: impl Into<Option<F>>,
-    ) -> Self {
-        self.simplex.cost = optional_tolerance(value);
-        self
-    }
-}
-
-impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
     fn set_absolute_projected_gradient_tolerance<F: Scalar>(
         self,
         value: impl Into<Option<F>>,
@@ -1042,14 +1035,10 @@ mod tests {
                 let mut state =
                     SimplexProgress::from_simplex(vec![vec![0.0]; 2]);
                 state.replace(vec![vec![0.0]; 2], costs).unwrap();
-                let mut cost_only = SimplexChecks {
-                    size: (),
-                    cost: Some(0.0),
-                };
-                let mut combined = SimplexChecks {
-                    size: Some(0.0),
-                    cost: Some(0.0),
-                };
+                let mut cost_only = SimplexChecks::from(());
+                cost_only.cost = Some(0.0);
+                let mut combined = cost_only.clone();
+                combined.size = Some(0.0);
                 assert_eq!(cost_only.check(&problem, &state), None);
                 assert_eq!(combined.check(&problem, &state), None);
             }

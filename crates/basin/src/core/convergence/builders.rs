@@ -130,58 +130,6 @@ macro_rules! gradient_setters {
         }
     };
 }
-macro_rules! simplex_setters {
-    ([$($generic:tt)*] $solver:ty, [$($bound:tt)*]) => {
-        impl<$($generic)*> $solver where $($bound)* {
-            /// Require the maximum infinity-norm distance from the best simplex vertex to be at most the tolerance.
-            ///
-            /// Disabled by default. `None` disables; zero requests an exact-zero
-            /// threshold. Values must be finite and nonnegative. Combines with the other enabled simplex condition using AND.
-            /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting.
-            pub fn with_absolute_simplex_size_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, (), (), (), SimplexChecks<Q>>
-             { ConfiguredSolver::new(self).set_absolute_simplex_size_tolerance(value) }
-            /// Require the maximum absolute cost difference from the best simplex vertex to be at most the tolerance.
-            ///
-            /// Disabled by default. `None` disables; zero requests an exact-zero
-            /// threshold. Values must be finite and nonnegative. Combines with the other enabled simplex condition using AND.
-            /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting.
-            pub fn with_absolute_simplex_cost_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, (), (), (), SimplexChecks<Q, ()>>
-             { ConfiguredSolver::new(self).set_absolute_simplex_cost_tolerance(value) }
-        }
-        impl<CG, CX, CC, CT, $($generic)*> ConfiguredSolver<$solver, CG, CX, CC, CT> where $($bound)* {
-            /// Require the maximum infinity-norm distance from the best simplex vertex to be at most the tolerance.
-            ///
-            /// Disabled by default. `None` disables; zero requests an exact-zero
-            /// threshold. Values must be finite and nonnegative. Combines with the other enabled simplex condition using AND.
-            /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting.
-            pub fn with_absolute_simplex_size_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, CG, CX, CC, SimplexChecks<Q>>
-            where CT: Into<SimplexChecks<Q>> { self.set_absolute_simplex_size_tolerance(value) }
-        }
-        impl<CG, CX, CC, $($generic)*> ConfiguredSolver<$solver, CG, CX, CC> where $($bound)* {
-            /// Require the maximum absolute cost difference from the best simplex vertex to be at most the tolerance.
-            ///
-            /// Disabled by default. `None` disables; zero requests an exact-zero
-            /// threshold. Values must be finite and nonnegative. Combines with the other enabled simplex condition using AND.
-            /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting.
-            pub fn with_absolute_simplex_cost_tolerance<Q: Scalar>(self, value: impl Into<Option<Q>>) -> ConfiguredSolver<$solver, CG, CX, CC, SimplexChecks<Q, ()>>
-             { self.set_absolute_simplex_cost_tolerance(value) }
-        }
-        impl<CG, CX, CC, Q: Scalar, Size, $($generic)*> ConfiguredSolver<$solver, CG, CX, CC, SimplexChecks<Q, Size>> where $($bound)* {
-            /// Require the maximum absolute cost difference from the best simplex vertex to be at most the tolerance.
-            ///
-            /// Disabled by default. `None` disables; zero requests an exact-zero
-            /// threshold. Values must be finite and nonnegative. Combines with the other enabled simplex condition using AND.
-            /// Evaluated at initialized iteration boundaries; repeated calls replace
-            /// this setting.
-            pub fn with_absolute_simplex_cost_tolerance(self, value: impl Into<Option<Q>>) -> Self
-             { self.set_absolute_simplex_cost_tolerance(value) }
-        }
-    };
-}
 macro_rules! projected_setters {
     ([$($generic:tt)*] $solver:ty, [$($bound:tt)*]) => {
         impl<$($generic)*> $solver where $($bound)* {
@@ -284,7 +232,6 @@ gradient_setters!([V, L, M, F: Scalar] Bfgs<V,F,M,L>, [V: crate::DenseBackend<F>
 gradient_setters!([V,L,F:Scalar] Lbfgs<V,F,crate::solver::lbfgs::Unbounded,L>, []);
 gradient_setters!([Sub,F:Scalar,Mode] TrustRegion<Sub,F,Mode>, []);
 gradient_setters!([F:Scalar] BrentDerivative<F>, []);
-simplex_setters!([V,Mode,F:Scalar] NelderMead<V,F,Mode>, []);
 projected_setters!([L,F:Scalar] ProjectedGradientDescent<L,F>, []);
 
 macro_rules! absolute_step_setters {

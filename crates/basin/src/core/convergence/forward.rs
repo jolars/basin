@@ -43,6 +43,15 @@ impl<CG, CX, CC, CT, V, F: Scalar>
     }
 }
 
+impl<CG, CX, CC, CT, V, F: Scalar, Mode>
+    ConfiguredSolver<NelderMead<V, F, Mode>, CG, CX, CC, CT>
+{
+    forward_setting!(NelderMead, with_absolute_simplex_size_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(NelderMead, with_relative_simplex_size_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(NelderMead, with_absolute_simplex_cost_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(NelderMead, with_relative_simplex_cost_tolerance, value: impl Into<Option<F>>);
+}
+
 impl<CG, CX, CC, CT, V, S, F: Scalar>
     ConfiguredSolver<
         Lbfgs<V, F, crate::solver::lbfgs::Bounded, S>,

@@ -107,7 +107,10 @@ bracketing routines.
   Luersen–Le Riche restart algorithm. Publishes `SimplexProgress`, with
   observable vertices and an independent historical incumbent; scratch belongs
   to the solver. Both variants support all four dense backends with `f32` or
-  `f64`.
+  `f64` and require coordinate access through `VectorIndex`. Paired simplex size
+  and cost-spread tests are enabled by default in Basin 2.0; see the
+  [convergence migration guidance](../migrating-convergence/) and API reference
+  for tolerance settings and scaling limits.
 - **[`Mads`](https://docs.rs/basin/latest/basin/solver/mads/struct.Mads.html)**:
   mesh adaptive direct search (the deterministic OrthoMADS instance): polls a
   positive spanning set of `2n` directions on a shrinking mesh, generated from

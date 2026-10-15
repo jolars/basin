@@ -90,6 +90,10 @@ from a point. Nelder–Mead builds its default 5% simplex there; the Argmin
 simplex above uses the same coordinate perturbations. Generic stopping rules
 belong on the solver; its simplex tolerances check both simplex diameter and cost
 spread, rather than Argmin's sample standard deviation of costs alone.
+In Basin 2.0 both tests have absolute and relative defaults. The example below
+disables the relative settings to request absolute-only thresholds. An absolute
+setter alone changes its floor while leaving the relative setting enabled;
+see [Migrating Convergence Settings](../migrating-convergence/) for details.
 
 <!-- compile: basin-nelder-mead -->
 ```rust
@@ -112,6 +116,8 @@ fn main() {
     let result = Executor::from_start(
         Rosenbrock,
         (NelderMead::new())
+            .with_relative_simplex_size_tolerance(None)
+            .with_relative_simplex_cost_tolerance(None)
             .with_absolute_simplex_size_tolerance(1e-8)
             .with_absolute_simplex_cost_tolerance(1e-8),
         vec![-1.2, 1.0],

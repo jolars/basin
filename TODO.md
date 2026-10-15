@@ -271,14 +271,23 @@ desired backend features.
   support end date, and publish migration guidance. Keep the 2.0 release PR
   open until the release is ready.
 
-- [ ] **Revisit convergence defaults in a separate focused effort
-  ([#109](https://github.com/jolars/basin/issues/109)).** Select defaults for
-  paired simplex size and cost spread tests in Nelder-Mead, covering objective
-  and parameter scales, flat objectives, projected collapse, and both
-  precisions. For LM, L-BFGS-B, and both TRF implementations, validate scaled
-  stopping criteria or concrete configuration guidance on NIST cases and known
-  premature stops. Preserve Basin 1.x defaults. The delivered numerical
-  safeguards do not close this issue.
+- [x] **Enable paired Nelder-Mead convergence defaults
+  ([#109](https://github.com/jolars/basin/issues/109)).** Both simplex size and
+  cost spread use absolute floors of `1e-8` and relative tolerances of
+  `sqrt(f64::EPSILON)` for `f64` and `32 * f32::EPSILON` for `f32`. The relative
+  cost reference includes the initial spread so it remains useful near zero
+  minima. Tests cover objective and parameter scales, flat objectives,
+  projected collapse, high-dimensional Rosenbrock, both precisions, and every
+  dense backend version. A corpus audit across multiple starts and dimensions
+  informed the precision-specific defaults. See the
+  [migration guide](MIGRATING.md#nelder-mead-convergence-defaults) for settings,
+  checkpoint changes, and the limits imposed by fixed floors.
+
+- [ ] **Revisit convergence defaults for LM, L-BFGS-B, and both TRF
+  implementations ([#109](https://github.com/jolars/basin/issues/109)).**
+  Validate scaled stopping criteria or concrete configuration guidance on NIST
+  cases and known premature stops. Preserve Basin 1.x defaults. Nelder-Mead's
+  new defaults and the delivered numerical safeguards do not close this issue.
 
 - [x] **Make structured termination reports part of ordinary results.**
   Ordinary `run()` returns an owned report, final state, and authoritative

@@ -154,8 +154,11 @@ pub enum ConvergenceTest {
     AbsoluteCostChange,
     /// `|f_current - f_previous| <= tolerance * |f_previous|`.
     RelativeCostChange,
-    /// Configured maximum vertex distance and cost difference from the first
-    /// vertex must both pass. A disabled condition is absent from the evidence.
+    /// Maximum `||x_i - x_0||_infinity <= max(x_abs, x_rel * ||x_0||_infinity)`
+    /// AND maximum `|f_i - f_0| <= max(f_abs, f_rel * max(|f_0|, initial_spread))`.
+    /// Disabled terms are omitted; a dimension with both terms disabled is
+    /// absent from the conjunction and evidence. The initial spread is the
+    /// first finite cost spread after fresh initialization.
     Simplex,
     /// `max_j |(Jᵀr)_j| / (||J[:,j]|| * ||r||) <= tolerance`.
     GradientOrthogonality,
@@ -259,12 +262,19 @@ pub struct BinaryValue<F: Scalar = f64> {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A scalar comparison value and its configured tolerance.
+/// A scalar comparison value, its tolerance settings, and the evaluated bound.
 pub struct Threshold<F: Scalar = f64> {
     /// Observed value.
     pub value: F,
-    /// Configured tolerance for this predicate.
+    /// Evaluated bound: the maximum of the enabled absolute tolerance and
+    /// relative tolerance times its reference.
     pub tolerance: F,
+    /// Configured absolute tolerance, if enabled.
+    pub absolute_tolerance: Option<F>,
+    /// Configured relative tolerance, if enabled.
+    pub relative_tolerance: Option<F>,
+    /// Reference magnitude used by the relative tolerance, if enabled.
+    pub reference: Option<F>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

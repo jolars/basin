@@ -17,6 +17,14 @@ impl basin::VectorLen for Vector {
         self.0.len()
     }
 }
+impl basin::VectorIndex for Vector {
+    fn get_scalar(&self, i: usize) -> f64 {
+        self.0[i]
+    }
+    fn set_scalar(&mut self, i: usize, value: f64) {
+        self.0[i] = value;
+    }
+}
 impl ScaleInPlace for Vector {
     fn scale_in_place(&mut self, scalar: f64) {
         for x in &mut self.0 {
@@ -81,11 +89,14 @@ fn projected_iterations_do_not_clone_bounds() {
     clones.set(0);
     for _ in 0..20 {
         state = solver.next_iter(&mut problem, state).unwrap().state;
+        let counts = *problem.counts();
+        let _ = solver.check_convergence(&problem, &state);
+        assert_eq!(problem.counts(), &counts);
     }
     assert_eq!(
         clones.get(),
         0,
-        "initialized projected steps must not clone vectors"
+        "initialized projected steps and convergence checks must not clone vectors"
     );
     assert!(problem.counts().cost_evals > 20);
 }

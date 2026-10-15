@@ -29,7 +29,8 @@ fn main() {
     // the simplex use `SimplexProgress::with_step` or `::from_simplex`.
     //
     // `NelderMead::adaptive()` infers `n` from the simplex during `init`
-    // and uses the dimension-aware parameters of Gao & Han (2012).
+    // and uses the dimension-aware parameters of Gao & Han (2012). The default
+    // paired simplex checks stop a collapsed simplex before the safety budget.
     let solver = NelderMead::adaptive();
     let state = SimplexProgress::new(x0);
     let result = Executor::new(problem, solver, state)

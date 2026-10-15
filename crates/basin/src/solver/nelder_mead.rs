@@ -5,8 +5,9 @@ pub mod diagnostics;
 use diagnostics::{Trace, Trial, TrialKind};
 
 use crate::core::constraint::BoxConstraints;
+use crate::core::convergence::{Check, SimplexChecks, optional_tolerance};
 use crate::core::math::{
-    ClampInPlace, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+    ClampInPlace, Scalar, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
 };
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -21,20 +22,35 @@ use crate::core::state::SimplexProgress;
 ///
 /// # Convergence
 ///
-/// All convergence tests are disabled by default, for both unbounded and
-/// projected variants. Without an explicit test, a collapsed simplex does
-/// not stop the solver; it continues until an executor limit or another
-/// configured stop ends the run.
+/// Both unbounded and projected variants stop when the whole simplex is small
+/// in parameters AND costs. Let `b` be its current best vertex, `D_x` the
+/// maximum `||x_i - b||_infinity`, and `D_f` the maximum `|f_i - f_b|`. The tests
+/// are `D_x <= max(x_abs, x_rel * ||b||_infinity)` and
+/// `D_f <= max(f_abs, f_rel * max(|f_b|, initial_cost_spread))`.
+/// Both absolute tolerances default to `1e-8`; both relative tolerances default
+/// to `sqrt(f64::EPSILON)` for `f64` (about `1.5e-8`) and
+/// `32 * f32::EPSILON` for `f32` (about `3.8e-6`).
+/// The initial cost spread is captured after projection and evaluation, or at
+/// the first subsequent boundary with a finite spread. It keeps the relative
+/// cost test useful near a zero minimum under large objective multipliers.
+/// Fresh solves reset this reference; exact checkpoints preserve it.
 ///
-/// Configure [`with_absolute_simplex_size_tolerance`](Self::with_absolute_simplex_size_tolerance)
-/// and [`with_absolute_simplex_cost_tolerance`](Self::with_absolute_simplex_cost_tolerance)
-/// to stop when both the maximum infinity-norm distance from the best vertex
-/// and the maximum absolute cost difference from that vertex meet their
-/// tolerances. These tests measure the whole simplex, so an unchanged best
-/// vertex alone does not trigger them. Both thresholds are absolute; choose
-/// them for the units of the parameters and objective. `None` disables a
-/// test; zero requires an exact-zero spread. Keep an iteration or evaluation
-/// budget on the executor as well. The example below configures both tests.
+/// The four `with_absolute_simplex_*_tolerance` and
+/// `with_relative_simplex_*_tolerance` setters replace individual settings.
+/// `None` disables a setting; zero requests an exact-zero threshold. Disabled
+/// terms are omitted from each maximum, and a dimension with both settings
+/// disabled is omitted from the AND group. Disable all four settings to turn
+/// off simplex convergence. Other configured tests combine with this group
+/// using OR. Nonfinite measurements or overflowed bounds cannot establish
+/// convergence. Checks require no additional evaluations or vector clones.
+///
+/// An unchanged best vertex alone does not establish collapse. Flat objectives
+/// and simplexes collapsed by clipping can pass these tests without establishing
+/// stationarity or parameter accuracy. Fixed absolute floors limit accuracy for
+/// small quantities, and one vector norm cannot account for different units
+/// across coordinates. Scale parameters and tune the floors for the problem;
+/// disable relative settings when configuring absolute-only tests. Keep an
+/// iteration or evaluation budget on the executor as well.
 ///
 /// # Bounds
 ///
@@ -69,10 +85,11 @@ use crate::core::state::SimplexProgress;
 ///
 /// Supports `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`, and faer
 /// `Col<F>`, with `F = f32` or `f64`. Requires [`Clone`], [`VectorLen`],
-/// [`ScaleInPlace`], and [`ScaledAdd`]. The projected variant also requires
-/// [`ClampInPlace`]. Default point seeding uses
+/// [`VectorIndex`], [`ScaleInPlace`], and [`ScaledAdd`]. The projected variant
+/// also requires [`ClampInPlace`]. Default point seeding uses
 /// [`IntoInitialSimplex`](crate::IntoInitialSimplex), implemented for vectors
-/// with coordinate access. Explicit simplex seeding does not need it.
+/// with coordinate access. Explicit simplex seeding does not need this
+/// conversion trait, but convergence still requires coordinate access.
 ///
 /// # Examples
 ///
@@ -95,9 +112,7 @@ use crate::core::state::SimplexProgress;
 ///
 /// let result = Executor::new(
 ///     Rosenbrock,
-///     NelderMead::new()
-///         .with_absolute_simplex_size_tolerance(1e-10)
-///         .with_absolute_simplex_cost_tolerance(1e-10),
+///     NelderMead::new(),
 ///     SimplexProgress::new(vec![-1.2, 1.0]),
 /// )
 /// .max_iter(1_000)
@@ -111,6 +126,7 @@ pub struct NelderMead<V, F: Scalar = f64, Mode = Unbounded> {
     #[cfg_attr(feature = "serde", serde(skip, default = "Trace::default"))]
     trace: Trace<V, F>,
     config: ParamConfig<F>,
+    convergence: SimplexChecks<F>,
     /// Resolved parameters; populated by `init` once the dimension is known.
     params: Option<Params<F>>,
     /// Type-state marker; carries the mode at the type level only.
@@ -181,10 +197,12 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
     /// α=1, β=2, γ=0.5, δ=0.5. These coefficients *are* the default, so
     /// this is the canonical entry point; [`adaptive`](Self::adaptive)
     /// and [`with_params`](Self::with_params) are presets and overrides.
-    /// No convergence test is enabled; see [Convergence](Self#convergence).
+    /// Enables paired absolute and relative simplex tests; see
+    /// [Convergence](Self#convergence).
     pub fn new() -> Self {
         Self {
             config: ParamConfig::Standard,
+            convergence: SimplexChecks::nelder_mead_defaults(),
             params: None,
             scratch: Vec::new(),
             trace: Trace {
@@ -203,6 +221,7 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
     pub fn adaptive() -> Self {
         Self {
             config: ParamConfig::Adaptive,
+            convergence: SimplexChecks::nelder_mead_defaults(),
             params: None,
             scratch: Vec::new(),
             trace: Trace {
@@ -229,6 +248,7 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
                 gamma,
                 delta,
             }),
+            convergence: SimplexChecks::nelder_mead_defaults(),
             params: None,
             scratch: Vec::new(),
             trace: Trace {
@@ -249,6 +269,7 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
     pub fn projected(self) -> NelderMead<V, F, Projected> {
         NelderMead {
             config: self.config,
+            convergence: self.convergence,
             params: self.params,
             scratch: self.scratch,
             trace: self.trace,
@@ -258,6 +279,68 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
 }
 
 impl<V, Mode, F: Scalar> NelderMead<V, F, Mode> {
+    /// Set the absolute floor on maximum infinity-norm distance from the best vertex.
+    ///
+    /// Defaults to `1e-8`. Combines with the relative size tolerance using OR;
+    /// enabled size and cost conditions combine with AND. `None` disables only
+    /// this setting, and zero requests an exact-zero threshold. Values must be
+    /// finite and nonnegative. See [Convergence](Self#convergence).
+    pub fn with_absolute_simplex_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.convergence.size = optional_tolerance(value);
+        self
+    }
+
+    /// Set the relative tolerance on maximum infinity-norm distance from the best vertex.
+    ///
+    /// Defaults to `sqrt(f64::EPSILON)` for `f64` and `32 * f32::EPSILON` for
+    /// `f32`, multiplied by the current best vertex's infinity norm.
+    /// Combines with the absolute size tolerance using OR;
+    /// enabled size and cost conditions combine with AND. `None` disables only
+    /// this setting, and zero requests an exact-zero threshold. Values must be
+    /// finite and nonnegative. See [Convergence](Self#convergence).
+    pub fn with_relative_simplex_size_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.convergence.relative_size = optional_tolerance(value);
+        self
+    }
+
+    /// Set the absolute floor on maximum cost difference from the best vertex.
+    ///
+    /// Defaults to `1e-8`. Combines with the relative cost tolerance using OR;
+    /// enabled size and cost conditions combine with AND. `None` disables only
+    /// this setting, and zero requests an exact-zero threshold. Values must be
+    /// finite and nonnegative. See [Convergence](Self#convergence).
+    pub fn with_absolute_simplex_cost_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.convergence.cost = optional_tolerance(value);
+        self
+    }
+
+    /// Set the relative tolerance on maximum cost difference from the best vertex.
+    ///
+    /// Defaults to `sqrt(f64::EPSILON)` for `f64` and `32 * f32::EPSILON` for
+    /// `f32`, multiplied by the larger of the current best cost magnitude and
+    /// the initial cost spread. The saved initial spread
+    /// survives setter calls and exact continuation. Combines with the absolute
+    /// cost tolerance using OR; enabled size and cost conditions combine with
+    /// AND. `None` disables only this setting, and zero requests an exact-zero
+    /// threshold. Values must be finite and nonnegative. See
+    /// [Convergence](Self#convergence).
+    pub fn with_relative_simplex_cost_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.convergence.relative_cost = optional_tolerance(value);
+        self
+    }
+
     /// Record the most recent iteration's native trial attempts. Disabled by default.
     /// Fresh initialization resets ordinals; exact continuation retains them.
     /// Execution controls can leave an earlier batch intact. Getters make no callbacks.
@@ -490,7 +573,7 @@ impl<P, V, F> Solver<P, SimplexProgress<V, F>> for NelderMead<V, F, Unbounded>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
-    V: Clone + VectorLen + ScaleInPlace<F> + ScaledAdd<F>,
+    V: Clone + VectorLen + VectorIndex<F> + ScaleInPlace<F> + ScaledAdd<F>,
 {
     type Error = P::Error;
 
@@ -500,13 +583,27 @@ where
         mut state: SimplexProgress<V, F>,
     ) -> Result<SimplexProgress<V, F>, Self::Error> {
         state.reset();
+        self.convergence.reset();
         self.trace.trials.clear();
         self.trace.sequence = 0;
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
         self.scratch = vec![state.vertices[0].clone(); 3];
         init_costs_and_sort(problem, &mut state)?;
+        self.convergence.capture_initial_cost_spread(state.costs());
         Ok(state)
+    }
+
+    fn reset_convergence(&mut self) {
+        self.convergence.reset();
+    }
+
+    fn check_convergence(
+        &mut self,
+        problem: &Problem<P>,
+        state: &SimplexProgress<V, F>,
+    ) -> Option<crate::Termination<F>> {
+        self.convergence.check(problem, state)
     }
 
     fn next_iter(
@@ -532,7 +629,12 @@ impl<P, V, F> Solver<P, SimplexProgress<V, F>> for NelderMead<V, F, Projected>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + BoxConstraints,
-    V: Clone + VectorLen + ScaleInPlace<F> + ScaledAdd<F> + ClampInPlace,
+    V: Clone
+        + VectorLen
+        + VectorIndex<F>
+        + ScaleInPlace<F>
+        + ScaledAdd<F>
+        + ClampInPlace,
 {
     type Error = P::Error;
 
@@ -542,6 +644,7 @@ where
         mut state: SimplexProgress<V, F>,
     ) -> Result<SimplexProgress<V, F>, Self::Error> {
         state.reset();
+        self.convergence.reset();
         self.trace.trials.clear();
         self.trace.sequence = 0;
         let n = state.vertices.len() - 1;
@@ -555,7 +658,20 @@ where
         }
         self.scratch = vec![state.vertices[0].clone(); 3];
         init_costs_and_sort(problem, &mut state)?;
+        self.convergence.capture_initial_cost_spread(state.costs());
         Ok(state)
+    }
+
+    fn reset_convergence(&mut self) {
+        self.convergence.reset();
+    }
+
+    fn check_convergence(
+        &mut self,
+        problem: &Problem<P>,
+        state: &SimplexProgress<V, F>,
+    ) -> Option<crate::Termination<F>> {
+        self.convergence.check(problem, state)
     }
 
     fn next_iter(

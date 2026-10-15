@@ -502,8 +502,9 @@ construction rejects malformed shapes. A simplex has at least two same-length
 vertices and at most `n + 1` vertices in `n` coordinates; embedded subspace
 simplexes remain supported. Degenerate geometry is allowed.
 
-Nelder-Mead's vector bounds now include `VectorLen`, in addition to `Clone`,
-`ScaleInPlace<F>`, and `ScaledAdd<F>`; projection also requires `ClampInPlace`.
+Nelder-Mead's vector bounds now include `VectorLen` and `VectorIndex<F>`, in
+addition to `Clone`, `ScaleInPlace<F>`, and `ScaledAdd<F>`; projection also
+requires `ClampInPlace`. Convergence reads coordinates without cloning vectors.
 `IntoInitialSimplex<V, F = f64>` now takes a relative step of type `F` and has a
 blanket implementation for `Clone + VectorLen + VectorIndex<F>`. It supports all
 backend versions and both scalar types. Remove custom implementations that
@@ -1039,6 +1040,70 @@ of silently discarding them; ordinary iteration, evaluation, and time budgets
 remain serializable. Do not assume solver payload compatibility across major
 versions. Follow the [checkpoint migration instructions](#checkpoint-files) when
 moving a saved run from 1.x to 2.0.
+
+## Nelder-Mead convergence defaults
+
+All Nelder-Mead constructors now enable paired size and cost-spread tests,
+including the adaptive and projected variants. Both absolute tolerances default
+to `1e-8`; both relative tolerances default to `sqrt(f64::EPSILON)` for `f64`
+(about `1.5e-8`) and `32 * f32::EPSILON` for `f32` (about `3.8e-6`). These
+defaults replace the Basin 1.x behavior of running until an executor limit or
+an explicitly configured stop.
+
+Corpus checks found that `sqrt(f32::EPSILON)` could stop prematurely on
+high-dimensional Rosenbrock problems. The tighter `f32` default improves those
+runs while avoiding most of the evaluation-budget stops seen with tolerances
+near machine precision. These checks covered multiple starts, dimensions,
+coefficient choices, and projected and unbounded runs. They do not establish
+stationarity or guarantee a global minimum.
+
+For the current best simplex vertex `b`, the size test compares the maximum
+`||x_i - b||_infinity` with `max(x_abs, x_rel * ||b||_infinity)`. The cost test
+compares the maximum `|f_i - f_b|` with
+`max(f_abs, f_rel * max(|f_b|, initial_cost_spread))`. Both enabled dimensions
+must pass. Absolute and relative terms within a dimension combine with OR.
+The initial cost spread is captured after projection and evaluation. If it is
+nonfinite, the first subsequent finite spread supplies the reference. Fresh
+initialization resets it; exact continuation and serialized checkpoints retain
+it. Changing a tolerance preserves the reference.
+
+The existing `with_absolute_simplex_size_tolerance` and
+`with_absolute_simplex_cost_tolerance` setters now accept the solver's scalar
+`F` and return `NelderMead` directly. The new
+`with_relative_simplex_size_tolerance` and
+`with_relative_simplex_cost_tolerance` setters follow the same contract.
+Wrappers created by other tolerance setters forward all four methods to that
+same owner. Remove explicit `ConfiguredSolver<..., SimplexChecks<...>>` type
+annotations used solely for simplex settings; prefer inferred types.
+
+Each setter replaces only its own setting. `None` disables that setting, and
+zero requests an exact-zero threshold. To retain absolute-only behavior,
+disable both relative settings before choosing absolute tolerances:
+
+```rust
+let solver = NelderMead::new()
+    .with_relative_simplex_size_tolerance(None)
+    .with_relative_simplex_cost_tolerance(None)
+    .with_absolute_simplex_size_tolerance(1e-10)
+    .with_absolute_simplex_cost_tolerance(1e-10);
+```
+
+To disable simplex convergence completely, set all four tolerances to `None`.
+Keep an iteration or evaluation budget on the executor. Other configured tests
+still combine with the simplex group using OR, and executor limits retain
+precedence. Results keep `ConvergenceTest::Simplex` and
+`TerminationCode::SimplexTolerance`. Each `Threshold` now records
+`absolute_tolerance`, `relative_tolerance`, and `reference` alongside `value`;
+its `tolerance` field contains the evaluated maximum bound. Update struct
+literals and serialized report consumers for these additional fields. Solver
+checkpoint payloads now include the settings and saved cost reference.
+
+These tests establish simplex collapse, including on flat objectives and after
+box clipping; they do not establish stationarity or parameter accuracy. Fixed
+absolute floors limit accuracy for small quantities, and a single vector norm
+does not resolve different units across coordinates. Scale parameters or tune
+the floors for the problem. Use GBNM when a projected search needs its restart
+strategy. Basin 1.x defaults remain unchanged on `v1`.
 
 ## Optional least-squares trial observations
 

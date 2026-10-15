@@ -132,9 +132,13 @@ rustdoc for the norm and scaling used by a test.
 
 Defaults vary by solver. In particular,
 [`NelderMead`](https://docs.rs/basin/latest/basin/solver/nelder_mead/struct.NelderMead.html#convergence)
-has **no convergence test enabled by default**: even a collapsed simplex
-continues until a run limit or another configured stop fires. Its API example
-shows how to configure both simplex tests.
+enables paired simplex size and cost-spread tests by default in Basin 2.0,
+including its projected variant. Absolute and relative tolerances work together
+within each test. An unchanged best vertex alone does not establish collapse,
+and collapse on a flat objective or after clipping does not establish
+stationarity. See the API reference and
+[convergence migration guidance](../migrating-convergence/) for settings,
+scaling limits, and complete opt-out. Basin 1.x retains its opt-in behavior.
 
 Choose tolerances for the scale of your objective and parameters. An absolute
 gradient threshold changes meaning when you rescale the problem. For least

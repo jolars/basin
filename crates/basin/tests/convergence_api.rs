@@ -119,6 +119,14 @@ fn simplex_cost_check_does_not_require_vector_norms() {
             1
         }
     }
+    impl basin::VectorIndex for Minimal {
+        fn get_scalar(&self, _: usize) -> f64 {
+            self.0
+        }
+        fn set_scalar(&mut self, _: usize, value: f64) {
+            self.0 = value;
+        }
+    }
     impl ScaleInPlace for Minimal {
         fn scale_in_place(&mut self, scale: f64) {
             self.0 *= scale;
@@ -144,11 +152,17 @@ fn simplex_cost_check_does_not_require_vector_norms() {
         (None, TerminationCode::MaxIter),
     ] {
         let direct = NelderMead::new()
+            .with_absolute_simplex_size_tolerance(None)
+            .with_relative_simplex_size_tolerance(None)
+            .with_relative_simplex_cost_tolerance(None)
             .with_absolute_simplex_cost_tolerance(1.0)
             .with_absolute_simplex_cost_tolerance(tolerance)
             .with_absolute_cost_change_tolerance(None);
         let configured = NelderMead::new()
             .with_absolute_cost_change_tolerance(None)
+            .with_absolute_simplex_size_tolerance(None)
+            .with_relative_simplex_size_tolerance(None)
+            .with_relative_simplex_cost_tolerance(None)
             .with_absolute_simplex_cost_tolerance(tolerance);
         for solver in [direct, configured] {
             let result = Executor::new(
@@ -195,11 +209,15 @@ fn simplex_group_preserves_settings_in_both_setter_orders() {
         (None, None, [1.0, 2.0], TerminationCode::MaxIter),
     ] {
         let size_first = NelderMead::new()
+            .with_relative_simplex_size_tolerance(None)
+            .with_relative_simplex_cost_tolerance(None)
             .with_absolute_simplex_size_tolerance(100.0)
             .with_absolute_simplex_cost_tolerance(100.0)
             .with_absolute_simplex_size_tolerance(size)
             .with_absolute_simplex_cost_tolerance(cost);
         let cost_first = NelderMead::new()
+            .with_relative_simplex_cost_tolerance(None)
+            .with_relative_simplex_size_tolerance(None)
             .with_absolute_simplex_cost_tolerance(cost)
             .with_absolute_simplex_size_tolerance(size);
         for solver in [size_first, cost_first] {

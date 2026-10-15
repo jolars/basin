@@ -110,6 +110,8 @@ fn simplex_tolerance_fires_when_simplex_collapses() {
     let result = Executor::new(
         problem,
         (NelderMead::new())
+            .with_relative_simplex_size_tolerance(None)
+            .with_relative_simplex_cost_tolerance(None)
             .with_absolute_simplex_size_tolerance(1e-8)
             .with_absolute_simplex_cost_tolerance(1e-8),
         SimplexProgress::new(vec![-1.2, 1.0]),
