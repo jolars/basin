@@ -1,7 +1,8 @@
 //! SGD publishes complete objective records without changing its batch cadence.
 
 use basin::{
-    CostFunction, EvaluationKind, Executor, MiniBatchGradient, PointState, Sgd,
+    BoxBounds, Constrained, Constraints, CostFunction, EvaluationKind,
+    Executor, MiniBatchGradient, PointState, RelaxedInner, SamplingDomain, Sgd,
     State, TerminationCode,
 };
 use std::convert::Infallible;
@@ -61,6 +62,59 @@ fn coherent(state: &PointState<Vec<f64>>, problem: &Quadratic) {
         assert_eq!(cost, problem.cost(x).unwrap());
     }
     assert_eq!(state.cost_evals(), state.counts().cost_evals);
+}
+
+#[test]
+fn explicit_box_relaxations_preserve_sgd_trajectory_and_counts() {
+    let boxed = || {
+        Constrained::new(
+            problem(),
+            Constraints::new().with_bounds(BoxBounds::new(
+                Some(vec![0.0; 2]),
+                Some(vec![1.0; 2]),
+            )),
+        )
+    };
+    for steps in 0..=12 {
+        let start = vec![0.5; 2];
+        let reference =
+            Executor::from_start(problem(), solver(), start.clone())
+                .max_iter(steps)
+                .run_with_solver()
+                .unwrap();
+        let sampling = Executor::from_start(
+            SamplingDomain::new(boxed()),
+            solver(),
+            start.clone(),
+        )
+        .max_iter(steps)
+        .run_with_solver()
+        .unwrap();
+        let relaxed =
+            Executor::from_start(boxed(), RelaxedInner::new(solver()), start)
+                .max_iter(steps)
+                .run_with_solver()
+                .unwrap();
+        for (state, counts, working) in [
+            (
+                &sampling.state,
+                sampling.counts,
+                sampling.solver.working_param(),
+            ),
+            (
+                &relaxed.state,
+                relaxed.counts,
+                relaxed.solver.inner().working_param(),
+            ),
+        ] {
+            assert_eq!(state, &reference.state);
+            assert_eq!(counts, reference.counts);
+            assert_eq!(working, reference.solver.working_param());
+        }
+        if steps == 12 {
+            assert!(reference.param().iter().all(|x| *x > 1.0));
+        }
+    }
 }
 
 #[test]

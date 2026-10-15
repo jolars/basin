@@ -1,11 +1,11 @@
 //! Constraint declaration, checked evaluation, and independent storage regressions.
 use basin::{
-    BoxBounds, Cobyla, Constrained, ConstraintAxis, ConstraintBlock,
+    Bobyqa, BoxBounds, Cobyla, Constrained, ConstraintAxis, ConstraintBlock,
     ConstraintDescription, ConstraintError, ConstraintSolveError, Constraints,
     CostFunction, DenseMatrix, Executor, Gradient, MatrixFinite, MatrixIndex,
     MatrixShape, NoConstraints, NoNonlinearBlock, NonlinearBlock,
-    NonlinearBlocks, NonlinearInequalityValues, Problem, ProblemConstraints,
-    Scalar, SelectedState, Slsqp, Solver, VectorLen,
+    NonlinearBlocks, NonlinearInequalityValues, PointState, Problem,
+    ProblemConstraints, Scalar, SelectedState, Slsqp, Solver, VectorLen,
 };
 use std::{
     cell::Cell,
@@ -201,6 +201,15 @@ fn malformed_bounds_abort_before_callbacks() {
         });
         let error = Cobyla::new()
             .init(&mut p, SelectedState::new(vec![0.0]))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            ConstraintSolveError::InvalidConstraints(expected.clone())
+        );
+        assert_eq!(p.inner().calls.get(), 0);
+        assert_eq!(p.counts().total_work(), 0);
+        let error = Bobyqa::new()
+            .init(&mut p, PointState::new(vec![0.0]))
             .unwrap_err();
         assert_eq!(error, ConstraintSolveError::InvalidConstraints(expected));
         assert_eq!(p.inner().calls.get(), 0);

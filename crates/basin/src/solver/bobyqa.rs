@@ -292,7 +292,7 @@ where
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             Some(state.param().vec_len()),
-            true,
+            false,
         )
         .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
@@ -441,6 +441,30 @@ mod tests {
         assert!((x[0] - 1.0).abs() < 1e-5, "x0 = {}", x[0]);
         assert!((x[1] + 2.0).abs() < 1e-5, "x1 = {}", x[1]);
         assert!(result.best_cost() < 1e-9, "cost = {}", result.best_cost());
+    }
+
+    #[test]
+    fn converges_with_unbounded_sides() {
+        for (lower, upper) in [
+            (vec![0.0, -3.0], vec![f64::INFINITY; 2]),
+            (vec![f64::NEG_INFINITY; 2], vec![2.0, 0.0]),
+            (vec![0.0, f64::NEG_INFINITY], vec![f64::INFINITY, 0.0]),
+            (vec![f64::NEG_INFINITY; 2], vec![f64::INFINITY; 2]),
+        ] {
+            let result = Executor::from_start(
+                Quad { lower, upper },
+                Bobyqa::new()
+                    .with_initial_radius(0.5)
+                    .with_final_radius(1e-8),
+                vec![0.0, 0.0],
+            )
+            .max_cost_evals(500)
+            .run()
+            .unwrap();
+            assert!((result.best_param()[0] - 1.0).abs() < 1e-5);
+            assert!((result.best_param()[1] + 2.0).abs() < 1e-5);
+            assert!(result.best_cost() < 1e-9);
+        }
     }
 
     /// A box narrower than `2·ρ_beg` triggers PRIMA's narrow-box revision: the

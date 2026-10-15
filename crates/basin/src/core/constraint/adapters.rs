@@ -5,8 +5,8 @@ use super::*;
 use crate::Scalar;
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::problem::{
-    CostFunction, Gradient, Hessian, HessianProduct, Jacobian, Problem,
-    Residual,
+    CostFunction, Gradient, Hessian, HessianProduct, Jacobian,
+    MiniBatchGradient, Problem, Residual,
 };
 use crate::core::solver::{Solver, SolverStep};
 use crate::core::state::State;
@@ -124,6 +124,11 @@ impl<P: CostFunction> CostFunction for RelaxedProblem<'_, P> {
 }
 macro_rules! forward_derivatives {
     ($wrapper:ty,$($bound:tt)*)=>{
+        impl<P> MiniBatchGradient for $wrapper where P:MiniBatchGradient,$($bound)* {
+            type Gradient=P::Gradient;
+            fn n_samples(&self)->usize{self.problem.n_samples()}
+            fn batch_gradient(&self,x:&Self::Param,batch:&[usize])->Result<Self::Gradient,Self::Error>{self.problem.batch_gradient(x,batch)}
+        }
         impl<P> Gradient for $wrapper where P:Gradient,$($bound)* {
             type Gradient=P::Gradient;
             fn gradient(&self,x:&Self::Param)->Result<Self::Gradient,Self::Error>{self.problem.gradient(x)}
@@ -373,6 +378,24 @@ macro_rules! constrained_values {
 constrained_values!(NonlinearEqualityValues, nonlinear_equalities, Values);
 constrained_values!(NonlinearInequalityValues, nonlinear_inequalities, Values);
 constrained_values!(ConstraintJacobian, constraint_jacobian, Jacobian);
+
+impl<P, C> MiniBatchGradient for Constrained<P, C>
+where
+    P: MiniBatchGradient<Constraints = NoConstraints>,
+    C: ConstraintDescription,
+{
+    type Gradient = P::Gradient;
+    fn n_samples(&self) -> usize {
+        self.problem.n_samples()
+    }
+    fn batch_gradient(
+        &self,
+        x: &Self::Param,
+        batch: &[usize],
+    ) -> Result<Self::Gradient, Self::Error> {
+        self.problem.batch_gradient(x, batch)
+    }
+}
 
 impl<P, C> Gradient for Constrained<P, C>
 where
