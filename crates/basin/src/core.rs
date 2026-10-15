@@ -61,6 +61,7 @@ pub mod barrier;
 pub mod checkpoint;
 pub mod constraint;
 pub mod convergence;
+pub mod evaluation;
 pub mod executor;
 pub mod inner;
 pub mod least_squares;

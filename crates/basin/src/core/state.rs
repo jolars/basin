@@ -62,8 +62,8 @@ use crate::core::problem::EvalCounts;
 ///   using the state's [`CountsMirror`] mapping, not iterations: a single
 ///   [`Solver::next_iter`](crate::core::solver::Solver::next_iter) may
 ///   evaluate the cost many times (line searches, Nelder-Mead shrinks),
-///   and users budget against this counter rather than
-///   [`iter`](Self::iter).
+///   independently of [`iter`](Self::iter). Executor budgets use the problem
+///   wrapper's raw categories, regardless of a custom state's count mapping.
 ///
 /// # Current vs best
 ///
@@ -119,7 +119,7 @@ pub trait State {
     /// Custom states define their mapping through [`CountsMirror`].
     /// Diverges from `iter()` whenever a single iteration evaluates the
     /// cost more than once (line searches, Nelder-Mead shrinks, etc.);
-    /// this is what users actually budget against.
+    /// executor evaluation limits use the problem wrapper's raw categories.
     ///
     /// Populated by the
     /// [`Executor`](crate::core::executor::Executor) from the wrapper's

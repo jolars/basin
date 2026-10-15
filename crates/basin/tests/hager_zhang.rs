@@ -476,7 +476,10 @@ fn propagates_typed_problem_errors() {
         .next(&mut problem, &vec![0.0], 1.0, &vec![-1.0], &vec![1.0])
         .unwrap_err();
 
-    assert_eq!(error, ProbeError::Cancelled);
+    assert_eq!(
+        error,
+        basin::EvaluationError::Evaluation(ProbeError::Cancelled)
+    );
     assert_eq!(problem.counts().cost_evals, 1);
     assert_eq!(problem.counts().gradient_evals, 1);
 }

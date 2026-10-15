@@ -111,7 +111,8 @@ fn augmented_lagrangian_fresh_and_exact_lifecycles() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint();
+            .into_checkpoint()
+            .unwrap();
         let resumed =
             Executor::resume_from_checkpoint(Equality::new(2), checkpoint)
                 .require_evaluated_state()
@@ -135,7 +136,7 @@ fn augmented_lagrangian_fresh_and_exact_lifecycles() {
     assert_eq!(initialized.counts.total_work(), 1);
     let restarted = Executor::resume_from_checkpoint(
         Equality::new(3),
-        initialized.into_checkpoint(),
+        initialized.into_checkpoint().unwrap(),
     )
     .max_iter(6)
     .run_with_solver()
@@ -244,14 +245,17 @@ fn failed_adapter_work_is_charged_before_propagating_error() {
     use basin::{Problem, SelectedState, Solver};
     let mut problem = Problem::new(FailingEquality(Equality::new(1)));
     let mut solver = solver();
-    let state = solver
-        .init(&mut problem, SelectedState::new(vec![0.0]))
-        .unwrap();
+    let mut state = SelectedState::new(vec![0.0]);
+    solver.init(&mut problem, &mut state).unwrap();
     assert_eq!(problem.counts().total_work(), 1);
-    let err = solver.next_iter(&mut problem, state).unwrap_err();
+    let err = solver.next_iter(&mut problem, &mut state).unwrap_err();
     assert_eq!(
         err,
-        basin::ConstraintSolveError::Evaluation("gradient callback aborted")
+        basin::EvaluationError::Evaluation(
+            basin::ConstraintSolveError::Evaluation(
+                "gradient callback aborted"
+            )
+        )
     );
     assert_eq!(problem.counts().cost_evals, 2);
     assert_eq!(problem.counts().gradient_evals, 1);
@@ -268,7 +272,8 @@ fn serialized_augmented_lagrangian_checkpoint_retains_multipliers() {
         .max_iter(3)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint();
+        .into_checkpoint()
+        .unwrap();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: basin::ExactCheckpoint<
         EqualitySolver,

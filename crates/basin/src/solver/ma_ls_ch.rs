@@ -171,14 +171,12 @@ impl<LS, S, F> Default for ChainHistory<LS, S, F> {
 ///
 /// # Termination
 ///
-/// No solver-internal optimality test. Pair with framework criteria,
-/// typically [`max_cost_evals`](crate::Executor::max_cost_evals) for budget control. Chain segments
-/// overshoot `I_str` slightly when the operator evaluates in batches
-/// (CMA-ES runs whole generations, overshooting by up to `λ_inner − 1`
-/// evaluations; Solis-Wets by at most one reversal evaluation); the
-/// outer `MaxCostEvals` will fire on the next outer iteration boundary,
-/// not exactly on the budget. Document and accept; matches Bergmeir's
-/// reference behavior.
+/// No solver-internal optimality test. Configure execution budgets on the
+/// executor. Chain segments perform at most `I_str` cost evaluations and may
+/// stop earlier when a complete operation cannot fit. CMA-ES needs a generation
+/// and mean evaluation; Solis-Wets allows for a reversal. Enclosing evaluation
+/// budgets also apply inside every segment. An interrupted chain whose model
+/// cannot be resumed is discarded after its coherent progress is consumed.
 ///
 /// # Backends
 ///
@@ -372,8 +370,8 @@ where
 
     /// Override `I_str`, the per-chain LS intensity in cost-evaluation
     /// units (default `300`, Bergmeir 2016 example value). Each chain
-    /// segment runs the operator until `cost_evals ≥ I_str`, slightly
-    /// overshooting when the operator evaluates in batches (see the
+    /// segment performs at most `I_str` cost evaluations, stopping earlier
+    /// when the next complete operation cannot fit (see the
     /// type-level "Termination" note).
     ///
     /// # Panics
@@ -480,8 +478,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         crate::core::constraint::validate_sampling(problem.inner(), None)?;
         if let Some(records) = &mut self.inner_diagnostics {
             records.clear();
@@ -505,17 +503,20 @@ where
             self.history.last_ls_cost.push(F::infinity());
             self.history.ls_application_count.push(0);
         }
-        sort_parallel_arrays(&mut state, &mut self.history);
+        sort_parallel_arrays(state, &mut self.history);
 
         self.rng = Some(rng);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<PopulationProgress<V, F>>,
+        Self::Error,
+    > {
         let history = &mut self.history;
         let lo = problem.inner().sampling_lower().clone();
         let hi = problem.inner().sampling_upper().clone();
@@ -550,7 +551,13 @@ where
                 self.bga_range_fraction,
                 rng,
             );
-            let c_child = problem.cost(&child)?;
+            let c_child = match problem.cost(&child) {
+                Ok(cost) => cost,
+                Err(error) => {
+                    sort_parallel_arrays(state, history);
+                    return Err(error.into());
+                }
+            };
             if let Some(replaced_idx) = replace_worst_if_better(
                 &mut state.candidates,
                 &mut state.costs,
@@ -565,7 +572,7 @@ where
                 history.ls_application_count[replaced_idx] = 0;
             }
         }
-        sort_parallel_arrays(&mut state, history);
+        sort_parallel_arrays(state, history);
 
         // -- Phase 2: pick the LS target c_LS. --
         // S_LS membership (Molina §4.3 step 1): never LS'd, or the last
@@ -646,7 +653,7 @@ where
             &mut self.inner_diagnostics,
             problem,
             crate::core::inner::diagnostics::Context {
-                outer_iteration: crate::State::iter(&state),
+                outer_iteration: crate::State::iter(&*state),
                 member: Some(c_ls),
                 resumed,
                 initial_scale,
@@ -673,12 +680,11 @@ where
             .can_continue_as_inner(crate::PartialResultPolicy::Consume)
         {
             // Leave the chain dropped so a future pick would restart.
-            return Ok(crate::SolverStep::from((
-                state,
+            return Ok(crate::SolverStep::from(
                 inner_result.report.into_outer_termination(
                     crate::PartialResultPolicy::Consume,
                 ),
-            )));
+            ));
         }
 
         // Adopt the chain's best *evaluated* point (xbest), not
@@ -710,15 +716,17 @@ where
         // a future pick reseeds at a fresh scale instead of resuming a
         // converged operator that would burn the whole segment budget
         // making no progress.
-        if pre_segment_cost - state.costs[c_ls] >= self.ls_improvement_threshold
+        if inner_result.report.can_checkpoint()
+            && pre_segment_cost - state.costs[c_ls]
+                >= self.ls_improvement_threshold
         {
             history.chains[c_ls] = Some((ls, inner_result.state));
         }
 
         // -- Phase 6: resort all parallel arrays jointly. --
-        sort_parallel_arrays(&mut state, history);
+        sort_parallel_arrays(state, history);
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 }
 

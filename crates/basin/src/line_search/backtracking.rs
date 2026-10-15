@@ -80,7 +80,7 @@ where
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<F, Self::Error> {
+    ) -> crate::EvaluationResult<F, Self::Error> {
         self.next_with_outcome(problem, param, cost, gradient, direction)
             .map(|outcome| match outcome {
                 LineSearchOutcome::Step(alpha) => alpha,
@@ -95,7 +95,7 @@ where
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<LineSearchOutcome<F>, Self::Error> {
+    ) -> crate::EvaluationResult<LineSearchOutcome<F>, Self::Error> {
         // Armijo: f(x + α d) ≤ f(x) + c α (∇f · d). For a descent direction,
         // `g_dot_d` is negative, so the threshold drops with α.
         let g_dot_d = gradient.dot(direction);
@@ -137,7 +137,7 @@ where
         gradient: &V,
         direction: &V,
         bounds: LineSearchBounds<F>,
-    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error> {
         if !(F::zero() < self.rho && self.rho < F::one()) {
             return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
         }

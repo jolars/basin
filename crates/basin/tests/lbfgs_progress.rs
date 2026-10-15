@@ -67,7 +67,7 @@ macro_rules! lifecycle {
                 assert_eq!(initial.state.counts(), &initial.counts);
                 let continued = Executor::resume_from_checkpoint(
                     ($prepare)(Quadratic::new(2)),
-                    initial.into_checkpoint(),
+                    initial.into_checkpoint().unwrap(),
                 )
                 .require_evaluated_state()
                 .max_iter(5)
@@ -101,7 +101,7 @@ macro_rules! lifecycle {
             assert_eq!(fresh.solver.history_capacity(), 2);
             let continued = Executor::resume_from_checkpoint(
                 ($prepare)(Quadratic::new(3)),
-                fresh.into_checkpoint(),
+                fresh.into_checkpoint().unwrap(),
             )
             .max_iter(3)
             .run_with_solver()
@@ -152,7 +152,7 @@ impl<P: CostFunction<Param = Vec<f64>, Output = f64, Error = Infallible>>
         _: f64,
         _: &Vec<f64>,
         _: &Vec<f64>,
-    ) -> Result<f64, Infallible> {
+    ) -> basin::EvaluationResult<f64, Infallible> {
         self.calls += 1;
         Ok(0.1 / self.calls as f64)
     }
@@ -165,7 +165,10 @@ impl<P: CostFunction<Param = Vec<f64>, Output = f64, Error = Infallible>>
         gradient: &Vec<f64>,
         direction: &Vec<f64>,
         bounds: basin::LineSearchBounds,
-    ) -> Result<basin::LineSearchResult<Vec<f64>, f64>, Infallible> {
+    ) -> basin::EvaluationResult<
+        basin::LineSearchResult<Vec<f64>, f64>,
+        Infallible,
+    > {
         let step = self.next(problem, x, cost, gradient, direction)?;
         Ok(basin::LineSearchResult::new(
             basin::LineSearchOutcome::Step(step.min(bounds.max())),
@@ -208,7 +211,7 @@ fn serialized_checkpoints_preserve_models_after_rollover() {
             let expected = make().max_iter(7).run_with_solver().unwrap();
             let first = make().max_iter(4).run_with_solver().unwrap();
             assert_eq!(first.solver.history_len(), 2);
-            let checkpoint = round_trip(&first.into_checkpoint());
+            let checkpoint = round_trip(&first.into_checkpoint().unwrap());
             let resumed = Executor::resume_from_checkpoint(
                 ($prepare)(Quadratic::new(8)),
                 checkpoint,

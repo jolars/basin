@@ -47,16 +47,11 @@ fn brent_domain<F: Scalar + VectorLen>() {
     });
     let mut solver =
         BrentDerivative::new().with_absolute_position_tolerance(F::one());
-    let mut state = solver
-        .init(
-            &mut problem,
-            FirstOrderState::new(F::from_f64(0.5).unwrap()),
-        )
-        .unwrap();
+    let mut state = FirstOrderState::new(F::from_f64(0.5).unwrap());
+    solver.init(&mut problem, &mut state).unwrap();
     // A composed policy can suppress the native width stop and request more steps.
     for _ in 0..5 {
-        let step = solver.next_iter(&mut problem, state).unwrap();
-        state = step.state;
+        let step = solver.next_iter(&mut problem, &mut state).unwrap();
         assert!(*state.param() >= F::zero() && *state.param() <= F::one());
         if step.termination.is_some() {
             break;

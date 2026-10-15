@@ -575,8 +575,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         let mean = state.seed().expect("CmaEs requires a mean seed").clone();
         state.reset();
         self.rng = ChaCha8Rng::seed_from_u64(self.seed);
@@ -594,24 +594,30 @@ where
         work.costs = problem.cost_batch(&work.candidates)?;
         sort_population_ascending(&mut work.candidates, &mut work.costs);
         work.m_cost = Some(problem.cost(&work.m)?);
-        publish(&mut work, &mut state);
+        publish(&mut work, state);
         self.work = Some(work);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<PopulationProgress<V, F>>,
+        Self::Error,
+    > {
         let work = self.work.as_mut().expect("CMA init must precede iteration");
         let k = self
             .constants
             .as_ref()
             .expect("CmaEs::init must run before next_iter");
 
-        work.candidates = std::mem::take(&mut state.candidates);
-        work.costs = std::mem::take(&mut state.costs);
+        if let Err(error) = problem.check_cost_budget(k.lambda as u64 + 1) {
+            return Ok(crate::SolverStep::stopped(Termination::Limit(
+                error.limits,
+            )));
+        }
         work.generation += 1;
 
         let one = F::one();
@@ -619,9 +625,9 @@ where
         let zero = F::zero();
 
         // Rebuild y_{i:λ} = (x_{i:λ} − m) / σ for the *previous* m, σ.
-        // (work.candidates carries the most recent generation's x's,
+        // (state.candidates carries the most recent generation's x's,
         // sorted ascending by cost.)
-        let mut y_sorted: Vec<V> = work
+        let mut y_sorted: Vec<V> = state
             .candidates
             .iter()
             .map(|x| {
@@ -712,13 +718,10 @@ where
         let (b_new, eigs) = match work.c.try_eigh() {
             Ok(pair) => pair,
             Err(_) => {
-                state.candidates = std::mem::take(&mut work.candidates);
-                state.costs = std::mem::take(&mut work.costs);
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::from(Some(
+                    Termination::numerical_failure(
                         "CMA-ES covariance eigendecomposition failed.",
-                    )),
+                    ),
                 )));
             }
         };
@@ -748,8 +751,8 @@ where
         let m_cost = problem.cost(&work.m)?;
         work.m_cost = Some(m_cost);
 
-        publish(work, &mut state);
-        Ok(crate::SolverStep::from((state, None)))
+        publish(work, state);
+        Ok(crate::SolverStep::from(None))
     }
 
     fn terminate(
@@ -840,12 +843,9 @@ pub(crate) fn publish<V: VectorLen + Clone, M, F: Scalar>(
     work: &mut Distribution<V, M, F>,
     state: &mut PopulationProgress<V, F>,
 ) {
-    state
-        .replace(
-            std::mem::take(&mut work.candidates),
-            std::mem::take(&mut work.costs),
-        )
-        .expect("CMA generation has matching shapes");
+    std::mem::swap(&mut state.candidates, &mut work.candidates);
+    std::mem::swap(&mut state.costs, &mut work.costs);
+    state.select_best_member();
     state
         .publish_representative_from(
             &work.m,
@@ -903,12 +903,8 @@ mod zero_tolerance_tests {
         let mut solver: CmaEs<Vec<F>, DenseMatrix<F>, F> =
             CmaEs::new(42, F::one())
                 .with_absolute_distribution_size_tolerance(F::zero());
-        let state = solver
-            .init(
-                &mut problem,
-                PopulationProgress::from_point(vec![F::zero()]),
-            )
-            .unwrap();
+        let mut state = PopulationProgress::from_point(vec![F::zero()]);
+        solver.init(&mut problem, &mut state).unwrap();
         assert!(
             <CmaEs<_, _, F> as Solver<crate::SamplingDomain<FlatBox<F>>, _>>::terminate(
                 &solver, &state
@@ -928,12 +924,8 @@ mod zero_tolerance_tests {
         let mut bounded: BoundedCmaEs<Vec<F>, DenseMatrix<F>, F> =
             BoundedCmaEs::new(42, F::one())
                 .with_absolute_distribution_size_tolerance(F::zero());
-        let state = bounded
-            .init(
-                &mut problem,
-                PopulationProgress::from_point(vec![F::zero()]),
-            )
-            .unwrap();
+        let mut state = PopulationProgress::from_point(vec![F::zero()]);
+        bounded.init(&mut problem, &mut state).unwrap();
         assert!(
             <BoundedCmaEs<_, _, F> as Solver<FlatBox<F>, _>>::terminate(
                 &bounded, &state

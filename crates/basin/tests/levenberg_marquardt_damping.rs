@@ -554,13 +554,13 @@ where
 {
     let counts = Nonlinear::default();
     let mut problem = Problem::new(counts.clone());
-    let initial = solver
-        .init(&mut problem, PointState::new(vec![0.1]))
-        .unwrap();
-    let (mut state, _, reason) = solver
-        .next_iter(&mut problem, initial)
+    let mut initial = PointState::new(vec![0.1]);
+    solver.init(&mut problem, &mut initial).unwrap();
+    let (_, reason) = solver
+        .next_iter(&mut problem, &mut initial)
         .unwrap()
         .into_parts();
+    let mut state = initial;
     assert!(reason.is_none());
     assert_eq!(state.param(), &vec![0.1]);
     assert_eq!(counts.residuals.get(), 2);
@@ -569,15 +569,16 @@ where
         if state.param()[0] != 0.1 {
             break;
         }
-        state = solver.next_iter(&mut problem, state).unwrap().state;
+        solver.next_iter(&mut problem, &mut state).unwrap();
         assert_eq!(counts.jacobians.get(), 1);
     }
     assert_ne!(state.param()[0], 0.1);
-    let reset = solver
-        .init(&mut problem, PointState::new(vec![0.1]))
-        .unwrap();
-    let (reset, _, _) =
-        solver.next_iter(&mut problem, reset).unwrap().into_parts();
+    let mut reset = PointState::new(vec![0.1]);
+    solver.init(&mut problem, &mut reset).unwrap();
+    let (_, _) = solver
+        .next_iter(&mut problem, &mut reset)
+        .unwrap()
+        .into_parts();
     // A fresh solve must again reject its first, undamped Newton step.
     assert_eq!(reset.param(), &vec![0.1]);
     assert_eq!(counts.jacobians.get(), 2);

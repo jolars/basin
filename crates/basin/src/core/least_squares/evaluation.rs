@@ -8,16 +8,19 @@ use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::state::PointState;
 
 pub(crate) type NllsStep<V, F, E> =
-    Result<crate::SolverStep<PointState<V, F>>, E>;
+    crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, E>;
 
 // Separate implementations keep additional robust math capabilities off the
 // existing solver bounds, including downstream minimal Jacobian types.
 pub(crate) trait Evaluation<V, M, F: Scalar> {
     type Error;
     const ROBUST: bool;
-    fn residual(&mut self, x: &V) -> Result<V, Self::Error>;
-    fn jacobian(&mut self, x: &V) -> Result<M, Self::Error>;
-    fn residual_and_jacobian(&mut self, x: &V) -> Result<(V, M), Self::Error>;
+    fn residual(&mut self, x: &V) -> crate::EvaluationResult<V, Self::Error>;
+    fn jacobian(&mut self, x: &V) -> crate::EvaluationResult<M, Self::Error>;
+    fn residual_and_jacobian(
+        &mut self,
+        x: &V,
+    ) -> crate::EvaluationResult<(V, M), Self::Error>;
     fn cost(&self, r: &V, quadratic: impl FnOnce(&V) -> F) -> F;
     // The inner None retains raw residuals without cloning on quadratic paths.
     fn model(&self, r: &V, j: M) -> Option<(Option<V>, M)>;
@@ -37,13 +40,16 @@ where
 {
     type Error = P::Error;
     const ROBUST: bool = false;
-    fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
+    fn residual(&mut self, x: &V) -> crate::EvaluationResult<V, Self::Error> {
         Problem::residual(self, x)
     }
-    fn jacobian(&mut self, x: &V) -> Result<M, Self::Error> {
+    fn jacobian(&mut self, x: &V) -> crate::EvaluationResult<M, Self::Error> {
         Problem::jacobian(self, x)
     }
-    fn residual_and_jacobian(&mut self, x: &V) -> Result<(V, M), Self::Error> {
+    fn residual_and_jacobian(
+        &mut self,
+        x: &V,
+    ) -> crate::EvaluationResult<(V, M), Self::Error> {
         Problem::residual_and_jacobian(self, x)
     }
     fn cost(&self, r: &V, quadratic: impl FnOnce(&V) -> F) -> F {
@@ -70,21 +76,17 @@ macro_rules! robust_evaluation {
         {
             type Error = P::Error;
             const ROBUST: bool = true;
-            fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
-                self.counts_mut().residual_evals += 1;
-                self.inner()$(.$field)*.problem.residual(x)
+            fn residual(&mut self, x: &V) -> crate::EvaluationResult<V, Self::Error> {
+                self.evaluate(|problem, context| problem$(.$field)*.problem.residual_with_context(x, context))
             }
-            fn jacobian(&mut self, x: &V) -> Result<M, Self::Error> {
-                self.counts_mut().jacobian_evals += 1;
-                self.inner()$(.$field)*.problem.jacobian(x)
+            fn jacobian(&mut self, x: &V) -> crate::EvaluationResult<M, Self::Error> {
+                self.evaluate(|problem, context| problem$(.$field)*.problem.jacobian_with_context(x, context))
             }
             fn residual_and_jacobian(
                 &mut self,
                 x: &V,
-            ) -> Result<(V, M), Self::Error> {
-                self.counts_mut().residual_evals += 1;
-                self.counts_mut().jacobian_evals += 1;
-                self.inner()$(.$field)*.problem.residual_and_jacobian(x)
+            ) -> crate::EvaluationResult<(V, M), Self::Error> {
+                self.evaluate(|problem, context| problem$(.$field)*.problem.residual_and_jacobian_with_context(x, context))
             }
             fn cost(&self, r: &V, _: impl FnOnce(&V) -> F) -> F {
                 self.inner()$(.$field)*.residual_cost(r)

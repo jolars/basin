@@ -201,13 +201,9 @@ where
 ///      [`CountsMirror`] impl decides how the counts surface on its
 ///      [`State::cost_evals`]/
 ///      [`GradientState::gradient_evals`](crate::core::state::GradientState::gradient_evals).
-///    - **Adapter-problem inner** (the outer builds a fresh
-///      `Problem::new(adapter)` per outer iter, e.g. the barrier and
-///      augmented-Lagrangian methods): after [`run`](Self::run) returns,
-///      fold the inner wrapper's counts back into the outer's wrapper via
-///      [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
-///      [`Problem::counts_mut`]. Skipping this fold silently corrupts
-///      `MaxCostEvals` budgets and the public `result.cost_evals()`.
+///    - **Adapter-problem inner**: build it with [`Problem::adapt`] and call
+///      [`Problem::synchronize_counts`] on the parent after the solve. The
+///      child shares counts and enclosing budgets; no manual addition is needed.
 ///
 ///    See the [`Solver::next_iter`]
 ///    contract for the canonical wording.
@@ -343,10 +339,9 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
     /// cumulative across calls. The wrapper itself accumulates
     /// monotonically: for same-problem composition the outer reads
     /// its own [`Problem::counts`] after `run` to see total work; for
-    /// adapter-problem composition the outer builds a fresh inner
-    /// `Problem` and folds counts via
-    /// [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
-    /// [`Problem::counts_mut`] after `run` returns.
+    /// adapter-problem composition the outer shares its ledger through
+    /// [`Problem::adapt`], then calls [`Problem::synchronize_counts`] on
+    /// the parent after `run` returns.
     ///
     /// Internally exactly
     /// [`run_loop_with_control`](crate::run_loop_with_control): `init` is called
@@ -356,7 +351,7 @@ impl<S: State + CountsMirror, So> InnerExecutor<S, So> {
         &mut self,
         problem: &mut Problem<P>,
         state: S,
-    ) -> Result<OptimizationResult<S>, So::Error>
+    ) -> crate::EvaluationResult<OptimizationResult<S>, So::Error>
     where
         So: Solver<P, S>,
     {

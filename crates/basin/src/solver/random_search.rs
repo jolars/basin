@@ -161,8 +161,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             None,
@@ -183,14 +183,17 @@ where
         state.costs = problem.cost_batch(&state.candidates)?;
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<PopulationProgress<V, F>>,
+        Self::Error,
+    > {
         // Snapshot the elite before resampling; this is what makes
         // state.cost() monotone.
         let elite_x = state.candidates[0].clone();
@@ -220,6 +223,6 @@ where
         state.candidates.truncate(self.lambda);
         state.costs.truncate(self.lambda);
         state.select_best_member();
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 }

@@ -24,9 +24,10 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// This adapter synthesizes [`Gradient`], [`Jacobian`], and
 /// [`crate::ConstraintJacobian`], but does not advertise Hessian capabilities.
 /// User errors propagate unchanged; non-finite values yield non-finite
-/// derivatives. Like `FiniteDiff`, counters charge derivative calls rather
-/// than internal probes. The optional `parallel` feature evaluates independent
+/// derivatives. Like `FiniteDiff`, counters charge both derivative requests
+/// and internal probes. The optional `parallel` feature evaluates independent
 /// columns concurrently without changing their arithmetic or result ordering.
+/// Executor hard budgets include every internal probe.
 ///
 /// # Backends
 ///
@@ -203,6 +204,7 @@ impl<P: CostFunction, F: Scalar> CostFunction for BoundedFiniteDiff<P, F> {
     fn cost(&self, x: &P::Param) -> Result<P::Output, P::Error> {
         self.problem.cost(x)
     }
+    crate::core::evaluation::forward_cost_context!();
 }
 impl<P: Residual, F: Scalar> Residual for BoundedFiniteDiff<P, F> {
     type Param = P::Param;
@@ -211,6 +213,7 @@ impl<P: Residual, F: Scalar> Residual for BoundedFiniteDiff<P, F> {
     fn residual(&self, x: &P::Param) -> Result<P::Output, P::Error> {
         self.problem.residual(x)
     }
+    crate::core::evaluation::forward_residual_context!();
 }
 
 pub(super) struct Options<F> {
@@ -384,6 +387,47 @@ where
         }
         Ok(result)
     }
+    fn gradient_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<V, crate::EvaluationError<P::Error>> {
+        context.reserve_kinds(&[crate::EvaluationKind::Gradient])?;
+        let (_, cols) = columns(
+            x,
+            self.options(false),
+            Some((&self.lower, &self.upper)),
+            |point| {
+                self.problem
+                    .cost_with_context(point, context)
+                    .map(|f| vec![f])
+            },
+        )?;
+        let mut result = x.clone();
+        for (j, col) in cols.into_iter().enumerate() {
+            result.set_scalar(j, col[0]);
+        }
+        Ok(result)
+    }
+    fn cost_and_gradient_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<(Self::Output, V), crate::EvaluationError<P::Error>> {
+        context.reserve_kinds(&[
+            crate::EvaluationKind::Cost,
+            crate::EvaluationKind::Gradient,
+        ])?;
+        let local = context.prepaid(crate::EvalCounts {
+            cost_evals: 1,
+            gradient_evals: 1,
+            ..crate::EvalCounts::default()
+        });
+        Ok((
+            self.cost_with_context(x, &local)?,
+            self.gradient_with_context(x, &local)?,
+        ))
+    }
 }
 impl<P, V, F> Jacobian for BoundedFiniteDiff<P, F>
 where
@@ -406,6 +450,44 @@ where
         )?;
         Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
     }
+    fn jacobian_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<Self::Jacobian, crate::EvaluationError<P::Error>> {
+        context.reserve_kinds(&[crate::EvaluationKind::Jacobian])?;
+        let (m, cols) = columns(
+            x,
+            self.options(true),
+            Some((&self.lower, &self.upper)),
+            |point| {
+                self.problem.residual_with_context(point, context).map(|r| {
+                    (0..r.vec_len()).map(|i| r.get_scalar(i)).collect()
+                })
+            },
+        )?;
+        Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
+    }
+    fn residual_and_jacobian_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<(Self::Output, Self::Jacobian), crate::EvaluationError<P::Error>>
+    {
+        context.reserve_kinds(&[
+            crate::EvaluationKind::Residual,
+            crate::EvaluationKind::Jacobian,
+        ])?;
+        let local = context.prepaid(crate::EvalCounts {
+            residual_evals: 1,
+            jacobian_evals: 1,
+            ..crate::EvalCounts::default()
+        });
+        Ok((
+            self.residual_with_context(x, &local)?,
+            self.jacobian_with_context(x, &local)?,
+        ))
+    }
 }
 
 pub(super) fn constraint_values<P, V, F>(
@@ -424,6 +506,26 @@ where
     }
     let mut counts = crate::EvalCounts::default();
     let (mut eq, ineq) = P::Constraints::values(p, x, &mut counts)?;
+    eq.extend(ineq);
+    Ok(eq)
+}
+
+pub(super) fn constraint_values_with_context<P, V, F>(
+    p: &P,
+    x: &V,
+    expected: (usize, usize),
+    context: &crate::EvaluationContext,
+) -> Result<Vec<F>, crate::ConstraintSolveError<crate::EvaluationError<P::Error>>>
+where
+    P: CostFunction<Param = V, Output = F>,
+    P::Constraints: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
+    F: Scalar,
+{
+    use crate::core::constraint::evaluation::{NonlinearSet, invalid};
+    if P::Constraints::counts(p.constraint_set()) != expected {
+        return Err(invalid(crate::ConstraintError::LayoutChanged));
+    }
+    let (mut eq, ineq) = P::Constraints::values_with_context(p, x, context)?;
     eq.extend(ineq);
     Ok(eq)
 }
@@ -455,6 +557,7 @@ where
     ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
         self.problem.nonlinear_equalities(x)
     }
+    crate::core::evaluation::forward_equalities_context!();
 }
 
 impl<P, F> crate::NonlinearInequalityValues for BoundedFiniteDiff<P, F>
@@ -471,6 +574,7 @@ where
     ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
         self.problem.nonlinear_inequalities(x)
     }
+    crate::core::evaluation::forward_inequalities_context!();
 }
 
 impl<P, V, F> crate::ConstraintJacobian for BoundedFiniteDiff<P, F>
@@ -499,6 +603,39 @@ where
         let (_, cols) =
             columns(x, options, Some((&self.lower, &self.upper)), |point| {
                 constraint_values(&self.problem, point, expected)
+            })?;
+        Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
+    }
+    fn constraint_jacobian_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<
+        Self::Jacobian,
+        crate::ConstraintSolveError<crate::EvaluationError<P::Error>>,
+    > {
+        context
+            .reserve_kinds(&[crate::EvaluationKind::Jacobian])
+            .map_err(|error| {
+                crate::ConstraintSolveError::Evaluation(error.into())
+            })?;
+
+        use crate::core::constraint::evaluation::NonlinearSet;
+        let expected = P::Constraints::counts(self.problem.constraint_set());
+        let m = expected.0.checked_add(expected.1).ok_or(
+            crate::ConstraintSolveError::InvalidConstraints(
+                crate::ConstraintError::CountOverflow,
+            ),
+        )?;
+        let options = self.options(true);
+        let (_, cols) =
+            columns(x, options, Some((&self.lower, &self.upper)), |point| {
+                constraint_values_with_context(
+                    &self.problem,
+                    point,
+                    expected,
+                    context,
+                )
             })?;
         Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
     }

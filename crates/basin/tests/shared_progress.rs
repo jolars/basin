@@ -66,29 +66,32 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> basin::EvaluationResult<(), Self::Error> {
         self.steps = 0;
         self.init_calls += 1;
         state.reset();
         let x = state.param().clone();
         let (cost, gradient) = problem.cost_and_gradient(&x)?;
         state.replace(x, cost, gradient).unwrap();
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> basin::EvaluationResult<
+        basin::SolverStep<FirstOrderState<V, F>>,
+        Self::Error,
+    > {
         let (x, _, gradient) = state.current().unwrap();
         let mut next = x.clone();
         next.scaled_add(-F::from_f64(0.25).unwrap(), gradient);
         let (cost, gradient) = problem.cost_and_gradient(&next)?;
         state.replace(next, cost, gradient).unwrap();
         self.steps += 1;
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::from(None))
     }
 }
 
@@ -158,25 +161,26 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> basin::EvaluationResult<(), Self::Error> {
         state.reset();
         let x = state.param().clone();
         let cost = problem.cost(&x)?;
         state.replace(x, cost);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<basin::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> basin::EvaluationResult<basin::SolverStep<PointState<V, F>>, Self::Error>
+    {
         let mut x = state.param().clone();
         x.scale_in_place(F::from_f64(0.5).unwrap());
         let cost = problem.cost(&x)?;
         state.replace(x, cost);
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::from(None))
     }
 }
 
@@ -421,19 +425,20 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
     fn init(
         &mut self,
         problem: &mut Problem<FallibleIdentity>,
-        mut state: PointState<f64>,
-    ) -> Result<PointState<f64>, Self::Error> {
+        state: &mut PointState<f64>,
+    ) -> basin::EvaluationResult<(), Self::Error> {
         state.reset();
         let x = *state.param();
         state.replace(x, problem.cost(&x)?);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<FallibleIdentity>,
-        mut state: PointState<f64>,
-    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
+        state: &mut PointState<f64>,
+    ) -> basin::EvaluationResult<basin::SolverStep<PointState<f64>>, Self::Error>
+    {
         state.replace(-2.0, problem.cost(&-2.0)?);
         // Unpublished probes still count, including the failing one.
         problem.cost(&-10.0)?;
@@ -441,11 +446,10 @@ impl Solver<FallibleIdentity, PointState<f64>> for Probe {
         if self.hard_error {
             return Err(error);
         }
-        Ok(basin::SolverStep::from((
-            state,
-            Some(basin::Termination::numerical_failure(
+        Ok(basin::SolverStep::from(Some(
+            basin::Termination::numerical_failure(
                 "External solver reported a numerical failure.",
-            )),
+            ),
         )))
     }
 }

@@ -52,7 +52,7 @@ impl<V: Clone, F: Scalar> Trace<V, F> {
         problem: &mut crate::Problem<P>,
         point: &V,
         kind: TrialKind,
-    ) -> Result<F, P::Error> {
+    ) -> crate::EvaluationResult<F, P::Error> {
         let before = *problem.counts();
         let result = problem.cost(point);
         if self.enabled {

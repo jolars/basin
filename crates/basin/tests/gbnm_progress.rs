@@ -193,7 +193,8 @@ fn owned_checkpoints_preserve_local_search_and_restart_sequences() {
                 .max_iter(split)
                 .run_with_solver()
                 .unwrap()
-                .into_checkpoint();
+                .into_checkpoint()
+                .unwrap();
             let resumed =
                 Executor::resume_from_checkpoint(problem(), checkpoint)
                     .require_evaluated_state()
@@ -237,7 +238,8 @@ fn serialized_checkpoints_retain_models_while_progress_only_restarts() {
         .max_iter(71)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint();
+        .into_checkpoint()
+        .unwrap();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
     let resumed =

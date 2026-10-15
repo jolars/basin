@@ -172,7 +172,7 @@ pub trait LineSearch<P, V, F = f64> {
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<F, Self::Error>;
+    ) -> crate::EvaluationResult<F, Self::Error>;
 
     /// Returns the step together with a distinguishable soft-failure outcome.
     ///
@@ -187,7 +187,7 @@ pub trait LineSearch<P, V, F = f64> {
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<LineSearchOutcome<F>, Self::Error> {
+    ) -> crate::EvaluationResult<LineSearchOutcome<F>, Self::Error> {
         self.next(problem, param, cost, gradient, direction)
             .map(LineSearchOutcome::Step)
     }
@@ -209,7 +209,7 @@ pub trait LineSearch<P, V, F = f64> {
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error> {
         self.next_with_outcome(problem, param, cost, gradient, direction)
             .map(LineSearchResult::new)
     }
@@ -236,7 +236,7 @@ pub trait LineSearch<P, V, F = f64> {
         _gradient: &V,
         _direction: &V,
         _bounds: LineSearchBounds<F>,
-    ) -> Result<LineSearchResult<V, F>, Self::Error>
+    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error>
     where
         F: Scalar,
     {
@@ -275,7 +275,7 @@ where
         _cost: F,
         _gradient: &V,
         _direction: &V,
-    ) -> Result<F, Self::Error> {
+    ) -> crate::EvaluationResult<F, Self::Error> {
         Ok(self.0)
     }
 
@@ -287,7 +287,7 @@ where
         _gradient: &V,
         _direction: &V,
         bounds: LineSearchBounds<F>,
-    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error> {
         let outcome = if self.0.is_finite() && self.0 > F::zero() {
             LineSearchOutcome::Step(self.0.min(bounds.max))
         } else {

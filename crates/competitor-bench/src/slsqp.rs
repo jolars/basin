@@ -139,9 +139,8 @@ fn manual(
 ) -> (SelectedFirstOrderState<Vec<f64>>, TerminationCode) {
     let mut problem = Problem::new(Unconstrained(obj));
     let mut solver = Slsqp::new().with_absolute_accuracy_tolerance(ACCURACY);
-    let mut state = solver
-        .init(&mut problem, SelectedFirstOrderState::new(START.to_vec()))
-        .unwrap();
+    let mut state = SelectedFirstOrderState::new(START.to_vec());
+    solver.init(&mut problem, &mut state).unwrap();
     state.mirror(problem.counts());
     state.update_best();
     loop {
@@ -151,8 +150,11 @@ fn manual(
         if let Some(reason) = solver.check_convergence(&problem, &state) {
             return (state, reason.code());
         }
-        let (mut next, completed, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (completed, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
+        let mut next = state;
         next.mirror(problem.counts());
         if completed {
             next.increment_iter();

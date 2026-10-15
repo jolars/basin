@@ -287,8 +287,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             Some(state.param().vec_len()),
@@ -307,7 +307,7 @@ where
         let template = state.param().clone();
 
         let (work, best_x, best_f) = {
-            let mut eval = |slice: &[F]| -> Result<
+            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
                 F,
                 crate::ConstraintSolveError<P::Error>,
             > {
@@ -326,14 +326,15 @@ where
 
         state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
+    {
         let template = state.param().clone();
         let work = self
             .work
@@ -341,7 +342,7 @@ where
             .expect("Bobyqa::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> Result<
+            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
                 F,
                 crate::ConstraintSolveError<P::Error>,
             > {
@@ -371,7 +372,7 @@ where
             )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok(crate::SolverStep::from((state, reason)))
+        Ok(crate::SolverStep::from(reason))
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {

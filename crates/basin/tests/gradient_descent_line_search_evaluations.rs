@@ -99,7 +99,7 @@ impl<P, V, F, L: LineSearch<P, V, F>> LineSearch<P, V, F> for StepOnly<L> {
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<F, Self::Error> {
+    ) -> basin::EvaluationResult<F, Self::Error> {
         self.0.next(problem, param, cost, gradient, direction)
     }
 }
@@ -267,7 +267,7 @@ impl<P: CostFunction, V> LineSearch<P, V> for FailedSearch {
         _: f64,
         _: &V,
         _: &V,
-    ) -> Result<f64, Self::Error> {
+    ) -> basin::EvaluationResult<f64, Self::Error> {
         panic!("the distinguishable failure must be preserved");
     }
 
@@ -278,7 +278,7 @@ impl<P: CostFunction, V> LineSearch<P, V> for FailedSearch {
         _: f64,
         _: &V,
         _: &V,
-    ) -> Result<LineSearchOutcome<f64>, Self::Error> {
+    ) -> basin::EvaluationResult<LineSearchOutcome<f64>, Self::Error> {
         Ok(LineSearchOutcome::Failed)
     }
 }

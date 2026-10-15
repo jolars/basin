@@ -417,8 +417,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedState<V, F>,
-    ) -> Result<SelectedState<V, F>, Self::Error> {
+        state: &mut SelectedState<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         state.reset();
         self.rho = self.rho0;
         self.c_norm = F::infinity();
@@ -445,15 +445,18 @@ where
             .map_err(invalid)?;
         let violation = residual.norm_squared().sqrt();
         state.replace(state.param().clone(), cost, violation);
-        self.select_incumbent(&mut state);
-        Ok(state)
+        self.select_incumbent(state);
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedState<V, F>,
-    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
+        state: &mut SelectedState<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<SelectedState<V, F>>,
+        Self::Error,
+    > {
         self.stationarity_norm = F::infinity();
         self.stationarity_initial_norm = F::infinity();
         // Minimize the augmented Lagrangian at the current (λ, ρ) on a
@@ -461,7 +464,8 @@ where
         // iterate. Fresh criteria each call satisfies the statelessness
         // contract.
         let lambda = self.lambda.as_ref().expect("init populates lambda");
-        let mut al_wrapper = Problem::new(AugmentedLagrangian::new(
+        let counts_before = *problem.counts();
+        let mut al_wrapper = problem.adapt(AugmentedLagrangian::new(
             problem.inner(),
             lambda,
             self.rho,
@@ -479,12 +483,8 @@ where
             &mut control,
         );
 
-        // Eval aggregation (adapter-problem composition): fold the inner
-        // wrapper's per-call counts back into the outer's wrapper. Copy out
-        // before borrowing the outer mutably so the AL adapter's `&P` borrow
-        // (still held by `al_wrapper`) doesn't collide with the
-        // `counts_mut` reborrow.
-        let inner_counts = *al_wrapper.counts();
+        // Keep inner diagnostics separate from the stationarity probes below.
+        let inner_counts = al_wrapper.counts().delta_since(&counts_before);
         let stationarity = result
             .as_ref()
             .ok()
@@ -500,11 +500,12 @@ where
                     al_wrapper.gradient(state.param())?.norm_infinity();
                 let final_norm =
                     al_wrapper.gradient(r.state.param())?.norm_infinity();
-                Ok::<_, Self::Error>((initial, final_norm))
+                Ok::<_, crate::EvaluationError<Self::Error>>((
+                    initial, final_norm,
+                ))
             })
             .transpose();
-        let total_counts = *al_wrapper.counts();
-        problem.counts_mut().add(&total_counts);
+        problem.synchronize_counts();
         self.last_inner = diagnostic_start.map(|(start, lambda)| {
             AugmentedLagrangianInnerDiagnostics {
                 rho: self.rho,
@@ -513,7 +514,10 @@ where
                 returned: result.as_ref().ok().map(|r| r.state.param().clone()),
                 report: result.as_ref().ok().map(|r| r.report.clone()),
                 counts: inner_counts,
-                hard_error: result.is_err(),
+                hard_error: matches!(
+                    result,
+                    Err(crate::EvaluationError::Evaluation(_))
+                ),
             }
         });
         let result = result?;
@@ -527,12 +531,11 @@ where
             .termination
             .can_continue_as_inner(crate::PartialResultPolicy::Consume)
         {
-            return Ok(crate::SolverStep::from((
-                state,
+            return Ok(crate::SolverStep::from(
                 result.report.into_outer_termination(
                     crate::PartialResultPolicy::Consume,
                 ),
-            )));
+            ));
         }
 
         // Publish a coherent original objective and feasibility pair only after
@@ -546,7 +549,6 @@ where
         let c_norm = c.norm_squared().sqrt();
         if !cost.is_finite() || !c_norm.is_finite() {
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "The augmented-Lagrangian solve returned a non-finite original objective or equality residual.",
                 ),
@@ -555,7 +557,7 @@ where
         self.c_norm_prev = self.c_norm;
         self.c_norm = c_norm;
         state.replace(candidate.clone(), cost, self.c_norm);
-        self.select_incumbent(&mut state);
+        self.select_incumbent(state);
 
         // Multiplier update vs. penalty increase. The first solve
         // (c_norm_prev = +∞) always takes the update branch.
@@ -569,7 +571,7 @@ where
             self.rho = self.rho * self.rho_increase;
         }
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 
     fn should_check_iterate_change(&self) -> bool {

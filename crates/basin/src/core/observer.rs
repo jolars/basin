@@ -168,6 +168,8 @@ pub trait Observe<S: crate::State> {
 ///
 /// All hooks default to no-ops. Their ordering, modes, exact continuation, and
 /// error behavior match [`Observe`]; see the [module documentation](self).
+/// A budget-interrupted model instead calls [`observe_interrupted`](Self::observe_interrupted)
+/// with progress alone. Incomplete initialization fires no hooks.
 /// Observers must use existing diagnostic getters without evaluating the
 /// problem or mutating solver machinery through interior mutability. Handle
 /// logging errors internally. Panics propagate normally. A cloned
@@ -206,11 +208,19 @@ pub trait ObserveSolver<S: crate::State, So> {
     ///
     /// A partial-step stop refreshes counts without incrementing the iteration
     /// counter. The solver may contain diagnostics updated by the final step
-    /// or convergence check. Hard errors do not fire this hook.
+    /// or convergence check. Callback errors and budget-interrupted models do
+    /// not fire this hook.
     fn observe_final(
         &mut self,
         _state: &S,
         _solver: &So,
+        _reason: &TerminationReport<S::Float>,
+    ) {
+    }
+    /// A hard budget interrupted the model. Only coherent progress is exposed.
+    fn observe_interrupted(
+        &mut self,
+        _state: &S,
         _reason: &TerminationReport<S::Float>,
     ) {
     }

@@ -200,18 +200,25 @@ fn malformed_bounds_abort_before_callbacks() {
             calls: Cell::new(0),
         });
         let error = Cobyla::new()
-            .init(&mut p, SelectedState::new(vec![0.0]))
+            .init(&mut p, &mut SelectedState::new(vec![0.0]))
             .unwrap_err();
         assert_eq!(
             error,
-            ConstraintSolveError::InvalidConstraints(expected.clone())
+            basin::EvaluationError::Evaluation(
+                ConstraintSolveError::InvalidConstraints(expected.clone())
+            )
         );
         assert_eq!(p.inner().calls.get(), 0);
         assert_eq!(p.counts().total_work(), 0);
         let error = Bobyqa::new()
-            .init(&mut p, PointState::new(vec![0.0]))
+            .init(&mut p, &mut PointState::new(vec![0.0]))
             .unwrap_err();
-        assert_eq!(error, ConstraintSolveError::InvalidConstraints(expected));
+        assert_eq!(
+            error,
+            basin::EvaluationError::Evaluation(
+                ConstraintSolveError::InvalidConstraints(expected)
+            )
+        );
         assert_eq!(p.inner().calls.get(), 0);
         assert_eq!(p.counts().total_work(), 0);
     }
@@ -283,20 +290,27 @@ fn malformed_output_and_callback_errors_preserve_attempt_counts() {
             calls: Cell::new(0),
         });
         let e = Cobyla::new()
-            .init(&mut p, SelectedState::new(vec![1.0]))
+            .init(&mut p, &mut SelectedState::new(vec![1.0]))
             .unwrap_err();
         if fail {
-            assert_eq!(e, ConstraintSolveError::Evaluation(CallbackError(37)))
+            assert_eq!(
+                e,
+                basin::EvaluationError::Evaluation(
+                    ConstraintSolveError::Evaluation(CallbackError(37))
+                )
+            )
         } else {
             assert_eq!(
                 e,
-                ConstraintSolveError::InvalidConstraints(
-                    ConstraintError::DimensionMismatch {
-                        block: ConstraintBlock::NonlinearInequalities,
-                        axis: ConstraintAxis::Length,
-                        expected: 1,
-                        actual: 2
-                    }
+                basin::EvaluationError::Evaluation(
+                    ConstraintSolveError::InvalidConstraints(
+                        ConstraintError::DimensionMismatch {
+                            block: ConstraintBlock::NonlinearInequalities,
+                            axis: ConstraintAxis::Length,
+                            expected: 1,
+                            actual: 2
+                        }
+                    )
                 )
             );
         }
@@ -314,7 +328,7 @@ fn zero_count_blocks_never_invoke_callbacks() {
         calls: Cell::new(0),
     });
     Cobyla::new()
-        .init(&mut p, SelectedState::new(vec![1.0]))
+        .init(&mut p, &mut SelectedState::new(vec![1.0]))
         .unwrap();
     assert_eq!(p.inner().calls.get(), 0);
     assert_eq!(p.counts().residual_evals, 0);
@@ -328,12 +342,15 @@ fn a_changed_declaration_is_a_typed_error() {
         calls: Cell::new(0),
     });
     let mut solver = Cobyla::new();
-    let state = solver.init(&mut p, SelectedState::new(vec![1.0])).unwrap();
+    let mut state = SelectedState::new(vec![1.0]);
+    solver.init(&mut p, &mut state).unwrap();
     p.inner().count.set(2);
     assert!(matches!(
-        solver.next_iter(&mut p, state),
-        Err(ConstraintSolveError::InvalidConstraints(
-            ConstraintError::LayoutChanged
+        solver.next_iter(&mut p, &mut state),
+        Err(basin::EvaluationError::Evaluation(
+            ConstraintSolveError::InvalidConstraints(
+                ConstraintError::LayoutChanged
+            )
         ))
     ));
 }
@@ -411,15 +428,17 @@ fn malformed_linear_shapes_are_errors_before_matrix_multiplication() {
         ));
     let mut p = Problem::new(Constrained::new(Quadratic, constraints));
     let e = Cobyla::new()
-        .init(&mut p, SelectedState::new(vec![0.0; 2]))
+        .init(&mut p, &mut SelectedState::new(vec![0.0; 2]))
         .unwrap_err();
     assert!(matches!(
         e,
-        ConstraintSolveError::InvalidConstraints(
-            ConstraintError::DimensionMismatch {
-                axis: ConstraintAxis::Columns,
-                ..
-            }
+        basin::EvaluationError::Evaluation(
+            ConstraintSolveError::InvalidConstraints(
+                ConstraintError::DimensionMismatch {
+                    axis: ConstraintAxis::Columns,
+                    ..
+                }
+            )
         )
     ));
     assert_eq!(p.counts().total_work(), 0);
@@ -715,7 +734,10 @@ fn slsqp_skips_zero_count_values_and_jacobians() {
         calls: Cell::new(0),
     });
     Slsqp::new()
-        .init(&mut problem, basin::SelectedFirstOrderState::new(vec![1.0]))
+        .init(
+            &mut problem,
+            &mut basin::SelectedFirstOrderState::new(vec![1.0]),
+        )
         .unwrap();
     assert_eq!(problem.inner().calls.get(), 0);
     assert_eq!(problem.counts().residual_evals, 0);

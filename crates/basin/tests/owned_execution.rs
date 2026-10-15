@@ -164,30 +164,31 @@ impl Solver<Quadratic, OwnedState> for OwnedSolver {
     fn init(
         &mut self,
         problem: &mut Problem<Quadratic>,
-        mut state: OwnedState,
-    ) -> Result<OwnedState, Self::Error> {
+        state: &mut OwnedState,
+    ) -> basin::EvaluationResult<(), Self::Error> {
         self.init_calls += 1;
         state.cost = problem.cost(state.param())?;
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<Quadratic>,
-        mut state: OwnedState,
-    ) -> Result<basin::SolverStep<OwnedState>, Self::Error> {
+        state: &mut OwnedState,
+    ) -> basin::EvaluationResult<basin::SolverStep<OwnedState>, Self::Error>
+    {
         self.steps += 1;
         self.workspace[0] += 1;
-        *state.point *= 0.5;
-        state.cost = problem.cost_and_gradient_and_hessian(state.param())?.0;
-        problem.residual_and_jacobian(state.param())?;
-        problem.hessian_product(state.param(), &1.0)?;
-        Ok(basin::SolverStep::from((
-            state,
-            self.stop_mid_step
-                .then_some(basin::Termination::Application(
-                    basin::ApplicationStop::new("user_requested"),
-                )),
+        let candidate = *state.point * 0.5;
+        let cost = problem.cost_and_gradient_and_hessian(&candidate)?.0;
+        problem.residual_and_jacobian(&candidate)?;
+        problem.hessian_product(&candidate, &1.0)?;
+        *state.point = candidate;
+        state.cost = cost;
+        Ok(basin::SolverStep::from(self.stop_mid_step.then_some(
+            basin::Termination::Application(basin::ApplicationStop::new(
+                "user_requested",
+            )),
         )))
     }
 }
@@ -327,7 +328,7 @@ fn stopped_stepper_extraction_does_not_repeat_final_callbacks() {
         } else {
             let result = stepper.run_to_end_with_solver().unwrap();
             assert_eq!(result.report.code(), TerminationCode::MaxIter);
-            result.into_checkpoint()
+            result.into_checkpoint().unwrap()
         };
         assert_eq!(*log.borrow(), before);
         assert_eq!(*checkpoint.counts(), counts(3));
@@ -366,7 +367,7 @@ fn clean_mid_step_stop_extracts_charged_counts_without_incrementing_iteration()
     assert_eq!(result.cost(), 16.0);
     assert_eq!(result.counts, counts(1));
     assert_eq!(result.best_cost_evals(), counts(1).total_work());
-    let checkpoint = result.into_checkpoint();
+    let checkpoint = result.into_checkpoint().unwrap();
     assert_eq!(checkpoint.state().iter(), 0);
     assert_eq!(*checkpoint.counts(), counts(1));
 }
@@ -389,7 +390,7 @@ fn cancelled_run_can_resume_with_new_execution_policy() {
         assert_eq!(result.counts, counts(pause));
         let resumed = Executor::resume_from_checkpoint(
             Quadratic::default(),
-            result.into_checkpoint(),
+            result.into_checkpoint().unwrap(),
         )
         .max_iter(3)
         .run_with_solver()
@@ -666,4 +667,43 @@ fn seeded_annealing_preserves_rng_neighbor_and_reannealing_history() {
     assert!(result.solver.reannealings() > 0);
     assert!(result.state.accepted_moves() > 0);
     assert!(result.state.rejected_moves() > 0);
+}
+
+#[test]
+fn hard_caps_retain_nonclone_progress_without_exposing_partial_models() {
+    let log = Log::default();
+    let models = Rc::new(Cell::new(0));
+    let observed = models.clone();
+    let result = executor(&log)
+        .max_evaluations(basin::EvaluationKind::TotalWork, 5)
+        .observe_solver(
+            move |_, _, _| observed.set(observed.get() + 1),
+            ObserverMode::Always,
+        )
+        .run_with_solver()
+        .unwrap();
+    assert!(matches!(
+        result.report.stage,
+        basin::TerminationStage::Interrupted { .. }
+    ));
+    assert_eq!(result.counts.total_work(), 4);
+    assert_eq!(
+        (*result.param(), result.cost(), result.iter()),
+        (8.0, 64.0, 0)
+    );
+    assert_eq!(*log.borrow(), vec![("init", 0), ("final", 0)]);
+    assert_eq!(models.get(), 1);
+    assert!(result.into_checkpoint().is_none());
+
+    let result = Executor::new(
+        Quadratic::default(),
+        OwnedSolver::default(),
+        OwnedState::new(),
+    )
+    .max_cost_evals(0)
+    .run_with_solver()
+    .unwrap();
+    assert!(result.initialized_state().is_none());
+    assert_eq!(result.counts.total_work(), 0);
+    assert!(result.into_checkpoint().is_none());
 }

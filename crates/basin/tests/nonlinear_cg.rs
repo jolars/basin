@@ -73,7 +73,7 @@ where
         _: f64,
         _: &Vec<f64>,
         _: &Vec<f64>,
-    ) -> Result<f64, Self::Error> {
+    ) -> basin::EvaluationResult<f64, Self::Error> {
         panic!("solver must request the accepted evaluation")
     }
     fn next_with_evaluation(
@@ -83,7 +83,8 @@ where
         cost: f64,
         gradient: &Vec<f64>,
         direction: &Vec<f64>,
-    ) -> Result<LineSearchResult<Vec<f64>, f64>, Self::Error> {
+    ) -> basin::EvaluationResult<LineSearchResult<Vec<f64>, f64>, Self::Error>
+    {
         let call = self.trace.borrow().len();
         let factor = match self.update {
             CgUpdate::HagerZhang => 0.875,
@@ -121,7 +122,7 @@ where
         _: f64,
         gradient: &Vec<f64>,
         d: &Vec<f64>,
-    ) -> Result<f64, Self::Error> {
+    ) -> basin::EvaluationResult<f64, Self::Error> {
         Ok(-gradient.dot(d)
             / (3.0 * d[0] * d[0] + 2.0 * d[0] * d[1] + 2.0 * d[1] * d[1]))
     }
@@ -317,15 +318,18 @@ fn changing_updates_between_iterations_restarts_from_the_current_gradient() {
         })
         .with_update(original);
         let mut problem = Problem::new(quadratic());
-        let state = solver
-            .init(&mut problem, FirstOrderState::new(vec![2.0, -1.0]))
-            .unwrap();
-        let (state, _, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let mut state = FirstOrderState::new(vec![2.0, -1.0]);
+        solver.init(&mut problem, &mut state).unwrap();
+        let (_, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert_eq!(reason, None);
         let mut solver = solver.with_update(update);
-        let (_, _, reason) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, reason) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert_eq!(reason, None);
         assert_eq!(trace.borrow().len(), 2);
         assert!(is_steepest(&trace.borrow()[1]));
@@ -342,7 +346,7 @@ impl<P, V, F, L: LineSearch<P, V, F>> LineSearch<P, V, F> for StepOnly<L> {
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<F, Self::Error> {
+    ) -> basin::EvaluationResult<F, Self::Error> {
         self.0.next(problem, param, cost, gradient, direction)
     }
 }

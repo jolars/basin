@@ -95,20 +95,88 @@ where
     type Output = F;
     type Error = ConstraintSolveError<P::Error>;
     fn cost(&self, x: &X) -> Result<F, Self::Error> {
-        let c = self.problem.linear_residual(x).map_err(invalid)?;
-        crate::core::constraint::model::dimension(
-            crate::ConstraintBlock::LinearEqualities,
-            crate::ConstraintAxis::Length,
-            c.len(),
-            self.lambda.vec_len(),
+        augmented_cost(
+            self,
+            x,
+            || {
+                self.problem
+                    .cost(x)
+                    .map_err(ConstraintSolveError::Evaluation)
+            },
+            invalid,
         )
-        .map_err(invalid)?;
-        let multiplier = (0..c.len()).map(|i| self.lambda[i] * c[i]).sum::<F>();
-        Ok(self.problem.cost(x)?
-            + multiplier
-            + F::from_f64(0.5).unwrap() * self.rho * c.norm_squared())
+    }
+    fn cost_with_context(
+        &self,
+        x: &X,
+        context: &crate::EvaluationContext,
+    ) -> Result<F, crate::EvaluationError<<Self as CostFunction>::Error>> {
+        augmented_cost(
+            self,
+            x,
+            || {
+                self.problem.cost_with_context(x, context).map_err(|error| {
+                    error.map_evaluation(ConstraintSolveError::Evaluation)
+                })
+            },
+            |error| crate::EvaluationError::Evaluation(invalid(error)),
+        )
+    }
+    fn cost_batch_request(&self, points: u64) -> crate::EvalCounts {
+        self.problem.cost_batch_request(points)
+    }
+    fn prepare_cost_batch(
+        &self,
+        points: u64,
+    ) -> Result<crate::CostBatchReservation, Self::Error> {
+        self.problem
+            .prepare_cost_batch(points)
+            .map_err(ConstraintSolveError::Evaluation)
+    }
+    fn cost_in_batch(
+        &self,
+        x: &X,
+        reservation: &crate::CostBatchReservation,
+    ) -> Result<F, Self::Error> {
+        augmented_cost(
+            self,
+            x,
+            || {
+                self.problem
+                    .cost_in_batch(x, reservation)
+                    .map_err(ConstraintSolveError::Evaluation)
+            },
+            invalid,
+        )
     }
 }
+
+fn augmented_cost<P, X, R, F, E>(
+    this: &AugmentedLagrangian<'_, P, R, F>,
+    x: &X,
+    evaluate: impl FnOnce() -> Result<F, E>,
+    constraint_error: impl Fn(crate::ConstraintError) -> E,
+) -> Result<F, E>
+where
+    F: Scalar,
+    P: CostFunction<Param = X, Output = F> + LinearEqualityProblem<X, F>,
+    X: VectorLen,
+    R: VectorLen + std::ops::Index<usize, Output = F>,
+{
+    let c = this.problem.linear_residual(x).map_err(&constraint_error)?;
+    crate::core::constraint::model::dimension(
+        crate::ConstraintBlock::LinearEqualities,
+        crate::ConstraintAxis::Length,
+        c.len(),
+        this.lambda.vec_len(),
+    )
+    .map_err(&constraint_error)?;
+    let multiplier = (0..c.len()).map(|i| this.lambda[i] * c[i]).sum::<F>();
+    Ok(evaluate()?
+        + multiplier
+        + F::from_f64(0.5).unwrap() * this.rho * c.norm_squared())
+}
+
 impl<P, X, R, F> Gradient for AugmentedLagrangian<'_, P, R, F>
 where
     F: Scalar,
@@ -120,25 +188,89 @@ where
 {
     type Gradient = X;
     fn gradient(&self, x: &X) -> Result<X, <Self as CostFunction>::Error> {
-        let c = self.problem.linear_residual(x).map_err(invalid)?;
-        crate::core::constraint::model::dimension(
-            crate::ConstraintBlock::LinearEqualities,
-            crate::ConstraintAxis::Length,
-            c.len(),
-            self.lambda.vec_len(),
+        augmented_gradient(
+            self,
+            x,
+            || {
+                self.problem
+                    .gradient(x)
+                    .map_err(ConstraintSolveError::Evaluation)
+            },
+            invalid,
         )
-        .map_err(invalid)?;
-        let weights: Vec<F> = (0..c.len())
-            .map(|i| self.lambda[i] + self.rho * c[i])
-            .collect();
-        let mut contribution = x.clone();
-        self.problem
-            .linear_transpose(&weights, &mut contribution)
-            .map_err(invalid)?;
-        let mut g = self.problem.gradient(x)?;
-        g.scaled_add(F::one(), &contribution);
-        Ok(g)
     }
+    fn gradient_with_context(
+        &self,
+        x: &X,
+        context: &crate::EvaluationContext,
+    ) -> Result<X, crate::EvaluationError<<Self as CostFunction>::Error>> {
+        augmented_gradient(
+            self,
+            x,
+            || {
+                self.problem.gradient_with_context(x, context).map_err(
+                    |error| {
+                        error.map_evaluation(ConstraintSolveError::Evaluation)
+                    },
+                )
+            },
+            |error| crate::EvaluationError::Evaluation(invalid(error)),
+        )
+    }
+    fn cost_and_gradient_with_context(
+        &self,
+        x: &X,
+        context: &crate::EvaluationContext,
+    ) -> Result<(F, X), crate::EvaluationError<<Self as CostFunction>::Error>>
+    {
+        context.reserve_kinds(&[
+            crate::EvaluationKind::Cost,
+            crate::EvaluationKind::Gradient,
+        ])?;
+        let local = context.prepaid(crate::EvalCounts {
+            cost_evals: 1,
+            gradient_evals: 1,
+            ..crate::EvalCounts::default()
+        });
+        Ok((
+            self.cost_with_context(x, &local)?,
+            self.gradient_with_context(x, &local)?,
+        ))
+    }
+}
+
+fn augmented_gradient<P, X, R, F, E>(
+    this: &AugmentedLagrangian<'_, P, R, F>,
+    x: &X,
+    evaluate: impl FnOnce() -> Result<X, E>,
+    constraint_error: impl Fn(crate::ConstraintError) -> E,
+) -> Result<X, E>
+where
+    F: Scalar,
+    P: CostFunction<Param = X, Output = F>
+        + LinearEqualityGradient<X, F>
+        + Gradient<Gradient = X>,
+    X: Clone + VectorLen + ScaledAdd<F>,
+    R: VectorLen + std::ops::Index<usize, Output = F>,
+{
+    let c = this.problem.linear_residual(x).map_err(&constraint_error)?;
+    crate::core::constraint::model::dimension(
+        crate::ConstraintBlock::LinearEqualities,
+        crate::ConstraintAxis::Length,
+        c.len(),
+        this.lambda.vec_len(),
+    )
+    .map_err(&constraint_error)?;
+    let weights: Vec<F> = (0..c.len())
+        .map(|i| this.lambda[i] + this.rho * c[i])
+        .collect();
+    let mut contribution = x.clone();
+    this.problem
+        .linear_transpose(&weights, &mut contribution)
+        .map_err(&constraint_error)?;
+    let mut g = evaluate()?;
+    g.scaled_add(F::one(), &contribution);
+    Ok(g)
 }
 
 #[cfg(all(test, feature = "nalgebra_all"))]

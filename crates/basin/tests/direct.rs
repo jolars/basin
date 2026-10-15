@@ -150,7 +150,7 @@ fn faer_scalars() {
 }
 
 #[test]
-fn midpoint_then_first_cross_and_budget_overshoot() {
+fn midpoint_then_first_cross_respects_the_batch_budget() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let log = calls.clone();
     let problem = Objective {
@@ -163,7 +163,7 @@ fn midpoint_then_first_cross_and_budget_overshoot() {
     };
     let stepper =
         Executor::new(problem, no_geometry(), PointState::new(vec![99.0; 3]))
-            .max_evaluations(EvaluationKind::Cost, 2)
+            .max_evaluations(EvaluationKind::Cost, 5)
             .into_stepper()
             .unwrap();
     assert_eq!(stepper.state().param(), &[3.0, 2.0, 0.0]);
@@ -440,7 +440,7 @@ fn checkpoint_continuation_and_fresh_reset() {
     };
     let full = run().max_iter(12).run_with_solver().unwrap();
     let partial = run().max_iter(4).run_with_solver().unwrap();
-    let checkpoint = partial.into_checkpoint();
+    let checkpoint = partial.into_checkpoint().unwrap();
     #[cfg(feature = "serde")]
     let checkpoint = {
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
@@ -456,9 +456,11 @@ fn checkpoint_continuation_and_fresh_reset() {
         .unwrap();
     assert_eq!(full.state, resumed.state);
     assert_eq!(full.counts, resumed.counts);
-    let (mut solver, state, _) = resumed.into_checkpoint().into_parts();
+    let (mut solver, state, _) =
+        resumed.into_checkpoint().unwrap().into_parts();
     let mut problem = Problem::new(quadratic(2));
-    let reset = solver.init(&mut problem, state).unwrap();
+    let mut reset = state;
+    solver.init(&mut problem, &mut reset).unwrap();
     assert_eq!(reset.iter(), 0);
     assert_eq!(reset.param(), &[0.0, 0.0]);
     assert_eq!(reset.cost(), sphere(&[0.0, 0.0]).unwrap());
@@ -528,7 +530,7 @@ fn scipy_solution_quality_and_evaluation_counts() {
             gap >= -1e-11 && gap <= tolerance,
             "{name}: gap={gap}, tolerance={tolerance}"
         );
-        assert!(result.state.cost_evals() >= budget);
+        assert!(result.state.cost_evals() <= budget);
         assert!(
             result.state.cost_evals() <= 2 * reference_count,
             "{name}: excessive final sweep"
@@ -558,4 +560,23 @@ fn parallel_pool_sizes_preserve_the_trajectory() {
             })
     };
     assert_eq!(run(1), run(4));
+}
+
+#[test]
+fn insufficient_allowance_declines_the_complete_cross() {
+    let result = Executor::new(
+        quadratic(2),
+        no_geometry(),
+        PointState::new(vec![0.0; 2]),
+    )
+    .max_cost_evals(2)
+    .require_evaluated_state()
+    .run()
+    .unwrap();
+    assert_eq!(result.counts.cost_evals, 1);
+    assert_eq!(result.iter(), 0);
+    assert!(
+        matches!(result.report.stage, basin::TerminationStage::Interrupted { requested } if requested.cost_evals == 4)
+    );
+    assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
 }

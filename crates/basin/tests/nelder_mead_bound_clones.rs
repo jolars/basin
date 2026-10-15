@@ -82,16 +82,16 @@ fn projected_iterations_do_not_clone_bounds() {
         lower: vector(vec![0.0; 2]),
         upper: vector(vec![1.0; 2]),
     });
-    let state = SimplexProgress::from_simplex(vec![
+    let mut state = SimplexProgress::from_simplex(vec![
         vector(vec![0.5, 0.5]),
         vector(vec![0.7, 0.5]),
         vector(vec![0.5, 0.7]),
     ]);
     let mut solver = NelderMead::new().projected();
-    let mut state = solver.init(&mut problem, state).unwrap();
+    solver.init(&mut problem, &mut state).unwrap();
     clones.set(0);
     for _ in 0..20 {
-        state = solver.next_iter(&mut problem, state).unwrap().state;
+        solver.next_iter(&mut problem, &mut state).unwrap();
         let counts = *problem.counts();
         let _ = solver.check_convergence(&problem, &state);
         assert_eq!(problem.counts(), &counts);

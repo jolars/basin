@@ -469,8 +469,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             None,
@@ -494,14 +494,17 @@ where
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
         self.rng = Some(rng);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<PopulationProgress<V, F>>,
+        Self::Error,
+    > {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -527,7 +530,17 @@ where
                 self.bga_range_fraction,
                 rng,
             );
-            let c_child = problem.cost(&child)?;
+            let c_child = match problem.cost(&child) {
+                Ok(cost) => cost,
+                Err(error) => {
+                    sort_population_ascending(
+                        &mut state.candidates,
+                        &mut state.costs,
+                    );
+                    state.select_best_member();
+                    return Err(error.into());
+                }
+            };
             replace_worst_if_better(
                 &mut state.candidates,
                 &mut state.costs,
@@ -538,7 +551,7 @@ where
 
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 }
 

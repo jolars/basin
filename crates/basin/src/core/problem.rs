@@ -30,6 +30,8 @@
 //! Niche optimization collapses `Result<f64, Infallible>` to `f64` layout,
 //! so the happy path stays zero-cost.
 
+use crate::core::evaluation::{EvaluationContext, EvaluationError};
+
 /// Scalar-valued objective `f(x): Param → Output`. The smallest
 /// problem trait: every solver binds at least on this.
 ///
@@ -92,6 +94,60 @@ pub trait CostFunction: crate::ProblemConstraints {
 
     /// Evaluate the objective at `param`.
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, Self::Error>;
+
+    /// Evaluate through a shared hard-budget context. Adapters forward the
+    /// context to their underlying callbacks instead of charging twice.
+    fn cost_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<Self::Output, EvaluationError<Self::Error>> {
+        context.reserve_kinds(&[EvaluationKind::Cost])?;
+        self.cost(param).map_err(EvaluationError::Evaluation)
+    }
+    /// Work reserved before dispatching a cost batch. Adapters include their
+    /// extra callback work so a batch can be declined atomically.
+    fn cost_batch_request(&self, points: u64) -> EvalCounts {
+        EvalCounts {
+            cost_evals: points,
+            ..EvalCounts::default()
+        }
+    }
+    /// Prepare a batch before any callback is dispatched. Transparent adapters
+    /// forward this hook together with `cost_in_batch` to preserve hard caps.
+    fn prepare_cost_batch(
+        &self,
+        _points: u64,
+    ) -> Result<crate::CostBatchReservation, Self::Error> {
+        Ok(crate::CostBatchReservation { context: None })
+    }
+    /// Evaluate one member of a prepared batch. Adapters forward this hook
+    /// through the same transformation as their ordinary cost callback.
+    fn cost_in_batch(
+        &self,
+        param: &Self::Param,
+        _reservation: &crate::CostBatchReservation,
+    ) -> Result<Self::Output, Self::Error> {
+        self.cost(param)
+    }
+    /// Evaluate independent costs in input order, in parallel when enabled.
+    fn cost_batch(
+        &self,
+        params: &[Self::Param],
+    ) -> Result<Vec<Self::Output>, Self::Error>
+    where
+        Self: crate::core::parallel::MaybeSync,
+        Self::Param: crate::core::parallel::MaybeSync,
+        Self::Output: crate::core::parallel::MaybeSend,
+        Self::Error: crate::core::parallel::MaybeSend,
+    {
+        let reservation = self.prepare_cost_batch(params.len() as u64)?;
+        crate::core::parallel::try_map_slice_with(
+            params,
+            || (),
+            |(), p| self.cost_in_batch(p, &reservation),
+        )
+    }
 }
 
 /// Analytic gradient `∇f(x): Param → Gradient`. Required by
@@ -244,6 +300,29 @@ pub trait Gradient: CostFunction {
     ) -> Result<(Self::Output, Self::Gradient), Self::Error> {
         Ok((self.cost(param)?, self.gradient(param)?))
     }
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    fn gradient_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<Self::Gradient, EvaluationError<Self::Error>> {
+        context.reserve_kinds(&[EvaluationKind::Gradient])?;
+        self.gradient(param).map_err(EvaluationError::Evaluation)
+    }
+
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    #[allow(clippy::type_complexity)]
+    fn cost_and_gradient_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<(Self::Output, Self::Gradient), EvaluationError<Self::Error>>
+    {
+        context
+            .reserve_kinds(&[EvaluationKind::Cost, EvaluationKind::Gradient])?;
+        self.cost_and_gradient(param)
+            .map_err(EvaluationError::Evaluation)
+    }
 }
 
 /// Finite-sum gradient `(1/|B|) Σ_{i ∈ B} ∇fᵢ(x)` over a chosen subset
@@ -362,6 +441,17 @@ pub trait MiniBatchGradient: CostFunction {
         param: &Self::Param,
         batch: &[usize],
     ) -> Result<Self::Gradient, Self::Error>;
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    fn batch_gradient_with_context(
+        &self,
+        param: &Self::Param,
+        batch: &[usize],
+        context: &EvaluationContext,
+    ) -> Result<Self::Gradient, EvaluationError<Self::Error>> {
+        context.reserve_kinds(&[EvaluationKind::Gradient])?;
+        self.batch_gradient(param, batch)
+            .map_err(EvaluationError::Evaluation)
+    }
 }
 
 /// Vector-valued residual `r(x): Param → Output` for least-squares
@@ -435,6 +525,15 @@ pub trait Residual: crate::ProblemConstraints {
         &self,
         param: &Self::Param,
     ) -> Result<Self::Output, Self::Error>;
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    fn residual_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<Self::Output, EvaluationError<Self::Error>> {
+        context.reserve_kinds(&[EvaluationKind::Residual])?;
+        self.residual(param).map_err(EvaluationError::Evaluation)
+    }
 }
 
 /// Analytic Jacobian `J(x) = ∂r/∂x: Param → Jacobian` for least-squares
@@ -561,6 +660,31 @@ pub trait Jacobian: Residual {
     > {
         Ok((self.residual(param)?, self.jacobian(param)?))
     }
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    fn jacobian_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<Self::Jacobian, EvaluationError<Self::Error>> {
+        context.reserve_kinds(&[EvaluationKind::Jacobian])?;
+        self.jacobian(param).map_err(EvaluationError::Evaluation)
+    }
+
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    #[allow(clippy::type_complexity)]
+    fn residual_and_jacobian_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<(Self::Output, Self::Jacobian), EvaluationError<Self::Error>>
+    {
+        context.reserve_kinds(&[
+            EvaluationKind::Residual,
+            EvaluationKind::Jacobian,
+        ])?;
+        self.residual_and_jacobian(param)
+            .map_err(EvaluationError::Evaluation)
+    }
 }
 
 /// Analytic Hessian `H(x) = ∇²f(x): Param → Hessian` for second-order
@@ -685,6 +809,34 @@ pub trait Hessian: Gradient {
         let (cost, grad) = self.cost_and_gradient(param)?;
         Ok((cost, grad, self.hessian(param)?))
     }
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    fn hessian_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<Self::Hessian, EvaluationError<Self::Error>> {
+        context.reserve_kinds(&[EvaluationKind::Hessian])?;
+        self.hessian(param).map_err(EvaluationError::Evaluation)
+    }
+
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    #[allow(clippy::type_complexity)]
+    fn cost_and_gradient_and_hessian_with_context(
+        &self,
+        param: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<
+        (Self::Output, Self::Gradient, Self::Hessian),
+        EvaluationError<Self::Error>,
+    > {
+        context.reserve_kinds(&[
+            EvaluationKind::Cost,
+            EvaluationKind::Gradient,
+            EvaluationKind::Hessian,
+        ])?;
+        self.cost_and_gradient_and_hessian(param)
+            .map_err(EvaluationError::Evaluation)
+    }
 }
 
 /// Matrix-free Hessian-vector products: `v ↦ ∇²f(param) · v`.
@@ -767,6 +919,17 @@ pub trait HessianProduct: Gradient {
         param: &Self::Param,
         v: &Self::Param,
     ) -> Result<<Self as Gradient>::Gradient, <Self as CostFunction>::Error>;
+    /// Evaluate through a shared hard-budget context, reserving all outputs first.
+    fn hessian_product_with_context(
+        &self,
+        param: &Self::Param,
+        v: &Self::Param,
+        context: &EvaluationContext,
+    ) -> Result<Self::Gradient, EvaluationError<Self::Error>> {
+        context.reserve_kinds(&[EvaluationKind::HessianProduct])?;
+        self.hessian_product(param, v)
+            .map_err(EvaluationError::Evaluation)
+    }
 }
 
 /// Per-kind evaluation counters carried by [`Problem`].
@@ -883,12 +1046,8 @@ impl EvalCounts {
         }
     }
 
-    /// Componentwise `self + other`. Used by composed solvers that drive an
-    /// inner against a *different* problem type (an adapter like
-    /// [`LogBarrier`](crate::core::barrier::LogBarrier) or
-    /// [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian)):
-    /// they construct a fresh inner [`Problem`] and merge its counts back
-    /// into the outer's wrapper after [`run_loop_with_control`](crate::core::executor::run_loop_with_control).
+    /// Add work in matching categories. Composed problem wrappers share a
+    /// ledger through [`Problem::adapt`] and do not need manual addition.
     pub fn add(&mut self, other: &EvalCounts) {
         self.cost_evals += other.cost_evals;
         self.gradient_evals += other.gradient_evals;
@@ -925,13 +1084,9 @@ impl EvalCounts {
 ///   into the outer's wrapper transparently; no explicit roll-up. Inner
 ///   `state` counts reflect per-run work (snapshot-relative, computed by
 ///   [`run_loop_with_control`](crate::core::executor::run_loop_with_control)).
-/// - **Adapter-problem inner** (e.g.
-///   [`BarrierMethod`](crate::solver::BarrierMethod) /
-///   [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod)):
-///   the outer constructs a fresh `Problem::new(adapter)` around its
-///   adapter type, runs the inner against it, then folds the inner's
-///   counts back into the outer's wrapper via
-///   [`EvalCounts::add`].
+/// - **Adapter-problem inner**: create the child with [`adapt`](Self::adapt),
+///   run the inner solver, then call [`synchronize_counts`](Self::synchronize_counts)
+///   on the parent. Both wrappers share counts and enclosing limits.
 ///
 /// # Error path
 ///
@@ -943,6 +1098,7 @@ impl EvalCounts {
 pub struct Problem<P> {
     inner: P,
     counts: EvalCounts,
+    context: EvaluationContext,
 }
 
 impl<P> Problem<P> {
@@ -951,7 +1107,50 @@ impl<P> Problem<P> {
         Self {
             inner,
             counts: EvalCounts::default(),
+            context: EvaluationContext::new(crate::EvaluationBudget::new()),
         }
+    }
+
+    /// Share one ledger with an adapter problem. Counts are already shared;
+    /// callers synchronize the parent instead of adding a second copy.
+    pub fn adapt<Q>(&self, problem: Q) -> Problem<Q> {
+        Problem {
+            inner: problem,
+            counts: self.context.counts(),
+            context: self.context.clone(),
+        }
+    }
+
+    /// The shared callback context, including enclosing evaluation limits.
+    pub fn context(&self) -> &EvaluationContext {
+        &self.context
+    }
+
+    /// Refresh the wrapper mirror after work performed through an adapter.
+    pub fn synchronize_counts(&mut self) {
+        self.counts = self.context.counts();
+    }
+
+    /// Restore authoritative counts before exact continuation.
+    ///
+    /// # Panics
+    /// Panics during an active run or if the total count overflows `u64`.
+    pub fn restore_counts(&mut self, counts: EvalCounts) {
+        self.context.restore_counts(counts);
+        self.counts = counts;
+    }
+
+    /// Invoke an adapter's context-aware callbacks and retain counts on errors.
+    pub fn evaluate<T, E>(
+        &mut self,
+        evaluate: impl FnOnce(
+            &P,
+            &EvaluationContext,
+        ) -> crate::EvaluationResult<T, E>,
+    ) -> crate::EvaluationResult<T, E> {
+        let result = evaluate(&self.inner, &self.context);
+        self.synchronize_counts();
+        result
     }
 
     /// Read-only access to the wrapped problem. Used by composed solvers
@@ -970,16 +1169,6 @@ impl<P> Problem<P> {
         &self.counts
     }
 
-    /// Mutable access to the wrapper's counters. Used by composed solvers
-    /// that drive an inner against an *adapter problem*: after
-    /// [`run_loop_with_control`](crate::core::executor::run_loop_with_control) returns the inner
-    /// wrapper, the outer calls
-    /// `outer.counts_mut().add(inner.counts())` to fold the inner's
-    /// per-run work into its own.
-    pub fn counts_mut(&mut self) -> &mut EvalCounts {
-        &mut self.counts
-    }
-
     /// Consume the wrapper and return the inner problem.
     pub fn into_inner(self) -> P {
         self.inner
@@ -987,167 +1176,155 @@ impl<P> Problem<P> {
 }
 
 impl<P: CostFunction> Problem<P> {
-    /// Counted [`CostFunction::cost`].
-    pub fn cost(&mut self, param: &P::Param) -> Result<P::Output, P::Error> {
-        self.counts.cost_evals += 1;
-        self.inner.cost(param)
+    /// Check a known number of cost evaluations before changing a solver model.
+    /// The check does not charge work. The actual callbacks still reserve it.
+    pub fn check_cost_budget(
+        &self,
+        points: u64,
+    ) -> Result<(), Box<crate::BudgetExhausted>> {
+        self.context.check(self.inner.cost_batch_request(points))
     }
 
-    /// Counted batch cost evaluation: evaluate the inner
-    /// [`CostFunction::cost`] at every `param` and collect the outputs in
-    /// input order.
-    ///
-    /// Bumps [`EvalCounts::cost_evals`] by `params.len()` once, on the
-    /// calling thread, then fans the evaluations across the `rayon` pool
-    /// when the `parallel` feature is on (sequential otherwise). The counter
-    /// touch happens before the fan-out and the parallel closure only borrows
-    /// the inner problem immutably, so there is no shared mutable state across
-    /// threads; the total it adds is identical to one
-    /// [`cost`](Self::cost) per element. Results are collected in slice order,
-    /// so the returned costs are bit-identical to a serial loop whether or not
-    /// `parallel` is enabled.
-    ///
-    /// Population solvers use this for per-generation fitness evaluation:
-    /// the λ candidates of one generation are independent, so they evaluate
-    /// concurrently. Short-circuits on the first `Err` (hard abort).
+    /// Counted and budget-checked [`CostFunction::cost`], including adapter probes.
+    #[allow(clippy::type_complexity)]
+    pub fn cost(
+        &mut self,
+        param: &P::Param,
+    ) -> crate::EvaluationResult<P::Output, P::Error> {
+        self.evaluate(|problem, context| {
+            problem.cost_with_context(param, context)
+        })
+    }
+    /// Reserve the full batch before parallel dispatch. Declined work is not charged.
     pub fn cost_batch(
         &mut self,
         params: &[P::Param],
-    ) -> Result<Vec<P::Output>, P::Error>
+    ) -> crate::EvaluationResult<Vec<P::Output>, P::Error>
     where
         P: crate::core::parallel::MaybeSync,
         P::Param: crate::core::parallel::MaybeSync,
         P::Output: crate::core::parallel::MaybeSend,
         P::Error: crate::core::parallel::MaybeSend,
     {
-        self.counts.cost_evals += params.len() as u64;
-        let inner = &self.inner;
-        crate::core::parallel::try_map_slice_with(
-            params,
-            || (),
-            |(), p| inner.cost(p),
-        )
+        self.evaluate(|problem, context| {
+            context.wrap(problem).cost_batch(params)
+        })
     }
 }
 
 impl<P: Gradient> Problem<P> {
-    /// Counted [`Gradient::gradient`].
+    /// Counted and budget-checked [`Gradient::gradient`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn gradient(
         &mut self,
         param: &P::Param,
-    ) -> Result<P::Gradient, P::Error> {
-        self.counts.gradient_evals += 1;
-        self.inner.gradient(param)
+    ) -> crate::EvaluationResult<P::Gradient, P::Error> {
+        self.evaluate(|problem, context| {
+            problem.gradient_with_context(param, context)
+        })
     }
-
-    /// Counted [`Gradient::cost_and_gradient`]: bumps both
-    /// [`EvalCounts::cost_evals`] and
-    /// [`EvalCounts::gradient_evals`] in one place, so the
-    /// "one fused call counts as one of each" rule lives in exactly one
-    /// spot.
+    /// Counted and budget-checked [`Gradient::cost_and_gradient`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn cost_and_gradient(
         &mut self,
         param: &P::Param,
-    ) -> Result<(P::Output, P::Gradient), P::Error> {
-        self.counts.cost_evals += 1;
-        self.counts.gradient_evals += 1;
-        self.inner.cost_and_gradient(param)
+    ) -> crate::EvaluationResult<(P::Output, P::Gradient), P::Error> {
+        self.evaluate(|problem, context| {
+            problem.cost_and_gradient_with_context(param, context)
+        })
     }
 }
 
 impl<P: MiniBatchGradient> Problem<P> {
-    /// Counted [`MiniBatchGradient::batch_gradient`]: one call bumps
-    /// [`EvalCounts::gradient_evals`] by one, regardless of batch
-    /// size, the same convention as [`Gradient::gradient`] (one *call* is
-    /// one gradient evaluation; the per-sample work is implementation
-    /// detail).
+    /// Counted and budget-checked [`MiniBatchGradient::batch_gradient`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn batch_gradient(
         &mut self,
         param: &P::Param,
         batch: &[usize],
-    ) -> Result<<P as MiniBatchGradient>::Gradient, P::Error> {
-        self.counts.gradient_evals += 1;
-        self.inner.batch_gradient(param, batch)
+    ) -> crate::EvaluationResult<<P as MiniBatchGradient>::Gradient, P::Error>
+    {
+        self.evaluate(|problem, context| {
+            problem.batch_gradient_with_context(param, batch, context)
+        })
     }
 }
 
 impl<P: Residual> Problem<P> {
-    /// Counted [`Residual::residual`].
+    /// Counted and budget-checked [`Residual::residual`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn residual(
         &mut self,
         param: &P::Param,
-    ) -> Result<<P as Residual>::Output, <P as Residual>::Error> {
-        self.counts.residual_evals += 1;
-        self.inner.residual(param)
+    ) -> crate::EvaluationResult<<P as Residual>::Output, <P as Residual>::Error>
+    {
+        self.evaluate(|problem, context| {
+            problem.residual_with_context(param, context)
+        })
     }
 }
 
 impl<P: Jacobian> Problem<P> {
-    /// Counted [`Jacobian::jacobian`].
+    /// Counted and budget-checked [`Jacobian::jacobian`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn jacobian(
         &mut self,
         param: &P::Param,
-    ) -> Result<P::Jacobian, <P as Residual>::Error> {
-        self.counts.jacobian_evals += 1;
-        self.inner.jacobian(param)
+    ) -> crate::EvaluationResult<P::Jacobian, <P as Residual>::Error> {
+        self.evaluate(|problem, context| {
+            problem.jacobian_with_context(param, context)
+        })
     }
-
-    /// Counted [`Jacobian::residual_and_jacobian`]: bumps both
-    /// [`EvalCounts::residual_evals`] and
-    /// [`EvalCounts::jacobian_evals`].
+    /// Counted and budget-checked [`Jacobian::residual_and_jacobian`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn residual_and_jacobian(
         &mut self,
         param: &P::Param,
-    ) -> Result<(<P as Residual>::Output, P::Jacobian), <P as Residual>::Error>
-    {
-        self.counts.residual_evals += 1;
-        self.counts.jacobian_evals += 1;
-        self.inner.residual_and_jacobian(param)
+    ) -> crate::EvaluationResult<
+        (<P as Residual>::Output, P::Jacobian),
+        <P as Residual>::Error,
+    > {
+        self.evaluate(|problem, context| {
+            problem.residual_and_jacobian_with_context(param, context)
+        })
     }
 }
 
 impl<P: Hessian> Problem<P> {
-    /// Counted [`Hessian::hessian`].
+    /// Counted and budget-checked [`Hessian::hessian`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn hessian(
         &mut self,
         param: &P::Param,
-    ) -> Result<P::Hessian, <P as CostFunction>::Error> {
-        self.counts.hessian_evals += 1;
-        self.inner.hessian(param)
+    ) -> crate::EvaluationResult<P::Hessian, P::Error> {
+        self.evaluate(|problem, context| {
+            problem.hessian_with_context(param, context)
+        })
     }
-
-    /// Counted [`Hessian::cost_and_gradient_and_hessian`]: bumps
-    /// [`EvalCounts::cost_evals`],
-    /// [`EvalCounts::gradient_evals`], and
-    /// [`EvalCounts::hessian_evals`].
+    /// Counted and budget-checked [`Hessian::cost_and_gradient_and_hessian`], including adapter probes.
     #[allow(clippy::type_complexity)]
     pub fn cost_and_gradient_and_hessian(
         &mut self,
         param: &P::Param,
-    ) -> Result<
-        (
-            <P as CostFunction>::Output,
-            <P as Gradient>::Gradient,
-            P::Hessian,
-        ),
-        <P as CostFunction>::Error,
-    > {
-        self.counts.cost_evals += 1;
-        self.counts.gradient_evals += 1;
-        self.counts.hessian_evals += 1;
-        self.inner.cost_and_gradient_and_hessian(param)
+    ) -> crate::EvaluationResult<(P::Output, P::Gradient, P::Hessian), P::Error>
+    {
+        self.evaluate(|problem, context| {
+            problem.cost_and_gradient_and_hessian_with_context(param, context)
+        })
     }
 }
 
 impl<P: HessianProduct> Problem<P> {
-    /// Counted [`HessianProduct::hessian_product`].
+    /// Counted and budget-checked [`HessianProduct::hessian_product`], including adapter probes.
+    #[allow(clippy::type_complexity)]
     pub fn hessian_product(
         &mut self,
         param: &P::Param,
         v: &P::Param,
-    ) -> Result<<P as Gradient>::Gradient, <P as CostFunction>::Error> {
-        self.counts.hessian_product_evals += 1;
-        self.inner.hessian_product(param, v)
+    ) -> crate::EvaluationResult<P::Gradient, P::Error> {
+        self.evaluate(|problem, context| {
+            problem.hessian_product_with_context(param, v, context)
+        })
     }
 }
 

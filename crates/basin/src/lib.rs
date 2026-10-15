@@ -351,6 +351,10 @@ pub use crate::core::constraint::{
 pub use crate::core::convergence::{
     ConfiguredSolver, NativeConvergenceDiagnostics, NativeConvergenceTest,
 };
+pub use crate::core::evaluation::{
+    BudgetExhausted, ContextProblem, CostBatchReservation, EvaluationBudget,
+    EvaluationContext, EvaluationError, EvaluationResult,
+};
 pub use crate::core::executor::{
     CancellationToken, Executor, OptimizationResult,
     OptimizationResultWithSolver, StepOutcome, Stepper, run_loop_with_control,

@@ -112,8 +112,9 @@ fn simplex<F: Scalar>() {
                     vec![f(0.), f(1.)],
                 ])
             };
-            let state = solver.init(&mut p, seed()).unwrap();
-            let result = solver.next_iter(&mut p, state);
+            let mut state = seed();
+            solver.init(&mut p, &mut state).unwrap();
+            let result = solver.next_iter(&mut p, &mut state);
             assert_eq!(result.is_err(), fail.is_some());
             let trials = solver.trial_observations();
             let length = fail.map_or(costs.len(), |i| i - 2);
@@ -148,9 +149,10 @@ fn simplex<F: Scalar>() {
             let prior = trials.last().unwrap().sequence;
             // Fresh initialization resets records and ordinals without changing settings.
             p.inner().call.set(0);
-            let state = solver.init(&mut p, seed()).unwrap();
+            let mut state = seed();
+            solver.init(&mut p, &mut state).unwrap();
             assert!(solver.trial_observations().is_empty());
-            let _ = solver.next_iter(&mut p, state);
+            let _ = solver.next_iter(&mut p, &mut state);
             assert_eq!(solver.trial_observations()[0].sequence, 1);
             assert!(prior >= 1);
         }
@@ -270,12 +272,13 @@ fn exact_steps_keep_ordinals_and_fresh_init_resets() {
     });
     let seed = || SimplexProgress::from_simplex(vec![vec![1.], vec![2.]]);
     let mut solver = NelderMead::new().with_trial_diagnostics(true);
-    let state = solver.init(&mut p, seed()).unwrap();
-    let state = solver.next_iter(&mut p, state).unwrap().state;
+    let mut state = seed();
+    solver.init(&mut p, &mut state).unwrap();
+    solver.next_iter(&mut p, &mut state).unwrap();
     let last = solver.trial_observations().last().unwrap().sequence;
-    let _ = solver.next_iter(&mut p, state).unwrap();
+    let _ = solver.next_iter(&mut p, &mut state).unwrap();
     assert_eq!(solver.trial_observations()[0].sequence, last + 1);
-    let _ = solver.init(&mut p, seed()).unwrap();
+    solver.init(&mut p, &mut seed()).unwrap();
     assert!(solver.trial_observations().is_empty());
 }
 
@@ -288,21 +291,17 @@ fn serde_diagnostics_are_explicitly_ephemeral() {
         scalar: std::marker::PhantomData,
     });
     let mut nm = NelderMead::new().with_trial_diagnostics(true);
-    let state = nm
-        .init(
-            &mut p,
-            SimplexProgress::from_simplex(vec![vec![1.], vec![2.]]),
-        )
-        .unwrap();
-    let state = nm.next_iter(&mut p, state).unwrap().state;
+    let mut state = SimplexProgress::from_simplex(vec![vec![1.], vec![2.]]);
+    nm.init(&mut p, &mut state).unwrap();
+    nm.next_iter(&mut p, &mut state).unwrap();
     assert!(!nm.trial_observations().is_empty());
     let encoded = postcard::to_allocvec(&(nm, state)).unwrap();
-    let (mut nm, state): (
+    let (mut nm, mut state): (
         NelderMead<Vec<f32>, f32>,
         SimplexProgress<Vec<f32>, f32>,
     ) = postcard::from_bytes(&encoded).unwrap();
     assert!(nm.trial_observations().is_empty());
-    let _ = nm.next_iter(&mut p, state).unwrap();
+    let _ = nm.next_iter(&mut p, &mut state).unwrap();
     assert!(nm.trial_observations().is_empty());
     let search = MoreThuente::<f32>::new().with_trial_diagnostics(true);
     let encoded = postcard::to_allocvec(&search).unwrap();

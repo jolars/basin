@@ -329,7 +329,7 @@ pub(crate) fn evaluate_with_penalty<P, V, F>(
     upper: &V,
     gamma: &V,
     n: usize,
-) -> Result<(F, F), P::Error>
+) -> crate::EvaluationResult<(F, F), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -483,7 +483,7 @@ fn sample_and_penalize<P, V, M, F>(
     problem: &mut Problem<P>,
     lo: &V,
     hi: &V,
-) -> Result<(), P::Error>
+) -> crate::EvaluationResult<(), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -561,8 +561,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             None,
@@ -614,16 +614,19 @@ where
         let (raw, _) =
             evaluate_with_penalty(problem, &work.m, &lo, &hi, gamma, n)?;
         work.m_cost = Some(raw);
-        publish(&work, &mut state, &lo, &hi);
+        publish(&work, state, &lo, &hi);
         self.work = Some(work);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PopulationProgress<V, F>,
-    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
+        state: &mut PopulationProgress<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<PopulationProgress<V, F>>,
+        Self::Error,
+    > {
         let work = self.work.as_mut().expect("CMA init must precede iteration");
         let k = self
             .constants
@@ -631,6 +634,11 @@ where
             .expect("BoundedCmaEs::init must run before next_iter");
         let kc = &k.cma;
 
+        if let Err(error) = problem.check_cost_budget(kc.lambda as u64 + 1) {
+            return Ok(crate::SolverStep::stopped(Termination::Limit(
+                error.limits,
+            )));
+        }
         work.generation += 1;
 
         let one = F::one();
@@ -723,11 +731,10 @@ where
         let (b_new, eigs) = match work.c.try_eigh() {
             Ok(pair) => pair,
             Err(_) => {
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::from(Some(
+                    Termination::numerical_failure(
                         "Bounded CMA-ES covariance eigendecomposition failed.",
-                    )),
+                    ),
                 )));
             }
         };
@@ -760,8 +767,8 @@ where
             evaluate_with_penalty(problem, &work.m, &lo, &hi, gamma, n)?;
         work.m_cost = Some(raw);
 
-        publish(work, &mut state, &lo, &hi);
-        Ok(crate::SolverStep::from((state, None)))
+        publish(work, state, &lo, &hi);
+        Ok(crate::SolverStep::from(None))
     }
 
     fn terminate(

@@ -140,18 +140,31 @@ fn coordinate_validation_preserves_bound_errors() {
         let mut direct_problem =
             Problem::new(boxed(lower.clone(), upper.clone()));
         let error = Direct::new()
-            .init(&mut direct_problem, PointState::new(Coordinates(vec![0.0])))
+            .init(
+                &mut direct_problem,
+                &mut PointState::new(Coordinates(vec![0.0])),
+            )
             .unwrap_err();
         assert_eq!(
             error,
-            ConstraintSolveError::InvalidConstraints(expected.clone())
+            basin::EvaluationError::Evaluation(
+                ConstraintSolveError::InvalidConstraints(expected.clone())
+            )
         );
         assert_eq!(direct_problem.counts().total_work(), 0);
         let mut gbnm_problem = Problem::new(boxed(lower, upper));
         let error = Gbnm::new(42)
-            .init(&mut gbnm_problem, PointState::new(Coordinates(vec![0.0])))
+            .init(
+                &mut gbnm_problem,
+                &mut PointState::new(Coordinates(vec![0.0])),
+            )
             .unwrap_err();
-        assert_eq!(error, ConstraintSolveError::InvalidConstraints(expected));
+        assert_eq!(
+            error,
+            basin::EvaluationError::Evaluation(
+                ConstraintSolveError::InvalidConstraints(expected)
+            )
+        );
         assert_eq!(gbnm_problem.counts().total_work(), 0);
     }
 }

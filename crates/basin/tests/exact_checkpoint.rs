@@ -105,19 +105,20 @@ impl Solver<(), TestState> for CountingSolver {
     fn init(
         &mut self,
         _problem: &mut Problem<()>,
-        state: TestState,
-    ) -> Result<TestState, Self::Error> {
+        _state: &mut TestState,
+    ) -> basin::EvaluationResult<(), Self::Error> {
         self.init_calls += 1;
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         _problem: &mut Problem<()>,
-        state: TestState,
-    ) -> Result<basin::SolverStep<TestState>, Self::Error> {
+        _state: &mut TestState,
+    ) -> basin::EvaluationResult<basin::SolverStep<TestState>, Self::Error>
+    {
         self.steps += 1;
-        Ok(basin::SolverStep::completed(state))
+        Ok(basin::SolverStep::completed())
     }
 }
 

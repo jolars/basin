@@ -163,7 +163,8 @@ fn exact_resume_preserves_unpublished_work_and_refresh_phase() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint();
+            .into_checkpoint()
+            .unwrap();
         let resumed = Executor::resume_from_checkpoint(problem(), checkpoint)
             .require_evaluated_state()
             .max_iter(11)
@@ -202,7 +203,7 @@ fn fresh_run_resets_momentum_batches_refresh_phase_and_progress() {
     );
     let resumed = Executor::resume_from_checkpoint(
         Quadratic { samples: 5 },
-        initialized.into_checkpoint(),
+        initialized.into_checkpoint().unwrap(),
     )
     .max_iter(7)
     .run_with_solver()
@@ -255,7 +256,8 @@ fn serialized_checkpoint_preserves_rng_momentum_and_working_iterate() {
         .max_iter(4)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint();
+        .into_checkpoint()
+        .unwrap();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: basin::ExactCheckpoint<Sgd<Vec<f64>>, PointState<Vec<f64>>> =
         postcard::from_bytes(&bytes).unwrap();

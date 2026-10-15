@@ -33,13 +33,12 @@ fn main() {
             // `Solver::init` populates cost + gradient at the initial param,
             // matching the contract `next_iter` expects (gradient cached
             // from the previous iter or from init).
-            let state = solver
-                .init(&mut problem, FirstOrderState::new(vec![-1.2, 1.0]))
-                .unwrap();
+            let mut state = FirstOrderState::new(vec![-1.2, 1.0]);
+            solver.init(&mut problem, &mut state).unwrap();
             (solver, problem, state)
         },
-        |(mut solver, mut problem, state)| {
-            solver.next_iter(&mut problem, state).unwrap()
+        |(mut solver, mut problem, mut state)| {
+            solver.next_iter(&mut problem, &mut state).unwrap()
         },
     );
 

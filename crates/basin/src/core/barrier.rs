@@ -222,35 +222,103 @@ where
     type Output = F;
     type Error = ConstraintSolveError<P::Error>;
     fn cost(&self, x: &V) -> Result<F, Self::Error> {
-        let mut values = self.problem.linear_residual(x).map_err(invalid)?;
-        if !vector_is_finite(x) || !vector_is_finite(&values) {
-            return Ok(F::infinity());
-        }
-        let phase_one_s = match self.objective {
-            BarrierObjective::PhaseOne => {
-                match phase_one_slacks(&mut values, self.mu) {
-                    Some(s) => Some(s),
-                    None => return Ok(F::infinity()),
-                }
-            }
-            BarrierObjective::PhaseTwo => {
-                values.neg_in_place();
-                None
-            }
-        };
-        let mut log_sum = F::zero();
-        for &slack in &values {
-            if !(slack.is_finite() && slack > F::zero()) {
-                return Ok(F::infinity());
-            }
-            log_sum = log_sum + slack.ln();
-        }
-        match phase_one_s {
-            Some(s) => Ok(s - self.mu * log_sum),
-            None => Ok(self.problem.cost(x)? - self.mu * log_sum),
-        }
+        barrier_cost(
+            self,
+            x,
+            || {
+                self.problem
+                    .cost(x)
+                    .map_err(ConstraintSolveError::Evaluation)
+            },
+            invalid,
+        )
+    }
+    fn cost_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<F, crate::EvaluationError<<Self as CostFunction>::Error>> {
+        barrier_cost(
+            self,
+            x,
+            || {
+                self.problem.cost_with_context(x, context).map_err(|error| {
+                    error.map_evaluation(ConstraintSolveError::Evaluation)
+                })
+            },
+            |error| crate::EvaluationError::Evaluation(invalid(error)),
+        )
+    }
+    fn cost_batch_request(&self, points: u64) -> crate::EvalCounts {
+        self.problem.cost_batch_request(points)
+    }
+    fn prepare_cost_batch(
+        &self,
+        points: u64,
+    ) -> Result<crate::CostBatchReservation, Self::Error> {
+        self.problem
+            .prepare_cost_batch(points)
+            .map_err(ConstraintSolveError::Evaluation)
+    }
+    fn cost_in_batch(
+        &self,
+        x: &V,
+        reservation: &crate::CostBatchReservation,
+    ) -> Result<F, Self::Error> {
+        barrier_cost(
+            self,
+            x,
+            || {
+                self.problem
+                    .cost_in_batch(x, reservation)
+                    .map_err(ConstraintSolveError::Evaluation)
+            },
+            invalid,
+        )
     }
 }
+
+fn barrier_cost<P, V, F, E>(
+    this: &LogBarrier<'_, P, F>,
+    x: &V,
+    evaluate: impl FnOnce() -> Result<F, E>,
+    constraint_error: impl Fn(crate::ConstraintError) -> E,
+) -> Result<F, E>
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F> + LinearInequalityProblem<V, F>,
+    V: VectorLen + VectorIndex<F>,
+{
+    let mut values =
+        this.problem.linear_residual(x).map_err(&constraint_error)?;
+    if !vector_is_finite(x) || !vector_is_finite(&values) {
+        return Ok(F::infinity());
+    }
+    let phase_one_s = match this.objective {
+        BarrierObjective::PhaseOne => {
+            match phase_one_slacks(&mut values, this.mu) {
+                Some(s) => Some(s),
+                None => return Ok(F::infinity()),
+            }
+        }
+        BarrierObjective::PhaseTwo => {
+            values.neg_in_place();
+            None
+        }
+    };
+    let mut log_sum = F::zero();
+    for &slack in &values {
+        if !(slack.is_finite() && slack > F::zero()) {
+            return Ok(F::infinity());
+        }
+        log_sum = log_sum + slack.ln();
+    }
+    match phase_one_s {
+        Some(s) => Ok(s - this.mu * log_sum),
+        None => Ok(evaluate()? - this.mu * log_sum),
+    }
+}
+
 impl<P, V, F> Gradient for LogBarrier<'_, P, F>
 where
     F: Scalar,
@@ -261,32 +329,96 @@ where
 {
     type Gradient = V;
     fn gradient(&self, x: &V) -> Result<V, <Self as CostFunction>::Error> {
-        let mut values = self.problem.linear_residual(x).map_err(invalid)?;
-        let valid = vector_is_finite(x)
-            && vector_is_finite(&values)
-            && match self.objective {
-                BarrierObjective::PhaseOne => {
-                    phase_one_slacks(&mut values, self.mu).is_some()
-                }
-                BarrierObjective::PhaseTwo => {
-                    values.neg_in_place();
-                    values.iter().all(|v| v.is_finite() && *v > F::zero())
-                }
-            };
-        for value in &mut values {
-            *value = if valid { self.mu / *value } else { F::zero() };
-        }
-        let mut barrier_grad = x.clone();
-        self.problem
-            .linear_transpose(&values, &mut barrier_grad)
-            .map_err(invalid)?;
-        match self.objective {
-            BarrierObjective::PhaseOne => Ok(barrier_grad),
-            BarrierObjective::PhaseTwo => {
-                let mut g = self.problem.gradient(x)?;
-                g.scaled_add(F::one(), &barrier_grad);
-                Ok(g)
+        barrier_gradient(
+            self,
+            x,
+            || {
+                self.problem
+                    .gradient(x)
+                    .map_err(ConstraintSolveError::Evaluation)
+            },
+            invalid,
+        )
+    }
+    fn gradient_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<V, crate::EvaluationError<<Self as CostFunction>::Error>> {
+        barrier_gradient(
+            self,
+            x,
+            || {
+                self.problem.gradient_with_context(x, context).map_err(
+                    |error| {
+                        error.map_evaluation(ConstraintSolveError::Evaluation)
+                    },
+                )
+            },
+            |error| crate::EvaluationError::Evaluation(invalid(error)),
+        )
+    }
+    fn cost_and_gradient_with_context(
+        &self,
+        x: &V,
+        context: &crate::EvaluationContext,
+    ) -> Result<(F, V), crate::EvaluationError<<Self as CostFunction>::Error>>
+    {
+        context.reserve_kinds(&[
+            crate::EvaluationKind::Cost,
+            crate::EvaluationKind::Gradient,
+        ])?;
+        let local = context.prepaid(crate::EvalCounts {
+            cost_evals: 1,
+            gradient_evals: 1,
+            ..crate::EvalCounts::default()
+        });
+        Ok((
+            self.cost_with_context(x, &local)?,
+            self.gradient_with_context(x, &local)?,
+        ))
+    }
+}
+
+fn barrier_gradient<P, V, F, E>(
+    this: &LogBarrier<'_, P, F>,
+    x: &V,
+    evaluate: impl FnOnce() -> Result<V, E>,
+    constraint_error: impl Fn(crate::ConstraintError) -> E,
+) -> Result<V, E>
+where
+    F: Scalar,
+    P: CostFunction<Param = V, Output = F>
+        + LinearInequalityGradient<V, F>
+        + Gradient<Gradient = V>,
+    V: Clone + VectorLen + VectorIndex<F> + ScaledAdd<F>,
+{
+    let mut values =
+        this.problem.linear_residual(x).map_err(&constraint_error)?;
+    let valid = vector_is_finite(x)
+        && vector_is_finite(&values)
+        && match this.objective {
+            BarrierObjective::PhaseOne => {
+                phase_one_slacks(&mut values, this.mu).is_some()
             }
+            BarrierObjective::PhaseTwo => {
+                values.neg_in_place();
+                values.iter().all(|v| v.is_finite() && *v > F::zero())
+            }
+        };
+    for value in &mut values {
+        *value = if valid { this.mu / *value } else { F::zero() };
+    }
+    let mut barrier_grad = x.clone();
+    this.problem
+        .linear_transpose(&values, &mut barrier_grad)
+        .map_err(&constraint_error)?;
+    match this.objective {
+        BarrierObjective::PhaseOne => Ok(barrier_grad),
+        BarrierObjective::PhaseTwo => {
+            let mut g = evaluate()?;
+            g.scaled_add(F::one(), &barrier_grad);
+            Ok(g)
         }
     }
 }

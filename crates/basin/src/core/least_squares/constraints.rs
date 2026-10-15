@@ -14,6 +14,7 @@ where
     ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
         self.problem.nonlinear_equalities(x)
     }
+    crate::core::evaluation::forward_equalities_context!();
 }
 
 impl<P, L, F> crate::NonlinearInequalityValues for RobustLeastSquares<P, L, F>
@@ -30,6 +31,7 @@ where
     ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
         self.problem.nonlinear_inequalities(x)
     }
+    crate::core::evaluation::forward_inequalities_context!();
 }
 
 impl<P, L, F> crate::ConstraintJacobian for RobustLeastSquares<P, L, F>
@@ -46,4 +48,5 @@ where
     ) -> Result<Self::Jacobian, crate::ConstraintSolveError<Self::Error>> {
         self.problem.constraint_jacobian(x)
     }
+    crate::core::evaluation::forward_constraint_jacobian_context!();
 }

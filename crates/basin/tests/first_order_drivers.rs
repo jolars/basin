@@ -100,7 +100,7 @@ macro_rules! lifecycle {
                 let initial = make().max_iter(split).run_with_solver().unwrap();
                 let resumed = Executor::resume_from_checkpoint(
                     ($prepare)(Quadratic::new(2)),
-                    initial.into_checkpoint(),
+                    initial.into_checkpoint().unwrap(),
                 )
                 .require_evaluated_state()
                 .max_iter(5)
@@ -130,7 +130,7 @@ macro_rules! lifecycle {
             assert_eq!(initialized.counts.total_work(), 2);
             let resumed = Executor::resume_from_checkpoint(
                 ($prepare)(Quadratic::new(3)),
-                initialized.into_checkpoint(),
+                initialized.into_checkpoint().unwrap(),
             )
             .max_iter(3)
             .run_with_solver()
@@ -216,7 +216,7 @@ impl<P: CostFunction<Param = Vec<f64>, Output = f64, Error = Infallible>>
         _: f64,
         _: &Vec<f64>,
         _: &Vec<f64>,
-    ) -> Result<f64, Infallible> {
+    ) -> basin::EvaluationResult<f64, Infallible> {
         self.calls += 1;
         Ok(0.02 / self.calls as f64)
     }
@@ -264,7 +264,8 @@ fn serialized_checkpoints_preserve_solver_history() {
                     .max_iter(2)
                     .run_with_solver()
                     .unwrap()
-                    .into_checkpoint(),
+                    .into_checkpoint()
+                    .unwrap(),
             );
             let resumed = Executor::resume_from_checkpoint(
                 ($prepare)(Quadratic::new(3)),

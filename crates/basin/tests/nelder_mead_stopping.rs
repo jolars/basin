@@ -65,12 +65,9 @@ fn mixed_thresholds_use_or_within_each_dimension_and_and_between_them() {
             .with_relative_simplex_size_tolerance(relative)
             .with_relative_simplex_cost_tolerance(cost_relative);
         let mut problem = Problem::new(Sphere);
-        let state = solver
-            .init(
-                &mut problem,
-                SimplexProgress::from_simplex(vec![vec![10.0], vec![12.0]]),
-            )
-            .unwrap();
+        let mut state =
+            SimplexProgress::from_simplex(vec![vec![10.0], vec![12.0]]);
+        solver.init(&mut problem, &mut state).unwrap();
         let counts = *problem.counts();
         for _ in 0..3 {
             let termination = solver.check_convergence(&problem, &state);
@@ -162,12 +159,8 @@ fn wrappers_and_projection_preserve_one_owner_in_both_builder_orders() {
 fn initial_spread_survives_checks_and_setters_and_resets_on_fresh_init() {
     let mut solver = disabled().with_relative_simplex_cost_tolerance(0.25);
     let mut problem = Problem::new(Sphere);
-    let mut state = solver
-        .init(
-            &mut problem,
-            SimplexProgress::from_simplex(vec![vec![0.0], vec![4.0]]),
-        )
-        .unwrap();
+    let mut state = SimplexProgress::from_simplex(vec![vec![0.0], vec![4.0]]);
+    solver.init(&mut problem, &mut state).unwrap();
     assert!(solver.check_convergence(&problem, &state).is_none());
     state
         .replace(vec![vec![0.0], vec![1.0]], vec![0.0, 1.0])
@@ -179,12 +172,8 @@ fn initial_spread_survives_checks_and_setters_and_resets_on_fresh_init() {
     assert_eq!(cost.unwrap().reference, Some(16.0));
     assert_eq!(cost.unwrap().tolerance, 2.0);
 
-    let mut fresh = solver
-        .init(
-            &mut problem,
-            SimplexProgress::from_simplex(vec![vec![0.0], vec![2.0]]),
-        )
-        .unwrap();
+    let mut fresh = SimplexProgress::from_simplex(vec![vec![0.0], vec![2.0]]);
+    solver.init(&mut problem, &mut fresh).unwrap();
     fresh
         .replace(vec![vec![0.0], vec![0.5]], vec![0.0, 0.25])
         .unwrap();
@@ -221,12 +210,8 @@ fn nonfinite_initial_costs_defer_reference_until_first_finite_spread() {
     }
     let mut solver = disabled().with_relative_simplex_cost_tolerance(0.25);
     let mut problem = Problem::new(Domain);
-    let mut state = solver
-        .init(
-            &mut problem,
-            SimplexProgress::from_simplex(vec![vec![0.0], vec![2.0]]),
-        )
-        .unwrap();
+    let mut state = SimplexProgress::from_simplex(vec![vec![0.0], vec![2.0]]);
+    solver.init(&mut problem, &mut state).unwrap();
     assert!(solver.check_convergence(&problem, &state).is_none());
     state
         .replace(vec![vec![0.0], vec![1.0]], vec![0.0, 1.0])
@@ -251,14 +236,9 @@ fn zero_is_exact_and_complete_opt_out_reaches_budget() {
             .with_relative_simplex_size_tolerance(size_enabled.then_some(0.0))
             .with_relative_simplex_cost_tolerance(0.0);
         let mut problem = Problem::new(Sphere);
-        let state = solver
-            .init(
-                &mut problem,
-                SimplexProgress::from_simplex(
-                    vertices.map(|x| vec![x]).to_vec(),
-                ),
-            )
-            .unwrap();
+        let mut state =
+            SimplexProgress::from_simplex(vertices.map(|x| vec![x]).to_vec());
+        solver.init(&mut problem, &mut state).unwrap();
         assert_eq!(
             solver.check_convergence(&problem, &state).is_some(),
             expected
@@ -317,12 +297,8 @@ fn nonfinite_measurements_and_overflowed_bounds_never_converge() {
         assert!(solver.check_convergence(&problem, &state).is_none());
     }
     let mut problem = Problem::new(Sphere);
-    let state = solver
-        .init(
-            &mut problem,
-            SimplexProgress::from_simplex(vec![vec![2.0]; 2]),
-        )
-        .unwrap();
+    let mut state = SimplexProgress::from_simplex(vec![vec![2.0]; 2]);
+    solver.init(&mut problem, &mut state).unwrap();
     for mut solver in [
         NelderMead::new().with_relative_simplex_size_tolerance(f64::MAX),
         NelderMead::new().with_relative_simplex_cost_tolerance(f64::MAX),
@@ -361,7 +337,8 @@ fn exact_continuation_preserves_reference_state_counts_and_report() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint();
+            .into_checkpoint()
+            .unwrap();
         let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
             .require_evaluated_state()
             .max_iter(2_000)
@@ -384,7 +361,8 @@ fn serialized_checkpoint_preserves_reference_and_evidence() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint();
+            .into_checkpoint()
+            .unwrap();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
         let decoded: basin::ExactCheckpoint<
             NelderMead<Vec<f64>>,

@@ -658,7 +658,7 @@ impl<F: Scalar> Work<F> {
         &self,
         problem: &mut Problem<P>,
         x: &V,
-    ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>
+    ) -> crate::EvaluationResult<Vec<F>, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
         P::Constraints: SlsqpSet<P, V, F>,
@@ -667,7 +667,7 @@ impl<F: Scalar> Work<F> {
         let expected = (self.nonlinear_eq, self.nonlinear_ineq);
         if P::Constraints::counts(problem.inner().constraint_set()) != expected
         {
-            return Err(invalid(ConstraintError::LayoutChanged));
+            return Err(invalid(ConstraintError::LayoutChanged).into());
         }
         let mut c = vec![F::zero(); self.c.len()];
         for (i, value) in c.iter_mut().take(self.linear_eq.rows).enumerate() {
@@ -689,16 +689,16 @@ impl<F: Scalar> Work<F> {
                     .sum::<F>();
         }
         let (equalities, inequalities) = c.split_at_mut(meq);
-        let mut counts = crate::EvalCounts::default();
-        let result = P::Constraints::write_values(
-            problem.inner(),
-            x,
-            &mut counts,
-            &mut equalities[self.linear_eq.rows..],
-            &mut inequalities[self.linear_ineq.rows..],
-        );
-        problem.counts_mut().add(&counts);
-        result?;
+        problem.evaluate(|inner, context| {
+            P::Constraints::write_values(
+                inner,
+                x,
+                context,
+                &mut equalities[self.linear_eq.rows..],
+                &mut inequalities[self.linear_ineq.rows..],
+            )
+            .map_err(crate::core::evaluation::flatten_constraint_error)
+        })?;
         for value in &mut inequalities[self.linear_ineq.rows..] {
             *value = -*value;
         }
@@ -708,7 +708,7 @@ impl<F: Scalar> Work<F> {
         &mut self,
         problem: &mut Problem<P>,
         x: &V,
-    ) -> Result<Matrix<F>, ConstraintSolveError<P::Error>>
+    ) -> crate::EvaluationResult<Matrix<F>, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
         P::Constraints: SlsqpSet<P, V, F>,
@@ -725,16 +725,16 @@ impl<F: Scalar> Work<F> {
                 a.set(self.meq() + i, j, -self.linear_ineq.get(i, k));
             }
         }
-        let mut counts = crate::EvalCounts::default();
-        let result = P::Constraints::jacobian(
-            problem.inner(),
-            x,
-            x.vec_len(),
-            self.nonlinear_eq + self.nonlinear_ineq,
-            &mut counts,
-        );
-        problem.counts_mut().add(&counts);
-        let jac = result?;
+        let jac = problem.evaluate(|inner, context| {
+            P::Constraints::jacobian(
+                inner,
+                x,
+                x.vec_len(),
+                self.nonlinear_eq + self.nonlinear_ineq,
+                context,
+            )
+            .map_err(crate::core::evaluation::flatten_constraint_error)
+        })?;
         if jac.iter().flatten().any(|v| !v.is_finite()) {
             self.failure = Some(SlsqpFailure::NonFiniteEvaluation);
         }
@@ -797,12 +797,10 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: SelectedFirstOrderState<V, F>,
-    ) -> Result<SelectedFirstOrderState<V, F>, ConstraintSolveError<P::Error>>
-    {
+        state: &mut SelectedFirstOrderState<V, F>,
+    ) -> crate::EvaluationResult<(), ConstraintSolveError<P::Error>> {
         self.work = None;
         let mut param = state.param().clone();
-        let mut state = state;
         state.reset();
         let n = param.vec_len();
         assert!(n > 0, "SLSQP requires at least one parameter");
@@ -893,43 +891,41 @@ where
             .expect("SLSQP gradient dimensions were checked");
         state.select_current();
         self.work = Some(work);
-        Ok(state)
+        Ok(())
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SelectedFirstOrderState<V, F>,
-    ) -> Result<
+        state: &mut SelectedFirstOrderState<V, F>,
+    ) -> crate::EvaluationResult<
         crate::SolverStep<SelectedFirstOrderState<V, F>>,
         ConstraintSolveError<P::Error>,
     > {
         let work = self.work.as_mut().expect("SLSQP must be initialized");
         if work.failure.is_some() {
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::from(Some(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
+                )),
             )));
         }
         if work.free.is_empty() {
             // No step is possible, so disabled convergence leaves termination
             // to executor controls without attempting empty BFGS updates.
-            return Ok(crate::SolverStep::from((state, None)));
+            return Ok(crate::SolverStep::from(None));
         }
         let old_cost = state.cost();
         let merit = old_cost + work.weighted_violation();
         if !merit.is_finite() {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::from(Some(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
+                )),
             )));
         }
         let mut alpha = F::one();
@@ -982,12 +978,11 @@ where
         let Some((param, cost, c)) = accepted else {
             work.failure = Some(SlsqpFailure::LineSearchFailed);
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::from(Some(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
+                )),
             )));
         };
         let gradient = problem.gradient(&param)?;
@@ -1004,12 +999,11 @@ where
         {
             work.failure = Some(SlsqpFailure::NonFiniteEvaluation);
             work.diagnostics(state.param());
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(format!(
+            return Ok(crate::SolverStep::from(Some(
+                Termination::numerical_failure(format!(
                     "SLSQP numerical failure: {:?}.",
                     work.failure
-                ))),
+                )),
             )));
         }
         work.scratch.y.resize(work.free.len(), F::zero());
@@ -1046,7 +1040,7 @@ where
             .replace(param, cost, gradient, work.reported_violation())
             .expect("SLSQP gradient dimensions were checked");
         state.select_current();
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
     fn terminate(
         &self,

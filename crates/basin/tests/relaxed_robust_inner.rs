@@ -131,7 +131,7 @@ macro_rules! injected_solver {
             assert!(result.counts.jacobian_evals > 0);
             assert!(result.counts.cost_evals > 0);
             assert_eq!(
-                result.counts.residual_evals + result.counts.cost_evals,
+                result.counts.residual_evals,
                 location.residual_calls.load(Ordering::Relaxed)
             );
             assert_eq!(
@@ -161,16 +161,23 @@ fn relaxed_robust_callback_errors_retain_counts() {
     let location = Location::default();
     let mut problem = Problem::new(objective(location.clone(), 0.1));
     let mut solver = RelaxedInner::new(LevenbergMarquardt::new());
-    problem.counts_mut().cost_evals = 7;
-    problem.counts_mut().hessian_evals = 3;
-    let state = solver
-        .init(&mut problem, PointState::new(vec![0.0]))
-        .unwrap();
+    problem.restore_counts(basin::EvalCounts {
+        cost_evals: 7,
+        hessian_evals: 3,
+        ..Default::default()
+    });
+    let mut state = PointState::new(vec![0.0]);
+    solver.init(&mut problem, &mut state).unwrap();
     assert_eq!(problem.counts().residual_evals, 1);
     assert_eq!(problem.counts().jacobian_evals, 1);
     location.fail.store(true, Ordering::Relaxed);
-    let error = solver.next_iter(&mut problem, state).unwrap_err();
-    assert_eq!(error, ConstraintSolveError::Evaluation("residual failed"));
+    let error = solver.next_iter(&mut problem, &mut state).unwrap_err();
+    assert_eq!(
+        error,
+        basin::EvaluationError::Evaluation(ConstraintSolveError::Evaluation(
+            "residual failed"
+        ))
+    );
     assert_eq!(problem.counts().cost_evals, 7);
     assert_eq!(problem.counts().hessian_evals, 3);
     assert_eq!(problem.counts().residual_evals, 2);
@@ -185,9 +192,14 @@ fn relaxed_robust_initial_error_retains_attempted_combined_counts() {
     location.fail.store(true, Ordering::Relaxed);
     let mut problem = Problem::new(objective(location.clone(), 0.1));
     let error = RelaxedInner::new(LevenbergMarquardt::new())
-        .init(&mut problem, PointState::new(vec![0.0]))
+        .init(&mut problem, &mut PointState::new(vec![0.0]))
         .unwrap_err();
-    assert_eq!(error, ConstraintSolveError::Evaluation("residual failed"));
+    assert_eq!(
+        error,
+        basin::EvaluationError::Evaluation(ConstraintSolveError::Evaluation(
+            "residual failed"
+        ))
+    );
     assert_eq!(problem.counts().residual_evals, 1);
     assert_eq!(problem.counts().jacobian_evals, 1);
     assert_eq!(location.residual_calls.load(Ordering::Relaxed), 1);

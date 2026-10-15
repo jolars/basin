@@ -144,7 +144,8 @@ macro_rules! lifecycle {
                         .max_iter(split)
                         .run_with_solver()
                         .unwrap()
-                        .into_checkpoint();
+                        .into_checkpoint()
+                        .unwrap();
                     let resumed = Executor::resume_from_checkpoint(
                         ($prepare)(Bowl::new(2)),
                         checkpoint,
@@ -179,7 +180,8 @@ macro_rules! lifecycle {
                     .max_iter(7)
                     .run_with_solver()
                     .unwrap()
-                    .into_checkpoint();
+                    .into_checkpoint()
+                    .unwrap();
                 let bytes = postcard::to_allocvec(&checkpoint).unwrap();
                 let restored: Checkpoint =
                     postcard::from_bytes(&bytes).unwrap();

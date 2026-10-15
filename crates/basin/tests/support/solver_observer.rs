@@ -50,21 +50,22 @@ impl Solver<Linear, PointState<f64>> for Probe {
     fn init(
         &mut self,
         p: &mut Problem<Linear>,
-        mut s: PointState<f64>,
-    ) -> Result<PointState<f64>, Self::Error> {
+        s: &mut PointState<f64>,
+    ) -> basin::EvaluationResult<(), Self::Error> {
         self.diagnostic = 0.0;
         s.reset();
         s.replace(*s.param(), p.cost(s.param())?);
         if self.scenario == Scenario::InitError {
-            return Err("init");
+            return Err(basin::EvaluationError::Evaluation("init"));
         }
-        Ok(s)
+        Ok(())
     }
     fn next_iter(
         &mut self,
         p: &mut Problem<Linear>,
-        mut s: PointState<f64>,
-    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
+        s: &mut PointState<f64>,
+    ) -> basin::EvaluationResult<basin::SolverStep<PointState<f64>>, Self::Error>
+    {
         let x = *s.param()
             - if self.scenario == Scenario::Flat {
                 0.0
@@ -75,17 +76,16 @@ impl Solver<Linear, PointState<f64>> for Probe {
         self.diagnostic += 1.0;
         self.workspace[0] = self.diagnostic;
         if self.scenario == Scenario::StepError {
-            return Err("step");
+            return Err(basin::EvaluationError::Evaluation("step"));
         }
         s.replace(x, cost);
-        Ok(basin::SolverStep::from((
-            s,
+        Ok(basin::SolverStep::from(
             (self.scenario == Scenario::MidStop).then(|| {
                 basin::Termination::numerical_failure(
                     "External solver reported a numerical failure.",
                 )
             }),
-        )))
+        ))
     }
     fn check_convergence(
         &mut self,

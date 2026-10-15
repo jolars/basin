@@ -422,7 +422,7 @@ where
 fn init_costs_and_sort<P, V, F>(
     problem: &mut Problem<P>,
     state: &mut SimplexProgress<V, F>,
-) -> Result<(), P::Error>
+) -> crate::EvaluationResult<(), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -448,12 +448,12 @@ where
 #[allow(clippy::type_complexity)]
 fn next_iter_inner<P, V, F, Proj>(
     problem: &mut Problem<P>,
-    mut state: SimplexProgress<V, F>,
+    state: &mut SimplexProgress<V, F>,
     p: Params<F>,
     scratch: &mut [V],
     trace: &mut Trace<V, F>,
     project: &Proj,
-) -> Result<crate::SolverStep<SimplexProgress<V, F>>, P::Error>
+) -> crate::EvaluationResult<crate::SolverStep<SimplexProgress<V, F>>, P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
@@ -518,7 +518,7 @@ where
             std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = foc;
         } else {
-            shrink_inner(problem, &mut state, p.delta, project, trace)?;
+            shrink_inner(problem, state, p.delta, project, trace)?;
         }
     } else {
         // fr ≥ f_{n+1}: inside contraction.
@@ -533,12 +533,12 @@ where
             std::mem::swap(&mut state.vertices[worst], x_alt);
             state.costs[worst] = fic;
         } else {
-            shrink_inner(problem, &mut state, p.delta, project, trace)?;
+            shrink_inner(problem, state, p.delta, project, trace)?;
         }
     }
 
     state.sort();
-    Ok(crate::SolverStep::from((state, None)))
+    Ok(crate::SolverStep::from(None))
 }
 
 fn shrink_inner<P, V, F, Proj>(
@@ -547,27 +547,31 @@ fn shrink_inner<P, V, F, Proj>(
     delta: F,
     project: &Proj,
     trace: &mut Trace<V, F>,
-) -> Result<(), P::Error>
+) -> crate::EvaluationResult<(), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
     V: Clone + ScaleInPlace<F> + ScaledAdd<F>,
     Proj: Fn(&P, &mut V),
 {
-    // Best vertex is fixed at index 0; shrink every other vertex toward
-    // it in place: v ← best + δ·(v − best) = (1 − δ)·best + δ·v.
-    // Split-borrow lets us read x[0] while mutating x[i], and the
-    // affine write goes directly into the vertex slot, with no scratch
-    // alloc per shrunk vertex.
     let one = F::one();
-    let (best_slice, rest) = state.vertices.split_at_mut(1);
-    let best = &best_slice[0];
-    for (i, (v, c)) in rest.iter_mut().zip(&mut state.costs[1..]).enumerate() {
-        // Multiply v by δ in place, then add (1−δ)·best; finally project.
-        v.scale_in_place(delta);
-        v.scaled_add(one - delta, best);
-        project(problem.inner(), v);
-        *c = trace.evaluate(problem, v, TrialKind::Shrink(i + 1))?;
+    let best = state.vertices[0].clone();
+    let mut candidate = best.clone();
+    for i in 1..state.vertices.len() {
+        candidate.clone_from(&state.vertices[i]);
+        candidate.scale_in_place(delta);
+        candidate.scaled_add(one - delta, &best);
+        project(problem.inner(), &mut candidate);
+        let cost =
+            match trace.evaluate(problem, &candidate, TrialKind::Shrink(i)) {
+                Ok(cost) => cost,
+                Err(error) => {
+                    state.sort();
+                    return Err(error);
+                }
+            };
+        std::mem::swap(&mut state.vertices[i], &mut candidate);
+        state.costs[i] = cost;
         trace.accept(trace.trials.len().saturating_sub(1), true);
     }
     Ok(())
@@ -585,8 +589,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SimplexProgress<V, F>,
-    ) -> Result<SimplexProgress<V, F>, Self::Error> {
+        state: &mut SimplexProgress<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         state.reset();
         self.convergence.reset();
         self.trace.trials.clear();
@@ -594,9 +598,9 @@ where
         let n = state.vertices.len() - 1;
         self.params = Some(Self::resolve(self.config, n));
         self.scratch = vec![state.vertices[0].clone(); 3];
-        init_costs_and_sort(problem, &mut state)?;
+        init_costs_and_sort(problem, state)?;
         self.convergence.capture_initial_cost_spread(state.costs());
-        Ok(state)
+        Ok(())
     }
 
     fn reset_convergence(&mut self) {
@@ -614,8 +618,11 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: SimplexProgress<V, F>,
-    ) -> Result<crate::SolverStep<SimplexProgress<V, F>>, Self::Error> {
+        state: &mut SimplexProgress<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<SimplexProgress<V, F>>,
+        Self::Error,
+    > {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");
@@ -646,8 +653,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SimplexProgress<V, F>,
-    ) -> Result<SimplexProgress<V, F>, Self::Error> {
+        state: &mut SimplexProgress<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         crate::core::constraint::evaluation::validate_coordinate_box_problem(
             problem.inner(),
             state.vertices[0].vec_len(),
@@ -668,9 +675,9 @@ where
             v.clamp_in_place(problem.inner().lower(), problem.inner().upper());
         }
         self.scratch = vec![state.vertices[0].clone(); 3];
-        init_costs_and_sort(problem, &mut state)?;
+        init_costs_and_sort(problem, state)?;
         self.convergence.capture_initial_cost_spread(state.costs());
-        Ok(state)
+        Ok(())
     }
 
     fn reset_convergence(&mut self) {
@@ -688,8 +695,11 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: SimplexProgress<V, F>,
-    ) -> Result<crate::SolverStep<SimplexProgress<V, F>>, Self::Error> {
+        state: &mut SimplexProgress<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<SimplexProgress<V, F>>,
+        Self::Error,
+    > {
         let p = self
             .params
             .expect("NelderMead::init must run before next_iter");

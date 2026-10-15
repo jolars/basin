@@ -582,8 +582,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ProposalState<V, F>,
-    ) -> Result<ProposalState<V, F>, Self::Error> {
+        state: &mut ProposalState<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         state.reset();
         self.live_neighbor = Some(self.neighbor.clone());
         self.live_rng = Some(self.rng.clone());
@@ -593,14 +593,17 @@ where
         self.accepted_iterate = true;
         let cost = problem.cost(state.param())?;
         state.replace(state.param().clone(), cost);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: ProposalState<V, F>,
-    ) -> Result<crate::SolverStep<ProposalState<V, F>>, Self::Error> {
+        state: &mut ProposalState<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<ProposalState<V, F>>,
+        Self::Error,
+    > {
         let incumbent_cost = state.cost();
         let temperature = self.temperature();
         let rng = self
@@ -611,7 +614,8 @@ where
             .live_neighbor
             .as_mut()
             .expect("annealing must be initialized")
-            .propose(state.param(), temperature, rng)?;
+            .propose(state.param(), temperature, rng)
+            .map_err(crate::EvaluationError::Evaluation)?;
         let candidate_cost = problem.cost(&candidate)?;
         let new_best = candidate_cost < state.best_cost();
         let accepted =
@@ -646,7 +650,7 @@ where
                 self.reannealings = self.reannealings.saturating_add(1);
             }
         }
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 
     fn should_check_iterate_change(&self) -> bool {

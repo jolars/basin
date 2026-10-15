@@ -207,7 +207,8 @@ fn checkpoints_keep_rng_draws_and_particle_models_across_every_boundary() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint();
+            .into_checkpoint()
+            .unwrap();
         let resumed =
             Executor::resume_from_checkpoint(Sphere::new(3), checkpoint)
                 .require_evaluated_state()
@@ -249,7 +250,8 @@ fn serialized_models_continue_exactly_and_fresh_initialization_clears_scratch()
         .max_iter(11)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint();
+        .into_checkpoint()
+        .unwrap();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(Sphere::new(2), restored)
@@ -333,7 +335,8 @@ fn custom_rng_continues_exactly_and_fresh_runs_clone_its_configured_value() {
         .max_iter(9)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint();
+        .into_checkpoint()
+        .unwrap();
     #[cfg(feature = "serde")]
     let checkpoint = {
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();

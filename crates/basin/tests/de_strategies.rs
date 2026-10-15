@@ -49,6 +49,7 @@ fn solve(solver: De, generations: u64) -> Checkpoint {
         .run_with_solver()
         .unwrap()
         .into_checkpoint()
+        .unwrap()
 }
 
 fn assert_same_population(
@@ -83,7 +84,8 @@ fn every_combination_repeats_resets_and_resumes_exactly() {
                         .max_iter(20)
                         .run_with_solver()
                         .unwrap()
-                        .into_checkpoint();
+                        .into_checkpoint()
+                        .unwrap();
                 assert_same_population(reference.state(), resumed.state());
                 assert_eq!(reference.counts(), resumed.counts());
                 #[cfg(feature = "serde")]

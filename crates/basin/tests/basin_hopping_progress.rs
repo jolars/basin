@@ -52,11 +52,13 @@ fn fresh_run_resets_progress_and_restarts_random_walk() {
         .run_with_solver()
         .unwrap();
     assert_eq!(initialized.state.iter(), 0);
-    let restarted =
-        Executor::resume_from_checkpoint(Sphere, initialized.into_checkpoint())
-            .max_iter(8)
-            .run_with_solver()
-            .unwrap();
+    let restarted = Executor::resume_from_checkpoint(
+        Sphere,
+        initialized.into_checkpoint().unwrap(),
+    )
+    .max_iter(8)
+    .run_with_solver()
+    .unwrap();
     let rebuilt = Executor::new(Sphere, solver(), PointState::new(seed))
         .max_iter(8)
         .run_with_solver()
@@ -75,7 +77,8 @@ fn exact_resume_retains_adaptation_and_all_progress() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint();
+            .into_checkpoint()
+            .unwrap();
         let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
             .require_evaluated_state()
             .max_iter(11)
@@ -147,7 +150,8 @@ fn custom_strategies_reset_only_for_fresh_runs() {
         .max_iter(3)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint();
+        .into_checkpoint()
+        .unwrap();
     let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
         .max_iter(7)
         .run_with_solver()
@@ -249,22 +253,25 @@ impl basin::Solver<Sphere, PointState<Vec<f64>>> for EveryCategory {
     fn init(
         &mut self,
         p: &mut basin::Problem<Sphere>,
-        mut s: PointState<Vec<f64>>,
-    ) -> Result<PointState<Vec<f64>>, Infallible> {
+        s: &mut PointState<Vec<f64>>,
+    ) -> basin::EvaluationResult<(), Infallible> {
         s.reset();
         let x = s.param();
         let (cost, _, _) = p.cost_and_gradient_and_hessian(x)?;
         p.residual_and_jacobian(x)?;
         p.hessian_product(x, x)?;
         s.replace(x.clone(), cost);
-        Ok(s)
+        Ok(())
     }
     fn next_iter(
         &mut self,
         _: &mut basin::Problem<Sphere>,
-        s: PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Infallible> {
-        Ok(basin::SolverStep::completed(s))
+        _s: &mut PointState<Vec<f64>>,
+    ) -> basin::EvaluationResult<
+        basin::SolverStep<PointState<Vec<f64>>>,
+        Infallible,
+    > {
+        Ok(basin::SolverStep::completed())
     }
 }
 
@@ -311,7 +318,8 @@ fn serialization_preserves_inner_solver_and_adaptive_walk() {
         .max_iter(5)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint();
+        .into_checkpoint()
+        .unwrap();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: basin::ExactCheckpoint<Hopping, PointState<Vec<f64>>> =
         postcard::from_bytes(&bytes).unwrap();

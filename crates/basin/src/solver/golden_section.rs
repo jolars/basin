@@ -130,8 +130,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<F, F>,
-    ) -> Result<PointState<F, F>, Self::Error> {
+        state: &mut PointState<F, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         crate::core::constraint::evaluation::validate_scalar_box_problem(
             problem.inner(),
         )
@@ -168,14 +168,15 @@ where
         } else {
             state.replace(c2, f2);
         }
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<F, F>,
-    ) -> Result<crate::SolverStep<PointState<F, F>>, Self::Error> {
+        state: &mut PointState<F, F>,
+    ) -> crate::EvaluationResult<crate::SolverStep<PointState<F, F>>, Self::Error>
+    {
         let s = self
             .inner
             .as_mut()
@@ -215,7 +216,7 @@ where
         // the bracket has shrunk below tolerance, so the two coincide at
         // convergence.
         state.replace(u, fu);
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 
     fn terminate(&self, _state: &PointState<F, F>) -> Option<Termination<F>> {

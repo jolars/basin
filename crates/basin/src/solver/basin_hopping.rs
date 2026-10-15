@@ -602,8 +602,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         state.reset();
         self.rng = ChaCha8Rng::seed_from_u64(self.seed);
         self.step.reset();
@@ -641,14 +641,15 @@ where
         ) {
             self.pending_stop = Some(result.report.termination);
         }
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
+    {
         let f_old = state.cost();
 
         // 1. Perturb the current iterate.
@@ -675,10 +676,7 @@ where
             result.report.termination,
             Termination::Cancelled | Termination::Application(_)
         ) {
-            return Ok(crate::SolverStep::stopped(
-                state,
-                result.report.termination,
-            ));
+            return Ok(crate::SolverStep::stopped(result.report.termination));
         }
         let new_success = !result.report.termination.is_failure();
 
@@ -717,7 +715,7 @@ where
             self.step.adjust_scale(factor);
         }
 
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 
     fn terminate(&self, _: &PointState<V, F>) -> Option<Termination<F>> {

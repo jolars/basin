@@ -270,7 +270,7 @@ impl<F: Scalar> HagerZhang<F> {
         direction: &V,
         alpha: F,
         evaluations: &mut u32,
-    ) -> Result<Option<Trial<F>>, P::Error>
+    ) -> crate::EvaluationResult<Option<Trial<F>>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -301,7 +301,7 @@ impl<F: Scalar> HagerZhang<F> {
         dphi0: F,
         epsilon_k: F,
         evaluations: &mut u32,
-    ) -> Result<SearchResult<F>, P::Error>
+    ) -> crate::EvaluationResult<SearchResult<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -346,7 +346,7 @@ impl<F: Scalar> HagerZhang<F> {
         dphi0: F,
         epsilon_k: F,
         evaluations: &mut u32,
-    ) -> Result<SearchResult<F>, P::Error>
+    ) -> crate::EvaluationResult<SearchResult<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -395,7 +395,7 @@ impl<F: Scalar> HagerZhang<F> {
         dphi0: F,
         epsilon_k: F,
         evaluations: &mut u32,
-    ) -> Result<LineSearchOutcome<F>, P::Error>
+    ) -> crate::EvaluationResult<LineSearchOutcome<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -561,7 +561,7 @@ impl<F: Scalar> HagerZhang<F> {
         gradient: &V,
         direction: &V,
         accept_boundary: bool,
-    ) -> Result<LineSearchOutcome<F>, P::Error>
+    ) -> crate::EvaluationResult<LineSearchOutcome<F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -678,7 +678,7 @@ where
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<F, Self::Error> {
+    ) -> crate::EvaluationResult<F, Self::Error> {
         match self.search(problem, param, cost, gradient, direction, false)? {
             LineSearchOutcome::Step(alpha) => Ok(alpha),
             LineSearchOutcome::Failed => Ok(F::zero()),
@@ -692,7 +692,7 @@ where
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> Result<LineSearchOutcome<F>, Self::Error> {
+    ) -> crate::EvaluationResult<LineSearchOutcome<F>, Self::Error> {
         self.search(problem, param, cost, gradient, direction, false)
     }
 
@@ -704,7 +704,7 @@ where
         gradient: &V,
         direction: &V,
         bounds: LineSearchBounds<F>,
-    ) -> Result<LineSearchResult<V, F>, Self::Error> {
+    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error> {
         let search = Self {
             alpha_init: bounds.initial,
             step_max: self.step_max.min(bounds.max),

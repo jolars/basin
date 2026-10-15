@@ -102,7 +102,7 @@ where
     let iter = resumed.iter();
     let limited = Executor::resume_from_checkpoint(
         prepare(Fit::new(3.)),
-        resumed.into_checkpoint(),
+        resumed.into_checkpoint().unwrap(),
     )
     .max_iter(iter)
     .run_with_solver()
@@ -121,7 +121,7 @@ where
     assert!(fresh.solver.native_convergence_tests().is_empty());
     let continued = Executor::resume_from_checkpoint(
         prepare(Fit::new(-2.)),
-        fresh.into_checkpoint(),
+        fresh.into_checkpoint().unwrap(),
     )
     .max_iter(100)
     .run_with_solver()
@@ -229,7 +229,8 @@ fn continuing_a_native_stop_replaces_its_record() {
     .run_with_solver()
     .unwrap();
     assert_eq!(result.native_convergence_tests(), &[Test::AbsoluteGradient]);
-    let (solver, state, counts) = result.into_checkpoint().into_parts();
+    let (solver, state, counts) =
+        result.into_checkpoint().unwrap().into_parts();
     let checkpoint = basin::ExactCheckpoint::from_parts(
         solver.with_absolute_gradient_tolerance(None),
         state,

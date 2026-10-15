@@ -298,14 +298,15 @@ fn repeated_setters_replace_and_none_disables() {
 }
 
 #[test]
-fn direct_budget_observes_initialization() {
+fn zero_budget_stops_before_initialization() {
     let result =
         Executor::from_start(Sphere, GradientDescent::new(0.1), vec![1.0])
             .max_cost_evals(0)
             .run()
             .unwrap();
     assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
-    assert_eq!(result.cost_evals(), 1);
+    assert_eq!(result.cost_evals(), 0);
+    assert!(result.initialized_state().is_none());
     assert_eq!(result.iter(), 0);
 }
 
@@ -547,7 +548,8 @@ fn nonfinite_gradient_is_not_convergence() {
     let mut solver =
         GradientDescent::new(0.1).with_relative_gradient_tolerance(1.0);
     let mut problem = Problem::new(Nonfinite);
-    let state = solver.init(&mut problem, solver.seed(&vec![0.0])).unwrap();
+    let mut state = solver.seed(&vec![0.0]);
+    solver.init(&mut problem, &mut state).unwrap();
     assert_eq!(solver.check_convergence(&problem, &state), None);
 }
 

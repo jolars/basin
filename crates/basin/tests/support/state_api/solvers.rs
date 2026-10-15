@@ -222,22 +222,25 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<FirstOrderState<V, F>, P::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> basin::EvaluationResult<(), P::Error> {
         self.matrix = Some(M::identity(state.param().vec_len()));
         self.scaled = false;
         self.search = (self.make_search)();
         let x = state.param().clone();
         let (cost, gradient) = problem.cost_and_gradient(&x)?;
         state.replace(x, cost, gradient).unwrap();
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, P::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> basin::EvaluationResult<
+        basin::SolverStep<FirstOrderState<V, F>>,
+        P::Error,
+    > {
         let (mut x, cost, gradient) = state.take_current().unwrap();
         let matrix = self.matrix.as_mut().unwrap();
         let mut direction = matrix.matvec(&gradient);
@@ -249,23 +252,21 @@ where
             LineSearchOutcome::Step(alpha) => alpha,
             _ => {
                 state.replace(x, cost, gradient).unwrap();
-                return Ok(basin::SolverStep::from((
-                    state,
-                    Some(basin::Termination::numerical_failure(
+                return Ok(basin::SolverStep::from(Some(
+                    basin::Termination::numerical_failure(
                         "External solver reported a numerical failure.",
-                    )),
+                    ),
                 )));
             }
         };
         if !(alpha.is_finite() && alpha > F::zero()) {
             state.replace(x, cost, gradient).unwrap();
-            return Ok(basin::SolverStep::from((
-                state,
-                Some(basin::Termination::custom(
+            return Ok(basin::SolverStep::from(Some(
+                basin::Termination::custom(
                     "external.SolverConverged",
                     "External solver stopping predicate: SolverConverged.",
                     vec![],
-                )),
+                ),
             )));
         }
         let mut s = direction;
@@ -293,7 +294,7 @@ where
             matrix.general_rank_one_update(-rho, &hy, &s);
         }
         state.replace(x, cost_new, gradient_new).unwrap();
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::from(None))
     }
 }
 
@@ -360,22 +361,25 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<FirstOrderState<V, F>, P::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> basin::EvaluationResult<(), P::Error> {
         self.pairs.clear();
         self.theta = F::one();
         self.search = (self.make_search)();
         let x = state.param().clone();
         let (cost, gradient) = problem.cost_and_gradient(&x)?;
         state.replace(x, cost, gradient).unwrap();
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<basin::SolverStep<FirstOrderState<V, F>>, P::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> basin::EvaluationResult<
+        basin::SolverStep<FirstOrderState<V, F>>,
+        P::Error,
+    > {
         let (mut x, cost, gradient) = state.take_current().unwrap();
         let mut direction = gradient.clone();
         let mut alpha = vec![F::zero(); self.pairs.len()];
@@ -399,11 +403,10 @@ where
         };
         if !(step.is_finite() && step > F::zero()) {
             state.replace(x, cost, gradient).unwrap();
-            return Ok(basin::SolverStep::from((
-                state,
-                Some(basin::Termination::numerical_failure(
+            return Ok(basin::SolverStep::from(Some(
+                basin::Termination::numerical_failure(
                     "External solver reported a numerical failure.",
-                )),
+                ),
             )));
         }
         let (cost_new, gradient_new) =
@@ -431,7 +434,7 @@ where
             self.pairs.push(Pair { s, y, sy });
         }
         state.replace(x, cost_new, gradient_new).unwrap();
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::from(None))
     }
 }
 
@@ -468,8 +471,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SimplexState<V, F>,
-    ) -> Result<SimplexState<V, F>, P::Error> {
+        state: &mut SimplexState<V, F>,
+    ) -> basin::EvaluationResult<(), P::Error> {
         let (points, _) = state.take_members();
         self.scratch = vec![points[0].clone(); 3];
         let costs = points
@@ -477,14 +480,15 @@ where
             .map(|x| problem.cost(x))
             .collect::<Result<Vec<_>, _>>()?;
         state.replace_members(points, costs).unwrap();
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: SimplexState<V, F>,
-    ) -> Result<basin::SolverStep<SimplexState<V, F>>, P::Error> {
+        state: &mut SimplexState<V, F>,
+    ) -> basin::EvaluationResult<basin::SolverStep<SimplexState<V, F>>, P::Error>
+    {
         let (mut points, mut costs) = state.take_members();
         let n = points.len() - 1;
         let one = F::one();
@@ -539,7 +543,7 @@ where
             }
         }
         state.replace_members(points, costs).unwrap();
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::from(None))
     }
 }
 
@@ -620,25 +624,27 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, P::Error> {
+        state: &mut PointState<V, F>,
+    ) -> basin::EvaluationResult<(), P::Error> {
         self.neighbor = (self.make_neighbor)();
         self.rng = ChaCha8Rng::seed_from_u64(self.seed);
         self.age = 0;
         let cost = problem.cost(state.param())?;
         state.replace(state.param().clone(), cost);
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: PointState<V, F>,
-    ) -> Result<basin::SolverStep<PointState<V, F>>, P::Error> {
+        state: &mut PointState<V, F>,
+    ) -> basin::EvaluationResult<basin::SolverStep<PointState<V, F>>, P::Error>
+    {
         let temperature = self.temperature();
-        let candidate =
-            self.neighbor
-                .propose(state.param(), temperature, &mut self.rng)?;
+        let candidate = self
+            .neighbor
+            .propose(state.param(), temperature, &mut self.rng)
+            .map_err(basin::EvaluationError::Evaluation)?;
         let cost = problem.cost(&candidate)?;
         if !cost.is_nan() && cost != F::infinity() {
             let accept = cost <= state.cost()
@@ -649,6 +655,6 @@ where
             }
         }
         self.age += 1;
-        Ok(basin::SolverStep::from((state, None)))
+        Ok(basin::SolverStep::from(None))
     }
 }

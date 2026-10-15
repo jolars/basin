@@ -467,8 +467,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         let (lower, upper) = problem
             .inner()
             .box_bounds()
@@ -508,7 +508,7 @@ where
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
         history.work = Some(work);
-        Ok(state)
+        Ok(())
     }
 
     fn reset_convergence(&mut self) {
@@ -560,21 +560,19 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<FirstOrderState<V, F>>,
+        Self::Error,
+    > {
         self.trace.observations.clear();
         self.previous_cost = None;
-        // Take the gradient and cost cached at the current `param`;
-        // restore them on early exits.
-        let (f_old, g_v) = state
-            .take_evaluation()
+        // Keep the accepted record available if a trial exhausts the budget.
+        let (_, f_old, g_v) = state
+            .current()
             .expect("L-BFGS requires initialized progress");
-        if !finite_evaluation(state.param(), f_old, &g_v) {
-            state
-                .set_evaluation(f_old, g_v)
-                .expect("gradient dimension differs from parameter");
+        if !finite_evaluation(state.param(), f_old, g_v) {
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "L-BFGS-B requires a finite point, cost, and gradient.",
                 ),
@@ -612,11 +610,7 @@ where
                 problem.inner().upper().as_float_slice(),
             );
 
-            // Restore values taken from the state before returning.
             if projected_gradient_converged(sbgnrm, self.tol_pg) {
-                state
-                    .set_evaluation(f_old, g_v)
-                    .expect("gradient dimension differs from parameter");
                 let tolerance = self.tol_pg.unwrap();
                 let stop = Termination::upper_bound(
                     crate::ConvergenceTest::BoundClippedGradient,
@@ -625,7 +619,7 @@ where
                     tolerance,
                     None,
                 );
-                return Ok(crate::SolverStep::from((state, Some(stop))));
+                return Ok(crate::SolverStep::from(Some(stop)));
             }
 
             let col = history.ws.len();
@@ -683,14 +677,10 @@ where
                     if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
-                        state.set_evaluation(f_old, g_v).expect(
-                            "gradient dimension differs from parameter",
-                        );
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
+                        return Ok(crate::SolverStep::from(Some(
+                            Termination::numerical_failure(
                                 "L-BFGS-B Cauchy-point construction failed after exhausting restarts.",
-                            )),
+                            ),
                         )));
                     }
                 }
@@ -757,14 +747,10 @@ where
                     if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
-                        state.set_evaluation(f_old, g_v).expect(
-                            "gradient dimension differs from parameter",
-                        );
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
+                        return Ok(crate::SolverStep::from(Some(
+                            Termination::numerical_failure(
                                 "L-BFGS-B compact subspace factorization failed after exhausting restarts.",
-                            )),
+                            ),
                         )));
                     }
                 }
@@ -811,14 +797,10 @@ where
                     if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
-                        state.set_evaluation(f_old, g_v).expect(
-                            "gradient dimension differs from parameter",
-                        );
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
+                        return Ok(crate::SolverStep::from(Some(
+                            Termination::numerical_failure(
                                 "L-BFGS-B reduced-gradient construction failed after exhausting restarts.",
-                            )),
+                            ),
                         )));
                     }
                 }
@@ -862,14 +844,10 @@ where
                     if try_restart(history, &mut restart_budget) {
                         continue;
                     } else {
-                        state.set_evaluation(f_old, g_v).expect(
-                            "gradient dimension differs from parameter",
-                        );
-                        return Ok(crate::SolverStep::from((
-                            state,
-                            Some(Termination::numerical_failure(
+                        return Ok(crate::SolverStep::from(Some(
+                            Termination::numerical_failure(
                                 "L-BFGS-B subspace minimization failed after exhausting restarts.",
-                            )),
+                            ),
                         )));
                     }
                 }
@@ -934,7 +912,7 @@ where
                     problem,
                     state.param(),
                     f_old,
-                    &g_v,
+                    g_v,
                     &d_v,
                     LineSearchBounds::new(alpha_init, stpmx),
                 )?
@@ -1002,27 +980,19 @@ where
             let Some((param_new, f_new, g_new)) = accepted else {
                 // Restart with cleared history when compact-form state exists.
                 if history.ws.is_empty() {
-                    state
-                        .set_evaluation(f_old, g_v)
-                        .expect("gradient dimension differs from parameter");
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::from(Some(
+                        Termination::numerical_failure(
                             "L-BFGS-B line search failed with empty curvature history.",
-                        )),
+                        ),
                     )));
                 }
                 if try_restart(history, &mut restart_budget) {
                     continue;
                 } else {
-                    state
-                        .set_evaluation(f_old, g_v)
-                        .expect("gradient dimension differs from parameter");
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::from(Some(
+                        Termination::numerical_failure(
                             "L-BFGS-B line search failed after exhausting restarts.",
-                        )),
+                        ),
                     )));
                 }
             };
@@ -1045,14 +1015,14 @@ where
             let ddum = -work.gdold * stp;
 
             if dr > self.epsilon * ddum.abs() {
-                // The line search has finished with the direction and old
-                // gradient, so their storage can become the new history pair.
+                // All evaluations have finished, so the old gradient can now
+                // become the secant vector without a rollback copy.
                 let mut s_v = d_v;
                 let s_slice = s_v.as_float_slice_mut();
                 for i in 0..n {
                     s_slice[i] = stp * work.d[i];
                 }
-                let mut y_v = g_v;
+                let mut y_v = state.take_evaluation().unwrap().1;
                 let y_slice = y_v.as_float_slice_mut();
                 for i in 0..n {
                     y_slice[i] = g_new_slice[i] - g_old_slice[i];
@@ -1120,7 +1090,7 @@ where
                 .replace(param_new, f_new, g_new)
                 .expect("gradient dimension differs from parameter");
             self.previous_cost = Some(f_old);
-            return Ok(crate::SolverStep::from((state, None)));
+            return Ok(crate::SolverStep::from(None));
         }
     }
 }
@@ -1152,8 +1122,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        state: &mut FirstOrderState<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         state.reset();
         self.trace.observations.clear();
         self.trace.sequence = 0;
@@ -1163,23 +1133,22 @@ where
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
-        Ok(state)
+        Ok(())
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        mut state: FirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
-        let (f_old, g_v) = state
-            .take_evaluation()
+        state: &mut FirstOrderState<V, F>,
+    ) -> crate::EvaluationResult<
+        crate::SolverStep<FirstOrderState<V, F>>,
+        Self::Error,
+    > {
+        let (_, f_old, g_v) = state
+            .current()
             .expect("L-BFGS requires initialized progress");
-        if !finite_evaluation(state.param(), f_old, &g_v) {
-            state
-                .set_evaluation(f_old, g_v)
-                .expect("gradient dimension differs from parameter");
+        if !finite_evaluation(state.param(), f_old, g_v) {
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "L-BFGS requires a finite point, cost, and gradient.",
                 ),
@@ -1269,7 +1238,7 @@ where
             problem,
             state.param(),
             f_old,
-            &g_v,
+            g_v,
             &d_v,
         )?;
         let stp = match line_search_result.outcome {
@@ -1278,17 +1247,11 @@ where
         };
 
         if !(stp.is_finite() && stp > F::zero()) {
-            // Line search bailed. Restore cached cost and gradient so
-            // the caller's final state is consistent with the last
-            // accepted iterate, and bubble the failure.
-            state
-                .set_evaluation(f_old, g_v)
-                .expect("gradient dimension differs from parameter");
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            // Keep the last accepted iterate when the search fails.
+            return Ok(crate::SolverStep::from(Some(
+                Termination::numerical_failure(
                     "L-BFGS line search returned no finite positive step.",
-                )),
+                ),
             )));
         }
 
@@ -1302,11 +1265,7 @@ where
                 (param, cost, gradient)
             };
         if !finite_evaluation(&param_new, f_new, &g_new) {
-            state
-                .set_evaluation(f_old, g_v)
-                .expect("gradient dimension differs from parameter");
             return Ok(crate::SolverStep::stopped(
-                state,
                 Termination::numerical_failure(
                     "L-BFGS line search returned a nonfinite evaluation.",
                 ),
@@ -1350,7 +1309,7 @@ where
         state
             .replace(param_new, f_new, g_new)
             .expect("gradient dimension differs from parameter");
-        Ok(crate::SolverStep::from((state, None)))
+        Ok(crate::SolverStep::from(None))
     }
 }
 

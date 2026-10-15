@@ -326,14 +326,14 @@ fn trace_river() -> Vec<[f64; 2]> {
     let mut solver =
         GradientDescent::new(RIVER_ALPHA).with_momentum(RIVER_BETA);
     let mut problem = Problem::new(Bowl);
-    let mut state = solver
-        .init(&mut problem, FirstOrderState::new(RIVER_START.to_vec()))
-        .unwrap();
+    let mut state = FirstOrderState::new(RIVER_START.to_vec());
+    solver.init(&mut problem, &mut state).unwrap();
     let mut full = vec![[state.param()[0], state.param()[1]]];
     for _ in 0..RIVER_ITERS {
-        let (next, _, stop) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
-        state = next;
+        let (_, stop) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         full.push([state.param()[0], state.param()[1]]);
         if stop.is_some() {
             break;

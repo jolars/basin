@@ -193,15 +193,16 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> crate::EvaluationResult<(), Self::Error> {
         self.init_evaluated(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        state: &mut PointState<V, F>,
+    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
+    {
         self.next_evaluated(problem, state)
     }
 }
@@ -214,8 +215,8 @@ where
     fn init_evaluated<E: Evaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        mut state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, E::Error> {
+        state: &mut PointState<V, F>,
+    ) -> crate::EvaluationResult<(), E::Error> {
         state.reset();
         if let Some(trace) = &mut self.trace {
             trace.reset();
@@ -237,18 +238,18 @@ where
             if let Some(trace) = &mut self.trace {
                 trace.event(state.cost(), "construction", "invalid_model");
             }
-            return Ok(state);
+            return Ok(());
         };
         self.r_cache = Some(r);
         self.j_cache = Some(j);
         self.model_r_cache = model_r;
-        Ok(state)
+        Ok(())
     }
 
     fn next_evaluated<E: Evaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        mut state: PointState<V, F>,
+        state: &mut PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
         if let Some(trace) = &mut self.trace {
             trace.clear();
@@ -257,11 +258,10 @@ where
             if let Some(trace) = &mut self.trace {
                 trace.event(state.cost(), "construction", "invalid_model");
             }
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::from(Some(
+                Termination::numerical_failure(
                     "Gauss-Newton could not initialize a finite residual model.",
-                )),
+                ),
             )));
         }
         let r = match self.r_cache.take() {
@@ -281,11 +281,10 @@ where
                             "invalid_model",
                         );
                     }
-                    return Ok(crate::SolverStep::from((
-                        state,
-                        Some(Termination::numerical_failure(
+                    return Ok(crate::SolverStep::from(Some(
+                        Termination::numerical_failure(
                             "Gauss-Newton could not construct the residual model at the current point.",
-                        )),
+                        ),
                     )));
                 };
                 model
@@ -306,11 +305,10 @@ where
                 trace.observations[index].gradient =
                     self.trace_vector.unwrap()(&g);
             }
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::numerical_failure(
+            return Ok(crate::SolverStep::from(Some(
+                Termination::numerical_failure(
                     "The Gauss-Newton model gradient is invalid.",
-                )),
+                ),
             )));
         }
         let gradient_norm = g.norm_infinity();
@@ -336,15 +334,14 @@ where
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             self.model_r_cache = model_r;
-            return Ok(crate::SolverStep::from((
-                state,
-                Some(Termination::upper_bound(
+            return Ok(crate::SolverStep::from(Some(
+                Termination::upper_bound(
                     crate::ConvergenceTest::AbsoluteGradientInfinity,
                     gradient_norm,
                     self.tol_grad.unwrap(),
                     self.tol_grad.unwrap(),
                     None,
-                )),
+                ),
             )));
         }
 
@@ -382,11 +379,10 @@ where
                 self.r_cache = Some(r);
                 self.j_cache = Some(j);
                 self.model_r_cache = model_r;
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::numerical_failure(
+                return Ok(crate::SolverStep::from(Some(
+                    Termination::numerical_failure(
                         "The Gauss-Newton normal-equation Cholesky solve failed.",
-                    )),
+                    ),
                 )));
             }
         };
@@ -438,9 +434,10 @@ where
 
         let failed = E::ROBUST && !state.cost().is_finite();
         self.failed = failed;
-        Ok(crate::SolverStep::from((
-            state,
-            failed.then(|| Termination::numerical_failure("Gauss-Newton trial produced a non-finite robust objective.")),
-        )))
+        Ok(crate::SolverStep::from(failed.then(|| {
+            Termination::numerical_failure(
+                "Gauss-Newton trial produced a non-finite robust objective.",
+            )
+        })))
     }
 }

@@ -159,7 +159,7 @@ where
         cost: F,
         g: &V,
         d: &V,
-    ) -> Result<F, P::Error> {
+    ) -> crate::EvaluationResult<F, P::Error> {
         self.inner
             .search_recorded(p, x, cost, g, d, &mut self.trace)
             .map(|r| match r.outcome {
@@ -174,7 +174,7 @@ where
         cost: F,
         g: &V,
         d: &V,
-    ) -> Result<crate::LineSearchResult<V, F>, P::Error> {
+    ) -> crate::EvaluationResult<crate::LineSearchResult<V, F>, P::Error> {
         self.inner
             .search_recorded(p, x, cost, g, d, &mut self.trace)
     }
@@ -186,7 +186,7 @@ where
         g: &V,
         d: &V,
         bounds: crate::LineSearchBounds<F>,
-    ) -> Result<crate::LineSearchResult<V, F>, P::Error> {
+    ) -> crate::EvaluationResult<crate::LineSearchResult<V, F>, P::Error> {
         let max = self.inner.stpmax.min(bounds.max());
         if !(max.is_finite() && max > F::zero() && self.inner.stpmin <= max) {
             self.trace.reset();

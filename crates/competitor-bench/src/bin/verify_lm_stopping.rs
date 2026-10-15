@@ -250,17 +250,19 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<Probe<'a>>,
-        state: PointState<BasinVector<f64>>,
-    ) -> Result<PointState<BasinVector<f64>>, Infallible> {
+        state: &mut PointState<BasinVector<f64>>,
+    ) -> basin::EvaluationResult<(), Infallible> {
         self.inner.init(problem, state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<Probe<'a>>,
-        state: PointState<BasinVector<f64>>,
-    ) -> Result<basin::SolverStep<PointState<BasinVector<f64>>>, Infallible>
-    {
+        state: &mut PointState<BasinVector<f64>>,
+    ) -> basin::EvaluationResult<
+        basin::SolverStep<PointState<BasinVector<f64>>>,
+        Infallible,
+    > {
         let base = DVector::from_column_slice(state.param().as_slice());
         let (prediction, j) = self.case.model.evaluate(&base);
         let r = prediction - self.observations;
@@ -278,7 +280,7 @@ where
         let base_cost = state.cost();
         let before = self.calls.residual.get();
         self.calls.trial.take();
-        let (state, completed, reason) =
+        let (completed, reason) =
             self.inner.next_iter(problem, state)?.into_parts();
         let calls = self.calls.residual.get() - before;
         assert!(calls <= 1, "LM unexpectedly made multiple trial callbacks");
@@ -326,7 +328,6 @@ where
         }
         self.rows.borrow_mut().push(row);
         Ok(basin::SolverStep {
-            state,
             completed,
             termination: reason,
         })

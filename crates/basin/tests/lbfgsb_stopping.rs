@@ -434,7 +434,7 @@ fn cost_history_survives_exact_resume_and_resets_for_fresh_runs() {
     assert_eq!(first_check, repeated_check);
     let first = make().max_iter(1).run_with_solver().unwrap();
     assert_eq!(first.report.code(), TerminationCode::MaxIter);
-    let checkpoint = first.into_checkpoint();
+    let checkpoint = first.into_checkpoint().unwrap();
     #[cfg(feature = "serde")]
     let checkpoint = {
         fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(

@@ -274,8 +274,15 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
         .unwrap();
         assert_eq!(calls.get(), budget);
         assert_eq!(result.report.code(), TerminationCode::MaxCostEvals);
-        assert!(result.best_param()[0].abs() <= 1.0 + f64::EPSILON.sqrt());
-        assert!((result.best_cost() - 1.0).abs() < 1e-12);
+        if result.initialized_state().is_some() {
+            assert!(result.best_param()[0].abs() <= 1.0 + f64::EPSILON.sqrt());
+            assert!((result.best_cost() - 1.0).abs() < 1e-12);
+        } else {
+            assert_eq!(
+                result.report.stage,
+                basin::TerminationStage::Initialization
+            );
+        }
         if budget >= 2 {
             assert!(projected.get() > 0);
         }
@@ -571,16 +578,17 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
         .with_final_radius(1e-6);
     for (n, m) in [(2, 3), (5, 0), (1, 2), (3, 1)] {
         let mut problem = Problem::new(Sphere(m));
-        let mut state = solver
-            .init(&mut problem, SelectedState::new(vec![1.0; n]))
-            .unwrap();
+        let mut state = SelectedState::new(vec![1.0; n]);
+        solver.init(&mut problem, &mut state).unwrap();
         state.update_best();
         let snapshot = state.best_param().clone();
         let snapshot_cost = state.best_cost();
         // Solver callbacks reuse their own parameter buffer. The selected
         // snapshot remains unchanged until the executor publishes the boundary.
-        let (mut state, _, _) =
-            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        let (_, _) = solver
+            .next_iter(&mut problem, &mut state)
+            .unwrap()
+            .into_parts();
         assert_eq!(state.best_param(), &snapshot);
         assert_eq!(state.best_cost(), snapshot_cost);
         assert_eq!(state.param().len(), n);
