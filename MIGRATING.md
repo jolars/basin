@@ -102,9 +102,11 @@ application stops propagate. An algorithm may explicitly reject a failed
 local candidate and continue, as basin hopping does; an inner convergence
 report never establishes outer convergence.
 
-Exact checkpoint files now use format version 3 because solver convergence
-history includes report payloads. Older exact formats are rejected. Finish
-those runs with the matching application and export parameters for a fresh
+Exact checkpoint files now use format version 4 because solver convergence
+history includes report payloads and L-BFGS-B's previous accepted cost. The
+convergence-test enum also identifies the native cost-reduction rule. Older
+exact formats are rejected. Finish those runs with the matching application
+and export parameters for a fresh
 run. State-only checkpoint files retain their format.
 
 ## Solver and line-search settings
@@ -250,12 +252,12 @@ dependencies.
 
 Basin 2.0 removes bincode and the readers for the two legacy checkpoint formats.
 The `serde` feature still enables serialization and, on native targets,
-checkpoint file I/O. The checkpoint writers keep their postcard formats:
+checkpoint file I/O. The checkpoint writers use postcard:
 
   | Checkpoint                      | Accepted format                                     | Removed format                            |
   | ------------------------------- | --------------------------------------------------- | ----------------------------------------- |
   | State (`read_checkpoint`)       | `BASINST\0`, version 1, postcard payload            | Unprefixed bincode payload                |
-  | Exact (`read_exact_checkpoint`) | `BASINEX\0`, version 3, postcard header and payload | Versions 1 (bincode) and 2 (older solver layouts) |
+  | Exact (`read_exact_checkpoint`) | `BASINEX\0`, version 4, postcard header and payload | Versions 1 (bincode), 2, and 3 (older solver layouts) |
 
 Both readers return `std::io::ErrorKind::InvalidData` for removed formats,
 unsupported versions, malformed data, or trailing bytes. Reading a checkpoint
@@ -714,7 +716,48 @@ retain it with `run_with_solver()` and inspect `history_len()` and
 `history_capacity()`. Mode transitions discard the initialized model and require
 a fresh run. Changing capacity takes effect on fresh initialization; a
 checkpoint retains the capacity with which its model was built. The
-projected-gradient and line-search stopping rules are unchanged.
+line-search settings are unchanged. Bounded `f64` convergence defaults change
+as described below.
+
+### L-BFGS-B stopping defaults
+
+For bounded `f64` solves, the absolute projected-gradient tolerance changes
+from `1e-10` to `1e-9`, and a signed relative-cost reduction test is enabled
+with tolerance `10 * f64::EPSILON` (about `2.22e-15`). The cost rule follows
+L-BFGS-B's original formula:
+
+```text
+f_previous - f_current <= tolerance * max(|f_previous|, |f_current|, 1)
+```
+
+The solver checks this rule after an accepted step, with projected-gradient
+convergence taking precedence. Its unit floor and signed numerator are
+intentional: an unchanged or increased finite cost satisfies a zero threshold.
+The rule can stop before stationarity, and neither test guarantees parameter
+accuracy on ill-conditioned problems. Choose tolerances for the objective's
+scale and the accuracy the application needs.
+
+Configure the two native tests directly. To retain the previous thresholds:
+
+```rust
+let solver = basin::Lbfgsb::<Vec<f64>>::new()
+    .with_absolute_projected_gradient_tolerance(1e-10)
+    .with_relative_cost_reduction_tolerance(None);
+```
+
+`with_relative_cost_reduction_tolerance` is distinct from
+`with_relative_cost_change_tolerance`, which retains its existing absolute
+change divided by the previous absolute cost. Both can be configured
+independently. `None` disables a test, and zero uses a zero threshold.
+Fresh runs reset cost history; exact continuation preserves it.
+The `f32` defaults remain `1e-10` for projected gradient with cost reduction
+disabled. Unbounded L-BFGS still has no default optimality tests.
+
+Both L-BFGS modes now reject nonfinite selected evaluations instead of
+publishing them as progress. Bounded mode uses its existing restart and
+failure path, retaining the last finite iterate. Nonfinite initial evaluations
+produce numerical failure, including at fixed bounds, rather than false
+projected-gradient convergence.
 
 Gradient descent retains the type `GradientDescent<L, V, F>`, and trust regions
 retain `TrustRegion<Sub, F, Mode>`. Replace their `BasicState::new(x)` arguments

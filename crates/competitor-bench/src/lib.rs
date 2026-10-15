@@ -31,6 +31,7 @@
 //! comparable work before the timings are trusted.
 
 pub mod cobyla;
+pub mod nist;
 pub mod slsqp;
 
 // Share the benchmark-only adapter with the backend harness.

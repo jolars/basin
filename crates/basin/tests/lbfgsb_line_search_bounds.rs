@@ -318,6 +318,20 @@ fn invalid_selected_steps_and_cached_points_leave_a_feasible_best() {
         -1.0,
         vec![0.0; 2],
     ));
+    for nonfinite in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        results.push(LineSearchResult::with_evaluation(
+            1.0,
+            vec![0.75; 2],
+            nonfinite,
+            vec![-1.0; 2],
+        ));
+        results.push(LineSearchResult::with_evaluation(
+            1.0,
+            vec![0.75; 2],
+            1.0,
+            vec![nonfinite; 2],
+        ));
+    }
     for search_result in results {
         let problem = Quadratic::new(vec![50.0; 2]);
         let result = Executor::new(

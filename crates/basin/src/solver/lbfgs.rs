@@ -130,13 +130,21 @@ use self::subsm::subsm;
 /// The unbounded path has no default optimality check. Configure
 /// `with_absolute_gradient_tolerance` or `with_relative_gradient_tolerance`
 /// on the unbounded solver to use the Euclidean gradient norm.
-/// The bounded path owns one projected-gradient test,
-/// `‖x - projection(x - g)‖_∞ ≤ tolerance`, configured with
+/// The bounded path tests the infinity norm of L-BFGS-B's bound-clipped
+/// gradient. Negative components are clipped to `max(g_i, x_i - upper_i)`
+/// when the upper bound is finite; nonnegative components are clipped to
+/// `min(g_i, x_i - lower_i)` when the lower bound is finite. Configure it with
 /// [`with_absolute_projected_gradient_tolerance`](Self::with_absolute_projected_gradient_tolerance).
-/// It uses the current problem's bounds and defaults to `1e-10`.
-/// `None` disables a configurable check; zero tests exact stationarity.
-/// Observed step and cost checks are disabled by default and combine with
-/// it using OR when enabled.
+/// It uses the current problem's bounds and defaults to `1e-9` for `f64`
+/// and `1e-10` for `f32`. For `f64`, the bounded path also stops after an
+/// accepted step when
+/// `f_previous - f_current <= 10 * f64::EPSILON * max(|f_previous|, |f_current|, 1)`.
+/// Configure this signed reduction test with
+/// [`with_relative_cost_reduction_tolerance`](Self::with_relative_cost_reduction_tolerance).
+/// It is disabled by default for `f32`. The gradient test takes precedence.
+/// `None` disables a configurable check; zero requests an exact-zero threshold.
+/// Additional observed step and cost-change checks are disabled by default
+/// and combine with the native tests using OR when enabled.
 /// Keep iteration and evaluation budgets on the executor.
 ///
 /// The projected-gradient threshold is absolute and depends on the scaling
@@ -152,7 +160,7 @@ use self::subsm::subsm;
 /// [`BoundedFiniteDiff`](crate::BoundedFiniteDiff), account for derivative error
 /// when choosing the gradient threshold. For the `f64` quadratic below, forward
 /// differences produce a gradient infinity norm of about `1.49e-8` at the exact
-/// minimum. The default `1e-10` threshold cannot accept that point, and the
+/// minimum. The default `1e-9` threshold cannot accept that point, and the
 /// subsequent line search fails. An explicit `1e-7` threshold stops there with
 /// the correct convergence report. This value applies to this example; choose
 /// and verify the tolerance for your objective, precision, and stencil.
@@ -214,14 +222,21 @@ pub struct Lbfgs<V, F: Scalar = f64, Mode = Bounded, S = MoreThuente<F>> {
     /// in both modes for the limited-memory update acceptance test.
     epsilon: F,
     /// Built-in projected-gradient convergence tolerance. Bounded mode
-    /// only; emits [`crate::TerminationCode::SolverConverged`] at the top
-    /// of an iteration when `‖projgr(x, g, l, u)‖_∞ ≤ tol_pg`. Default
-    /// `1e-10`. `None` disables the check; zero tests exact stationarity.
+    /// only; emits [`crate::TerminationCode::ProjectedGradientTolerance`] at the top
+    /// of an iteration when `‖projgr(x, g, l, u)‖_∞ ≤ tol_pg`. Defaults to
+    /// `1e-9` for `f64` and `1e-10` for `f32`. `None` disables the check;
+    /// zero tests exact stationarity.
     /// Stored on the shared struct; the field is unused (and the
     /// builder unavailable) in [`Unbounded`] mode, where users wire
     /// [`with_absolute_gradient_tolerance`](Lbfgs::with_absolute_gradient_tolerance)
     /// instead.
     tol_pg: Option<F>,
+    /// Source L-BFGS-B signed relative-cost reduction, bounded mode only.
+    #[cfg_attr(feature = "serde", serde(default))]
+    tol_cost_reduction: Option<F>,
+    /// Base cost of the most recent accepted step; exact checkpoints retain it.
+    #[cfg_attr(feature = "serde", serde(default))]
+    previous_cost: Option<F>,
     /// Maximum number of curvature pairs retained by the solver.
     m_capacity: usize,
     /// Type-state marker; carries the mode at the type level only.
@@ -259,8 +274,10 @@ impl<V, F: Scalar> Default for Lbfgs<V, F, Unbounded> {
 }
 
 impl<V, F: Scalar> Lbfgs<V, F> {
-    /// L-BFGS-B with Moré–Thuente line search, history capacity 10,
-    /// and projected-gradient tolerance `1e-10`.
+    /// L-BFGS-B with Moré–Thuente line search and history capacity 10.
+    /// For `f64`, defaults to projected-gradient tolerance `1e-9` and signed
+    /// cost-reduction tolerance `10 * f64::EPSILON`. For `f32`, defaults to
+    /// projected-gradient tolerance `1e-10` with the cost test disabled.
     /// Use [`Self::unbounded`] for unconstrained L-BFGS.
     pub fn new() -> Self {
         Self::with_line_search(MoreThuente::new())
@@ -272,14 +289,22 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
     /// anything other than [`MoreThuente`] forfeits iteration-wise
     /// parity with the Fortran reference. The curvature-skip threshold
     /// defaults to `F::epsilon()` (matching `f64::EPSILON` when
-    /// `F = f64`); `tol_pg` defaults to `1e-10`.
+    /// `F = f64`). Convergence defaults match [`Self::new`].
     /// Custom strategies must implement [`LineSearch::next_with_bounds`];
     /// its default reports failure without evaluating an unbounded trial.
     pub fn with_line_search(line_search: S) -> Self {
+        let double_precision =
+            F::epsilon() == F::from_f64(f64::EPSILON).unwrap();
         Self {
             line_search,
             epsilon: F::epsilon(),
-            tol_pg: Some(F::from_f64(1e-10).unwrap()),
+            tol_pg: Some(
+                F::from_f64(if double_precision { 1e-9 } else { 1e-10 })
+                    .unwrap(),
+            ),
+            tol_cost_reduction: double_precision
+                .then(|| F::from_f64(10.).unwrap() * F::epsilon()),
+            previous_cost: None,
             m_capacity: 10,
             history: None,
             trace: Trace::default(),
@@ -301,6 +326,30 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
         self
     }
 
+    /// Configure L-BFGS-B's signed relative-cost reduction test.
+    ///
+    /// Stop after an accepted step when
+    /// `f_previous - f_current <= tolerance * max(|f_previous|, |f_current|, 1)`.
+    /// The projected-gradient check takes precedence. No cost comparison runs
+    /// at initialization or after a failed step. Repeated checks at one
+    /// boundary are idempotent; fresh runs reset the previous cost, and exact
+    /// checkpoints preserve it.
+    ///
+    /// Defaults to `10 * f64::EPSILON` for `f64`, and is disabled for `f32`.
+    /// `None` disables this test; zero accepts a nonpositive signed reduction.
+    /// Values must be finite and nonnegative. This differs from
+    /// [`with_relative_cost_change_tolerance`](Self::with_relative_cost_change_tolerance),
+    /// which checks absolute change against the previous absolute cost.
+    /// Both checks can be configured independently and combine with OR.
+    pub fn with_relative_cost_reduction_tolerance(
+        mut self,
+        value: impl Into<Option<F>>,
+    ) -> Self {
+        self.tol_cost_reduction =
+            crate::core::convergence::optional_tolerance(value);
+        self
+    }
+
     /// Switch to the unconstrained [`Unbounded`] mode while preserving
     /// the configured line search, curvature threshold, and history
     /// capacity. Mirrors [`NelderMead::projected`](crate::solver::NelderMead::projected)'s
@@ -311,6 +360,8 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Bounded, S> {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
+            tol_cost_reduction: self.tol_cost_reduction,
+            previous_cost: None,
             m_capacity: self.m_capacity,
             history: None,
             trace: Trace {
@@ -333,6 +384,8 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Unbounded, S> {
             line_search: self.line_search,
             epsilon: self.epsilon,
             tol_pg: self.tol_pg,
+            tol_cost_reduction: self.tol_cost_reduction,
+            previous_cost: None,
             m_capacity: self.m_capacity,
             history: None,
             trace: Trace {
@@ -416,6 +469,7 @@ where
         mut state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
         state.reset();
+        self.previous_cost = None;
         self.trace.observations.clear();
         self.trace.sequence = 0;
         self.line_search.reset();
@@ -445,17 +499,75 @@ where
         Ok(state)
     }
 
+    fn reset_convergence(&mut self) {
+        self.previous_cost = None;
+    }
+
+    fn check_convergence(
+        &mut self,
+        problem: &Problem<P>,
+        state: &FirstOrderState<V, F>,
+    ) -> Option<Termination<F>> {
+        let gradient = crate::GradientState::gradient(state)
+            .expect("L-BFGS-B requires initialized progress");
+        if !finite_evaluation(state.param(), state.cost(), gradient) {
+            return Some(Termination::numerical_failure(
+                "L-BFGS-B requires a finite point, cost, and gradient.",
+            ));
+        }
+        // Cost-disabled runs retain the original native gradient stopping path.
+        let tolerance = self.tol_cost_reduction?;
+        let norm = projected_gradient_norm(
+            state.param().as_float_slice(),
+            gradient.as_float_slice(),
+            problem.inner().lower().as_float_slice(),
+            problem.inner().upper().as_float_slice(),
+        );
+        if projected_gradient_converged(norm, self.tol_pg) {
+            // The native step publishes gradient convergence. Defer to it to
+            // preserve both its precedence and its observation stage.
+            return None;
+        }
+        let previous = self.previous_cost?;
+        let current = state.cost();
+        let reference = previous.abs().max(current.abs()).max(F::one());
+        let reduction = previous - current;
+        (previous.is_finite() && reduction <= tolerance * reference).then(
+            || {
+                Termination::upper_bound(
+                    crate::ConvergenceTest::RelativeCostReduction,
+                    reduction,
+                    tolerance * reference,
+                    tolerance,
+                    Some(reference),
+                )
+            },
+        )
+    }
+
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
     ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         self.trace.observations.clear();
+        self.previous_cost = None;
         // Take the gradient and cost cached at the current `param`;
         // restore them on early exits.
         let (f_old, g_v) = state
             .take_evaluation()
             .expect("L-BFGS requires initialized progress");
+        if !finite_evaluation(state.param(), f_old, &g_v) {
+            state
+                .set_evaluation(f_old, g_v)
+                .expect("gradient dimension differs from parameter");
+            return Ok(crate::SolverStep::stopped(
+                state,
+                Termination::numerical_failure(
+                    "L-BFGS-B requires a finite point, cost, and gradient.",
+                ),
+            ));
+        }
         if self.trace.enabled {
             self.trace.context = [
                 state.param().as_float_slice().to_vec(),
@@ -489,20 +601,19 @@ where
             );
 
             // Restore values taken from the state before returning.
-            if self.tol_pg.is_some_and(|tol| sbgnrm <= tol) {
+            if projected_gradient_converged(sbgnrm, self.tol_pg) {
                 state
                     .set_evaluation(f_old, g_v)
                     .expect("gradient dimension differs from parameter");
-                return Ok(crate::SolverStep::from((
-                    state,
-                    Some(Termination::upper_bound(
-                        crate::ConvergenceTest::BoundClippedGradient,
-                        sbgnrm,
-                        self.tol_pg.unwrap(),
-                        self.tol_pg.unwrap(),
-                        None,
-                    )),
-                )));
+                let tolerance = self.tol_pg.unwrap();
+                let stop = Termination::upper_bound(
+                    crate::ConvergenceTest::BoundClippedGradient,
+                    sbgnrm,
+                    tolerance,
+                    tolerance,
+                    None,
+                );
+                return Ok(crate::SolverStep::from((state, Some(stop))));
             }
 
             let col = history.ws.len();
@@ -836,12 +947,25 @@ where
                         param.scaled_add(stp, &d_v);
                         (param, None)
                     };
-                inside_box(
+                if inside_box(
                     param.as_float_slice(),
                     problem.inner().lower().as_float_slice(),
                     problem.inner().upper().as_float_slice(),
-                )
-                .then_some((param, evaluation))
+                ) {
+                    let (cost, gradient) = if let Some(evaluation) = evaluation
+                    {
+                        evaluation
+                    } else {
+                        problem.cost_and_gradient(&param)?
+                    };
+                    // A line-search warning can select an invalid callback
+                    // result. Keep the last finite iterate and use the normal
+                    // restart path instead of publishing it as progress.
+                    finite_evaluation(&param, cost, &gradient)
+                        .then_some((param, cost, gradient))
+                } else {
+                    None
+                }
             } else {
                 None
             };
@@ -863,7 +987,7 @@ where
                 work,
                 None,
             );
-            let Some((param_new, evaluation)) = accepted else {
+            let Some((param_new, f_new, g_new)) = accepted else {
                 // Restart with cleared history when compact-form state exists.
                 if history.ws.is_empty() {
                     state
@@ -889,12 +1013,6 @@ where
                         )),
                     )));
                 }
-            };
-
-            let (f_new, g_new) = if let Some(evaluation) = evaluation {
-                evaluation
-            } else {
-                problem.cost_and_gradient(&param_new)?
             };
 
             // Limited-memory update with the Fortran curvature check.
@@ -989,6 +1107,7 @@ where
             state
                 .replace(param_new, f_new, g_new)
                 .expect("gradient dimension differs from parameter");
+            self.previous_cost = Some(f_old);
             return Ok(crate::SolverStep::from((state, None)));
         }
     }
@@ -1002,6 +1121,20 @@ where
     S: LineSearch<P, V, F, Error = P::Error>,
 {
     type Error = P::Error;
+
+    fn check_convergence(
+        &mut self,
+        _problem: &Problem<P>,
+        state: &FirstOrderState<V, F>,
+    ) -> Option<Termination<F>> {
+        let gradient = crate::GradientState::gradient(state)
+            .expect("L-BFGS requires initialized progress");
+        (!finite_evaluation(state.param(), state.cost(), gradient)).then(|| {
+            Termination::numerical_failure(
+                "L-BFGS requires a finite point, cost, and gradient.",
+            )
+        })
+    }
 
     fn init(
         &mut self,
@@ -1028,6 +1161,17 @@ where
         let (f_old, g_v) = state
             .take_evaluation()
             .expect("L-BFGS requires initialized progress");
+        if !finite_evaluation(state.param(), f_old, &g_v) {
+            state
+                .set_evaluation(f_old, g_v)
+                .expect("gradient dimension differs from parameter");
+            return Ok(crate::SolverStep::stopped(
+                state,
+                Termination::numerical_failure(
+                    "L-BFGS requires a finite point, cost, and gradient.",
+                ),
+            ));
+        }
         let history = self
             .history
             .as_mut()
@@ -1144,6 +1288,17 @@ where
                 let (cost, gradient) = problem.cost_and_gradient(&param)?;
                 (param, cost, gradient)
             };
+        if !finite_evaluation(&param_new, f_new, &g_new) {
+            state
+                .set_evaluation(f_old, g_v)
+                .expect("gradient dimension differs from parameter");
+            return Ok(crate::SolverStep::stopped(
+                state,
+                Termination::numerical_failure(
+                    "L-BFGS line search returned a nonfinite evaluation.",
+                ),
+            ));
+        }
 
         // Curvature-conditioned limited-memory update. Matches Fortran
         // `dr ≤ epsmch · |ddum|` with `dr = y·s` and `ddum = −gdold·stp`.
@@ -1226,6 +1381,26 @@ fn active_init<F: Scalar>(
     }
 }
 
+fn finite_evaluation<V: AsFloatSlice<F>, F: Scalar>(
+    x: &V,
+    cost: F,
+    gradient: &V,
+) -> bool {
+    cost.is_finite()
+        && x.as_float_slice().len() == gradient.as_float_slice().len()
+        && x.as_float_slice()
+            .iter()
+            .chain(gradient.as_float_slice())
+            .all(|v| v.is_finite())
+}
+
+fn projected_gradient_converged<F: Scalar>(
+    norm: F,
+    tolerance: Option<F>,
+) -> bool {
+    tolerance.is_some_and(|tolerance| norm.is_finite() && norm <= tolerance)
+}
+
 /// Infinity-norm of the projected gradient (Fortran `projgr`,
 /// `lbfgsb.f:2942`).
 fn projected_gradient_norm<F: Scalar>(x: &[F], g: &[F], l: &[F], u: &[F]) -> F {
@@ -1233,6 +1408,11 @@ fn projected_gradient_norm<F: Scalar>(x: &[F], g: &[F], l: &[F], u: &[F]) -> F {
     let mut sbgnrm = zero;
     for i in 0..x.len() {
         let mut gi = g[i];
+        // NaNs cannot leave the norm at zero, and bounds must not clip an
+        // infinite gradient into a finite stationarity certificate.
+        if !gi.is_finite() {
+            return F::infinity();
+        }
         let lower_finite = l[i].is_finite();
         let upper_finite = u[i].is_finite();
         if lower_finite || upper_finite {

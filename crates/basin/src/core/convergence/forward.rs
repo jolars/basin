@@ -62,6 +62,7 @@ impl<CG, CX, CC, CT, V, S, F: Scalar>
     >
 {
     forward_setting!(Lbfgs, with_absolute_projected_gradient_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(Lbfgs, with_relative_cost_reduction_tolerance, value: impl Into<Option<F>>);
     /// Configure [`unbounded`](Lbfgs::unbounded) while retaining convergence settings.
     pub fn unbounded(
         self,

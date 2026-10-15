@@ -288,6 +288,14 @@ desired backend features.
   Validate scaled stopping criteria or concrete configuration guidance on NIST
   cases and known premature stops. Preserve Basin 1.x defaults. Nelder-Mead's
   new defaults and the delivered numerical safeguards do not close this issue.
+  Bounded `f64` L-BFGS now uses projected-gradient tolerance `1e-9` and signed
+  cost-reduction tolerance `10*f64::EPSILON`, after a bounded NIST investigation
+  and a fix for nonfinite selected evaluations. The `f32` defaults are unchanged.
+  The [NIST fixtures](crates/competitor-bench/fixtures/nist/README.md) remain
+  available for future solver comparisons.
+  See the [migration guide](MIGRATING.md#l-bfgs-b-stopping-defaults) for the
+  individual knobs and accuracy tradeoffs. LM, both TRF implementations, and
+  scaled-gradient guidance still need decisions.
 
 - [x] **Make structured termination reports part of ordinary results.**
   Ordinary `run()` returns an owned report, final state, and authoritative

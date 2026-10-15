@@ -144,6 +144,7 @@ impl<V: Vector> Driver<V> {
         let history = if self.number == 3 { 10 } else { 5 };
         let solver = Lbfgsb::new()
             .with_m_capacity(history)
+            .with_relative_cost_reduction_tolerance(None)
             .with_absolute_projected_gradient_tolerance(first.then_some(1e-5));
         let mut previous: Option<f64> = None;
         let lower = self.lower.clone();

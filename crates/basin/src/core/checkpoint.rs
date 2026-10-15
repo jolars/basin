@@ -96,7 +96,7 @@ mod file {
     use super::{CheckpointSink, EvalCounts, ExactCheckpoint};
 
     const MAGIC: &[u8; 8] = b"BASINEX\0";
-    const FORMAT_VERSION: u32 = 3;
+    const FORMAT_VERSION: u32 = 4;
     const PREFIX_LEN: usize = MAGIC.len() + 2 * size_of::<u32>();
     const MAX_HEADER_LEN: usize = 64 * 1024;
 
@@ -288,8 +288,8 @@ mod file {
     /// Read the result with [`read_exact_checkpoint`] and pass it to
     /// [`Executor::resume_from_checkpoint`](crate::Executor::resume_from_checkpoint).
     ///
-    /// Writes format version 3 with postcard-encoded metadata and payload.
-    /// Older Basin releases that only support version 1 cannot read these files.
+    /// Writes format version 4 with postcard-encoded metadata and payload.
+    /// Older Basin releases that support only earlier formats cannot read these files.
     /// See [`read_exact_checkpoint`] for migration from Basin 1.x.
     #[derive(Clone, Debug)]
     pub struct ExactCheckpointWriter {
@@ -373,14 +373,14 @@ mod file {
     ///
     /// The format, exact Basin version, and concrete solver/state type names
     /// must match before the payload is deserialized.
-    /// Reads only postcard format version 3 without modifying the file.
+    /// Reads only postcard format version 4 without modifying the file.
     /// Unsupported formats, mismatched metadata, malformed data, and trailing
     /// bytes return [`io::ErrorKind::InvalidData`].
     ///
     /// # Migrating from Basin 1.x
     ///
-    /// Basin 2.0 no longer reads bincode format version 1. Exact checkpoints
-    /// from 1.x cannot continue in 2.0, even when written in postcard format,
+    /// Basin 2.0 no longer reads formats 1–3, including bincode version 1.
+    /// Exact checkpoints from 1.x cannot continue in 2.0, even in postcard format,
     /// because the exact Basin version must match. Finish the run with the
     /// matching 1.x application, or load the checkpoint there and export its
     /// parameters to initialize a fresh 2.0 run. Rewriting the format or editing

@@ -146,6 +146,7 @@ impl<V: Vector> Short<V> {
         let custom_stop = gradient_tolerance == 0.0;
         let solver = Lbfgsb::new()
             .with_m_capacity(history)
+            .with_relative_cost_reduction_tolerance(None)
             .with_absolute_projected_gradient_tolerance(Some(
                 gradient_tolerance,
             ));

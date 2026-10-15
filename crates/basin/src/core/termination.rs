@@ -154,6 +154,9 @@ pub enum ConvergenceTest {
     AbsoluteCostChange,
     /// `|f_current - f_previous| <= tolerance * |f_previous|`.
     RelativeCostChange,
+    /// L-BFGS-B's signed reduction:
+    /// `f_previous - f_current <= tolerance * max(|f_previous|, |f_current|, 1)`.
+    RelativeCostReduction,
     /// Maximum `||x_i - x_0||_infinity <= max(x_abs, x_rel * ||x_0||_infinity)`
     /// AND maximum `|f_i - f_0| <= max(f_abs, f_rel * max(|f_0|, initial_spread))`.
     /// Disabled terms are omitted; a dimension with both terms disabled is
@@ -593,7 +596,9 @@ impl<F: Scalar> Termination<F> {
                 C::AbsoluteStep => R::ParamTolerance,
                 C::RelativeStep => R::RelativeParamTolerance,
                 C::AbsoluteCostChange => R::CostTolerance,
-                C::RelativeCostChange => R::RelativeCostTolerance,
+                C::RelativeCostChange | C::RelativeCostReduction => {
+                    R::RelativeCostTolerance
+                }
                 C::Simplex => R::SimplexTolerance,
                 C::DistributionSize => R::CmaEsTolerance,
                 C::Radius => R::RhoTolerance,

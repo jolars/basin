@@ -124,6 +124,7 @@ fn rosenbrock_5d_matches_fortran_trajectory() {
         problem,
         Lbfgsb::new()
             .with_m_capacity(5)
+            .with_relative_cost_reduction_tolerance(None)
             .with_absolute_projected_gradient_tolerance(0.0),
         state,
     )
