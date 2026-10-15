@@ -45,23 +45,25 @@ numerical work against analytic cases and reference implementations.
   1.16.2 comparisons. `Trf` retains its existing bounded-LM behavior through
   Basin 1.x. The large-scale path remains a follow-up below.
 - [x] **Improve full TRF termination at the floating-point cost floor.** Found
-  during the [Navette integration](https://github.com/opticsWolf/Navette/issues/2)
-  and reproduced directly in Basin 1.14.0 with the `Vec<f64>` backend, using
+  during the [Navette
+  integration](https://github.com/opticsWolf/Navette/issues/2) and
+  reproduced directly in Basin 1.14.0 with the `Vec<f64>` backend, using
   both an analytic Jacobian and central `BoundedFiniteDiff`. Minimize
-  `r(x) = [x[0] - 0.3, x[1] - 0.7, 2]` from `[0, 1]` in the unit box,
-  with absolute scaled gradient tolerance `1e-10`, relative cost-change
-  tolerance `1e-12`, relative step tolerance `1e-12`, and 200 iterations.
-  TRF returned `SolverFailed` after four completed iterations at approximately
-  `[0.2999999969867295, 0.7000000030132705]`, with objective `0.5 * ||r||^2 = 2`.
-  Further cost reductions round to zero, and the observed stopping checks
-  cannot inspect the rejected trials inside the solver's loop. SciPy 1.18.1
-  TRF stops on `xtol` on the same problem. Removing the constant residual or
-  loosening the gradient tolerance to `1e-8` lets Basin converge. TRF now
-  reports `NumericalNoProgress` when a finite equal-cost rejection is followed
-  by a contracted trial that changes no parameter. It retains the last accepted
-  point without claiming stationarity. Regression tests cover analytic and
-  central finite-difference Jacobians, both controls, all dense backends with
-  `f32` and `f64`, and genuine failures.
+  `r(x) = [x[0] - 0.3, x[1] - 0.7, 2]` from `[0, 1]` in the unit box, with
+  absolute scaled gradient tolerance `1e-10`, relative cost-change tolerance
+  `1e-12`, relative step tolerance `1e-12`, and 200 iterations. TRF returned
+  `SolverFailed` after four completed iterations at approximately
+  `[0.2999999969867295, 0.7000000030132705]`, with objective
+  `0.5 * ||r||^2 = 2`. Further cost reductions round to zero, and the
+  observed stopping checks cannot inspect the rejected trials inside the
+  solver's loop. SciPy 1.18.1 TRF stops on `xtol` on the same problem.
+  Removing the constant residual or loosening the gradient tolerance to
+  `1e-8` lets Basin converge. TRF now reports `NumericalNoProgress` when a
+  finite equal-cost rejection is followed by a contracted trial that changes
+  no parameter. It retains the last accepted point without claiming
+  stationarity. Regression tests cover analytic and central
+  finite-difference Jacobians, both controls, all dense backends with `f32`
+  and `f64`, and genuine failures.
 - [x] **Implement nonlinear conjugate gradient.** Added `NonlinearCg` with
   selectable Hager–Zhang (default) and Polak–Ribière+ updates, pluggable
   line searches, and optional periodic restarts. All four dense backends
@@ -101,11 +103,11 @@ numerical work against analytic cases and reference implementations.
   selection. This needs population feasibility records and selection-aware
   incumbent reporting, since the preferred feasible candidate need not have
   the lowest objective. Keep objective-based execution controls honest.
-- [ ] **Add integer variables to differential evolution.** Define a
-  problem-side domain contract, validate that each integer interval contains
-  an integer, and preserve integrality through sampling, mutation repair,
-  and local refinement. Specify compatible `DeInject` inner solvers before
-  enabling mixed-integer local search.
+- [ ] **Add integer variables to differential evolution.** Define a problem-side
+  domain contract, validate that each integer interval contains an integer,
+  and preserve integrality through sampling, mutation repair, and local
+  refinement. Specify compatible `DeInject` inner solvers before enabling
+  mixed-integer local search.
 - [ ] **Add dedicated linear least-squares solvers.** Implement nonnegative
   least squares and general box-bounded linear least squares. Reuse suitable
   factorizations and test rank deficiency, active bounds, and optimality
@@ -184,16 +186,16 @@ Ship these in order, preserving existing public APIs and behavior:
 - [x] **Expose which native stopping tests caused termination.** Added
   `NativeConvergenceDiagnostics` and `NativeConvergenceTest` for both LM
   factorizations and full TRF, including their convergence wrappers.
-  `run_with_solver()` results expose all passing native tests at the stopping
-  stage, including LM's trust-radius test and TRF's all-fixed case. Navette
-  can distinguish these without inferring a cause from the final iterate.
-  Existing stopping behavior, termination values, and fieldless enum numeric
-  casts remain unchanged. Numerical safeguards retain their distinct reasons.
-  Fresh runs clear records, exact checkpoints retain them, and the result
-  accessor excludes earlier native diagnostics when continuation stops on a
-  budget or another non-native reason. Tests cover simultaneous tests, rejected
-  trials, robust objectives, continuation, and all dense backends with both
-  scalar types.
+  `run_with_solver()` results expose all passing native tests at the
+  stopping stage, including LM's trust-radius test and TRF's all-fixed case.
+  Navette can distinguish these without inferring a cause from the final
+  iterate. Existing stopping behavior, termination values, and fieldless
+  enum numeric casts remain unchanged. Numerical safeguards retain their
+  distinct reasons. Fresh runs clear records, exact checkpoints retain them,
+  and the result accessor excludes earlier native diagnostics when
+  continuation stops on a budget or another non-native reason. Tests cover
+  simultaneous tests, rejected trials, robust objectives, continuation, and
+  all dense backends with both scalar types.
 
 ### State API prototype
 
@@ -272,57 +274,58 @@ desired backend features.
   open until the release is ready.
 
 - [x] **Enable paired Nelder-Mead convergence defaults
-  ([#109](https://github.com/jolars/basin/issues/109)).** Both simplex size and
-  cost spread use absolute floors of `1e-8` and relative tolerances of
-  `sqrt(f64::EPSILON)` for `f64` and `32 * f32::EPSILON` for `f32`. The relative
-  cost reference includes the initial spread so it remains useful near zero
-  minima. Tests cover objective and parameter scales, flat objectives,
-  projected collapse, high-dimensional Rosenbrock, both precisions, and every
-  dense backend version. A corpus audit across multiple starts and dimensions
-  informed the precision-specific defaults. See the
-  [migration guide](MIGRATING.md#nelder-mead-convergence-defaults) for settings,
-  checkpoint changes, and the limits imposed by fixed floors.
+  ([#109](https://github.com/jolars/basin/issues/109)).** Both simplex size
+  and cost spread use absolute floors of `1e-8` and relative tolerances of
+  `sqrt(f64::EPSILON)` for `f64` and `32 * f32::EPSILON` for `f32`. The
+  relative cost reference includes the initial spread so it remains useful
+  near zero minima. Tests cover objective and parameter scales, flat
+  objectives, projected collapse, high-dimensional Rosenbrock, both
+  precisions, and every dense backend version. A corpus audit across
+  multiple starts and dimensions informed the precision-specific defaults.
+  See the [migration guide](MIGRATING.md#nelder-mead-convergence-defaults)
+  for settings, checkpoint changes, and the limits imposed by fixed floors.
 
-- [ ] **Revisit convergence defaults for LM, L-BFGS-B, and both TRF
+- [x] **Revisit convergence defaults for LM, L-BFGS-B, and both TRF
   implementations ([#109](https://github.com/jolars/basin/issues/109)).**
-  Validate scaled stopping criteria or concrete configuration guidance on NIST
-  cases and known premature stops. Preserve Basin 1.x defaults. Nelder-Mead's
-  new defaults and the delivered numerical safeguards do not close this issue.
-  Bounded `f64` L-BFGS now uses projected-gradient tolerance `1e-9` and signed
-  cost-reduction tolerance `10*f64::EPSILON`, after a bounded NIST investigation
-  and a fix for nonfinite selected evaluations. The `f32` defaults are unchanged.
-  The [NIST fixtures](crates/competitor-bench/fixtures/nist/README.md) remain
-  available for future solver comparisons.
-  See the [migration guide](MIGRATING.md#l-bfgs-b-stopping-defaults) for the
-  individual knobs and accuracy tradeoffs. LM, both TRF implementations, and
-  scaled-gradient guidance still need decisions.
+  Validate scaled stopping criteria or concrete configuration guidance on
+  NIST cases and known premature stops. Preserve Basin 1.x defaults.
+  Nelder-Mead's new defaults and the delivered numerical safeguards do not
+  close this issue. Bounded `f64` L-BFGS now uses projected-gradient
+  tolerance `1e-9` and signed cost-reduction tolerance `10*f64::EPSILON`,
+  after a bounded NIST investigation and a fix for nonfinite selected
+  evaluations. The `f32` defaults are unchanged. The [NIST
+  fixtures](crates/competitor-bench/fixtures/nist/README.md) remain
+  available for future solver comparisons. See the [migration
+  guide](MIGRATING.md#l-bfgs-b-stopping-defaults) for the individual knobs
+  and accuracy tradeoffs. LM, both TRF implementations, and scaled-gradient
+  guidance still need decisions.
 
-- [x] **Make structured termination reports part of ordinary results.**
-  Ordinary `run()` returns an owned report, final state, and authoritative
-  counts. Reports distinguish convergence, limits, targets, stalls, failures,
+- [x] **Make structured termination reports part of ordinary results.** Ordinary
+  `run()` returns an owned report, final state, and authoritative counts.
+  Reports distinguish convergence, limits, targets, stalls, failures,
   cancellation, and application stops, retaining simultaneous criteria and
   their measurements. `SolverStep` separates completion from termination;
   composed runs retain inner failure details and use explicit policies for
-  partial results. Exact continuation produces a new report, and typed callback
-  aborts remain `Result::Err`. See the
-  [migration guide](MIGRATING.md#structured-termination-reports) for the API,
-  binding code mapping, observer lifecycle, and checkpoint changes.
+  partial results. Exact continuation produces a new report, and typed
+  callback aborts remain `Result::Err`. See the [migration
+  guide](MIGRATING.md#structured-termination-reports) for the API, binding
+  code mapping, observer lifecycle, and checkpoint changes.
 
 - [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
-  unversioned `nalgebra`, `ndarray`, and `faer` features and their LAPACK/BLAS
-  counterparts select the newest supported releases. Retain the `*_latest`
-  features as deprecated synonyms and exact version features for pinned
-  dependencies. Remove the backend-specific quasi-Newton state aliases in
-  favor of `FirstOrderState<V, F>` with a solver-owned matrix. Preserve
-  independent implementations for every enabled version and version-specific
-  acceleration. Document the 1.x migration and retain simultaneous-version
-  and downstream Cargo feature-unification tests.
+  unversioned `nalgebra`, `ndarray`, and `faer` features and their
+  LAPACK/BLAS counterparts select the newest supported releases. Retain the
+  `*_latest` features as deprecated synonyms and exact version features for
+  pinned dependencies. Remove the backend-specific quasi-Newton state
+  aliases in favor of `FirstOrderState<V, F>` with a solver-owned matrix.
+  Preserve independent implementations for every enabled version and
+  version-specific acceleration. Document the 1.x migration and retain
+  simultaneous-version and downstream Cargo feature-unification tests.
 
 - [x] **Remove bincode in Basin 2.0.0.** Drop legacy readers for unprefixed
   state checkpoints and version 1 exact checkpoints, along with the bincode
   dependency and compatibility-only tests. Retain the postcard formats and
-  document [checkpoint migration requirements](MIGRATING.md#checkpoint-files)
-  for users upgrading from 1.x.
+  document [checkpoint migration
+  requirements](MIGRATING.md#checkpoint-files) for users upgrading from 1.x.
 
 - [x] **Migrate existing solvers to shared progress states.** Build on the
   validated [prototype](#state-api-prototype) and [1.x
@@ -330,15 +333,17 @@ desired backend features.
   solver/state types and apply uniform evaluation categories and the
   accepted initialization and continuation contracts. Document replacement
   constructors, public types, trait bounds, stopping semantics, and
-  serialized-format compatibility. See the [migration guide](MIGRATING.md#shared-progress-states).
+  serialized-format compatibility. See the [migration
+  guide](MIGRATING.md#shared-progress-states).
 
 - [x] **Decide how observers access solver diagnostics before finalizing 2.0.**
-  Keep `Observe<S>` for progress and add optional `ObserveSolver<S, So>` hooks
-  and `Executor::observe_solver` closures that borrow the solver at the same
-  observation boundaries. Preserve solver ownership, modes, and mixed
-  registration order without cloning workspace or triggering evaluations.
-  `Stepper::solver()` remains available for applications driving their own
-  loop. See [custom diagnostic logging](MIGRATING.md#observing-solver-diagnostics).
+  Keep `Observe<S>` for progress and add optional `ObserveSolver<S, So>`
+  hooks and `Executor::observe_solver` closures that borrow the solver at
+  the same observation boundaries. Preserve solver ownership, modes, and
+  mixed registration order without cloning workspace or triggering
+  evaluations. `Stepper::solver()` remains available for applications
+  driving their own loop. See [custom diagnostic
+  logging](MIGRATING.md#observing-solver-diagnostics).
 
 - [ ] **Simplify and strengthen the full-form constraint API (tenet 4).**
   Consider having COBYLA consume `NonlinearConstraints` directly, removing
@@ -390,14 +395,14 @@ desired backend features.
 
 ## Deferred design
 
-- [ ] **Define shared constraint-violation reporting (tenet 3).**
-  Constrained MADS publishes the sum of squared positive violations in
-  `SelectedState`, and SLSQP publishes the sum of absolute equality residuals
-  and positive inequality violations in `SelectedFirstOrderState`. COBYLA
-  publishes its maximum positive violation in `SelectedState`. Define a shared state capability with explicit semantics for
-  the measure, scaling, associated iterate, and availability before
-  initialization. Preserve each solver's numerical convergence semantics:
-  SLSQP already combines feasibility with other convergence tests. Do not
-  add a standalone `FeasibilityTolerance` to the executor: its stopping
-  conditions combine with OR, so it could stop at the first feasible but
-  nonoptimal iterate.
+- [ ] **Define shared constraint-violation reporting (tenet 3).** Constrained
+  MADS publishes the sum of squared positive violations in `SelectedState`,
+  and SLSQP publishes the sum of absolute equality residuals and positive
+  inequality violations in `SelectedFirstOrderState`. COBYLA publishes its
+  maximum positive violation in `SelectedState`. Define a shared state
+  capability with explicit semantics for the measure, scaling, associated
+  iterate, and availability before initialization. Preserve each solver's
+  numerical convergence semantics: SLSQP already combines feasibility with
+  other convergence tests. Do not add a standalone `FeasibilityTolerance` to
+  the executor: its stopping conditions combine with OR, so it could stop at
+  the first feasible but nonoptimal iterate.
