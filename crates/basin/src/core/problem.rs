@@ -61,6 +61,12 @@
 /// use basin::CostFunction;
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints {
+///         basin::NoConstraints::EMPTY
+///     }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -72,7 +78,7 @@
 ///
 /// assert_eq!(Sphere.cost(&vec![3.0, 4.0]).unwrap(), 25.0);
 /// ```
-pub trait CostFunction {
+pub trait CostFunction: crate::ProblemConstraints {
     /// The parameter type the objective is defined over.
     type Param;
     /// Scalar cost type. In practice `f64` (see `CONTRIBUTING.md`'s
@@ -134,6 +140,12 @@ pub trait CostFunction {
 /// use basin::{CostFunction, Gradient};
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints {
+///         basin::NoConstraints::EMPTY
+///     }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -144,7 +156,10 @@ pub trait CostFunction {
 /// }
 /// impl Gradient for Sphere {
 ///     type Gradient = Vec<f64>;
-///     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+///     fn gradient(
+///         &self,
+///         x: &Vec<f64>,
+///     ) -> Result<Vec<f64>, std::convert::Infallible> {
 ///         Ok(x.iter().map(|xi| 2.0 * xi).collect())
 ///     }
 /// }
@@ -158,6 +173,12 @@ pub trait CostFunction {
 /// use basin::{CostFunction, Gradient};
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints {
+///         basin::NoConstraints::EMPTY
+///     }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -168,7 +189,10 @@ pub trait CostFunction {
 /// }
 /// impl Gradient for Sphere {
 ///     type Gradient = Vec<f64>;
-///     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+///     fn gradient(
+///         &self,
+///         x: &Vec<f64>,
+///     ) -> Result<Vec<f64>, std::convert::Infallible> {
 ///         Ok(x.iter().map(|xi| 2.0 * xi).collect())
 ///     }
 ///     fn cost_and_gradient(
@@ -274,6 +298,12 @@ pub trait Gradient: CostFunction {
 ///     rows: Vec<Vec<f64>>,
 ///     y: Vec<f64>,
 /// }
+/// impl basin::ProblemConstraints for LinReg {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints {
+///         basin::NoConstraints::EMPTY
+///     }
+/// }
 /// impl CostFunction for LinReg {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -302,7 +332,8 @@ pub trait Gradient: CostFunction {
 ///         let mut g = vec![0.0; x.len()];
 ///         for &i in batch {
 ///             let a = &self.rows[i];
-///             let r = a.iter().zip(x).map(|(ai, xi)| ai * xi).sum::<f64>() - self.y[i];
+///             let r = a.iter().zip(x).map(|(ai, xi)| ai * xi).sum::<f64>()
+///                 - self.y[i];
 ///             for (gj, aj) in g.iter_mut().zip(a) {
 ///                 *gj += inv * r * aj;
 ///             }
@@ -366,21 +397,27 @@ pub trait MiniBatchGradient: CostFunction {
 ///
 /// // r(x) = (x₀ − 1, x₁ − 2); the least-squares optimum is (1, 2).
 /// struct Affine;
+/// impl basin::ProblemConstraints for Affine {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints {
+///         basin::NoConstraints::EMPTY
+///     }
+/// }
 /// impl Residual for Affine {
 ///     type Param = Vec<f64>;
 ///     type Output = Vec<f64>;
 ///     type Error = std::convert::Infallible;
-///     fn residual(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
+///     fn residual(
+///         &self,
+///         x: &Vec<f64>,
+///     ) -> Result<Vec<f64>, std::convert::Infallible> {
 ///         Ok(vec![x[0] - 1.0, x[1] - 2.0])
 ///     }
 /// }
 ///
-/// assert_eq!(
-///     Affine.residual(&vec![0.0, 0.0]).unwrap(),
-///     vec![-1.0, -2.0]
-/// );
+/// assert_eq!(Affine.residual(&vec![0.0, 0.0]).unwrap(), vec![-1.0, -2.0]);
 /// ```
-pub trait Residual {
+pub trait Residual: crate::ProblemConstraints {
     /// The parameter type the residual is defined over (matches
     /// [`CostFunction::Param`]).
     type Param;
@@ -462,6 +499,10 @@ pub trait Residual {
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Affine;
+/// impl basin::ProblemConstraints for Affine  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl Residual for Affine {
 ///     type Param = DVector<f64>;
 ///     type Output = DVector<f64>;
@@ -577,6 +618,10 @@ pub trait Jacobian: Residual {
 ///
 /// // f(x) = x₀² + x₁² has constant Hessian 2·I.
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = DVector<f64>;
 ///     type Output = f64;
@@ -684,6 +729,10 @@ pub trait Hessian: Gradient {
 ///
 /// // f(x) = x₀² + x₁² has constant Hessian 2·I, so ∇²f(x)·v = 2·v.
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -909,7 +958,7 @@ impl<P> Problem<P> {
     /// to build adapter problems (`LogBarrier::new(wrapper.inner(), μ)`,
     /// `AugmentedLagrangian::new(wrapper.inner(), …)`) and by callers that
     /// need to read non-evaluation methods (e.g.
-    /// [`BoxConstraints::lower`](crate::core::constraint::BoxConstraints::lower)).
+    /// [`BoxBounds::lower`](crate::core::constraint::BoxBounds::lower)).
     pub fn inner(&self) -> &P {
         &self.inner
     }
@@ -934,45 +983,6 @@ impl<P> Problem<P> {
     /// Consume the wrapper and return the inner problem.
     pub fn into_inner(self) -> P {
         self.inner
-    }
-}
-
-impl<P: crate::core::constraint::NonlinearInequalityConstraints> Problem<P> {
-    /// Count and evaluate one inequality block as residual work.
-    pub fn constraints(&mut self, x: &P::Param) -> Result<P::Param, P::Error> {
-        self.counts.residual_evals += 1;
-        self.inner.constraints(x)
-    }
-}
-
-impl<P: crate::core::constraint::NonlinearConstraints> Problem<P> {
-    /// Count and evaluate one nonlinear inequality block as residual work.
-    pub fn nonlinear_constraints(
-        &mut self,
-        x: &P::Param,
-    ) -> Result<P::Param, P::Error> {
-        self.counts.residual_evals += 1;
-        self.inner.nonlinear_constraints(x)
-    }
-
-    /// Count and evaluate one nonlinear equality block as residual work.
-    pub fn nonlinear_equalities(
-        &mut self,
-        x: &P::Param,
-    ) -> Result<Option<P::Param>, P::Error> {
-        self.counts.residual_evals += 1;
-        self.inner.nonlinear_equalities(x)
-    }
-}
-
-impl<P: crate::core::constraint::ConstraintJacobian> Problem<P> {
-    /// Count and evaluate the nonlinear constraint Jacobian as Jacobian work.
-    pub fn constraint_jacobian(
-        &mut self,
-        x: &P::Param,
-    ) -> Result<P::Matrix, P::Error> {
-        self.counts.jacobian_evals += 1;
-        self.inner.constraint_jacobian(x)
     }
 }
 
@@ -1146,6 +1156,16 @@ mod problem_wrapper_tests {
     use super::*;
 
     struct Sphere;
+
+    impl crate::ProblemConstraints for Sphere {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Vec<f64>;
         type Output = f64;

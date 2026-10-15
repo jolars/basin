@@ -44,6 +44,15 @@ impl Probe<'_> {
         self.model.evaluate(x).1
     }
 }
+
+impl basin::ProblemConstraints for Probe<'_> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for Probe<'_> {
     type Param = BasinVector<f64>;
     type Output = BasinVector<f64>;

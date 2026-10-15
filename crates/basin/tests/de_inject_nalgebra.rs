@@ -31,9 +31,12 @@ use basin::{De, DeInject, Executor, NelderMead, PopulationProgress};
 fn converges_on_ackley_d3_with_nm_inner() {
     let problem = AckleyBoxed::<DVector<f64>>::with_standard_bounds(3);
     let de = De::new(42).with_pop_size(20);
-    let solver = DeInject::with_inner_solver(de, NelderMead::adaptive())
-        .with_k(1)
-        .with_inner_max_iter(30);
+    let solver = DeInject::with_inner_solver(
+        de,
+        basin::RelaxedInner::new(NelderMead::adaptive()),
+    )
+    .with_k(1)
+    .with_inner_max_iter(30);
 
     let result = Executor::new(
         problem,
@@ -80,9 +83,12 @@ fn aggregates_inner_cost_evals_into_outer() {
 
     // Memetic variant on the same seed and outer budget.
     let de = De::new(7).with_pop_size(pop_size);
-    let solver = DeInject::with_inner_solver(de, NelderMead::adaptive())
-        .with_k(k)
-        .with_inner_max_iter(inner_iters);
+    let solver = DeInject::with_inner_solver(
+        de,
+        basin::RelaxedInner::new(NelderMead::adaptive()),
+    )
+    .with_k(k)
+    .with_inner_max_iter(inner_iters);
 
     let memetic = Executor::new(
         RastriginBoxed::<DVector<f64>>::with_standard_bounds(n),
@@ -119,7 +125,7 @@ fn same_seed_yields_identical_trajectory() {
         problem_a,
         DeInject::with_inner_solver(
             De::new(7).with_pop_size(10),
-            NelderMead::adaptive(),
+            basin::RelaxedInner::new(NelderMead::adaptive()),
         )
         .with_k(1)
         .with_inner_max_iter(20),
@@ -133,7 +139,7 @@ fn same_seed_yields_identical_trajectory() {
         problem_b,
         DeInject::with_inner_solver(
             De::new(7).with_pop_size(10),
-            NelderMead::adaptive(),
+            basin::RelaxedInner::new(NelderMead::adaptive()),
         )
         .with_k(1)
         .with_inner_max_iter(20),

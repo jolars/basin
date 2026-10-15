@@ -14,9 +14,7 @@
 //! reordering of floating-point ops but is tight enough to catch
 //! algorithmic divergence.
 
-use basin::{
-    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb,
-};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb};
 use std::fs;
 
 /// Standard Rosenbrock 5D (basin's coefficient convention).
@@ -25,6 +23,15 @@ struct Rosen5D {
     u: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for Rosen5D {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(Some(&self.l), Some(&self.u)))
+    }
+}
 impl CostFunction for Rosen5D {
     type Param = Vec<f64>;
     type Output = f64;
@@ -58,15 +65,6 @@ impl Gradient for Rosen5D {
             }
             g
         })
-    }
-}
-
-impl BoxConstraints for Rosen5D {
-    fn lower(&self) -> &Vec<f64> {
-        &self.l
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.u
     }
 }
 

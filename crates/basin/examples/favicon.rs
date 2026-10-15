@@ -281,6 +281,14 @@ fn normalize3(v: [f64; 3]) -> [f64; 3] {
 /// descend the exact terrain we draw (analytic gradient of [`raw_height`]).
 struct Bowl;
 
+impl basin::ProblemConstraints for Bowl {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Bowl {
     type Param = Vec<f64>;
     type Output = f64;

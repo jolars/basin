@@ -1,8 +1,8 @@
 //! Shared swarm progress and solver-owned particle histories.
 
 use basin::{
-    BoxConstraints, CostFunction, CountsMirror, EvalCounts, Executor,
-    GlobalBestPso, PopulationProgress, State,
+    CostFunction, CountsMirror, EvalCounts, Executor, GlobalBestPso,
+    PopulationProgress, State,
 };
 use std::convert::Infallible;
 
@@ -18,6 +18,18 @@ impl Sphere {
         }
     }
 }
+
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -26,14 +38,6 @@ impl CostFunction for Sphere {
         assert_eq!(x.len(), self.lower.len());
         assert!(x.iter().all(|x| (-5.0..=5.0).contains(x)));
         Ok(x.iter().map(|x| x * x).sum())
-    }
-}
-impl BoxConstraints for Sphere {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

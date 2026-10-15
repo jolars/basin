@@ -62,20 +62,21 @@ impl<F: Scalar> MinimumBracketResult<F> {
 /// Bracketing and optimization have separate evaluation counts.
 ///
 /// ```
-/// use basin::{BoxConstraints, Brent, CostFunction, Executor, MinimumBracketer,
+/// use basin::{Brent, CostFunction, Executor, MinimumBracketer,
 ///             PointState};
 /// use std::convert::Infallible;
 /// struct Quadratic { lower: f64, upper: f64 }
+/// impl basin::ProblemConstraints for Quadratic  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<f64>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// }
 /// impl CostFunction for Quadratic {
 ///     type Param = f64;
 ///     type Output = f64;
 ///     type Error = Infallible;
 ///     fn cost(&self, x: &f64) -> Result<f64, Infallible> { Ok((x - 10.0).powi(2)) }
 /// }
-/// impl BoxConstraints for Quadratic {
-///     fn lower(&self) -> &f64 { &self.lower }
-///     fn upper(&self) -> &f64 { &self.upper }
-/// }
+///
 /// let bracket = MinimumBracketer::new(-1.0, 0.0, 1.0)
 ///     .bracket(|x: f64| Ok::<_, Infallible>((x - 10.0).powi(2))).unwrap();
 /// assert!(bracket.bracketed());

@@ -1,7 +1,6 @@
 use basin::{
-    BoxConstraints, BrentDerivative, CostFunction, Executor, FirstOrderState,
-    Gbnm, Gradient, PointState, Problem, Scalar, Solver, State,
-    TerminationCode, VectorLen,
+    BrentDerivative, CostFunction, Executor, FirstOrderState, Gbnm, Gradient,
+    PointState, Problem, Scalar, Solver, State, TerminationCode, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -10,6 +9,17 @@ struct Linear<F> {
     upper: F,
 }
 
+impl<F: Scalar> basin::ProblemConstraints for Linear<F> {
+    type Constraints = basin::Constraints<basin::BoxBounds<F>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<F: Scalar> CostFunction for Linear<F> {
     type Param = F;
     type Output = F;
@@ -27,15 +37,6 @@ impl<F: Scalar> Gradient for Linear<F> {
     fn gradient(&self, x: &F) -> Result<F, Infallible> {
         assert!(*x >= self.lower && *x <= self.upper);
         Ok(F::one())
-    }
-}
-
-impl<F: Scalar> BoxConstraints for Linear<F> {
-    fn lower(&self) -> &F {
-        &self.lower
-    }
-    fn upper(&self) -> &F {
-        &self.upper
     }
 }
 
@@ -68,6 +69,17 @@ struct FixedBox<F> {
     cost: F,
 }
 
+impl<F: Scalar> basin::ProblemConstraints for FixedBox<F> {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<F>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.point),
+            Some(&self.point),
+        ))
+    }
+}
 impl<F: Scalar> CostFunction for FixedBox<F> {
     type Param = Vec<F>;
     type Output = F;
@@ -76,15 +88,6 @@ impl<F: Scalar> CostFunction for FixedBox<F> {
     fn cost(&self, x: &Vec<F>) -> Result<F, Infallible> {
         assert_eq!(x, &self.point);
         Ok(self.cost)
-    }
-}
-
-impl<F: Scalar> BoxConstraints for FixedBox<F> {
-    fn lower(&self) -> &Vec<F> {
-        &self.point
-    }
-    fn upper(&self) -> &Vec<F> {
-        &self.point
     }
 }
 

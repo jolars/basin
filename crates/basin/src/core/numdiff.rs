@@ -8,7 +8,7 @@
 //! the solvers want: [`Gradient`] (for first-order solvers), [`Jacobian`]
 //! (for least-squares solvers), [`Hessian`] (for second-order solvers), and
 //! [`HessianProduct`] (for matrix-free second-order solvers). Nonlinear
-//! constraint derivatives use [`ConstraintJacobian`].
+//! constraint derivatives use [`crate::ConstraintJacobian`].
 //! Each derivative is approximated by finite differences of the wrapped
 //! problem, so a values-only problem flows straight into the existing
 //! solvers via basin's type-system dispatch.
@@ -75,9 +75,6 @@
 //! (and its param vector/error type) to be [`Sync`]/[`Send`]; without the
 //! feature there is no such bound and the evaluation is sequential.
 
-use crate::core::constraint::{
-    BoxConstraints, ConstraintJacobian, NonlinearConstraints,
-};
 use crate::core::math::{DenseMatrixFromFn, VectorIndex, VectorLen};
 use crate::core::parallel::{
     MaybeSend, MaybeSync, try_map_range_with, try_map_slice_with,
@@ -104,7 +101,7 @@ pub enum Method {
 /// Jacobian; see the [module docs](self)) and adjust with the builder
 /// methods. The wrapper delegates [`CostFunction`]/[`Residual`] /
 /// all constraint traits to the inner problem and implements [`Gradient`],
-/// [`Jacobian`], [`ConstraintJacobian`], and [`Hessian`] via finite differences.
+/// [`Jacobian`], [`crate::ConstraintJacobian`], and [`Hessian`] via finite differences.
 ///
 /// # Backends
 ///
@@ -113,8 +110,8 @@ pub enum Method {
 /// [`Hessian`] additionally require `V: DenseMatrixFromFn`, so they are
 /// available for `Vec<f64>`/`DenseMatrix`, nalgebra `DVector<f64>`/`DMatrix`,
 /// ndarray `Array1<f64>`/`Array2`, and faer `Col<f64>`/`Mat`.
-/// [`ConstraintJacobian`] requires the constraint matrix type to match that
-/// backend's dense matrix. Use [`BoundedFiniteDiff`] for `f32` first derivatives.
+/// [`crate::ConstraintJacobian`] uses the parameter backend's dense matrix,
+/// independently of the linear block matrices. Use [`BoundedFiniteDiff`] for `f32` first derivatives.
 ///
 /// # Solver stopping tolerances
 ///
@@ -137,10 +134,13 @@ pub enum Method {
 ///
 /// ```
 /// use basin::{
-///     FirstOrderState, CostFunction, Executor, FiniteDiff, GradientDescent,
-/// };
+///     FirstOrderState, CostFunction, Executor, FiniteDiff, GradientDescent};
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -254,18 +254,10 @@ impl<P: Residual> Residual for FiniteDiff<P> {
     }
 }
 
-// Forward box bounds so a `CostFunction + BoxConstraints` problem wrapped
+// Forward box bounds so a `CostFunction + BoxBounds` problem wrapped
 // in `FiniteDiff` still routes to the constrained solvers (ProjectedGD,
 // TRF). Per tenet 4 this is correct precisely because `FiniteDiff` *adds* a
 // capability and preserves the constraint: it does not consume it.
-impl<P: BoxConstraints> BoxConstraints for FiniteDiff<P> {
-    fn lower(&self) -> &Self::Param {
-        self.problem.lower()
-    }
-    fn upper(&self) -> &Self::Param {
-        self.problem.upper()
-    }
-}
 
 // Synthesized derivative traits.
 
@@ -832,210 +824,84 @@ pub use check::{
     DerivativeComparison, DerivativeSource,
 };
 
-impl<P, V> ConstraintJacobian for FiniteDiff<P>
+impl<P> crate::ProblemConstraints for FiniteDiff<P>
 where
-    P: NonlinearConstraints<Param = V, Output = f64> + MaybeSync,
+    P: crate::ProblemConstraints,
+{
+    type Constraints = P::Constraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        self.problem.constraint_set()
+    }
+}
+
+impl<P> crate::NonlinearEqualityValues for FiniteDiff<P>
+where
+    P: crate::NonlinearEqualityValues,
+{
+    type Param = P::Param;
+    type Values = P::Values;
+    type Error = P::Error;
+    fn nonlinear_equalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
+        self.problem.nonlinear_equalities(x)
+    }
+}
+
+impl<P> crate::NonlinearInequalityValues for FiniteDiff<P>
+where
+    P: crate::NonlinearInequalityValues,
+{
+    type Param = P::Param;
+    type Values = P::Values;
+    type Error = P::Error;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
+        self.problem.nonlinear_inequalities(x)
+    }
+}
+
+impl<P, V> crate::ConstraintJacobian for FiniteDiff<P>
+where
+    P: CostFunction<Param = V, Output = f64> + MaybeSync,
+    P::Constraints:
+        crate::core::constraint::evaluation::NonlinearSet<P, V, f64>,
     V: Clone
         + VectorLen
-        + VectorIndex
-        + DenseMatrixFromFn<Matrix = P::Matrix>
+        + VectorIndex<f64>
+        + DenseMatrixFromFn<f64>
         + MaybeSync,
     P::Error: MaybeSend,
 {
-    fn constraint_jacobian(&self, x: &V) -> Result<P::Matrix, P::Error> {
-        let m = self.problem.num_nonlinear_equalities()
-            + self.problem.num_nonlinear_constraints();
+    type Param = V;
+    type Jacobian = <V as DenseMatrixFromFn<f64>>::Matrix;
+    type Error = P::Error;
+    fn constraint_jacobian(
+        &self,
+        x: &V,
+    ) -> Result<Self::Jacobian, crate::ConstraintSolveError<P::Error>> {
+        use crate::core::constraint::evaluation::NonlinearSet;
+        let expected = P::Constraints::counts(self.problem.constraint_set());
+        let m = expected.0.checked_add(expected.1).ok_or(
+            crate::ConstraintSolveError::InvalidConstraints(
+                crate::ConstraintError::CountOverflow,
+            ),
+        )?;
         let options = bounded::Options {
             method: self.jacobian_method,
             precision: self.function_precision,
             step: self.fixed_step,
             minpack: true,
         };
-        let (_, columns) = bounded::columns(x, options, None, |x| {
-            bounded::constraint_values(&self.problem, x)
+        let (_, cols) = bounded::columns(x, options, None, |point| {
+            bounded::constraint_values(&self.problem, point, expected)
         })?;
-        Ok(V::dense_from_fn(m, x.vec_len(), |i, j| columns[j][i]))
-    }
-}
-
-impl<P: NonlinearConstraints> NonlinearConstraints for FiniteDiff<P> {
-    type Matrix = P::Matrix;
-    fn nonlinear_constraints(
-        &self,
-        x: &P::Param,
-    ) -> Result<P::Param, P::Error> {
-        self.problem.nonlinear_constraints(x)
-    }
-    fn num_nonlinear_constraints(&self) -> usize {
-        self.problem.num_nonlinear_constraints()
-    }
-    fn nonlinear_equalities(
-        &self,
-        x: &P::Param,
-    ) -> Result<Option<P::Param>, P::Error> {
-        self.problem.nonlinear_equalities(x)
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        self.problem.num_nonlinear_equalities()
-    }
-    fn inequalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.inequalities()
-    }
-    fn equalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.equalities()
-    }
-    fn lower(&self) -> Option<&P::Param> {
-        self.problem.lower()
-    }
-    fn upper(&self) -> Option<&P::Param> {
-        self.problem.upper()
-    }
-}
-
-impl<P: crate::core::constraint::LinearConstraints>
-    crate::core::constraint::LinearConstraints for FiniteDiff<P>
-{
-    type Matrix = P::Matrix;
-    fn inequalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.inequalities()
-    }
-    fn equalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.equalities()
-    }
-    fn lower(&self) -> Option<&P::Param> {
-        self.problem.lower()
-    }
-    fn upper(&self) -> Option<&P::Param> {
-        self.problem.upper()
-    }
-}
-
-impl<P: crate::core::constraint::LinearEqualityConstraints>
-    crate::core::constraint::LinearEqualityConstraints for FiniteDiff<P>
-{
-    type Matrix = P::Matrix;
-    fn a(&self) -> &P::Matrix {
-        self.problem.a()
-    }
-    fn b(&self) -> &P::Param {
-        self.problem.b()
-    }
-}
-
-impl<P: crate::core::constraint::LinearInequalityConstraints>
-    crate::core::constraint::LinearInequalityConstraints for FiniteDiff<P>
-{
-    type Matrix = P::Matrix;
-    fn a(&self) -> &P::Matrix {
-        self.problem.a()
-    }
-    fn b(&self) -> &P::Param {
-        self.problem.b()
-    }
-}
-
-impl<P: crate::core::constraint::NonlinearInequalityConstraints>
-    crate::core::constraint::NonlinearInequalityConstraints for FiniteDiff<P>
-{
-    fn num_constraints(&self) -> usize {
-        self.problem.num_constraints()
-    }
-    fn constraints(&self, x: &P::Param) -> Result<P::Param, P::Error> {
-        self.problem.constraints(x)
-    }
-}
-
-impl<P: NonlinearConstraints, F: crate::Scalar> NonlinearConstraints
-    for BoundedFiniteDiff<P, F>
-{
-    type Matrix = P::Matrix;
-    fn nonlinear_constraints(
-        &self,
-        x: &P::Param,
-    ) -> Result<P::Param, P::Error> {
-        self.problem.nonlinear_constraints(x)
-    }
-    fn num_nonlinear_constraints(&self) -> usize {
-        self.problem.num_nonlinear_constraints()
-    }
-    fn nonlinear_equalities(
-        &self,
-        x: &P::Param,
-    ) -> Result<Option<P::Param>, P::Error> {
-        self.problem.nonlinear_equalities(x)
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        self.problem.num_nonlinear_equalities()
-    }
-    fn inequalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.inequalities()
-    }
-    fn equalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.equalities()
-    }
-    fn lower(&self) -> Option<&P::Param> {
-        self.problem.lower()
-    }
-    fn upper(&self) -> Option<&P::Param> {
-        self.problem.upper()
-    }
-}
-
-impl<P: crate::core::constraint::LinearConstraints, F: crate::Scalar>
-    crate::core::constraint::LinearConstraints for BoundedFiniteDiff<P, F>
-{
-    type Matrix = P::Matrix;
-    fn inequalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.inequalities()
-    }
-    fn equalities(&self) -> Option<(&P::Matrix, &P::Param)> {
-        self.problem.equalities()
-    }
-    fn lower(&self) -> Option<&P::Param> {
-        self.problem.lower()
-    }
-    fn upper(&self) -> Option<&P::Param> {
-        self.problem.upper()
-    }
-}
-
-impl<P: crate::core::constraint::LinearEqualityConstraints, F: crate::Scalar>
-    crate::core::constraint::LinearEqualityConstraints
-    for BoundedFiniteDiff<P, F>
-{
-    type Matrix = P::Matrix;
-    fn a(&self) -> &P::Matrix {
-        self.problem.a()
-    }
-    fn b(&self) -> &P::Param {
-        self.problem.b()
-    }
-}
-
-impl<P: crate::core::constraint::LinearInequalityConstraints, F: crate::Scalar>
-    crate::core::constraint::LinearInequalityConstraints
-    for BoundedFiniteDiff<P, F>
-{
-    type Matrix = P::Matrix;
-    fn a(&self) -> &P::Matrix {
-        self.problem.a()
-    }
-    fn b(&self) -> &P::Param {
-        self.problem.b()
-    }
-}
-
-impl<
-    P: crate::core::constraint::NonlinearInequalityConstraints,
-    F: crate::Scalar,
-> crate::core::constraint::NonlinearInequalityConstraints
-    for BoundedFiniteDiff<P, F>
-{
-    fn num_constraints(&self) -> usize {
-        self.problem.num_constraints()
-    }
-    fn constraints(&self, x: &P::Param) -> Result<P::Param, P::Error> {
-        self.problem.constraints(x)
+        Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
     }
 }
 
@@ -1049,6 +915,15 @@ mod tests {
         a: Vec<f64>,
     }
 
+    impl crate::ProblemConstraints for DiagQuadratic {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for DiagQuadratic {
         type Param = Vec<f64>;
         type Output = f64;
@@ -1140,6 +1015,15 @@ mod tests {
         a: Vec<f64>,
     }
 
+    impl crate::ProblemConstraints for DiagQuadraticGrad {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for DiagQuadraticGrad {
         type Param = Vec<f64>;
         type Output = f64;
@@ -1208,6 +1092,16 @@ mod tests {
         // Analytic 2D Rosenbrock Hessian at a generic point:
         //   H₀₀ = 2 − 400(x₁ − 3x₀²), H₀₁ = H₁₀ = −400x₀, H₁₁ = 200.
         struct Rosenbrock2;
+
+        impl crate::ProblemConstraints for Rosenbrock2 {
+            type Constraints = crate::NoConstraints;
+            fn constraint_set(
+                &self,
+            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            {
+                crate::Constraints::new()
+            }
+        }
         impl CostFunction for Rosenbrock2 {
             type Param = Vec<f64>;
             type Output = f64;
@@ -1300,16 +1194,16 @@ mod tests {
         }
     }
 
-    // BoxConstraints forwarding: a wrapped boxed problem stays constrained
+    // BoxBounds forwarding: a wrapped boxed problem stays constrained
     // and still satisfies the gradient-solver bound.
     #[cfg(feature = "problems")]
     #[test]
     fn box_constrained_is_forwarded() {
-        use crate::core::constraint::BoxConstraints;
+        use crate::core::constraint::evaluation::BoxProblem;
         use crate::problems::rastrigin::RastriginBoxed;
 
         fn _assert_constrained_and_differentiable<
-            T: BoxConstraints + Gradient,
+            T: crate::core::constraint::evaluation::BoxProblem + Gradient,
         >() {
         }
         _assert_constrained_and_differentiable::<

@@ -1,12 +1,24 @@
 //! COBYLA's selected progress, callback accounting, and model lifetime.
 
 use basin::{
-    Cobyla, CostFunction, Executor, NonlinearInequalityConstraints, Problem,
-    SelectedState, Solver, State,
+    Cobyla, CostFunction, Executor, Problem, SelectedState, Solver, State,
 };
 use std::convert::Infallible;
 
 struct LowerBound;
+
+impl basin::ProblemConstraints for LowerBound {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_inequalities(1)
+    }
+}
 impl CostFunction for LowerBound {
     type Param = Vec<f64>;
     type Output = f64;
@@ -15,12 +27,16 @@ impl CostFunction for LowerBound {
         Ok(x.iter().map(|x| x * x).sum())
     }
 }
-impl NonlinearInequalityConstraints for LowerBound {
-    fn num_constraints(&self) -> usize {
-        1
-    }
-    fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-        Ok(vec![1.0 - x[0]])
+impl basin::NonlinearInequalityValues for LowerBound {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        { Ok(vec![1.0 - x[0]]) }
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -209,6 +225,21 @@ enum CallbackError {
 struct FullForm {
     failure: Option<CallbackError>,
 }
+
+impl basin::ProblemConstraints for FullForm {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_nonlinear_equalities(1)
+            .with_nonlinear_inequalities(1)
+    }
+}
 impl CostFunction for FullForm {
     type Param = Vec<f64>;
     type Output = f64;
@@ -217,33 +248,48 @@ impl CostFunction for FullForm {
         Ok(x.iter().map(|x| x * x).sum())
     }
 }
-impl basin::NonlinearConstraints for FullForm {
-    type Matrix = basin::DenseMatrix;
-    fn num_nonlinear_constraints(&self) -> usize {
-        1
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        1
-    }
-    fn nonlinear_constraints(
+impl basin::NonlinearInequalityValues for FullForm {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = CallbackError;
+    fn nonlinear_inequalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Vec<f64>, CallbackError> {
-        if self.failure == Some(CallbackError::Inequality) {
-            Err(CallbackError::Inequality)
-        } else {
-            Ok(vec![1.0 - x[0]])
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            if self.failure == Some(CallbackError::Inequality) {
+                Err(CallbackError::Inequality)
+            } else {
+                Ok(vec![1.0 - x[0]])
+            }
         }
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
+}
+impl basin::NonlinearEqualityValues for FullForm {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = CallbackError;
     fn nonlinear_equalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Option<Vec<f64>>, CallbackError> {
-        if self.failure == Some(CallbackError::Equality) {
-            Err(CallbackError::Equality)
-        } else {
-            Ok(Some(vec![x[1]]))
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            if self.failure == Some(CallbackError::Equality) {
+                Err(CallbackError::Equality)
+            } else {
+                Ok(Some(vec![x[1]]))
+            }
         }
+        .map_err(basin::ConstraintSolveError::Evaluation)?
+        .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+            basin::ConstraintError::DimensionMismatch {
+                block: basin::ConstraintBlock::NonlinearEqualities,
+                axis: basin::ConstraintAxis::Length,
+                expected: 1,
+                actual: 0,
+            },
+        ))
     }
 }
 
@@ -254,8 +300,7 @@ fn folded_callbacks_count_each_block_including_failure_attempts() {
         Some(CallbackError::Inequality),
         Some(CallbackError::Equality),
     ] {
-        let mut problem =
-            Problem::new(basin::FoldedConstraints::new(FullForm { failure }));
+        let mut problem = Problem::new(FullForm { failure });
         let mut solver = Cobyla::new();
         let output =
             solver.init(&mut problem, SelectedState::new(vec![0.0; 2]));
@@ -266,7 +311,10 @@ fn folded_callbacks_count_each_block_including_failure_attempts() {
                 assert_eq!(problem.counts().residual_evals, 6);
             }
             Some(error) => {
-                assert_eq!(output.unwrap_err(), error);
+                assert_eq!(
+                    output.unwrap_err(),
+                    basin::ConstraintSolveError::Evaluation(error)
+                );
                 assert_eq!(problem.counts().cost_evals, 1);
                 assert_eq!(
                     problem.counts().residual_evals,
@@ -284,6 +332,23 @@ fn folded_callbacks_count_each_block_including_failure_attempts() {
 #[test]
 fn published_records_keep_the_drivers_nonfinite_moderation() {
     struct Nonfinite(f64);
+
+    impl basin::ProblemConstraints for Nonfinite {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for Nonfinite {
         type Param = Vec<f64>;
         type Output = f64;
@@ -292,14 +357,20 @@ fn published_records_keep_the_drivers_nonfinite_moderation() {
             Ok(self.0)
         }
     }
-    impl NonlinearInequalityConstraints for Nonfinite {
-        fn num_constraints(&self) -> usize {
-            1
-        }
-        fn constraints(&self, _: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-            Ok(vec![self.0])
+    impl basin::NonlinearInequalityValues for Nonfinite {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = Infallible;
+        fn nonlinear_inequalities(
+            &self,
+            _: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(vec![self.0]) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
+
     let limit = 2_f64.powi(100);
     for (input, cost, violation) in [
         (f64::NAN, limit, limit),
@@ -323,7 +394,7 @@ fn published_records_keep_the_drivers_nonfinite_moderation() {
 
 #[test]
 fn folded_checkpoints_preserve_constraint_counts_and_selected_records() {
-    let problem = || basin::FoldedConstraints::new(FullForm { failure: None });
+    let problem = || FullForm { failure: None };
     let make = || {
         Executor::from_start(
             problem(),

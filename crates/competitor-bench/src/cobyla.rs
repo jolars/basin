@@ -3,10 +3,7 @@
 //! Basin follows PRIMA; the `cobyla` crate is derived from NLopt. Equal objective
 //! budgets and final radii do not imply equal trajectories or numerical work.
 
-use basin::{
-    Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
-    SelectedState, TerminationCode,
-};
+use basin::{Cobyla, CostFunction, Executor, SelectedState, TerminationCode};
 use std::{cell::Cell, convert::Infallible};
 
 const FINAL_RADIUS: f64 = 7.450_580_596_923_828e-9;
@@ -205,6 +202,21 @@ impl Problem {
     }
 }
 
+impl basin::ProblemConstraints for &Problem {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_inequalities({
+            2 * self.bounds.len()
+                + usize::from(matches!(self.case, Case::Quadratic))
+        })
+    }
+}
 impl CostFunction for &Problem {
     type Param = Vec<f64>;
     type Output = f64;
@@ -221,22 +233,31 @@ impl CostFunction for &Problem {
     }
 }
 
-impl NonlinearInequalityConstraints for &Problem {
-    fn num_constraints(&self) -> usize {
-        2 * self.bounds.len()
-            + usize::from(matches!(self.case, Case::Quadratic))
-    }
-
-    fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-        self.constraint_calls.set(self.constraint_calls.get() + 1);
-        let mut values = Vec::with_capacity(self.num_constraints());
-        if matches!(self.case, Case::Quadratic) {
-            values.push(-(1.5 - x[0] - x[1]));
+impl basin::NonlinearInequalityValues for &Problem {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            self.constraint_calls.set(self.constraint_calls.get() + 1);
+            let mut values = Vec::with_capacity(
+                basin::ProblemConstraints::constraint_set(self)
+                    .nonlinear()
+                    .inequalities()
+                    .count(),
+            );
+            if matches!(self.case, Case::Quadratic) {
+                values.push(-(1.5 - x[0] - x[1]));
+            }
+            for (&v, &(lower, upper)) in x.iter().zip(&self.bounds) {
+                values.extend([lower - v, v - upper]);
+            }
+            Ok(values)
         }
-        for (&v, &(lower, upper)) in x.iter().zip(&self.bounds) {
-            values.extend([lower - v, v - upper]);
-        }
-        Ok(values)
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 

@@ -11,7 +11,7 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::{
     Backtracking, BarrierMethod, CostFunction, Executor, Gradient,
-    GradientDescent, LinearInequalityConstraints, PointState, TerminationCode,
+    GradientDescent, PointState, TerminationCode,
 };
 
 // 1. Define the problem. The objective and its gradient are the usual
@@ -24,6 +24,22 @@ struct MyProblem {
 }
 
 // 1a. The objective value, f(x) = (x₀−2)² + (x₁−2)².
+
+impl basin::ProblemConstraints for MyProblem {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::LinearBlocks<
+            basin::NoLinearBlock,
+            basin::LinearBlock<DMatrix<f64>, DVector<f64>>,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_linear_inequalities(basin::LinearBlock::new(&self.a, &self.b))
+    }
+}
 impl CostFunction for MyProblem {
     type Param = DVector<f64>;
     type Output = f64;
@@ -50,15 +66,6 @@ impl Gradient for MyProblem {
 // 1c. The constraints, in standard form `A x ≤ b`. Implementing *this* trait
 //     (and not a box-bounds trait) is what routes the problem to the barrier
 //     method at compile time. `b` lives in ℝᵐ (one entry per constraint row).
-impl LinearInequalityConstraints for MyProblem {
-    type Matrix = DMatrix<f64>;
-    fn a(&self) -> &DMatrix<f64> {
-        &self.a
-    }
-    fn b(&self) -> &DVector<f64> {
-        &self.b
-    }
-}
 
 #[test]
 fn barrier_method_tour() {

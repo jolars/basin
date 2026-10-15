@@ -10,6 +10,14 @@ struct ShiftedQuadratic {
     center: f64,
 }
 
+impl basin::ProblemConstraints for ShiftedQuadratic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for ShiftedQuadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -60,6 +68,14 @@ fn expands_before_bracketing_a_distant_minimum() {
 
 struct ShiftedQuartic;
 
+impl basin::ProblemConstraints for ShiftedQuartic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for ShiftedQuartic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -102,6 +118,14 @@ fn expansion_and_secant_refinement_handle_a_nonlinear_profile() {
 
 struct CancellationProneQuadratic;
 
+impl basin::ProblemConstraints for CancellationProneQuadratic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for CancellationProneQuadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -147,6 +171,14 @@ fn approximate_wolfe_accepts_when_armijo_decrease_rounds_away() {
 
 struct Linear;
 
+impl basin::ProblemConstraints for Linear {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Linear {
     type Param = Vec<f64>;
     type Output = f64;
@@ -301,6 +333,14 @@ fn rejects_invalid_wolfe_parameters() {
 
 struct BoundedQuadratic;
 
+impl basin::ProblemConstraints for BoundedQuadratic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for BoundedQuadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -345,6 +385,14 @@ struct BelowStepBound;
 
 struct StepBoundGuard;
 
+impl basin::ProblemConstraints for StepBoundGuard {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for StepBoundGuard {
     type Param = Vec<f64>;
     type Output = f64;
@@ -393,6 +441,14 @@ enum ProbeError {
 
 struct Bailing;
 
+impl basin::ProblemConstraints for Bailing {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Bailing {
     type Param = Vec<f64>;
     type Output = f64;
@@ -467,6 +523,14 @@ fn ackley_cost_and_gradient(x: &[f64]) -> (f64, Vec<f64>) {
     (cost, gradient)
 }
 
+impl basin::ProblemConstraints for DifferentiableAckley {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for DifferentiableAckley {
     type Param = Vec<f64>;
     type Output = f64;

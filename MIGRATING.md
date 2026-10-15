@@ -1,5 +1,153 @@
 # Migrating to Basin 2.0
 
+## Declaring constraints
+
+Every objective and residual problem now implements `ProblemConstraints`.
+Its `Constraints` associated type is the complete mathematical constraint set,
+shared by `CostFunction` and `Residual`. An unconstrained problem declares
+`NoConstraints`:
+
+```rust
+impl basin::ProblemConstraints for MyProblem {
+    type Constraints = basin::NoConstraints;
+
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
+```
+
+Constrained problems build a typed `Constraints` value. The getter returns a
+borrowed view, so existing matrices, right-hand sides, and bounds can stay in
+problem fields. For example, a box-only objective with `Vec<f64>` parameters
+can borrow its existing vectors:
+
+```rust
+use basin::{BoxBounds, ConstraintDescription, Constraints, ProblemConstraints};
+
+struct BoxProblem {
+    lower: Vec<f64>,
+    upper: Vec<f64>,
+}
+
+impl ProblemConstraints for BoxProblem {
+    type Constraints = Constraints<BoxBounds<Vec<f64>>>;
+
+    fn constraint_set(&self) -> <Self::Constraints as ConstraintDescription>::Borrowed<'_> {
+        Constraints::new().with_bounds(BoxBounds::new(Some(&self.lower), Some(&self.upper)))
+    }
+}
+```
+
+Alternatively, store the complete set on the problem and return
+`self.constraints.borrowed()`. `Constrained::new(problem, constraints)` attaches
+an owned set to a problem that declares `NoConstraints` and forwards its
+objective, residual, derivative, and constraint evaluation capabilities.
+
+The old sibling constraint traits and `FoldedConstraints` have been removed:
+
+| Basin 1.x | Basin 2.0 declaration and evaluation |
+| --- | --- |
+| `BoxConstraints` | `Constraints::new().with_bounds(BoxBounds::new(lower, upper))` |
+| `LinearEqualityConstraints` | `.with_linear_equalities(LinearBlock::new(matrix, rhs))` |
+| `LinearInequalityConstraints` | `.with_linear_inequalities(LinearBlock::new(matrix, rhs))` |
+| `LinearConstraints` | The applicable bounds and linear blocks in one set |
+| `NonlinearInequalityConstraints` | `.with_nonlinear_inequalities(count)` and `NonlinearInequalityValues` |
+| `NonlinearConstraints` | The applicable blocks in one set, plus `NonlinearEqualityValues` and `NonlinearInequalityValues` for declared nonlinear blocks |
+| `FoldedConstraints::new(problem)` | Pass the declared problem directly to COBYLA |
+
+Builders preserve the other blocks and change the set's type. `NoBounds`,
+`NoLinearBlock`, and `NoNonlinearBlock` mark statically absent blocks. A missing
+linear block needs no matrix type, and a missing nonlinear block needs no
+callback or Jacobian. `LinearBlock::optional(None)` retains a linear kind in
+the type while representing a runtime empty block. Zero-row linear blocks and
+zero-count nonlinear blocks are also valid. Static presence determines solver
+compatibility even when a block is empty at runtime.
+
+Solvers accept only the combinations they implement. Unconstrained solvers
+require `Constraints = NoConstraints`; box-only solvers require
+`Constraints<BoxBounds<V>>`. LINCOA accepts bounds and linear blocks, COBYLA and
+SLSQP accept all five kinds, and progressive-barrier MADS accepts only nonlinear
+inequalities. A box solver cannot silently ignore an additional nonlinear
+block. The barrier and augmented-Lagrangian adapters consume their supported
+single linear block and expose `NoConstraints` to their inner solvers.
+
+Nonlinear callbacks remain problem methods. `NonlinearEqualityValues` and
+`NonlinearInequalityValues` each declare independent `Param`, `Values`, and
+`Error` types. Their methods return
+`Result<Values, ConstraintSolveError<Error>>`; use `?`, `error.into()`, or
+`map_err(ConstraintSolveError::Evaluation)` to preserve an existing callback
+error. Equality residuals follow `h(x) = 0`, and inequalities follow
+`c(x) <= 0`. Constraint values need readable length and coordinate access;
+they need not use the parameter backend.
+
+`ConstraintJacobian` now declares its own `Param`, `Jacobian`, and `Error`, and
+returns `Result<Jacobian, ConstraintSolveError<Error>>`. Rows contain nonlinear
+equalities first and nonlinear inequalities second. Linear rows are excluded.
+Equality and inequality matrices, right-hand-side vectors, nonlinear value
+vectors, and the nonlinear Jacobian can all use different storage. SLSQP
+requires no nonlinear Jacobian for a linear-only set. `FiniteDiff`,
+`BoundedFiniteDiff`, and `RobustLeastSquares` preserve the canonical set;
+finite differences synthesize nonlinear Jacobians in this row order.
+
+`AugmentedLagrangianInnerDiagnostics::lambda` now stores `Vec<F>`, independently
+of the parameter backend. The standalone `AugmentedLagrangian` adapter accepts
+its multiplier vector independently of its objective parameter representation.
+
+The math layer supplies `MatrixShape` and `MatrixFinite` independently of
+matrix entry access. `MatrixIndex` now extends `MatrixShape`. Implement shape
+methods in `MatrixShape` when migrating a custom matrix. `MatVecInto<V, F>`
+writes `A x` into a scalar slice, and `MatTransposeVecInto<V, F>` writes
+`A^T y` from a scalar slice into an existing parameter vector. These operations
+allow independent constraint storage. COBYLA needs checked matrix-vector
+products only for present linear blocks, LINCOA needs transpose products, and
+SLSQP uses matrix shape and entry access. All supported dense backend versions
+and the existing nalgebra and faer CSC backends implement the new operations
+in pure Rust.
+
+Constrained solvers return `ConstraintSolveError<E>`. Match
+`InvalidConstraints(ConstraintError)` for malformed declarations or callback
+shapes, and `Evaluation(E)` for the original user error. The user error need
+not implement `std::error::Error`. Bounds reject NaN, positive infinity on the
+lower side, negative infinity on the upper side, inverted intervals, and wrong
+lengths. Negative-infinite lower and positive-infinite upper endpoints mean an
+absent side; fixed coordinates remain valid. Sampling algorithms may further
+require finite intervals. Linear coefficients and right-hand sides must be
+finite and match the parameter dimension. Nonlinear output lengths and
+Jacobian shapes are checked before indexing. A changed nonlinear count during
+a run returns `ConstraintError::LayoutChanged`.
+
+Each attempted nonempty nonlinear callback counts once in `residual_evals`,
+including failing and malformed attempts. Zero-count and statically absent
+blocks skip callbacks and add no work. Bounds and linear arithmetic add no
+callback counts. Constraint Jacobians count in `jacobian_evals`; finite-difference probes retain the derivative adapter's existing accounting.
+
+### Sampling domains and local relaxations
+
+MA-LS uses a box to sample new candidates, while its local chains can explore
+and accept points outside that box. It now requires `SamplingBounds` on an
+unconstrained objective. Wrap an existing box-only problem in
+`SamplingDomain::new(problem)` to make this interpretation explicit, or
+implement `SamplingBounds` directly alongside `NoConstraints`. This preserves
+the algorithm's sampling, local search, and acceptance behavior.
+
+Bounded CMA and DE injection retain mathematical box constraints and repair
+local results. When their local solver is unconstrained, select that relaxation
+explicitly with `RelaxedInner::new(inner_solver)`:
+
+```rust
+let solver = basin::DeInject::with_inner_solver(
+    basin::De::new(42),
+    basin::RelaxedInner::new(basin::NelderMead::new()),
+);
+```
+
+A local solver that enforces the same box, such as bounded L-BFGS, can be
+passed directly. `RelaxedInner` forwards solver lifecycle and convergence
+behavior and rolls every evaluation category back into the outer problem,
+including on callback errors. Exact continuation retains the inner model.
+Neither adapter can discard additional linear or nonlinear constraints.
+
 ## Structured termination reports
 
 Ordinary `Executor::run()` now returns `OptimizationResult<S>` with three
@@ -375,15 +523,15 @@ return `None` until those records become available. First-order
 `replace(x, cost, gradient)` requires matching dimensions and preserves the
 previous record on a dimension error. Scalar `f32` and `f64` parameters each
 have one coordinate. Scalar solver bounds remain problem-side through
-`BoxConstraints`.
+`Constraints<BoxBounds<F>>`.
 
 NEWUOA, BOBYQA, and LINCOA now publish `PointState<V, F>`. Replace their
 algorithm-specific `*State::new(x)` constructors with `PointState::new(x)`;
 `Executor::from_start` still constructs the appropriate state. The solver types
 remain `Newuoa<F = f64>`, `Bobyqa<Mode = Bounded, F = f64>`, and
 `Lincoa<F = f64>`, with an explicit `F: Scalar` bound. Vectors still require
-`Clone`, `VectorLen`, and `Index`/`IndexMut`; LINCOA constraint matrices still
-require `MatTransposeVec`. Every supported dense backend release works with both
+`Clone`, `VectorLen`, and `Index`/`IndexMut`; LINCOA constraint matrices
+require `MatrixShape`, `MatrixFinite`, and `MatTransposeVecInto`. Every supported dense backend release works with both
 `f32` and `f64`.
 
 Read the radius through `result.solver.rho()` after `run_with_solver()`, or
@@ -406,8 +554,9 @@ COBYLA uses `SelectedState<V, F>` and has the type `Cobyla<V, F = f64>`. Replace
 `CobylaState::new(x)` with `SelectedState::new(x)` or keep using
 `Executor::from_start`. An explicit `Cobyla<f32>` annotation becomes
 `Cobyla<V, f32>`. Its backend requirements remain `Clone`, `VectorLen`, and
-indexing, plus `MatVec` for a `FoldedConstraints` matrix. Both constraint paths
-support every dense backend release with `f32` and `f64`.
+indexing. Present linear blocks additionally require `MatrixShape`,
+`MatrixFinite`, and `MatVecInto`. The canonical constraint path supports every
+dense backend release with `f32` and `f64`.
 
 `current()` and `best()` expose the filter-selected point, objective, and
 maximum positive constraint violation. COBYLA can prefer a higher-cost point as
@@ -423,13 +572,12 @@ capability. Fresh runs rebuild these structures and reevaluate their seed. Exact
 checkpoints retain them, and `serde` supports the complete solver and shared
 state. Old `CobylaState` payloads have no compatibility reader.
 
-COBYLA now counts inequality callbacks in `residual_evals`. With
-`FoldedConstraints`, its nonlinear inequality and equality callbacks each count
-once, including empty blocks and failing attempts; arithmetic for bounds and
-linear constraints adds no callback count. `cost_evals()` reports only objective
-calls. Constraint budgets use `max_evaluations(EvaluationKind::Residual, n)`,
-and `state.counts()` preserves all six categories. The constraint traits and
-`FoldedConstraints` adapter remain problem-side.
+COBYLA counts each attempted nonempty nonlinear inequality or equality callback
+once in `residual_evals`. Empty and absent blocks skip callbacks. Arithmetic for
+bounds and linear constraints adds no callback count. `cost_evals()` reports
+only objective calls. Constraint budgets use
+`max_evaluations(EvaluationKind::Residual, n)`, and `state.counts()` preserves
+all six categories. See [declaring constraints](#declaring-constraints).
 
 MADS keeps its `Mads<Mode = Unbounded, F = f64>` type, now explicitly bounded by
 `F: Scalar`. Unbounded and box-bounded modes use `PointState::new(x)`;
@@ -710,7 +858,7 @@ including standalone execution. Replace `Lbfgs::<Unbounded>::new()` with
 `Clone`, `Dot`, `ScaledAdd`, and the public
 `solver::lbfgs::{AsFloatSlice, AsFloatSliceMut}` traits. All four dense backends
 support both scalar types; ndarray storage must be contiguous. Bounded mode
-still requires problem-side `BoxConstraints` and a line search implementing
+still requires a problem-side `Constraints<BoxBounds<V>>` declaration and a line search implementing
 `next_with_bounds`. History and compact work buffers belong to the solver;
 retain it with `run_with_solver()` and inspect `history_len()` and
 `history_capacity()`. Mode transitions discard the initialized model and require

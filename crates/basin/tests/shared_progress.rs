@@ -18,6 +18,14 @@ use std::marker::PhantomData;
 
 struct Sphere<V, F>(PhantomData<(V, F)>);
 
+impl<V: NormSquared<F>, F: Scalar> basin::ProblemConstraints for Sphere<V, F> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: NormSquared<F>, F: Scalar> CostFunction for Sphere<V, F> {
     type Param = V;
     type Output = F;
@@ -381,6 +389,14 @@ fn nested_runs_mirror_only_their_own_work() {
 
 struct FallibleIdentity;
 
+impl basin::ProblemConstraints for FallibleIdentity {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for FallibleIdentity {
     type Param = f64;
     type Output = f64;

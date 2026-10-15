@@ -55,6 +55,14 @@ impl TestVector for crate::backend_aliases::faer::Col<f64> {
 
 struct ShiftedQuadratic<V>(PhantomData<V>);
 
+impl<V: TestVector> basin::ProblemConstraints for ShiftedQuadratic<V> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: TestVector> CostFunction for ShiftedQuadratic<V> {
     type Param = V;
     type Output = f64;

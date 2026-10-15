@@ -565,6 +565,10 @@ where
     /// use basin::{CostFunction, Executor, NelderMead, State};
     /// # fn main() -> Result<(), std::convert::Infallible> {
     /// struct Sphere;
+    /// impl basin::ProblemConstraints for Sphere  {
+    ///     type Constraints = basin::NoConstraints;
+    ///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+    /// }
     /// impl CostFunction for Sphere {
     ///     type Param = Vec<f64>;
     ///     type Output = f64;
@@ -751,10 +755,13 @@ where
 ///
 /// ```
 /// use basin::{
-///     FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
-/// };
+///     FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -936,10 +943,13 @@ where
     /// ```
     /// use basin::{
     ///     FirstOrderState, CancellationToken, CostFunction, Executor, Gradient,
-    ///     GradientDescent, Termination,
-    /// };
+    ///     GradientDescent, Termination};
     ///
     /// struct Sphere;
+    /// impl basin::ProblemConstraints for Sphere  {
+    ///     type Constraints = basin::NoConstraints;
+    ///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+    /// }
     /// impl CostFunction for Sphere {
     ///     type Param = Vec<f64>;
     ///     type Output = f64;
@@ -1039,6 +1049,10 @@ where
     /// use std::convert::Infallible;
     ///
     /// struct Square;
+    /// impl basin::ProblemConstraints for Square  {
+    ///     type Constraints = basin::NoConstraints;
+    ///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+    /// }
     /// impl CostFunction for Square {
     ///     type Param = f64;
     ///     type Output = f64;
@@ -1176,6 +1190,10 @@ where
     /// use basin::{CostFunction, Executor, NelderMead};
     /// # fn main() -> Result<(), std::convert::Infallible> {
     /// struct Sphere;
+    /// impl basin::ProblemConstraints for Sphere  {
+    ///     type Constraints = basin::NoConstraints;
+    ///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+    /// }
     /// impl CostFunction for Sphere {
     ///     type Param = Vec<f64>;
     ///     type Output = f64;

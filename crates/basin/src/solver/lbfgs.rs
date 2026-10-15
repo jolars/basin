@@ -48,7 +48,7 @@ use diagnostics::{ModelFailure, ModelObservation, ModelPhase, Trace};
 use core::marker::PhantomData;
 
 use self::workspace::{History, LbfgsbWork};
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{Dot, Scalar, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -166,11 +166,15 @@ use self::subsm::subsm;
 /// and verify the tolerance for your objective, precision, and stencil.
 ///
 /// ```
-/// use basin::{BoxConstraints, CostFunction, Executor, FiniteDiff,
+/// use basin::{CostFunction, Executor, FiniteDiff,
 ///     FirstOrderState, Lbfgs, Termination};
 /// use basin::core::numdiff::Method;
 ///
 /// struct Quadratic { lower: Vec<f64>, upper: Vec<f64> }
+/// impl basin::ProblemConstraints for Quadratic  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// }
 /// impl CostFunction for Quadratic {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -179,10 +183,7 @@ use self::subsm::subsm;
 ///         Ok(0.5 * ((x[0] - 1.0).powi(2) + (x[1] + 2.0).powi(2)))
 ///     }
 /// }
-/// impl BoxConstraints for Quadratic {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
-/// }
+///
 /// let problem = Quadratic { lower: vec![-8.0; 2], upper: vec![8.0; 2] };
 /// let result = Executor::new(
 ///     FiniteDiff::new(problem).gradient_method(Method::Forward),
@@ -245,14 +246,14 @@ pub struct Lbfgs<V, F: Scalar = f64, Mode = Bounded, S = MoreThuente<F>> {
 
 /// Type-state marker for box-constrained L-BFGS-B (the default).
 /// Constructors live on [`Lbfgs<V, F>`]; the
-/// [`Solver`] impl requires `P: BoxConstraints` and the full
+/// [`Solver`] impl requires `P::Constraints = Constraints<BoxBounds<V>>` and the full
 /// `AsFloatSliceMut<F>` + [`Dot<F>`] + [`ScaledAdd<F>`] backend.
 /// [`Lbfgsb`] is the canonical type alias for this mode.
 pub struct Bounded;
 
 /// Type-state marker for unconstrained L-BFGS. Use [`Lbfgs::unbounded`].
 /// The [`Solver`] implementation has the same
-/// backend bounds as [`Bounded`] but **no** [`BoxConstraints`]
+/// backend bounds as [`Bounded`] but **no** [`BoxBounds`](crate::BoxBounds)
 /// requirement. The algorithm is Nocedal–Wright's two-loop recursion
 /// over the solver-owned history with `H₀ = (1/θ)·I`.
 pub struct Unbounded;
@@ -377,7 +378,7 @@ impl<V, S, F: Scalar> Lbfgs<V, F, Unbounded, S> {
     /// Switch to box-constrained [`Bounded`] mode while preserving the
     /// configured line search, curvature threshold, and history
     /// capacity. The resulting solver requires the problem to
-    /// implement [`BoxConstraints`]. Discards the initialized model; run fresh
+    /// declare a box-only set using [`BoxBounds`](crate::BoxBounds). Discards the initialized model; run fresh
     /// initialization before using the new mode.
     pub fn bounded(self) -> Lbfgs<V, F, Bounded, S> {
         Lbfgs {
@@ -457,17 +458,28 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
-        + BoxConstraints,
+        + BoxProblem<Param = V>,
     V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
     S: LineSearch<P, V, F, Error = P::Error>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        let (lower, upper) = problem
+            .inner()
+            .box_bounds()
+            .map_err(crate::core::constraint::evaluation::invalid)?;
+        crate::core::constraint::evaluation::validate_bound_slices(
+            lower.as_float_slice(),
+            upper.as_float_slice(),
+            state.param().vec_len(),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         self.previous_cost = None;
         self.trace.observations.clear();
@@ -1119,6 +1131,7 @@ where
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     V: AsFloatSliceMut<F> + Clone + Dot<F> + ScaledAdd<F> + VectorLen,
     S: LineSearch<P, V, F, Error = P::Error>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -1621,13 +1634,25 @@ mod tests {
     /// formk + line search + matupd) returns the analytical answer.
     #[test]
     fn shifted_quadratic_in_box_converges_to_clamp() {
-        use crate::core::constraint::BoxConstraints;
         use crate::core::problem::{CostFunction, Gradient};
 
         struct Quad {
             c: Vec<f64>,
             l: Vec<f64>,
             u: Vec<f64>,
+        }
+
+        impl crate::ProblemConstraints for Quad {
+            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+            fn constraint_set(
+                &self,
+            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            {
+                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                    Some(&self.l),
+                    Some(&self.u),
+                ))
+            }
         }
         impl CostFunction for Quad {
             type Param = Vec<f64>;
@@ -1641,14 +1666,6 @@ mod tests {
             type Gradient = Vec<f64>;
             fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
                 Ok(x.iter().zip(&self.c).map(|(a, b)| 2.0 * (a - b)).collect())
-            }
-        }
-        impl BoxConstraints for Quad {
-            fn lower(&self) -> &Vec<f64> {
-                &self.l
-            }
-            fn upper(&self) -> &Vec<f64> {
-                &self.u
             }
         }
 
@@ -1680,12 +1697,24 @@ mod tests {
     /// skips GCP entirely after the first iteration.
     #[test]
     fn unbounded_rosenbrock_2d_converges() {
-        use crate::core::constraint::BoxConstraints;
         use crate::core::problem::{CostFunction, Gradient};
 
         struct Rosen {
             l: Vec<f64>,
             u: Vec<f64>,
+        }
+
+        impl crate::ProblemConstraints for Rosen {
+            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+            fn constraint_set(
+                &self,
+            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            {
+                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                    Some(&self.l),
+                    Some(&self.u),
+                ))
+            }
         }
         impl CostFunction for Rosen {
             type Param = Vec<f64>;
@@ -1702,14 +1731,6 @@ mod tests {
                     -2.0 * (1.0 - x[0]) - 400.0 * x[0] * (x[1] - x[0] * x[0]);
                 let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
                 Ok(vec![dfdx0, dfdx1])
-            }
-        }
-        impl BoxConstraints for Rosen {
-            fn lower(&self) -> &Vec<f64> {
-                &self.l
-            }
-            fn upper(&self) -> &Vec<f64> {
-                &self.u
             }
         }
 

@@ -30,7 +30,7 @@ macro_rules! check_solvers {
             GaussNewton::<V, M, F>::default()
                 .with_absolute_gradient_tolerance(gradient),
             tolerance,
-        );
+         basin::SamplingDomain::new);
         for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
             check(
                 fit.clone(),
@@ -38,7 +38,7 @@ macro_rules! check_solvers {
                     .with_damping(damping)
                     .with_absolute_gradient_tolerance(gradient),
                 tolerance,
-            );
+             basin::SamplingDomain::new);
             check_cauchy_gradient(
                 fit.clone(),
                 LevenbergMarquardt::<V, M, F>::default().with_damping(damping),
@@ -49,7 +49,7 @@ macro_rules! check_solvers {
             Trf::<V, M, F>::default()
                 .with_absolute_scaled_gradient_tolerance(gradient),
             tolerance,
-        );
+         |p| p);
         check_nonfinite_damping(fit.clone(), Trf::<V, M, F>::default().with_tau(F::INFINITY));
         // Disable convergence to exercise damping escalation after finite rejections.
         check_nonfinite_damping(fit.clone(), Trf::<V, M, F>::default().with_absolute_scaled_gradient_tolerance(None));
@@ -66,6 +66,7 @@ macro_rules! dense_solvers {
                     .with_damping(damping)
                     .with_absolute_gradient_tolerance($grad),
                 $tol,
+                basin::SamplingDomain::new,
             );
             check_cauchy_gradient(
                 $fit.clone(),
@@ -77,6 +78,7 @@ macro_rules! dense_solvers {
             TrustRegionReflective::new()
                 .with_absolute_scaled_gradient_tolerance($grad),
             $tol,
+            |p| p,
         );
     }};
 }

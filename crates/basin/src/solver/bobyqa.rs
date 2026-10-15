@@ -10,7 +10,7 @@
 //! box-aware TRSBOX subproblem (§3),
 //! ALTMOV geometry (§3), and the RESCUE restoration procedure (§5). It binds
 //! [`CostFunction`](crate::core::problem::CostFunction) +
-//! [`BoxConstraints`](crate::core::constraint::BoxConstraints).
+//! [`BoxBounds`](crate::BoxBounds).
 
 pub(crate) mod driver;
 pub(crate) mod geometry;
@@ -23,7 +23,7 @@ mod parity;
 
 use std::marker::PhantomData;
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
@@ -43,14 +43,18 @@ pub struct Bounded;
 ///
 /// Configure the trust-region radii and interpolation-set size, then drive it
 /// with an [`Executor`](crate::Executor) over a [`PointState`] on a problem
-/// that implements [`CostFunction`] + [`BoxConstraints`]:
+/// that implements [`CostFunction`] and declares a box-only set:
 ///
 /// ```
-/// use basin::{Bobyqa, PointState, BoxConstraints, CostFunction, Executor};
+/// use basin::{Bobyqa, PointState, CostFunction, Executor};
 ///
 /// struct Booth {
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
+/// }
+/// impl basin::ProblemConstraints for Booth  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for Booth {
 ///     type Param = Vec<f64>;
@@ -61,14 +65,7 @@ pub struct Bounded;
 ///             + (2.0 * x[0] + x[1] - 5.0).powi(2))
 ///     }
 /// }
-/// impl BoxConstraints for Booth {
-///     fn lower(&self) -> &Vec<f64> {
-///         &self.lower
-///     }
-///     fn upper(&self) -> &Vec<f64> {
-///         &self.upper
-///     }
-/// }
+///
 ///
 /// let problem = Booth {
 ///     lower: vec![-5.0, -5.0],
@@ -278,19 +275,26 @@ where
 impl<P, V, F> Solver<P, PointState<V, F>> for Bobyqa<Bounded, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     V: Clone
         + VectorLen
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            Some(state.param().vec_len()),
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         self.work = None;
         let n = state.param().vec_len();
@@ -303,8 +307,11 @@ where
         let template = state.param().clone();
 
         let (work, best_x, best_f) = {
-            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
-                problem.cost(&fill_from(&template, slice))
+            let mut eval = |slice: &[F]| -> Result<
+                F,
+                crate::ConstraintSolveError<P::Error>,
+            > {
+                Ok(problem.cost(&fill_from(&template, slice))?)
             };
             BobyqaWork::try_init(
                 x0,
@@ -334,8 +341,11 @@ where
             .expect("Bobyqa::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
-                problem.cost(&fill_from(&template, slice))
+            let mut eval = |slice: &[F]| -> Result<
+                F,
+                crate::ConstraintSolveError<P::Error>,
+            > {
+                Ok(problem.cost(&fill_from(&template, slice))?)
             };
             work.step(&mut eval)?
         };
@@ -381,7 +391,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::core::constraint::BoxConstraints;
     use crate::core::problem::CostFunction;
     use crate::{Bobyqa, Executor, PointState};
 
@@ -389,20 +398,25 @@ mod tests {
         lower: Vec<f64>,
         upper: Vec<f64>,
     }
+
+    impl crate::ProblemConstraints for Quad {
+        type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for Quad {
         type Param = Vec<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
         fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
             Ok((x[0] - 1.0).powi(2) + 2.0 * (x[1] + 2.0).powi(2))
-        }
-    }
-    impl BoxConstraints for Quad {
-        fn lower(&self) -> &Vec<f64> {
-            &self.lower
-        }
-        fn upper(&self) -> &Vec<f64> {
-            &self.upper
         }
     }
 
@@ -482,6 +496,19 @@ mod tests {
             lower: Vec<f64>,
             upper: Vec<f64>,
         }
+
+        impl crate::ProblemConstraints for Bowl {
+            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+            fn constraint_set(
+                &self,
+            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            {
+                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                    Some(&self.lower),
+                    Some(&self.upper),
+                ))
+            }
+        }
         impl CostFunction for Bowl {
             type Param = Vec<f64>;
             type Output = f64;
@@ -493,14 +520,7 @@ mod tests {
                 Ok((x[0] - 5.0).powi(2) + (x[1] - 5.0).powi(2))
             }
         }
-        impl BoxConstraints for Bowl {
-            fn lower(&self) -> &Vec<f64> {
-                &self.lower
-            }
-            fn upper(&self) -> &Vec<f64> {
-                &self.upper
-            }
-        }
+
         let problem = Bowl {
             lower: vec![-2.0, -2.0],
             upper: vec![2.0, 2.0],
@@ -527,6 +547,19 @@ mod tests {
             lower: Vec<f64>,
             upper: Vec<f64>,
         }
+
+        impl crate::ProblemConstraints for Rosen {
+            type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+            fn constraint_set(
+                &self,
+            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            {
+                crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                    Some(&self.lower),
+                    Some(&self.upper),
+                ))
+            }
+        }
         impl CostFunction for Rosen {
             type Param = Vec<f64>;
             type Output = f64;
@@ -538,14 +571,7 @@ mod tests {
                 Ok(100.0 * (x[1] - x[0] * x[0]).powi(2) + (1.0 - x[0]).powi(2))
             }
         }
-        impl BoxConstraints for Rosen {
-            fn lower(&self) -> &Vec<f64> {
-                &self.lower
-            }
-            fn upper(&self) -> &Vec<f64> {
-                &self.upper
-            }
-        }
+
         let problem = Rosen {
             lower: vec![-5.0, -5.0],
             upper: vec![5.0, 5.0],

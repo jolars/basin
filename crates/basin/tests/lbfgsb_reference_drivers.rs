@@ -83,7 +83,7 @@ where
     basin::Lbfgsb<V>: for<'a> basin::Solver<
             &'a support::Driver<V>,
             basin::FirstOrderState<V>,
-            Error = std::convert::Infallible,
+            Error = basin::ConstraintSolveError<std::convert::Infallible>,
         >,
 {
     use basin::GradientState;
@@ -146,7 +146,7 @@ where
     basin::Lbfgsb<V>: for<'a> basin::Solver<
             &'a support::short::Short<V>,
             basin::FirstOrderState<V>,
-            Error = std::convert::Infallible,
+            Error = basin::ConstraintSolveError<std::convert::Infallible>,
         >,
 {
     use support::short::{Adapter, Case, Short};

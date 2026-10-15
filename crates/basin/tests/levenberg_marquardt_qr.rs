@@ -77,6 +77,15 @@ struct CountedProblem {
 }
 #[derive(Debug, PartialEq)]
 struct CallbackError;
+
+impl basin::ProblemConstraints for CountedProblem {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for CountedProblem {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -200,6 +209,16 @@ fn nonfinite_gradient_fails_before_solving() {
 #[test]
 fn actual_augmented_rank_loss_recovers_with_more_damping() {
     struct Redundant;
+
+    impl basin::ProblemConstraints for Redundant {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl Residual for Redundant {
         type Param = Vec<f64>;
         type Output = Vec<f64>;
@@ -259,6 +278,15 @@ fn callback_errors_propagate_unchanged() {
 }
 
 struct Linear;
+
+impl basin::ProblemConstraints for Linear {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for Linear {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -327,7 +355,16 @@ macro_rules! scaled_gradient_checks {
         #[test]
         fn $solve() {
             struct Fit;
-            impl Residual for Fit {
+
+            impl basin::ProblemConstraints for Fit {
+                type Constraints = basin::NoConstraints;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new()
+                }
+            }
+impl Residual for Fit {
                 type Param = $vector;
                 type Output = $vector;
                 type Error = std::convert::Infallible;
@@ -437,7 +474,16 @@ macro_rules! backend_solve {
         #[test]
         fn $name() {
             struct Fit;
-            impl Residual for Fit {
+
+            impl basin::ProblemConstraints for Fit {
+                type Constraints = basin::NoConstraints;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new()
+                }
+            }
+impl Residual for Fit {
                 type Param = $vector;
                 type Output = $vector;
                 type Error = std::convert::Infallible;

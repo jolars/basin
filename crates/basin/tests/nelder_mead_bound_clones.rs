@@ -1,8 +1,6 @@
 //! Projected steps must borrow box bounds instead of allocating copies.
-use basin::{
-    BoxConstraints, CostFunction, NelderMead, Problem, SimplexProgress, Solver,
-};
 use basin::{ClampInPlace, ScaleInPlace, ScaledAdd};
+use basin::{CostFunction, NelderMead, Problem, SimplexProgress, Solver};
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 
 struct Vector(Vec<f64>, Rc<Cell<usize>>);
@@ -50,6 +48,18 @@ struct Quadratic {
     lower: Vector,
     upper: Vector,
 }
+
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vector>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Quadratic {
     type Param = Vector;
     type Output = f64;
@@ -63,14 +73,7 @@ impl CostFunction for Quadratic {
         Ok(x.0.iter().map(|value| (value - 0.25).powi(2)).sum())
     }
 }
-impl BoxConstraints for Quadratic {
-    fn lower(&self) -> &Vector {
-        &self.lower
-    }
-    fn upper(&self) -> &Vector {
-        &self.upper
-    }
-}
+
 #[test]
 fn projected_iterations_do_not_clone_bounds() {
     let clones = Rc::new(Cell::new(0));

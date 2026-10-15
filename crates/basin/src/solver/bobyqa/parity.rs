@@ -65,7 +65,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::core::constraint::BoxConstraints;
 use crate::core::problem::CostFunction;
 use crate::{Bobyqa, Executor, PointState};
 
@@ -220,6 +219,17 @@ struct Tracing<'a> {
     trace: Rc<RefCell<Vec<Vec<f64>>>>,
 }
 
+impl crate::ProblemConstraints for Tracing<'_> {
+    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Tracing<'_> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -227,15 +237,6 @@ impl CostFunction for Tracing<'_> {
     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
         self.trace.borrow_mut().push(x.clone());
         Ok(objective(self.problem, x))
-    }
-}
-
-impl BoxConstraints for Tracing<'_> {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

@@ -138,6 +138,10 @@ pub enum CgUpdate {
 /// use std::convert::Infallible;
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -418,6 +422,7 @@ where
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     V: Clone + Dot<F> + ScaledAdd<F> + NegInPlace + NormInfinity<F> + VectorLen,
     L: LineSearch<P, V, F, Error = P::Error>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 

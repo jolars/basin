@@ -12,6 +12,14 @@ use basin::{CostFunction, Executor, Mads, PointState, TerminationCode};
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
 
+impl basin::ProblemConstraints for Rosenbrock {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
@@ -28,6 +36,14 @@ impl CostFunction for Rosenbrock {
 /// Sphere, minimum 0 at the origin.
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -199,6 +215,16 @@ fn backend_generic_nalgebra() {
     use crate::backend_aliases::nalgebra::DVector;
 
     struct SphereN;
+
+    impl basin::ProblemConstraints for SphereN {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for SphereN {
         type Param = DVector<f64>;
         type Output = f64;
@@ -235,6 +261,16 @@ fn backend_generic_ndarray() {
     use crate::backend_aliases::ndarray::Array1;
 
     struct SphereA;
+
+    impl basin::ProblemConstraints for SphereA {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for SphereA {
         type Param = Array1<f64>;
         type Output = f64;
@@ -271,6 +307,16 @@ fn backend_generic_faer() {
     use crate::backend_aliases::faer::Col;
 
     struct SphereF;
+
+    impl basin::ProblemConstraints for SphereF {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for SphereF {
         type Param = Col<f64>;
         type Output = f64;

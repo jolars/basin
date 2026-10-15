@@ -71,7 +71,7 @@ impl From<BmvError> for CauchyError {
 }
 
 /// Compute the generalized Cauchy point. See module docs for parameter
-/// roles. Bounds use `±∞` for missing sides (basin's `BoxConstraints`
+/// roles. Bounds use `±∞` for missing sides (basin's `BoxBounds`
 /// convention); the Fortran `nbd(i)` code is recovered per-component
 /// from `l[i].is_finite() / u[i].is_finite()`.
 #[allow(clippy::too_many_arguments)]

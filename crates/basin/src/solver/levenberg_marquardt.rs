@@ -9,13 +9,12 @@ use crate::core::math::{
     MatTransposeVec, NegInPlace, NormInfinity, NormSquared, QrSolveError,
     RegularizedQrSolve, Scalar, ScaleInPlace, ScaledAdd,
 };
-use crate::core::problem::{Jacobian, Problem, Residual};
+use crate::core::problem::Problem;
+#[cfg(test)]
+use crate::core::problem::{Jacobian, Residual};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
 use crate::core::termination::Termination;
-use crate::{
-    LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
-};
 
 use super::least_squares_diagnostics::{
     LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
@@ -228,12 +227,13 @@ pub enum LmDamping {
 /// CSC pattern (always true when `J` has no zero columns); see
 /// `AddDiagonalVectorInPlace` and `MatDiagonal`.
 /// All support `f32` and `f64`; use `LevenbergMarquardt::default()` for `f32`.
-/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
-/// Jacobian types.
+/// Robust objectives additionally require
+/// [`ScaleRowsInPlace`](crate::ScaleRowsInPlace) on custom Jacobian types.
 ///
 /// # State convention
 ///
-/// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss
+/// Wrap the raw problem in [`RobustLeastSquares`](crate::RobustLeastSquares)
+/// to minimize a robust loss
 /// with either damping strategy. The adapter supplies the safeguarded
 /// Gauss–Newton model. Reported costs, actual reductions, and convergence
 /// use the robust objective and its gradient.
@@ -264,7 +264,7 @@ pub enum LmDamping {
 /// For an ordinary residual problem, `state.cost` carries the LM convention
 /// `½‖r‖²`, derived from the
 /// residual the solver evaluates itself. The bound on `P` is
-/// [`Residual`] + [`Jacobian`], not
+/// [`Residual`](crate::Residual) + [`Jacobian`](crate::Jacobian), not
 /// [`CostFunction`](crate::core::problem::CostFunction); problems
 /// whose user-facing `cost()` uses an unscaled `Σ rᵢ²` form will see
 /// `state.cost()` differ from `problem.cost(state.param())` by a
@@ -274,8 +274,9 @@ pub enum LmDamping {
 /// # Examples
 ///
 /// Least-squares fit of an affine residual `r(x) = (x₀ − 1, x₁ − 2)` whose
-/// minimum is `(1, 2)`. Levenberg–Marquardt binds on [`Residual`] +
-/// [`Jacobian`] (not [`CostFunction`](crate::core::problem::CostFunction))
+/// minimum is `(1, 2)`. Levenberg–Marquardt binds on
+/// [`Residual`](crate::Residual) +
+/// [`Jacobian`](crate::Jacobian) (not [`CostFunction`](crate::core::problem::CostFunction))
 /// and runs on the matrix-capable backends:
 ///
 /// ```
@@ -284,6 +285,10 @@ pub enum LmDamping {
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Affine;
+/// impl basin::ProblemConstraints for Affine  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl Residual for Affine {
 ///     type Param = DVector<f64>;
 ///     type Output = DVector<f64>;
@@ -465,7 +470,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
 
     /// Configure the maximum residual/Jacobian-column absolute cosine.
     ///
-    /// With [`RobustLeastSquares`], the test is instead
+    /// With [`RobustLeastSquares`](crate::RobustLeastSquares), the test is instead
     /// `max_j |g_j| / (sqrt(2C) · ‖J̃_j‖) ≤ tolerance`, where `C` is the
     /// robust cost, `g` its gradient, and `J̃` the safeguarded model Jacobian.
     /// The model residual norm can grow under curvature clipping and must
@@ -637,10 +642,10 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     }
 }
 
-impl<P, V, M, F> Solver<P, PointState<V, F>> for LevenbergMarquardt<V, M, F>
+impl<P, V, M, F, E> Solver<P, PointState<V, F>> for LevenbergMarquardt<V, M, F>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    Problem<P>: Evaluation<V, M, F, Error = E>,
     V: ScaledAdd<F>
         + NormSquared<F>
         + NormInfinity<F>
@@ -659,8 +664,9 @@ where
         + AddDiagonalVectorInPlace<V>
         + MatDiagonal<V>
         + Clone,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
-    type Error = <P as Residual>::Error;
+    type Error = E;
     fn should_check_iterate_change(&self) -> bool {
         !self.rejected_step
     }
@@ -680,59 +686,6 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
-    }
-}
-
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
-    for LevenbergMarquardt<V, M, F>
-where
-    F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
-    V: ScaledAdd<F>
-        + NormSquared<F>
-        + NormInfinity<F>
-        + NegInPlace
-        + Dot<F>
-        + ScaleInPlace<F>
-        + ComponentMulAssign
-        + ComponentDivAssign
-        + ComponentZip<F>
-        + ComponentMaxAssign
-        + FloorZerosInPlace<F>
-        + Clone,
-    M: GramMatrix
-        + MatTransposeVec<V>
-        + LinearSolveSpd<V>
-        + AddDiagonalVectorInPlace<V>
-        + MatDiagonal<V>
-        + Clone,
-    L: LossFunction<F>,
-    V: VectorLen + VectorIndex<F>,
-    M: ScaleRowsInPlace<F>,
-{
-    type Error = <P as Residual>::Error;
-    fn should_check_iterate_change(&self) -> bool {
-        !self.rejected_step
-    }
-    fn reset_convergence(&mut self) {
-        self.native_convergence.clear();
-        if let Some(trace) = &mut self.trace {
-            trace.reset();
-        }
-    }
-    fn init(
-        &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
-        self.init_model::<_, M, NormalEquations>(problem, state)
-    }
-    fn next_iter(
-        &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
@@ -1641,7 +1594,8 @@ where
 /// near rank deficiency; neither strategy guarantees MINPACK's nonlinear
 /// convergence trajectory or evaluation counts.
 ///
-/// [`RobustLeastSquares`] supplies robust objectives with the same model,
+/// [`RobustLeastSquares`](crate::RobustLeastSquares) supplies robust
+/// objectives with the same model,
 /// cost, and convergence conventions as [`LevenbergMarquardt`].
 /// Its [robust stopping guidance](LevenbergMarquardt#state-convention) also
 /// applies to this factorization.
@@ -1667,8 +1621,8 @@ where
 /// `Col<F>`/`Mat<F>`, for `f32` and `f64`, in pure Rust. Sparse matrices
 /// deliberately lack [`FactorizePivotedQr`]: nalgebra-sparse has no QR, and
 /// faer's sparse QR does not provide numerical column pivoting.
-/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
-/// Jacobian types.
+/// Robust objectives additionally require
+/// [`ScaleRowsInPlace`](crate::ScaleRowsInPlace) on custom Jacobian types.
 ///
 /// # References
 ///
@@ -1883,59 +1837,11 @@ where
         self
     }
 }
-impl<P, V, M, F> Solver<P, PointState<V, F>> for LevenbergMarquardtQr<V, M, F>
-where
-    F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
-    V: ScaledAdd<F>
-        + NormSquared<F>
-        + NormInfinity<F>
-        + NegInPlace
-        + Dot<F>
-        + ScaleInPlace<F>
-        + ComponentMulAssign
-        + ComponentDivAssign
-        + ComponentZip<F>
-        + ComponentMaxAssign
-        + FloorZerosInPlace<F>
-        + Clone,
-    M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
-{
-    type Error = <P as Residual>::Error;
-    fn should_check_iterate_change(&self) -> bool {
-        !self.inner.rejected_step
-    }
-    fn reset_convergence(&mut self) {
-        self.inner.native_convergence.clear();
-        if let Some(trace) = &mut self.inner.trace {
-            trace.reset();
-        }
-    }
-    fn init(
-        &mut self,
-        problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
-        self.inner.init_model::<_, M, PivotedQr>(problem, state)
-    }
-    fn next_iter(
-        &mut self,
-        problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        self.inner.next_iter_model::<_, M, PivotedQr>(
-            problem,
-            state,
-            self.rank_tolerance,
-        )
-    }
-}
-
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
+impl<P, V, M, F, E> Solver<P, PointState<V, F>>
     for LevenbergMarquardtQr<V, M, F>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    Problem<P>: Evaluation<V, M, F, Error = E>,
     V: ScaledAdd<F>
         + NormSquared<F>
         + NormInfinity<F>
@@ -1949,11 +1855,9 @@ where
         + FloorZerosInPlace<F>
         + Clone,
     M: FactorizePivotedQr<V, F> + MatTransposeVec<V>,
-    L: LossFunction<F>,
-    V: VectorLen + VectorIndex<F>,
-    M: ScaleRowsInPlace<F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
-    type Error = <P as Residual>::Error;
+    type Error = E;
     fn should_check_iterate_change(&self) -> bool {
         !self.inner.rejected_step
     }
@@ -1965,14 +1869,14 @@ where
     }
     fn init(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
         self.inner.init_model::<_, M, PivotedQr>(problem, state)
     }
     fn next_iter(
         &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
+        problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.inner.next_iter_model::<_, M, PivotedQr>(
@@ -2042,6 +1946,16 @@ mod tests {
         }
     }
     struct Fit;
+
+    impl crate::ProblemConstraints for Fit {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl Residual for Fit {
         type Param = Vec<f64>;
         type Output = Vec<f64>;

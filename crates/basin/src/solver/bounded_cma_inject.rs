@@ -1,4 +1,4 @@
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::executor::OptimizationResult;
 use crate::core::inner::{InitialState, InnerExecutor};
 use crate::core::math::{
@@ -39,14 +39,14 @@ use crate::solver::cma_inject::{MemeticInner, default_c_y};
 /// [`NelderMead`](crate::solver::NelderMead),
 /// [`LevenbergMarquardt`](crate::solver::LevenbergMarquardt), and
 /// [`Lbfgsb`](crate::Lbfgsb). L-BFGS-B is the natural inner
-/// here: its `P: BoxConstraints` bound matches the outer's, and the
+/// here: its `P::Constraints = Constraints<BoxBounds<V>>` bound matches the outer's, and the
 /// same box flows through both ends of the composition.
 ///
-/// Note an asymmetry: NM and LM are unconstrained solvers, so even
-/// when the outer enforces bounds, their inner polish may step
-/// outside the box. The outer's BoundPenalty re-pulls injected
-/// candidates back into feasibility through the penalized
-/// re-evaluation below.
+/// Unconstrained local solvers such as NM and LM require
+/// [`RelaxedInner::new`](crate::RelaxedInner::new). Their polish may step outside
+/// the box; the outer repairs and reevaluates the injected result using its
+/// existing BoundPenalty calculation. A box-respecting inner such as L-BFGS-B
+/// is passed directly. Additional constraint blocks are rejected at compile time.
 ///
 /// Shared [`PopulationProgress`] contains repaired points and raw objective
 /// costs. The outer solver retains genotypes and penalized ranking values.
@@ -208,9 +208,13 @@ impl<P, I, V, M, F> Solver<P, PopulationProgress<V, F>>
     for BoundedCmaInject<I, V, M, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     I: MemeticInner<V, F>
-        + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
+        + Solver<
+            P,
+            <I as InitialState<V>>::State,
+            Error = crate::ConstraintSolveError<P::Error>,
+        >,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone
@@ -231,16 +235,26 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
-    BoundedCmaEs<V, M, F>:
-        Solver<P, PopulationProgress<V, F>, Error = P::Error>,
+    BoundedCmaEs<V, M, F>: Solver<
+            P,
+            PopulationProgress<V, F>,
+            Error = crate::ConstraintSolveError<P::Error>,
+        >,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            None,
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         if let Some(records) = &mut self.inner_diagnostics {
             records.clear();
         }

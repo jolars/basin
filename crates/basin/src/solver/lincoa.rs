@@ -11,7 +11,7 @@
 //! subproblem for the linearly-constrained `trstep` (projected truncated-CG) with
 //! the active-set step `getact`/`ActiveSetQr`. It binds
 //! [`CostFunction`](crate::core::problem::CostFunction) +
-//! [`LinearConstraints`](crate::core::constraint::LinearConstraints) (the
+//! [`Constraints`](crate::Constraints) (the
 //! general linear form: box bounds, equalities, and inequalities).
 //!
 //! # Architecture
@@ -23,13 +23,13 @@
 //! (`ActiveSetQr`) threaded across iterations and the residual vector `rescon`.
 //! Box bounds and linear equalities fold into the inequality form `A x ≤ b`
 //! exactly as PRIMA's `get_lincon` does (`fold_constraints`); the public solver
-//! binds the general-form `LinearConstraints` aggregator, which carries all
+//! binds the general-form `Constraints` aggregator, which carries all
 //! three kinds at once (see [`Lincoa`]).
 //!
 //! # Backends
 //!
 //! Backend-generic over the parameter vector; the constraint matrix `A` is read
-//! through [`MatTransposeVec`](crate::core::math::MatTransposeVec) only (each
+//! through [`crate::MatTransposeVecInto`](crate::core::math::MatTransposeVec) only (each
 //! constraint normal is `Aᵀ eⱼ`), which every backend's matrix type provides
 //! (`DenseMatrix` for `Vec<F>`, `Array2`, `DMatrix`, `Mat`), with `F = f64`
 //! or `f32`. Model algebra uses pure-Rust `Vec<F>` storage; wasm-clean.
@@ -49,9 +49,10 @@ pub(crate) mod trstep;
 #[cfg(test)]
 mod parity;
 
-use crate::core::constraint::LinearConstraints;
+use crate::ConstraintSolveError;
+use crate::core::constraint::evaluation::{LincoaSet, invalid};
 use crate::core::inner::InitialState;
-use crate::core::math::{MatTransposeVec, Scalar, VectorLen};
+use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
@@ -72,10 +73,11 @@ use init::fold_constraints;
 ///
 /// Drive it with an [`Executor`](crate::Executor) over a [`PointState`] on a
 /// problem implementing [`CostFunction`] and
-/// [`LinearConstraints`] (here only the inequality block is present):
+/// declaring its bounds and linear blocks in [`Constraints`](crate::Constraints)
+/// (here only the inequality block is present):
 ///
 /// ```
-/// use basin::core::constraint::LinearConstraints;
+///
 /// use basin::{CostFunction, DenseMatrix, Executor, Lincoa, PointState};
 ///
 /// // min ‖x − (2, 2)‖²  s.t.  x0 + x1 ≤ 2   (optimum: the projection (1, 1)).
@@ -83,6 +85,10 @@ use init::fold_constraints;
 /// struct Proj {
 ///     a: DenseMatrix<f64>,
 ///     b: Vec<f64>,
+/// }
+/// impl basin::ProblemConstraints for Proj  {
+///     type Constraints = basin::Constraints<basin::NoBounds, basin::LinearBlocks<basin::NoLinearBlock, basin::LinearBlock<DenseMatrix<f64>, Vec<f64>>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_linear_inequalities(basin::LinearBlock::optional({ Some((&self.a, &self.b)) })) }
 /// }
 /// impl CostFunction for Proj {
 ///     type Param = Vec<f64>;
@@ -92,12 +98,7 @@ use init::fold_constraints;
 ///         Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
 ///     }
 /// }
-/// impl LinearConstraints for Proj {
-///     type Matrix = DenseMatrix<f64>;
-///     fn inequalities(&self) -> Option<(&DenseMatrix<f64>, &Vec<f64>)> {
-///         Some((&self.a, &self.b))
-///     }
-/// }
+///
 ///
 /// let problem = Proj {
 ///     a: DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]),
@@ -127,7 +128,7 @@ use init::fold_constraints;
 /// # Constraints
 ///
 /// LINCOA binds the general-form
-/// [`LinearConstraints`]: a problem
+/// [`Constraints`](crate::Constraints): a problem
 /// exposes any combination of box bounds, linear equalities, and linear
 /// inequalities (each accessor is optional). All present blocks are folded into
 /// one unit-normalized `A x ≤ b` system: bounds as `±eᵢ` rows, an equality
@@ -166,7 +167,7 @@ use init::fold_constraints;
 /// `Vec<F>`/`DenseMatrix<F>`, nalgebra `DVector<F>`/`DMatrix<F>`, ndarray
 /// `Array1<F>`/`Array2<F>`, and faer `Col<F>`/`Mat<F>`, for every supported
 /// backend release and `F = f64` or `f32`. Vectors need [`Clone`], [`VectorLen`],
-/// and indexing; constraint matrices need [`MatTransposeVec`]. Model algebra
+/// and indexing; constraint matrices need [`crate::MatTransposeVecInto`]. Model algebra
 /// uses pure-Rust `Vec<F>` storage, with no BLAS/LAPACK dependency. Choose radii
 /// appropriate to the scalar precision.
 ///
@@ -293,14 +294,14 @@ where
 impl<P, V, F> Solver<P, PointState<V, F>> for Lincoa<F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + LinearConstraints,
-    P::Matrix: MatTransposeVec<V>,
+    P: CostFunction<Param = V, Output = F>,
+    P::Constraints: LincoaSet<V, F>,
     V: Clone
         + VectorLen
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
@@ -316,52 +317,25 @@ where
         let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
         let template = state.param().clone();
 
-        // Extract each linear block into `(normal, rhs)` rows. A constraint
-        // normal is row `j` of `A` = `Aᵀ eⱼ` (one `mat_transpose_vec` per row);
-        // `b` is read element-wise. `fold_constraints` then folds box bounds,
-        // equalities, and inequalities into one unit-normalized `A x ≤ b` system
-        // and relaxes `b` for a feasible start.
-        let extract_rows = |a: &P::Matrix, b: &V| -> Vec<(Vec<F>, F)> {
-            let m = b.vec_len();
-            (0..m)
-                .map(|j| {
-                    let mut ej = b.clone();
-                    for i in 0..m {
-                        ej[i] = if i == j { F::one() } else { F::zero() };
-                    }
-                    let normal = a.mat_transpose_vec(&ej);
-                    ((0..n).map(|i| normal[i]).collect(), b[j])
-                })
-                .collect()
-        };
-        let (amat, bvec_abs) = {
-            let inner = problem.inner();
-            let ineq = inner
-                .inequalities()
-                .map(|(a, b)| extract_rows(a, b))
-                .unwrap_or_default();
-            let eq = inner
-                .equalities()
-                .map(|(a, b)| extract_rows(a, b))
-                .unwrap_or_default();
-            let lower: Option<Vec<F>> =
-                inner.lower().map(|v| (0..n).map(|i| v[i]).collect());
-            let upper: Option<Vec<F>> =
-                inner.upper().map(|v| (0..n).map(|i| v[i]).collect());
-            fold_constraints(
-                n,
-                &x0,
-                lower.as_deref(),
-                upper.as_deref(),
-                &eq,
-                &ineq,
-            )
-        };
+        let data = P::Constraints::data(
+            problem.inner().constraint_set(),
+            state.param(),
+        )
+        .map_err(invalid)?;
+        let (amat, bvec_abs) = fold_constraints(
+            n,
+            &x0,
+            data.bounds.lower.as_deref(),
+            data.bounds.upper.as_deref(),
+            &data.equalities,
+            &data.inequalities,
+        );
 
         let (work, best_x, best_f) = {
-            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
-                problem.cost(&fill_from(&template, slice))
-            };
+            let mut eval =
+                |slice: &[F]| -> Result<F, ConstraintSolveError<P::Error>> {
+                    Ok(problem.cost(&fill_from(&template, slice))?)
+                };
             LincoaWork::try_init(
                 x0,
                 amat,
@@ -390,9 +364,10 @@ where
             .expect("Lincoa::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
-                problem.cost(&fill_from(&template, slice))
-            };
+            let mut eval =
+                |slice: &[F]| -> Result<F, ConstraintSolveError<P::Error>> {
+                    Ok(problem.cost(&fill_from(&template, slice))?)
+                };
             work.step(&mut eval)?
         };
 

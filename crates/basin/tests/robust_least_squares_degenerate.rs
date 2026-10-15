@@ -1,8 +1,8 @@
 use basin::{
-    BoxConstraints, CostFunction, DenseMatrix, Executor, GaussNewton, Gradient,
-    HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, PointState,
-    Residual, RobustLeastSquares, Scalar, Solver, SquaredLoss, TerminationCode,
-    Trf, TrustRegionReflective,
+    CostFunction, DenseMatrix, Executor, GaussNewton, Gradient, HuberLoss,
+    Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, PointState, Residual,
+    RobustLeastSquares, Scalar, Solver, SquaredLoss, TerminationCode, Trf,
+    TrustRegionReflective,
 };
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 
@@ -22,6 +22,18 @@ impl Fit {
             lower: vec![-1.0; 2],
             upper: vec![1.0; 2],
         }
+    }
+}
+
+impl basin::ProblemConstraints for Fit {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
     }
 }
 impl CostFunction for Fit {
@@ -63,21 +75,19 @@ impl Jacobian for Fit {
         Ok((self.residual(x)?, self.jacobian(x)?))
     }
 }
-impl BoxConstraints for Fit {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
 
-fn check_initial<S>(solver: impl Fn() -> S)
+fn check_initial<S, P, E>(solver: impl Fn() -> S, prepare: impl Fn(Fit) -> P)
 where
+    P: Residual<
+            Param = Vec<f64>,
+            Output = Vec<f64>,
+            Error = std::convert::Infallible,
+        >,
+    E: std::fmt::Debug,
     S: Solver<
-            RobustLeastSquares<Fit, HuberLoss>,
+            RobustLeastSquares<P, HuberLoss>,
             PointState<Vec<f64>>,
-            Error = Infallible,
+            Error = E,
         >,
 {
     for invalid in [false, true] {
@@ -85,7 +95,7 @@ where
         fit.invalid_jacobian = invalid;
         let calls = Rc::clone(&fit.fused_calls);
         let result = Executor::new(
-            RobustLeastSquares::new(fit, HuberLoss),
+            RobustLeastSquares::new(prepare(fit), HuberLoss),
             solver(),
             PointState::new(vec![0.0; 2]),
         )
@@ -110,23 +120,29 @@ where
 
 #[test]
 fn zero_residuals_and_invalid_derivatives_use_one_fused_evaluation() {
-    check_initial(GaussNewton::new);
-    check_initial(LevenbergMarquardt::new);
-    check_initial(LevenbergMarquardtQr::new);
-    check_initial(Trf::new);
-    check_initial(TrustRegionReflective::new);
+    check_initial(GaussNewton::new, basin::SamplingDomain::new);
+    check_initial(LevenbergMarquardt::new, basin::SamplingDomain::new);
+    check_initial(LevenbergMarquardtQr::new, basin::SamplingDomain::new);
+    check_initial(Trf::new, std::convert::identity);
+    check_initial(TrustRegionReflective::new, std::convert::identity);
 }
 
-fn check_rank_deficient<S>(solver: S)
+fn check_rank_deficient<S, P, E>(solver: S, prepare: impl Fn(Fit) -> P)
 where
+    P: Residual<
+            Param = Vec<f64>,
+            Output = Vec<f64>,
+            Error = std::convert::Infallible,
+        >,
+    E: std::fmt::Debug,
     S: Solver<
-            RobustLeastSquares<Fit, HuberLoss>,
+            RobustLeastSquares<P, HuberLoss>,
             PointState<Vec<f64>>,
-            Error = Infallible,
+            Error = E,
         >,
 {
     let result = Executor::new(
-        RobustLeastSquares::new(Fit::new(true), HuberLoss),
+        RobustLeastSquares::new(prepare(Fit::new(true)), HuberLoss),
         solver,
         PointState::new(vec![0.0; 2]),
     )
@@ -140,14 +156,25 @@ where
 
 #[test]
 fn damping_and_dense_svd_handle_a_rank_deficient_robust_model() {
-    check_rank_deficient(LevenbergMarquardt::new());
-    check_rank_deficient(LevenbergMarquardtQr::new());
-    check_rank_deficient(Trf::new());
-    check_rank_deficient(TrustRegionReflective::new());
+    check_rank_deficient(LevenbergMarquardt::new(), basin::SamplingDomain::new);
+    check_rank_deficient(
+        LevenbergMarquardtQr::new(),
+        basin::SamplingDomain::new,
+    );
+    check_rank_deficient(Trf::new(), std::convert::identity);
+    check_rank_deficient(TrustRegionReflective::new(), std::convert::identity);
 }
 
 struct IdentityResidual<F>(std::marker::PhantomData<F>);
 
+impl<F: Scalar> basin::ProblemConstraints for IdentityResidual<F> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<F: Scalar> Residual for IdentityResidual<F> {
     type Param = Vec<F>;
     type Output = Vec<F>;

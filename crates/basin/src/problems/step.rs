@@ -76,6 +76,14 @@ impl<P> HasSpec for Step<P> {
     const SPEC: &'static ProblemSpec = &STEP_SPEC;
 }
 
+impl crate::ProblemConstraints for Step<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for Step<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -92,7 +100,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl CostFunction for Step<DVector<f64>> {
+    impl crate::ProblemConstraints for Step<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Step<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -112,7 +124,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl CostFunction for Step<Array1<f64>> {
+    impl crate::ProblemConstraints for Step<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Step<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -132,7 +148,11 @@ crate::backend_macros::faer_versions! {
     use crate::CostFunction;
     use faer::Col;
 
-    impl CostFunction for Step<Col<f64>> {
+    impl crate::ProblemConstraints for Step<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Step<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;

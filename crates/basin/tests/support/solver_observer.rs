@@ -12,6 +12,15 @@ pub enum Scenario {
 }
 
 pub struct Linear;
+
+impl basin::ProblemConstraints for Linear {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Linear {
     type Param = f64;
     type Output = f64;

@@ -47,9 +47,11 @@ fn example_bounded_cma_inject_lm_on_booth_corner() {
     //    inner cleanly once ‖Jᵀr‖_∞ ≤ 1e-8 (2–3 iters on this
     //    quadratic), so we don't need to cap inner iters explicitly.
     // -----------------------------------------------------------------
-    let solver =
-        BoundedCmaInject::with_inner_solver(cma, LevenbergMarquardt::new())
-            .with_k(1);
+    let solver = BoundedCmaInject::with_inner_solver(
+        cma,
+        basin::RelaxedInner::new(LevenbergMarquardt::new()),
+    )
+    .with_k(1);
 
     // -----------------------------------------------------------------
     // 4. Drive.

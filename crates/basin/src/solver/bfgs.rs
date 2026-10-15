@@ -47,10 +47,13 @@ use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 ///
 /// ```
 /// use basin::{
-///     Bfgs, CostFunction, FirstOrderState, Executor, Gradient,
-/// };
+///     Bfgs, CostFunction, FirstOrderState, Executor, Gradient};
 ///
 /// struct Rosenbrock;
+/// impl basin::ProblemConstraints for Rosenbrock  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Rosenbrock {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -161,6 +164,7 @@ where
         + MatrixIdentity
         + ScaleInPlace<F>
         + GeneralRankOneUpdate<V, F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 

@@ -13,15 +13,24 @@
 //! they guard the support-matrix ✓ for nalgebra/ndarray/faer the same way
 //! `lincoa_public.rs` does for the linear-constrained family.
 
-use basin::{
-    Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
-    SelectedState, TerminationCode,
-};
+use basin::{Cobyla, CostFunction, Executor, SelectedState, TerminationCode};
 
 /// `min x0·x1` s.t. `x0² + x1² ≤ 1` on `Vec<f64>` (default features). The
 /// constrained optimum is `F* = −1/2` on the unit circle.
 struct Disk;
 
+impl basin::ProblemConstraints for Disk {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_inequalities(1)
+    }
+}
 impl CostFunction for Disk {
     type Param = Vec<f64>;
     type Output = f64;
@@ -31,15 +40,16 @@ impl CostFunction for Disk {
     }
 }
 
-impl NonlinearInequalityConstraints for Disk {
-    fn constraints(
+impl basin::NonlinearInequalityValues for Disk {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = std::convert::Infallible;
+    fn nonlinear_inequalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Vec<f64>, std::convert::Infallible> {
-        Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
-    }
-    fn num_constraints(&self) -> usize {
-        1
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        { Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0]) }
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -105,6 +115,23 @@ fn callback_errors_abort_immediately_during_initialization_and_steps() {
         fail_constraint: bool,
         fail_at: usize,
     }
+
+    impl basin::ProblemConstraints for FallibleDisk<'_> {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for FallibleDisk<'_> {
         type Param = Vec<f64>;
         type Output = f64;
@@ -119,20 +146,28 @@ fn callback_errors_abort_immediately_during_initialization_and_steps() {
             }
         }
     }
-    impl NonlinearInequalityConstraints for FallibleDisk<'_> {
-        fn num_constraints(&self) -> usize {
-            1
-        }
-        fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
-            let call = self.constraints.get();
-            self.constraints.set(call + 1);
-            if self.fail_constraint && call == self.fail_at {
-                Err(CallbackError(true, call))
-            } else {
-                Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
+    impl basin::NonlinearInequalityValues for FallibleDisk<'_> {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = CallbackError;
+        fn nonlinear_inequalities(
+            &self,
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            {
+                let call = self.constraints.get();
+                self.constraints.set(call + 1);
+                if self.fail_constraint && call == self.fail_at {
+                    Err(CallbackError(true, call))
+                } else {
+                    Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
+                }
             }
+            .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
+
     for fail_constraint in [false, true] {
         for fail_at in 0..16 {
             let costs = Cell::new(0);
@@ -152,7 +187,7 @@ fn callback_errors_abort_immediately_during_initialization_and_steps() {
             .max_iter(1000)
             .run_with_solver();
             assert!(
-                matches!(result, Err(e) if e == CallbackError(fail_constraint, fail_at))
+                matches!(result, Err(basin::ConstraintSolveError::Evaluation(e)) if e == CallbackError(fail_constraint, fail_at))
             );
             assert_eq!(costs.get(), fail_at + 1);
             assert_eq!(
@@ -172,6 +207,23 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
         projected: &'a Cell<u64>,
         budget: u64,
     }
+
+    impl basin::ProblemConstraints for GuardedBox<'_> {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(2)
+        }
+    }
     impl CostFunction for GuardedBox<'_> {
         type Param = Vec<f64>;
         type Output = f64;
@@ -188,14 +240,20 @@ fn projected_callbacks_retain_their_hard_budget_and_box_feasibility() {
             Ok((projected - 2.0).powi(2))
         }
     }
-    impl NonlinearInequalityConstraints for GuardedBox<'_> {
-        fn num_constraints(&self) -> usize {
-            2
-        }
-        fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-            Ok(vec![-1.0 - x[0], x[0] - 1.0])
+    impl basin::NonlinearInequalityValues for GuardedBox<'_> {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = Infallible;
+        fn nonlinear_inequalities(
+            &self,
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(vec![-1.0 - x[0], x[0] - 1.0]) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
+
     for budget in [1, 2, 3, 5, 8] {
         let calls = Cell::new(0);
         let projected = Cell::new(0);
@@ -255,6 +313,23 @@ fn backend_generic_nalgebra() {
     use crate::backend_aliases::nalgebra::DVector;
 
     struct Disk;
+
+    impl basin::ProblemConstraints for Disk {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for Disk {
         type Param = DVector<f64>;
         type Output = f64;
@@ -266,15 +341,17 @@ fn backend_generic_nalgebra() {
             Ok(x[0] * x[1])
         }
     }
-    impl NonlinearInequalityConstraints for Disk {
-        fn constraints(
+    impl basin::NonlinearInequalityValues for Disk {
+        type Param = DVector<f64>;
+        type Values = DVector<f64>;
+        type Error = std::convert::Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &DVector<f64>,
-        ) -> Result<DVector<f64>, std::convert::Infallible> {
-            Ok(DVector::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0]))
-        }
-        fn num_constraints(&self) -> usize {
-            1
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(DVector::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0])) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
@@ -307,6 +384,23 @@ fn backend_generic_ndarray() {
     use crate::backend_aliases::ndarray::Array1;
 
     struct Disk;
+
+    impl basin::ProblemConstraints for Disk {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for Disk {
         type Param = Array1<f64>;
         type Output = f64;
@@ -318,15 +412,17 @@ fn backend_generic_ndarray() {
             Ok(x[0] * x[1])
         }
     }
-    impl NonlinearInequalityConstraints for Disk {
-        fn constraints(
+    impl basin::NonlinearInequalityValues for Disk {
+        type Param = Array1<f64>;
+        type Values = Array1<f64>;
+        type Error = std::convert::Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Array1<f64>,
-        ) -> Result<Array1<f64>, std::convert::Infallible> {
-            Ok(Array1::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0]))
-        }
-        fn num_constraints(&self) -> usize {
-            1
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(Array1::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0])) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
@@ -359,6 +455,23 @@ fn backend_generic_faer() {
     use crate::backend_aliases::faer::Col;
 
     struct Disk;
+
+    impl basin::ProblemConstraints for Disk {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for Disk {
         type Param = Col<f64>;
         type Output = f64;
@@ -367,16 +480,20 @@ fn backend_generic_faer() {
             Ok(x[0] * x[1])
         }
     }
-    impl NonlinearInequalityConstraints for Disk {
-        fn constraints(
+    impl basin::NonlinearInequalityValues for Disk {
+        type Param = Col<f64>;
+        type Values = Col<f64>;
+        type Error = std::convert::Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Col<f64>,
-        ) -> Result<Col<f64>, std::convert::Infallible> {
-            let c = x[0] * x[0] + x[1] * x[1] - 1.0;
-            Ok(Col::from_fn(1, |_| c))
-        }
-        fn num_constraints(&self) -> usize {
-            1
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            {
+                let c = x[0] * x[0] + x[1] * x[1] - 1.0;
+                Ok(Col::from_fn(1, |_| c))
+            }
+            .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
@@ -410,6 +527,23 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
     use std::convert::Infallible;
 
     struct Sphere(usize);
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(self.0)
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Vec<f64>;
         type Output = f64;
@@ -418,12 +552,17 @@ fn reused_solver_resizes_scratch_and_keeps_best_snapshot_independent() {
             Ok(x.iter().map(|v| v * v).sum())
         }
     }
-    impl NonlinearInequalityConstraints for Sphere {
-        fn num_constraints(&self) -> usize {
-            self.0
-        }
-        fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-            Ok((0..self.0).map(|i| x[i % x.len()] - 4.0).collect())
+    impl basin::NonlinearInequalityValues for Sphere {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = Infallible;
+        fn nonlinear_inequalities(
+            &self,
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok((0..self.0).map(|i| x[i % x.len()] - 4.0).collect()) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 

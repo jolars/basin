@@ -79,6 +79,14 @@ impl<P> HasSpec for HolderTable<P> {
     const SPEC: &'static ProblemSpec = &HOLDER_TABLE_SPEC;
 }
 
+impl crate::ProblemConstraints for HolderTable<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for HolderTable<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -95,7 +103,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl CostFunction for HolderTable<DVector<f64>> {
+    impl crate::ProblemConstraints for HolderTable<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for HolderTable<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -115,7 +127,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl CostFunction for HolderTable<Array1<f64>> {
+    impl crate::ProblemConstraints for HolderTable<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for HolderTable<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -135,7 +151,11 @@ crate::backend_macros::faer_versions! {
     use crate::CostFunction;
     use faer::Col;
 
-    impl CostFunction for HolderTable<Col<f64>> {
+    impl crate::ProblemConstraints for HolderTable<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for HolderTable<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;

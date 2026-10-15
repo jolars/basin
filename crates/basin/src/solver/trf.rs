@@ -1,4 +1,4 @@
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::inner::InitialState;
 use crate::core::least_squares::evaluation::{BoundedEvaluation, NllsStep};
 use crate::core::math::{
@@ -68,7 +68,7 @@ use super::least_squares_diagnostics::{
 /// same iterates, same convergence. `Trf` strictly subsumes
 /// [`LevenbergMarquardt`](super::LevenbergMarquardt) at the trait-bound
 /// level (the reverse is a compile error: LM bounds on
-/// `Residual + Jacobian` only, not [`BoxConstraints`]).
+/// `Residual + Jacobian` only, not [`BoxBounds`](crate::BoxBounds)).
 ///
 /// # Simplified bounded-LM variant
 ///
@@ -159,10 +159,10 @@ use super::least_squares_diagnostics::{
 /// For an ordinary residual problem, as with
 /// [`LevenbergMarquardt`](super::LevenbergMarquardt),
 /// `state.cost` carries the LM convention `½‖r‖²`. The bound on `P`
-/// includes [`BoxConstraints`] (which inherits
-/// [`CostFunction`](crate::core::problem::CostFunction)) but the solver
-/// never calls `cost()`; it computes `½‖r‖²` from the residual it
-/// evaluates itself. Problems whose user-facing `cost()` uses an
+/// requires a box-only [`ProblemConstraints`](crate::ProblemConstraints)
+/// declaration independent of `CostFunction`. The solver computes `½‖r‖²`
+/// from the residual and never calls `cost()`. Problems whose user-facing
+/// `cost()` uses an
 /// unscaled `Σ rᵢ²` form (e.g.
 /// [`BoothBoxedResiduals`](https://docs.rs/basin/latest/basin/problems/booth/struct.BoothBoxedResiduals.html),
 /// available with the `problems` feature) will
@@ -173,7 +173,7 @@ use super::least_squares_diagnostics::{
 ///
 /// See [`LevenbergMarquardt`](crate::LevenbergMarquardt) for the
 /// `Residual` + `Jacobian` least-squares pattern; `Trf` additionally
-/// requires the problem to implement `BoxConstraints` and is constructed
+/// requires a box-only constraint declaration and is constructed
 /// with `Trf::new()`.
 pub struct Trf<V, M, F: Scalar = f64> {
     tol_grad: Option<F>,
@@ -327,7 +327,7 @@ where
     F: Scalar,
     P: Residual<Param = V, Output = V>
         + Jacobian<Jacobian = M>
-        + BoxConstraints<Param = V>,
+        + BoxProblem<Param = V>,
     V: ScaledAdd<F>
         + NormSquared<F>
         + NegInPlace
@@ -340,8 +340,9 @@ where
         + AddDiagonalVectorInPlace<V>
         + MaxDiagonal<F>
         + Clone,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = <P as Residual>::Error;
+    type Error = crate::ConstraintSolveError<<P as Residual>::Error>;
     fn should_check_iterate_change(&self) -> bool {
         !self.rejected_step
     }
@@ -350,7 +351,14 @@ where
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            Some(state.param().vec_len()),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
@@ -358,6 +366,7 @@ where
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -365,9 +374,12 @@ impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for Trf<V, M, F>
 where
     F: Scalar,
+    P: crate::ProblemConstraints<
+            Constraints = crate::Constraints<crate::BoxBounds<V>>,
+        >,
     P: Residual<Param = V, Output = V>
         + Jacobian<Jacobian = M>
-        + BoxConstraints<Param = V>,
+        + BoxProblem<Param = V>,
     V: ScaledAdd<F>
         + NormSquared<F>
         + NegInPlace
@@ -383,8 +395,9 @@ where
     L: LossFunction<F>,
     V: VectorLen + VectorIndex<F>,
     M: ScaleRowsInPlace<F>,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = <P as Residual>::Error;
+    type Error = crate::ConstraintSolveError<<P as Residual>::Error>;
     fn should_check_iterate_change(&self) -> bool {
         !self.rejected_step
     }
@@ -393,7 +406,14 @@ where
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            Some(state.param().vec_len()),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
@@ -401,6 +421,7 @@ where
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
 }
 

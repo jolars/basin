@@ -12,6 +12,15 @@ struct Script<F> {
     call: Cell<usize>,
     fail: Option<usize>,
 }
+
+impl<F: Scalar> basin::ProblemConstraints for Script<F> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<F: Scalar> CostFunction for Script<F> {
     type Param = Vec<F>;
     type Output = F;
@@ -151,6 +160,15 @@ struct Quadratic<F> {
     flat: bool,
     fail: bool,
     scalar: std::marker::PhantomData<F>,
+}
+
+impl<F: Scalar> basin::ProblemConstraints for Quadratic<F> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
 }
 impl<F: Scalar> CostFunction for Quadratic<F> {
     type Param = Vec<F>;

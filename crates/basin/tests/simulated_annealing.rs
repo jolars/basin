@@ -8,6 +8,14 @@ use std::convert::Infallible;
 
 struct IdentityCost;
 
+impl basin::ProblemConstraints for IdentityCost {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for IdentityCost {
     type Param = i32;
     type Output = f64;
@@ -25,6 +33,14 @@ enum ApplicationError {
 
 struct FallibleCost;
 
+impl basin::ProblemConstraints for FallibleCost {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for FallibleCost {
     type Param = i32;
     type Output = f64;
@@ -352,6 +368,14 @@ fn repeated_reannealing_builder_replaces_only_its_threshold() {
 
 struct NonFiniteCost;
 
+impl basin::ProblemConstraints for NonFiniteCost {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for NonFiniteCost {
     type Param = i32;
     type Output = f64;
@@ -442,6 +466,16 @@ fn f32_scalar_and_non_numeric_parameter_round_trip() {
     }
 
     struct LabelCost;
+
+    impl basin::ProblemConstraints for LabelCost {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for LabelCost {
         type Param = Label;
         type Output = f32;
@@ -472,6 +506,16 @@ fn f32_scalar_and_non_numeric_parameter_round_trip() {
 #[test]
 fn continuous_neighbor_reaches_the_analytic_sphere_minimum() {
     struct Sphere;
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Vec<f64>;
         type Output = f64;
@@ -503,6 +547,16 @@ fn discrete_permutation_neighbor_improves_a_tour() {
     use basin::core::rng::RngExt;
 
     struct Tour;
+
+    impl basin::ProblemConstraints for Tour {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Tour {
         type Param = Vec<usize>;
         type Output = f64;

@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use rand_distr::uniform::SampleUniform;
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::executor::OptimizationResult;
 use crate::core::inner::{InitialState, InnerExecutor};
 use crate::core::math::{
@@ -29,6 +29,10 @@ use crate::solver::de::De;
 /// top of DE's bounded-search loop instead of CMA-ES's covariance model.
 /// For the persistent-chain analogue with a steady-state GA outer, see
 /// [`MaLsChCma`](crate::solver::MaLsChCma).
+///
+/// Use [`RelaxedInner::new`](crate::RelaxedInner::new) for an unconstrained local
+/// solver such as Nelder-Mead. Box-respecting local solvers can be passed directly.
+/// The outer retains its clipping and reevaluation of the refined point.
 ///
 /// # Algorithm
 ///
@@ -74,7 +78,7 @@ use crate::solver::de::De;
 /// # Bounds
 ///
 /// Unlike CMA-ES, [`De`] is bounded by construction (requires
-/// [`BoxConstraints`]). One struct covers both unconstrained and bounded
+/// [`BoxBounds`](crate::BoxBounds)). One struct covers both unconstrained and bounded
 /// use; there is no `BoundedDeInject` because DE is always bounded.
 ///
 /// # Eval aggregation
@@ -309,9 +313,13 @@ where
 impl<P, I, V, F> Solver<P, PopulationProgress<V, F>> for DeInject<I, V, F>
 where
     F: Scalar + SampleUniform,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     I: MemeticInner<V, F>
-        + Solver<P, <I as InitialState<V>>::State, Error = P::Error>,
+        + Solver<
+            P,
+            <I as InitialState<V>>::State,
+            Error = crate::ConstraintSolveError<P::Error>,
+        >,
     I::State: State<Param = V, Float = F> + CountsMirror,
     V: VectorLen
         + Clone
@@ -320,15 +328,26 @@ where
         + ScaleInPlace<F>
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
-    De<F>: Solver<P, PopulationProgress<V, F>, Error = P::Error>,
+    De<F>: Solver<
+            P,
+            PopulationProgress<V, F>,
+            Error = crate::ConstraintSolveError<P::Error>,
+        >,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            None,
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         if let Some(records) = &mut self.inner_diagnostics {
             records.clear();
         }
@@ -416,7 +435,7 @@ where
             // 6. Saturating clip to the box. The inner may have stepped
             //    outside `[lo, hi]` (NM, LM, and L-BFGS-B are
             //    unconstrained on their seed; L-BFGS-B respects bounds
-            //    only when paired with a `BoxConstraints` problem,
+            //    only when paired with a `BoxBounds` problem,
             //    which is this case, but we re-clip for safety).
             let mut x_refined = inner_result.state.param().clone();
             let n = x_refined.vec_len();
@@ -466,22 +485,28 @@ mod tests {
     #[test]
     #[should_panic(expected = "DeInject requires k >= 1")]
     fn with_k_zero_panics() {
-        let _ =
-            DeInject::<NelderMead<Vec<f64>>, Vec<f64>, f64>::with_inner_solver(
-                De::new(0),
-                NelderMead::new(),
-            )
-            .with_k(0);
+        let _ = DeInject::<
+            crate::RelaxedInner<NelderMead<Vec<f64>>>,
+            Vec<f64>,
+            f64,
+        >::with_inner_solver(
+            De::new(0),
+            crate::RelaxedInner::new(NelderMead::new()),
+        )
+        .with_k(0);
     }
 
     #[test]
     #[should_panic(expected = "DeInject requires refine_every >= 1")]
     fn with_refine_every_zero_panics() {
-        let _ =
-            DeInject::<NelderMead<Vec<f64>>, Vec<f64>, f64>::with_inner_solver(
-                De::new(0),
-                NelderMead::new(),
-            )
-            .with_refine_every(0);
+        let _ = DeInject::<
+            crate::RelaxedInner<NelderMead<Vec<f64>>>,
+            Vec<f64>,
+            f64,
+        >::with_inner_solver(
+            De::new(0),
+            crate::RelaxedInner::new(NelderMead::new()),
+        )
+        .with_refine_every(0);
     }
 }

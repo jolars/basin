@@ -1,7 +1,7 @@
 use basin::{
-    BoxConstraints, ClampInPlace, ConvergenceEvidence, ConvergenceTest,
-    CostFunction, Executor, NelderMead, Scalar, ScaleInPlace, ScaledAdd,
-    SimplexProgress, Termination, TerminationCode, VectorIndex, VectorLen,
+    ClampInPlace, ConvergenceEvidence, ConvergenceTest, CostFunction, Executor,
+    NelderMead, Scalar, ScaleInPlace, ScaledAdd, SimplexProgress, Termination,
+    TerminationCode, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -21,6 +21,21 @@ struct Objective<V, F> {
     bounds: (V, V),
 }
 
+impl<V, F> basin::ProblemConstraints for Objective<V, F>
+where
+    F: Scalar,
+    V: VectorIndex<F> + VectorLen,
+{
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.bounds.0),
+            Some(&self.bounds.1),
+        ))
+    }
+}
 impl<V, F> CostFunction for Objective<V, F>
 where
     F: Scalar,
@@ -51,20 +66,6 @@ where
             Landscape::Flat => F::one(),
         };
         Ok(self.offset + self.magnitude * value)
-    }
-}
-
-impl<V, F> BoxConstraints for Objective<V, F>
-where
-    F: Scalar,
-    V: VectorIndex<F> + VectorLen,
-{
-    fn lower(&self) -> &V {
-        &self.bounds.0
-    }
-
-    fn upper(&self) -> &V {
-        &self.bounds.1
     }
 }
 
@@ -115,10 +116,14 @@ where
                     initial_costs.iter().fold(F::zero(), |spread, &cost| {
                         spread.max((cost - best_initial).abs())
                     });
-                let result = Executor::new(problem, NelderMead::new(), seed)
-                    .max_iter(2_000)
-                    .run()
-                    .unwrap();
+                let result = Executor::new(
+                    basin::SamplingDomain::new(problem),
+                    NelderMead::new(),
+                    seed,
+                )
+                .max_iter(2_000)
+                .run()
+                .unwrap();
                 assert_eq!(
                     result.report.code(),
                     TerminationCode::SimplexTolerance
@@ -208,7 +213,7 @@ where
             bounds: (make(&[-f(5.0); 2]), make(&[f(5.0); 2])),
         };
         let result = Executor::new(
-            problem,
+            basin::SamplingDomain::new(problem),
             NelderMead::adaptive(),
             SimplexProgress::new(make(&[F::zero(); 2])),
         )
@@ -235,7 +240,7 @@ where
             bounds: (make(&[-f(5.0); 2]), make(&[f(5.0); 2])),
         };
         let result = Executor::new(
-            problem,
+            basin::SamplingDomain::new(problem),
             NelderMead::default(),
             SimplexProgress::new(make(&[f(2.0), -F::one()])),
         )
@@ -288,11 +293,15 @@ where
                     .run()
                     .unwrap()
             } else {
-                Executor::new(problem, solver, state)
-                    .max_iter(10_000)
-                    .max_cost_evals(20_000)
-                    .run()
-                    .unwrap()
+                Executor::new(
+                    basin::SamplingDomain::new(problem),
+                    solver,
+                    state,
+                )
+                .max_iter(10_000)
+                .max_cost_evals(20_000)
+                .run()
+                .unwrap()
             };
             assert_eq!(result.report.code(), TerminationCode::SimplexTolerance);
             assert!(result.cost() < f(1e-8), "cost {:?}", result.cost());

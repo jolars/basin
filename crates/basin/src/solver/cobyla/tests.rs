@@ -2,7 +2,6 @@
 //! These assert convergence to the *published* optima: an oracle independent of
 //! PRIMA. The PRIMA bit-parity cross-validation lives in [`super::parity`].
 
-use crate::NonlinearInequalityConstraints;
 use crate::core::executor::Executor;
 use crate::core::problem::CostFunction;
 use crate::core::state::SelectedState;
@@ -14,6 +13,19 @@ struct Prob {
     c: fn(&[f64]) -> Vec<f64>,
     m: usize,
 }
+
+impl crate::ProblemConstraints for Prob {
+    type Constraints = crate::Constraints<
+        crate::NoBounds,
+        crate::NoLinearConstraints,
+        crate::NonlinearBlocks<crate::NoNonlinearBlock, crate::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_nonlinear_inequalities(self.m)
+    }
+}
 impl CostFunction for Prob {
     type Param = Vec<f64>;
     type Output = f64;
@@ -22,15 +34,15 @@ impl CostFunction for Prob {
         Ok((self.f)(x))
     }
 }
-impl NonlinearInequalityConstraints for Prob {
-    fn constraints(
+impl crate::NonlinearInequalityValues for Prob {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = std::convert::Infallible;
+    fn nonlinear_inequalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Vec<f64>, std::convert::Infallible> {
+        x: &Self::Param,
+    ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
         Ok((self.c)(x))
-    }
-    fn num_constraints(&self) -> usize {
-        self.m
     }
 }
 

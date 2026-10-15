@@ -370,6 +370,10 @@ where
 /// use nalgebra::{DMatrix, DVector};
 ///
 /// struct Rosenbrock;
+/// impl basin::ProblemConstraints for Rosenbrock  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Rosenbrock {
 ///     type Param = DVector<f64>;
 ///     type Output = f64;
@@ -415,10 +419,13 @@ where
 /// ```
 /// use basin::{
 ///     FirstOrderState, CostFunction, Executor, Gradient, HessianProduct,
-///     TrustRegion,
-/// };
+///     TrustRegion};
 ///
 /// struct IllQuadratic;
+/// impl basin::ProblemConstraints for IllQuadratic  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for IllQuadratic {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -832,6 +839,7 @@ where
         + Hessian<Hessian = M>,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
     Sub: Subproblem<V, M, F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -885,6 +893,7 @@ where
         + HessianProduct,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
     Sub: SubproblemHvp<V, F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -944,6 +953,15 @@ mod tests {
     /// fast.
     struct Quadratic;
 
+    impl crate::ProblemConstraints for Quadratic {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for Quadratic {
         type Param = Vec<f64>;
         type Output = f64;
@@ -975,6 +993,15 @@ mod tests {
     /// curvature handling of every subproblem.
     struct Rosenbrock;
 
+    impl crate::ProblemConstraints for Rosenbrock {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for Rosenbrock {
         type Param = Vec<f64>;
         type Output = f64;
@@ -1055,6 +1082,15 @@ mod tests {
     /// cannot produce a trustworthy step from it.
     struct NonFiniteGradient;
 
+    impl crate::ProblemConstraints for NonFiniteGradient {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for NonFiniteGradient {
         type Param = Vec<f64>;
         type Output = f64;
@@ -1208,6 +1244,15 @@ mod tests {
     /// is the proof that matrix-free mode never forms (or names) a matrix.
     struct QuadraticHvOnly;
 
+    impl crate::ProblemConstraints for QuadraticHvOnly {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for QuadraticHvOnly {
         type Param = Vec<f64>;
         type Output = f64;
@@ -1236,6 +1281,15 @@ mod tests {
     /// `Hessian` impl).
     struct RosenbrockHvOnly;
 
+    impl crate::ProblemConstraints for RosenbrockHvOnly {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for RosenbrockHvOnly {
         type Param = Vec<f64>;
         type Output = f64;

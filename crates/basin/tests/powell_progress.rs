@@ -1,8 +1,8 @@
 //! Progress ownership and lifecycle for Powell's quadratic-model solvers.
 
 use basin::{
-    Bobyqa, BoxConstraints, CostFunction, CountsMirror, DenseMatrix,
-    EvalCounts, Executor, Lincoa, LinearConstraints, Newuoa, PointState, State,
+    Bobyqa, CostFunction, CountsMirror, EvalCounts, Executor, Lincoa, Newuoa,
+    PointState, State,
 };
 use std::convert::Infallible;
 
@@ -18,6 +18,18 @@ impl Bowl {
         }
     }
 }
+
+impl basin::ProblemConstraints for Bowl {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Bowl {
     type Param = Vec<f64>;
     type Output = f64;
@@ -29,32 +41,15 @@ impl CostFunction for Bowl {
             .sum())
     }
 }
-impl BoxConstraints for Bowl {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
-impl LinearConstraints for Bowl {
-    type Matrix = DenseMatrix;
-    fn lower(&self) -> Option<&Vec<f64>> {
-        Some(&self.lower)
-    }
-    fn upper(&self) -> Option<&Vec<f64>> {
-        Some(&self.upper)
-    }
-}
 
 macro_rules! lifecycle {
-    ($module:ident, $solver:ident, $state:ident) => {
+    ($module:ident, $solver:ident, $state:ident, $prepare:expr) => {
         mod $module {
             use super::*;
             #[test]
             fn fresh_run_resets_bookkeeping_and_reevaluates() {
                 let prior = Executor::from_start(
-                    Bowl::new(2),
+                    ($prepare)(Bowl::new(2)),
                     $solver::new(),
                     vec![2.0; 2],
                 )
@@ -62,11 +57,14 @@ macro_rules! lifecycle {
                 .run_with_solver()
                 .unwrap();
                 assert_eq!(prior.iter(), 3);
-                let fresh =
-                    Executor::new(Bowl::new(2), prior.solver, prior.state)
-                        .max_iter(0)
-                        .run_with_solver()
-                        .unwrap();
+                let fresh = Executor::new(
+                    ($prepare)(Bowl::new(2)),
+                    prior.solver,
+                    prior.state,
+                )
+                .max_iter(0)
+                .run_with_solver()
+                .unwrap();
                 assert_eq!(fresh.iter(), 0);
                 assert_eq!(fresh.state.best_iter(), 0);
                 assert_eq!(fresh.counts.cost_evals, 5);
@@ -102,7 +100,7 @@ macro_rules! lifecycle {
             #[test]
             fn fresh_solver_rebuilds_model_for_a_different_dimension() {
                 let used = Executor::from_start(
-                    Bowl::new(2),
+                    ($prepare)(Bowl::new(2)),
                     $solver::new(),
                     vec![2.0; 2],
                 )
@@ -110,7 +108,7 @@ macro_rules! lifecycle {
                 .run_with_solver()
                 .unwrap();
                 let fresh = Executor::new(
-                    Bowl::new(3),
+                    ($prepare)(Bowl::new(3)),
                     used.solver,
                     PointState::new(vec![1.5; 3]),
                 )
@@ -119,7 +117,7 @@ macro_rules! lifecycle {
                 .run_with_solver()
                 .unwrap();
                 let expected = Executor::from_start(
-                    Bowl::new(3),
+                    ($prepare)(Bowl::new(3)),
                     $solver::new(),
                     vec![1.5; 3],
                 )
@@ -135,7 +133,7 @@ macro_rules! lifecycle {
             fn owned_checkpoints_continue_without_reevaluating_or_resetting() {
                 let make = || {
                     Executor::from_start(
-                        Bowl::new(2),
+                        ($prepare)(Bowl::new(2)),
                         $solver::new().with_final_radius(1e-12),
                         vec![2.0; 2],
                     )
@@ -148,7 +146,7 @@ macro_rules! lifecycle {
                         .unwrap()
                         .into_checkpoint();
                     let resumed = Executor::resume_from_checkpoint(
-                        Bowl::new(2),
+                        ($prepare)(Bowl::new(2)),
                         checkpoint,
                     )
                     .require_evaluated_state()
@@ -171,7 +169,7 @@ macro_rules! lifecycle {
                     basin::ExactCheckpoint<$solver, PointState<Vec<f64>>>;
                 let make = || {
                     Executor::from_start(
-                        Bowl::new(2),
+                        ($prepare)(Bowl::new(2)),
                         $solver::new().with_final_radius(1e-12),
                         vec![2.0; 2],
                     )
@@ -185,12 +183,14 @@ macro_rules! lifecycle {
                 let bytes = postcard::to_allocvec(&checkpoint).unwrap();
                 let restored: Checkpoint =
                     postcard::from_bytes(&bytes).unwrap();
-                let resumed =
-                    Executor::resume_from_checkpoint(Bowl::new(2), restored)
-                        .require_evaluated_state()
-                        .max_iter(20)
-                        .run_with_solver()
-                        .unwrap();
+                let resumed = Executor::resume_from_checkpoint(
+                    ($prepare)(Bowl::new(2)),
+                    restored,
+                )
+                .require_evaluated_state()
+                .max_iter(20)
+                .run_with_solver()
+                .unwrap();
                 assert_eq!(resumed.state, expected.state);
                 assert_eq!(resumed.counts, expected.counts);
                 assert_eq!(
@@ -198,7 +198,7 @@ macro_rules! lifecycle {
                     postcard::to_allocvec(&expected.solver).unwrap()
                 );
                 let fresh = Executor::new(
-                    Bowl::new(2),
+                    ($prepare)(Bowl::new(2)),
                     resumed.solver,
                     PointState::new(vec![2.0; 2]),
                 )
@@ -215,6 +215,6 @@ macro_rules! lifecycle {
         }
     };
 }
-lifecycle!(newuoa, Newuoa, PointState);
-lifecycle!(bobyqa, Bobyqa, PointState);
-lifecycle!(lincoa, Lincoa, PointState);
+lifecycle!(newuoa, Newuoa, PointState, basin::SamplingDomain::new);
+lifecycle!(bobyqa, Bobyqa, PointState, |p| p);
+lifecycle!(lincoa, Lincoa, PointState, |p| p);

@@ -11,7 +11,7 @@ use core::marker::PhantomData;
 use super::spec::{
     Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
 };
-use crate::{BoxConstraints, CostFunction, Gradient};
+use crate::{CostFunction, Gradient};
 
 /// Standard lower bound on each coordinate (De Jong 1975).
 pub const STANDARD_LOWER: f64 = -5.12;
@@ -79,6 +79,14 @@ impl<P> HasSpec for Sphere<P> {
     const SPEC: &'static ProblemSpec = &SPHERE_SPEC;
 }
 
+impl crate::ProblemConstraints for Sphere<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for Sphere<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -107,7 +115,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl CostFunction for Sphere<DVector<f64>> {
+    impl crate::ProblemConstraints for Sphere<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Sphere<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -139,7 +151,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl CostFunction for Sphere<Array1<f64>> {
+    impl crate::ProblemConstraints for Sphere<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Sphere<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -174,7 +190,11 @@ crate::backend_macros::faer_versions! {
     use crate::{CostFunction, Gradient};
     use faer::Col;
 
-    impl CostFunction for Sphere<Col<f64>> {
+    impl crate::ProblemConstraints for Sphere<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Sphere<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -202,13 +222,13 @@ crate::backend_macros::faer_versions! {
 
 // Boxed (constrained) form
 // Carries element-wise bounds on the struct so it can implement
-// `BoxConstraints` for solvers that require explicit box constraints
+// `BoxBounds` for solvers that require explicit box constraints
 // (CMA-ES variants, projected methods). The standard `[−5.12, 5.12]ⁿ`
 // search domain is the most common choice; `with_standard_bounds(n)`
 // is a shortcut for that case.
 
 /// Sphere function with explicit element-wise box bounds, suitable for
-/// solvers that require [`BoxConstraints`] (e.g. CMA-ES variants like
+/// solvers that require [`BoxBounds`](crate::BoxBounds) (e.g. CMA-ES variants like
 /// MA-LSCh-CMA). Carries the bounds as data on the problem (tenet 4 in
 /// `crate::core` and `CONTRIBUTING.md`) and routes the cost through the
 /// same raw [`sphere`] free function as the unconstrained [`Sphere`].
@@ -243,6 +263,17 @@ impl SphereBoxed<Vec<f64>> {
     }
 }
 
+impl crate::ProblemConstraints for SphereBoxed<Vec<f64>> {
+    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for SphereBoxed<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -252,11 +283,13 @@ impl CostFunction for SphereBoxed<Vec<f64>> {
     }
 }
 
-impl BoxConstraints for SphereBoxed<Vec<f64>> {
-    fn lower(&self) -> &Vec<f64> {
+impl SphereBoxed<Vec<f64>> {
+    /// Return the lower bound vector.
+    pub fn lower(&self) -> &Vec<f64> {
         &self.lower
     }
-    fn upper(&self) -> &Vec<f64> {
+    /// Return the upper bound vector.
+    pub fn upper(&self) -> &Vec<f64> {
         &self.upper
     }
 }
@@ -265,7 +298,7 @@ impl BoxConstraints for SphereBoxed<Vec<f64>> {
 crate::backend_macros::nalgebra_versions! {
     nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{STANDARD_LOWER, STANDARD_UPPER, SphereBoxed, sphere};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use nalgebra::DVector;
 
     impl SphereBoxed<DVector<f64>> {
@@ -279,7 +312,11 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl CostFunction for SphereBoxed<DVector<f64>> {
+    impl crate::ProblemConstraints for SphereBoxed<DVector<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for SphereBoxed<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -291,11 +328,13 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl BoxConstraints for SphereBoxed<DVector<f64>> {
-        fn lower(&self) -> &DVector<f64> {
+    impl SphereBoxed<DVector<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &DVector<f64> {
             &self.lower
         }
-        fn upper(&self) -> &DVector<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &DVector<f64> {
             &self.upper
         }
     }
@@ -305,7 +344,7 @@ crate::backend_macros::nalgebra_versions! {
 crate::backend_macros::ndarray_versions! {
     ndarray_boxed_impl(ndarray);
     use super::{STANDARD_LOWER, STANDARD_UPPER, SphereBoxed, sphere};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use ndarray::Array1;
 
     impl SphereBoxed<Array1<f64>> {
@@ -319,7 +358,11 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl CostFunction for SphereBoxed<Array1<f64>> {
+    impl crate::ProblemConstraints for SphereBoxed<Array1<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for SphereBoxed<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -331,11 +374,13 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl BoxConstraints for SphereBoxed<Array1<f64>> {
-        fn lower(&self) -> &Array1<f64> {
+    impl SphereBoxed<Array1<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Array1<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Array1<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Array1<f64> {
             &self.upper
         }
     }
@@ -345,7 +390,7 @@ crate::backend_macros::ndarray_versions! {
 crate::backend_macros::faer_versions! {
     faer_boxed_impl(faer, faer_traits);
     use super::{STANDARD_LOWER, STANDARD_UPPER, SphereBoxed};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use faer::Col;
 
     impl SphereBoxed<Col<f64>> {
@@ -362,7 +407,11 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24
     // APIs we care about, so we evaluate elementwise here rather than
     // routing through the slice-based primitive.
-    impl CostFunction for SphereBoxed<Col<f64>> {
+    impl crate::ProblemConstraints for SphereBoxed<Col<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for SphereBoxed<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -376,11 +425,13 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl BoxConstraints for SphereBoxed<Col<f64>> {
-        fn lower(&self) -> &Col<f64> {
+    impl SphereBoxed<Col<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Col<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Col<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Col<f64> {
             &self.upper
         }
     }
@@ -440,8 +491,8 @@ mod tests {
     #[test]
     fn boxed_form_exposes_standard_bounds() {
         let p = SphereBoxed::<Vec<f64>>::with_standard_bounds(10);
-        let lo = <SphereBoxed<Vec<f64>> as BoxConstraints>::lower(&p);
-        let hi = <SphereBoxed<Vec<f64>> as BoxConstraints>::upper(&p);
+        let lo = p.lower();
+        let hi = p.upper();
         assert_eq!(lo.len(), 10);
         assert_eq!(hi.len(), 10);
         for &v in lo {

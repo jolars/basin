@@ -1,4 +1,4 @@
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::inner::InitialState;
 use crate::core::math::{
     ClampInPlace, NegInPlace, Scalar, ScaledAdd, VectorLen,
@@ -14,7 +14,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// Steepest-descent step along `−∇f` followed by an element-wise
 /// projection back into `[lower, upper]`. The first n-D constrained
 /// solver in basin and the smallest vehicle for the
-/// [`BoxConstraints`] trait; handing this solver an unconstrained
+/// box-only [`ProblemConstraints`](crate::ProblemConstraints) declaration; handing this solver an unconstrained
 /// problem is a compile error per tenet 4.
 ///
 /// # Algorithm
@@ -34,7 +34,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 ///
 /// # Contract
 ///
-/// - **Caller must:** implement [`BoxConstraints`] on the problem with
+/// - **Caller must:** declare a box-only set using [`BoxBounds`](crate::BoxBounds) on the problem with
 ///   `lower[i] ≤ upper[i]` for every component. Equal bounds are
 ///   allowed (the corresponding component is pinned).
 /// - **Caller must:** pair with a feasible **or** infeasible initial
@@ -74,21 +74,25 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 /// `Vec<F>`, `nalgebra::DVector<F>` (feature `nalgebra`),
 /// `ndarray::Array1<F>` (feature `ndarray`), and `faer::Col<F>` (feature
 /// `faer`) for both `f32` and `f64`. The problem must implement
-/// [`BoxConstraints`].
+/// [`BoxBounds`](crate::BoxBounds).
 ///
 /// # Examples
 ///
 /// Box-constrained gradient descent. The bounds live on the problem via
-/// [`BoxConstraints`]; the projection keeps every iterate feasible. Here
+/// [`BoxBounds`](crate::BoxBounds); the projection keeps every iterate feasible. Here
 /// the unconstrained minimum of the shifted sphere is at `(2, 2)`, but the
 /// box caps it at `(1, 1)`:
 ///
 /// ```
-/// use basin::{FirstOrderState, BoxConstraints, CostFunction, Executor, Gradient, ProjectedGradientDescent};
+/// use basin::{FirstOrderState, CostFunction, Executor, Gradient, ProjectedGradientDescent};
 ///
 /// struct ShiftedSphere {
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
+/// }
+/// impl basin::ProblemConstraints for ShiftedSphere  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for ShiftedSphere {
 ///     type Param = Vec<f64>;
@@ -104,10 +108,7 @@ use crate::line_search::{Constant, LineSearch, LineSearchOutcome};
 ///         Ok(vec![2.0 * (x[0] - 2.0), 2.0 * (x[1] - 2.0)])
 ///     }
 /// }
-/// impl BoxConstraints for ShiftedSphere {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
-/// }
+///
 ///
 /// let problem = ShiftedSphere { lower: vec![-1.0, -1.0], upper: vec![1.0, 1.0] };
 /// let result = Executor::new(
@@ -171,17 +172,24 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
         + Gradient<Gradient = V>
-        + BoxConstraints,
+        + BoxProblem<Param = V>,
     V: ScaledAdd<F> + NegInPlace + ClampInPlace + Clone + VectorLen,
     S: LineSearch<P, V, F, Error = P::Error>,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<V, F>,
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            Some(state.param().vec_len()),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         self.line_search.reset();
         // Project an infeasible start once so iter-0 termination checks

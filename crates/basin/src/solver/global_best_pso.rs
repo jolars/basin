@@ -1,6 +1,6 @@
 //! Synchronous global-best particle swarm optimization.
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{SampleUniformBox, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, Rng, RngExt, SeedableRng};
@@ -67,7 +67,7 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 ///
 /// # Contract
 ///
-/// - **Caller must:** implement [`CostFunction`] and [`BoxConstraints`] with a
+/// - **Caller must:** implement [`CostFunction`] and declare a box-only set with a
 ///   non-empty pair of same-shaped, finite bounds satisfying
 ///   `lower[j] ≤ upper[j]`.
 /// - Supply [`PopulationProgress::empty`] for uniform initialization, or
@@ -141,13 +141,16 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 ///
 /// ```
 /// use basin::{
-///     BoxConstraints, CostFunction, Executor, GlobalBestPso,
-///     PopulationProgress,
-/// };
+///     CostFunction, Executor, GlobalBestPso,
+///     PopulationProgress};
 ///
 /// struct Sphere {
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
+/// }
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
@@ -157,14 +160,7 @@ pub enum PsoVelocityLimit<F: Scalar = f64> {
 ///         Ok(x.iter().map(|xi| xi * xi).sum())
 ///     }
 /// }
-/// impl BoxConstraints for Sphere {
-///     fn lower(&self) -> &Vec<f64> {
-///         &self.lower
-///     }
-///     fn upper(&self) -> &Vec<f64> {
-///         &self.upper
-///     }
-/// }
+///
 ///
 /// let result = Executor::new(
 ///     Sphere {
@@ -526,7 +522,7 @@ impl<P, V, F, R> Solver<P, PopulationProgress<V, F>> for GlobalBestPso<V, F, R>
 where
     F: Scalar + crate::core::parallel::MaybeSend,
     P: CostFunction<Param = V, Output = F>
-        + BoxConstraints<Param = V>
+        + BoxProblem<Param = V>
         + crate::core::parallel::MaybeSync,
     P::Error: crate::core::parallel::MaybeSend,
     V: Clone
@@ -536,14 +532,21 @@ where
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
     R: Rng + Clone,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            None,
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         self.velocities.clear();
         self.personal_best_positions.clear();

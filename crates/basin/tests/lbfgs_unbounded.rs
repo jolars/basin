@@ -23,6 +23,16 @@ mod rosenbrock {
 #[test]
 fn rosenbrock_vec() {
     struct Rosen;
+
+    impl basin::ProblemConstraints for Rosen {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Rosen {
         type Param = Vec<f64>;
         type Output = f64;
@@ -70,6 +80,16 @@ fn rosenbrock_nalgebra() {
     use crate::backend_aliases::nalgebra::DVector;
 
     struct Rosen;
+
+    impl basin::ProblemConstraints for Rosen {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Rosen {
         type Param = DVector<f64>;
         type Output = f64;
@@ -120,6 +140,16 @@ fn rosenbrock_faer() {
     use crate::backend_aliases::faer::Col;
 
     struct Rosen;
+
+    impl basin::ProblemConstraints for Rosen {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Rosen {
         type Param = Col<f64>;
         type Output = f64;
@@ -168,6 +198,16 @@ fn rosenbrock_ndarray() {
     use crate::backend_aliases::ndarray::{Array1, array};
 
     struct Rosen;
+
+    impl basin::ProblemConstraints for Rosen {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Rosen {
         type Param = Array1<f64>;
         type Output = f64;

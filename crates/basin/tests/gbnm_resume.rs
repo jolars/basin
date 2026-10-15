@@ -4,8 +4,8 @@ use std::convert::Infallible;
 use std::path::PathBuf;
 
 use basin::{
-    BoxConstraints, CostFunction, ExactCheckpoint, ExactCheckpointWriter,
-    Executor, Gbnm, ObserverMode, PointState, State, read_exact_checkpoint,
+    CostFunction, ExactCheckpoint, ExactCheckpointWriter, Executor, Gbnm,
+    ObserverMode, PointState, State, read_exact_checkpoint,
 };
 
 #[derive(Clone)]
@@ -14,6 +14,17 @@ struct FlatBox {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for FlatBox {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for FlatBox {
     type Param = Vec<f64>;
     type Output = f64;
@@ -21,16 +32,6 @@ impl CostFunction for FlatBox {
 
     fn cost(&self, _x: &Self::Param) -> Result<Self::Output, Self::Error> {
         Ok(1.0)
-    }
-}
-
-impl BoxConstraints for FlatBox {
-    fn lower(&self) -> &Self::Param {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Self::Param {
-        &self.upper
     }
 }
 

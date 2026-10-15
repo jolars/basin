@@ -29,6 +29,19 @@ fn unbounded_rosenbrock_2d_converges() {
         l: Vec<f64>,
         u: Vec<f64>,
     }
+
+    impl basin::ProblemConstraints for Rosen {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.l),
+                Some(&self.u),
+            ))
+        }
+    }
     impl CostFunction for Rosen {
         type Param = Vec<f64>;
         type Output = f64;
@@ -49,14 +62,6 @@ fn unbounded_rosenbrock_2d_converges() {
                 let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
                 vec![dfdx0, dfdx1]
             })
-        }
-    }
-    impl basin::BoxConstraints for Rosen {
-        fn lower(&self) -> &Vec<f64> {
-            &self.l
-        }
-        fn upper(&self) -> &Vec<f64> {
-            &self.u
         }
     }
 
@@ -175,6 +180,19 @@ fn quadratic_5d_diagonal_converges_quickly() {
         l: Vec<f64>,
         u: Vec<f64>,
     }
+
+    impl basin::ProblemConstraints for Quadratic {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.l),
+                Some(&self.u),
+            ))
+        }
+    }
     impl CostFunction for Quadratic {
         type Param = Vec<f64>;
         type Output = f64;
@@ -202,14 +220,6 @@ fn quadratic_5d_diagonal_converges_quickly() {
                 }
                 g
             })
-        }
-    }
-    impl basin::BoxConstraints for Quadratic {
-        fn lower(&self) -> &Vec<f64> {
-            &self.l
-        }
-        fn upper(&self) -> &Vec<f64> {
-            &self.u
         }
     }
 

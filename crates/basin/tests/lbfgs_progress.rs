@@ -1,9 +1,6 @@
 //! Limited-memory models belong to the solver, including during exact continuation.
 
-use basin::{
-    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient, Lbfgs,
-    State,
-};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, Lbfgs, State};
 use std::convert::Infallible;
 
 struct Quadratic {
@@ -16,6 +13,18 @@ impl Quadratic {
             lower: vec![-5.0; n],
             upper: vec![5.0; n],
         }
+    }
+}
+
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
     }
 }
 impl CostFunction for Quadratic {
@@ -38,22 +47,14 @@ impl Gradient for Quadratic {
             .collect())
     }
 }
-impl BoxConstraints for Quadratic {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
 
 macro_rules! lifecycle {
-    ($name:ident, $solver:expr) => {
+    ($name:ident, $solver:expr, $prepare:expr) => {
         #[test]
         fn $name() {
             let make = || {
                 Executor::new(
-                    Quadratic::new(2),
+                    ($prepare)(Quadratic::new(2)),
                     $solver,
                     FirstOrderState::new(vec![3.0, 2.0]),
                 )
@@ -65,7 +66,7 @@ macro_rules! lifecycle {
                 assert!(initial.solver.history_len() <= 2);
                 assert_eq!(initial.state.counts(), &initial.counts);
                 let continued = Executor::resume_from_checkpoint(
-                    Quadratic::new(2),
+                    ($prepare)(Quadratic::new(2)),
                     initial.into_checkpoint(),
                 )
                 .require_evaluated_state()
@@ -83,12 +84,15 @@ macro_rules! lifecycle {
             state
                 .replace(vec![3.0, 2.0, 1.0], 20.0, vec![6.0, 8.0, 6.0])
                 .unwrap();
-            let fresh =
-                Executor::new(Quadratic::new(3), complete.solver, state)
-                    .require_evaluated_state()
-                    .max_iter(0)
-                    .run_with_solver()
-                    .unwrap();
+            let fresh = Executor::new(
+                ($prepare)(Quadratic::new(3)),
+                complete.solver,
+                state,
+            )
+            .require_evaluated_state()
+            .max_iter(0)
+            .run_with_solver()
+            .unwrap();
             assert_eq!(fresh.state.iter(), 0);
             assert_eq!(fresh.state.best_iter(), 0);
             assert_eq!(fresh.counts.cost_evals, 1);
@@ -96,14 +100,14 @@ macro_rules! lifecycle {
             assert_eq!(fresh.solver.history_len(), 0);
             assert_eq!(fresh.solver.history_capacity(), 2);
             let continued = Executor::resume_from_checkpoint(
-                Quadratic::new(3),
+                ($prepare)(Quadratic::new(3)),
                 fresh.into_checkpoint(),
             )
             .max_iter(3)
             .run_with_solver()
             .unwrap();
             let rebuilt = Executor::from_start(
-                Quadratic::new(3),
+                ($prepare)(Quadratic::new(3)),
                 $solver,
                 vec![3.0, 2.0, 1.0],
             )
@@ -118,11 +122,13 @@ macro_rules! lifecycle {
 
 lifecycle!(
     bounded_history_and_exact_continuation,
-    Lbfgs::new().with_m_capacity(2)
+    Lbfgs::new().with_m_capacity(2),
+    |p| p
 );
 lifecycle!(
     unbounded_history_and_exact_continuation,
-    Lbfgs::new().unbounded().with_m_capacity(2)
+    Lbfgs::new().unbounded().with_m_capacity(2),
+    basin::SamplingDomain::new
 );
 
 // Deliberately not Clone: exact continuation retains components by ownership.
@@ -130,7 +136,9 @@ struct StatefulSearch {
     calls: u64,
 }
 
-impl basin::LineSearch<Quadratic, Vec<f64>> for StatefulSearch {
+impl<P: CostFunction<Param = Vec<f64>, Output = f64, Error = Infallible>>
+    basin::LineSearch<P, Vec<f64>> for StatefulSearch
+{
     type Error = Infallible;
 
     fn reset(&mut self) {
@@ -139,7 +147,7 @@ impl basin::LineSearch<Quadratic, Vec<f64>> for StatefulSearch {
 
     fn next(
         &mut self,
-        _: &mut basin::Problem<Quadratic>,
+        _: &mut basin::Problem<P>,
         _: &Vec<f64>,
         _: f64,
         _: &Vec<f64>,
@@ -151,7 +159,7 @@ impl basin::LineSearch<Quadratic, Vec<f64>> for StatefulSearch {
 
     fn next_with_bounds(
         &mut self,
-        problem: &mut basin::Problem<Quadratic>,
+        problem: &mut basin::Problem<P>,
         x: &Vec<f64>,
         cost: f64,
         gradient: &Vec<f64>,
@@ -167,13 +175,15 @@ impl basin::LineSearch<Quadratic, Vec<f64>> for StatefulSearch {
 
 lifecycle!(
     bounded_search_resets_fresh_history_and_retains_exact_history,
-    Lbfgs::with_line_search(StatefulSearch { calls: 99 }).with_m_capacity(2)
+    Lbfgs::with_line_search(StatefulSearch { calls: 99 }).with_m_capacity(2),
+    |p| p
 );
 lifecycle!(
     unbounded_search_resets_fresh_history_and_retains_exact_history,
     Lbfgs::with_line_search(StatefulSearch { calls: 99 })
         .unbounded()
-        .with_m_capacity(2)
+        .with_m_capacity(2),
+    basin::SamplingDomain::new
 );
 
 #[cfg(feature = "serde")]
@@ -187,20 +197,26 @@ fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(
 #[test]
 fn serialized_checkpoints_preserve_models_after_rollover() {
     macro_rules! check {
-        ($solver:expr) => {{
+        ($solver:expr, $prepare:expr) => {{
             let make = || {
-                Executor::from_start(Quadratic::new(8), $solver, vec![3.0; 8])
+                Executor::from_start(
+                    ($prepare)(Quadratic::new(8)),
+                    $solver,
+                    vec![3.0; 8],
+                )
             };
             let expected = make().max_iter(7).run_with_solver().unwrap();
             let first = make().max_iter(4).run_with_solver().unwrap();
             assert_eq!(first.solver.history_len(), 2);
             let checkpoint = round_trip(&first.into_checkpoint());
-            let resumed =
-                Executor::resume_from_checkpoint(Quadratic::new(8), checkpoint)
-                    .require_evaluated_state()
-                    .max_iter(7)
-                    .run_with_solver()
-                    .unwrap();
+            let resumed = Executor::resume_from_checkpoint(
+                ($prepare)(Quadratic::new(8)),
+                checkpoint,
+            )
+            .require_evaluated_state()
+            .max_iter(7)
+            .run_with_solver()
+            .unwrap();
             assert_eq!(resumed.state, expected.state);
             assert_eq!(resumed.counts, expected.counts);
             assert_eq!(
@@ -209,8 +225,11 @@ fn serialized_checkpoints_preserve_models_after_rollover() {
             );
         }};
     }
-    check!(Lbfgs::new().with_m_capacity(2));
-    check!(Lbfgs::new().unbounded().with_m_capacity(2));
+    check!(Lbfgs::new().with_m_capacity(2), |p| p);
+    check!(
+        Lbfgs::new().unbounded().with_m_capacity(2),
+        basin::SamplingDomain::new
+    );
 }
 
 #[test]
@@ -249,6 +268,19 @@ fn custom_contiguous_backend_needs_no_matrix_capabilities() {
         lower: Vector,
         upper: Vector,
     }
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vector>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Vector;
         type Output = f64;
@@ -263,14 +295,7 @@ fn custom_contiguous_backend_needs_no_matrix_capabilities() {
             Ok(Vector(x.0.iter().map(|x| 2.0 * x).collect()))
         }
     }
-    impl BoxConstraints for Sphere {
-        fn lower(&self) -> &Vector {
-            &self.lower
-        }
-        fn upper(&self) -> &Vector {
-            &self.upper
-        }
-    }
+
     let problem = || Sphere {
         lower: Vector(vec![-5.0; 2]),
         upper: Vector(vec![5.0; 2]),
@@ -283,7 +308,7 @@ fn custom_contiguous_backend_needs_no_matrix_capabilities() {
             .unwrap();
     assert!(bounded.cost() < 1e-12);
     let unbounded = Executor::from_start(
-        problem(),
+        basin::SamplingDomain::new(problem()),
         Lbfgs::new().unbounded(),
         Vector(vec![3.0, 2.0]),
     )

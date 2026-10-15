@@ -1,9 +1,8 @@
 use basin::{
-    BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian,
-    LevenbergMarquardt, LevenbergMarquardtQr, LmDamping,
-    NativeConvergenceDiagnostics, NativeConvergenceTest as Test, PointState,
-    Residual, RobustLeastSquares, Solver, SquaredLoss, TerminationCode,
-    TrustRegionReflective,
+    CostFunction, DenseMatrix, Executor, Jacobian, LevenbergMarquardt,
+    LevenbergMarquardtQr, LmDamping, NativeConvergenceDiagnostics,
+    NativeConvergenceTest as Test, PointState, Residual, RobustLeastSquares,
+    Solver, SquaredLoss, TerminationCode, TrustRegionReflective,
 };
 use std::convert::Infallible;
 
@@ -24,6 +23,19 @@ impl Fit {
     }
 }
 
+impl basin::ProblemConstraints for Fit {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
+fn bounded(
+    fit: Fit,
+) -> basin::Constrained<Fit, basin::Constraints<basin::BoxBounds<Vec<f64>>>> {
+    let bounds =
+        basin::BoxBounds::new(Some(fit.lower.clone()), Some(fit.upper.clone()));
+    basin::Constrained::new(fit, basin::Constraints::new().with_bounds(bounds))
+}
 impl Residual for Fit {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -49,22 +61,14 @@ impl CostFunction for Fit {
     }
 }
 
-impl BoxConstraints for Fit {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
-
-fn check_lifecycle<So>(make: impl Fn() -> So)
+fn check_lifecycle<So, P, E>(make: impl Fn() -> So, prepare: impl Fn(Fit) -> P)
 where
-    So: Solver<Fit, PointState<Vec<f64>>, Error = Infallible>
+    E: std::fmt::Debug,
+    So: Solver<P, PointState<Vec<f64>>, Error = E>
         + NativeConvergenceDiagnostics,
 {
     let uninterrupted =
-        Executor::new(Fit::new(3.), make(), PointState::new(vec![1.]))
+        Executor::new(prepare(Fit::new(3.)), make(), PointState::new(vec![1.]))
             .max_iter(100)
             .run_with_solver()
             .unwrap();
@@ -75,13 +79,13 @@ where
     assert!(!uninterrupted.native_convergence_tests().is_empty());
 
     let mut stepper =
-        Executor::new(Fit::new(3.), make(), PointState::new(vec![1.]))
+        Executor::new(prepare(Fit::new(3.)), make(), PointState::new(vec![1.]))
             .max_iter(100)
             .into_stepper()
             .unwrap();
     stepper.step().unwrap();
     let resumed = Executor::resume_from_checkpoint(
-        Fit::new(3.),
+        prepare(Fit::new(3.)),
         stepper.into_checkpoint().unwrap(),
     )
     .max_iter(100)
@@ -97,7 +101,7 @@ where
 
     let iter = resumed.iter();
     let limited = Executor::resume_from_checkpoint(
-        Fit::new(3.),
+        prepare(Fit::new(3.)),
         resumed.into_checkpoint(),
     )
     .max_iter(iter)
@@ -106,24 +110,30 @@ where
     assert_eq!(limited.report.code(), TerminationCode::MaxIter);
     assert!(limited.native_convergence_tests().is_empty());
 
-    let fresh =
-        Executor::new(Fit::new(-2.), limited.solver, PointState::new(vec![1.]))
-            .max_iter(0)
-            .run_with_solver()
-            .unwrap();
+    let fresh = Executor::new(
+        prepare(Fit::new(-2.)),
+        limited.solver,
+        PointState::new(vec![1.]),
+    )
+    .max_iter(0)
+    .run_with_solver()
+    .unwrap();
     assert!(fresh.solver.native_convergence_tests().is_empty());
     let continued = Executor::resume_from_checkpoint(
-        Fit::new(-2.),
+        prepare(Fit::new(-2.)),
         fresh.into_checkpoint(),
     )
     .max_iter(100)
     .run_with_solver()
     .unwrap();
-    let reference =
-        Executor::new(Fit::new(-2.), make(), PointState::new(vec![1.]))
-            .max_iter(100)
-            .run_with_solver()
-            .unwrap();
+    let reference = Executor::new(
+        prepare(Fit::new(-2.)),
+        make(),
+        PointState::new(vec![1.]),
+    )
+    .max_iter(100)
+    .run_with_solver()
+    .unwrap();
     assert_eq!(continued.param(), reference.param());
     assert_eq!(continued.counts, reference.counts);
     assert_eq!(
@@ -134,15 +144,20 @@ where
 
 #[test]
 fn diagnostics_follow_fresh_and_exact_runs() {
-    check_lifecycle(LevenbergMarquardt::new);
-    check_lifecycle(LevenbergMarquardtQr::new);
-    check_lifecycle(TrustRegionReflective::new);
-    check_lifecycle(|| {
-        LevenbergMarquardtQr::new().with_absolute_cost_change_tolerance(None)
-    });
-    check_lifecycle(|| {
-        TrustRegionReflective::new().with_relative_step_tolerance(None)
-    });
+    check_lifecycle(LevenbergMarquardt::new, |p| p);
+    check_lifecycle(LevenbergMarquardtQr::new, |p| p);
+    check_lifecycle(TrustRegionReflective::new, bounded);
+    check_lifecycle(
+        || {
+            LevenbergMarquardtQr::new()
+                .with_absolute_cost_change_tolerance(None)
+        },
+        |p| p,
+    );
+    check_lifecycle(
+        || TrustRegionReflective::new().with_relative_step_tolerance(None),
+        bounded,
+    );
 }
 
 #[test]
@@ -192,7 +207,7 @@ fn orthogonality_is_distinct_from_absolute_gradient_and_robust_normalization() {
     assert_eq!(result.param(), robust.param());
 
     let robust_trf = Executor::from_start(
-        RobustLeastSquares::new(Fit::new(1.), SquaredLoss),
+        RobustLeastSquares::new(bounded(Fit::new(1.)), SquaredLoss),
         TrustRegionReflective::new(),
         vec![1.],
     )
@@ -277,7 +292,7 @@ fn trf_distinguishes_stationarity_from_fixed_parameters() {
             } else {
                 Some(0.)
             });
-        let result = Executor::from_start(fit, solver, vec![1.])
+        let result = Executor::from_start(bounded(fit), solver, vec![1.])
             .run_with_solver()
             .unwrap();
         assert_eq!(
@@ -309,7 +324,7 @@ fn safeguards_failures_and_observed_checks_are_not_native_convergence() {
     assert!(result.solver.native_convergence_tests().is_empty());
 
     let failed = Executor::from_start(
-        Fit::new(f64::NAN),
+        bounded(Fit::new(f64::NAN)),
         TrustRegionReflective::new(),
         vec![1.],
     )

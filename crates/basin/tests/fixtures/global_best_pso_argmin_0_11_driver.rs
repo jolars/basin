@@ -47,6 +47,11 @@ impl RngCore for SequenceRng {
 
 struct Sphere;
 
+
+impl basin::ProblemConstraints for Sphere  {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new() }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;

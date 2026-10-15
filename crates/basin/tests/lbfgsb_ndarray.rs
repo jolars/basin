@@ -6,13 +6,21 @@
 
 use crate::backend_aliases::ndarray::{Array1, array};
 use basin::problems::BoothBoxed;
-use basin::{
-    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb,
-};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb};
 
 struct Rosen {
     l: Array1<f64>,
     u: Array1<f64>,
+}
+
+impl basin::ProblemConstraints for Rosen {
+    type Constraints = basin::Constraints<basin::BoxBounds<Array1<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(Some(&self.l), Some(&self.u)))
+    }
 }
 impl CostFunction for Rosen {
     type Param = Array1<f64>;
@@ -34,14 +42,6 @@ impl Gradient for Rosen {
             let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
             array![dfdx0, dfdx1]
         })
-    }
-}
-impl BoxConstraints for Rosen {
-    fn lower(&self) -> &Array1<f64> {
-        &self.l
-    }
-    fn upper(&self) -> &Array1<f64> {
-        &self.u
     }
 }
 

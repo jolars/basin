@@ -2,9 +2,7 @@ use std::convert::Infallible;
 use std::ops::{Index, IndexMut};
 
 use basin::core::math::{Scalar, VectorLen};
-use basin::{
-    Bobyqa, BoxConstraints, CostFunction, Executor, PointState, TerminationCode,
-};
+use basin::{Bobyqa, CostFunction, Executor, PointState, TerminationCode};
 
 struct Corner<V> {
     lower: V,
@@ -12,6 +10,21 @@ struct Corner<V> {
     coefficients: V,
 }
 
+impl<V, F> basin::ProblemConstraints for &Corner<V>
+where
+    V: VectorLen + Index<usize, Output = F>,
+    F: Scalar,
+{
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V, F> CostFunction for &Corner<V>
 where
     V: VectorLen + Index<usize, Output = F>,
@@ -26,20 +39,6 @@ where
             x[i].is_finite() && self.lower[i] <= x[i] && x[i] <= self.upper[i]
         }));
         Ok((0..x.vec_len()).map(|i| self.coefficients[i] * x[i]).sum())
-    }
-}
-
-impl<V, F> BoxConstraints for &Corner<V>
-where
-    V: VectorLen + Index<usize, Output = F>,
-    F: Scalar,
-{
-    fn lower(&self) -> &V {
-        &self.lower
-    }
-
-    fn upper(&self) -> &V {
-        &self.upper
     }
 }
 

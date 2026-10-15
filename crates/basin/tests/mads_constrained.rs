@@ -15,15 +15,24 @@
 //! `cobyla_public.rs`). MADS's poll geometry is deterministic and
 //! backend-independent, so every backend traces the identical run.
 
-use basin::{
-    CostFunction, Executor, Mads, NonlinearInequalityConstraints,
-    SelectedState, TerminationCode,
-};
+use basin::{CostFunction, Executor, Mads, SelectedState, TerminationCode};
 
 /// `min x0·x1` s.t. `x0² + x1² ≤ 1` on `Vec<f64>` (default features). The
 /// constrained optimum is `F* = −1/2` on the unit circle (at the 45° points).
 struct Disk;
 
+impl basin::ProblemConstraints for Disk {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_inequalities(1)
+    }
+}
 impl CostFunction for Disk {
     type Param = Vec<f64>;
     type Output = f64;
@@ -33,15 +42,16 @@ impl CostFunction for Disk {
     }
 }
 
-impl NonlinearInequalityConstraints for Disk {
-    fn constraints(
+impl basin::NonlinearInequalityValues for Disk {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = std::convert::Infallible;
+    fn nonlinear_inequalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Vec<f64>, std::convert::Infallible> {
-        Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
-    }
-    fn num_constraints(&self) -> usize {
-        1
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        { Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0]) }
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -160,6 +170,23 @@ fn backend_generic_nalgebra() {
     use crate::backend_aliases::nalgebra::DVector;
 
     struct Disk;
+
+    impl basin::ProblemConstraints for Disk {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for Disk {
         type Param = DVector<f64>;
         type Output = f64;
@@ -171,15 +198,17 @@ fn backend_generic_nalgebra() {
             Ok(x[0] * x[1])
         }
     }
-    impl NonlinearInequalityConstraints for Disk {
-        fn constraints(
+    impl basin::NonlinearInequalityValues for Disk {
+        type Param = DVector<f64>;
+        type Values = DVector<f64>;
+        type Error = std::convert::Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &DVector<f64>,
-        ) -> Result<DVector<f64>, std::convert::Infallible> {
-            Ok(DVector::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0]))
-        }
-        fn num_constraints(&self) -> usize {
-            1
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(DVector::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0])) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
@@ -209,6 +238,23 @@ fn backend_generic_ndarray() {
     use crate::backend_aliases::ndarray::Array1;
 
     struct Disk;
+
+    impl basin::ProblemConstraints for Disk {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for Disk {
         type Param = Array1<f64>;
         type Output = f64;
@@ -220,15 +266,17 @@ fn backend_generic_ndarray() {
             Ok(x[0] * x[1])
         }
     }
-    impl NonlinearInequalityConstraints for Disk {
-        fn constraints(
+    impl basin::NonlinearInequalityValues for Disk {
+        type Param = Array1<f64>;
+        type Values = Array1<f64>;
+        type Error = std::convert::Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Array1<f64>,
-        ) -> Result<Array1<f64>, std::convert::Infallible> {
-            Ok(Array1::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0]))
-        }
-        fn num_constraints(&self) -> usize {
-            1
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(Array1::from_vec(vec![x[0] * x[0] + x[1] * x[1] - 1.0])) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
@@ -258,6 +306,23 @@ fn backend_generic_faer() {
     use crate::backend_aliases::faer::Col;
 
     struct Disk;
+
+    impl basin::ProblemConstraints for Disk {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for Disk {
         type Param = Col<f64>;
         type Output = f64;
@@ -266,15 +331,17 @@ fn backend_generic_faer() {
             Ok(x[0] * x[1])
         }
     }
-    impl NonlinearInequalityConstraints for Disk {
-        fn constraints(
+    impl basin::NonlinearInequalityValues for Disk {
+        type Param = Col<f64>;
+        type Values = Col<f64>;
+        type Error = std::convert::Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Col<f64>,
-        ) -> Result<Col<f64>, std::convert::Infallible> {
-            Ok(Col::from_fn(1, |_| x[0] * x[0] + x[1] * x[1] - 1.0))
-        }
-        fn num_constraints(&self) -> usize {
-            1
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(Col::from_fn(1, |_| x[0] * x[0] + x[1] * x[1] - 1.0)) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 

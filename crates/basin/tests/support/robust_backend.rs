@@ -1,7 +1,7 @@
 use basin::{
-    BoxConstraints, CauchyLoss, CostFunction, Executor, HuberLoss, Jacobian,
-    PointState, Residual, RobustLeastSquares, Scalar, Solver, TerminationCode,
-    VectorIndex, VectorLen,
+    CauchyLoss, CostFunction, Executor, HuberLoss, Jacobian, PointState,
+    Residual, RobustLeastSquares, Scalar, Solver, TerminationCode, VectorIndex,
+    VectorLen,
 };
 use std::convert::Infallible;
 
@@ -13,6 +13,17 @@ pub struct Location<V, M, F> {
     pub upper: V,
 }
 
+impl<V, M, F: Scalar> basin::ProblemConstraints for Location<V, M, F> {
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V, M, F: Scalar> CostFunction for Location<V, M, F> {
     type Param = V;
     type Output = F;
@@ -40,20 +51,21 @@ impl<V: VectorIndex<F>, M: Clone, F: Scalar> Jacobian for Location<V, M, F> {
     }
 }
 
-impl<V, M, F: Scalar> BoxConstraints for Location<V, M, F> {
-    fn lower(&self) -> &V {
-        &self.lower
-    }
-    fn upper(&self) -> &V {
-        &self.upper
-    }
-}
-
 pub struct CauchyLocation<V, M, F> {
     make: fn(&[F]) -> V,
     jacobian: M,
 }
 
+impl<V: VectorIndex<F>, M, F: Scalar> basin::ProblemConstraints
+    for CauchyLocation<V, M, F>
+{
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: VectorIndex<F>, M, F: Scalar> Residual for CauchyLocation<V, M, F> {
     type Param = V;
     type Output = V;
@@ -110,20 +122,22 @@ where
     assert!(result.cost() < F::from_f64(1e-12).unwrap());
 }
 
-pub fn check<V, M, F, S>(fit: Location<V, M, F>, solver: S, tolerance: F)
-where
+pub fn check<V, M, F, S, P, E>(
+    fit: Location<V, M, F>,
+    solver: S,
+    tolerance: F,
+    prepare: impl FnOnce(Location<V, M, F>) -> P,
+) where
     F: Scalar,
+    P: Residual<Param = V, Output = V, Error = Infallible>,
+    E: std::fmt::Debug,
     V: Clone + VectorIndex<F> + VectorLen,
     M: Clone,
-    S: Solver<
-            RobustLeastSquares<Location<V, M, F>, HuberLoss, F>,
-            PointState<V, F>,
-            Error = Infallible,
-        >,
+    S: Solver<RobustLeastSquares<P, HuberLoss, F>, PointState<V, F>, Error = E>,
 {
     let start = (fit.make)(&[F::zero()]);
     let result = Executor::new(
-        RobustLeastSquares::new(fit, HuberLoss),
+        RobustLeastSquares::new(prepare(fit), HuberLoss),
         solver,
         PointState::new(start),
     )
@@ -148,7 +162,7 @@ where
     S: Solver<
             RobustLeastSquares<Location<V, M, F>, HuberLoss, F>,
             PointState<V, F>,
-            Error = Infallible,
+            Error = basin::ConstraintSolveError<Infallible>,
         >,
 {
     use basin::{State, StepOutcome};

@@ -1,8 +1,8 @@
 //! Shared population records and fresh versus exact stochastic runs.
 
 use basin::{
-    BoxConstraints, CostFunction, De, Executor, PopulationProgress,
-    RandomSearch, Solver, Ssga, State,
+    CostFunction, De, Executor, PopulationProgress, RandomSearch, Solver, Ssga,
+    State,
 };
 use std::convert::Infallible;
 
@@ -18,6 +18,18 @@ impl Sphere {
         }
     }
 }
+
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -27,18 +39,10 @@ impl CostFunction for Sphere {
         Ok(x.iter().map(|x| x * x).sum())
     }
 }
-impl BoxConstraints for Sphere {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
 
 fn fresh_population<So>(solver: So)
 where
-    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error = Infallible>,
+    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error: std::fmt::Debug>,
 {
     let prior =
         Executor::new(Sphere::new(), solver, PopulationProgress::empty())
@@ -71,7 +75,7 @@ fn ssga_fresh_run_reevaluates_members_and_resets_bookkeeping() {
 
 fn explicit_population<So>(solver: So)
 where
-    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error = Infallible>,
+    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error: std::fmt::Debug>,
 {
     let result = Executor::new(
         Sphere::new(),
@@ -280,7 +284,7 @@ fn ties_and_nonfinite_costs_do_not_corrupt_incumbents() {
 
 fn exact_runs<So>(make: impl Fn() -> So)
 where
-    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error = Infallible>,
+    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error: std::fmt::Debug>,
 {
     let expected =
         Executor::new(Sphere::new(), make(), PopulationProgress::empty())
@@ -325,7 +329,7 @@ fn exact_continuation_keeps_population_rng_and_refinement_schedule() {
 #[cfg(feature = "serde")]
 fn serialized_runs<So>(make: impl Fn() -> So)
 where
-    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error = Infallible>
+    So: Solver<Sphere, PopulationProgress<Vec<f64>>, Error: std::fmt::Debug>
         + serde::Serialize
         + serde::de::DeserializeOwned,
 {
@@ -511,12 +515,12 @@ impl basin::MemeticInner<Vec<f64>> for PartialRefinement {
     }
 }
 impl Solver<Sphere, basin::PointState<Vec<f64>>> for PartialRefinement {
-    type Error = Infallible;
+    type Error = basin::ConstraintSolveError<Infallible>;
     fn init(
         &mut self,
         p: &mut basin::Problem<Sphere>,
         mut state: basin::PointState<Vec<f64>>,
-    ) -> Result<basin::PointState<Vec<f64>>, Infallible> {
+    ) -> Result<basin::PointState<Vec<f64>>, Self::Error> {
         state.reset();
         let point = vec![if self.calls == 0 { 0.5 } else { 0.0 }];
         let (cost, _, _) = p.cost_and_gradient_and_hessian(&point)?;
@@ -530,7 +534,7 @@ impl Solver<Sphere, basin::PointState<Vec<f64>>> for PartialRefinement {
         &mut self,
         _: &mut basin::Problem<Sphere>,
         _: basin::PointState<Vec<f64>>,
-    ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Infallible>
+    ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Self::Error>
     {
         unreachable!("the test inner terminates at initialization")
     }

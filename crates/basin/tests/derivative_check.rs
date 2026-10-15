@@ -6,6 +6,15 @@ use basin::{
 struct Polynomial {
     wrong: bool,
 }
+
+impl basin::ProblemConstraints for Polynomial {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Polynomial {
     type Param = Vec<f64>;
     type Output = f64;
@@ -112,6 +121,15 @@ fn directional_checks_compare_products_and_normalize_direction() {
 }
 
 struct Bounded;
+
+impl basin::ProblemConstraints for Bounded {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Bounded {
     type Param = Vec<f64>;
     type Output = f64;
@@ -186,6 +204,15 @@ struct NonFinite {
     at_base: bool,
     analytic: bool,
 }
+
+impl basin::ProblemConstraints for NonFinite {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for NonFinite {
     type Param = Vec<f64>;
     type Output = f64;
@@ -246,6 +273,15 @@ fn non_finite_evaluations_are_errors_not_derivative_mismatches() {
 struct Linear {
     slope: f64,
     derivative: f64,
+}
+
+impl basin::ProblemConstraints for Linear {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
 }
 impl CostFunction for Linear {
     type Param = Vec<f64>;
@@ -356,6 +392,16 @@ fn directional_checks_reject_probes_requiring_projection() {
         derivative: f64,
         calls: AtomicUsize,
     }
+
+    impl basin::ProblemConstraints for NarrowBox {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for NarrowBox {
         type Param = Vec<f64>;
         type Output = f64;
@@ -458,6 +504,15 @@ fn invalid_points_directions_and_shapes_return_errors() {
 
 struct Broken {
     mode: usize,
+}
+
+impl basin::ProblemConstraints for Broken {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
 }
 impl CostFunction for Broken {
     type Param = Vec<f64>;
@@ -606,6 +661,15 @@ use basin::{DenseMatrixFromFn, MatrixIndex, Scalar, VectorIndex, VectorLen};
 struct Backend<V, F> {
     make: fn(&[F]) -> V,
 }
+
+impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints for Backend<V, F> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: VectorIndex<F>, F: Scalar> CostFunction for Backend<V, F> {
     type Param = V;
     type Output = F;
@@ -719,6 +783,15 @@ fn faer_f32_and_f64() {
 struct Counted {
     calls: std::sync::atomic::AtomicUsize,
 }
+
+impl basin::ProblemConstraints for Counted {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Counted {
     type Param = Vec<f64>;
     type Output = f64;
@@ -809,6 +882,16 @@ fn empty_and_all_fixed_checks_expose_their_lack_of_coverage() {
 #[test]
 fn finite_evaluations_with_overflowing_differences_are_identified() {
     struct Jump;
+
+    impl basin::ProblemConstraints for Jump {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Jump {
         type Param = Vec<f64>;
         type Output = f64;

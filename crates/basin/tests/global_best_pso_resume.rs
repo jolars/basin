@@ -4,8 +4,8 @@ use std::convert::Infallible;
 use std::path::PathBuf;
 
 use basin::{
-    BoxConstraints, CostFunction, ExactCheckpoint, ExactCheckpointWriter,
-    Executor, GlobalBestPso, ObserverMode, PopulationProgress, State,
+    CostFunction, ExactCheckpoint, ExactCheckpointWriter, Executor,
+    GlobalBestPso, ObserverMode, PopulationProgress, State,
     read_exact_checkpoint,
 };
 
@@ -15,6 +15,17 @@ struct Landscape {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for Landscape {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Landscape {
     type Param = Vec<f64>;
     type Output = f64;
@@ -25,16 +36,6 @@ impl CostFunction for Landscape {
             .map(|xi| xi * xi - 10.0 * (std::f64::consts::TAU * xi).cos())
             .sum::<f64>()
             + 10.0 * x.len() as f64)
-    }
-}
-
-impl BoxConstraints for Landscape {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

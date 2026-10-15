@@ -1,9 +1,6 @@
 //! MADS progress and solver-owned mesh schedules.
 
-use basin::{
-    BoxConstraints, CostFunction, Executor, Mads,
-    NonlinearInequalityConstraints, Problem, Solver,
-};
+use basin::{CostFunction, Executor, Mads, Problem, Solver};
 use basin::{PointState, SelectedState, State};
 use std::convert::Infallible;
 
@@ -19,6 +16,38 @@ impl Bowl {
         }
     }
 }
+
+impl basin::ProblemConstraints for Bowl {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
+fn bounded(
+    n: usize,
+) -> basin::Constrained<Bowl, basin::Constraints<basin::BoxBounds<Vec<f64>>>> {
+    let bowl = Bowl::new(n);
+    let bounds = basin::BoxBounds::new(
+        Some(bowl.lower.clone()),
+        Some(bowl.upper.clone()),
+    );
+    basin::Constrained::new(bowl, basin::Constraints::new().with_bounds(bounds))
+}
+fn constrained(
+    n: usize,
+) -> basin::Constrained<
+    Bowl,
+    basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >,
+> {
+    basin::Constrained::new(
+        Bowl::new(n),
+        basin::Constraints::new().with_nonlinear_inequalities(1),
+    )
+}
 impl CostFunction for Bowl {
     type Param = Vec<f64>;
     type Output = f64;
@@ -27,34 +56,31 @@ impl CostFunction for Bowl {
         Ok(x.iter().map(|x| x * x).sum())
     }
 }
-impl BoxConstraints for Bowl {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
-impl NonlinearInequalityConstraints for Bowl {
-    fn num_constraints(&self) -> usize {
-        1
-    }
-    fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-        Ok(vec![1.0 - x[0]])
+
+impl basin::NonlinearInequalityValues for Bowl {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        { Ok(vec![1.0 - x[0]]) }
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
 macro_rules! fresh {
-    ($test:ident, $solver:expr) => {
+    ($test:ident, $solver:expr, $problem:expr) => {
         #[test]
         fn $test() {
             let prior =
-                Executor::from_start(Bowl::new(2), $solver, vec![2.0; 2])
+                Executor::from_start(($problem)(2), $solver, vec![2.0; 2])
                     .max_iter(4)
                     .run_with_solver()
                     .unwrap();
             assert_eq!(prior.iter(), 4);
-            let fresh = Executor::new(Bowl::new(2), prior.solver, prior.state)
+            let fresh = Executor::new(($problem)(2), prior.solver, prior.state)
                 .max_iter(0)
                 .run_with_solver()
                 .unwrap();
@@ -63,13 +89,17 @@ macro_rules! fresh {
         }
     };
 }
-fresh!(unbounded_fresh_bookkeeping, Mads::new());
-fresh!(bounded_fresh_bookkeeping, Mads::new().bounded());
-fresh!(constrained_fresh_bookkeeping, Mads::new().constrained());
+fresh!(unbounded_fresh_bookkeeping, Mads::new(), Bowl::new);
+fresh!(bounded_fresh_bookkeeping, Mads::new().bounded(), bounded);
+fresh!(
+    constrained_fresh_bookkeeping,
+    Mads::new().constrained(),
+    constrained
+);
 
 #[test]
 fn constraints_are_counted_as_residual_calls() {
-    let mut problem = Problem::new(Bowl::new(2));
+    let mut problem = Problem::new(constrained(2));
     let mut solver = Mads::new().constrained();
     let _ = solver
         .init(&mut problem, basin::SelectedState::new(vec![0.0; 2]))
@@ -79,14 +109,14 @@ fn constraints_are_counted_as_residual_calls() {
 }
 
 macro_rules! lifecycle {
-    ($module:ident, $solver:expr, $mode:ty, $state:ident) => {
+    ($module:ident, $solver:expr, $mode:ty, $state:ident, $problem:expr) => {
         mod $module {
             use super::*;
             #[test]
             fn exact_checkpoints_keep_mesh_and_halton_history() {
                 let make = || {
                     Executor::from_start(
-                        Bowl::new(2),
+                        ($problem)(2),
                         $solver.with_minimum_poll_size(1e-12),
                         vec![2.0; 2],
                     )
@@ -99,7 +129,7 @@ macro_rules! lifecycle {
                         .unwrap()
                         .into_checkpoint();
                     let actual = Executor::resume_from_checkpoint(
-                        Bowl::new(2),
+                        ($problem)(2),
                         checkpoint,
                     )
                     .require_evaluated_state()
@@ -122,12 +152,12 @@ macro_rules! lifecycle {
             #[test]
             fn fresh_runs_rebuild_for_a_new_dimension() {
                 let used =
-                    Executor::from_start(Bowl::new(2), $solver, vec![2.0; 2])
+                    Executor::from_start(($problem)(2), $solver, vec![2.0; 2])
                         .max_iter(4)
                         .run_with_solver()
                         .unwrap();
                 let actual = Executor::new(
-                    Bowl::new(3),
+                    ($problem)(3),
                     used.solver,
                     $state::new(vec![1.5; 3]),
                 )
@@ -135,7 +165,7 @@ macro_rules! lifecycle {
                 .run_with_solver()
                 .unwrap();
                 let expected =
-                    Executor::from_start(Bowl::new(3), $solver, vec![1.5; 3])
+                    Executor::from_start(($problem)(3), $solver, vec![1.5; 3])
                         .max_iter(10)
                         .run_with_solver()
                         .unwrap();
@@ -154,7 +184,7 @@ macro_rules! lifecycle {
                     basin::ExactCheckpoint<Mads<$mode>, $state<Vec<f64>>>;
                 let make = || {
                     Executor::from_start(
-                        Bowl::new(2),
+                        ($problem)(2),
                         $solver.with_minimum_poll_size(1e-12),
                         vec![2.0; 2],
                     )
@@ -169,7 +199,7 @@ macro_rules! lifecycle {
                 let restored: Checkpoint =
                     postcard::from_bytes(&bytes).unwrap();
                 let actual =
-                    Executor::resume_from_checkpoint(Bowl::new(2), restored)
+                    Executor::resume_from_checkpoint(($problem)(2), restored)
                         .max_iter(20)
                         .run_with_solver()
                         .unwrap();
@@ -180,7 +210,7 @@ macro_rules! lifecycle {
                     postcard::to_allocvec(&expected.solver).unwrap()
                 );
                 let fresh = Executor::new(
-                    Bowl::new(2),
+                    ($problem)(2),
                     actual.solver,
                     $state::new(vec![2.0; 2]),
                 )
@@ -201,25 +231,28 @@ lifecycle!(
     unbounded,
     Mads::new(),
     basin::solver::nelder_mead::Unbounded,
-    PointState
+    PointState,
+    Bowl::new
 );
 lifecycle!(
     bounded,
     Mads::new().bounded(),
     basin::solver::mads::Bounded,
-    PointState
+    PointState,
+    bounded
 );
 lifecycle!(
     constrained,
     Mads::new().constrained(),
     basin::solver::mads::Constrained,
-    SelectedState
+    SelectedState,
+    constrained
 );
 
 #[test]
 fn constrained_selection_preserves_feasibility_and_publication_counts() {
     let mut stepper = Executor::from_start(
-        Bowl::new(2),
+        constrained(2),
         Mads::new().constrained(),
         vec![0.0; 2],
     )

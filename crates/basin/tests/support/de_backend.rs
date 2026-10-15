@@ -4,8 +4,8 @@ use std::{
 };
 
 use basin::{
-    BoxConstraints, CostFunction, De, Executor, PopulationProgress,
-    SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, State, VectorLen,
+    CostFunction, De, Executor, PopulationProgress, SampleUniformBox, Scalar,
+    ScaleInPlace, ScaledAdd, State, VectorLen,
 };
 use rand_distr::uniform::SampleUniform;
 
@@ -14,6 +14,21 @@ struct Quadratic<V> {
     upper: V,
 }
 
+impl<V, F> basin::ProblemConstraints for Quadratic<V>
+where
+    V: VectorLen + Index<usize, Output = F>,
+    F: Scalar,
+{
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V, F> CostFunction for Quadratic<V>
 where
     V: VectorLen + Index<usize, Output = F>,
@@ -28,19 +43,6 @@ where
         Ok((0..x.vec_len())
             .map(|i| F::from_usize(i + 1).unwrap() * (x[i] - quarter).powi(2))
             .sum())
-    }
-}
-
-impl<V, F> BoxConstraints for Quadratic<V>
-where
-    V: VectorLen + Index<usize, Output = F>,
-    F: Scalar,
-{
-    fn lower(&self) -> &V {
-        &self.lower
-    }
-    fn upper(&self) -> &V {
-        &self.upper
     }
 }
 

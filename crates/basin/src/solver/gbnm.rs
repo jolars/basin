@@ -1,6 +1,6 @@
 use rand_distr::uniform::SampleUniform;
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::inner::InitialState;
 use crate::core::math::{
     ClampInPlace, SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd,
@@ -136,11 +136,15 @@ struct BoxGeometry<'a, V> {
 /// # Example
 ///
 /// ```
-/// use basin::{BoxConstraints, CostFunction, Executor, Gbnm, PointState};
+/// use basin::{CostFunction, Executor, Gbnm, PointState};
 ///
 /// struct BoundedSphere {
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
+/// }
+/// impl basin::ProblemConstraints for BoundedSphere  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for BoundedSphere {
 ///     type Param = Vec<f64>;
@@ -150,14 +154,7 @@ struct BoxGeometry<'a, V> {
 ///         Ok(x.iter().map(|xi| xi * xi).sum())
 ///     }
 /// }
-/// impl BoxConstraints for BoundedSphere {
-///     fn lower(&self) -> &Vec<f64> {
-///         &self.lower
-///     }
-///     fn upper(&self) -> &Vec<f64> {
-///         &self.upper
-///     }
-/// }
+///
 ///
 /// let problem = BoundedSphere {
 ///     lower: vec![-5.0, -5.0],
@@ -477,9 +474,9 @@ where
         center: V,
         edge_fraction: F,
         geometry: BoxGeometry<'_, V>,
-    ) -> Result<PointState<V, F>, P::Error>
+    ) -> Result<PointState<V, F>, crate::ConstraintSolveError<P::Error>>
     where
-        P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
+        P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
         V: Clone
             + VectorLen
             + ClampInPlace
@@ -550,7 +547,7 @@ where
 impl<P, V, F> Solver<P, PointState<V, F>> for Gbnm<V, F>
 where
     F: Scalar + SampleUniform,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     V: Clone
         + ClampInPlace
         + SampleUniformBox
@@ -559,13 +556,19 @@ where
         + VectorIndex<F>
         + VectorLen,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_coordinate_box_problem(
+            problem.inner(),
+            state.param().vec_len(),
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         assert_eq!(

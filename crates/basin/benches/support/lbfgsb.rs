@@ -7,8 +7,8 @@
 pub mod short;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
-    GradientState, Lbfgsb, OptimizationResult, Solver, State,
+    CostFunction, Executor, FirstOrderState, Gradient, GradientState, Lbfgsb,
+    OptimizationResult, Solver, State,
 };
 use std::convert::Infallible;
 
@@ -136,8 +136,11 @@ impl<V: Vector> Driver<V> {
 
     pub fn solve(&self) -> OptimizationResult<FirstOrderState<V>>
     where
-        Lbfgsb<V>:
-            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
+        Lbfgsb<V>: for<'a> Solver<
+                &'a Self,
+                FirstOrderState<V>,
+                Error = basin::ConstraintSolveError<Infallible>,
+            >,
     {
         let first = self.number == 1;
         let evaluation_limit = if self.number == 3 { 900 } else { 99 };
@@ -236,6 +239,17 @@ impl<V: Vector> Driver<V> {
     }
 }
 
+impl<V: Vector> basin::ProblemConstraints for &Driver<V> {
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V: Vector> CostFunction for &Driver<V> {
     type Param = V;
     type Output = f64;
@@ -255,11 +269,13 @@ impl<V: Vector> Gradient for &Driver<V> {
         Ok((cost, gradient))
     }
 }
-impl<V: Vector> BoxConstraints for &Driver<V> {
-    fn lower(&self) -> &V {
+impl<V: Vector> Driver<V> {
+    /// Access this problem's lower.
+    pub fn lower(&self) -> &V {
         &self.lower
     }
-    fn upper(&self) -> &V {
+    /// Access this problem's upper.
+    pub fn upper(&self) -> &V {
         &self.upper
     }
 }

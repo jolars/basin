@@ -74,6 +74,19 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
 }
 
 struct Equality;
+
+impl basin::ProblemConstraints for Equality {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_equalities(1)
+    }
+}
 impl basin::CostFunction for Equality {
     type Param = Vec<f64>;
     type Output = f64;
@@ -88,35 +101,41 @@ impl basin::Gradient for Equality {
         Ok(x.iter().map(|x| 2.0 * x).collect())
     }
 }
-impl basin::NonlinearConstraints for Equality {
-    type Matrix = basin::DenseMatrix;
-    fn num_nonlinear_constraints(&self) -> usize {
-        0
-    }
-    fn nonlinear_constraints(
-        &self,
-        _: &Vec<f64>,
-    ) -> Result<Vec<f64>, Self::Error> {
-        Ok(vec![])
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        1
-    }
+impl basin::NonlinearEqualityValues for Equality {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = std::convert::Infallible;
     fn nonlinear_equalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Option<Vec<f64>>, Self::Error> {
-        Ok(Some(vec![x[0] - 1.0]))
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        { Ok(Some(vec![x[0] - 1.0])) }
+            .map_err(basin::ConstraintSolveError::Evaluation)?
+            .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+                basin::ConstraintError::DimensionMismatch {
+                    block: basin::ConstraintBlock::NonlinearEqualities,
+                    axis: basin::ConstraintAxis::Length,
+                    expected: 1,
+                    actual: 0,
+                },
+            ))
     }
 }
+
 impl basin::ConstraintJacobian for Equality {
+    type Param = Vec<f64>;
+    type Jacobian = basin::DenseMatrix;
+    type Error = std::convert::Infallible;
     fn constraint_jacobian(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<basin::DenseMatrix, Self::Error> {
-        let mut row = vec![0.0; x.len()];
-        row[0] = 1.0;
-        Ok(basin::DenseMatrix::from_row_slice(1, x.len(), &row))
+        x: &Self::Param,
+    ) -> Result<Self::Jacobian, basin::ConstraintSolveError<Self::Error>> {
+        {
+            let mut row = vec![0.0; x.len()];
+            row[0] = 1.0;
+            Ok(basin::DenseMatrix::from_row_slice(1, x.len(), &row))
+        }
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 

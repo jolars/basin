@@ -16,15 +16,12 @@
 //!   [`Gradient`](problem::Gradient)/[`Jacobian`](problem::Jacobian)/
 //!   [`Hessian`](problem::Hessian) to a problem that only exposes
 //!   function values.
-//! - [`constraint`]: constraint markers carried on the problem (tenet 4
-//!   in `CONTRIBUTING.md`): [`BoxConstraints`](constraint::BoxConstraints),
-//!   [`LinearInequalityConstraints`](constraint::LinearInequalityConstraints),
-//!   [`LinearEqualityConstraints`](constraint::LinearEqualityConstraints), and
-//!   [`NonlinearInequalityConstraints`](constraint::NonlinearInequalityConstraints).
-//!   The standalone aggregators [`LinearConstraints`](constraint::LinearConstraints)
-//!   and [`NonlinearConstraints`](constraint::NonlinearConstraints) supply the
-//!   full forms for LINCOA and COBYLA, respectively; COBYLA consumes the latter
-//!   through [`FoldedConstraints`](constraint::FoldedConstraints).
+//! - [`constraint`]: the canonical [`ProblemConstraints`](crate::ProblemConstraints)
+//!   declaration shared by objective and residual problems. Its typed
+//!   [`Constraints`](crate::Constraints) set determines solver compatibility.
+//!   Separate capabilities evaluate nonlinear values and Jacobians. COBYLA and
+//!   SLSQP consume the complete set directly; absent blocks require no unused
+//!   matrix type or callback.
 //! - [`barrier`]: the [`LogBarrier`](barrier::LogBarrier) adapter that
 //!   rewrites a linearly-constrained problem as the unconstrained
 //!   log-barrier objective consumed by the

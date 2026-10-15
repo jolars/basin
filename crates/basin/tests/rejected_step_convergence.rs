@@ -1,11 +1,11 @@
 //! Rejected trials must not look like converged cost or parameter changes.
 
 use basin::{
-    BoxConstraints, CostFunction, DenseMatrix, ExactCheckpoint, Executor,
-    FirstOrderState, Gradient, Hessian, HessianProduct, Jacobian,
-    LevenbergMarquardt, LmDamping, PointState, Problem, Residual,
-    RobustLeastSquares, RunControl, Solver, SquaredLoss, State,
-    TerminationCode, Trf, TrustRegion, run_loop_with_control,
+    CostFunction, DenseMatrix, ExactCheckpoint, Executor, FirstOrderState,
+    Gradient, Hessian, HessianProduct, Jacobian, LevenbergMarquardt, LmDamping,
+    PointState, Problem, Residual, RobustLeastSquares, RunControl, Solver,
+    SquaredLoss, State, TerminationCode, Trf, TrustRegion,
+    run_loop_with_control,
 };
 use std::convert::Infallible;
 
@@ -23,6 +23,26 @@ impl SquareResidual {
     }
 }
 
+impl basin::ProblemConstraints for SquareResidual {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
+fn bounded_square() -> basin::Constrained<
+    SquareResidual,
+    basin::Constraints<basin::BoxBounds<Vec<f64>>>,
+> {
+    let problem = SquareResidual::new();
+    let bounds = basin::BoxBounds::new(
+        Some(problem.lower.clone()),
+        Some(problem.upper.clone()),
+    );
+    basin::Constrained::new(
+        problem,
+        basin::Constraints::new().with_bounds(bounds),
+    )
+}
 impl Residual for SquareResidual {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -77,16 +97,6 @@ impl HessianProduct for SquareResidual {
     }
 }
 
-impl BoxConstraints for SquareResidual {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
-
 fn check_rejections<P, S, So>(
     make_problem: impl Fn() -> P,
     make_state: impl Fn() -> S,
@@ -94,7 +104,7 @@ fn check_rejections<P, S, So>(
     accepted_reason: TerminationCode,
 ) where
     S: State<Param = Vec<f64>, Float = f64> + basin::CountsMirror,
-    So: Solver<P, S, Error = Infallible>,
+    So: Solver<P, S, Error: std::fmt::Debug>,
 {
     let mut problem = Problem::new(make_problem());
     // Both fresh reuse and exact continuation must retain the right anchor.
@@ -166,8 +176,8 @@ macro_rules! rejection_checks {
 }
 
 macro_rules! all_change_checks {
-    ($name:ident, $state:ident, $solver:expr) => {
-        rejection_checks!($name, SquareResidual::new(), $state, $solver, [
+    ($name:ident, $state:ident, $solver:expr, $problem:expr) => {
+        rejection_checks!($name, $problem, $state, $solver, [
             with_absolute_cost_change_tolerance => CostTolerance,
             with_relative_cost_change_tolerance => RelativeCostTolerance,
             with_absolute_step_tolerance => ParamTolerance,
@@ -176,20 +186,22 @@ macro_rules! all_change_checks {
     };
 }
 
-all_change_checks!(trf, PointState, Trf::new());
+all_change_checks!(trf, PointState, Trf::new(), bounded_square());
 all_change_checks!(
     trust_region,
     FirstOrderState,
     TrustRegion::new()
         .with_radius(10.)
-        .with_max_inner_attempts(1)
+        .with_max_inner_attempts(1),
+    SquareResidual::new()
 );
 all_change_checks!(
     matrix_free,
     FirstOrderState,
     TrustRegion::matrix_free()
         .with_radius(10.)
-        .with_max_inner_attempts(1)
+        .with_max_inner_attempts(1),
+    SquareResidual::new()
 );
 
 macro_rules! lm_checks {
@@ -231,7 +243,7 @@ lm_checks!(
     LevenbergMarquardt::new().with_pivoted_qr()
 );
 rejection_checks!(robust_trf,
-RobustLeastSquares::new(SquareResidual::new(), SquaredLoss), PointState, Trf::new(), [
+RobustLeastSquares::new(bounded_square(), SquaredLoss), PointState, Trf::new(), [
     with_absolute_cost_change_tolerance => CostTolerance,
     with_relative_cost_change_tolerance => RelativeCostTolerance,
     with_absolute_step_tolerance => ParamTolerance,
@@ -247,7 +259,7 @@ fn rejection_after_accepted_steps_does_not_establish_convergence() {
         So: Solver<
                 SquareResidual,
                 FirstOrderState<Vec<f64>>,
-                Error = Infallible,
+                Error: std::fmt::Debug,
             >,
     {
         let iterates = Rc::new(RefCell::new(Vec::new()));

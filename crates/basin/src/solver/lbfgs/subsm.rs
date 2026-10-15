@@ -78,7 +78,7 @@ pub(crate) enum SubsmError {
 /// - `gg`: length `n`. The gradient at `xx`.
 /// - `ind`: length `nsub`. Coordinate indices of free variables.
 /// - `l`, `u`: length `n`. Bounds with `±∞` for missing sides
-///   (basin's `BoxConstraints` convention). Fortran's `nbd(k)` code
+///   (basin's `BoxBounds` convention). Fortran's `nbd(k)` code
 ///   is recovered per-component from `l[k].is_finite()` /
 ///   `u[k].is_finite()`.
 /// - `ws_cols`, `wy_cols`: `col` history columns, oldest first;

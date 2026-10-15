@@ -26,11 +26,10 @@ use basin::problems::{
 use basin::problems::{styblinski_tang, styblinski_tang_gradient};
 use basin::solver::lbfgs::{Lbfgs, Unbounded as LbfgsUnbounded};
 use basin::{
-    Backtracking, BoxConstraints, CmaEs, Constant, CostFunction, De,
-    DenseMatrix, Executor, FiniteDiff, FirstOrderState, Gradient,
-    GradientDescent, Mads, NelderMead, PointState, PopulationProgress,
-    RandomSearch, SimplexProgress, Ssga, State, StepOutcome, Stepper,
-    TerminationCode,
+    Backtracking, CmaEs, Constant, CostFunction, De, DenseMatrix, Executor,
+    FiniteDiff, FirstOrderState, Gradient, GradientDescent, Mads, NelderMead,
+    PointState, PopulationProgress, RandomSearch, SimplexProgress, Ssga, State,
+    StepOutcome, Stepper, TerminationCode,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -152,6 +151,14 @@ impl Default for RunOptions {
 #[derive(Clone, Copy)]
 struct Problem2D(ProblemKind);
 
+impl basin::ProblemConstraints for Problem2D {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Problem2D {
     type Param = Vec<f64>;
     type Output = f64;
@@ -181,6 +188,14 @@ impl CostFunction for Problem2D {
 #[derive(Clone, Copy)]
 struct Problem2DCost(ProblemKind);
 
+impl basin::ProblemConstraints for Problem2DCost {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Problem2DCost {
     type Param = Vec<f64>;
     type Output = f64;
@@ -193,7 +208,7 @@ impl CostFunction for Problem2DCost {
 
 /// 2D problem dispatcher with box bounds attached. DE, SSGA, and
 /// Random Search bound their `Solver<P, ...>` impl on `P:
-/// BoxConstraints<Param = V>`, so they can't reuse the bare [`Problem2D`].
+/// Constraints<BoxBounds<V>>`, so they use a separate canonical declaration.
 /// Bounds are sourced from the visualizer viewport: "visible" doubles as
 /// "feasible" here, which is the right semantics for a 2D demo.
 #[derive(Clone)]
@@ -203,6 +218,17 @@ struct Problem2DBounded {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for Problem2DBounded {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Problem2DBounded {
     type Param = Vec<f64>;
     type Output = f64;
@@ -210,15 +236,6 @@ impl CostFunction for Problem2DBounded {
 
     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
         Problem2D(self.kind).cost(x)
-    }
-}
-
-impl BoxConstraints for Problem2DBounded {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

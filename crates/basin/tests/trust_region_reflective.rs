@@ -1,6 +1,6 @@
 use basin::{
-    BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian, PointState,
-    Residual, State, TerminationCode, TrustRegionReflective,
+    CostFunction, DenseMatrix, Executor, Jacobian, PointState, Residual, State,
+    TerminationCode, TrustRegionReflective,
 };
 
 #[path = "support/backend_aliases.rs"]
@@ -78,6 +78,17 @@ impl Model {
     }
 }
 
+impl basin::ProblemConstraints for Model {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Model {
     type Param = Vec<f64>;
     type Output = f64;
@@ -132,15 +143,6 @@ impl Jacobian for Model {
                 &[-20.0 * x[0], 10.0, -1.0, 0.0],
             ),
         })
-    }
-}
-
-impl BoxConstraints for Model {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -343,7 +345,9 @@ fn check_cost_floor<P>(
 ) where
     P: Residual<Param = Vec<f64>, Output = Vec<f64>, Error = &'static str>
         + Jacobian<Jacobian = DenseMatrix>
-        + BoxConstraints<Param = Vec<f64>>,
+        + basin::ProblemConstraints<
+            Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>,
+        >,
 {
     let result = Executor::from_start(
         problem,
@@ -560,6 +564,18 @@ impl Callbacks {
         }
     }
 }
+
+impl basin::ProblemConstraints for Callbacks {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Callbacks {
     type Param = Vec<f64>;
     type Output = f64;
@@ -580,14 +596,6 @@ impl Jacobian for Callbacks {
     type Jacobian = DenseMatrix;
     fn jacobian(&self, x: &Vec<f64>) -> Result<DenseMatrix, Self::Error> {
         (self.jacobian)(x[0]).map(|v| DenseMatrix::from_row_slice(1, 1, &[v]))
-    }
-}
-impl BoxConstraints for Callbacks {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -822,21 +830,19 @@ fn bound_aware_numerical_jacobian() {
 }
 
 #[test]
-fn malformed_shapes_and_bounds_panic() {
+fn malformed_bounds_return_errors_and_nonfinite_starts_panic() {
     for p in [
         Model::linear(&[1.0], &[0.0], &[1.0], &[0.0]),
         Model::linear(&[1.0], &[0.0], &[f64::NAN], &[1.0]),
         Model::linear(&[1.0], &[0.0], &[], &[1.0]),
     ] {
-        assert!(
-            std::panic::catch_unwind(|| Executor::from_start(
-                p,
-                TrustRegionReflective::new(),
-                vec![0.0]
-            )
-            .run())
-            .is_err()
-        );
+        let result =
+            Executor::from_start(p, TrustRegionReflective::new(), vec![0.0])
+                .run();
+        assert!(matches!(
+            result,
+            Err(basin::ConstraintSolveError::InvalidConstraints(_))
+        ));
     }
     assert!(
         std::panic::catch_unwind(|| Executor::from_start(

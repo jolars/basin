@@ -40,8 +40,8 @@ use std::hint::black_box;
 use std::sync::Once;
 
 use basin::{
-    BoxConstraints, CmaEs, CostFunction, De, DenseMatrix, Executor,
-    PopulationProgress, RandomSearch,
+    CmaEs, CostFunction, De, DenseMatrix, Executor, PopulationProgress,
+    RandomSearch,
 };
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -71,6 +71,17 @@ impl ExpensiveSphere {
     }
 }
 
+impl basin::ProblemConstraints for ExpensiveSphere {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for ExpensiveSphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -82,15 +93,6 @@ impl CostFunction for ExpensiveSphere {
         }
         let base: f64 = x.iter().map(|xi| xi * xi).sum();
         Ok(base + acc * 1e-12)
-    }
-}
-
-impl BoxConstraints for ExpensiveSphere {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -117,7 +119,9 @@ fn bench_cma_es(c: &mut Criterion) {
                 b.iter(|| {
                     black_box(
                         Executor::new(
-                            ExpensiveSphere::new(dim),
+                            basin::SamplingDomain::new(ExpensiveSphere::new(
+                                dim,
+                            )),
                             CmaEs::<Vec<f64>, DenseMatrix>::new(7, 0.5)
                                 .with_lambda(lambda),
                             PopulationProgress::<Vec<f64>>::from_point(vec![

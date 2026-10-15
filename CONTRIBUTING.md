@@ -200,8 +200,8 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     controls instead of discarding them; legacy budget layouts remain stable.
   - `termination.rs`: stopping reasons reported by solvers and execution controls.
   - `constraint.rs` (+ `constraint/`), `barrier.rs`, `augmented_lagrangian.rs`:
-    problem-side constraint traits and explicit adapters, including
-    `FoldedConstraints` for COBYLA's full constraint form (tenet 4).
+    canonical typed constraint sets, independent evaluation capabilities,
+    checked validation, and explicit problem transformations (tenet 4).
   - `inner.rs`: `InnerExecutor`/`WarmStart`/`ResumableInner` for solver
     composition (fresh-seed tiers plus the seed + snapshot + resume tier the
     MA-LSCh chain family drives).
@@ -261,15 +261,20 @@ These shape API decisions and are non-obvious from the code alone.
    problem-side, not as executor config, never on state. Solvers declare support
    via traits; a constrained problem handed to an unconstrained solver is a
    compile error, with opt-in adapters (projection, barrier, or penalty) to wrap
-   unconstrained solvers. Box bounds, linear (in)equalities, and nonlinear
-   inequalities ship today. `NonlinearConstraints` is a standalone full-form
-   trait combining nonlinear inequalities with optional linear inequalities,
-   equalities, and box bounds. Use `FoldedConstraints::new(problem)` with
-   `Cobyla::new()` to fold these into inequality residuals. The adapter is an
-   explicit problem-side opt-in, with no blanket bridge to
-   `NonlinearInequalityConstraints`; existing callers keep using that trait
-   directly. The full-form solver path additionally requires matrix-vector
-   multiplication, supported by all four dense backends.
+   unconstrained solvers. Box bounds, linear equalities and inequalities, and
+   nonlinear equalities and inequalities share one `ProblemConstraints` declaration with
+   `CostFunction` and `Residual`. Its canonical `Constraints` type determines
+   solver compatibility; statically absent blocks need no matrix or callback.
+   A borrowed view preserves existing problem storage. Nonlinear values,
+   right-hand sides, linear matrices, and nonlinear Jacobians may use independent
+   representations. COBYLA consumes the complete declaration directly. Validate
+   bounds, shapes, and declared counts before indexing, and preserve original
+   callback errors in `ConstraintSolveError`. Differentiation and robust-loss
+   adapters forward the declaration; barrier and penalty adapters consume only
+   their supported blocks. Sampling boxes use `SamplingBounds` on unconstrained
+   problems. Bounded memetic solvers require an explicit `RelaxedInner` when
+   their local solver ignores the box. See
+   [constraint migration](MIGRATING.md#declaring-constraints).
 5. **Tiered backends with full solver coverage.** A small universal
    *vector tier* keeps first-order and derivative-free solvers generic over
    operations that every backend implements well. The richer *`linalg` tier*

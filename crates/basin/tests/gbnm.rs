@@ -3,10 +3,7 @@
 
 use std::convert::Infallible;
 
-use basin::{
-    BoxConstraints, CostFunction, Executor, Gbnm, PointState, State,
-    TerminationCode,
-};
+use basin::{CostFunction, Executor, Gbnm, PointState, State, TerminationCode};
 
 #[derive(Clone)]
 struct BoundedRosenbrock {
@@ -20,6 +17,17 @@ impl BoundedRosenbrock {
     }
 }
 
+impl basin::ProblemConstraints for BoundedRosenbrock {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for BoundedRosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
@@ -30,22 +38,23 @@ impl CostFunction for BoundedRosenbrock {
     }
 }
 
-impl BoxConstraints for BoundedRosenbrock {
-    fn lower(&self) -> &Self::Param {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Self::Param {
-        &self.upper
-    }
-}
-
 #[derive(Clone)]
 struct FlatBox {
     lower: Vec<f64>,
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for FlatBox {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for FlatBox {
     type Param = Vec<f64>;
     type Output = f64;
@@ -53,16 +62,6 @@ impl CostFunction for FlatBox {
 
     fn cost(&self, _x: &Self::Param) -> Result<Self::Output, Self::Error> {
         Ok(1.0)
-    }
-}
-
-impl BoxConstraints for FlatBox {
-    fn lower(&self) -> &Self::Param {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Self::Param {
-        &self.upper
     }
 }
 
@@ -94,6 +93,18 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
     #[derive(Clone)]
     struct Sphere(FlatBox);
 
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.0.lower),
+                Some(&self.0.upper),
+            ))
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Vec<f64>;
         type Output = f64;
@@ -101,16 +112,6 @@ fn upper_bound_start_explores_the_feasible_inward_direction() {
 
         fn cost(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
             Ok(x.iter().map(|value| value * value).sum())
-        }
-    }
-
-    impl BoxConstraints for Sphere {
-        fn lower(&self) -> &Self::Param {
-            &self.0.lower
-        }
-
-        fn upper(&self) -> &Self::Param {
-            &self.0.upper
         }
     }
 
@@ -156,6 +157,18 @@ fn f32_extreme_box_starts_with_a_working_local_simplex() {
         upper: Vec<f32>,
     }
 
+    impl basin::ProblemConstraints for ScaledSphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for ScaledSphere {
         type Param = Vec<f32>;
         type Output = f32;
@@ -163,16 +176,6 @@ fn f32_extreme_box_starts_with_a_working_local_simplex() {
 
         fn cost(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
             Ok(x.iter().map(|value| (value / 3.0e38_f32).powi(2)).sum())
-        }
-    }
-
-    impl BoxConstraints for ScaledSphere {
-        fn lower(&self) -> &Self::Param {
-            &self.lower
-        }
-
-        fn upper(&self) -> &Self::Param {
-            &self.upper
         }
     }
 
@@ -209,6 +212,18 @@ fn f32_extreme_box_supports_probabilistic_restarts() {
         upper: Vec<f32>,
     }
 
+    impl basin::ProblemConstraints for FlatF32Box {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for FlatF32Box {
         type Param = Vec<f32>;
         type Output = f32;
@@ -216,16 +231,6 @@ fn f32_extreme_box_supports_probabilistic_restarts() {
 
         fn cost(&self, _x: &Self::Param) -> Result<Self::Output, Self::Error> {
             Ok(1.0)
-        }
-    }
-
-    impl BoxConstraints for FlatF32Box {
-        fn lower(&self) -> &Self::Param {
-            &self.lower
-        }
-
-        fn upper(&self) -> &Self::Param {
-            &self.upper
         }
     }
 
@@ -350,16 +355,21 @@ fn an_all_pinned_box_respects_the_initial_iteration_limit() {
 }
 
 #[test]
-#[should_panic(expected = "GBNM requires lower <= upper")]
 fn reversed_bounds_are_rejected() {
     let problem = FlatBox {
         lower: vec![1.0, -1.0],
         upper: vec![-1.0, 1.0],
     };
-    let _ =
+    let result =
         Executor::new(problem, Gbnm::new(1), PointState::new(vec![0.0, 0.0]))
             .max_iter(0)
             .run_with_solver();
+    assert!(matches!(
+        result,
+        Err(basin::ConstraintSolveError::InvalidConstraints(
+            basin::ConstraintError::InvertedBounds { coordinate: 0 }
+        ))
+    ));
 }
 
 #[test]
@@ -372,6 +382,18 @@ fn zero_restart_candidates_are_rejected() {
 fn nan_costs_sort_after_finite_vertices() {
     struct NanAtOrigin(FlatBox);
 
+    impl basin::ProblemConstraints for NanAtOrigin {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.0.lower),
+                Some(&self.0.upper),
+            ))
+        }
+    }
     impl CostFunction for NanAtOrigin {
         type Param = Vec<f64>;
         type Output = f64;
@@ -383,16 +405,6 @@ fn nan_costs_sort_after_finite_vertices() {
             } else {
                 Ok(x.iter().map(|value| value * value).sum())
             }
-        }
-    }
-
-    impl BoxConstraints for NanAtOrigin {
-        fn lower(&self) -> &Self::Param {
-            &self.0.lower
-        }
-
-        fn upper(&self) -> &Self::Param {
-            &self.0.upper
         }
     }
 
@@ -416,6 +428,18 @@ fn nan_costs_sort_after_finite_vertices() {
 fn probabilistic_restarts_escape_the_initial_rastrigin_basin() {
     struct Rastrigin(FlatBox);
 
+    impl basin::ProblemConstraints for Rastrigin {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.0.lower),
+                Some(&self.0.upper),
+            ))
+        }
+    }
     impl CostFunction for Rastrigin {
         type Param = Vec<f64>;
         type Output = f64;
@@ -429,16 +453,6 @@ fn probabilistic_restarts_escape_the_initial_rastrigin_basin() {
                             - 10.0 * (std::f64::consts::TAU * value).cos()
                     })
                     .sum::<f64>())
-        }
-    }
-
-    impl BoxConstraints for Rastrigin {
-        fn lower(&self) -> &Self::Param {
-            &self.0.lower
-        }
-
-        fn upper(&self) -> &Self::Param {
-            &self.0.upper
         }
     }
 

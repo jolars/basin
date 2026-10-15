@@ -7,18 +7,17 @@ use crate::core::math::{
     GramMatrix, LinearSolveSpd, MatTransposeVec, NegInPlace, NormInfinity,
     NormSquared, Scalar, ScaledAdd,
 };
-use crate::core::problem::{Jacobian, Problem, Residual};
+use crate::core::problem::Problem;
 use crate::core::solver::Solver;
 use crate::core::state::{PointState, State};
 use crate::core::termination::Termination;
-use crate::{
-    LossFunction, RobustLeastSquares, ScaleRowsInPlace, VectorIndex, VectorLen,
-};
+use crate::{VectorIndex, VectorLen};
 
 /// Pure Gauss-Newton solver for nonlinear least-squares problems
 /// `min ½‖r(x)‖²`.
 ///
-/// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss.
+/// Wrap the raw problem in [`RobustLeastSquares`](crate::RobustLeastSquares)
+/// to minimize a robust loss.
 /// The adapter supplies the safeguarded Gauss–Newton model, and reported
 /// costs and convergence use the robust objective and its gradient.
 ///
@@ -73,15 +72,16 @@ use crate::{
 /// the same pure-Rust Cholesky), plus the nalgebra-sparse / faer-sparse
 /// matrices.
 /// All support `f32` and `f64`; use `GaussNewton::default()` for `f32`.
-/// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
-/// Jacobian types.
+/// Robust objectives additionally require
+/// [`ScaleRowsInPlace`](crate::ScaleRowsInPlace) on custom Jacobian types.
 ///
 /// # State convention
 ///
 /// For an ordinary residual problem, `state.cost` carries the LM convention
 /// `½‖r‖²`, derived from the
 /// residual the solver computes itself. The bound on `P` is
-/// [`Residual`] + [`Jacobian`], not [`CostFunction`](crate::core::problem::CostFunction);
+/// [`Residual`](crate::Residual) + [`Jacobian`](crate::Jacobian), not
+/// [`CostFunction`](crate::core::problem::CostFunction);
 /// problems whose user-facing `cost()` uses an unscaled `Σ rᵢ²` form
 /// (e.g. Rosenbrock-as-residuals) will see `state.cost()` differ from
 /// `problem.cost(state.param())` by a factor of two. Both go to zero
@@ -181,14 +181,15 @@ where
     }
 }
 
-impl<P, V, M, F> Solver<P, PointState<V, F>> for GaussNewton<V, M, F>
+impl<P, V, M, F, E> Solver<P, PointState<V, F>> for GaussNewton<V, M, F>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+    Problem<P>: Evaluation<V, M, F, Error = E>,
     V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
     M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
-    type Error = <P as Residual>::Error;
+    type Error = E;
     fn init(
         &mut self,
         problem: &mut Problem<P>,
@@ -199,34 +200,6 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: PointState<V, F>,
-    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
-        self.next_evaluated(problem, state)
-    }
-}
-
-impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
-    for GaussNewton<V, M, F>
-where
-    F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
-    V: ScaledAdd<F> + NormSquared<F> + NormInfinity<F> + NegInPlace + Clone,
-    M: GramMatrix + MatTransposeVec<V> + LinearSolveSpd<V>,
-    L: LossFunction<F>,
-    V: VectorLen + VectorIndex<F>,
-    M: ScaleRowsInPlace<F>,
-{
-    type Error = <P as Residual>::Error;
-    fn init(
-        &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: PointState<V, F>,
-    ) -> Result<PointState<V, F>, Self::Error> {
-        self.init_evaluated(problem, state)
-    }
-    fn next_iter(
-        &mut self,
-        problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)

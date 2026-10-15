@@ -4,9 +4,8 @@ use std::{cell::Cell, convert::Infallible, ops::Index};
 
 use basin::core::math::{MatVec, VectorLen};
 use basin::{
-    Cobyla, CostFunction, DenseMatrix, Executor, FoldedConstraints,
-    NonlinearConstraints, NonlinearInequalityConstraints, Problem,
-    SelectedState, Solver, State, TerminationCode,
+    Cobyla, CostFunction, DenseMatrix, Executor, Problem, SelectedState,
+    Solver, State, TerminationCode,
 };
 
 #[path = "support/backend_aliases.rs"]
@@ -22,6 +21,31 @@ struct Mixed<V, M> {
     vector: fn(Vec<f64>) -> V,
 }
 
+impl<V: Index<usize, Output = f64>, M> basin::ProblemConstraints
+    for Mixed<V, M>
+{
+    type Constraints = basin::Constraints<
+        basin::BoxBounds<V>,
+        basin::LinearBlocks<basin::LinearBlock<M, V>, basin::LinearBlock<M, V>>,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+            .with_linear_equalities(basin::LinearBlock::optional({
+                Some((&self.equality, &self.equality_rhs))
+            }))
+            .with_linear_inequalities(basin::LinearBlock::optional({
+                Some((&self.inequality, &self.inequality_rhs))
+            }))
+            .with_nonlinear_inequalities(1)
+    }
+}
 impl<V: Index<usize, Output = f64>, M> CostFunction for Mixed<V, M> {
     type Param = V;
     type Output = f64;
@@ -32,31 +56,18 @@ impl<V: Index<usize, Output = f64>, M> CostFunction for Mixed<V, M> {
     }
 }
 
-impl<V: Index<usize, Output = f64>, M> NonlinearConstraints for Mixed<V, M> {
-    type Matrix = M;
-
-    fn nonlinear_constraints(&self, x: &V) -> Result<V, Infallible> {
-        Ok((self.vector)(vec![x[0] * x[0] - 1.0]))
-    }
-
-    fn num_nonlinear_constraints(&self) -> usize {
-        1
-    }
-
-    fn inequalities(&self) -> Option<(&M, &V)> {
-        Some((&self.inequality, &self.inequality_rhs))
-    }
-
-    fn equalities(&self) -> Option<(&M, &V)> {
-        Some((&self.equality, &self.equality_rhs))
-    }
-
-    fn lower(&self) -> Option<&V> {
-        Some(&self.lower)
-    }
-
-    fn upper(&self) -> Option<&V> {
-        Some(&self.upper)
+impl<V: Index<usize, Output = f64>, M> basin::NonlinearInequalityValues
+    for Mixed<V, M>
+{
+    type Param = V;
+    type Values = V;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        { Ok((self.vector)(vec![x[0] * x[0] - 1.0])) }
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -69,19 +80,18 @@ fn mixed<V, M>(
         inequality_rhs: vector(vec![0.5]),
         equality: matrix(&[0.0, 0.0, 1.0, 0.0, 0.0]),
         equality_rhs: vector(vec![0.25]),
-        // Every non-finite entry denotes an absent bound, including NaN
-        // and an infinity with the opposite sign from the usual sentinel.
+        // Signed infinities omit individual bounds without changing the feasible set.
         lower: vector(vec![
             f64::NEG_INFINITY,
-            f64::INFINITY,
-            f64::NAN,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
             f64::NEG_INFINITY,
             3.0,
         ]),
         upper: vector(vec![
             f64::INFINITY,
-            f64::NEG_INFINITY,
-            f64::NAN,
+            f64::INFINITY,
+            f64::INFINITY,
             0.75,
             f64::INFINITY,
         ]),
@@ -108,14 +118,16 @@ where
         + VectorLen
         + Index<usize, Output = f64>
         + std::ops::IndexMut<usize, Output = f64>,
-    M: MatVec<V>,
+    M: MatVec<V>
+        + basin::MatrixShape
+        + basin::MatrixFinite
+        + basin::MatVecInto<V>,
 {
     let start = (problem.vector)(vec![0.0; 5]);
-    let result =
-        Executor::from_start(FoldedConstraints::new(problem), solver(), start)
-            .max_cost_evals(3000)
-            .run()
-            .unwrap();
+    let result = Executor::from_start(problem, solver(), start)
+        .max_cost_evals(3000)
+        .run()
+        .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     let x = result.best_param();
@@ -171,32 +183,25 @@ fn mixed_constraints_faer() {
     ));
 }
 
-impl NonlinearInequalityConstraints for Mixed<Vec<f64>, DenseMatrix<f64>> {
-    fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-        self.nonlinear_constraints(x)
-    }
-
-    fn num_constraints(&self) -> usize {
-        1
-    }
-}
-
 #[test]
-fn explicit_adapter_selects_all_blocks_for_a_problem_with_both_traits() {
-    let legacy = Executor::from_start(mixed_vec(), solver(), vec![0.0; 5])
-        .max_cost_evals(3000)
-        .run()
-        .unwrap();
-    assert!((legacy.best_cost() - 1.0).abs() < 1e-3);
-    for i in 1..5 {
-        assert!((legacy.best_param()[i] - 2.0).abs() < 1e-3);
-    }
-
+fn canonical_set_always_supplies_every_declared_block() {
     assert_mixed_solution(mixed_vec());
 }
 
 struct Expanded(Mixed<Vec<f64>, DenseMatrix<f64>>);
 
+impl basin::ProblemConstraints for Expanded {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_inequalities(6)
+    }
+}
 impl CostFunction for Expanded {
     type Param = Vec<f64>;
     type Output = f64;
@@ -207,33 +212,34 @@ impl CostFunction for Expanded {
     }
 }
 
-impl NonlinearInequalityConstraints for Expanded {
-    fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-        Ok(vec![
-            3.0 - x[4],
-            x[3] - 0.75,
-            0.25 - x[2],
-            x[2] - 0.25,
-            x[1] - 0.5,
-            x[0] * x[0] - 1.0,
-        ])
-    }
-
-    fn num_constraints(&self) -> usize {
-        6
+impl basin::NonlinearInequalityValues for Expanded {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            Ok(vec![
+                3.0 - x[4],
+                x[3] - 0.75,
+                0.25 - x[2],
+                x[2] - 0.25,
+                x[1] - 0.5,
+                x[0] * x[0] - 1.0,
+            ])
+        }
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
 #[test]
 fn agrees_with_hand_expanded_legacy_constraints() {
-    let folded = Executor::from_start(
-        FoldedConstraints::new(mixed_vec()),
-        solver(),
-        vec![0.0; 5],
-    )
-    .max_cost_evals(3000)
-    .run()
-    .unwrap();
+    let folded = Executor::from_start(mixed_vec(), solver(), vec![0.0; 5])
+        .max_cost_evals(3000)
+        .run()
+        .unwrap();
     let expanded =
         Executor::from_start(Expanded(mixed_vec()), solver(), vec![0.0; 5])
             .max_cost_evals(3000)
@@ -259,6 +265,18 @@ struct FallibleDisk<'a> {
     fail_at: usize,
 }
 
+impl basin::ProblemConstraints for FallibleDisk<'_> {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_inequalities(1)
+    }
+}
 impl CostFunction for FallibleDisk<'_> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -279,28 +297,28 @@ impl CostFunction for FallibleDisk<'_> {
     }
 }
 
-impl NonlinearConstraints for FallibleDisk<'_> {
-    type Matrix = DenseMatrix<f64>;
-
-    fn nonlinear_constraints(
+impl basin::NonlinearInequalityValues for FallibleDisk<'_> {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = CallbackError;
+    fn nonlinear_inequalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Vec<f64>, Self::Error> {
-        let call = self.constraints.get();
-        self.constraints.set(call + 1);
-        assert_eq!(self.costs.get(), call + 1);
-        if self.fail_constraint && call == self.fail_at {
-            Err(CallbackError {
-                constraint: true,
-                call,
-            })
-        } else {
-            Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            let call = self.constraints.get();
+            self.constraints.set(call + 1);
+            assert_eq!(self.costs.get(), call + 1);
+            if self.fail_constraint && call == self.fail_at {
+                Err(CallbackError {
+                    constraint: true,
+                    call,
+                })
+            } else {
+                Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
+            }
         }
-    }
-
-    fn num_nonlinear_constraints(&self) -> usize {
-        1
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -311,20 +329,22 @@ fn typed_callback_errors_abort_initialization_and_later_iterations() {
             let costs = Cell::new(0);
             let constraints = Cell::new(0);
             let result = Executor::from_start(
-                FoldedConstraints::new(FallibleDisk {
+                FallibleDisk {
                     costs: &costs,
                     constraints: &constraints,
                     fail_constraint,
                     fail_at,
-                }),
+                },
                 solver(),
                 vec![1.0, 1.0],
             )
             .max_iter(1000)
             .run();
 
-            assert!(matches!(result, Err(CallbackError { constraint, call })
-                if constraint == fail_constraint && call == fail_at));
+            assert!(
+                matches!(result, Err(basin::ConstraintSolveError::Evaluation(CallbackError { constraint, call }))
+                if constraint == fail_constraint && call == fail_at)
+            );
             assert_eq!(costs.get(), fail_at + 1);
             assert_eq!(
                 constraints.get(),
@@ -339,12 +359,12 @@ fn counts_objective_evaluations_once_and_preserves_callback_order() {
     let costs = Cell::new(0);
     let constraints = Cell::new(0);
     let result = Executor::from_start(
-        FoldedConstraints::new(FallibleDisk {
+        FallibleDisk {
             costs: &costs,
             constraints: &constraints,
             fail_constraint: false,
             fail_at: usize::MAX,
-        }),
+        },
         solver(),
         vec![1.0, 1.0],
     )
@@ -359,12 +379,31 @@ fn counts_objective_evaluations_once_and_preserves_callback_order() {
 }
 
 #[test]
-fn constraint_count_changes_panic_during_initialization_and_later_steps() {
+fn constraint_count_changes_return_typed_errors_during_initialization_and_later_steps()
+ {
     struct GrowingDisk {
         costs: Cell<usize>,
         grow_at: usize,
     }
 
+    impl basin::ProblemConstraints for GrowingDisk {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities({
+                1 + usize::from(self.costs.get() >= self.grow_at)
+            })
+        }
+    }
     impl CostFunction for GrowingDisk {
         type Param = Vec<f64>;
         type Output = f64;
@@ -376,49 +415,47 @@ fn constraint_count_changes_panic_during_initialization_and_later_steps() {
         }
     }
 
-    impl NonlinearConstraints for GrowingDisk {
-        type Matrix = DenseMatrix<f64>;
-
-        fn nonlinear_constraints(
+    impl basin::NonlinearInequalityValues for GrowingDisk {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Vec<f64>,
-        ) -> Result<Vec<f64>, Infallible> {
-            let mut values = vec![x[0] * x[0] + x[1] * x[1] - 1.0];
-            values.resize(self.num_nonlinear_constraints(), 0.0);
-            Ok(values)
-        }
-
-        fn num_nonlinear_constraints(&self) -> usize {
-            1 + usize::from(self.costs.get() >= self.grow_at)
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            {
+                let mut values = vec![x[0] * x[0] + x[1] * x[1] - 1.0];
+                values.resize(
+                    basin::ProblemConstraints::constraint_set(self)
+                        .nonlinear()
+                        .inequalities()
+                        .count(),
+                    0.0,
+                );
+                Ok(values)
+            }
+            .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
     for grow_at in [2, 8] {
-        let panic = std::panic::catch_unwind(|| {
-            Executor::from_start(
-                FoldedConstraints::new(GrowingDisk {
-                    costs: Cell::new(0),
-                    grow_at,
-                }),
-                solver(),
-                vec![1.0, 1.0],
-            )
-            .max_iter(1000)
-            .run()
-            .unwrap();
-        })
-        .expect_err("changing the constraint count must panic");
-        let message = panic
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| panic.downcast_ref::<&str>().copied())
-            .expect("the assertion must provide a panic message");
-        assert!(
-            message.contains(
-                "Cobyla constraint count must remain fixed during a solve"
-            ),
-            "unexpected panic on callback {grow_at}: {message}"
-        );
+        let result = Executor::from_start(
+            GrowingDisk {
+                costs: Cell::new(0),
+                grow_at,
+            },
+            solver(),
+            vec![1.0, 1.0],
+        )
+        .max_iter(1000)
+        .run();
+        assert!(matches!(
+            result,
+            Err(basin::ConstraintSolveError::InvalidConstraints(
+                basin::ConstraintError::LayoutChanged
+            ))
+        ));
     }
 }
 
@@ -429,6 +466,26 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
         lower: Option<Vec<f64>>,
     }
 
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::Constraints<
+            basin::BoxBounds<Vec<f64>>,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+                .with_bounds(basin::BoxBounds::new(self.lower.as_ref(), {
+                    None
+                }))
+                .with_nonlinear_inequalities(self.constraints)
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Vec<f64>;
         type Output = f64;
@@ -439,24 +496,21 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
         }
     }
 
-    impl NonlinearConstraints for Sphere {
-        type Matrix = DenseMatrix<f64>;
-
-        fn nonlinear_constraints(
+    impl basin::NonlinearInequalityValues for Sphere {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Vec<f64>,
-        ) -> Result<Vec<f64>, Infallible> {
-            Ok((0..self.constraints)
-                .map(|i| x[i % x.len()] - 4.0)
-                .collect())
-        }
-
-        fn num_nonlinear_constraints(&self) -> usize {
-            self.constraints
-        }
-
-        fn lower(&self) -> Option<&Vec<f64>> {
-            self.lower.as_ref()
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            {
+                Ok((0..self.constraints)
+                    .map(|i| x[i % x.len()] - 4.0)
+                    .collect())
+            }
+            .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
@@ -464,10 +518,10 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
     for (n, m, bounds) in
         [(2, 3, true), (5, 0, false), (1, 0, true), (3, 1, false)]
     {
-        let mut problem = Problem::new(FoldedConstraints::new(Sphere {
+        let mut problem = Problem::new(Sphere {
             constraints: m,
             lower: bounds.then(|| vec![-3.0; n]),
-        }));
+        });
         let mut state = solver
             .init(&mut problem, SelectedState::new(vec![1.0; n]))
             .unwrap();

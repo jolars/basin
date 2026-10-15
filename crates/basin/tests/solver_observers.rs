@@ -267,6 +267,16 @@ fn annealing_diagnostics_describe_next_proposal_including_restarts() {
     use basin::core::rng::ChaCha8Rng;
     use basin::{SimulatedAnnealing, TemperatureSchedule};
     struct Cost;
+
+    impl basin::ProblemConstraints for Cost {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl basin::CostFunction for Cost {
         type Param = f64;
         type Output = f64;
@@ -300,6 +310,23 @@ fn annealing_diagnostics_describe_next_proposal_including_restarts() {
 fn slsqp_observer_reads_optional_borrowed_multipliers() {
     use basin::{Gradient, Slsqp};
     struct Quadratic;
+
+    impl basin::ProblemConstraints for Quadratic {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NonlinearBlock,
+                basin::NoNonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_equalities(1)
+        }
+    }
     impl basin::CostFunction for Quadratic {
         type Param = Vec<f64>;
         type Output = f64;
@@ -314,35 +341,42 @@ fn slsqp_observer_reads_optional_borrowed_multipliers() {
             Ok(vec![2.0 * x[0]])
         }
     }
-    impl basin::NonlinearConstraints for Quadratic {
-        type Matrix = basin::DenseMatrix;
-        fn num_nonlinear_constraints(&self) -> usize {
-            0
-        }
-        fn nonlinear_constraints(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<Vec<f64>, Self::Error> {
-            Ok(vec![])
-        }
-        fn num_nonlinear_equalities(&self) -> usize {
-            1
-        }
+    impl basin::NonlinearEqualityValues for Quadratic {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = std::convert::Infallible;
         fn nonlinear_equalities(
             &self,
-            x: &Vec<f64>,
-        ) -> Result<Option<Vec<f64>>, Self::Error> {
-            Ok(Some(vec![x[0] - 1.0]))
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(Some(vec![x[0] - 1.0])) }
+                .map_err(basin::ConstraintSolveError::Evaluation)?
+                .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+                    basin::ConstraintError::DimensionMismatch {
+                        block: basin::ConstraintBlock::NonlinearEqualities,
+                        axis: basin::ConstraintAxis::Length,
+                        expected: 1,
+                        actual: 0,
+                    },
+                ))
         }
     }
+
     impl basin::ConstraintJacobian for Quadratic {
+        type Param = Vec<f64>;
+        type Jacobian = basin::DenseMatrix;
+        type Error = std::convert::Infallible;
         fn constraint_jacobian(
             &self,
-            _: &Vec<f64>,
-        ) -> Result<basin::DenseMatrix, Self::Error> {
-            Ok(basin::DenseMatrix::from_row_slice(1, 1, &[1.0]))
+            _: &Self::Param,
+        ) -> Result<Self::Jacobian, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(basin::DenseMatrix::from_row_slice(1, 1, &[1.0])) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
+
     let solver = Slsqp::new();
     assert!(solver.stationarity().is_none());
     let seen = Rc::new(Cell::new(false));
@@ -368,6 +402,16 @@ fn scalar_f32_and_default_trait_hooks_need_no_extra_capabilities() {
     use basin::core::rng::ChaCha8Rng;
     use basin::{ProposalState, SimulatedAnnealing, TemperatureSchedule};
     struct Cost;
+
+    impl basin::ProblemConstraints for Cost {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl basin::CostFunction for Cost {
         type Param = f32;
         type Output = f32;
@@ -412,6 +456,16 @@ fn direct_callback_accepts_borrowed_neighbor() {
     use basin::core::rng::ChaCha8Rng;
     use basin::{CostFunction, SimulatedAnnealing, TemperatureSchedule};
     struct Cost;
+
+    impl basin::ProblemConstraints for Cost {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Cost {
         type Param = f64;
         type Output = f64;
@@ -499,6 +553,16 @@ fn state_and_solver_may_borrow_local_data_with_mixed_observers() {
     use basin::{CostFunction, Problem, Solver};
     use std::convert::Infallible;
     struct Cost<'a>(&'a f64);
+
+    impl<'a> basin::ProblemConstraints for Cost<'a> {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl<'a> CostFunction for Cost<'a> {
         type Param = &'a f64;
         type Output = f64;

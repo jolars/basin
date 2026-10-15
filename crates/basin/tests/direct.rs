@@ -4,8 +4,8 @@ mod backend;
 mod backend_aliases;
 
 use basin::{
-    BoxConstraints, CostFunction, Direct, EvaluationKind, Executor, PointState,
-    Problem, Solver, State, TerminationCode,
+    CostFunction, Direct, EvaluationKind, Executor, PointState, Problem,
+    Solver, State, TerminationCode,
 };
 use std::{
     convert::Infallible,
@@ -19,6 +19,20 @@ struct Objective<C> {
     cost: C,
 }
 
+impl<C, E> basin::ProblemConstraints for Objective<C>
+where
+    C: Fn(&[f64]) -> Result<f64, E>,
+{
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<C, E> CostFunction for Objective<C>
 where
     C: Fn(&[f64]) -> Result<f64, E>,
@@ -31,18 +45,6 @@ where
             assert!(x.is_finite() && x >= lo && x <= hi);
         }
         (self.cost)(x)
-    }
-}
-
-impl<C, E> BoxConstraints for Objective<C>
-where
-    C: Fn(&[f64]) -> Result<f64, E>,
-{
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -76,6 +78,18 @@ fn f32_mixed_magnitude_costs_refine_the_best_rectangle() {
         upper: Vec<f32>,
     }
 
+    impl basin::ProblemConstraints for Penalized {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for Penalized {
         type Param = Vec<f32>;
         type Output = f32;
@@ -91,16 +105,6 @@ fn f32_mixed_magnitude_costs_refine_the_best_rectangle() {
             } else {
                 0.0
             })
-        }
-    }
-
-    impl BoxConstraints for Penalized {
-        fn lower(&self) -> &Vec<f32> {
-            &self.lower
-        }
-
-        fn upper(&self) -> &Vec<f32> {
-            &self.upper
         }
     }
 
@@ -314,7 +318,7 @@ fn negative_infinity_and_typed_errors() {
         assert!(matches!(
             Executor::new(problem, Direct::new(), PointState::new(vec![0.0]))
                 .run(),
-            Err(Abort)
+            Err(basin::ConstraintSolveError::Evaluation(Abort))
         ));
         let problem = Objective {
             lower: vec![0.0],
@@ -372,7 +376,7 @@ fn extreme_bounds_and_roundoff_stop() {
 }
 
 #[test]
-fn invalid_inputs_panic_before_evaluation() {
+fn invalid_inputs_are_rejected_before_evaluation() {
     for (lower, upper, seed) in [
         (vec![], vec![], vec![]),
         (vec![0.0], vec![1.0, 1.0], vec![0.0]),
@@ -382,6 +386,7 @@ fn invalid_inputs_panic_before_evaluation() {
         (vec![0.0], vec![f64::INFINITY], vec![0.0]),
         (vec![f64::NAN], vec![1.0], vec![0.0]),
     ] {
+        let empty_box = lower.is_empty() && upper.is_empty();
         let calls = std::sync::atomic::AtomicUsize::new(0);
         let problem = Objective {
             lower,
@@ -391,15 +396,17 @@ fn invalid_inputs_panic_before_evaluation() {
                 Ok::<_, Infallible>(1.0)
             },
         };
-        assert!(
-            std::panic::catch_unwind(|| Executor::new(
-                problem,
-                Direct::new(),
-                PointState::new(seed)
-            )
-            .run())
-            .is_err()
-        );
+        let result = std::panic::catch_unwind(|| {
+            Executor::new(problem, Direct::new(), PointState::new(seed)).run()
+        });
+        if empty_box {
+            assert!(result.is_err());
+        } else {
+            assert!(matches!(
+                result.unwrap(),
+                Err(basin::ConstraintSolveError::InvalidConstraints(_))
+            ));
+        }
         assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
     }
     for value in [-1.0, f64::NAN, f64::INFINITY] {

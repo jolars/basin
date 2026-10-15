@@ -1,9 +1,8 @@
 //! Source stopping predicates, finite publication, and convergence history.
 
 use basin::{
-    BoxConstraints, Constant, ConvergenceEvidence, ConvergenceTest,
-    CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb, State,
-    Termination, TerminationCode,
+    Constant, ConvergenceEvidence, ConvergenceTest, CostFunction, Executor,
+    FirstOrderState, Gradient, Lbfgsb, State, Termination, TerminationCode,
 };
 use std::convert::Infallible;
 
@@ -30,6 +29,18 @@ macro_rules! stopping_backend {
                     }
                 }
             }
+
+            impl basin::ProblemConstraints for Quadratic {
+                type Constraints = basin::Constraints<basin::BoxBounds<Vector>>;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                        Some(&self.lower),
+                        Some(&self.upper),
+                    ))
+                }
+            }
             impl CostFunction for Quadratic {
                 type Param = Vector;
                 type Output = Float;
@@ -44,14 +55,7 @@ macro_rules! stopping_backend {
                     Ok(($make)(vec![self.gradient.unwrap_or(x[0])]))
                 }
             }
-            impl BoxConstraints for Quadratic {
-                fn lower(&self) -> &Vector {
-                    &self.lower
-                }
-                fn upper(&self) -> &Vector {
-                    &self.upper
-                }
-            }
+
 
             #[test]
             fn nonfinite_initial_cost_or_gradient_cannot_converge_at_fixed_bounds() {
@@ -192,6 +196,17 @@ struct NonfiniteTrial {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for NonfiniteTrial {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for NonfiniteTrial {
     type Param = Vec<f64>;
     type Output = f64;
@@ -216,15 +231,6 @@ impl Gradient for NonfiniteTrial {
     }
 }
 
-impl BoxConstraints for NonfiniteTrial {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
-
 #[test]
 fn uncached_nonfinite_trials_preserve_the_last_finite_iterate_in_both_modes() {
     for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
@@ -244,10 +250,14 @@ fn uncached_nonfinite_trials_preserve_the_last_finite_iterate_in_both_modes() {
                         .run()
                         .unwrap()
                 } else {
-                    Executor::new(problem, solver.unbounded(), state)
-                        .max_iter(3)
-                        .run()
-                        .unwrap()
+                    Executor::new(
+                        basin::SamplingDomain::new(problem),
+                        solver.unbounded(),
+                        state,
+                    )
+                    .max_iter(3)
+                    .run()
+                    .unwrap()
                 };
                 assert_eq!(result.report.code(), TerminationCode::SolverFailed);
                 assert_eq!(result.param(), &[1.]);
@@ -282,6 +292,17 @@ impl<F: basin::Scalar> RoundedLinear<F> {
     }
 }
 
+impl<F: basin::Scalar> basin::ProblemConstraints for RoundedLinear<F> {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<F>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<F: basin::Scalar> CostFunction for RoundedLinear<F> {
     type Param = Vec<F>;
     type Output = F;
@@ -294,14 +315,6 @@ impl<F: basin::Scalar> Gradient for RoundedLinear<F> {
     type Gradient = Vec<F>;
     fn gradient(&self, _: &Vec<F>) -> Result<Vec<F>, Infallible> {
         Ok(vec![self.slope])
-    }
-}
-impl<F: basin::Scalar> BoxConstraints for RoundedLinear<F> {
-    fn lower(&self) -> &Vec<F> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<F> {
-        &self.upper
     }
 }
 

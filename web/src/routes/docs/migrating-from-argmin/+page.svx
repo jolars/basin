@@ -102,6 +102,12 @@ use std::convert::Infallible;
 
 struct Rosenbrock;
 
+impl basin::ProblemConstraints for Rosenbrock {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
@@ -145,11 +151,11 @@ initialization needs more than one point, such as CMA-ES and population solvers.
 | `LBFGS::new(MoreThuenteLineSearch::new(), m)` | `Lbfgs::new().unbounded().with_m_capacity(m)` or bounded `Lbfgsb::new()` |
 | `HagerZhangLineSearch::new()` | `HagerZhang::new()` |
 | `GaussNewtonLS` | `GaussNewton` for full steps or `LevenbergMarquardt` for damping |
-| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `BoxConstraints` and `PopulationProgress::empty()` |
+| `ParticleSwarm::new((lower, upper), n)` | `GlobalBestPso::new(seed).with_swarm_size(n)` plus problem-side `Constraints<BoxBounds<V>>` and `PopulationProgress::empty()` |
 | `BrentRoot::new(lower, upper, tol)` | `BrentRoot::new(lower, upper).with_relative_position_tolerance(tol_rel).with_absolute_position_tolerance(tol_abs).solve(function)`; no `Executor` is needed |
 | `CostFunction`, `Gradient`, `Hessian`, `Residual`, `Jacobian` | Corresponding Basin traits, with one problem-owned error type |
 | Hand-written central differences | `FiniteDiff::new(problem)` or the standalone finite-difference functions |
-| Transforms, clamps, or penalties for box bounds | `BoxConstraints` plus a solver that consumes bounds |
+| Transforms, clamps, or penalties for box bounds | `Constraints<BoxBounds<V>>` plus a solver that consumes bounds |
 | Argmin's general `Error` | The application's concrete error type in `CostFunction::Error` or `Residual::Error` |
 | `add_observer(observer, mode)` | `observe_with(observer, mode)` |
 | Returning an observer error to stop | A `CancellationToken` for a clean stop or a typed problem error for a hard abort |
@@ -191,7 +197,7 @@ same-sign brackets, non-finite values, and callback errors are distinct
 
 Argmin's `LBFGS` is unconstrained. Basin exposes both algorithms through one
 type-state API: `Lbfgs<V, F, Unbounded>` is unconstrained, while `Lbfgsb` (and the
-default `Lbfgs`) requires `BoxConstraints`. Moré–Thuente is Basin's default line
+default `Lbfgs`) requires `Constraints<BoxBounds<V>>`. Moré–Thuente is Basin's default line
 search for both modes.
 
 <!-- compile: basin-lbfgs -->
@@ -201,6 +207,12 @@ use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -214,10 +226,7 @@ impl CostFunction for Sphere {
 impl Gradient for Sphere {
     type Gradient = Vec<f64>;
 
-    fn gradient(
-        &self,
-        x: &Self::Param,
-    ) -> Result<Self::Gradient, Self::Error> {
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
         Ok(x.iter().map(|xi| 2.0 * xi).collect())
     }
 }
@@ -261,15 +270,18 @@ use std::convert::Infallible;
 
 struct AffineResidual;
 
+impl basin::ProblemConstraints for AffineResidual {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl Residual for AffineResidual {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
     type Error = Infallible;
 
-    fn residual(
-        &self,
-        x: &Self::Param,
-    ) -> Result<Self::Output, Self::Error> {
+    fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
         Ok(vec![x[0] - 1.0, x[1] - 2.0])
     }
 }
@@ -277,21 +289,17 @@ impl Residual for AffineResidual {
 impl Jacobian for AffineResidual {
     type Jacobian = DenseMatrix<f64>;
 
-    fn jacobian(
-        &self,
-        _x: &Self::Param,
-    ) -> Result<Self::Jacobian, Self::Error> {
+    fn jacobian(&self, _x: &Self::Param) -> Result<Self::Jacobian, Self::Error> {
         Ok(DenseMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 1.0]))
     }
 }
 
 fn main() {
     let solver = GaussNewton::<Vec<f64>, DenseMatrix<f64>>::new();
-    let result =
-        Executor::from_start(AffineResidual, solver, vec![0.0, 0.0])
-            .max_iter(20)
-            .run()
-            .unwrap();
+    let result = Executor::from_start(AffineResidual, solver, vec![0.0, 0.0])
+        .max_iter(20)
+        .run()
+        .unwrap();
 
     assert!(result.cost() < 1e-20);
 }
@@ -321,6 +329,12 @@ enum ObjectiveError {
 
 struct FallibleSphere;
 
+impl basin::ProblemConstraints for FallibleSphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for FallibleSphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -335,13 +349,9 @@ impl CostFunction for FallibleSphere {
 }
 
 fn main() -> Result<(), ObjectiveError> {
-    let result = Executor::from_start(
-        FallibleSphere,
-        NelderMead::new(),
-        vec![1.0, -1.0],
-    )
-    .max_iter(200)
-    .run()?;
+    let result = Executor::from_start(FallibleSphere, NelderMead::new(), vec![1.0, -1.0])
+        .max_iter(200)
+        .run()?;
 
     assert!(result.cost() < 1e-8);
     Ok(())
@@ -366,6 +376,12 @@ use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -380,8 +396,7 @@ fn main() {
     let problem = FiniteDiff::new(Sphere);
     let result = Executor::from_start(
         problem,
-        (GradientDescent::new(0.25))
-            .with_absolute_gradient_tolerance(1e-12),
+        (GradientDescent::new(0.25)).with_absolute_gradient_tolerance(1e-12),
         vec![2.0, -1.0],
     )
     .max_iter(100)
@@ -392,19 +407,19 @@ fn main() {
 }
 ```
 
-`FiniteDiff` forwards `BoxConstraints`, so adding numerical derivatives does not
+`FiniteDiff` preserves the canonical constraint set, so adding numerical derivatives does not
 erase bounds. Under the optional `parallel` feature, its coordinate-wise
 evaluations can run in parallel.
 
 ## Bounds and Constraints
 
-Bounds describe the problem in Basin. Implement `BoxConstraints`, then choose a
+Bounds describe the problem in Basin. Declare a box-only set through `ProblemConstraints`, then choose a
 solver whose type advertises that it consumes bounds. The compiler rejects a
 bounded solver paired with a problem that does not expose them.
 
 <!-- compile: basin-box-constraints -->
 ```rust
-use basin::{BoxConstraints, CostFunction, Executor, Gradient, Lbfgsb};
+use basin::{CostFunction, Executor, Gradient, Lbfgsb};
 use std::convert::Infallible;
 
 struct BoundedQuadratic {
@@ -412,6 +427,17 @@ struct BoundedQuadratic {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for BoundedQuadratic {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for BoundedQuadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -425,21 +451,8 @@ impl CostFunction for BoundedQuadratic {
 impl Gradient for BoundedQuadratic {
     type Gradient = Vec<f64>;
 
-    fn gradient(
-        &self,
-        x: &Self::Param,
-    ) -> Result<Self::Gradient, Self::Error> {
+    fn gradient(&self, x: &Self::Param) -> Result<Self::Gradient, Self::Error> {
         Ok(vec![2.0 * (x[0] - 2.0), 2.0 * (x[1] + 1.0)])
-    }
-}
-
-impl BoxConstraints for BoundedQuadratic {
-    fn lower(&self) -> &Self::Param {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Self::Param {
-        &self.upper
     }
 }
 
@@ -474,7 +487,7 @@ neighborhoods, and SPSO-2011 also changes the motion distribution; those are
 future separate solvers, not hidden strategy modes.
 
 Move the box from Argmin's solver constructor to the problem's
-`BoxConstraints` implementation. Set `PsoBoundaryHandling::Preserve` to match
+`ProblemConstraints` declaration. Set `PsoBoundaryHandling::Preserve` to match
 Argmin's clamp-position/retain-velocity behavior; Basin defaults to absorbing a
 boundary crossing. Basin's default initialization follows the Standard PSO 2006
 profile, `v=(u-x)/2`, rather than Argmin's `v~U(-span, span)`, so use a warm
@@ -486,10 +499,7 @@ semantics.
 
 <!-- compile: basin-global-best-pso -->
 ```rust
-use basin::{
-    BoxConstraints, CostFunction, Executor, GlobalBestPso,
-    PopulationProgress, PsoBoundaryHandling,
-};
+use basin::{CostFunction, Executor, GlobalBestPso, PopulationProgress, PsoBoundaryHandling};
 use std::convert::Infallible;
 
 struct BoundedSphere {
@@ -497,6 +507,17 @@ struct BoundedSphere {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for BoundedSphere {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for BoundedSphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -504,16 +525,6 @@ impl CostFunction for BoundedSphere {
 
     fn cost(&self, x: &Self::Param) -> Result<f64, Self::Error> {
         Ok(x.iter().map(|xi| xi * xi).sum())
-    }
-}
-
-impl BoxConstraints for BoundedSphere {
-    fn lower(&self) -> &Self::Param {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Self::Param {
-        &self.upper
     }
 }
 
@@ -525,14 +536,10 @@ fn main() {
     let solver = GlobalBestPso::new(42)
         .with_swarm_size(40)
         .with_boundary_handling(PsoBoundaryHandling::Preserve);
-    let result = Executor::new(
-        problem,
-        solver,
-        PopulationProgress::<Vec<f64>>::empty(),
-    )
-    .max_iter(500)
-    .run()
-    .unwrap();
+    let result = Executor::new(problem, solver, PopulationProgress::<Vec<f64>>::empty())
+        .max_iter(500)
+        .run()
+        .unwrap();
 
     assert!(result.cost() < 1e-6);
 }
@@ -604,13 +611,19 @@ available state with `Termination::Cancelled`.
 <!-- compile: basin-observer-cancellation -->
 ```rust
 use basin::{
-    CancellationToken, CostFunction, Executor, NelderMead, Observe,
-    ObserverMode, State, Termination,
+    CancellationToken, CostFunction, Executor, NelderMead, Observe, ObserverMode, State,
+    Termination,
 };
 use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -639,13 +652,12 @@ fn main() {
     let observer = Progress {
         cancel: token.clone(),
     };
-    let result =
-        Executor::from_start(Sphere, NelderMead::new(), vec![2.0, -1.0])
-            .max_iter(100)
-            .with_cancellation_token(token)
-            .observe_with(observer, ObserverMode::Always)
-            .run()
-            .unwrap();
+    let result = Executor::from_start(Sphere, NelderMead::new(), vec![2.0, -1.0])
+        .max_iter(100)
+        .with_cancellation_token(token)
+        .observe_with(observer, ObserverMode::Always)
+        .run()
+        .unwrap();
 
     assert_eq!(result.report.termination, Termination::Cancelled);
     assert_eq!(result.iter(), 5);
@@ -673,6 +685,12 @@ use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -708,6 +726,12 @@ use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Sphere {
     type Param = DVector<f64>;
     type Output = f64;
@@ -744,6 +768,12 @@ use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Sphere {
     type Param = Array1<f64>;
     type Output = f64;
@@ -780,6 +810,12 @@ use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Sphere {
     type Param = Col<f64>;
     type Output = f64;

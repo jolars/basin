@@ -6,13 +6,21 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxed;
-use basin::{
-    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb,
-};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb};
 
 struct Rosen {
     l: Col<f64>,
     u: Col<f64>,
+}
+
+impl basin::ProblemConstraints for Rosen {
+    type Constraints = basin::Constraints<basin::BoxBounds<Col<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(Some(&self.l), Some(&self.u)))
+    }
 }
 impl CostFunction for Rosen {
     type Param = Col<f64>;
@@ -34,14 +42,6 @@ impl Gradient for Rosen {
             let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
             Col::from_fn(2, |i| if i == 0 { dfdx0 } else { dfdx1 })
         })
-    }
-}
-impl BoxConstraints for Rosen {
-    fn lower(&self) -> &Col<f64> {
-        &self.l
-    }
-    fn upper(&self) -> &Col<f64> {
-        &self.u
     }
 }
 

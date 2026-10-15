@@ -165,12 +165,24 @@ impl<F: Scalar> Trace<F> {
 mod tests {
     use super::*;
     use crate::{
-        BoxConstraints, CostFunction, FirstOrderState, Gradient, Lbfgs,
-        Problem, Solver,
+        CostFunction, FirstOrderState, Gradient, Lbfgs, Problem, Solver,
     };
     struct Quadratic<F: Scalar> {
         lower: Vec<F>,
         upper: Vec<F>,
+    }
+
+    impl<F: Scalar> crate::ProblemConstraints for Quadratic<F> {
+        type Constraints = crate::Constraints<crate::BoxBounds<Vec<F>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
     }
     impl<F: Scalar> CostFunction for Quadratic<F> {
         type Param = Vec<F>;
@@ -189,14 +201,7 @@ mod tests {
             ])
         }
     }
-    impl<F: Scalar> BoxConstraints for Quadratic<F> {
-        fn lower(&self) -> &Vec<F> {
-            &self.lower
-        }
-        fn upper(&self) -> &Vec<F> {
-            &self.upper
-        }
-    }
+
     fn failed_subspace<F: Scalar>() {
         let f = |v| F::from_f64(v).unwrap();
         let mut p = Problem::new(Quadratic {

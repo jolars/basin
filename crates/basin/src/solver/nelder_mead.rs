@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 pub mod diagnostics;
 use diagnostics::{Trace, Trial, TrialKind};
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::convergence::{Check, SimplexChecks, optional_tolerance};
 use crate::core::math::{
     ClampInPlace, Scalar, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
@@ -60,7 +60,7 @@ use crate::core::state::SimplexProgress;
 /// ([`Projected`]). Construct unbounded NM with [`new`](Self::new),
 /// [`adaptive`](Self::adaptive), or [`with_params`](Self::with_params), then
 /// transition with [`projected`](Self::projected) when the problem carries
-/// box bounds. The projected `Solver` impl requires `P: BoxConstraints`
+/// box bounds. The projected `Solver` impl requires `P::Constraints = Constraints<BoxBounds<V>>`
 /// and `V: ClampInPlace`, so handing a non-bounded problem to a projected
 /// `NelderMead` is a compile-time error per CONTRIBUTING.md tenet 4.
 ///
@@ -101,6 +101,10 @@ use crate::core::state::SimplexProgress;
 /// use basin::{SimplexProgress, CostFunction, Executor, NelderMead};
 ///
 /// struct Rosenbrock;
+/// impl basin::ProblemConstraints for Rosenbrock  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Rosenbrock {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -141,7 +145,7 @@ pub struct Unbounded;
 /// Type-state marker for the projection-style box-constrained
 /// Nelder-Mead variant. Obtain via
 /// [`NelderMead::projected`](NelderMead::projected). The `Solver` impl
-/// requires `P: BoxConstraints` and `V: ClampInPlace`.
+/// requires `P::Constraints = Constraints<BoxBounds<V>>` and `V: ClampInPlace`.
 ///
 /// # Algorithm
 ///
@@ -263,7 +267,7 @@ impl<V, F: Scalar> NelderMead<V, F, Unbounded> {
     /// Switch to the projection-style box-constrained variant
     /// ([`Projected`]). The algorithm parameters configured on this
     /// builder are preserved; the resulting solver requires the problem
-    /// to implement [`BoxConstraints`] and projects every trial vertex
+    /// to declare a box-only set using [`BoxBounds`](crate::BoxBounds) and projects every trial vertex
     /// element-wise into `[lower, upper]`. See the type-level rustdoc on
     /// [`Projected`] for the algorithm contract and limitations.
     pub fn projected(self) -> NelderMead<V, F, Projected> {
@@ -574,6 +578,7 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>,
     V: Clone + VectorLen + VectorIndex<F> + ScaleInPlace<F> + ScaledAdd<F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -628,7 +633,7 @@ where
 impl<P, V, F> Solver<P, SimplexProgress<V, F>> for NelderMead<V, F, Projected>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     V: Clone
         + VectorLen
         + VectorIndex<F>
@@ -636,13 +641,19 @@ where
         + ScaledAdd<F>
         + ClampInPlace,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: SimplexProgress<V, F>,
     ) -> Result<SimplexProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_coordinate_box_problem(
+            problem.inner(),
+            state.vertices[0].vec_len(),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         self.convergence.reset();
         self.trace.trials.clear();
@@ -694,5 +705,6 @@ where
                 v.clamp_in_place(problem.lower(), problem.upper())
             },
         )
+        .map_err(Into::into)
     }
 }

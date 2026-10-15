@@ -345,18 +345,16 @@ desired backend features.
   driving their own loop. See [custom diagnostic
   logging](MIGRATING.md#observing-solver-diagnostics).
 
-- [ ] **Simplify and strengthen the full-form constraint API (tenet 4).**
-  Consider having COBYLA consume `NonlinearConstraints` directly, removing
-  the need for the `FoldedConstraints` compatibility adapter. Separate the
-  constraint-value representation from `Param`, and avoid requiring an
-  unused matrix type when linear blocks are absent. Define strict validation
-  for NaN bounds, wrong-sign infinities, inverted bounds, and malformed
-  shapes, with typed configuration errors that preserve user callback
-  errors. Revisit problem typing if unconstrained solvers must reject
-  constrained problems: a `CostFunction` bound alone cannot enforce that
-  guarantee. Keep constraints problem-side, preserve distinct blocks, and
-  require only the math capabilities each solver needs. Define migration
-  from the 1.x API.
+- [x] **Simplify and strengthen the full-form constraint API (tenet 4).**
+  Share one canonical `ProblemConstraints` declaration between objectives and
+  residuals, enforce solver support through its type, and let COBYLA consume
+  every declared block directly. Separate constraint values, right-hand sides,
+  linear matrices, and nonlinear Jacobians from the parameter representation.
+  Statically absent blocks require no unused matrix or callback. Validate
+  bounds, shapes, and counts with `ConstraintSolveError`, preserving original
+  callback errors. Keep MA-LS sampling domains distinct from mathematical
+  constraints, and require explicit local relaxation in bounded memetic runs.
+  See [constraint migration](MIGRATING.md#declaring-constraints).
 
 - [x] Remove the deprecated `TerminationCriterion` facility, all shipped
   criterion types and re-exports, `Executor::terminate_on`,

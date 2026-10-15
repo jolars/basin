@@ -440,11 +440,7 @@ pub trait DenseMatrixFromFn<F = f64>: Sized {
 /// constant time and use mathematical row/column indices, independently of
 /// storage order. Out-of-range indices panic. SLSQP uses this capability to
 /// copy constraint Jacobians into its scalar-generic factorization workspace.
-pub trait MatrixIndex<F = f64> {
-    /// Number of rows, including zero for an empty constraint block.
-    fn matrix_rows(&self) -> usize;
-    /// Number of columns.
-    fn matrix_cols(&self) -> usize;
+pub trait MatrixIndex<F = f64>: MatrixShape {
     /// Read entry `(row, col)`.
     fn matrix_entry(&self, row: usize, col: usize) -> F;
 }
@@ -641,4 +637,34 @@ impl core::error::Error for LinearSolveError {}
 pub trait DenseBackend<F: super::Scalar = f64> {
     /// Dense matrix used for solver-owned models by default.
     type Matrix;
+}
+
+/// Matrix dimensions, independently of scalar access or multiplication.
+pub trait MatrixShape {
+    /// Number of rows, including zero for an empty constraint block.
+    fn matrix_rows(&self) -> usize;
+    /// Number of columns.
+    fn matrix_cols(&self) -> usize;
+}
+/// Whether every coefficient is finite. Sparse implicit zeros are finite.
+pub trait MatrixFinite {
+    /// Inspect coefficients without evaluating a problem callback.
+    fn matrix_is_finite(&self) -> bool;
+}
+/// Matrix-vector multiplication into an independent scalar output buffer.
+///
+/// The destination is overwritten. Its length must equal the row count, and
+/// the input length must equal the column count. Shape mismatches panic;
+/// constraint consumers validate them before calling this operation.
+pub trait MatVecInto<V, F: super::Scalar = f64>: MatrixShape {
+    /// Overwrite `output` with `self * input`.
+    fn matvec_into(&self, input: &V, output: &mut [F]);
+}
+/// Transposed multiplication from scalar constraint values into a parameter vector.
+///
+/// The destination is overwritten. Input and output lengths must equal the
+/// row and column counts, respectively. Constraint consumers check these shapes.
+pub trait MatTransposeVecInto<V, F: super::Scalar = f64>: MatrixShape {
+    /// Overwrite `output` with `self.transpose() * input`.
+    fn mat_transpose_vec_into(&self, input: &[F], output: &mut V);
 }

@@ -8,6 +8,15 @@ use basin::{
 use std::convert::Infallible;
 
 struct Linear;
+
+impl basin::ProblemConstraints for Linear {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for Linear {
     type Param = Vec<f64>;
     type Output = Vec<f64>;

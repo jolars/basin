@@ -32,18 +32,22 @@ line, `default-features = false` excludes it.
 
 ## A Simple Example
 
-Implement `CostFunction` for your objective. Add a `Gradient` impl when the
+Declare `ProblemConstraints` and implement `CostFunction` for your objective. Add a `Gradient` impl when the
 solver needs derivatives (gradient descent does; Nelder–Mead does not). Then
 hand the problem, a solver, and an initial state to the `Executor`.
 
 ```rust
-use basin::{
-    FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
-};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, GradientDescent};
 use std::convert::Infallible;
 
 struct Rosenbrock;
 
+impl basin::ProblemConstraints for Rosenbrock {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(&self) -> basin::NoConstraints {
+        basin::NoConstraints::EMPTY
+    }
+}
 impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
@@ -66,8 +70,7 @@ impl Gradient for Rosenbrock {
 }
 
 fn main() {
-    let solver = GradientDescent::new(1e-3)
-        .with_absolute_gradient_tolerance(1e-6);
+    let solver = GradientDescent::new(1e-3).with_absolute_gradient_tolerance(1e-6);
     let state = FirstOrderState::new(vec![-1.2, 1.0]);
 
     let result = Executor::new(Rosenbrock, solver, state)

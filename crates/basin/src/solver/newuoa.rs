@@ -84,6 +84,10 @@ use driver::{NewuoaWork, Transition};
 /// use basin::{CostFunction, Executor, Newuoa, PointState};
 ///
 /// struct Quadratic;
+/// impl basin::ProblemConstraints for Quadratic  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Quadratic {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -268,6 +272,7 @@ where
         + VectorLen
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 

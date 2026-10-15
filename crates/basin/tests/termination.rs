@@ -40,6 +40,14 @@ fn termination_reasons_preserve_numeric_casts_and_values() {
 /// f(x) = ½ ‖x‖²: convex quadratic with minimum at origin, gradient = x.
 struct Quadratic;
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Quadratic {
     type Param = Vec<f64>;
     type Output = f64;

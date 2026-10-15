@@ -438,6 +438,15 @@ struct NonFinite {
     initial_gradient: Vec<f64>,
     invalid_trial: bool,
 }
+
+impl basin::ProblemConstraints for NonFinite {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for NonFinite {
     type Param = Vec<f64>;
     type Output = f64;
@@ -527,6 +536,15 @@ fn invalid_steps_are_soft_failures() {
 #[derive(Debug, PartialEq)]
 struct Aborted;
 struct Fallible;
+
+impl basin::ProblemConstraints for Fallible {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Fallible {
     type Param = Vec<f64>;
     type Output = f64;

@@ -8,6 +8,14 @@ use basin::{
 #[derive(Clone)]
 struct Location;
 
+impl basin::ProblemConstraints for Location {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for Location {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -186,19 +194,25 @@ fn general_optimizer_and_finite_differences_use_the_same_loss() {
 
 #[test]
 fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
-    fn check<S>(solver: impl Fn() -> S)
-    where
-        S: basin::Solver<
-                RobustLeastSquares<
-                    robust_backend::Location<Vec<f64>, DenseMatrix, f64>,
-                    HuberLoss,
-                >,
-                PointState<Vec<f64>>,
+    fn check<S, P, E>(
+        solver: impl Fn() -> S,
+        prepare: impl Fn(robust_backend::Location<Vec<f64>, DenseMatrix, f64>) -> P,
+    ) where
+        P: Residual<
+                Param = Vec<f64>,
+                Output = Vec<f64>,
                 Error = std::convert::Infallible,
             >,
+        E: std::fmt::Debug,
+        S: basin::Solver<
+                RobustLeastSquares<P, HuberLoss>,
+                PointState<Vec<f64>>,
+                Error = E,
+            >,
     {
-        let objective =
-            || RobustLeastSquares::new(bounded(-10.0, 10.0), HuberLoss);
+        let objective = || {
+            RobustLeastSquares::new(prepare(bounded(-10.0, 10.0)), HuberLoss)
+        };
         let reference =
             Executor::new(objective(), solver(), PointState::new(vec![0.0]))
                 .max_iter(100)
@@ -231,17 +245,26 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
         assert_eq!(reference.cost(), fresh.cost());
         assert_eq!(reference.counts, fresh.counts);
     }
-    check(GaussNewton::new);
-    check(LevenbergMarquardt::new);
-    check(LevenbergMarquardtQr::new);
-    check(basin::Trf::new);
-    check(basin::TrustRegionReflective::new);
+    check(GaussNewton::new, basin::SamplingDomain::new);
+    check(LevenbergMarquardt::new, basin::SamplingDomain::new);
+    check(LevenbergMarquardtQr::new, basin::SamplingDomain::new);
+    check(basin::Trf::new, std::convert::identity);
+    check(basin::TrustRegionReflective::new, std::convert::identity);
 }
 
 #[derive(Clone)]
 struct Domain {
     initial_invalid: bool,
     hard_error: bool,
+}
+
+impl basin::ProblemConstraints for Domain {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
 }
 impl Residual for Domain {
     type Param = Vec<f64>;

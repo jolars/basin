@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use super::cma_es::workspace::{BoundPenalty, Distribution};
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{
     ClampInPlace, ComponentMulAssign, MatDiagonal, MatTransposeVec, MatVec,
     MatrixFromDiagonal, MatrixIdentity, NormSquared, RankOneUpdate,
@@ -75,9 +75,9 @@ use super::cma_es::{
 ///
 /// - **Caller must:** implement
 ///   [`CostFunction<Param = V, Output = F>`] **and**
-///   [`BoxConstraints`] on the same problem type. The bounds live on
+///   [`BoxBounds`](crate::BoxBounds) on the same problem type. The bounds live on
 ///   the problem (tenet 4 in `CONTRIBUTING.md`); handing this solver a
-///   problem without `BoxConstraints` is a compile-time error.
+///   problem without `BoxBounds` is a compile-time error.
 /// - **Caller must:** ensure `lower[i] ≤ upper[i]` for every component
 ///   ([`f64::clamp`] panics otherwise) and `sigma > 0`.
 /// - **Caller must:** supply the mean through [`PopulationProgress::from_point`]
@@ -127,7 +127,7 @@ use super::cma_es::{
 ///
 /// See [`CmaEs`](crate::CmaEs) (and [`RandomSearch`](crate::RandomSearch)
 /// for the population `Executor` pattern); `BoundedCmaEs` additionally
-/// requires `BoxConstraints` on the problem.
+/// requires `BoxBounds` on the problem.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoundedCmaEs<V, M, F: Scalar = f64> {
     distribution_tolerance: Option<F>,
@@ -359,7 +359,7 @@ fn update_gamma<P, V, M, F>(
     problem: &P,
 ) where
     F: Scalar,
-    P: BoxConstraints<Param = V>,
+    P: BoxProblem<Param = V>,
     V: Clone
         + ClampInPlace
         + std::ops::Index<usize, Output = F>
@@ -534,7 +534,7 @@ where
 impl<P, V, M, F> Solver<P, PopulationProgress<V, F>> for BoundedCmaEs<V, M, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     V: VectorLen
         + Clone
         + ScaledAdd<F>
@@ -554,14 +554,21 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            None,
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         let mut mean = state
             .seed()
             .expect("BoundedCmaEs requires a mean seed")

@@ -686,6 +686,16 @@ mod tests {
         fn diagonal(i: usize) -> f64 {
             2.0 * 10.0_f64.powf(4.0 * i as f64 / 19.0)
         }
+
+        impl crate::ProblemConstraints for Quadratic {
+            type Constraints = crate::NoConstraints;
+            fn constraint_set(
+                &self,
+            ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+            {
+                crate::Constraints::new()
+            }
+        }
         impl CostFunction for Quadratic {
             type Param = Vec<f64>;
             type Output = f64;

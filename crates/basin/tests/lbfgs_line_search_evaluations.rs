@@ -1,8 +1,7 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
-    GradientState, Lbfgsb,
+    CostFunction, Executor, FirstOrderState, Gradient, GradientState, Lbfgsb,
 };
 
 struct Quadratic {
@@ -19,6 +18,17 @@ impl Quadratic {
     }
 }
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Quadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -37,20 +47,10 @@ impl Gradient for Quadratic {
     }
 }
 
-impl BoxConstraints for Quadratic {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
-
 #[test]
 fn lbfgs_reuses_the_line_search_evaluation() {
     let result = Executor::new(
-        Quadratic::new(),
+        basin::SamplingDomain::new(Quadratic::new()),
         Lbfgsb::new().unbounded(),
         FirstOrderState::new(vec![1.0]),
     )

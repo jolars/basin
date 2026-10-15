@@ -1,6 +1,6 @@
 //! GBNM progress and solver-owned restart history.
 
-use basin::{BoxConstraints, CostFunction, Executor, Gbnm, PointState, State};
+use basin::{CostFunction, Executor, Gbnm, PointState, State};
 use std::convert::Infallible;
 
 struct FlatBox {
@@ -23,6 +23,18 @@ impl FlatBox {
         }
     }
 }
+
+impl basin::ProblemConstraints for FlatBox {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for FlatBox {
     type Param = Vec<f64>;
     type Output = f64;
@@ -32,14 +44,6 @@ impl CostFunction for FlatBox {
         Ok(self
             .constant
             .unwrap_or_else(|| x.iter().map(|x| x * x).sum()))
-    }
-}
-impl BoxConstraints for FlatBox {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

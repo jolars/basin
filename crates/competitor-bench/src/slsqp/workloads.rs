@@ -3,9 +3,9 @@
 use std::convert::Infallible;
 
 use basin::{
-    ConstraintJacobian, CostFunction, DenseMatrix, Executor, Gradient,
-    NonlinearConstraints, OptimizationResultWithSolver,
-    SelectedFirstOrderState, Slsqp, State, TerminationCode,
+    CostFunction, DenseMatrix, Executor, Gradient,
+    OptimizationResultWithSolver, SelectedFirstOrderState, Slsqp, State,
+    TerminationCode,
 };
 
 pub type Result =
@@ -16,6 +16,24 @@ struct Hs71 {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for Hs71 {
+    type Constraints = basin::Constraints<
+        basin::BoxBounds<Vec<f64>>,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+            .with_nonlinear_equalities(1)
+            .with_nonlinear_inequalities(1)
+    }
+}
 impl CostFunction for Hs71 {
     type Param = Vec<f64>;
     type Output = f64;
@@ -42,45 +60,64 @@ impl Gradient for Hs71 {
     }
 }
 
-impl NonlinearConstraints for Hs71 {
-    type Matrix = DenseMatrix;
-
-    fn lower(&self) -> Option<&Vec<f64>> {
-        Some(&self.lower)
-    }
-    fn upper(&self) -> Option<&Vec<f64>> {
-        Some(&self.upper)
-    }
-    fn num_nonlinear_constraints(&self) -> usize {
-        1
-    }
-    fn nonlinear_constraints(
+impl basin::NonlinearInequalityValues for Hs71 {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
         &self,
-        x: &Vec<f64>,
-    ) -> std::result::Result<Vec<f64>, Infallible> {
-        Ok(vec![25.0 - x.iter().product::<f64>()])
+        x: &Self::Param,
+    ) -> std::result::Result<
+        Self::Values,
+        basin::ConstraintSolveError<Self::Error>,
+    > {
+        { Ok(vec![25.0 - x.iter().product::<f64>()]) }
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
-    fn num_nonlinear_equalities(&self) -> usize {
-        1
-    }
+}
+impl basin::NonlinearEqualityValues for Hs71 {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
     fn nonlinear_equalities(
         &self,
-        x: &Vec<f64>,
-    ) -> std::result::Result<Option<Vec<f64>>, Infallible> {
-        Ok(Some(vec![x.iter().map(|v| v * v).sum::<f64>() - 40.0]))
+        x: &Self::Param,
+    ) -> std::result::Result<
+        Self::Values,
+        basin::ConstraintSolveError<Self::Error>,
+    > {
+        { Ok(Some(vec![x.iter().map(|v| v * v).sum::<f64>() - 40.0])) }
+            .map_err(basin::ConstraintSolveError::Evaluation)?
+            .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+                basin::ConstraintError::DimensionMismatch {
+                    block: basin::ConstraintBlock::NonlinearEqualities,
+                    axis: basin::ConstraintAxis::Length,
+                    expected: 1,
+                    actual: 0,
+                },
+            ))
     }
 }
 
-impl ConstraintJacobian for Hs71 {
+impl basin::ConstraintJacobian for Hs71 {
+    type Param = Vec<f64>;
+    type Jacobian = DenseMatrix;
+    type Error = Infallible;
     fn constraint_jacobian(
         &self,
-        x: &Vec<f64>,
-    ) -> std::result::Result<DenseMatrix, Infallible> {
-        let mut entries: Vec<_> = x.iter().map(|v| 2.0 * v).collect();
-        entries.extend((0..4).map(|j| {
-            -(0..4).filter(|&k| k != j).map(|k| x[k]).product::<f64>()
-        }));
-        Ok(DenseMatrix::from_row_slice(2, 4, &entries))
+        x: &Self::Param,
+    ) -> std::result::Result<
+        Self::Jacobian,
+        basin::ConstraintSolveError<Self::Error>,
+    > {
+        {
+            let mut entries: Vec<_> = x.iter().map(|v| 2.0 * v).collect();
+            entries.extend((0..4).map(|j| {
+                -(0..4).filter(|&k| k != j).map(|k| x[k]).product::<f64>()
+            }));
+            Ok(DenseMatrix::from_row_slice(2, 4, &entries))
+        }
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 

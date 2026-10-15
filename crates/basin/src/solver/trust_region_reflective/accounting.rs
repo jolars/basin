@@ -9,6 +9,18 @@ struct Overflow<F: Scalar> {
     upper: Vec<F>,
     residuals: Rc<Cell<u32>>,
 }
+
+impl<F: Scalar> crate::ProblemConstraints for Overflow<F> {
+    type Constraints = crate::Constraints<crate::BoxBounds<Vec<F>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<F: Scalar> Residual for Overflow<F> {
     type Param = Vec<F>;
     type Output = Vec<F>;
@@ -33,14 +45,7 @@ impl<F: Scalar> CostFunction for Overflow<F> {
         unreachable!()
     }
 }
-impl<F: Scalar> BoxConstraints for Overflow<F> {
-    fn lower(&self) -> &Vec<F> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<F> {
-        &self.upper
-    }
-}
+
 fn check<F: Scalar>() {
     for enabled in [false, true] {
         let residuals = Rc::new(Cell::new(0));

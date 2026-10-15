@@ -9,8 +9,7 @@
 use basin::problems::ConstrainedQuadratic;
 use basin::{
     Backtracking, BarrierMethod, CostFunction, DenseMatrix, Executor, Gradient,
-    GradientDescent, LinearInequalityConstraints, NelderMead, PointState,
-    TerminationCode,
+    GradientDescent, NelderMead, PointState, TerminationCode,
 };
 
 /// `min ‖x − (2,2)‖²` s.t. `x₀ + x₁ ≤ 2`. The unconstrained min (2,2) is
@@ -156,6 +155,21 @@ struct LinearProbe {
     b: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for LinearProbe {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::LinearBlocks<
+            basin::NoLinearBlock,
+            basin::LinearBlock<DenseMatrix, Vec<f64>>,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_linear_inequalities(basin::LinearBlock::new(&self.a, &self.b))
+    }
+}
 impl CostFunction for LinearProbe {
     type Param = Vec<f64>;
     type Output = f64;
@@ -171,18 +185,6 @@ impl Gradient for LinearProbe {
 
     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Self::Error> {
         Ok(x.iter().map(|xi| 2.0 * xi).collect())
-    }
-}
-
-impl LinearInequalityConstraints for LinearProbe {
-    type Matrix = DenseMatrix;
-
-    fn a(&self) -> &DenseMatrix {
-        &self.a
-    }
-
-    fn b(&self) -> &Vec<f64> {
-        &self.b
     }
 }
 
@@ -296,12 +298,23 @@ fn nonfinite_initial_parameter_reports_failure() {
 }
 
 #[test]
-fn nonfinite_constraint_data_reports_failure() {
+fn nonfinite_constraint_data_returns_a_typed_error() {
     let problem = LinearProbe {
         a: DenseMatrix::from_row_slice(1, 1, &[1.0]),
         b: vec![f64::INFINITY],
     };
-    assert_eq!(run_probe(problem, vec![0.0]), TerminationCode::SolverFailed);
+    let result = Executor::from_start(
+        problem,
+        BarrierMethod::with_inner_solver(GradientDescent::new(0.1)),
+        vec![0.0],
+    )
+    .run();
+    assert!(matches!(
+        result,
+        Err(basin::ConstraintSolveError::InvalidConstraints(
+            basin::ConstraintError::NonFiniteLinearData { .. }
+        ))
+    ));
 }
 
 #[test]

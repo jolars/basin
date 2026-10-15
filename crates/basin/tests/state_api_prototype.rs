@@ -80,6 +80,16 @@ impl<V, F: Scalar> Rosenbrock<V, F> {
     }
 }
 
+impl<V: Coordinates<F>, F: Scalar> basin::ProblemConstraints
+    for Rosenbrock<V, F>
+{
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: Coordinates<F>, F: Scalar> CostFunction for Rosenbrock<V, F> {
     type Param = V;
     type Output = F;
@@ -109,6 +119,14 @@ impl<V: Coordinates<F>, F: Scalar> Gradient for Rosenbrock<V, F> {
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -877,6 +895,14 @@ fn exact_resume_preserves_convergence_history_and_fresh_run_resets_it() {
 
 struct FallibleSphere;
 
+impl basin::ProblemConstraints for FallibleSphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for FallibleSphere {
     type Param = Vec<f64>;
     type Output = f64;

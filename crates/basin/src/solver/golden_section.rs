@@ -1,4 +1,4 @@
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
@@ -6,7 +6,7 @@ use crate::core::state::PointState;
 use crate::core::termination::Termination;
 
 /// Golden-section search for 1D minimization on a closed interval
-/// `[lower, upper]` supplied via `BoxConstraints`. Maintains a shrinking
+/// `[lower, upper]` supplied via `BoxBounds`. Maintains a shrinking
 /// bracket with two interior points placed at the golden ratio and discards
 /// the worse-side endpoint each step, reusing one of the two interior
 /// evaluations so that every iteration costs exactly **one** new function
@@ -38,13 +38,13 @@ use crate::core::termination::Termination;
 ///
 /// Scalar by construction: the parameter is a single `F` (default
 /// `f64`), so `GoldenSection` is backend-agnostic and needs no
-/// linear-algebra backend. The problem's `BoxConstraints` carry
+/// linear-algebra backend. The problem's `BoxBounds` carry
 /// `F`-valued lower and upper bounds.
 ///
 /// # Examples
 ///
 /// `GoldenSection` minimizes a 1-D function over a bracket, so the problem
-/// implements `CostFunction` *and* `BoxConstraints` with scalar (`F`)
+/// implements `CostFunction` and declares `Constraints<BoxBounds<F>>` with scalar
 /// bounds. See [`Brent`](crate::solver::Brent) for the faster, parabolic
 /// sibling and [`NelderMead`](crate::NelderMead) for the general
 /// derivative-free `Executor` pattern.
@@ -123,15 +123,19 @@ impl<F: Scalar> GoldenSection<F> {
 impl<P, F> Solver<P, PointState<F, F>> for GoldenSection<F>
 where
     F: Scalar,
-    P: CostFunction<Param = F, Output = F> + BoxConstraints,
+    P: CostFunction<Param = F, Output = F> + BoxProblem<Param = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<F, F>,
     ) -> Result<PointState<F, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_scalar_box_problem(
+            problem.inner(),
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         let a = *problem.inner().lower();
         let b = *problem.inner().upper();
@@ -263,20 +267,25 @@ mod tests {
         lo: f64,
         hi: f64,
     }
+
+    impl crate::ProblemConstraints for Quadratic {
+        type Constraints = crate::Constraints<crate::BoxBounds<f64>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.lo),
+                Some(&self.hi),
+            ))
+        }
+    }
     impl CostFunction for Quadratic {
         type Param = f64;
         type Output = f64;
         type Error = std::convert::Infallible;
         fn cost(&self, x: &f64) -> Result<f64, Self::Error> {
             Ok((x - 2.0).powi(2))
-        }
-    }
-    impl BoxConstraints for Quadratic {
-        fn lower(&self) -> &f64 {
-            &self.lo
-        }
-        fn upper(&self) -> &f64 {
-            &self.hi
         }
     }
 
@@ -314,6 +323,19 @@ mod tests {
         lo: f64,
         hi: f64,
     }
+
+    impl crate::ProblemConstraints for Cubic {
+        type Constraints = crate::Constraints<crate::BoxBounds<f64>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.lo),
+                Some(&self.hi),
+            ))
+        }
+    }
     impl CostFunction for Cubic {
         type Param = f64;
         type Output = f64;
@@ -321,14 +343,6 @@ mod tests {
         // x^3 − 3x; on [0, 2] the unique min is at x = 1, f(1) = −2.
         fn cost(&self, x: &f64) -> Result<f64, Self::Error> {
             Ok(x.powi(3) - 3.0 * x)
-        }
-    }
-    impl BoxConstraints for Cubic {
-        fn lower(&self) -> &f64 {
-            &self.lo
-        }
-        fn upper(&self) -> &f64 {
-            &self.hi
         }
     }
 

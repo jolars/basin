@@ -168,6 +168,16 @@ fn with_stds_anisotropic_converges_on_sphere() {
 #[test]
 fn with_stds_preconditions_ill_scaled_quadratic() {
     struct IllScaledQuadratic;
+
+    impl basin::ProblemConstraints for IllScaledQuadratic {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for IllScaledQuadratic {
         type Param = Vec<f64>;
         type Output = f64;

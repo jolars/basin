@@ -63,7 +63,7 @@ pub(crate) mod progressive_barrier;
 
 use std::marker::PhantomData;
 
-use crate::core::constraint::{BoxConstraints, NonlinearInequalityConstraints};
+use crate::core::constraint::evaluation::{BoxProblem, invalid};
 use crate::core::inner::InitialState;
 use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
@@ -71,6 +71,7 @@ use crate::core::solver::Solver;
 use crate::core::state::{PointState, SelectedState, State};
 use crate::core::termination::Termination;
 use crate::solver::nelder_mead::Unbounded;
+use crate::{ConstraintSolveError, NonlinearInequalityValues};
 
 use driver::{MadsWork, Transition};
 use progressive_barrier::PbWork;
@@ -79,7 +80,7 @@ use progressive_barrier::PbWork;
 /// [`Mads::bounded`]. Bounds are enforced by the **extreme barrier**: infeasible
 /// poll points are assigned `f = +∞` and rejected without evaluating the
 /// objective (Audet & Dennis 2006, §2). Pair with a problem implementing
-/// [`BoxConstraints`].
+/// [`BoxBounds`](crate::BoxBounds).
 pub struct Bounded;
 
 /// Type-state marker: nonlinearly-constrained MADS (`Mads<Constrained>`),
@@ -87,7 +88,7 @@ pub struct Bounded;
 /// `c(x) ≤ 0` are handled by the **progressive barrier** (Audet & Dennis 2009):
 /// the solver tracks the aggregate violation `h(x) = Σⱼ max(cⱼ, 0)²` and walks a
 /// barrier threshold down to zero, so an **infeasible start is allowed**. Pair
-/// with a problem implementing [`NonlinearInequalityConstraints`].
+/// with a problem implementing [`NonlinearInequalityValues`].
 pub struct Constrained;
 
 /// MADS (Audet & Dennis 2006): mesh adaptive direct search, deterministic
@@ -102,6 +103,10 @@ pub struct Constrained;
 ///
 /// // A nonsmooth objective (an L1 "valley") with minimizer (1, 2).
 /// struct AbsValley;
+/// impl basin::ProblemConstraints for AbsValley  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for AbsValley {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -137,13 +142,13 @@ pub struct Constrained;
 ///
 /// - [`bounded`](Self::bounded) → `Mads<Bounded>` handles box bounds by the
 ///   **extreme barrier** (infeasible poll points get `f = +∞`); needs a problem
-///   implementing [`BoxConstraints`] and a feasible (or clamped) start.
+///   declaring a box-only set and a feasible (or clamped) start.
 /// - [`constrained`](Self::constrained) → `Mads<Constrained>` handles general
 ///   nonlinear inequality constraints `c(x) ≤ 0` by the **progressive barrier**
 ///   (Audet & Dennis 2009): it tracks the aggregate violation
 ///   `h(x) = Σⱼ max(cⱼ, 0)²` and drives a barrier threshold down to zero,
 ///   exploring around both a feasible and an infeasible incumbent. Needs a
-///   problem implementing [`NonlinearInequalityConstraints`] and a
+///   problem implementing [`NonlinearInequalityValues`] and a
 ///   [`SelectedState`]; an **infeasible start is allowed**.
 ///
 /// # Progress and continuation
@@ -204,6 +209,7 @@ pub struct Mads<Mode = Unbounded, F: Scalar = f64> {
     /// Built in [`Solver::init`] for the constrained mode; the resumable
     /// progressive-barrier poll loop. `None` in the other modes.
     pb_work: Option<PbWork<F>>,
+    constraint_count: Option<usize>,
     _mode: PhantomData<fn() -> Mode>,
 }
 
@@ -250,6 +256,7 @@ impl<F: Scalar> Mads<Unbounded, F> {
             poll_size_min: F::from_f64(1e-6).expect("1e-6 representable"),
             work: None,
             pb_work: None,
+            constraint_count: None,
             _mode: PhantomData,
         }
     }
@@ -273,7 +280,7 @@ impl<Mode, F: Scalar> Mads<Mode, F> {
 
 impl<F: Scalar> Mads<Unbounded, F> {
     /// Switch to the box-bound-constrained variant ([`Bounded`]). The resulting
-    /// `Mads<Bounded>` requires a problem implementing [`BoxConstraints`] and
+    /// `Mads<Bounded>` requires a problem declaring a box-only set and
     /// enforces the bounds by the extreme barrier (infeasible poll points get
     /// `f = +∞`).
     /// An infeasible start is clamped into the box.
@@ -284,13 +291,14 @@ impl<F: Scalar> Mads<Unbounded, F> {
             poll_size_min: self.poll_size_min,
             work: None,
             pb_work: None,
+            constraint_count: None,
             _mode: PhantomData,
         }
     }
 
     /// Switch to the nonlinearly-constrained variant ([`Constrained`]). The
     /// resulting `Mads<Constrained>` requires a problem implementing
-    /// [`NonlinearInequalityConstraints`] (`c(x) ≤ 0`) and handles the
+    /// [`NonlinearInequalityValues`] (`c(x) ≤ 0`) and handles the
     /// constraints by the **progressive barrier**, so an **infeasible start is
     /// allowed**. Drive it with a [`SelectedState`].
     pub fn constrained(self) -> Mads<Constrained, F> {
@@ -300,6 +308,7 @@ impl<F: Scalar> Mads<Unbounded, F> {
             poll_size_min: self.poll_size_min,
             work: None,
             pb_work: None,
+            constraint_count: None,
             _mode: PhantomData,
         }
     }
@@ -382,6 +391,7 @@ where
         + VectorLen
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -495,13 +505,26 @@ where
 impl<P, V, F> Solver<P, SelectedState<V, F>> for Mads<Constrained, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + NonlinearInequalityConstraints,
+    P: CostFunction<
+            Param = V,
+            Output = F,
+            Constraints = crate::Constraints<
+                crate::NoBounds,
+                crate::NoLinearConstraints,
+                crate::NonlinearBlocks<
+                    crate::NoNonlinearBlock,
+                    crate::NonlinearBlock,
+                >,
+            >,
+        > + NonlinearInequalityValues<Param = V, Error = <P as CostFunction>::Error>,
+    <P as NonlinearInequalityValues>::Values:
+        VectorLen + std::ops::Index<usize, Output = F>,
     V: Clone
         + VectorLen
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = ConstraintSolveError<<P as CostFunction>::Error>;
 
     fn init(
         &mut self,
@@ -514,15 +537,22 @@ where
         let n = state.param().vec_len();
         assert!(n >= 1, "Mads requires a non-empty start point");
 
-        let m = problem.inner().num_constraints();
+        let m = crate::ProblemConstraints::constraint_set(problem.inner())
+            .nonlinear()
+            .inequalities()
+            .count();
+        self.constraint_count = Some(m);
         let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
         let template = state.param().clone();
 
         let (work, best_x, best_f, best_h) = {
-            let mut eval = |slice: &[F]| -> Result<(F, F), P::Error> {
+            let mut eval = |slice: &[F]| -> Result<
+                (F, F),
+                ConstraintSolveError<<P as CostFunction>::Error>,
+            > {
                 let xv = fill_from(&template, slice);
                 let f = problem.cost(&xv)?;
-                let c = problem.constraints(&xv)?;
+                let c = checked_inequalities(problem, &xv, m)?;
                 Ok((f, violation(&c, m)))
             };
             PbWork::try_init(
@@ -544,7 +574,9 @@ where
         problem: &mut Problem<P>,
         mut state: SelectedState<V, F>,
     ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
-        let m = problem.inner().num_constraints();
+        let m = self
+            .constraint_count
+            .expect("MADS initialization declares the constraint count");
         let template = state.param().clone();
         let work = self
             .pb_work
@@ -552,10 +584,13 @@ where
             .expect("Mads::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> Result<(F, F), P::Error> {
+            let mut eval = |slice: &[F]| -> Result<
+                (F, F),
+                ConstraintSolveError<<P as CostFunction>::Error>,
+            > {
                 let xv = fill_from(&template, slice);
                 let f = problem.cost(&xv)?;
-                let c = problem.constraints(&xv)?;
+                let c = checked_inequalities(problem, &xv, m)?;
                 Ok((f, violation(&c, m)))
             };
             work.step(&mut eval)?
@@ -609,19 +644,26 @@ where
 impl<P, V, F> Solver<P, PointState<V, F>> for Mads<Bounded, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     V: Clone
         + VectorLen
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            Some(state.param().vec_len()),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         self.work = None;
         self.pb_work = None;
@@ -647,11 +689,14 @@ where
         let template = state.param().clone();
 
         let (work, best_x, best_f) = {
-            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+            let mut eval = |slice: &[F]| -> Result<
+                F,
+                crate::ConstraintSolveError<P::Error>,
+            > {
                 if out_of_box(slice, &lower, &upper) {
                     Ok(F::infinity()) // extreme barrier: reject without evaluating
                 } else {
-                    problem.cost(&fill_from(&template, slice))
+                    Ok(problem.cost(&fill_from(&template, slice))?)
                 }
             };
             MadsWork::try_init(
@@ -682,11 +727,14 @@ where
             .expect("Mads::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+            let mut eval = |slice: &[F]| -> Result<
+                F,
+                crate::ConstraintSolveError<P::Error>,
+            > {
                 if out_of_box(slice, &lower, &upper) {
                     Ok(F::infinity())
                 } else {
-                    problem.cost(&fill_from(&template, slice))
+                    Ok(problem.cost(&fill_from(&template, slice))?)
                 }
             };
             work.step(&mut eval)?
@@ -727,4 +775,50 @@ where
             )
         })
     }
+}
+
+fn checked_inequalities<P, V, F>(
+    p: &mut Problem<P>,
+    x: &V,
+    m: usize,
+) -> Result<Vec<F>, ConstraintSolveError<<P as CostFunction>::Error>>
+where
+    P: CostFunction<
+            Param = V,
+            Output = F,
+            Constraints = crate::Constraints<
+                crate::NoBounds,
+                crate::NoLinearConstraints,
+                crate::NonlinearBlocks<
+                    crate::NoNonlinearBlock,
+                    crate::NonlinearBlock,
+                >,
+            >,
+        > + NonlinearInequalityValues<Param = V, Error = <P as CostFunction>::Error>,
+    <P as NonlinearInequalityValues>::Values:
+        VectorLen + std::ops::Index<usize, Output = F>,
+    F: Scalar,
+{
+    if crate::ProblemConstraints::constraint_set(p.inner())
+        .nonlinear()
+        .inequalities()
+        .count()
+        != m
+    {
+        return Err(invalid(crate::ConstraintError::LayoutChanged));
+    }
+    if m == 0 {
+        return Ok(vec![]);
+    }
+    p.counts_mut().residual_evals += 1;
+    let values =
+        <P as NonlinearInequalityValues>::nonlinear_inequalities(p.inner(), x)?;
+    crate::core::constraint::model::dimension(
+        crate::ConstraintBlock::NonlinearInequalities,
+        crate::ConstraintAxis::Length,
+        m,
+        values.vec_len(),
+    )
+    .map_err(invalid)?;
+    Ok((0..m).map(|i| values[i]).collect())
 }

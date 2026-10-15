@@ -1,6 +1,6 @@
 use basin::{
-    BoxConstraints, CostFunction, DenseMatrixFromFn, Executor, Jacobian,
-    MatrixIndex, NativeConvergenceTest, Residual, Scalar, TerminationCode,
+    CostFunction, DenseMatrixFromFn, Executor, Jacobian, MatrixIndex,
+    NativeConvergenceTest, Residual, Scalar, TerminationCode,
     TrustRegionReflective, VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
@@ -16,6 +16,17 @@ struct Fit<V, F> {
     deficient: bool,
 }
 
+impl<V, F: Scalar> basin::ProblemConstraints for Fit<V, F> {
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V, F: Scalar> CostFunction for Fit<V, F> {
     type Param = V;
     type Output = F;
@@ -72,19 +83,15 @@ impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar> Jacobian
         ))
     }
 }
-impl<V, F: Scalar> BoxConstraints for Fit<V, F> {
-    fn lower(&self) -> &V {
-        &self.lower
-    }
-    fn upper(&self) -> &V {
-        &self.upper
-    }
-}
 
 pub fn check<V, F>(make: fn(&[F]) -> V)
 where
     F: Scalar,
-    V: Clone + VectorIndex<F> + VectorLen + DenseMatrixFromFn<F>,
+    V: std::ops::Index<usize, Output = F>
+        + Clone
+        + VectorIndex<F>
+        + VectorLen
+        + DenseMatrixFromFn<F>,
     V::Matrix: MatrixIndex<F>,
 {
     for deficient in [false, true] {
@@ -140,6 +147,17 @@ struct Diagonal<V, F> {
     upper: V,
 }
 
+impl<V, F: Scalar> basin::ProblemConstraints for Diagonal<V, F> {
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V, F: Scalar> CostFunction for Diagonal<V, F> {
     type Param = V;
     type Output = F;
@@ -181,19 +199,14 @@ impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar> Jacobian
     }
 }
 
-impl<V, F: Scalar> BoxConstraints for Diagonal<V, F> {
-    fn lower(&self) -> &V {
-        &self.lower
-    }
-    fn upper(&self) -> &V {
-        &self.upper
-    }
-}
-
 fn check_small_radius<V, F>(make: fn(&[F]) -> V)
 where
     F: Scalar,
-    V: Clone + VectorIndex<F> + VectorLen + DenseMatrixFromFn<F>,
+    V: std::ops::Index<usize, Output = F>
+        + Clone
+        + VectorIndex<F>
+        + VectorLen
+        + DenseMatrixFromFn<F>,
     V::Matrix: MatrixIndex<F>,
 {
     for start in [F::one(), -F::one(), num::<F>(1e6)] {
@@ -239,7 +252,11 @@ where
 fn check_small_secular_root<V, F>(make: fn(&[F]) -> V)
 where
     F: Scalar,
-    V: Clone + VectorIndex<F> + VectorLen + DenseMatrixFromFn<F>,
+    V: std::ops::Index<usize, Output = F>
+        + Clone
+        + VectorIndex<F>
+        + VectorLen
+        + DenseMatrixFromFn<F>,
     V::Matrix: MatrixIndex<F>,
 {
     let small = if F::epsilon() > num(1e-10) {
@@ -275,7 +292,11 @@ where
 fn check_cost_floor<V, F>(make: fn(&[F]) -> V)
 where
     F: Scalar,
-    V: Clone + VectorIndex<F> + VectorLen + DenseMatrixFromFn<F>,
+    V: std::ops::Index<usize, Output = F>
+        + Clone
+        + VectorIndex<F>
+        + VectorLen
+        + DenseMatrixFromFn<F>,
     V::Matrix: MatrixIndex<F>,
 {
     let problem = Diagonal {

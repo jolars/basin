@@ -32,11 +32,10 @@ mod tests;
 #[cfg(test)]
 mod regression;
 
-use crate::core::constraint::{
-    FoldedConstraints, NonlinearConstraints, NonlinearInequalityConstraints,
-};
+use crate::core::constraint::evaluation::{CobylaSet, SetLayout, invalid};
+use crate::core::constraint::{ConstraintError, ConstraintSolveError};
 use crate::core::inner::InitialState;
-use crate::core::math::{MatVec, Scalar, VectorLen};
+use crate::core::math::{Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedState, State};
@@ -56,16 +55,18 @@ use driver::{CobylaWork, Transition};
 /// to `ρ_end`.
 ///
 /// Drive it with an [`Executor`](crate::Executor) over a [`SelectedState`] on a
-/// problem implementing [`CostFunction`] and [`NonlinearInequalityConstraints`]:
+/// problem implementing [`CostFunction`] and declaring nonlinear inequalities:
 ///
 /// ```
 /// use basin::{
-///     Cobyla, SelectedState, CostFunction, Executor,
-///     NonlinearInequalityConstraints,
-/// };
+///     Cobyla, SelectedState, CostFunction, Executor};
 ///
 /// // min x0·x1  s.t.  x0² + x1² ≤ 1   (optimum F* = −1/2 on the unit circle).
 /// struct Disk;
+/// impl basin::ProblemConstraints for Disk  {
+///     type Constraints = basin::Constraints<basin::NoBounds, basin::NoLinearConstraints, basin::NonlinearBlocks<basin::NoNonlinearBlock, basin::NonlinearBlock>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_nonlinear_inequalities(1) }
+/// }
 /// impl CostFunction for Disk {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -74,17 +75,13 @@ use driver::{CobylaWork, Transition};
 ///         Ok(x[0] * x[1])
 ///     }
 /// }
-/// impl NonlinearInequalityConstraints for Disk {
-///     fn constraints(
-///         &self,
-///         x: &Vec<f64>,
-///     ) -> Result<Vec<f64>, std::convert::Infallible> {
-///         Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
-///     }
-///     fn num_constraints(&self) -> usize {
-///         1
+/// impl basin::NonlinearInequalityValues for Disk  {
+///     type Param = Vec<f64>; type Values = Vec<f64>; type Error = std::convert::Infallible;
+///     fn nonlinear_inequalities(&self, x: &Self::Param) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+///         (|| -> Result<Vec<f64>, std::convert::Infallible> { Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0]) })().map_err(basin::ConstraintSolveError::Evaluation)
 ///     }
 /// }
+///
 ///
 /// let solver = Cobyla::new()
 ///     .with_initial_radius(0.5)
@@ -106,13 +103,15 @@ use driver::{CobylaWork, Transition};
 ///
 /// # Constraints
 ///
-/// For inequality-only input, implement [`NonlinearInequalityConstraints`]:
-/// the problem returns `c(x)` (feasible iff every `cᵢ(x) ≤ 0`). For the full
-/// form, implement [`NonlinearConstraints`] and pass
-/// `FoldedConstraints::new(problem)` to the executor. The adapter folds
-/// nonlinear inequalities, optional linear inequalities and equalities, and
-/// optional box bounds into one constraint vector. Equalities become paired
-/// residuals of opposite signs; rows are neither normalized nor relaxed.
+/// Declare the complete set through [`ProblemConstraints`](crate::ProblemConstraints)
+/// and [`Constraints`](crate::Constraints), then pass the problem directly to
+/// the executor. Implement [`NonlinearInequalityValues`](crate::NonlinearInequalityValues)
+/// or [`NonlinearEqualityValues`](crate::NonlinearEqualityValues) for each
+/// declared nonlinear block. Values may use a different backend from parameters.
+/// Linear equalities, linear inequalities, and bounds remain separate blocks.
+/// The solver folds equalities into paired residuals of opposite signs;
+/// rows are neither normalized nor relaxed. Absent blocks require no callback
+/// or matrix type. Zero-count nonlinear blocks skip callbacks.
 ///
 /// The start point need not be feasible, and callbacks may be evaluated outside
 /// every supplied constraint, including box bounds. Folding retains COBYLA's
@@ -162,10 +161,11 @@ use driver::{CobylaWork, Transition};
 /// and indexing; COBYLA's models are pure-Rust `Vec<F>` scratch (no backend
 /// matrix, no linear solve). `Vec<F>`, nalgebra `DVector<F>`, ndarray `Array1<F>`,
 /// and faer `Col<F>` work for every supported backend release, and it is wasm-clean.
-/// The [`FoldedConstraints`] path additionally requires [`MatVec`] on the
-/// constraint matrix: `DenseMatrix`/`Vec`, `DMatrix`/`DVector`, `Array2`/`Array1`,
-/// and `Mat`/`Col` all provide it in pure Rust. Both paths support `f32` and
-/// `f64`.
+/// Present linear blocks additionally require [`MatrixShape`](crate::MatrixShape),
+/// [`MatrixFinite`](crate::MatrixFinite), and [`MatVecInto`](crate::MatVecInto).
+/// Each linear block may use its own matrix and right-hand-side representation.
+/// Every dense backend provides these operations in pure Rust with `f32` and `f64`.
+/// Nonlinear-only input needs no matrix capabilities.
 ///
 /// # References
 ///
@@ -184,6 +184,7 @@ pub struct Cobyla<V, F: Scalar = f64> {
     /// Built in [`Solver::init`]; the resumable simplex + schedule + filter.
     work: Option<CobylaWork<F>>,
     evaluation_param: Option<V>,
+    layout: Option<SetLayout>,
 }
 
 impl<V, F: Scalar> Cobyla<V, F> {
@@ -229,6 +230,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
             rho_end: F::from_f64(1e-6).expect("1e-6 representable"),
             work: None,
             evaluation_param: None,
+            layout: None,
         }
     }
 
@@ -283,23 +285,6 @@ fn publish<V, F>(
     }
 }
 
-fn folded_values<P, V, F>(
-    problem: &mut Problem<FoldedConstraints<P>>,
-    x: &V,
-) -> Result<Vec<F>, P::Error>
-where
-    P: NonlinearConstraints<Param = V, Output = F>,
-    P::Matrix: MatVec<V>,
-    V: VectorLen + std::ops::Index<usize, Output = F>,
-    F: Scalar,
-{
-    let mut counts = crate::EvalCounts::default();
-    let result = problem.inner().evaluate_constraints_counted(x, &mut counts);
-    // Preserve successful and failing callback attempts in the outer wrapper.
-    problem.counts_mut().add(&counts);
-    result
-}
-
 impl<V, F> InitialState<V> for Cobyla<V, F>
 where
     F: Scalar,
@@ -319,8 +304,14 @@ impl<V, F: Scalar> Cobyla<V, F> {
         problem: &mut Problem<P>,
         mut state: SelectedState<V, F>,
         m: usize,
-        mut constraints: impl FnMut(&mut Problem<P>, &V) -> Result<Vec<F>, P::Error>,
-    ) -> Result<SelectedState<V, F>, P::Error>
+        mut constraints: impl FnMut(
+            &mut Problem<P>,
+            &V,
+        ) -> Result<
+            Vec<F>,
+            ConstraintSolveError<P::Error>,
+        >,
+    ) -> Result<SelectedState<V, F>, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
         V: Clone
@@ -337,15 +328,16 @@ impl<V, F: Scalar> Cobyla<V, F> {
         let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
 
         let (work, _, _) = {
-            let mut eval = |slice: &[F]| -> Result<(F, Vec<F>), P::Error> {
+            let mut eval = |slice: &[F]| -> Result<
+                (F, Vec<F>),
+                ConstraintSolveError<P::Error>,
+            > {
                 fill_into(&mut param, slice);
                 let f = problem.cost(&param)?;
                 let c = constraints(problem, &param)?;
-                assert_eq!(
-                    c.len(),
-                    m,
-                    "Cobyla constraint count must remain fixed during a solve",
-                );
+                if c.len() != m {
+                    return Err(invalid(ConstraintError::LayoutChanged));
+                }
                 Ok((f, c))
             };
             CobylaWork::try_init(x0, m, self.rho_beg, self.rho_end, &mut eval)?
@@ -361,8 +353,14 @@ impl<V, F: Scalar> Cobyla<V, F> {
         &mut self,
         problem: &mut Problem<P>,
         mut state: SelectedState<V, F>,
-        mut constraints: impl FnMut(&mut Problem<P>, &V) -> Result<Vec<F>, P::Error>,
-    ) -> CobylaStep<V, F, P::Error>
+        mut constraints: impl FnMut(
+            &mut Problem<P>,
+            &V,
+        ) -> Result<
+            Vec<F>,
+            ConstraintSolveError<P::Error>,
+        >,
+    ) -> CobylaStep<V, F, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
         V: Clone
@@ -381,15 +379,16 @@ impl<V, F: Scalar> Cobyla<V, F> {
             .expect("Cobyla::init seeds the evaluation buffer");
 
         let transition = {
-            let mut eval = |slice: &[F]| -> Result<(F, Vec<F>), P::Error> {
+            let mut eval = |slice: &[F]| -> Result<
+                (F, Vec<F>),
+                ConstraintSolveError<P::Error>,
+            > {
                 fill_into(param, slice);
                 let f = problem.cost(param)?;
                 let c = constraints(problem, param)?;
-                assert_eq!(
-                    c.len(),
-                    m,
-                    "Cobyla constraint count must remain fixed during a solve",
-                );
+                if c.len() != m {
+                    return Err(invalid(ConstraintError::LayoutChanged));
+                }
                 Ok((f, c))
             };
             work.step(&mut eval)?
@@ -428,92 +427,47 @@ impl<V, F: Scalar> Cobyla<V, F> {
     }
 }
 
-fn inequality_values<P, V, F>(
-    problem: &mut Problem<P>,
-    x: &V,
-    m: usize,
-) -> Result<Vec<F>, P::Error>
-where
-    P: NonlinearInequalityConstraints<Param = V, Output = F>,
-    V: VectorLen + std::ops::Index<usize, Output = F>,
-    F: Scalar,
-{
-    let cv = problem.constraints(x)?;
-    assert_eq!(
-        cv.vec_len(),
-        m,
-        "constraints() returned {} values but num_constraints() = {m}",
-        cv.vec_len(),
-    );
-    Ok((0..m).map(|i| cv[i]).collect())
-}
-
 impl<P, V, F> Solver<P, SelectedState<V, F>> for Cobyla<V, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F> + NonlinearInequalityConstraints,
-    V: Clone
-        + VectorLen
-        + std::ops::Index<usize, Output = F>
-        + std::ops::IndexMut<usize, Output = F>,
+    P: CostFunction<Param = V, Output = F>,
+    P::Constraints: CobylaSet<P, V, F>,
+    V: Clone + VectorLen + std::ops::IndexMut<usize, Output = F>,
 {
-    type Error = P::Error;
-
+    type Error = ConstraintSolveError<P::Error>;
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: SelectedState<V, F>,
     ) -> Result<SelectedState<V, F>, Self::Error> {
-        let m = problem.inner().num_constraints();
-        self.init_with(problem, state, m, |p, x| inequality_values(p, x, m))
+        self.layout = None;
+        let layout = P::Constraints::layout(
+            problem.inner().constraint_set(),
+            state.param().vec_len(),
+        )
+        .map_err(invalid)?;
+        let count = layout.folded_count().map_err(invalid)?;
+        let result = self.init_with(problem, state, count, |p, x| {
+            P::Constraints::values(p, x, &layout)
+        });
+        self.layout = Some(layout);
+        result
     }
-
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
         state: SelectedState<V, F>,
     ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
-        let m = problem.inner().num_constraints();
-        self.next_iter_with(problem, state, |p, x| inequality_values(p, x, m))
+        let layout = self
+            .layout
+            .take()
+            .expect("Cobyla::init prepares the constraint layout");
+        let result = self.next_iter_with(problem, state, |p, x| {
+            P::Constraints::values(p, x, &layout)
+        });
+        self.layout = Some(layout);
+        result
     }
-
-    fn terminate(
-        &self,
-        _state: &SelectedState<V, F>,
-    ) -> Option<Termination<F>> {
-        self.radius_termination()
-    }
-}
-
-impl<P, V, F> Solver<FoldedConstraints<P>, SelectedState<V, F>> for Cobyla<V, F>
-where
-    F: Scalar,
-    P: NonlinearConstraints<Param = V, Output = F>,
-    P::Matrix: MatVec<V>,
-    V: Clone
-        + VectorLen
-        + std::ops::Index<usize, Output = F>
-        + std::ops::IndexMut<usize, Output = F>,
-{
-    type Error = P::Error;
-
-    fn init(
-        &mut self,
-        problem: &mut Problem<FoldedConstraints<P>>,
-        state: SelectedState<V, F>,
-    ) -> Result<SelectedState<V, F>, Self::Error> {
-        let m = problem.inner().constraint_count(state.param().vec_len());
-        self.init_with(problem, state, m, folded_values)
-    }
-
-    fn next_iter(
-        &mut self,
-        problem: &mut Problem<FoldedConstraints<P>>,
-        state: SelectedState<V, F>,
-    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
-        self.next_iter_with(problem, state, folded_values)
-    }
-
     fn terminate(
         &self,
         _state: &SelectedState<V, F>,

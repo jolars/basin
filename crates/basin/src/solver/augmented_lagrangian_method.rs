@@ -1,12 +1,12 @@
 //! Augmented-Lagrangian method for linear equality constraints `A x = b`.
 
+use crate::ConstraintSolveError;
 use crate::core::augmented_lagrangian::AugmentedLagrangian;
-use crate::core::constraint::LinearEqualityConstraints;
+use crate::core::constraint::evaluation::{LinearEqualityGradient, invalid};
 use crate::core::executor::run_loop_with_control;
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
-    Dot, MatTransposeVec, MatVec, NormInfinity, NormSquared, Scalar,
-    ScaleInPlace, ScaledAdd,
+    Dot, NormInfinity, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -23,7 +23,7 @@ pub struct AugmentedLagrangianInnerDiagnostics<V, F: Scalar = f64> {
     /// Penalty that defined the attempted subproblem.
     pub rho: F,
     /// Multiplier vector before the outer multiplier or penalty update.
-    pub lambda: V,
+    pub lambda: Vec<F>,
     /// Seed passed to the fresh inner state.
     pub start: V,
     /// Published inner point on a clean return.
@@ -139,8 +139,8 @@ pub struct AugmentedLagrangianInnerDiagnostics<V, F: Scalar = f64> {
 ///
 /// # Backends
 ///
-/// Requires the constraint matrix to implement [`MatVec`] (`A x`) and
-/// [`MatTransposeVec`] (`Aᵀ v`), never a linear solve. All backends supply
+/// Requires the constraint matrix to implement [`crate::MatVecInto`] (`A x`) and
+/// [`crate::MatTransposeVecInto`] (`Aᵀ v`), never a linear solve. All backends supply
 /// those two ops: `Vec<F>` with [`DenseMatrix`](crate::DenseMatrix),
 /// nalgebra `DVector<F>`/`DMatrix<F>`, ndarray `Array1<F>`/`Array2<F>`, and
 /// faer `Col<F>`/`Mat<F>`, with `F = f64` (default) or `f32`. Vectors need
@@ -159,7 +159,7 @@ pub struct AugmentedLagrangianInnerDiagnostics<V, F: Scalar = f64> {
 /// # Examples
 ///
 /// `AugmentedLagrangianMethod` wraps a gradient inner solver to handle
-/// `LinearEqualityConstraints`, and tolerates infeasible starts. See
+/// `Constraints`, and tolerates infeasible starts. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -177,7 +177,7 @@ pub struct AugmentedLagrangianMethod<So, V, F: Scalar = f64> {
     stationarity_norm: F,
     /// Multiplier estimate `λ ∈ ℝᵐ`; populated in [`init`](Solver::init) with
     /// a zero vector shaped like `b`, then carried across outer iterations.
-    lambda: Option<V>,
+    lambda: Option<Vec<F>>,
     /// `‖c(x)‖` of the most recent inner solve; `+∞` until the first solve so
     /// [`terminate`](Solver::terminate) cannot fire at iter 0.
     c_norm: F,
@@ -392,14 +392,12 @@ where
     }
 }
 
-impl<P, V, M, So, F> Solver<P, SelectedState<V, F>>
+impl<P, V, So, F> Solver<P, SelectedState<V, F>>
     for AugmentedLagrangianMethod<So, V, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F>
-        + Gradient<Gradient = V>
-        + LinearEqualityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V> + MatTransposeVec<V>,
+    P: LinearEqualityGradient<V, F> + Gradient<Gradient = V>,
+    V: crate::VectorLen,
     V: ScaledAdd<F>
         + Dot<F>
         + NormSquared<F>
@@ -408,13 +406,13 @@ where
         + Clone,
     So: WarmStart<V>
         + for<'a> Solver<
-            AugmentedLagrangian<'a, P, V, F>,
+            AugmentedLagrangian<'a, P, Vec<F>, F>,
             So::State,
-            Error = <P as CostFunction>::Error,
+            Error = ConstraintSolveError<<P as CostFunction>::Error>,
         >,
     So::State: State<Param = V, Float = F> + CountsMirror,
 {
-    type Error = <P as CostFunction>::Error;
+    type Error = ConstraintSolveError<<P as CostFunction>::Error>;
 
     fn init(
         &mut self,
@@ -433,13 +431,18 @@ where
         // backend-generic with no "zeros_like" in the math layer. No
         // feasibility precondition: the augmented Lagrangian tolerates an
         // infeasible x₀.
-        let mut lambda = problem.inner().b().clone();
-        lambda.scale_in_place(F::zero());
+        problem
+            .inner()
+            .validate_linear(state.param().vec_len())
+            .map_err(invalid)?;
+        let lambda = vec![F::zero(); problem.inner().linear_count()];
         self.lambda = Some(lambda);
 
         let cost = problem.cost(state.param())?;
-        let mut residual = problem.inner().a().matvec(state.param());
-        residual.scaled_add(-F::one(), problem.inner().b());
+        let residual = problem
+            .inner()
+            .linear_residual(state.param())
+            .map_err(invalid)?;
         let violation = residual.norm_squared().sqrt();
         state.replace(state.param().clone(), cost, violation);
         self.select_incumbent(&mut state);
@@ -536,8 +539,10 @@ where
         // checking both independently of the surrogate's stopping report.
         let candidate = result.state.param();
         let cost = problem.cost(candidate)?;
-        let mut c = problem.inner().a().matvec(candidate);
-        c.scaled_add(-F::one(), problem.inner().b());
+        let c = problem
+            .inner()
+            .linear_residual(candidate)
+            .map_err(invalid)?;
         let c_norm = c.norm_squared().sqrt();
         if !cost.is_finite() || !c_norm.is_finite() {
             return Ok(crate::SolverStep::stopped(

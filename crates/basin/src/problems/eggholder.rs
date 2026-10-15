@@ -78,6 +78,14 @@ impl<P> HasSpec for Eggholder<P> {
     const SPEC: &'static ProblemSpec = &EGGHOLDER_SPEC;
 }
 
+impl crate::ProblemConstraints for Eggholder<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for Eggholder<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -94,7 +102,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl CostFunction for Eggholder<DVector<f64>> {
+    impl crate::ProblemConstraints for Eggholder<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Eggholder<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -114,7 +126,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl CostFunction for Eggholder<Array1<f64>> {
+    impl crate::ProblemConstraints for Eggholder<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Eggholder<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -134,7 +150,11 @@ crate::backend_macros::faer_versions! {
     use crate::CostFunction;
     use faer::Col;
 
-    impl CostFunction for Eggholder<Col<f64>> {
+    impl crate::ProblemConstraints for Eggholder<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Eggholder<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;

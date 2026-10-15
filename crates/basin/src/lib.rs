@@ -1,10 +1,8 @@
 //! Basin: a numerical optimization library.
 //!
 //! The framework lives in [`core`]: problem traits the user implements
-//! ([`CostFunction`], [`Gradient`], [`BoxConstraints`],
-//! [`LinearInequalityConstraints`], [`LinearEqualityConstraints`],
-//! [`LinearConstraints`], [`NonlinearInequalityConstraints`],
-//! [`NonlinearConstraints`]), state shapes
+//! ([`ProblemConstraints`], [`CostFunction`], [`Gradient`], [`Residual`], and
+//! the nonlinear constraint evaluation capabilities), state shapes
 //! solvers iterate over ([`State`], [`GradientState`], [`SimplexState`]),
 //! the [`Solver`] trait, solver-owned convergence, execution controls
 //! ([`RunControl`]), and a read-only observer layer
@@ -26,10 +24,13 @@
 //!
 //! ```
 //! use basin::{
-//!     FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
-//! };
+//!     FirstOrderState, CostFunction, Executor, Gradient, GradientDescent};
 //!
 //! struct Sphere;
+//! impl basin::ProblemConstraints for Sphere  {
+//!     type Constraints = basin::NoConstraints;
+//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+//! }
 //! impl CostFunction for Sphere {
 //!     type Param = Vec<f64>;
 //!     type Output = f64;
@@ -71,7 +72,11 @@
 //! ```
 //! use basin::{Executor, NelderMead};
 //! # struct Sphere;
-//! # impl basin::CostFunction for Sphere {
+//! # impl basin::ProblemConstraints for Sphere  {
+//!     type Constraints = basin::NoConstraints;
+//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+//! }
+//! impl basin::CostFunction for Sphere {
 //! #     type Param = Vec<f64>;
 //! #     type Output = f64;
 //! #     type Error = std::convert::Infallible;
@@ -335,9 +340,13 @@ pub use crate::core::checkpoint::{
     read_exact_checkpoint,
 };
 pub use crate::core::constraint::{
-    BoxConstraints, ConstraintJacobian, FoldedConstraints, LinearConstraints,
-    LinearEqualityConstraints, LinearInequalityConstraints,
-    NonlinearConstraints, NonlinearInequalityConstraints,
+    BoundSide, BoxBounds, Constrained, ConstraintAxis, ConstraintBlock,
+    ConstraintDescription, ConstraintError, ConstraintJacobian,
+    ConstraintSolveError, Constraints, LinearBlock, LinearBlocks, NoBounds,
+    NoConstraints, NoLinearBlock, NoLinearConstraints, NoNonlinearBlock,
+    NoNonlinearConstraints, NonlinearBlock, NonlinearBlocks,
+    NonlinearEqualityValues, NonlinearInequalityValues, ProblemConstraints,
+    RelaxedInner, SamplingBounds, SamplingDomain,
 };
 pub use crate::core::convergence::{
     ConfiguredSolver, NativeConvergenceDiagnostics, NativeConvergenceTest,
@@ -357,12 +366,12 @@ pub use crate::core::math::{
     AddDiagonalVectorInPlace, ClampInPlace, ComponentMulAssign, DenseBackend,
     DenseMatrix, DenseMatrixFromFn, Dot, FactorizePivotedQr,
     GeneralRankOneUpdate, GramMatrix, LinearSolveError, LinearSolveLstsq,
-    LinearSolveSpd, MatTransposeVec, MatVec, MatrixFromDiagonal,
-    MatrixIdentity, MatrixIndex, MaxDiagonal, NegInPlace, NormInfinity,
-    NormSquared, QrFactorization, QrSolveError, RegularizedQrSolve,
-    SampleStandardNormal, SampleUniformBox, Scalar, ScaleInPlace,
-    ScaleRowsInPlace, ScaledAdd, SymmetricEigen, SymmetricEigenError,
-    VectorIndex, VectorLen,
+    LinearSolveSpd, MatTransposeVec, MatTransposeVecInto, MatVec, MatVecInto,
+    MatrixFinite, MatrixFromDiagonal, MatrixIdentity, MatrixIndex, MatrixShape,
+    MaxDiagonal, NegInPlace, NormInfinity, NormSquared, QrFactorization,
+    QrSolveError, RegularizedQrSolve, SampleStandardNormal, SampleUniformBox,
+    Scalar, ScaleInPlace, ScaleRowsInPlace, ScaledAdd, SymmetricEigen,
+    SymmetricEigenError, VectorIndex, VectorLen,
 };
 pub use crate::core::numdiff::{
     BoundedFiniteDiff, DerivativeCheckError, DerivativeCheckReport,

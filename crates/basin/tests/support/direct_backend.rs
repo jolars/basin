@@ -1,7 +1,7 @@
 use basin::core::parallel::{MaybeSend, MaybeSync};
 use basin::{
-    BoxConstraints, CostFunction, Direct, Executor, PointState, Scalar, State,
-    TerminationCode, VectorIndex, VectorLen,
+    CostFunction, Direct, Executor, PointState, Scalar, State, TerminationCode,
+    VectorIndex, VectorLen,
 };
 use std::convert::Infallible;
 
@@ -11,6 +11,19 @@ struct Quadratic<V, F> {
     target: Vec<F>,
 }
 
+impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints
+    for Quadratic<V, F>
+{
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V: VectorIndex<F>, F: Scalar> CostFunction for Quadratic<V, F> {
     type Param = V;
     type Output = F;
@@ -31,19 +44,14 @@ impl<V: VectorIndex<F>, F: Scalar> CostFunction for Quadratic<V, F> {
     }
 }
 
-impl<V: VectorIndex<F>, F: Scalar> BoxConstraints for Quadratic<V, F> {
-    fn lower(&self) -> &V {
-        &self.lower
-    }
-    fn upper(&self) -> &V {
-        &self.upper
-    }
-}
-
 pub fn check<V, F>(make: fn(&[F]) -> V)
 where
     F: Scalar + MaybeSend + MaybeSync,
-    V: Clone + VectorIndex<F> + VectorLen + MaybeSync,
+    V: std::ops::Index<usize, Output = F>
+        + Clone
+        + VectorIndex<F>
+        + VectorLen
+        + MaybeSync,
 {
     let num = |v| F::from_f64(v).unwrap();
     for (lower, upper, target) in [

@@ -17,11 +17,10 @@ fn ndarray_0_17_norm() {
 macro_rules! dense_checks {
     ($vector:ty, $matrix:ty, $scalar:ty, $make:expr) => {{
         use basin::{
-            Bfgs, BoxConstraints, CostFunction, Executor, FactorizePivotedQr,
+            Bfgs, CostFunction, Executor, FactorizePivotedQr,
             FirstOrderState, Gradient, Lbfgs, LinearSolveSpd, MatVec,
             MatrixIdentity, NormSquared, RegularizedQrSolve, ScaleInPlace,
-            State,
-        };
+            State};
         use std::convert::Infallible;
         type V = $vector;
         type M = $matrix;
@@ -46,6 +45,14 @@ macro_rules! dense_checks {
             a: M,
             b: V,
         }
+
+        impl basin::ProblemConstraints for Quadratic {
+            type Constraints = basin::NoConstraints;
+            fn constraint_set(&self) -> basin::NoConstraints {
+                basin::NoConstraints::EMPTY
+            }
+        }
+
         impl CostFunction for Quadratic {
             type Param = V;
             type Output = F;
@@ -90,66 +97,42 @@ macro_rules! dense_checks {
                 self.gradient(v)
             }
         }
-        impl BoxConstraints for Quadratic {
-            fn lower(&self) -> &V {
-                &self.lower
-            }
-            fn upper(&self) -> &V {
-                &self.upper
-            }
-        }
-        impl basin::LinearEqualityConstraints for Quadratic {
-            type Matrix = M;
-            fn a(&self) -> &M {
-                &self.a
-            }
-            fn b(&self) -> &V {
-                &self.b
-            }
-        }
-        impl basin::LinearInequalityConstraints for Quadratic {
-            type Matrix = M;
-            fn a(&self) -> &M {
-                &self.a
-            }
-            fn b(&self) -> &V {
-                &self.b
-            }
-        }
-        impl basin::LinearConstraints for Quadratic {
-            type Matrix = M;
-            fn inequalities(&self) -> Option<(&M, &V)> {
-                Some((&self.a, &self.b))
-            }
-        }
-        impl basin::NonlinearInequalityConstraints for Quadratic {
-            fn num_constraints(&self) -> usize {
-                2
-            }
-            fn constraints(&self, x: &V) -> Result<V, Infallible> {
+
+
+
+
+
+impl Quadratic  {
+
+            /// Access this problem's constraints.
+            pub fn constraints(&self, x: &V) -> Result<V, Infallible> {
                 let mut constraints = x.clone();
                 constraints[0] = 1.0 - x[0];
                 constraints[1] = -1.0;
                 Ok(constraints)
             }
         }
-        impl basin::NonlinearConstraints for Quadratic {
-            type Matrix = M;
-            fn num_nonlinear_constraints(&self) -> usize {
-                2
-            }
-            fn nonlinear_constraints(&self, x: &V) -> Result<V, Infallible> {
-                basin::NonlinearInequalityConstraints::constraints(self, x)
-            }
-            fn lower(&self) -> Option<&V> {
-                Some(&self.lower)
-            }
-            fn upper(&self) -> Option<&V> {
-                Some(&self.upper)
+        impl basin::NonlinearInequalityValues for Quadratic {
+            type Param = V;
+            type Values = V;
+            type Error = Infallible;
+            fn nonlinear_inequalities(
+                &self,
+                x: &Self::Param,
+            ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+                self.constraints(x)
+                    .map_err(basin::ConstraintSolveError::Evaluation)
             }
         }
+
         impl basin::ConstraintJacobian for Quadratic {
-            fn constraint_jacobian(&self, x: &V) -> Result<M, Infallible> {
+            type Param = V;
+            type Jacobian = M;
+            type Error = Infallible;
+            fn constraint_jacobian(
+                &self,
+                x: &Self::Param,
+            ) -> Result<Self::Jacobian, basin::ConstraintSolveError<Self::Error>> {
                 let mut diagonal = x.clone();
                 diagonal[0] = -1.0;
                 diagonal[1] = 0.0;
@@ -158,15 +141,21 @@ macro_rules! dense_checks {
                 ))
             }
         }
+
         let problem = || Quadratic {
             lower: make(&[-5.0, -5.0]),
             upper: make(&[5.0, 5.0]),
             a: <M as MatrixIdentity>::identity(2),
             b: make(&[1.0, 1.0]),
         };
+        let boxed = |p:Quadratic| {let bounds=basin::BoxBounds::new(Some(p.lower.clone()),Some(p.upper.clone()));basin::Constrained::new(p,basin::Constraints::new().with_bounds(bounds))};
+        let nonlinear = |p:Quadratic| basin::Constrained::new(p,basin::Constraints::new().with_nonlinear_inequalities(2));
+        let full = |p:Quadratic| {let bounds=basin::BoxBounds::new(Some(p.lower.clone()),Some(p.upper.clone()));basin::Constrained::new(p,basin::Constraints::new().with_bounds(bounds).with_nonlinear_inequalities(2))};
+        let linear_eq = |p:Quadratic| {let block=basin::LinearBlock::new(p.a.clone(),p.b.clone());basin::Constrained::new(p,basin::Constraints::new().with_linear_equalities(block))};
+        let linear_ineq = |p:Quadratic| {let block=basin::LinearBlock::new(p.a.clone(),p.b.clone());basin::Constrained::new(p,basin::Constraints::new().with_linear_inequalities(block))};
         macro_rules! powell_run {
-            ($solver:expr, $seed:expr) => {{
-                let result = Executor::from_start(problem(), $solver, $seed)
+            ($problem:expr, $solver:expr, $seed:expr) => {{
+                let result = Executor::from_start($problem, $solver, $seed)
                     .require_evaluated_state()
                     .max_iter(200)
                     .run_with_solver()
@@ -184,15 +173,15 @@ macro_rules! dense_checks {
             }};
         }
         powell_run!(
-            basin::Newuoa::new().with_final_radius(F::EPSILON.sqrt()),
+            problem(), basin::Newuoa::new().with_final_radius(F::EPSILON.sqrt()),
             x.clone()
         );
         powell_run!(
-            basin::Bobyqa::new().with_final_radius(F::EPSILON.sqrt()),
+            boxed(problem()), basin::Bobyqa::new().with_final_radius(F::EPSILON.sqrt()),
             x.clone()
         );
         powell_run!(
-            basin::Lincoa::new().with_final_radius(F::EPSILON.sqrt()),
+            linear_ineq(problem()), basin::Lincoa::new().with_final_radius(F::EPSILON.sqrt()),
             make(&[0.5, 0.5])
         );
         macro_rules! cobyla_run {
@@ -220,12 +209,12 @@ macro_rules! dense_checks {
                 assert!(result.solver.rho().unwrap() <= F::EPSILON.sqrt());
             }};
         }
-        cobyla_run!(problem(), 1);
-        cobyla_run!(basin::FoldedConstraints::new(problem()), 2);
+        cobyla_run!(nonlinear(problem()), 1);
+        cobyla_run!(full(problem()), 1);
         macro_rules! mads_run {
-            ($solver:expr, $target:expr, $blocks:expr) => {{
+            ($problem:expr, $solver:expr, $target:expr, $blocks:expr) => {{
                 let result = Executor::from_start(
-                    problem(),
+                    $problem,
                     $solver.with_minimum_poll_size(F::EPSILON.sqrt()),
                     make(&[0.5, 0.5]),
                 )
@@ -253,11 +242,11 @@ macro_rules! dense_checks {
                 assert!(result.solver.mesh_index().unwrap() > 0);
             }};
         }
-        mads_run!(basin::Mads::new(), 0.0, 0);
-        mads_run!(basin::Mads::new().bounded(), 0.0, 0);
-        mads_run!(basin::Mads::new().constrained(), 1.0, 1);
+        mads_run!(problem(),basin::Mads::new(), 0.0, 0);
+        mads_run!(boxed(problem()),basin::Mads::new().bounded(), 0.0, 0);
+        mads_run!(nonlinear(problem()),basin::Mads::new().constrained(), 1.0, 1);
         let slsqp = Executor::from_start(
-            problem(),
+            full(problem()),
             basin::Slsqp::new()
                 .with_absolute_accuracy_tolerance(F::EPSILON.sqrt()),
             make(&[0.0, 0.5]),
@@ -281,9 +270,9 @@ macro_rules! dense_checks {
         assert!(slsqp.counts.residual_evals > 0);
         assert!(slsqp.counts.jacobian_evals > 0);
         macro_rules! cma_run {
-            ($solver:expr, $bounded:expr) => {{
+            ($solver:expr, $bounded:expr, $problem:expr) => {{
                 let result = Executor::new(
-                    problem(),
+                    $problem,
                     $solver,
                     basin::PopulationProgress::from_point(make(&[0.4, -0.4])),
                 )
@@ -316,12 +305,12 @@ macro_rules! dense_checks {
             basin::CmaEs::<V, M, F>::new(91, 0.7)
                 .with_lambda(6)
                 .with_stds(make(&[1.0, 0.3])),
-            false
+            false, problem()
         );
         assert_eq!(cma.counts.cost_evals, 36 * 7);
         let bounded_cma = cma_run!(
             basin::BoundedCmaEs::<V, M, F>::new(91, 0.7).with_lambda(6),
-            true
+            true, boxed(problem())
         );
         assert_eq!(bounded_cma.counts.cost_evals, 36 * 7);
         cma_run!(
@@ -330,7 +319,7 @@ macro_rules! dense_checks {
                 basin::NelderMead::adaptive()
             )
             .with_inner_max_iter(3),
-            false
+            false, problem()
         );
         let injected_cma = cma_run!(
             basin::BoundedCmaInject::with_inner_solver(
@@ -338,13 +327,13 @@ macro_rules! dense_checks {
                 basin::Lbfgsb::new()
             )
             .with_inner_max_iter(3),
-            true
+            true, boxed(problem())
         );
         assert!(injected_cma.counts.gradient_evals > 0);
         macro_rules! chain_run {
             ($solver:expr) => {{
                 let result = Executor::new(
-                    problem(),
+                    basin::SamplingDomain::new(boxed(problem())),
                     $solver
                         .with_pop_size(4)
                         .with_nfrec(2)
@@ -370,7 +359,7 @@ macro_rules! dense_checks {
         macro_rules! population_run {
             ($solver:expr) => {{
                 let result = Executor::new(
-                    problem(),
+                    boxed(problem()),
                     $solver,
                     basin::PopulationProgress::from_population(vec![
                         make(&[3.0, 4.0]),
@@ -416,7 +405,7 @@ macro_rules! dense_checks {
         assert!(injected.counts.gradient_evals > 0);
         assert_eq!(injected.state.cost_evals(), injected.counts.cost_evals);
         let swarm = Executor::new(
-            problem(),
+            boxed(problem()),
             basin::GlobalBestPso::new(73).with_swarm_size(16),
             basin::PopulationProgress::empty(),
         )
@@ -444,7 +433,7 @@ macro_rules! dense_checks {
             );
         }
         let gbnm =
-            Executor::from_start(problem(), basin::Gbnm::new(73), x.clone())
+            Executor::from_start(boxed(problem()), basin::Gbnm::new(73), x.clone())
                 .require_evaluated_state()
                 .max_iter(200)
                 .run_with_solver()
@@ -477,7 +466,7 @@ macro_rules! dense_checks {
             NormSquared::norm_squared(simplex.state.current().unwrap().0)
         );
         let projected_simplex = Executor::from_start(
-            problem(),
+            boxed(problem()),
             basin::NelderMead::new().projected(),
             x.clone(),
         )
@@ -509,7 +498,7 @@ macro_rules! dense_checks {
         .unwrap();
         assert!(seeded.cost() < 128.0 * F::EPSILON);
         let lbfgs = Executor::new(
-            problem(),
+            boxed(problem()),
             Lbfgs::<_, F>::with_line_search(basin::MoreThuente::<F>::new())
                 .with_m_capacity(5),
             FirstOrderState::new(x.clone()),
@@ -553,7 +542,7 @@ macro_rules! dense_checks {
         assert_eq!(hopping.state.counts().cost_evals, 104);
         assert_eq!(hopping.state.counts().gradient_evals, 104);
         let constrained = Executor::from_start(
-            problem(),
+            linear_eq(problem()),
             basin::AugmentedLagrangianMethod::with_inner_solver(
                 basin::GradientDescent::new(0.05),
             )
@@ -583,7 +572,7 @@ macro_rules! dense_checks {
             let start = make(&[0.0, 3.0]);
             let code = if barrier_mode {
                 Executor::from_start(
-                    probe,
+                    linear_ineq(probe),
                     basin::BarrierMethod::with_inner_solver(
                         basin::GradientDescent::new(0.0 as F),
                     )
@@ -597,7 +586,7 @@ macro_rules! dense_checks {
                 .code()
             } else {
                 Executor::from_start(
-                    probe,
+                    linear_eq(probe),
                     basin::AugmentedLagrangianMethod::with_inner_solver(
                         basin::GradientDescent::new(0.0 as F),
                     )
@@ -616,7 +605,7 @@ macro_rules! dense_checks {
         fixed_problem.lower = make(&[1.0, 2.0]);
         fixed_problem.upper = fixed_problem.lower.clone();
         let fixed = Executor::from_start(
-            fixed_problem,
+            boxed(fixed_problem),
             basin::Gbnm::new(42),
             x.clone(),
         )
@@ -631,7 +620,7 @@ macro_rules! dense_checks {
         assert_eq!(fixed.state.iter(), 0);
         for start in [make(&[0.0, 0.0]), x.clone()] {
             let barrier = Executor::from_start(
-                problem(),
+                linear_ineq(problem()),
                 basin::BarrierMethod::with_inner_solver(
                     basin::GradientDescent::with_line_search(
                         basin::Backtracking::<F>::new(),
@@ -699,7 +688,7 @@ macro_rules! dense_checks {
         .unwrap();
         assert!(random_walk.cost() < 1e-4);
         let projected = Executor::from_start(
-            problem(),
+            boxed(problem()),
             basin::ProjectedGradientDescent::new(0.25),
             x.clone(),
         )
@@ -771,8 +760,8 @@ macro_rules! corpus_checks {
     ($vector:ty, $matrix:ty, $make:expr) => {{
         use basin::problems::*;
         use basin::{
-            BoxConstraints, CostFunction, Gradient, Jacobian,
-            LinearEqualityConstraints, MatrixIdentity, NormSquared, Residual,
+            CostFunction, Gradient, Jacobian, MatrixIdentity, NormSquared,
+            Residual,
         };
         type V = $vector;
         type M = $matrix;
@@ -882,10 +871,7 @@ macro_rules! sparse_problem_checks {
     (f32, $a:expr, $make:expr) => {};
     (f64, $a:expr, $make:expr) => {{
         use basin::problems::{SparseLeastSquares, SparseLeastSquaresBoxed};
-        use basin::{
-            BoxConstraints, Executor, GaussNewton, Jacobian, PointState,
-            Residual,
-        };
+        use basin::{Executor, GaussNewton, Jacobian, PointState, Residual};
         let a = $a;
         let make = $make;
         let target = make(&[1.0, 2.0]);

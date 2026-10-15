@@ -7,7 +7,7 @@ use super::least_squares_diagnostics::{
 mod accounting;
 mod step;
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::convergence::{
     NativeConvergenceDiagnostics, NativeConvergenceTest,
 };
@@ -61,7 +61,7 @@ use step::{Model, interior, number, update_radius};
 ///
 /// # Bounds and failure behavior
 ///
-/// Supply [`Residual`], [`Jacobian`], and [`BoxConstraints`]. The solver never
+/// Supply [`Residual`], [`Jacobian`], and [`BoxBounds`](crate::BoxBounds). The solver never
 /// calls the raw problem's `CostFunction::cost`; state cost is `½‖r‖²` for an
 /// ordinary residual problem, or the chosen robust objective. Use
 /// [`crate::BoundedFiniteDiff`] when numerical Jacobians must respect bounds.
@@ -137,10 +137,14 @@ use step::{Model, interior, number, update_radius};
 /// # Examples
 ///
 /// ```
-/// use basin::{BoxConstraints, CostFunction, DenseMatrix, Executor, Jacobian,
+/// use basin::{CostFunction, DenseMatrix, Executor, Jacobian,
 ///     Residual, TrustRegionReflective};
 /// use std::convert::Infallible;
 /// struct Fit { lower: Vec<f64>, upper: Vec<f64> }
+/// impl basin::ProblemConstraints for Fit  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// }
 /// impl CostFunction for Fit {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -163,10 +167,7 @@ use step::{Model, interior, number, update_radius};
 ///         Ok(DenseMatrix::from_row_slice(1, 1, &[1.0]))
 ///     }
 /// }
-/// impl BoxConstraints for Fit {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
-/// }
+///
 /// let problem = Fit { lower: vec![0.0], upper: vec![1.0] };
 /// let result = Executor::from_start(problem, TrustRegionReflective::new(),
 ///     vec![0.5]).max_iter(100).run().unwrap();
@@ -404,11 +405,11 @@ impl<F: Scalar> Work<F> {
 impl<P, V, F> Solver<P, PointState<V, F>> for TrustRegionReflective<F>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian + BoxConstraints<Param = V>,
+    P: Residual<Param = V, Output = V> + Jacobian + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
 {
-    type Error = <P as Residual>::Error;
+    type Error = crate::ConstraintSolveError<<P as Residual>::Error>;
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
         if let Some(trace) = &mut self.trace {
@@ -427,7 +428,14 @@ where
         problem: &mut Problem<P>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_coordinate_box_problem(
+            problem.inner(),
+            state.param().vec_len(),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
@@ -435,6 +443,7 @@ where
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
         self.terminate_evaluated(state)
@@ -445,13 +454,16 @@ impl<P, L, V, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
     for TrustRegionReflective<F>
 where
     F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian + BoxConstraints<Param = V>,
+    P: crate::ProblemConstraints<
+            Constraints = crate::Constraints<crate::BoxBounds<V>>,
+        >,
+    P: Residual<Param = V, Output = V> + Jacobian + BoxProblem<Param = V>,
     P::Jacobian: MatrixIndex<F>,
     V: Clone + VectorLen + VectorIndex<F>,
     L: LossFunction<F>,
     P::Jacobian: ScaleRowsInPlace<F>,
 {
-    type Error = <P as Residual>::Error;
+    type Error = crate::ConstraintSolveError<<P as Residual>::Error>;
     fn reset_convergence(&mut self) {
         self.native_convergence.clear();
         if let Some(trace) = &mut self.trace {
@@ -470,7 +482,14 @@ where
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
         state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_coordinate_box_problem(
+            problem.inner(),
+            state.param().vec_len(),
+            false,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
@@ -478,6 +497,7 @@ where
         state: PointState<V, F>,
     ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
         self.terminate_evaluated(state)

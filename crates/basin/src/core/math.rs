@@ -317,9 +317,10 @@ pub use dense_qr::QrFactorization;
 pub use linalg::{
     AddDiagonalVectorInPlace, DenseBackend, DenseMatrixFromFn,
     FactorizePivotedQr, GeneralRankOneUpdate, GramMatrix, LinearSolveError,
-    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatVec,
-    MatrixFromDiagonal, MatrixIdentity, MatrixIndex, MaxDiagonal, QrSolveError,
-    RegularizedQrSolve, ScaleRowsInPlace, SymmetricEigen, SymmetricEigenError,
+    LinearSolveLstsq, LinearSolveSpd, MatTransposeVec, MatTransposeVecInto,
+    MatVec, MatVecInto, MatrixFinite, MatrixFromDiagonal, MatrixIdentity,
+    MatrixIndex, MatrixShape, MaxDiagonal, QrSolveError, RegularizedQrSolve,
+    ScaleRowsInPlace, SymmetricEigen, SymmetricEigenError,
 };
 pub use sample::{SampleStandardNormal, SampleUniformBox};
 

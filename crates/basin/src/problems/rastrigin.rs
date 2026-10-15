@@ -27,7 +27,7 @@ use core::marker::PhantomData;
 use super::spec::{
     Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
 };
-use crate::{BoxConstraints, CostFunction};
+use crate::CostFunction;
 
 /// Rastrigin amplitude constant. Fixed at 10 by Mühlenbein et al.
 /// (1991); essentially every paper that benchmarks on Rastrigin uses
@@ -120,6 +120,14 @@ impl<P> HasSpec for Rastrigin<P> {
     const SPEC: &'static ProblemSpec = &RASTRIGIN_SPEC;
 }
 
+impl crate::ProblemConstraints for Rastrigin<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for Rastrigin<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -136,7 +144,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl CostFunction for Rastrigin<DVector<f64>> {
+    impl crate::ProblemConstraints for Rastrigin<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Rastrigin<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -156,7 +168,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl CostFunction for Rastrigin<Array1<f64>> {
+    impl crate::ProblemConstraints for Rastrigin<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Rastrigin<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -179,7 +195,11 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs
     // we care about, so we evaluate elementwise here rather than routing
     // through the slice-based primitive.
-    impl CostFunction for Rastrigin<Col<f64>> {
+    impl crate::ProblemConstraints for Rastrigin<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Rastrigin<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -198,13 +218,13 @@ crate::backend_macros::faer_versions! {
 
 // Boxed (constrained) form
 // Carries element-wise bounds on the struct so it can implement
-// `BoxConstraints` for solvers that require explicit box constraints
+// `BoxBounds` for solvers that require explicit box constraints
 // (CMA-ES variants, projected methods). The standard `[−5.12, 5.12]ⁿ`
 // search domain is the most common choice; `with_standard_bounds(n)`
 // is a shortcut for that case.
 
 /// Rastrigin function with explicit element-wise box bounds, suitable
-/// for solvers that require [`BoxConstraints`] (e.g. CMA-ES variants
+/// for solvers that require [`BoxBounds`](crate::BoxBounds) (e.g. CMA-ES variants
 /// like MA-LSCh-CMA). Carries the bounds as data on the problem (tenet
 /// 4 in `crate::core` and `CONTRIBUTING.md`) and routes the cost through the
 /// same raw [`rastrigin`] free function as the unconstrained
@@ -241,6 +261,17 @@ impl RastriginBoxed<Vec<f64>> {
     }
 }
 
+impl crate::ProblemConstraints for RastriginBoxed<Vec<f64>> {
+    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for RastriginBoxed<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -250,11 +281,13 @@ impl CostFunction for RastriginBoxed<Vec<f64>> {
     }
 }
 
-impl BoxConstraints for RastriginBoxed<Vec<f64>> {
-    fn lower(&self) -> &Vec<f64> {
+impl RastriginBoxed<Vec<f64>> {
+    /// Return the lower bound vector.
+    pub fn lower(&self) -> &Vec<f64> {
         &self.lower
     }
-    fn upper(&self) -> &Vec<f64> {
+    /// Return the upper bound vector.
+    pub fn upper(&self) -> &Vec<f64> {
         &self.upper
     }
 }
@@ -263,7 +296,7 @@ impl BoxConstraints for RastriginBoxed<Vec<f64>> {
 crate::backend_macros::nalgebra_versions! {
     nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{RastriginBoxed, STANDARD_LOWER, STANDARD_UPPER, rastrigin};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use nalgebra::DVector;
 
     impl RastriginBoxed<DVector<f64>> {
@@ -277,7 +310,11 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl CostFunction for RastriginBoxed<DVector<f64>> {
+    impl crate::ProblemConstraints for RastriginBoxed<DVector<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for RastriginBoxed<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -289,11 +326,13 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl BoxConstraints for RastriginBoxed<DVector<f64>> {
-        fn lower(&self) -> &DVector<f64> {
+    impl RastriginBoxed<DVector<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &DVector<f64> {
             &self.lower
         }
-        fn upper(&self) -> &DVector<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &DVector<f64> {
             &self.upper
         }
     }
@@ -303,7 +342,7 @@ crate::backend_macros::nalgebra_versions! {
 crate::backend_macros::ndarray_versions! {
     ndarray_boxed_impl(ndarray);
     use super::{RastriginBoxed, STANDARD_LOWER, STANDARD_UPPER, rastrigin};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use ndarray::Array1;
 
     impl RastriginBoxed<Array1<f64>> {
@@ -317,7 +356,11 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl CostFunction for RastriginBoxed<Array1<f64>> {
+    impl crate::ProblemConstraints for RastriginBoxed<Array1<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for RastriginBoxed<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -329,11 +372,13 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl BoxConstraints for RastriginBoxed<Array1<f64>> {
-        fn lower(&self) -> &Array1<f64> {
+    impl RastriginBoxed<Array1<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Array1<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Array1<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Array1<f64> {
             &self.upper
         }
     }
@@ -343,7 +388,7 @@ crate::backend_macros::ndarray_versions! {
 crate::backend_macros::faer_versions! {
     faer_boxed_impl(faer, faer_traits);
     use super::{A, RastriginBoxed, STANDARD_LOWER, STANDARD_UPPER};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use faer::Col;
 
     impl RastriginBoxed<Col<f64>> {
@@ -357,7 +402,11 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl CostFunction for RastriginBoxed<Col<f64>> {
+    impl crate::ProblemConstraints for RastriginBoxed<Col<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for RastriginBoxed<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -373,11 +422,13 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl BoxConstraints for RastriginBoxed<Col<f64>> {
-        fn lower(&self) -> &Col<f64> {
+    impl RastriginBoxed<Col<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Col<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Col<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Col<f64> {
             &self.upper
         }
     }
@@ -449,8 +500,8 @@ mod tests {
     #[test]
     fn boxed_form_exposes_standard_bounds() {
         let p = RastriginBoxed::<Vec<f64>>::with_standard_bounds(10);
-        let lo = <RastriginBoxed<Vec<f64>> as BoxConstraints>::lower(&p);
-        let hi = <RastriginBoxed<Vec<f64>> as BoxConstraints>::upper(&p);
+        let lo = p.lower();
+        let hi = p.upper();
         assert_eq!(lo.len(), 10);
         assert_eq!(hi.len(), 10);
         for &v in lo {

@@ -4,10 +4,9 @@ use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 
 use basin::{
-    BasinHopping, BoxConstraints, CmaEs, CostFunction, De, DenseMatrix,
-    ExactCheckpoint, ExactCheckpointWriter, Executor, NelderMead, ObserverMode,
-    PointState, PopulationProgress, SimplexProgress, Ssga, State,
-    read_exact_checkpoint,
+    BasinHopping, CmaEs, CostFunction, De, DenseMatrix, ExactCheckpoint,
+    ExactCheckpointWriter, Executor, NelderMead, ObserverMode, PointState,
+    PopulationProgress, SimplexProgress, Ssga, State, read_exact_checkpoint,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -27,6 +26,17 @@ impl Landscape {
     }
 }
 
+impl basin::ProblemConstraints for Landscape {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Landscape {
     type Param = Vec<f64>;
     type Output = f64;
@@ -37,16 +47,6 @@ impl CostFunction for Landscape {
             .map(|xi| xi * xi - 10.0 * (std::f64::consts::TAU * xi).cos())
             .sum::<f64>()
             + 10.0 * x.len() as f64)
-    }
-}
-
-impl BoxConstraints for Landscape {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -252,37 +252,46 @@ fn cma_es_resume_is_bit_identical() {
     let make_state = || -> TestState {
         PopulationProgress::from_point(vec![2.5, -1.5, 0.75])
     };
-    let reference =
-        Executor::new(Landscape::new(3), make_solver(), make_state())
-            .max_iter(22)
-            .checkpoint_with(
-                ExactCheckpointWriter::new(&reference_path),
-                ObserverMode::Never,
-            )
-            .run()
-            .unwrap();
+    let reference = Executor::new(
+        basin::SamplingDomain::new(Landscape::new(3)),
+        make_solver(),
+        make_state(),
+    )
+    .max_iter(22)
+    .checkpoint_with(
+        ExactCheckpointWriter::new(&reference_path),
+        ObserverMode::Never,
+    )
+    .run()
+    .unwrap();
 
-    Executor::new(Landscape::new(3), make_solver(), make_state())
-        .max_iter(8)
-        .checkpoint_with(
-            ExactCheckpointWriter::new(&split_path),
-            ObserverMode::Never,
-        )
-        .run()
-        .unwrap();
+    Executor::new(
+        basin::SamplingDomain::new(Landscape::new(3)),
+        make_solver(),
+        make_state(),
+    )
+    .max_iter(8)
+    .checkpoint_with(
+        ExactCheckpointWriter::new(&split_path),
+        ObserverMode::Never,
+    )
+    .run()
+    .unwrap();
     let checkpoint: ExactCheckpoint<TestSolver, TestState> =
         read_exact_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 8);
 
-    let resumed =
-        Executor::resume_from_checkpoint(Landscape::new(3), checkpoint)
-            .max_iter(22)
-            .checkpoint_with(
-                ExactCheckpointWriter::new(&resumed_path),
-                ObserverMode::Never,
-            )
-            .run()
-            .unwrap();
+    let resumed = Executor::resume_from_checkpoint(
+        basin::SamplingDomain::new(Landscape::new(3)),
+        checkpoint,
+    )
+    .max_iter(22)
+    .checkpoint_with(
+        ExactCheckpointWriter::new(&resumed_path),
+        ObserverMode::Never,
+    )
+    .run()
+    .unwrap();
 
     assert_identical_finish(
         &reference.state,
@@ -315,7 +324,7 @@ fn basin_hopping_resume_is_bit_identical() {
             .with_adaptive_interval(3)
     };
     let reference = Executor::new(
-        Landscape::new(2),
+        basin::SamplingDomain::new(Landscape::new(2)),
         make_solver(),
         PointState::new(vec![3.1, -2.7]),
     )
@@ -328,7 +337,7 @@ fn basin_hopping_resume_is_bit_identical() {
     .unwrap();
 
     Executor::new(
-        Landscape::new(2),
+        basin::SamplingDomain::new(Landscape::new(2)),
         make_solver(),
         PointState::new(vec![3.1, -2.7]),
     )
@@ -343,15 +352,17 @@ fn basin_hopping_resume_is_bit_identical() {
         read_exact_checkpoint(&split_path).unwrap();
     assert_eq!(checkpoint.state().iter(), 7);
 
-    let resumed =
-        Executor::resume_from_checkpoint(Landscape::new(2), checkpoint)
-            .max_iter(18)
-            .checkpoint_with(
-                ExactCheckpointWriter::new(&resumed_path),
-                ObserverMode::Never,
-            )
-            .run()
-            .unwrap();
+    let resumed = Executor::resume_from_checkpoint(
+        basin::SamplingDomain::new(Landscape::new(2)),
+        checkpoint,
+    )
+    .max_iter(18)
+    .checkpoint_with(
+        ExactCheckpointWriter::new(&resumed_path),
+        ObserverMode::Never,
+    )
+    .run()
+    .unwrap();
 
     assert_identical_finish(
         &reference.state,
@@ -374,11 +385,15 @@ fn basin_hopping_checkpoint_rejects_inner_closures() {
         .with_inner_max_iter(12)
         .inner_stop_when_factory(|| |_| None);
 
-    Executor::new(Landscape::new(2), solver, PointState::new(vec![2.0, -2.0]))
-        .max_iter(2)
-        .checkpoint_with(writer, ObserverMode::Never)
-        .run()
-        .unwrap();
+    Executor::new(
+        basin::SamplingDomain::new(Landscape::new(2)),
+        solver,
+        PointState::new(vec![2.0, -2.0]),
+    )
+    .max_iter(2)
+    .checkpoint_with(writer, ObserverMode::Never)
+    .run()
+    .unwrap();
 
     assert_eq!(status.last_successful_iter(), None);
     assert_eq!(status.failure_count(), 1);

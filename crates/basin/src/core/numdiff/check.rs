@@ -14,6 +14,7 @@
 //! See also SciPy's [`check_grad`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.check_grad.html).
 
 use super::{Method, bounded};
+use crate::core::math::MatrixShape;
 use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
 use crate::core::parallel::{MaybeSend, MaybeSync};
 use crate::core::problem::{Gradient, Jacobian};
@@ -198,6 +199,10 @@ impl<F: Scalar> DerivativeCheckReport<F> {
 /// ```
 /// use basin::{CostFunction, DerivativeChecker, Gradient};
 /// struct Square;
+/// impl basin::ProblemConstraints for Square  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Square {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;

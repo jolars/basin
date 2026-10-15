@@ -5,7 +5,7 @@ use std::convert::Infallible;
 use basin::core::numdiff::Method;
 use basin::solver::lbfgs::AsFloatSliceMut;
 use basin::{
-    BoundedFiniteDiff, BoxConstraints, CostFunction, Dot, Executor, FiniteDiff,
+    BoundedFiniteDiff, CostFunction, Dot, Executor, FiniteDiff,
     FirstOrderState, Gradient, Lbfgs, Scalar, ScaledAdd, Termination,
     VectorIndex, VectorLen,
 };
@@ -16,6 +16,19 @@ struct Quadratic<V, F: Scalar = f64> {
     multiplier: F,
 }
 
+impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints
+    for Quadratic<V, F>
+{
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V: VectorIndex<F>, F: Scalar> CostFunction for Quadratic<V, F> {
     type Param = V;
     type Output = F;
@@ -25,15 +38,6 @@ impl<V: VectorIndex<F>, F: Scalar> CostFunction for Quadratic<V, F> {
         let a = x.get_scalar(0) - F::one();
         let b = x.get_scalar(1) + F::from_f64(2.0).unwrap();
         Ok(self.multiplier * F::from_f64(0.5).unwrap() * (a * a + b * b))
-    }
-}
-
-impl<V: VectorIndex<F>, F: Scalar> BoxConstraints for Quadratic<V, F> {
-    fn lower(&self) -> &V {
-        &self.lower
-    }
-    fn upper(&self) -> &V {
-        &self.upper
     }
 }
 
@@ -95,6 +99,7 @@ fn check<V, F>(make: fn(&[F]) -> V)
 where
     F: Scalar + Send + Sync,
     V: Clone
+        + std::ops::Index<usize, Output = F>
         + VectorIndex<F>
         + VectorLen
         + AsFloatSliceMut<F>

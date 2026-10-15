@@ -65,6 +65,14 @@ impl ArgminProblem {
     }
 }
 
+impl basin::ProblemConstraints for ArgminProblem {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for ArgminProblem {
     type Param = Vec<f64>;
     type Output = f64;
@@ -258,6 +266,14 @@ impl<V> VarDim<V> {
     }
 }
 
+impl basin::ProblemConstraints for VarDim<DVector<f64>> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for VarDim<DVector<f64>> {
     type Param = DVector<f64>;
     type Output = DVector<f64>;
@@ -284,6 +300,15 @@ impl Jacobian for VarDim<DVector<f64>> {
     }
 }
 
+#[cfg(feature = "basin-latest")]
+impl basin::ProblemConstraints for VarDim<nalgebra_latest::DVector<f64>> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 #[cfg(feature = "basin-latest")]
 impl Residual for VarDim<nalgebra_latest::DVector<f64>> {
     type Param = nalgebra_latest::DVector<f64>;
@@ -318,6 +343,14 @@ impl Jacobian for VarDim<nalgebra_latest::DVector<f64>> {
     }
 }
 
+impl basin::ProblemConstraints for VarDim<Col<f64>> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for VarDim<Col<f64>> {
     type Param = Col<f64>;
     type Output = Col<f64>;
@@ -485,6 +518,14 @@ impl<V> UnderDet<V> {
     }
 }
 
+impl basin::ProblemConstraints for UnderDet<DVector<f64>> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for UnderDet<DVector<f64>> {
     type Param = DVector<f64>;
     type Output = DVector<f64>;
@@ -511,6 +552,15 @@ impl Jacobian for UnderDet<DVector<f64>> {
     }
 }
 
+#[cfg(feature = "basin-latest")]
+impl basin::ProblemConstraints for UnderDet<nalgebra_latest::DVector<f64>> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 #[cfg(feature = "basin-latest")]
 impl Residual for UnderDet<nalgebra_latest::DVector<f64>> {
     type Param = nalgebra_latest::DVector<f64>;
@@ -545,6 +595,14 @@ impl Jacobian for UnderDet<nalgebra_latest::DVector<f64>> {
     }
 }
 
+impl basin::ProblemConstraints for UnderDet<Col<f64>> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for UnderDet<Col<f64>> {
     type Param = Col<f64>;
     type Output = Col<f64>;

@@ -19,7 +19,7 @@ use core::marker::PhantomData;
 use super::spec::{
     Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
 };
-use crate::{BoxConstraints, CostFunction, Gradient};
+use crate::{CostFunction, Gradient};
 
 /// Standard lower bound on each coordinate.
 pub const STANDARD_LOWER: f64 = -10.0;
@@ -135,6 +135,14 @@ impl<P> HasSpec for Levy<P> {
     const SPEC: &'static ProblemSpec = &LEVY_SPEC;
 }
 
+impl crate::ProblemConstraints for Levy<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for Levy<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -163,7 +171,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl CostFunction for Levy<DVector<f64>> {
+    impl crate::ProblemConstraints for Levy<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Levy<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -195,7 +207,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl CostFunction for Levy<Array1<f64>> {
+    impl crate::ProblemConstraints for Levy<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Levy<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -233,7 +249,11 @@ crate::backend_macros::faer_versions! {
     // The Levy math is index-coupled (first/middle/last terms differ), so we
     // collect into a `Vec` and route through the slice primitives rather than
     // duplicating the recurrence elementwise.
-    impl CostFunction for Levy<Col<f64>> {
+    impl crate::ProblemConstraints for Levy<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Levy<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -261,7 +281,7 @@ crate::backend_macros::faer_versions! {
 
 /// Levy function with explicit element-wise box bounds, suitable for
 /// box-constrained solvers (L-BFGS-B, projected gradient, CMA-ES variants).
-/// Implements both [`CostFunction`] and [`Gradient`] plus [`BoxConstraints`],
+/// Implements both [`CostFunction`] and [`Gradient`] plus [`BoxBounds`](crate::BoxBounds),
 /// routing through the same raw [`levy`]/[`levy_gradient`] free functions as
 /// the unconstrained [`Levy`]. The standard search domain `[−10, 10]ⁿ` is the
 /// common case; build it with [`LevyBoxed::with_standard_bounds`].
@@ -293,6 +313,17 @@ impl LevyBoxed<Vec<f64>> {
     }
 }
 
+impl crate::ProblemConstraints for LevyBoxed<Vec<f64>> {
+    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for LevyBoxed<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -314,11 +345,13 @@ impl Gradient for LevyBoxed<Vec<f64>> {
     }
 }
 
-impl BoxConstraints for LevyBoxed<Vec<f64>> {
-    fn lower(&self) -> &Vec<f64> {
+impl LevyBoxed<Vec<f64>> {
+    /// Return the lower bound vector.
+    pub fn lower(&self) -> &Vec<f64> {
         &self.lower
     }
-    fn upper(&self) -> &Vec<f64> {
+    /// Return the upper bound vector.
+    pub fn upper(&self) -> &Vec<f64> {
         &self.upper
     }
 }
@@ -327,9 +360,8 @@ impl BoxConstraints for LevyBoxed<Vec<f64>> {
 crate::backend_macros::nalgebra_versions! {
     nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
-        LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient,
-    };
-    use crate::{BoxConstraints, CostFunction, Gradient};
+        LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient};
+    use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
     impl LevyBoxed<DVector<f64>> {
@@ -343,7 +375,11 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl CostFunction for LevyBoxed<DVector<f64>> {
+    impl crate::ProblemConstraints for LevyBoxed<DVector<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for LevyBoxed<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -367,11 +403,13 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl BoxConstraints for LevyBoxed<DVector<f64>> {
-        fn lower(&self) -> &DVector<f64> {
+    impl LevyBoxed<DVector<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &DVector<f64> {
             &self.lower
         }
-        fn upper(&self) -> &DVector<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &DVector<f64> {
             &self.upper
         }
     }
@@ -381,9 +419,8 @@ crate::backend_macros::nalgebra_versions! {
 crate::backend_macros::ndarray_versions! {
     ndarray_boxed_impl(ndarray);
     use super::{
-        LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient,
-    };
-    use crate::{BoxConstraints, CostFunction, Gradient};
+        LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient};
+    use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
     impl LevyBoxed<Array1<f64>> {
@@ -397,7 +434,11 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl CostFunction for LevyBoxed<Array1<f64>> {
+    impl crate::ProblemConstraints for LevyBoxed<Array1<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for LevyBoxed<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -424,11 +465,13 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl BoxConstraints for LevyBoxed<Array1<f64>> {
-        fn lower(&self) -> &Array1<f64> {
+    impl LevyBoxed<Array1<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Array1<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Array1<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Array1<f64> {
             &self.upper
         }
     }
@@ -438,9 +481,8 @@ crate::backend_macros::ndarray_versions! {
 crate::backend_macros::faer_versions! {
     faer_boxed_impl(faer, faer_traits);
     use super::{
-        LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient,
-    };
-    use crate::{BoxConstraints, CostFunction, Gradient};
+        LevyBoxed, STANDARD_LOWER, STANDARD_UPPER, levy, levy_gradient};
+    use crate::{CostFunction, Gradient};
     use faer::Col;
 
     impl LevyBoxed<Col<f64>> {
@@ -454,7 +496,11 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl CostFunction for LevyBoxed<Col<f64>> {
+    impl crate::ProblemConstraints for LevyBoxed<Col<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for LevyBoxed<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -477,11 +523,13 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl BoxConstraints for LevyBoxed<Col<f64>> {
-        fn lower(&self) -> &Col<f64> {
+    impl LevyBoxed<Col<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Col<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Col<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Col<f64> {
             &self.upper
         }
     }
@@ -547,8 +595,8 @@ mod tests {
     #[test]
     fn boxed_form_exposes_standard_bounds_and_shares_math() {
         let p = LevyBoxed::<Vec<f64>>::with_standard_bounds(4);
-        let lo = <LevyBoxed<Vec<f64>> as BoxConstraints>::lower(&p);
-        let hi = <LevyBoxed<Vec<f64>> as BoxConstraints>::upper(&p);
+        let lo = p.lower();
+        let hi = p.upper();
         assert!(lo.iter().all(|&v| v == STANDARD_LOWER));
         assert!(hi.iter().all(|&v| v == STANDARD_UPPER));
 

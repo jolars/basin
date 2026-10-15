@@ -31,11 +31,15 @@ fn converges_on_sphere_d10() {
     let problem = boxed_sphere(10);
     let solver =
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(7).with_pop_size(20);
-    let result = Executor::new(problem, solver, PopulationProgress::empty())
-        .max_iter(u64::MAX)
-        .max_cost_evals(20_000)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        basin::SamplingDomain::new(problem),
+        solver,
+        PopulationProgress::empty(),
+    )
+    .max_iter(u64::MAX)
+    .max_cost_evals(20_000)
+    .run()
+    .unwrap();
 
     assert!(
         result.cost() < 1e-6,
@@ -53,11 +57,15 @@ fn converges_on_rastrigin_d10() {
     let problem = RastriginBoxed::<DVector<f64>>::with_standard_bounds(10);
     let solver =
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(42).with_pop_size(30);
-    let result = Executor::new(problem, solver, PopulationProgress::empty())
-        .max_iter(u64::MAX)
-        .max_cost_evals(50_000)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        basin::SamplingDomain::new(problem),
+        solver,
+        PopulationProgress::empty(),
+    )
+    .max_iter(u64::MAX)
+    .max_cost_evals(50_000)
+    .run()
+    .unwrap();
 
     assert!(
         result.cost() < 1.0,
@@ -70,7 +78,7 @@ fn converges_on_rastrigin_d10() {
 #[test]
 fn same_seed_yields_identical_trajectory() {
     let result_a = Executor::new(
-        boxed_sphere(5),
+        basin::SamplingDomain::new(boxed_sphere(5)),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(99).with_pop_size(15),
         PopulationProgress::empty(),
     )
@@ -78,7 +86,7 @@ fn same_seed_yields_identical_trajectory() {
     .run()
     .unwrap();
     let result_b = Executor::new(
-        boxed_sphere(5),
+        basin::SamplingDomain::new(boxed_sphere(5)),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(99).with_pop_size(15),
         PopulationProgress::empty(),
     )
@@ -94,7 +102,7 @@ fn same_seed_yields_identical_trajectory() {
 #[test]
 fn different_seeds_yield_different_trajectories() {
     let result_a = Executor::new(
-        boxed_sphere(5),
+        basin::SamplingDomain::new(boxed_sphere(5)),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(1).with_pop_size(15),
         PopulationProgress::empty(),
     )
@@ -102,7 +110,7 @@ fn different_seeds_yield_different_trajectories() {
     .run()
     .unwrap();
     let result_b = Executor::new(
-        boxed_sphere(5),
+        basin::SamplingDomain::new(boxed_sphere(5)),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(2).with_pop_size(15),
         PopulationProgress::empty(),
     )
@@ -137,7 +145,7 @@ fn chain_resumes_at_least_one_individual_twice() {
     let problem = RastriginBoxed::<DVector<f64>>::with_standard_bounds(5);
     let pop_size = 4;
     let mut stepper = Executor::new(
-        problem,
+        basin::SamplingDomain::new(problem),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(31)
             .with_pop_size(pop_size)
             .with_nam_pool(pop_size)
@@ -189,11 +197,15 @@ fn cost_evals_overshoot_is_bounded() {
         .with_ls_intensity(ls_intensity)
         .with_nfrec(nfrec);
 
-    let result = Executor::new(problem, solver, PopulationProgress::empty())
-        .max_iter(u64::MAX)
-        .max_cost_evals(budget)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        basin::SamplingDomain::new(problem),
+        solver,
+        PopulationProgress::empty(),
+    )
+    .max_iter(u64::MAX)
+    .max_cost_evals(budget)
+    .run()
+    .unwrap();
 
     let max_overshoot = nfrec + ls_intensity + lambda_inner;
     assert!(
@@ -219,7 +231,7 @@ fn population_stays_sorted_ascending() {
     let problem = boxed_sphere(4);
     let pop_size = 12;
     let mut stepper = Executor::new(
-        problem,
+        basin::SamplingDomain::new(problem),
         MaLsChCma::<DVector<f64>, DMatrix<f64>>::new(2024)
             .with_pop_size(pop_size),
         PopulationProgress::empty(),

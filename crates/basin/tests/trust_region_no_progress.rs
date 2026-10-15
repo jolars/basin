@@ -17,12 +17,24 @@ macro_rules! backend_checks {
 
             struct OffsetQuadratic;
 
+
+            impl basin::ProblemConstraints for OffsetQuadratic {
+                type Constraints = basin::NoConstraints;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new()
+                }
+            }
             impl CostFunction for OffsetQuadratic {
                 type Param = $vector;
                 type Output = $scalar;
                 type Error = Infallible;
 
-                fn cost(&self, x: &$vector) -> Result<$scalar, Infallible> {
+                fn cost(
+                    &self,
+                    x: &$vector,
+                ) -> Result<$scalar, Infallible> {
                     // The constant hides cost reductions near x = 1 through
                     // rounding, but the analytic gradient there is still 1.
                     Ok(16. / <$scalar>::EPSILON + 0.5 * x[0] * x[0])

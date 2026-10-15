@@ -1,4 +1,4 @@
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{SampleUniformBox, Scalar, VectorLen};
 use crate::core::problem::{CostFunction, Problem};
 use crate::core::rng::{ChaCha8Rng, SeedableRng};
@@ -41,7 +41,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// # Contract
 ///
-/// - **Caller must:** implement [`BoxConstraints`] on the problem with
+/// - **Caller must:** declare a box-only set using [`BoxBounds`](crate::BoxBounds) on the problem with
 ///   `lower[i] ≤ upper[i]` for every component. Equal bounds are
 ///   allowed (the corresponding component is pinned).
 /// - Supply [`PopulationProgress::empty`] to sample `lambda` members, or
@@ -74,21 +74,25 @@ use crate::solver::cma_es::sort_population_ascending;
 /// for all supported releases with `F = f32` or `f64`. Requires
 /// [`SampleUniformBox`], [`VectorLen`], `Index<usize, Output = F>`,
 /// `IndexMut<usize, Output = F>`, and `Clone`. No matrix operations are needed.
-/// The problem must implement [`BoxConstraints`].
+/// The problem must declare a box-only set using [`BoxBounds`](crate::BoxBounds).
 ///
 /// # Examples
 ///
 /// Elitist random search over a feasible box. The problem implements
-/// [`CostFunction`] and [`BoxConstraints`]; the
+/// [`CostFunction`] and [`BoxBounds`](crate::BoxBounds); the
 /// initial population is generated from an empty state via
 /// [`PopulationProgress::empty`](crate::PopulationProgress::empty):
 ///
 /// ```
-/// use basin::{PopulationProgress, BoxConstraints, CostFunction, Executor, RandomSearch};
+/// use basin::{PopulationProgress, CostFunction, Executor, RandomSearch};
 ///
 /// struct BoundedSphere {
 ///     lower: Vec<f64>,
 ///     upper: Vec<f64>,
+/// }
+/// impl basin::ProblemConstraints for BoundedSphere  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
 /// }
 /// impl CostFunction for BoundedSphere {
 ///     type Param = Vec<f64>;
@@ -98,10 +102,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///         Ok(x.iter().map(|xi| xi * xi).sum())
 ///     }
 /// }
-/// impl BoxConstraints for BoundedSphere {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
-/// }
+///
 ///
 /// let problem = BoundedSphere { lower: vec![-5.0, -5.0], upper: vec![5.0, 5.0] };
 /// let result = Executor::new(
@@ -144,7 +145,7 @@ impl<P, V, F> Solver<P, PopulationProgress<V, F>> for RandomSearch
 where
     F: Scalar + crate::core::parallel::MaybeSend,
     P: CostFunction<Param = V, Output = F>
-        + BoxConstraints<Param = V>
+        + BoxProblem<Param = V>
         + crate::core::parallel::MaybeSync,
     P::Error: crate::core::parallel::MaybeSend,
     V: SampleUniformBox
@@ -153,14 +154,21 @@ where
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>
         + crate::core::parallel::MaybeSync,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            None,
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         state.reset();

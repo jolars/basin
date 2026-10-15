@@ -12,6 +12,14 @@ use basin::{
 /// f(x) = ½ ‖x‖²: strictly convex, so GD decreases the cost every step.
 struct Quadratic;
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Quadratic {
     type Param = Vec<f64>;
     type Output = f64;

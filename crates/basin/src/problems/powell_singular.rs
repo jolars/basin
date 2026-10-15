@@ -154,6 +154,14 @@ impl<P> Default for PowellSingular<P> {
     }
 }
 
+impl crate::ProblemConstraints for PowellSingular<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for PowellSingular<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -196,12 +204,15 @@ crate::backend_macros::nalgebra_versions! {
     nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
         PowellSingular, powell_singular, powell_singular_jacobian,
-        powell_singular_residuals,
-    };
+        powell_singular_residuals};
     use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::{DMatrix, DVector};
 
-    impl CostFunction for PowellSingular<DVector<f64>> {
+    impl crate::ProblemConstraints for PowellSingular<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for PowellSingular<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -247,13 +258,16 @@ crate::backend_macros::ndarray_versions! {
     ndarray_impl(ndarray);
     use super::{
         PowellSingular, powell_singular, powell_singular_jacobian,
-        powell_singular_residuals,
-    };
+        powell_singular_residuals};
     use crate::{CostFunction, Jacobian, Residual};
     use ndarray::{Array1, Array2};
 
     // Array1 owns a contiguous buffer, so `as_slice` always succeeds.
-    impl CostFunction for PowellSingular<Array1<f64>> {
+    impl crate::ProblemConstraints for PowellSingular<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for PowellSingular<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -311,7 +325,11 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl CostFunction for PowellSingular<Col<f64>> {
+    impl crate::ProblemConstraints for PowellSingular<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for PowellSingular<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;

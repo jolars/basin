@@ -13,7 +13,7 @@
 
 use std::marker::PhantomData;
 
-use crate::core::constraint::BoxConstraints;
+use crate::SamplingBounds;
 use crate::core::inner::ResumableInner;
 use crate::core::math::{
     NormSquared, SampleUniformBox, Scalar, ScaledAdd, VectorLen,
@@ -141,12 +141,14 @@ impl<LS, S, F> Default for ChainHistory<LS, S, F> {
 /// # Contract
 ///
 /// - **Caller must:** implement [`CostFunction<Param = V, Output = F>`]
-///   *and* [`BoxConstraints<Param = V>`] on the problem. The SSGA needs
+///   and [`SamplingBounds`] on an unconstrained problem. The SSGA needs
 ///   the box for initial sampling, BLX clipping, and BGA range; the
-///   per-individual LS inner does not see the box (so the inner is
+///   per-individual LS inner does not enforce the box (so the inner is
 ///   *unbounded*: chain individuals can drift outside the box and be
 ///   discarded only via the SSGA replace-worst feedback loop). This
 ///   matches Molina 2010 §4.4.6.
+///   Use [`SamplingDomain`](crate::SamplingDomain) to reinterpret an existing
+///   box-only objective explicitly. Accepted local points may leave the sampling box.
 /// - **Caller must:** supply [`PopulationProgress::empty`] for a sampled
 ///   population, or [`PopulationProgress::from_population`] with the configured
 ///   member count and dimension. Fresh initialization projects explicit seeds
@@ -462,7 +464,7 @@ where
 impl<P, V, LS, F> Solver<P, PopulationProgress<V, F>> for MaLsCh<V, LS, F>
 where
     F: Scalar + SampleUniform,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
+    P: CostFunction<Param = V, Output = F> + SamplingBounds<Param = V>,
     V: VectorLen
         + Clone
         + SampleUniformBox
@@ -473,18 +475,19 @@ where
     LS: ResumableInner<V, F>
         + Solver<P, <LS as ResumableInner<V, F>>::State, Error = P::Error>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::validate_sampling(problem.inner(), None)?;
         if let Some(records) = &mut self.inner_diagnostics {
             records.clear();
         }
-        let lo = problem.inner().lower().clone();
-        let hi = problem.inner().upper().clone();
+        let lo = problem.inner().sampling_lower().clone();
+        let hi = problem.inner().sampling_upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
 
         state.reset();
@@ -514,8 +517,8 @@ where
         mut state: PopulationProgress<V, F>,
     ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let history = &mut self.history;
-        let lo = problem.inner().lower().clone();
-        let hi = problem.inner().upper().clone();
+        let lo = problem.inner().sampling_lower().clone();
+        let hi = problem.inner().sampling_upper().clone();
         let rng = self
             .rng
             .as_mut()

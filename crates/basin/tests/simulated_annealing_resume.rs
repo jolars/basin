@@ -12,6 +12,14 @@ use std::path::PathBuf;
 
 struct RuggedCost;
 
+impl basin::ProblemConstraints for RuggedCost {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for RuggedCost {
     type Param = i32;
     type Output = f64;

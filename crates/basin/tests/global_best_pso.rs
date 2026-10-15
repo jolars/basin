@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, GlobalBestPso, PopulationProgress,
+    CostFunction, Executor, GlobalBestPso, PopulationProgress,
     PsoBoundaryHandling, PsoVelocityLimit, State, TerminationCode,
 };
 use rand::TryRng;
@@ -12,6 +12,20 @@ struct BoundedSphere<F> {
     upper: Vec<F>,
 }
 
+impl<F> basin::ProblemConstraints for BoundedSphere<F>
+where
+    F: basin::Scalar,
+{
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<F>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<F> CostFunction for BoundedSphere<F>
 where
     F: basin::Scalar,
@@ -22,19 +36,6 @@ where
 
     fn cost(&self, x: &Vec<F>) -> Result<F, Self::Error> {
         Ok(x.iter().map(|xi| *xi * *xi).sum())
-    }
-}
-
-impl<F> BoxConstraints for BoundedSphere<F>
-where
-    F: basin::Scalar,
-{
-    fn lower(&self) -> &Vec<F> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<F> {
-        &self.upper
     }
 }
 
@@ -381,6 +382,17 @@ struct Rastrigin {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for Rastrigin {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Rastrigin {
     type Param = Vec<f64>;
     type Output = f64;
@@ -391,16 +403,6 @@ impl CostFunction for Rastrigin {
             + x.iter()
                 .map(|xi| xi * xi - 10.0 * (std::f64::consts::TAU * xi).cos())
                 .sum::<f64>())
-    }
-}
-
-impl BoxConstraints for Rastrigin {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -426,6 +428,17 @@ struct PartialNan {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for PartialNan {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for PartialNan {
     type Param = Vec<f64>;
     type Output = f64;
@@ -437,16 +450,6 @@ impl CostFunction for PartialNan {
         } else {
             Ok(x[0] * x[0])
         }
-    }
-}
-
-impl BoxConstraints for PartialNan {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -487,6 +490,17 @@ struct FailingProblem {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for FailingProblem {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for FailingProblem {
     type Param = Vec<f64>;
     type Output = f64;
@@ -494,16 +508,6 @@ impl CostFunction for FailingProblem {
 
     fn cost(&self, _: &Vec<f64>) -> Result<f64, Self::Error> {
         Err(ApplicationError::Abort)
-    }
-}
-
-impl BoxConstraints for FailingProblem {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -520,7 +524,12 @@ fn typed_problem_errors_propagate_unchanged() {
     .max_iter(1)
     .run_with_solver();
 
-    assert!(matches!(result, Err(ApplicationError::Abort)));
+    assert!(matches!(
+        result,
+        Err(basin::ConstraintSolveError::Evaluation(
+            ApplicationError::Abort
+        ))
+    ));
 }
 
 struct AlwaysNan {
@@ -528,6 +537,17 @@ struct AlwaysNan {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for AlwaysNan {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for AlwaysNan {
     type Param = Vec<f64>;
     type Output = f64;
@@ -535,16 +555,6 @@ impl CostFunction for AlwaysNan {
 
     fn cost(&self, _: &Vec<f64>) -> Result<f64, Self::Error> {
         Ok(f64::NAN)
-    }
-}
-
-impl BoxConstraints for AlwaysNan {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -575,6 +585,17 @@ struct AlwaysNegativeInfinity {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for AlwaysNegativeInfinity {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for AlwaysNegativeInfinity {
     type Param = Vec<f64>;
     type Output = f64;
@@ -582,16 +603,6 @@ impl CostFunction for AlwaysNegativeInfinity {
 
     fn cost(&self, _: &Vec<f64>) -> Result<f64, Self::Error> {
         Ok(f64::NEG_INFINITY)
-    }
-}
-
-impl BoxConstraints for AlwaysNegativeInfinity {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

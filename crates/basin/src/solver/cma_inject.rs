@@ -476,6 +476,7 @@ where
         + SymmetricEigen<V>
         + Clone,
     CmaEs<V, M, F>: Solver<P, PopulationProgress<V, F>, Error = P::Error>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 

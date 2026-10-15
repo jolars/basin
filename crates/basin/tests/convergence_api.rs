@@ -5,6 +5,14 @@ use basin::{
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -25,6 +33,14 @@ impl Gradient for Sphere {
 
 struct ConstantCost;
 
+impl basin::ProblemConstraints for ConstantCost {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for ConstantCost {
     type Param = Vec<f64>;
     type Output = f64;
@@ -64,6 +80,16 @@ fn exact_step_checks_allow_overflowing_parameter_norms() {
 #[test]
 fn relative_step_checks_scale_large_parameters_before_taking_the_norm() {
     struct Linear;
+
+    impl basin::ProblemConstraints for Linear {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Linear {
         type Param = Vec<f64>;
         type Output = f64;
@@ -138,6 +164,16 @@ fn simplex_cost_check_does_not_require_vector_norms() {
         }
     }
     struct MinimalSphere;
+
+    impl basin::ProblemConstraints for MinimalSphere {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for MinimalSphere {
         type Param = Minimal;
         type Output = f64;
@@ -436,6 +472,16 @@ fn simplex_size_and_cost_are_an_and_group() {
 fn native_zero_is_exact_and_none_disables() {
     use basin::{DenseMatrix, GaussNewton, Jacobian, Residual};
     struct Linear;
+
+    impl basin::ProblemConstraints for Linear {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl Residual for Linear {
         type Param = Vec<f64>;
         type Output = Vec<f64>;
@@ -474,6 +520,16 @@ fn native_zero_is_exact_and_none_disables() {
 fn nonfinite_gradient_is_not_convergence() {
     use basin::{InitialState, Problem, Solver};
     struct Nonfinite;
+
+    impl basin::ProblemConstraints for Nonfinite {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Nonfinite {
         type Param = Vec<f64>;
         type Output = f64;
@@ -521,6 +577,16 @@ fn cost_check_does_not_require_vector_norms() {
         }
     }
     struct MinimalSphere;
+
+    impl basin::ProblemConstraints for MinimalSphere {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for MinimalSphere {
         type Param = Minimal;
         type Output = f64;
@@ -573,12 +639,24 @@ fn configured_solver_and_inner_budgets_round_trip() {
 #[test]
 fn projected_check_uses_each_inner_problems_bounds() {
     use basin::{
-        BoxConstraints, Problem, ProjectedGradientDescent, RunControl,
-        run_loop_with_control,
+        Problem, ProjectedGradientDescent, RunControl, run_loop_with_control,
     };
     struct BoundedSphere {
         lower: Vec<f64>,
         upper: Vec<f64>,
+    }
+
+    impl basin::ProblemConstraints for BoundedSphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
     }
     impl CostFunction for BoundedSphere {
         type Param = Vec<f64>;
@@ -594,14 +672,7 @@ fn projected_check_uses_each_inner_problems_bounds() {
             Sphere.gradient(x)
         }
     }
-    impl BoxConstraints for BoundedSphere {
-        fn lower(&self) -> &Vec<f64> {
-            &self.lower
-        }
-        fn upper(&self) -> &Vec<f64> {
-            &self.upper
-        }
-    }
+
     let mut solver = ProjectedGradientDescent::new(0.1)
         .with_absolute_projected_gradient_tolerance(0.0);
     let mut control = RunControl::new().max_iter(1);

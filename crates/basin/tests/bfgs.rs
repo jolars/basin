@@ -123,6 +123,14 @@ struct Quadratic {
     diag: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Quadratic {
     type Param = DVector<f64>;
     type Output = f64;

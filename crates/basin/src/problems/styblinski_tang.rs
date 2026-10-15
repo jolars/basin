@@ -15,7 +15,7 @@ use core::marker::PhantomData;
 use super::spec::{
     Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
 };
-use crate::{BoxConstraints, CostFunction, Gradient};
+use crate::{CostFunction, Gradient};
 
 /// Standard lower bound on each coordinate.
 pub const STANDARD_LOWER: f64 = -5.0;
@@ -98,6 +98,14 @@ impl<P> HasSpec for StyblinskiTang<P> {
     const SPEC: &'static ProblemSpec = &STYBLINSKI_TANG_SPEC;
 }
 
+impl crate::ProblemConstraints for StyblinskiTang<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for StyblinskiTang<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -126,7 +134,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl CostFunction for StyblinskiTang<DVector<f64>> {
+    impl crate::ProblemConstraints for StyblinskiTang<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for StyblinskiTang<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -158,7 +170,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl CostFunction for StyblinskiTang<Array1<f64>> {
+    impl crate::ProblemConstraints for StyblinskiTang<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for StyblinskiTang<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -196,7 +212,11 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl CostFunction for StyblinskiTang<Col<f64>> {
+    impl crate::ProblemConstraints for StyblinskiTang<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for StyblinskiTang<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -229,7 +249,7 @@ crate::backend_macros::faer_versions! {
 
 /// Styblinski-Tang function with explicit element-wise box bounds, suitable for
 /// box-constrained solvers (L-BFGS-B, projected gradient, CMA-ES variants).
-/// Implements both [`CostFunction`] and [`Gradient`] plus [`BoxConstraints`],
+/// Implements both [`CostFunction`] and [`Gradient`] plus [`BoxBounds`](crate::BoxBounds),
 /// routing through the same raw [`styblinski_tang`]/[`styblinski_tang_gradient`]
 /// free functions as the unconstrained [`StyblinskiTang`]. The standard search
 /// domain `[−5, 5]ⁿ` is the common case; build it with
@@ -262,6 +282,17 @@ impl StyblinskiTangBoxed<Vec<f64>> {
     }
 }
 
+impl crate::ProblemConstraints for StyblinskiTangBoxed<Vec<f64>> {
+    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for StyblinskiTangBoxed<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -283,11 +314,13 @@ impl Gradient for StyblinskiTangBoxed<Vec<f64>> {
     }
 }
 
-impl BoxConstraints for StyblinskiTangBoxed<Vec<f64>> {
-    fn lower(&self) -> &Vec<f64> {
+impl StyblinskiTangBoxed<Vec<f64>> {
+    /// Return the lower bound vector.
+    pub fn lower(&self) -> &Vec<f64> {
         &self.lower
     }
-    fn upper(&self) -> &Vec<f64> {
+    /// Return the upper bound vector.
+    pub fn upper(&self) -> &Vec<f64> {
         &self.upper
     }
 }
@@ -297,9 +330,8 @@ crate::backend_macros::nalgebra_versions! {
     nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
         STANDARD_LOWER, STANDARD_UPPER, StyblinskiTangBoxed, styblinski_tang,
-        styblinski_tang_gradient,
-    };
-    use crate::{BoxConstraints, CostFunction, Gradient};
+        styblinski_tang_gradient};
+    use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
     impl StyblinskiTangBoxed<DVector<f64>> {
@@ -313,7 +345,11 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl CostFunction for StyblinskiTangBoxed<DVector<f64>> {
+    impl crate::ProblemConstraints for StyblinskiTangBoxed<DVector<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for StyblinskiTangBoxed<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -337,11 +373,13 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl BoxConstraints for StyblinskiTangBoxed<DVector<f64>> {
-        fn lower(&self) -> &DVector<f64> {
+    impl StyblinskiTangBoxed<DVector<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &DVector<f64> {
             &self.lower
         }
-        fn upper(&self) -> &DVector<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &DVector<f64> {
             &self.upper
         }
     }
@@ -352,9 +390,8 @@ crate::backend_macros::ndarray_versions! {
     ndarray_boxed_impl(ndarray);
     use super::{
         STANDARD_LOWER, STANDARD_UPPER, StyblinskiTangBoxed, styblinski_tang,
-        styblinski_tang_gradient,
-    };
-    use crate::{BoxConstraints, CostFunction, Gradient};
+        styblinski_tang_gradient};
+    use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
     impl StyblinskiTangBoxed<Array1<f64>> {
@@ -368,7 +405,11 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl CostFunction for StyblinskiTangBoxed<Array1<f64>> {
+    impl crate::ProblemConstraints for StyblinskiTangBoxed<Array1<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for StyblinskiTangBoxed<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -395,11 +436,13 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl BoxConstraints for StyblinskiTangBoxed<Array1<f64>> {
-        fn lower(&self) -> &Array1<f64> {
+    impl StyblinskiTangBoxed<Array1<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Array1<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Array1<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Array1<f64> {
             &self.upper
         }
     }
@@ -409,7 +452,7 @@ crate::backend_macros::ndarray_versions! {
 crate::backend_macros::faer_versions! {
     faer_boxed_impl(faer, faer_traits);
     use super::{STANDARD_LOWER, STANDARD_UPPER, StyblinskiTangBoxed};
-    use crate::{BoxConstraints, CostFunction, Gradient};
+    use crate::{CostFunction, Gradient};
     use faer::Col;
 
     impl StyblinskiTangBoxed<Col<f64>> {
@@ -423,7 +466,11 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl CostFunction for StyblinskiTangBoxed<Col<f64>> {
+    impl crate::ProblemConstraints for StyblinskiTangBoxed<Col<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for StyblinskiTangBoxed<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -451,11 +498,13 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl BoxConstraints for StyblinskiTangBoxed<Col<f64>> {
-        fn lower(&self) -> &Col<f64> {
+    impl StyblinskiTangBoxed<Col<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Col<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Col<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Col<f64> {
             &self.upper
         }
     }
@@ -515,8 +564,8 @@ mod tests {
     #[test]
     fn boxed_form_exposes_standard_bounds_and_shares_math() {
         let p = StyblinskiTangBoxed::<Vec<f64>>::with_standard_bounds(3);
-        let lo = <StyblinskiTangBoxed<Vec<f64>> as BoxConstraints>::lower(&p);
-        let hi = <StyblinskiTangBoxed<Vec<f64>> as BoxConstraints>::upper(&p);
+        let lo = p.lower();
+        let hi = p.upper();
         assert!(lo.iter().all(|&v| v == STANDARD_LOWER));
         assert!(hi.iter().all(|&v| v == STANDARD_UPPER));
 

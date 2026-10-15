@@ -5,6 +5,15 @@ use basin::{
 use std::convert::Infallible;
 
 struct Fit;
+
+impl basin::ProblemConstraints for Fit {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for Fit {
     type Param = Vec<f64>;
     type Output = Vec<f64>;

@@ -1,500 +1,92 @@
-//! Constraint markers carried on the problem (tenet 4 in `CONTRIBUTING.md`).
-//! [`BoxConstraints`] (interval bounds, consumed by projection-based
-//! solvers), [`LinearInequalityConstraints`] (`A x ≤ b`, consumed by the
-//! log-barrier method), [`LinearEqualityConstraints`] (`A x = b`, consumed by
-//! the augmented-Lagrangian method), and [`NonlinearInequalityConstraints`]
-//! (`c(x) ≤ 0` for an arbitrary vector-valued `c`, consumed by COBYLA).
+//! Canonical problem-side constraint sets and checked evaluation capabilities.
 //!
-//! These four are deliberately *sibling* traits, not members of a
-//! `Constraint` supertrait or hierarchy. Per tenet 4, a shared *parent*
-//! abstraction waits until ≥2 constrained solvers share more than data
-//! accessors, and they don't: the box family keeps feasibility by
-//! *projection*, the linear-inequality family by a *barrier*, the
-//! linear-equality family by a *penalty plus multipliers* (the augmented
-//! Lagrangian), and the nonlinear-inequality family by an *exact-penalty merit
-//! function with a geometry/acceptance test* (COBYLA). Four feasibility
-//! mechanisms, and the traits share no operation beyond `lower()`/`upper()`
-//! resp. `a()`/`b()` resp. `constraints()`, so a one-member hierarchy would
-//! still be pure overhead.
+//! [`ProblemConstraints`] declares the complete constraint set. Solvers accept
+//! only block combinations they support. Bounds, linear equalities and
+//! inequalities, and nonlinear equalities and inequalities remain distinct.
+
 //!
-//! [`LinearConstraints`] describes box bounds, linear equalities, and linear
-//! inequalities together for [`Lincoa`](crate::Lincoa). [`NonlinearConstraints`]
-//! adds nonlinear equalities and inequalities to that general form. Add
-//! [`ConstraintJacobian`] for [`Slsqp`](crate::Slsqp), or wrap it in
-//! [`FoldedConstraints`] to pass every block to [`Cobyla`](crate::Cobyla).
-//! Both aggregator traits are standalone, with no hierarchy or blanket bridges
-//! to the single-kind traits.
+//! An unconstrained solver cannot discard a declared box:
+//!
+//! ```compile_fail
+//! use basin::{BoxBounds, Constrained, Constraints, CostFunction, Executor,
+//!             NelderMead, NoConstraints, ProblemConstraints};
+//! struct Sphere;
+//! impl ProblemConstraints for Sphere {
+//!     type Constraints = NoConstraints;
+//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+//! }
+//! impl CostFunction for Sphere {
+//!     type Param = Vec<f64>;
+//!     type Output = f64;
+//!     type Error = std::convert::Infallible;
+//!     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+//!         Ok(x.iter().map(|v| v * v).sum())
+//!     }
+//! }
+//! let constraints = Constraints::new()
+//!     .with_bounds(BoxBounds::new(Some(vec![-1.0]), Some(vec![1.0])));
+//! let problem = Constrained::new(Sphere, constraints);
+//! Executor::from_start(problem, NelderMead::new(), vec![0.5]).run();
+//! ```
+//!
+//! A box-only solver also rejects an additional nonlinear block, even when
+//! the problem supplies the required value callback:
+//!
+//! ```compile_fail
+//! use basin::{BoxBounds, Constrained, ConstraintSolveError, Constraints,
+//!             CostFunction, Executor, NelderMead, NoConstraints,
+//!             NonlinearInequalityValues, ProblemConstraints};
+//! struct Sphere;
+//! impl ProblemConstraints for Sphere {
+//!     type Constraints = NoConstraints;
+//!     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+//! }
+//! impl CostFunction for Sphere {
+//!     type Param = Vec<f64>;
+//!     type Output = f64;
+//!     type Error = std::convert::Infallible;
+//!     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> {
+//!         Ok(x.iter().map(|v| v * v).sum())
+//!     }
+//! }
+//! impl NonlinearInequalityValues for Sphere {
+//!     type Param = Vec<f64>;
+//!     type Values = Vec<f64>;
+//!     type Error = std::convert::Infallible;
+//!     fn nonlinear_inequalities(&self, x: &Vec<f64>)
+//!         -> Result<Vec<f64>, ConstraintSolveError<Self::Error>> {
+//!         Ok(vec![x[0] - 0.25])
+//!     }
+//! }
+//! let constraints = Constraints::new()
+//!     .with_bounds(BoxBounds::new(Some(vec![-1.0]), Some(vec![1.0])))
+//!     .with_nonlinear_inequalities(1);
+//! let problem = Constrained::new(Sphere, constraints);
+//! Executor::from_start(problem, NelderMead::new().projected(), vec![0.5]).run();
+//! ```
 
-use crate::core::problem::CostFunction;
+pub(crate) mod model;
+pub use model::*;
+mod adapters;
+pub(crate) mod evaluation;
+pub use adapters::*;
 
-/// Full-form constraint adapter for COBYLA.
-pub mod folded;
-
-pub use folded::FoldedConstraints;
-
-/// Box (interval) bounds on the parameter.
+/// Analytic Jacobian of the declared nonlinear blocks.
 ///
-/// Lives on the *problem* side (tenet 4 in `CONTRIBUTING.md`): constraints
-/// describe the problem, not the executor. Solvers that require box
-/// bounds bind on this trait so handing them an unconstrained problem is
-/// a compile error rather than a silent runtime issue.
-///
-/// `BoxConstraints` is a supertrait of `CostFunction` so the `Param` type
-/// is shared automatically: solver bounds read
-/// `P: BoxConstraints<Param = f64>` instead of repeating the parameter
-/// type across two trait bounds.
-///
-/// For 1D problems `Param = f64` and bounds are scalars; for n-D box
-/// constraints `Param` is a vector and bounds are vectors of the same
-/// length.
-///
-/// # Examples
-///
-/// Attach box bounds to a problem so a bounded solver (e.g.
-/// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent))
-/// will accept it. The equality/inequality sibling traits
-/// ([`LinearEqualityConstraints`], [`LinearInequalityConstraints`]) are
-/// implemented the same way, exposing `a()`/`b()` instead:
-///
-/// ```
-/// use basin::{BoxConstraints, CostFunction};
-///
-/// struct BoundedSphere {
-///     lower: Vec<f64>,
-///     upper: Vec<f64>,
-/// }
-/// impl CostFunction for BoundedSphere {
-///     type Param = Vec<f64>;
-///     type Output = f64;
-///     type Error = std::convert::Infallible;
-///     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
-///         Ok(x.iter().map(|xi| xi * xi).sum())
-///     }
-/// }
-/// impl BoxConstraints for BoundedSphere {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
-/// }
-///
-/// let problem = BoundedSphere { lower: vec![-1.0, -1.0], upper: vec![1.0, 1.0] };
-/// assert_eq!(problem.lower(), &vec![-1.0, -1.0]);
-/// ```
-pub trait BoxConstraints: CostFunction {
-    /// Element-wise lower bound on `Param`. Same shape as `Param`.
-    fn lower(&self) -> &Self::Param;
-    /// Element-wise upper bound on `Param`. Same shape as `Param`.
-    fn upper(&self) -> &Self::Param;
-}
-
-/// Linear inequality constraints `A x ≤ b` in standard form.
-///
-/// `A` is the `m × n` constraint matrix and `b ∈ ℝᵐ`; the feasible set is
-/// `{ x ∈ ℝⁿ : A x ≤ b }`. Like [`BoxConstraints`], the constraint data
-/// lives on the *problem* side (tenet 4 in `CONTRIBUTING.md`): solvers that
-/// handle linear inequalities (currently the log-barrier
-/// [`BarrierMethod`](crate::solver::BarrierMethod)) bind on this trait, so
-/// handing them an unconstrained problem is a compile error.
-///
-/// `LinearInequalityConstraints` is a supertrait of [`CostFunction`] so the
-/// `Param` type is shared automatically.
-///
-/// # Shapes
-///
-/// `b` shares the parameter's vector *type* ([`Param`](CostFunction::Param))
-/// but lives in `ℝᵐ` (one entry per constraint row), whereas the iterate
-/// lives in `ℝⁿ`. `m` and `n` need not match.
-///
-/// # Matrix type and consumers
-///
-/// The trait stays free of math bounds on [`Matrix`](Self::Matrix), the
-/// same way [`BoxConstraints`] does not bound `Param` on
-/// [`ClampInPlace`](crate::core::math::ClampInPlace). Consumers add the
-/// operations they actually need: the barrier requires
-/// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and
-/// `Aᵀ v`), a strict subset of the LA tier that never includes a linear
-/// solve. All four backends provide those operations: `DenseMatrix`/`Vec`,
-/// nalgebra `DMatrix`/`DVector`, faer `Mat`/`Col`, and ndarray
-/// `Array2`/`Array1` (tenet 5).
-pub trait LinearInequalityConstraints: CostFunction {
-    /// The `m × n` constraint-matrix type. Consumers bound this on
-    /// [`MatVec<Param>`](crate::core::math::MatVec) +
-    /// [`MatTransposeVec<Param>`](crate::core::math::MatTransposeVec).
-    type Matrix;
-    /// The constraint matrix `A` (`m` rows = number of inequalities).
-    fn a(&self) -> &Self::Matrix;
-    /// The right-hand side `b ∈ ℝᵐ`.
-    fn b(&self) -> &Self::Param;
-}
-
-/// Linear equality constraints `A x = b` in standard form.
-///
-/// `A` is the `m × n` constraint matrix and `b ∈ ℝᵐ`; the feasible set is
-/// the affine subspace `{ x ∈ ℝⁿ : A x = b }`. Like the sibling
-/// constraint traits, the data lives on the *problem* side (tenet 4 in
-/// `CONTRIBUTING.md`): solvers that handle linear equalities (currently the
-/// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod))
-/// bind on this trait, so handing them an unconstrained problem is a compile
-/// error.
-///
-/// This is a **distinct trait** from [`LinearInequalityConstraints`] even
-/// though the data shape (`A`, `b`) is identical: the semantics differ
-/// (`= b` vs `≤ b`), so the type system must keep them apart: an
-/// `A x ≤ b` problem must not be silently accepted by an equality solver,
-/// and vice versa.
-///
-/// `LinearEqualityConstraints` is a supertrait of [`CostFunction`] so the
-/// `Param` type is shared automatically.
-///
-/// # Shapes
-///
-/// `b` shares the parameter's vector *type* ([`Param`](CostFunction::Param))
-/// but lives in `ℝᵐ` (one entry per constraint row), whereas the iterate
-/// lives in `ℝⁿ`. `m` and `n` need not match.
-///
-/// # Matrix type and consumers
-///
-/// The trait stays free of math bounds on [`Matrix`](Self::Matrix), the
-/// same way the sibling traits leave their carriers unbounded. Consumers add
-/// the operations they actually need: the augmented Lagrangian requires
-/// `Matrix: MatVec<Param> + MatTransposeVec<Param>` (for `A x` and `Aᵀ v`):
-/// a strict subset of the LA tier that never includes a linear solve. All four
-/// backends provide those operations: `DenseMatrix`/`Vec`, nalgebra
-/// `DMatrix`/`DVector`, faer `Mat`/`Col`, and ndarray `Array2`/`Array1`
-/// (tenet 5).
-pub trait LinearEqualityConstraints: CostFunction {
-    /// The `m × n` constraint-matrix type. Consumers bound this on
-    /// [`MatVec<Param>`](crate::core::math::MatVec) +
-    /// [`MatTransposeVec<Param>`](crate::core::math::MatTransposeVec).
-    type Matrix;
-    /// The constraint matrix `A` (`m` rows = number of equalities).
-    fn a(&self) -> &Self::Matrix;
-    /// The right-hand side `b ∈ ℝᵐ`.
-    fn b(&self) -> &Self::Param;
-}
-
-/// Nonlinear inequality constraints `c(x) ≤ 0` for an arbitrary vector-valued
-/// constraint function `c : ℝⁿ → ℝᵐ`.
-///
-/// `x` is feasible iff every component satisfies `cᵢ(x) ≤ 0`; the *constraint
-/// violation* is `[ maxᵢ cᵢ(x) ]₊` (zero when feasible). Unlike the three
-/// linear sibling traits, the constraint here is a **function** evaluated at the
-/// iterate, not matrix/vector data, so this trait carries a
-/// [`constraints`](Self::constraints) evaluator rather than `a()`/`b()`
-/// accessors. Like the siblings, the constraints live on the *problem* side
-/// (tenet 4 in `CONTRIBUTING.md`): the derivative-free solver that handles them
-/// ([`Cobyla`](crate::Cobyla)) binds on this trait, so handing it an
-/// unconstrained problem is a compile error.
-///
-/// `NonlinearInequalityConstraints` is a supertrait of [`CostFunction`] so the
-/// `Param`/`Error` types are shared automatically.
-///
-/// # Sign convention
-///
-/// The feasible direction is `cᵢ(x) ≤ 0`, matching the linear-inequality
-/// sibling's `A x ≤ b` and PRIMA's modern COBYLA interface
-/// (`min F(x) s.t. constr(x) ≤ 0`). Powell's 1994 paper writes the constraints
-/// as `cᵢ(x) ≥ 0`; negate to convert (`basin`'s `cᵢ` is Powell's `−cᵢ`). An
-/// equality `g(x) = 0` is expressed as the pair `g(x) ≤ 0`, `−g(x) ≤ 0`.
-///
-/// # Shapes
-///
-/// The iterate lives in `ℝⁿ` ([`Param`](CostFunction::Param)); the value
-/// returned by [`constraints`](Self::constraints) lives in `ℝᵐ` (one entry per
-/// constraint, length [`num_constraints`](Self::num_constraints)) but shares
-/// the parameter's vector *type*. `m` and `n` need not match.
-///
-/// # Problems with several constraint kinds
-///
-/// This trait is the *single-kind* surface (nonlinear inequalities only),
-/// matching Powell's 1994 paper. For nonlinear inequalities together with
-/// linear inequalities, linear equalities, or box bounds, implement the
-/// standalone [`NonlinearConstraints`] trait and wrap the problem in
-/// [`FoldedConstraints`]. The adapter folds every supplied block into COBYLA's
-/// `c(x) ≤ 0` vector. There is no blanket bridge between the two traits: such
-/// a bridge could silently drop linear or box data and prevent a problem from
-/// implementing the full form itself.
-///
-/// # Examples
-///
-/// A problem feasible inside the unit disk, `x₁² + x₂² ≤ 1`, written as the
-/// single constraint `c(x) = x₁² + x₂² − 1 ≤ 0`:
-///
-/// ```
-/// use basin::{CostFunction, NonlinearInequalityConstraints};
-///
-/// struct InDisk;
-/// impl CostFunction for InDisk {
-///     type Param = Vec<f64>;
-///     type Output = f64;
-///     type Error = std::convert::Infallible;
-///     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
-///         Ok(x[0] * x[1]) // minimize x1*x2 over the disk
-///     }
-/// }
-/// impl NonlinearInequalityConstraints for InDisk {
-///     fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, std::convert::Infallible> {
-///         Ok(vec![x[0] * x[0] + x[1] * x[1] - 1.0])
-///     }
-///     fn num_constraints(&self) -> usize { 1 }
-/// }
-///
-/// let p = InDisk;
-/// assert_eq!(p.constraints(&vec![0.0, 0.0]).unwrap(), vec![-1.0]); // interior: feasible
-/// assert_eq!(p.num_constraints(), 1);
-/// ```
-pub trait NonlinearInequalityConstraints: CostFunction {
-    /// Evaluate the constraint function `c(x) ∈ ℝᵐ`. The point is feasible iff
-    /// every returned component is `≤ 0`; the constraint violation is
-    /// `[ maxᵢ cᵢ(x) ]₊`. The returned vector has length
-    /// [`num_constraints`](Self::num_constraints) and shares the parameter's
-    /// vector type.
-    fn constraints(&self, x: &Self::Param) -> Result<Self::Param, Self::Error>;
-
-    /// The number of constraints `m` (length of the
-    /// [`constraints`](Self::constraints) vector). Lets a solver size its
-    /// per-constraint model storage before the first evaluation.
-    fn num_constraints(&self) -> usize;
-}
-
-/// The general constrained problem: nonlinear equalities and inequalities,
-/// optional box bounds, linear equalities, and linear inequalities.
-///
-/// The feasible set is
-///
-/// ```text
-/// { x ∈ ℝⁿ : h(x) = 0, c(x) ≤ 0, lower ≤ x ≤ upper, A_eq x = b_eq, A_ineq x ≤ b_ineq }
-/// ```
-///
-/// Implement this trait and wrap the problem in [`FoldedConstraints`] to use
-/// [`Cobyla`](crate::Cobyla). Optional accessors default to `None`; the nonlinear
-/// block may also be empty, with [`num_nonlinear_constraints`](Self::num_nonlinear_constraints)
-/// returning zero and [`nonlinear_constraints`](Self::nonlinear_constraints)
-/// returning an empty vector. `FoldedConstraints` evaluates empty callbacks;
-/// SLSQP skips nonlinear blocks whose declared count is zero. Add
-/// [`ConstraintJacobian`] and [`crate::Gradient`] to use [`crate::Slsqp`].
-///
-/// This trait is standalone, like [`LinearConstraints`]. It does not extend
-/// [`NonlinearInequalityConstraints`] or the single-kind linear and box traits,
-/// and no blanket implementations bridge between them. This keeps every
-/// supplied constraint block explicit.
-///
-/// # Shapes and contract
-///
-/// The iterate has length `n`. Bounds share its vector type and length;
-/// every non-finite bound entry leaves that coordinate unbounded on that side.
-/// Each matrix has `n` columns and as many rows as its paired right-hand side.
-/// Linear right-hand sides and the nonlinear output share the iterate's vector
-/// type, but their lengths are independent of `n` and of one another.
-///
-/// Constraint values must be pure functions of the iterate, as for
-/// [`CostFunction::cost`]. Keep block presence, shapes, finite-bound positions,
-/// and both nonlinear counts fixed throughout a solve. Malformed output lengths,
-/// bound lengths, and matrix-product/right-hand-side lengths panic in
-/// [`FoldedConstraints`]; matrix column mismatches follow
-/// [`MatVec`](crate::core::math::MatVec)'s panic contract.
-///
-/// # Matrix type and consumers
-///
-/// [`Matrix`](Self::Matrix) has no math bounds here. COBYLA's folded-constraint
-/// path requires only [`MatVec<Param>`](crate::core::math::MatVec), available
-/// on all four dense backends. Choose the backend's matrix type even if both
-/// linear blocks are absent. SLSQP additionally requires
-/// [`MatrixIndex`](crate::MatrixIndex) for the same four dense backends.
-pub trait NonlinearConstraints: CostFunction {
-    /// The matrix type for the optional linear constraint blocks.
-    type Matrix;
-
-    /// Evaluate the nonlinear inequalities `c(x) ≤ 0`. The returned vector
-    /// has length [`num_nonlinear_constraints`](Self::num_nonlinear_constraints).
-    fn nonlinear_constraints(
-        &self,
-        x: &Self::Param,
-    ) -> Result<Self::Param, Self::Error>;
-
-    /// The number of nonlinear inequalities, excluding bounds and linear
-    /// constraints. Zero is valid.
-    fn num_nonlinear_constraints(&self) -> usize;
-
-    /// Number of native nonlinear equalities `h(x) = 0`. Defaults to zero.
-    /// Keep this count fixed throughout a solve.
-    fn num_nonlinear_equalities(&self) -> usize {
-        0
-    }
-
-    /// Evaluate native nonlinear equalities. `None` means an absent block
-    /// and requires a zero declared count. A present vector must have length
-    /// [`num_nonlinear_equalities`](Self::num_nonlinear_equalities).
-    /// SLSQP handles these natively; [`FoldedConstraints`] folds both signs.
-    fn nonlinear_equalities(
-        &self,
-        _x: &Self::Param,
-    ) -> Result<Option<Self::Param>, Self::Error> {
-        Ok(None)
-    }
-
-    /// Linear inequalities `A_ineq x ≤ b_ineq` as `(A_ineq, b_ineq)`, or
-    /// `None` (the default) when absent.
-    fn inequalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
-        None
-    }
-
-    /// Linear equalities `A_eq x = b_eq` as `(A_eq, b_eq)`, or `None` (the
-    /// default) when absent. Folding represents each equality by both signs
-    /// of its residual, without relaxing the equality at the start point.
-    fn equalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
-        None
-    }
-
-    /// Element-wise lower bounds of length `n`, or `None` (the default).
-    /// Non-finite entries leave that coordinate unbounded below.
-    fn lower(&self) -> Option<&Self::Param> {
-        None
-    }
-
-    /// Element-wise upper bounds of length `n`, or `None` (the default).
-    /// Non-finite entries leave that coordinate unbounded above.
-    fn upper(&self) -> Option<&Self::Param> {
-        None
-    }
-}
-
-/// Analytic Jacobian of the nonlinear blocks of [`NonlinearConstraints`].
-///
-/// Rows contain nonlinear equalities first, then nonlinear inequalities in
-/// callback order; columns correspond to parameters. Differentiate the public
-/// `c(x) ≤ 0` inequalities without changing their signs. The matrix has
-/// `num_nonlinear_equalities() + num_nonlinear_constraints()` rows and `n`
-/// columns, including when it has zero rows. Linear blocks already supply
-/// their own Jacobians and are excluded here.
-///
-/// [`crate::FiniteDiff`] and [`crate::BoundedFiniteDiff`] synthesize this
-/// capability from constraint values. Consumers add the matrix math bounds
-/// they need; the trait itself leaves the matrix carrier unconstrained.
-pub trait ConstraintJacobian: NonlinearConstraints {
-    /// Evaluate the nonlinear constraint Jacobian at `x`.
+/// Rows contain nonlinear equalities first, followed by nonlinear inequalities
+/// in callback order. Columns correspond to parameters. Linear blocks supply
+/// their own derivatives and are excluded. This storage is independent of the
+/// linear matrices. Finite-difference adapters synthesize this capability.
+pub trait ConstraintJacobian: ProblemConstraints {
+    /// Parameter type.
+    type Param;
+    /// Nonlinear Jacobian storage.
+    type Jacobian;
+    /// Original callback error type.
+    type Error;
+    /// Evaluate equality rows first, followed by inequality rows.
     fn constraint_jacobian(
         &self,
         x: &Self::Param,
-    ) -> Result<Self::Matrix, Self::Error>;
-}
-
-/// The general linearly-constrained problem: box bounds, linear equalities,
-/// and linear inequalities together.
-///
-/// This is the constraint surface of [`Lincoa`](crate::Lincoa), which
-/// minimizes a smooth objective over the feasible set
-///
-/// ```text
-/// { x ∈ ℝⁿ :  lower ≤ x ≤ upper,   A_eq x = b_eq,   A_ineq x ≤ b_ineq }
-/// ```
-///
-/// using only objective values. Every accessor is **optional** (defaulting to
-/// `None`), so a problem implements only the blocks it actually has: an
-/// inequality-only problem overrides just [`inequalities`](Self::inequalities),
-/// a box-bounded one just [`lower`](Self::lower)/[`upper`](Self::upper), and
-/// so on. LINCOA folds whatever is present into a single unit-normalized
-/// `A x ≤ b` system (bounds as `±eᵢ` rows, an equality `aᵀx = β` as the pair
-/// `aᵀx ≤ β`, `−aᵀx ≤ −β`) and keeps every iterate feasible with one
-/// active-set projection.
-///
-/// # Not a parent of the sibling constraint traits
-///
-/// Despite the family-resembling name, `LinearConstraints` is **standalone**:
-/// it is *not* a supertrait of [`LinearInequalityConstraints`]/
-/// [`LinearEqualityConstraints`]/[`BoxConstraints`], and there are no
-/// blanket impls bridging from them. A problem that wants LINCOA implements
-/// `LinearConstraints` directly. This is deliberate: a blanket
-/// `impl<P: LinearInequalityConstraints> LinearConstraints for P` could only
-/// forward the inequality block, silently dropping any box and equality data the
-/// problem also carries, and would block a manual impl by coherence. Keeping
-/// it standalone makes the full general form expressible. The sibling traits
-/// remain the right surface for their single-kind consumers (the log-barrier
-/// [`BarrierMethod`](crate::solver::BarrierMethod) on
-/// [`LinearInequalityConstraints`], the
-/// [`AugmentedLagrangianMethod`](crate::solver::AugmentedLagrangianMethod) on
-/// [`LinearEqualityConstraints`]).
-///
-/// # Shapes
-///
-/// The iterate lives in `ℝⁿ`. [`lower`](Self::lower)/[`upper`](Self::upper)
-/// share the parameter type and length `n`; non-finite entries mean that
-/// coordinate is unbounded on that side. Each linear block returns its matrix
-/// paired with its right-hand side `b ∈ ℝᵐ` (one entry per row), where `m` is
-/// that block's own row count; `m` need not match `n` or the other block's
-/// row count. The matrix and its `b` are returned **together** as a tuple so
-/// they cannot fall out of sync.
-///
-/// # Matrix type and consumers
-///
-/// Like the sibling traits, this leaves [`Matrix`](Self::Matrix) free of math
-/// bounds; the consumer adds what it needs. LINCOA reads each constraint
-/// normal as `Aᵀ eⱼ`, so it requires `Matrix: MatTransposeVec<Param>` (never a
-/// linear solve), which every backend's matrix type provides (`DenseMatrix`
-/// for `Vec<f64>`, `Array2`, `DMatrix`, `Mat`), so LINCOA works on all four.
-///
-/// # Examples
-///
-/// A box-bounded problem (no matrix blocks) handed to LINCOA:
-///
-/// ```
-/// use basin::CostFunction;
-/// use basin::core::constraint::LinearConstraints;
-///
-/// struct BoundedSphere { lower: Vec<f64>, upper: Vec<f64> }
-/// impl CostFunction for BoundedSphere {
-///     type Param = Vec<f64>;
-///     type Output = f64;
-///     type Error = std::convert::Infallible;
-///     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
-///         Ok(x.iter().map(|xi| xi * xi).sum())
-///     }
-/// }
-/// impl LinearConstraints for BoundedSphere {
-///     type Matrix = basin::DenseMatrix<f64>; // unused: no equality/inequality blocks
-///     fn lower(&self) -> Option<&Vec<f64>> { Some(&self.lower) }
-///     fn upper(&self) -> Option<&Vec<f64>> { Some(&self.upper) }
-/// }
-///
-/// let p = BoundedSphere { lower: vec![0.5, 0.5], upper: vec![2.0, 2.0] };
-/// assert_eq!(p.lower(), Some(&vec![0.5, 0.5]));
-/// assert!(p.inequalities().is_none());
-/// ```
-pub trait LinearConstraints: CostFunction {
-    /// The constraint-matrix type for the equality/inequality blocks.
-    /// LINCOA bounds it on
-    /// [`MatTransposeVec<Param>`](crate::core::math::MatTransposeVec) (each
-    /// constraint normal is `Aᵀ eⱼ`); never a linear solve.
-    type Matrix;
-
-    /// Linear inequalities `A_ineq x ≤ b_ineq` as `(A_ineq, b_ineq)`, or
-    /// `None` (the default) when the problem has no inequality constraints.
-    fn inequalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
-        None
-    }
-
-    /// Linear equalities `A_eq x = b_eq` as `(A_eq, b_eq)`, or `None` (the
-    /// default) when the problem has no equality constraints.
-    ///
-    /// Each equality folds to the inequality pair `aᵀx ≤ β`, `−aᵀx ≤ −β`. If the
-    /// start point is *not* on the equality (`aᵀx0 ≠ β`), both folded rows are
-    /// relaxed independently to keep `x0` feasible, so the equality is widened to
-    /// the slab between `β` and `aᵀx0` rather than re-projected onto the line
-    /// (Powell's behavior). Start on the equality for it to bind exactly.
-    fn equalities(&self) -> Option<(&Self::Matrix, &Self::Param)> {
-        None
-    }
-
-    /// Element-wise lower bound on the iterate (length `n`), or `None` (the
-    /// default) when unbounded below. Non-finite entries leave that coordinate
-    /// unbounded below.
-    fn lower(&self) -> Option<&Self::Param> {
-        None
-    }
-
-    /// Element-wise upper bound on the iterate (length `n`), or `None` (the
-    /// default) when unbounded above. Non-finite entries leave that coordinate
-    /// unbounded above.
-    fn upper(&self) -> Option<&Self::Param> {
-        None
-    }
+    ) -> Result<Self::Jacobian, ConstraintSolveError<Self::Error>>;
 }

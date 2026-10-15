@@ -5,9 +5,10 @@
 mod factor;
 mod least_squares;
 
-use crate::core::constraint::{ConstraintJacobian, NonlinearConstraints};
+use crate::core::constraint::evaluation::{NonlinearSet, SlsqpSet, invalid};
+use crate::core::constraint::{ConstraintError, ConstraintSolveError};
 use crate::core::inner::InitialState;
-use crate::core::math::{MatrixIndex, Scalar, VectorIndex, VectorLen};
+use crate::core::math::{Scalar, VectorIndex, VectorLen};
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{SelectedFirstOrderState, State};
@@ -51,16 +52,18 @@ pub enum SlsqpFailure {
 ///
 /// # Problem and progress
 ///
-/// Supply [`Gradient`], [`NonlinearConstraints`], and [`ConstraintJacobian`],
-/// or synthesize derivatives with [`crate::FiniteDiff`] or
-/// [`crate::BoundedFiniteDiff`]. Native equalities are `h(x) = 0` and public
+/// Supply [`Gradient`] and the canonical [`ProblemConstraints`](crate::ProblemConstraints)
+/// declaration. Present nonlinear blocks additionally require
+/// [`crate::ConstraintJacobian`]. Derivatives can be analytic or synthesized
+/// with [`crate::FiniteDiff`] or [`crate::BoundedFiniteDiff`]. Native equalities are `h(x) = 0` and public
 /// inequalities are `c(x) ≤ 0`. Linear blocks are evaluated exactly. Constraint
 /// counts, shapes, bounds, and linear coefficients must remain fixed throughout
-/// the solve. Malformed shapes and invalid configurations panic.
+/// the solve. Malformed constraint data returns [`ConstraintSolveError`].
 ///
 /// Nonlinear feasibility is not required at the start. Initial and trial points
 /// are clipped to the box, and fixed coordinates are eliminated internally.
-/// As in [`NonlinearConstraints`], non-finite bounds mean an unbounded side.
+/// Negative-infinite lower and positive-infinite upper bounds mean an unbounded
+/// side. NaN, wrong-sign infinities, and inverted bounds are invalid.
 /// Numerical differentiation respects the box only when explicitly configured
 /// with the bounded adapter. Every accepted point has a matching cost and
 /// objective gradient, even at termination. [`SelectedFirstOrderState`] publishes the latest
@@ -135,23 +138,25 @@ pub enum SlsqpFailure {
 /// Minimize `x²` with the nonlinear equality `x - 1 = 0`:
 /// ```
 /// use basin::{CostFunction, DenseMatrix, Executor, FiniteDiff,
-///     NonlinearConstraints, Slsqp, SelectedFirstOrderState, State};
+///     Slsqp, SelectedFirstOrderState, State};
 /// struct Example;
+/// impl basin::ProblemConstraints for Example  {
+///     type Constraints = basin::Constraints<basin::NoBounds, basin::NoLinearConstraints, basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_nonlinear_equalities(1) }
+/// }
 /// impl CostFunction for Example {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
 ///     type Error = std::convert::Infallible;
 ///     fn cost(&self, x: &Vec<f64>) -> Result<f64, Self::Error> { Ok(x[0]*x[0]) }
 /// }
-/// impl NonlinearConstraints for Example {
-///     type Matrix = DenseMatrix;
-///     fn num_nonlinear_constraints(&self) -> usize { 0 }
-///     fn nonlinear_constraints(&self, _: &Vec<f64>) -> Result<Vec<f64>, Self::Error> { Ok(vec![]) }
-///     fn num_nonlinear_equalities(&self) -> usize { 1 }
-///     fn nonlinear_equalities(&self, x: &Vec<f64>) -> Result<Option<Vec<f64>>, Self::Error> {
-///         Ok(Some(vec![x[0]-1.0]))
+/// impl basin::NonlinearEqualityValues for Example  {
+///     type Param = Vec<f64>; type Values = Vec<f64>; type Error = std::convert::Infallible;
+///     fn nonlinear_equalities(&self, x: &Self::Param) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+///         (|| -> Result<Option<Vec<f64>>, std::convert::Infallible> { Ok(Some(vec![x[0]-1.0])) })().map_err(basin::ConstraintSolveError::Evaluation)?.ok_or(basin::ConstraintSolveError::InvalidConstraints(basin::ConstraintError::DimensionMismatch { block: basin::ConstraintBlock::NonlinearEqualities, axis: basin::ConstraintAxis::Length, expected: 1, actual: 0 }))
 ///     }
 /// }
+///
 /// let result = Executor::new(FiniteDiff::new(Example), Slsqp::new(),
 ///     SelectedFirstOrderState::new(vec![0.0])).max_iter(100).run().unwrap();
 /// assert!((result.state.param()[0]-1.0).abs() < 1e-6);
@@ -313,38 +318,20 @@ fn below<F: Scalar>(value: F, tolerance: Option<F>) -> bool {
             && (value < t || (t == F::zero() && value == F::zero()))
     })
 }
-fn vector<V: VectorLen + VectorIndex<F>, F: Scalar>(v: &V) -> Vec<F> {
-    (0..v.vec_len()).map(|i| v.get_scalar(i)).collect()
-}
-fn linear_block<V, M, F>(
-    block: Option<(&M, &V)>,
+
+fn linear_block<F: Scalar>(
+    rows: Vec<(Vec<F>, F)>,
     n: usize,
-) -> (Matrix<F>, Vec<F>)
-where
-    V: VectorLen + VectorIndex<F>,
-    M: MatrixIndex<F>,
-    F: Scalar,
-{
-    let Some((a, b)) = block else {
-        return (Matrix::zeros(0, n), vec![]);
-    };
-    assert_eq!(
-        a.matrix_rows(),
-        b.vec_len(),
-        "constraint matrix row count mismatch"
-    );
-    assert_eq!(
-        a.matrix_cols(),
-        n,
-        "constraint matrix column count mismatch"
-    );
-    let mut matrix = Matrix::zeros(a.matrix_rows(), n);
-    for i in 0..matrix.rows {
-        for j in 0..n {
-            matrix.set(i, j, a.matrix_entry(i, j));
+) -> (Matrix<F>, Vec<F>) {
+    let mut matrix = Matrix::zeros(rows.len(), n);
+    let mut rhs = Vec::with_capacity(rows.len());
+    for (i, (row, b)) in rows.into_iter().enumerate() {
+        for (j, value) in row.into_iter().enumerate() {
+            matrix.set(i, j, value)
         }
+        rhs.push(b);
     }
-    (matrix, vector(b))
+    (matrix, rhs)
 }
 
 impl<F: Scalar> Work<F> {
@@ -671,54 +658,49 @@ impl<F: Scalar> Work<F> {
         &self,
         problem: &mut Problem<P>,
         x: &V,
-    ) -> Result<Vec<F>, P::Error>
+    ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>
     where
-        P: NonlinearConstraints<Param = V, Output = F>,
+        P: CostFunction<Param = V, Output = F>,
+        P::Constraints: SlsqpSet<P, V, F>,
         V: VectorLen + VectorIndex<F>,
     {
-        assert_eq!(
-            problem.inner().num_nonlinear_equalities(),
-            self.nonlinear_eq,
-            "nonlinear equality count changed"
-        );
-        assert_eq!(
-            problem.inner().num_nonlinear_constraints(),
-            self.nonlinear_ineq,
-            "nonlinear inequality count changed"
-        );
-        let mut c: Vec<_> = (0..self.linear_eq.rows)
-            .map(|i| {
-                (0..x.vec_len())
-                    .map(|j| self.linear_eq.get(i, j) * x.get_scalar(j))
-                    .sum::<F>()
-                    - self.rhs_eq[i]
-            })
-            .collect();
-        if self.nonlinear_eq > 0 {
-            let v = problem
-                .nonlinear_equalities(x)?
-                .expect("declared nonlinear equalities must return a vector");
-            assert_eq!(
-                v.vec_len(),
-                self.nonlinear_eq,
-                "nonlinear equality output length mismatch"
-            );
-            c.extend(vector(&v));
+        let expected = (self.nonlinear_eq, self.nonlinear_ineq);
+        if P::Constraints::counts(problem.inner().constraint_set()) != expected
+        {
+            return Err(invalid(ConstraintError::LayoutChanged));
         }
-        c.extend((0..self.linear_ineq.rows).map(|i| {
-            self.rhs_ineq[i]
+        let mut c = vec![F::zero(); self.c.len()];
+        for (i, value) in c.iter_mut().take(self.linear_eq.rows).enumerate() {
+            *value = (0..x.vec_len())
+                .map(|j| self.linear_eq.get(i, j) * x.get_scalar(j))
+                .sum::<F>()
+                - self.rhs_eq[i];
+        }
+        let meq = self.meq();
+        for (i, value) in c
+            .iter_mut()
+            .skip(meq)
+            .take(self.linear_ineq.rows)
+            .enumerate()
+        {
+            *value = self.rhs_ineq[i]
                 - (0..x.vec_len())
                     .map(|j| self.linear_ineq.get(i, j) * x.get_scalar(j))
-                    .sum::<F>()
-        }));
-        if self.nonlinear_ineq > 0 {
-            let v = problem.nonlinear_constraints(x)?;
-            assert_eq!(
-                v.vec_len(),
-                self.nonlinear_ineq,
-                "nonlinear inequality output length mismatch"
-            );
-            c.extend(vector(&v).into_iter().map(|v| -v));
+                    .sum::<F>();
+        }
+        let (equalities, inequalities) = c.split_at_mut(meq);
+        let mut counts = crate::EvalCounts::default();
+        let result = P::Constraints::write_values(
+            problem.inner(),
+            x,
+            &mut counts,
+            &mut equalities[self.linear_eq.rows..],
+            &mut inequalities[self.linear_ineq.rows..],
+        );
+        problem.counts_mut().add(&counts);
+        result?;
+        for value in &mut inequalities[self.linear_ineq.rows..] {
+            *value = -*value;
         }
         Ok(c)
     }
@@ -726,10 +708,10 @@ impl<F: Scalar> Work<F> {
         &mut self,
         problem: &mut Problem<P>,
         x: &V,
-    ) -> Result<Matrix<F>, P::Error>
+    ) -> Result<Matrix<F>, ConstraintSolveError<P::Error>>
     where
-        P: ConstraintJacobian<Param = V, Output = F>,
-        P::Matrix: MatrixIndex<F>,
+        P: CostFunction<Param = V, Output = F>,
+        P::Constraints: SlsqpSet<P, V, F>,
         V: VectorLen,
     {
         let mut a = Matrix::zeros(self.c.len(), self.free.len());
@@ -743,37 +725,30 @@ impl<F: Scalar> Work<F> {
                 a.set(self.meq() + i, j, -self.linear_ineq.get(i, k));
             }
         }
-        if self.nonlinear_eq + self.nonlinear_ineq > 0 {
-            let jac = problem.constraint_jacobian(x)?;
-            assert_eq!(
-                jac.matrix_rows(),
-                self.nonlinear_eq + self.nonlinear_ineq,
-                "constraint Jacobian row mismatch"
-            );
-            assert_eq!(
-                jac.matrix_cols(),
-                x.vec_len(),
-                "constraint Jacobian column mismatch"
-            );
-            if (0..jac.matrix_rows()).any(|i| {
-                (0..jac.matrix_cols())
-                    .any(|j| !jac.matrix_entry(i, j).is_finite())
-            }) {
-                self.failure = Some(SlsqpFailure::NonFiniteEvaluation);
-            }
-            for i in 0..self.nonlinear_eq + self.nonlinear_ineq {
-                let (row, sign) = if i < self.nonlinear_eq {
-                    (self.linear_eq.rows + i, F::one())
-                } else {
-                    (
-                        self.meq() + self.linear_ineq.rows + i
-                            - self.nonlinear_eq,
-                        -F::one(),
-                    )
-                };
-                for (j, &k) in self.free.iter().enumerate() {
-                    a.set(row, j, sign * jac.matrix_entry(i, k));
-                }
+        let mut counts = crate::EvalCounts::default();
+        let result = P::Constraints::jacobian(
+            problem.inner(),
+            x,
+            x.vec_len(),
+            self.nonlinear_eq + self.nonlinear_ineq,
+            &mut counts,
+        );
+        problem.counts_mut().add(&counts);
+        let jac = result?;
+        if jac.iter().flatten().any(|v| !v.is_finite()) {
+            self.failure = Some(SlsqpFailure::NonFiniteEvaluation);
+        }
+        for (i, values) in jac.iter().enumerate() {
+            let (row, sign) = if i < self.nonlinear_eq {
+                (self.linear_eq.rows + i, F::one())
+            } else {
+                (
+                    self.meq() + self.linear_ineq.rows + i - self.nonlinear_eq,
+                    -F::one(),
+                )
+            };
+            for (j, &k) in self.free.iter().enumerate() {
+                a.set(row, j, sign * values[k]);
             }
         }
         Ok(a)
@@ -814,40 +789,31 @@ impl<F: Scalar> Work<F> {
 impl<P, V, F> Solver<P, SelectedFirstOrderState<V, F>> for Slsqp<F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F>
-        + Gradient<Gradient = V>
-        + ConstraintJacobian,
+    P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
+    P::Constraints: SlsqpSet<P, V, F>,
     V: Clone + VectorLen + VectorIndex<F>,
-    P::Matrix: MatrixIndex<F>,
 {
-    type Error = P::Error;
+    type Error = ConstraintSolveError<P::Error>;
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: SelectedFirstOrderState<V, F>,
-    ) -> Result<SelectedFirstOrderState<V, F>, P::Error> {
+    ) -> Result<SelectedFirstOrderState<V, F>, ConstraintSolveError<P::Error>>
+    {
         self.work = None;
         let mut param = state.param().clone();
         let mut state = state;
         state.reset();
         let n = param.vec_len();
         assert!(n > 0, "SLSQP requires at least one parameter");
-        let mut lower = vec![F::neg_infinity(); n];
-        let mut upper = vec![F::infinity(); n];
-        for (bounds, out) in [
-            (problem.inner().lower(), &mut lower),
-            (problem.inner().upper(), &mut upper),
-        ] {
-            if let Some(bounds) = bounds {
-                assert_eq!(bounds.vec_len(), n, "SLSQP bound length mismatch");
-                for i in 0..n {
-                    let v = bounds.get_scalar(i);
-                    if v.is_finite() {
-                        out[i] = v;
-                    }
-                }
-            }
-        }
+        let data = P::Constraints::data(problem.inner().constraint_set(), n)
+            .map_err(invalid)?;
+        let lower = data
+            .bounds
+            .lower
+            .unwrap_or_else(|| vec![F::neg_infinity(); n]);
+        let upper = data.bounds.upper.unwrap_or_else(|| vec![F::infinity(); n]);
+
         for i in 0..n {
             assert!(
                 lower[i] <= upper[i],
@@ -862,13 +828,16 @@ where
         }
         let free: Vec<_> = (0..n).filter(|&i| lower[i] != upper[i]).collect();
         let nf = free.len();
-        let (linear_eq, rhs_eq) = linear_block(problem.inner().equalities(), n);
-        let (linear_ineq, rhs_ineq) =
-            linear_block(problem.inner().inequalities(), n);
-        let nonlinear_eq = problem.inner().num_nonlinear_equalities();
-        let nonlinear_ineq = problem.inner().num_nonlinear_constraints();
-        let m =
-            linear_eq.rows + linear_ineq.rows + nonlinear_eq + nonlinear_ineq;
+        let (linear_eq, rhs_eq) = linear_block(data.equalities, n);
+        let (linear_ineq, rhs_ineq) = linear_block(data.inequalities, n);
+        let (nonlinear_eq, nonlinear_ineq) =
+            P::Constraints::counts(problem.inner().constraint_set());
+        let m = linear_eq
+            .rows
+            .checked_add(linear_ineq.rows)
+            .and_then(|m| m.checked_add(nonlinear_eq))
+            .and_then(|m| m.checked_add(nonlinear_ineq))
+            .ok_or_else(|| invalid(ConstraintError::CountOverflow))?;
         let mut work = Work {
             free,
             lower,
@@ -930,8 +899,10 @@ where
         &mut self,
         problem: &mut Problem<P>,
         mut state: SelectedFirstOrderState<V, F>,
-    ) -> Result<crate::SolverStep<SelectedFirstOrderState<V, F>>, P::Error>
-    {
+    ) -> Result<
+        crate::SolverStep<SelectedFirstOrderState<V, F>>,
+        ConstraintSolveError<P::Error>,
+    > {
         let work = self.work.as_mut().expect("SLSQP must be initialized");
         if work.failure.is_some() {
             work.diagnostics(state.param());

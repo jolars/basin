@@ -266,6 +266,15 @@ mod tests {
     /// Minimum at x = 3, ∇f = 2(x - 3).
     struct Quadratic;
 
+    impl crate::ProblemConstraints for Quadratic {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for Quadratic {
         type Param = Vec<f64>;
         type Output = f64;

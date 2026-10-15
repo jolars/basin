@@ -6,9 +6,8 @@
 
 use super::Vector;
 use basin::{
-    BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
-    GradientState, Lbfgsb, OptimizationResult, Solver, State, Stepper,
-    TerminationCode,
+    CostFunction, Executor, FirstOrderState, Gradient, GradientState, Lbfgsb,
+    OptimizationResult, Solver, State, Stepper, TerminationCode,
 };
 use std::convert::Infallible;
 
@@ -135,8 +134,11 @@ impl<V: Vector> Short<V> {
         adapter: Adapter,
     ) -> Executor<&Self, FirstOrderState<V>, Lbfgsb<V>>
     where
-        Lbfgsb<V>:
-            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
+        Lbfgsb<V>: for<'a> Solver<
+                &'a Self,
+                FirstOrderState<V>,
+                Error = basin::ConstraintSolveError<Infallible>,
+            >,
     {
         let (history, cost_tolerance) = match self.case {
             Case::Mixed => (5, 0.0),
@@ -207,8 +209,11 @@ impl<V: Vector> Short<V> {
         adapter: Adapter,
     ) -> Stepper<&Self, FirstOrderState<V>, Lbfgsb<V>>
     where
-        Lbfgsb<V>:
-            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
+        Lbfgsb<V>: for<'a> Solver<
+                &'a Self,
+                FirstOrderState<V>,
+                Error = basin::ConstraintSolveError<Infallible>,
+            >,
     {
         self.executor(adapter).into_stepper().unwrap()
     }
@@ -218,8 +223,11 @@ impl<V: Vector> Short<V> {
         adapter: Adapter,
     ) -> OptimizationResult<FirstOrderState<V>>
     where
-        Lbfgsb<V>:
-            for<'a> Solver<&'a Self, FirstOrderState<V>, Error = Infallible>,
+        Lbfgsb<V>: for<'a> Solver<
+                &'a Self,
+                FirstOrderState<V>,
+                Error = basin::ConstraintSolveError<Infallible>,
+            >,
     {
         self.executor(adapter).run().unwrap()
     }
@@ -296,6 +304,17 @@ fn projected_gradient(
         .fold(0.0, f64::max)
 }
 
+impl<V: Vector> basin::ProblemConstraints for &Short<V> {
+    type Constraints = basin::Constraints<basin::BoxBounds<V>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl<V: Vector> CostFunction for &Short<V> {
     type Param = V;
     type Output = f64;
@@ -315,11 +334,13 @@ impl<V: Vector> Gradient for &Short<V> {
         Ok((value, gradient))
     }
 }
-impl<V: Vector> BoxConstraints for &Short<V> {
-    fn lower(&self) -> &V {
+impl<V: Vector> Short<V> {
+    /// Access this problem's lower.
+    pub fn lower(&self) -> &V {
         &self.lower
     }
-    fn upper(&self) -> &V {
+    /// Access this problem's upper.
+    pub fn upper(&self) -> &V {
         &self.upper
     }
 }

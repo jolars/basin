@@ -74,10 +74,14 @@ impl<M, V> HasSpec for EqualityConstrainedQuadratic<M, V> {
 crate::backend_macros::nalgebra_versions! {
     nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::EqualityConstrainedQuadratic;
-    use crate::{CostFunction, Gradient, LinearEqualityConstraints};
+    use crate::{CostFunction, Gradient};
     use nalgebra::{DMatrix, DVector};
 
-    impl CostFunction for EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>> {
+    impl crate::ProblemConstraints for EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>>  {
+    type Constraints = crate::Constraints<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<DMatrix<f64>, DVector<f64>>, crate::NoLinearBlock>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
+}
+impl CostFunction for EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -99,14 +103,14 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl LinearEqualityConstraints
-        for EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>>
-    {
-        type Matrix = DMatrix<f64>;
-        fn a(&self) -> &DMatrix<f64> {
+    impl EqualityConstrainedQuadratic<DMatrix<f64>, DVector<f64>>  {
+
+        /// Return the linear constraint coefficient matrix.
+        pub fn a(&self) -> &DMatrix<f64> {
             &self.a
         }
-        fn b(&self) -> &DVector<f64> {
+        /// Return the linear constraint right-hand side.
+        pub fn b(&self) -> &DVector<f64> {
             &self.b
         }
     }
@@ -116,10 +120,14 @@ crate::backend_macros::nalgebra_versions! {
 crate::backend_macros::faer_versions! {
     faer_impl(faer, faer_traits);
     use super::EqualityConstrainedQuadratic;
-    use crate::{CostFunction, Gradient, LinearEqualityConstraints};
+    use crate::{CostFunction, Gradient};
     use faer::{Col, Mat};
 
-    impl CostFunction for EqualityConstrainedQuadratic<Mat<f64>, Col<f64>> {
+    impl crate::ProblemConstraints for EqualityConstrainedQuadratic<Mat<f64>, Col<f64>>  {
+    type Constraints = crate::Constraints<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<Mat<f64>, Col<f64>>, crate::NoLinearBlock>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
+}
+impl CostFunction for EqualityConstrainedQuadratic<Mat<f64>, Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -143,14 +151,14 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl LinearEqualityConstraints
-        for EqualityConstrainedQuadratic<Mat<f64>, Col<f64>>
-    {
-        type Matrix = Mat<f64>;
-        fn a(&self) -> &Mat<f64> {
+    impl EqualityConstrainedQuadratic<Mat<f64>, Col<f64>>  {
+
+        /// Return the linear constraint coefficient matrix.
+        pub fn a(&self) -> &Mat<f64> {
             &self.a
         }
-        fn b(&self) -> &Col<f64> {
+        /// Return the linear constraint right-hand side.
+        pub fn b(&self) -> &Col<f64> {
             &self.b
         }
     }
@@ -159,8 +167,27 @@ crate::backend_macros::faer_versions! {
 mod vec_impl {
     use super::EqualityConstrainedQuadratic;
     use crate::core::math::DenseMatrix;
-    use crate::{CostFunction, Gradient, LinearEqualityConstraints};
+    use crate::{CostFunction, Gradient};
 
+    impl crate::ProblemConstraints
+        for EqualityConstrainedQuadratic<DenseMatrix, Vec<f64>>
+    {
+        type Constraints = crate::Constraints<
+            crate::NoBounds,
+            crate::LinearBlocks<
+                crate::LinearBlock<DenseMatrix, Vec<f64>>,
+                crate::NoLinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_linear_equalities(
+                crate::LinearBlock::new(&self.a, &self.b),
+            )
+        }
+    }
     impl CostFunction for EqualityConstrainedQuadratic<DenseMatrix, Vec<f64>> {
         type Param = Vec<f64>;
         type Output = f64;
@@ -186,14 +213,13 @@ mod vec_impl {
         }
     }
 
-    impl LinearEqualityConstraints
-        for EqualityConstrainedQuadratic<DenseMatrix, Vec<f64>>
-    {
-        type Matrix = DenseMatrix;
-        fn a(&self) -> &DenseMatrix {
+    impl EqualityConstrainedQuadratic<DenseMatrix, Vec<f64>> {
+        /// Return the linear constraint coefficient matrix.
+        pub fn a(&self) -> &DenseMatrix {
             &self.a
         }
-        fn b(&self) -> &Vec<f64> {
+        /// Return the linear constraint right-hand side.
+        pub fn b(&self) -> &Vec<f64> {
             &self.b
         }
     }
@@ -203,10 +229,14 @@ mod vec_impl {
 crate::backend_macros::ndarray_versions! {
     ndarray_impl(ndarray);
     use super::EqualityConstrainedQuadratic;
-    use crate::{CostFunction, Gradient, LinearEqualityConstraints};
+    use crate::{CostFunction, Gradient};
     use ndarray::{Array1, Array2};
 
-    impl CostFunction for EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>> {
+    impl crate::ProblemConstraints for EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>>  {
+    type Constraints = crate::Constraints<crate::NoBounds, crate::LinearBlocks<crate::LinearBlock<Array2<f64>, Array1<f64>>, crate::NoLinearBlock>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_linear_equalities(crate::LinearBlock::new(&self.a, &self.b)) }
+}
+impl CostFunction for EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -228,14 +258,14 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl LinearEqualityConstraints
-        for EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>>
-    {
-        type Matrix = Array2<f64>;
-        fn a(&self) -> &Array2<f64> {
+    impl EqualityConstrainedQuadratic<Array2<f64>, Array1<f64>>  {
+
+        /// Return the linear constraint coefficient matrix.
+        pub fn a(&self) -> &Array2<f64> {
             &self.a
         }
-        fn b(&self) -> &Array1<f64> {
+        /// Return the linear constraint right-hand side.
+        pub fn b(&self) -> &Array1<f64> {
             &self.b
         }
     }

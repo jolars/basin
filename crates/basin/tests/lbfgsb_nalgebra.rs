@@ -9,13 +9,23 @@
 use crate::backend_aliases::nalgebra::DVector;
 use basin::problems::BoothBoxed;
 use basin::{
-    Bfgs, BoxConstraints, CostFunction, Executor, FirstOrderState, Gradient,
-    Lbfgsb, MoreThuente,
+    Bfgs, CostFunction, Executor, FirstOrderState, Gradient, Lbfgsb,
+    MoreThuente,
 };
 
 struct Rosen {
     l: DVector<f64>,
     u: DVector<f64>,
+}
+
+impl basin::ProblemConstraints for Rosen {
+    type Constraints = basin::Constraints<basin::BoxBounds<DVector<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(Some(&self.l), Some(&self.u)))
+    }
 }
 impl CostFunction for Rosen {
     type Param = DVector<f64>;
@@ -37,14 +47,6 @@ impl Gradient for Rosen {
             let dfdx1 = 200.0 * (x[1] - x[0] * x[0]);
             DVector::from_vec(vec![dfdx0, dfdx1])
         })
-    }
-}
-impl BoxConstraints for Rosen {
-    fn lower(&self) -> &DVector<f64> {
-        &self.l
-    }
-    fn upper(&self) -> &DVector<f64> {
-        &self.u
     }
 }
 

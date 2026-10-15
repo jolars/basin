@@ -143,12 +143,15 @@ use crate::core::state::{PointState, State};
 /// ```
 /// use basin::{
 ///     PointState, CostFunction, Executor, MiniBatchGradient,
-///     Sgd,
-/// };
+///     Sgd};
 ///
 /// struct LinReg {
 ///     rows: Vec<Vec<f64>>,
 ///     y: Vec<f64>,
+/// }
+/// impl basin::ProblemConstraints for LinReg  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
 /// }
 /// impl CostFunction for LinReg {
 ///     type Param = Vec<f64>;
@@ -309,6 +312,7 @@ where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + MiniBatchGradient<Gradient = V>,
     V: ScaledAdd<F> + ScaleInPlace<F> + Clone,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -449,6 +453,15 @@ mod tests {
         }
     }
 
+    impl crate::ProblemConstraints for FiniteSumQuadratic {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for FiniteSumQuadratic {
         type Param = Vec<f64>;
         type Output = f64;

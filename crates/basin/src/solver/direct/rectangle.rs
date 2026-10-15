@@ -373,24 +373,29 @@ mod tests;
 #[cfg(test)]
 mod stopping_tests {
     use super::*;
-    use crate::{BoxConstraints, CostFunction, Direct, PointState, Solver};
+    use crate::{CostFunction, Direct, PointState, Solver};
     use std::convert::Infallible;
 
     struct FlatBox<F>(Vec<F>, Vec<F>);
+
+    impl<F: Scalar> crate::ProblemConstraints for FlatBox<F> {
+        type Constraints = crate::Constraints<crate::BoxBounds<Vec<F>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.0),
+                Some(&self.1),
+            ))
+        }
+    }
     impl<F: Scalar> CostFunction for FlatBox<F> {
         type Param = Vec<F>;
         type Output = F;
         type Error = Infallible;
         fn cost(&self, _: &Vec<F>) -> Result<F, Infallible> {
             Ok(F::zero())
-        }
-    }
-    impl<F: Scalar> BoxConstraints for FlatBox<F> {
-        fn lower(&self) -> &Vec<F> {
-            &self.0
-        }
-        fn upper(&self) -> &Vec<F> {
-            &self.1
         }
     }
 

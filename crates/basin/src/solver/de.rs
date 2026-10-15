@@ -1,6 +1,6 @@
 use rand_distr::uniform::SampleUniform;
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{
     SampleUniformBox, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
 };
@@ -125,7 +125,7 @@ pub enum DeCrossover {
 ///
 /// # Contract and lifecycle
 ///
-/// The problem implements [`CostFunction`] and [`BoxConstraints`] with the
+/// The problem implements [`CostFunction`] and declares a box-only set with the
 /// same vector type and scalar. Bounds must be non-empty, equal in length,
 /// finite, and ordered (`lower[j] ≤ upper[j]`). Equal bounds pin a coordinate.
 /// Invalid settings panic in their builders; initialization checks bounds and
@@ -504,7 +504,7 @@ impl<P, V, F> Solver<P, PopulationProgress<V, F>> for De<F>
 where
     F: Scalar + SampleUniform + crate::core::parallel::MaybeSend,
     P: CostFunction<Param = V, Output = F>
-        + BoxConstraints<Param = V>
+        + BoxProblem<Param = V>
         + crate::core::parallel::MaybeSync,
     P::Error: crate::core::parallel::MaybeSend,
     V: VectorLen
@@ -515,14 +515,21 @@ where
         + crate::core::parallel::MaybeSync
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            None,
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let n = lo.vec_len();
@@ -715,21 +722,24 @@ mod tests {
         upper: Vec<f64>,
     }
 
+    impl crate::ProblemConstraints for Plateau {
+        type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for Plateau {
         type Param = Vec<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
         fn cost(&self, _: &Vec<f64>) -> Result<f64, Self::Error> {
             Ok(0.0)
-        }
-    }
-
-    impl BoxConstraints for Plateau {
-        fn lower(&self) -> &Vec<f64> {
-            &self.lower
-        }
-        fn upper(&self) -> &Vec<f64> {
-            &self.upper
         }
     }
 

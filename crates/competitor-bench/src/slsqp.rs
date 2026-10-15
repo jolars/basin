@@ -82,6 +82,14 @@ struct Log {
 #[derive(Clone)]
 struct Objective(Rc<RefCell<Log>>);
 
+impl basin::ProblemConstraints for Objective {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Objective {
     type Param = Vec<f64>;
     type Output = f64;

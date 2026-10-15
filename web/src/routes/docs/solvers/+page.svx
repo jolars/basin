@@ -49,7 +49,7 @@ and
 provide automatic geometric bracket searches with optional domain limits.
 Bracketing is a separate stage with its own evaluation counts. Pass a root
 bracket to a root solver, or put a minimum bracket's outer endpoints on the
-problem's `BoxConstraints` and use its middle point to seed a scalar minimizer.
+problem's `BoxBounds` declaration and use its middle point to seed a scalar minimizer.
 Both searches follow the scalar recurrences in SciPy 1.16.3's elementwise
 bracketing routines.
 
@@ -119,7 +119,7 @@ bracketing routines.
   box-constrained variant (`Mads::bounded()`) via the extreme barrier, and a
   nonlinearly-constrained variant (`Mads::constrained()`) handling `c(x) ≤ 0`
   via the progressive barrier (which tolerates an infeasible start). Needs only
-  a `CostFunction` (plus `NonlinearInequalityConstraints` for the constrained
+  a `CostFunction` (plus `NonlinearInequalityValues` for the constrained
   mode). All modes support `f32` and `f64` on every dense backend release.
   Unbounded and box-bounded runs use `PointState`; progressive-barrier runs use
   `SelectedState` with the squared-sum violation. Mesh and poll diagnostics
@@ -137,7 +137,7 @@ bracketing routines.
   the bound-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a box-aware trust-region step (TRSBOX) and geometry step
   (ALTMOV), plus the RESCUE restoration procedure. Needs a `CostFunction` and
-  `BoxConstraints`. Uses `PointState` with `f32` and `f64` on every supported
+  `Constraints<BoxBounds<V>>`. Uses `PointState` with `f32` and `f64` on every supported
   dense backend release; the solver owns the model and radius schedule.
   Implements Powell (2009), cross-validated against PRIMA
   v0.7.2.
@@ -145,30 +145,28 @@ bracketing routines.
   the linearly-constrained sibling of `Newuoa`: the same least-Frobenius-norm
   quadratic model, with a projected truncated-CG trust-region step (TRSTEP) and
   active-set QR (GETACT) that keep every iterate feasible under `A x ≤ b`. Needs
-  a `CostFunction` and `LinearConstraints` (the general linear form: box bounds,
-  equalities, and inequalities, all folded into `A x ≤ b`). Uses `PointState`
+  a `CostFunction` and a canonical set of bounds and linear blocks, folded into
+  `A x ≤ b`. Uses `PointState`
   with `f32` and `f64` on every supported dense backend release; constraint
-  matrices require `MatTransposeVec`. Infeasible starts relax the constraints.
+  matrices require `MatrixShape`, `MatrixFinite`, and `MatTransposeVecInto`. Infeasible starts relax the constraints.
   Implements Powell
   (2015), ported from PRIMA v0.7.2.
 - **[`Cobyla`](https://docs.rs/basin/latest/basin/solver/cobyla/struct.Cobyla.html)**:
   Powell's nonlinearly-constrained solver: it builds **linear** models by
   interpolation at the `n+1` vertices of a simplex and steers by an L-infinity
-  exact-penalty merit function. For nonlinear inequalities `c(x) ≤ 0`, supply a
-  `CostFunction` and `NonlinearInequalityConstraints`. For nonlinear inequalities
-  with optional nonlinear equalities, linear constraints, and box bounds,
-  implement
-  [`NonlinearConstraints`](https://docs.rs/basin/latest/basin/core/constraint/trait.NonlinearConstraints.html)
-  and pass
-  [`FoldedConstraints::new(problem)`](https://docs.rs/basin/latest/basin/core/constraint/folded/struct.FoldedConstraints.html)
-  to the executor with `Cobyla::new()`. The adapter folds the full feasible set
-  into inequalities while retaining Basin's interpolation algorithm. Bound
-  constraints do not guarantee feasible callbacks, and radius convergence does
-  not certify feasibility. Uses `SelectedState` for the filter-selected point
-  and violation; the solver owns its model and radius. Both paths support
-  `f32` and `f64` on every supported dense backend release; folded constraint
-  matrices require `MatVec`. Constraint callbacks count as residual evaluations.
-  Implements Powell (1994), ported from PRIMA.
+  exact-penalty merit function. Supply a `CostFunction` with a canonical
+  `ProblemConstraints` declaration containing any combination of box bounds,
+  linear equalities and inequalities, and nonlinear equalities and inequalities.
+  Pass the problem directly to the executor; nonlinear values use the separate
+  `NonlinearEqualityValues` and `NonlinearInequalityValues` capabilities.
+  The solver folds the full feasible set into inequalities while retaining
+  Basin's interpolation algorithm. Bound constraints do not guarantee feasible
+  callbacks, and radius convergence does not certify feasibility. Uses
+  `SelectedState` for the filter-selected point and violation; the solver owns
+  its model and radius. Supports `f32` and `f64` on every dense backend release.
+  Only present linear blocks require `MatrixShape`, `MatrixFinite`, and
+  `MatVecInto`; nonlinear-only input needs no matrix type. Nonempty nonlinear
+  callbacks count as residual evaluations. Implements Powell (1994), ported from PRIMA.
 - **[`SolisWets`](https://docs.rs/basin/latest/basin/solver/solis_wets/struct.SolisWets.html)**:
   adaptive random local search: a randomized hill-climber testing `x + b + d`
   and `x − b − d` with `d ~ N(0, ρ²I)`, a success-direction bias `b`, and a step
@@ -364,7 +362,9 @@ _Bundle Adjustment — A Modern Synthesis_, and SciPy's least-squares wrapper.
 
 These run a local solver inside a global one using Basin's solver composition
 primitives. Custom inner solvers or local-search operators can narrow backend
-support.
+support. Bounded CMA and DE injection require `RelaxedInner::new(inner)`
+when an unconstrained local solver explores the bounded objective. Local
+solvers that enforce the same box can be supplied directly.
 
 - **[`CmaInject`](https://docs.rs/basin/latest/basin/solver/cma_inject/struct.CmaInject.html)**/**[`BoundedCmaInject`](https://docs.rs/basin/latest/basin/solver/bounded_cma_inject/struct.BoundedCmaInject.html)**:
   CMA-ES with per-generation local polishing of the best individuals,
@@ -381,14 +381,17 @@ support.
   control adaptation in memetic differential evolution frameworks* (Soft
   Computing, 2009). Publishes `PopulationProgress` and supports all four dense
   backends with `f32` or `f64` when the chosen inner solver does. Nelder-Mead
-  and L-BFGS-B cover all four; custom inners or strategies can narrow support.
+  with `RelaxedInner` and L-BFGS-B cover all four; custom inners or strategies can narrow support.
 - **[`MaLsCh`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**/**[`MaLsChCma`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   a memetic framework with persistent local-search chains and its CMA-ES
   configuration. Molina, Lozano, García-Martínez, and Herrera (2010),
   *Memetic algorithms for continuous optimisation based on local search chains*,
   Evolutionary Computation 18(1), 27–63 (DOI 10.1162/evco.2010.18.1.18102). Publishes `PopulationProgress`; the solver owns
   retained chains, their eligibility history, and RNG. Supports all four dense
-  backends with `f32` and `f64`, using CMA-ES's matrix capabilities.
+  backends with `f32` and `f64`, using CMA-ES's matrix capabilities. Requires
+  `SamplingBounds` on an unconstrained objective, or `SamplingDomain::new(problem)`
+  for an existing box-only objective. Local chains and accepted points may leave
+  the sampling box.
 - **[`MaLsChSw`](https://docs.rs/basin/latest/basin/solver/ma_ls_ch/struct.MaLsCh.html)**:
   the high-dimensional sibling of `MaLsChCma`: the same local-search-chain
   framework with a Solis-Wets inner, whose O(n) chain snapshots keep
@@ -406,13 +409,14 @@ support.
   dense Han–Powell sequential least-squares programming with damped BFGS,
   constrained least-squares subproblems, and an inexact L1 merit line search.
   Supports box bounds, linear and nonlinear equalities, and linear and nonlinear
-  inequalities through `NonlinearConstraints` and `ConstraintJacobian`, with
-  analytic or finite-difference derivatives. Reports feasibility, projected
+  inequalities through the canonical `ProblemConstraints` declaration, with
+  analytic or finite-difference derivatives. Only present nonlinear blocks
+  require `ConstraintJacobian`; linear-only sets need no nonlinear callback. Reports feasibility, projected
   Lagrangian stationarity, and complementarity on the solver alongside Kraft's
   native convergence tests. Uses `SelectedFirstOrderState` with a matching
   objective gradient and constraint violation. Supports `f32` and `f64` on
   every dense backend release; vectors need indexing and matrices need shape
-  and entry access. Kraft, D. (1988), *A software package for sequential
+  and finite entry access. Each block can use independent storage. Kraft, D. (1988), *A software package for sequential
   quadratic programming*, Technical Report DFVLR-FB 88-28, Institut für Dynamik
   der Flugsysteme, Oberpfaffenhofen, §§2.2 and 3.2
   ([report](https://degenerateconic.com/uploads/2018/03/DFVLR_FB_88_28.pdf)).

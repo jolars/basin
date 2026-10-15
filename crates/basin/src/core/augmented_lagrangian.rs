@@ -1,6 +1,6 @@
 //! Augmented-Lagrangian adapter for linear equality constraints.
 //!
-//! [`AugmentedLagrangian`] wraps a [`LinearEqualityConstraints`] problem
+//! [`AugmentedLagrangian`] wraps a [`Constraints`](crate::Constraints) problem
 //! `min f(x) s.t. A x = b` together with a multiplier estimate `λ ∈ ℝᵐ` and
 //! a penalty parameter `ρ > 0`, and exposes the unconstrained augmented
 //! Lagrangian
@@ -22,34 +22,31 @@
 //! inner solver may start from an **infeasible** point and use any line
 //! search (or none).
 //!
-//! # Adapter asymmetry (tenet 4, load-bearing)
+//! # Constraint transformation
 //!
-//! `AugmentedLagrangian` *consumes* [`LinearEqualityConstraints`] and exposes
-//! [`CostFunction`] + [`Gradient`] **only**: it deliberately does **not**
-//! implement [`LinearEqualityConstraints`] itself. That asymmetry is what
-//! routes the wrapped problem to *unconstrained* solvers: if the adapter
-//! re-exposed the constraint trait it would route straight back into
-//! constrained solvers and the adapter model would collapse. (Contrast
-//! [`FiniteDiff`](crate::core::numdiff::FiniteDiff), which *adds* a
-//! capability and therefore *forwards* [`BoxConstraints`](crate::core::constraint::BoxConstraints).)
+//! `AugmentedLagrangian` consumes a set containing only linear equality constraints and
+//! exposes [`NoConstraints`](crate::NoConstraints) to the inner solver. Other
+//! blocks are rejected at compile time. Derivative adapters such as
+//! [`FiniteDiff`](crate::FiniteDiff) instead preserve the full declaration.
 //!
 //! # Backends
 //!
-//! Requires the constraint matrix to implement
-//! [`MatVec`] (`A x`) and
-//! [`MatTransposeVec`] (`Aᵀ v`): a
+//! Requires checked matrix shape and finiteness, plus
+//! [`MatVecInto`](crate::MatVecInto) (`A x`) and
+//! [`MatTransposeVecInto`](crate::MatTransposeVecInto) (`Aᵀ v`): a
 //! strict subset of the LA tier that never includes a linear solve. That
 //! covers all four backends: `DenseMatrix`/`Vec`, nalgebra
 //! `DMatrix`/`DVector`, faer `Mat`/`Col`, and ndarray `Array2`/`Array1`
 //! (tenet 5).
 
-use crate::core::constraint::LinearEqualityConstraints;
-use crate::core::math::{
-    Dot, MatTransposeVec, MatVec, NormSquared, Scalar, ScaledAdd,
+use crate::ConstraintSolveError;
+use crate::core::constraint::evaluation::{
+    LinearEqualityGradient, LinearEqualityProblem, invalid,
 };
+use crate::core::math::{NormSquared, Scalar, ScaledAdd, VectorLen};
 use crate::core::problem::{CostFunction, Gradient};
 
-/// A [`LinearEqualityConstraints`] problem rewritten as the unconstrained
+/// A [`Constraints`](crate::Constraints) problem rewritten as the unconstrained
 /// augmented Lagrangian `f(x) + λᵀ(A x − b) + (ρ/2)‖A x − b‖²` at a fixed
 /// multiplier estimate `λ` and penalty `ρ`.
 ///
@@ -87,55 +84,59 @@ impl<'a, P, V, F: Scalar> AugmentedLagrangian<'a, P, V, F> {
     }
 }
 
-impl<P, V, M, F> CostFunction for AugmentedLagrangian<'_, P, V, F>
+impl<P, X, R, F> CostFunction for AugmentedLagrangian<'_, P, R, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F>
-        + LinearEqualityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V>,
-    V: ScaledAdd<F> + Dot<F> + NormSquared<F>,
+    P: CostFunction<Param = X, Output = F> + LinearEqualityProblem<X, F>,
+    X: VectorLen,
+    R: VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Param = V;
+    type Param = X;
     type Output = F;
-    // Pass through the wrapped problem's hard-abort error. `L_ρ` is finite
-    // everywhere (no feasibility wall, no soft-reject path), so the only
-    // `Err` that can come out of this `cost` is one the user's `cost`
-    // returned.
-    type Error = <P as CostFunction>::Error;
-
-    fn cost(&self, x: &V) -> Result<F, Self::Error> {
-        // Constraint residual c = A x − b.
-        let mut c = self.problem.a().matvec(x);
-        c.scaled_add(-F::one(), self.problem.b());
-        // L_ρ = f(x) + λᵀc + (ρ/2)‖c‖².
+    type Error = ConstraintSolveError<P::Error>;
+    fn cost(&self, x: &X) -> Result<F, Self::Error> {
+        let c = self.problem.linear_residual(x).map_err(invalid)?;
+        crate::core::constraint::model::dimension(
+            crate::ConstraintBlock::LinearEqualities,
+            crate::ConstraintAxis::Length,
+            c.len(),
+            self.lambda.vec_len(),
+        )
+        .map_err(invalid)?;
+        let multiplier = (0..c.len()).map(|i| self.lambda[i] * c[i]).sum::<F>();
         Ok(self.problem.cost(x)?
-            + self.lambda.dot(&c)
+            + multiplier
             + F::from_f64(0.5).unwrap() * self.rho * c.norm_squared())
     }
 }
-
-impl<P, V, M, F> Gradient for AugmentedLagrangian<'_, P, V, F>
+impl<P, X, R, F> Gradient for AugmentedLagrangian<'_, P, R, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F>
-        + Gradient<Gradient = V>
-        + LinearEqualityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<F> + Dot<F> + NormSquared<F> + Clone,
+    P: CostFunction<Param = X, Output = F>
+        + LinearEqualityGradient<X, F>
+        + Gradient<Gradient = X>,
+    X: Clone + VectorLen + ScaledAdd<F>,
+    R: VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Gradient = V;
-
-    fn gradient(&self, x: &V) -> Result<V, <Self as CostFunction>::Error> {
-        // Constraint residual c = A x − b.
-        let mut c = self.problem.a().matvec(x);
-        c.scaled_add(-F::one(), self.problem.b());
-        // Weight w = λ + ρ c, so the constraint contribution is Aᵀ w.
-        let mut w = self.lambda.clone();
-        w.scaled_add(self.rho, &c);
-        // ∇L_ρ = ∇f + Aᵀ(λ + ρ c).
+    type Gradient = X;
+    fn gradient(&self, x: &X) -> Result<X, <Self as CostFunction>::Error> {
+        let c = self.problem.linear_residual(x).map_err(invalid)?;
+        crate::core::constraint::model::dimension(
+            crate::ConstraintBlock::LinearEqualities,
+            crate::ConstraintAxis::Length,
+            c.len(),
+            self.lambda.vec_len(),
+        )
+        .map_err(invalid)?;
+        let weights: Vec<F> = (0..c.len())
+            .map(|i| self.lambda[i] + self.rho * c[i])
+            .collect();
+        let mut contribution = x.clone();
+        self.problem
+            .linear_transpose(&weights, &mut contribution)
+            .map_err(invalid)?;
         let mut g = self.problem.gradient(x)?;
-        let constraint_grad = self.problem.a().mat_transpose_vec(&w);
-        g.scaled_add(F::one(), &constraint_grad);
+        g.scaled_add(F::one(), &contribution);
         Ok(g)
     }
 }
@@ -160,6 +161,23 @@ mod tests {
         }
     }
 
+    impl crate::ProblemConstraints for Probe {
+        type Constraints = crate::Constraints<
+            crate::NoBounds,
+            crate::LinearBlocks<
+                crate::LinearBlock<DMatrix<f64>, DVector<f64>>,
+                crate::NoLinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_linear_equalities(
+                crate::LinearBlock::new(&self.a, &self.b),
+            )
+        }
+    }
     impl CostFunction for Probe {
         type Param = DVector<f64>;
         type Output = f64;
@@ -179,16 +197,6 @@ mod tests {
             x: &DVector<f64>,
         ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(x.clone())
-        }
-    }
-
-    impl LinearEqualityConstraints for Probe {
-        type Matrix = DMatrix<f64>;
-        fn a(&self) -> &DMatrix<f64> {
-            &self.a
-        }
-        fn b(&self) -> &DVector<f64> {
-            &self.b
         }
     }
 
@@ -239,5 +247,12 @@ mod tests {
                 fd
             );
         }
+    }
+}
+
+impl<P, V, F> crate::ProblemConstraints for AugmentedLagrangian<'_, P, V, F> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> crate::NoConstraints {
+        crate::NoConstraints::EMPTY
     }
 }

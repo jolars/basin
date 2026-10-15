@@ -14,6 +14,14 @@ struct TrialProblem {
     response: Result<f64, CallbackError>,
 }
 
+impl basin::ProblemConstraints for TrialProblem {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for TrialProblem {
     type Param = Vec<f64>;
     type Output = Vec<f64>;

@@ -1,7 +1,7 @@
 //! Scalar solvers use the same checked records and lifecycle as vector solvers.
 
 use basin::{
-    BoxConstraints, Brent, BrentDerivative, CostFunction, EvalCounts, Executor,
+    Brent, BrentDerivative, CostFunction, EvalCounts, Executor,
     FirstOrderState, GoldenSection, Gradient, GradientState, PointState,
     Solver, State,
 };
@@ -9,6 +9,15 @@ use std::convert::Infallible;
 
 struct Quadratic;
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::Constraints<basin::BoxBounds<f64>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(Some(&-1.0), Some(&2.0)))
+    }
+}
 impl CostFunction for Quadratic {
     type Param = f64;
     type Output = f64;
@@ -16,15 +25,6 @@ impl CostFunction for Quadratic {
 
     fn cost(&self, x: &f64) -> Result<f64, Infallible> {
         Ok((x - 0.25).powi(2))
-    }
-}
-
-impl BoxConstraints for Quadratic {
-    fn lower(&self) -> &f64 {
-        &-1.0
-    }
-    fn upper(&self) -> &f64 {
-        &2.0
     }
 }
 
@@ -38,7 +38,7 @@ impl Gradient for Quadratic {
 
 fn check_point_solver<So>(solver: So)
 where
-    So: Solver<Quadratic, PointState<f64>, Error = Infallible>,
+    So: Solver<Quadratic, PointState<f64>, Error: std::fmt::Debug>,
 {
     let initial = Executor::new(Quadratic, solver, PointState::new(0.5))
         .require_evaluated_state()

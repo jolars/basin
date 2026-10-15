@@ -54,6 +54,15 @@ struct Linear<F: Scalar> {
     matrix: Matrix<F>,
     residuals: Rc<Cell<usize>>,
 }
+
+impl<F: Scalar> crate::ProblemConstraints for Linear<F> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl<F: Scalar> Residual for Linear<F> {
     type Param = Vec<F>;
     type Output = Vec<F>;

@@ -79,8 +79,8 @@ fn driver_allocations_stay_bounded_without_changing_numerical_results() {
 #[test]
 fn public_quadratic_iterations_reuse_trial_buffers() {
     use basin::{
-        Cobyla, CostFunction, Executor, NonlinearInequalityConstraints,
-        Observe, ObserverMode, SelectedState, TerminationCode,
+        Cobyla, CostFunction, Executor, Observe, ObserverMode, SelectedState,
+        TerminationCode,
     };
     use std::{convert::Infallible, rc::Rc};
 
@@ -93,6 +93,23 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
         report_copy: Cell<(usize, usize)>,
     }
     struct Quadratic(Rc<Counts>);
+
+    impl basin::ProblemConstraints for Quadratic {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_inequalities(5)
+        }
+    }
     impl CostFunction for Quadratic {
         type Param = Vec<f64>;
         type Output = f64;
@@ -101,21 +118,29 @@ fn public_quadratic_iterations_reuse_trial_buffers() {
             Ok((x[0] - 1.0).powi(2) + (x[1] - 1.0).powi(2))
         }
     }
-    impl NonlinearInequalityConstraints for Quadratic {
-        fn num_constraints(&self) -> usize {
-            5
-        }
-        fn constraints(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
-            self.0.callbacks.set(self.0.callbacks.get() + 1);
-            Ok(vec![
-                -(1.5 - x[0] - x[1]),
-                -x[0],
-                x[0] - 2.0,
-                -x[1],
-                x[1] - 2.0,
-            ])
+    impl basin::NonlinearInequalityValues for Quadratic {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = Infallible;
+        fn nonlinear_inequalities(
+            &self,
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            {
+                self.0.callbacks.set(self.0.callbacks.get() + 1);
+                Ok(vec![
+                    -(1.5 - x[0] - x[1]),
+                    -x[0],
+                    x[0] - 2.0,
+                    -x[1],
+                    x[1] - 2.0,
+                ])
+            }
+            .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
+
     struct AllocationObserver(Rc<Counts>);
     impl Observe<SelectedState<Vec<f64>>> for AllocationObserver {
         fn observe_init(&mut self, _: &SelectedState<Vec<f64>>) {

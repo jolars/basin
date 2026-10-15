@@ -6,9 +6,7 @@
 
 use std::convert::Infallible;
 
-use basin::{
-    BoxConstraints, CostFunction, Executor, GlobalBestPso, PopulationProgress,
-};
+use basin::{CostFunction, Executor, GlobalBestPso, PopulationProgress};
 
 #[cfg(feature = "nalgebra_all")]
 #[test]
@@ -19,6 +17,19 @@ fn nalgebra_parameter_runs() {
         lower: DVector<f64>,
         upper: DVector<f64>,
     }
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<DVector<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for Sphere {
         type Param = DVector<f64>;
         type Output = f64;
@@ -26,14 +37,6 @@ fn nalgebra_parameter_runs() {
 
         fn cost(&self, x: &DVector<f64>) -> Result<f64, Self::Error> {
             Ok(x.iter().map(|xi| xi * xi).sum())
-        }
-    }
-    impl BoxConstraints for Sphere {
-        fn lower(&self) -> &DVector<f64> {
-            &self.lower
-        }
-        fn upper(&self) -> &DVector<f64> {
-            &self.upper
         }
     }
 
@@ -60,6 +63,19 @@ fn ndarray_parameter_runs() {
         lower: Array1<f64>,
         upper: Array1<f64>,
     }
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<Array1<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Array1<f64>;
         type Output = f64;
@@ -67,14 +83,6 @@ fn ndarray_parameter_runs() {
 
         fn cost(&self, x: &Array1<f64>) -> Result<f64, Self::Error> {
             Ok(x.iter().map(|xi| xi * xi).sum())
-        }
-    }
-    impl BoxConstraints for Sphere {
-        fn lower(&self) -> &Array1<f64> {
-            &self.lower
-        }
-        fn upper(&self) -> &Array1<f64> {
-            &self.upper
         }
     }
 
@@ -101,6 +109,19 @@ fn faer_parameter_runs() {
         lower: Col<f64>,
         upper: Col<f64>,
     }
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<Col<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Col<f64>;
         type Output = f64;
@@ -108,14 +129,6 @@ fn faer_parameter_runs() {
 
         fn cost(&self, x: &Col<f64>) -> Result<f64, Self::Error> {
             Ok((0..x.nrows()).map(|i| x[i] * x[i]).sum())
-        }
-    }
-    impl BoxConstraints for Sphere {
-        fn lower(&self) -> &Col<f64> {
-            &self.lower
-        }
-        fn upper(&self) -> &Col<f64> {
-            &self.upper
         }
     }
 

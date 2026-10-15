@@ -66,14 +66,11 @@ where
             self.nrows(),
             x.nrows()
         );
-        let col_ptr = self.col_ptr();
         let row_idx = self.row_idx();
         let vals = self.val();
 
         Col::from_fn(self.ncols(), |j| {
-            (col_ptr[j]..col_ptr[j + 1])
-                .map(|k| vals[k] * x[row_idx[k]])
-                .sum()
+            self.col_range(j).map(|k| vals[k] * x[row_idx[k]]).sum()
         })
     }
 }
@@ -109,14 +106,12 @@ impl<F: Scalar> MaxDiagonal<F> for SparseColMat<usize, F> {
         // Walk each column and search its row-index slice for the
         // diagonal entry. Missing diagonals contribute the implicit
         // zero; this matches MaxDiagonal's contract.
-        let col_ptr = self.col_ptr();
         let row_idx = self.row_idx();
         let vals = self.val();
         let mut best = F::neg_infinity();
         for j in 0..n {
-            let start = col_ptr[j];
-            let end = col_ptr[j + 1];
-            let v = (start..end)
+            let v = self
+                .col_range(j)
                 .find_map(|k| (row_idx[k] == j).then_some(vals[k]))
                 .unwrap_or(F::zero());
             if v > best {
@@ -140,13 +135,10 @@ impl<F: Scalar> MatDiagonal<Col<F>> for SparseColMat<usize, F> {
         // Same per-column walk as `max_diagonal`: search each column's
         // row-index slice for the diagonal entry; a missing diagonal is
         // the implicit zero.
-        let col_ptr = self.col_ptr();
         let row_idx = self.row_idx();
         let vals = self.val();
         Col::from_fn(n, |j| {
-            let start = col_ptr[j];
-            let end = col_ptr[j + 1];
-            (start..end)
+            self.col_range(j)
                 .find_map(|k| (row_idx[k] == j).then_some(vals[k]))
                 .unwrap_or(F::zero())
         })
@@ -171,14 +163,11 @@ impl<F: Scalar> AddDiagonalVectorInPlace<Col<F>> for SparseColMat<usize, F> {
             n,
             diag.nrows()
         );
-        let col_ptr: Vec<usize> = self.col_ptr().to_vec();
-        let row_idx: Vec<usize> = self.row_idx().to_vec();
-        let vals = self.val_mut();
+        let (symbolic, vals) = self.parts_mut();
+        let row_idx = symbolic.row_idx();
         for j in 0..n {
-            let start = col_ptr[j];
-            let end = col_ptr[j + 1];
             let mut found = false;
-            for k in start..end {
+            for k in symbolic.col_range(j) {
                 if row_idx[k] == j {
                     vals[k] = vals[k] + diag[j];
                     found = true;
@@ -261,10 +250,173 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for SparseColMat<usize, F> {
     }
 }
 
+impl<F: Scalar> super::MatrixShape for SparseColMat<usize, F> {
+    fn matrix_rows(&self) -> usize {
+        self.nrows()
+    }
+    fn matrix_cols(&self) -> usize {
+        self.ncols()
+    }
+}
+impl<F: Scalar> super::MatrixFinite for SparseColMat<usize, F> {
+    fn matrix_is_finite(&self) -> bool {
+        (0..self.ncols())
+            .all(|j| self.val_of_col(j).iter().all(|v| v.is_finite()))
+    }
+}
+impl<F: Scalar, V> super::MatVecInto<V, F> for SparseColMat<usize, F>
+where
+    V: super::VectorLen + std::ops::Index<usize, Output = F>,
+{
+    fn matvec_into(&self, x: &V, out: &mut [F]) {
+        assert_eq!(x.vec_len(), self.ncols());
+        assert_eq!(out.len(), self.nrows());
+        out.fill(F::zero());
+        let rows = self.row_idx();
+        let values = self.val();
+        for j in 0..self.ncols() {
+            for k in self.col_range(j) {
+                out[rows[k]] = out[rows[k]] + values[k] * x[j];
+            }
+        }
+    }
+}
+impl<F: Scalar, V> super::MatTransposeVecInto<V, F> for SparseColMat<usize, F>
+where
+    V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
+{
+    fn mat_transpose_vec_into(&self, x: &[F], out: &mut V) {
+        assert_eq!(x.len(), self.nrows());
+        assert_eq!(out.vec_len(), self.ncols());
+        let rows = self.row_idx();
+        let values = self.val();
+        for j in 0..self.ncols() {
+            out[j] = self.col_range(j).map(|k| values[k] * x[rows[k]]).sum();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::faer::sparse::{SparseColMat, Triplet};
+    use super::faer::sparse::{SparseColMat, SymbolicSparseColMat, Triplet};
     use super::*;
+    use crate::{MatTransposeVecInto, MatVecInto, MatrixFinite};
+
+    fn uncompressed_storage<F: Scalar + faer_traits::ComplexField>() {
+        for row in [0, usize::MAX] {
+            for padding in [F::from_f64(99.0).unwrap(), F::nan()] {
+                let symbolic = SymbolicSparseColMat::new_checked(
+                    1,
+                    1,
+                    vec![0, 2],
+                    Some(vec![1]),
+                    vec![0, row],
+                );
+                let mut a = SparseColMat::new(
+                    symbolic,
+                    vec![F::from_f64(2.0).unwrap(), padding],
+                );
+                let x = vec![F::from_f64(3.0).unwrap()];
+                let expected = F::from_f64(6.0).unwrap();
+                let mut out = vec![F::nan()];
+                a.matvec_into(&x, &mut out);
+                assert_eq!(out, [expected]);
+                out[0] = F::nan();
+                a.mat_transpose_vec_into(&x, &mut out);
+                assert_eq!(out, [expected]);
+                let col = Col::from_fn(1, |_| x[0]);
+                assert_eq!(a.matvec(&col)[0], expected);
+                assert_eq!(a.mat_transpose_vec(&col)[0], expected);
+                assert!(a.matrix_is_finite());
+                a.add_diagonal_vector_in_place(&Col::from_fn(1, |_| F::one()));
+                assert_eq!(a.diagonal()[0], F::from_f64(3.0).unwrap());
+                assert_eq!(a.max_diagonal(), F::from_f64(3.0).unwrap());
+                assert_eq!(a.val()[1].is_nan(), padding.is_nan());
+                if !padding.is_nan() {
+                    assert_eq!(a.val()[1], padding);
+                }
+                a.val_mut()[0] = F::nan();
+                assert!(!a.matrix_is_finite());
+                a.val_mut()[0] = F::infinity();
+                assert!(!a.matrix_is_finite());
+            }
+        }
+
+        let symbolic = SymbolicSparseColMat::new_checked(
+            2,
+            3,
+            vec![0, 2, 4, 5],
+            Some(vec![1, 0, 1]),
+            vec![0, usize::MAX, usize::MAX, usize::MAX, 1],
+        );
+        let a = SparseColMat::new(
+            symbolic,
+            vec![
+                F::from_f64(2.0).unwrap(),
+                F::nan(),
+                F::nan(),
+                F::nan(),
+                F::from_f64(5.0).unwrap(),
+            ],
+        );
+        let x = vec![
+            F::from_f64(3.0).unwrap(),
+            F::one(),
+            F::from_f64(4.0).unwrap(),
+        ];
+        let mut product = vec![F::nan(); 2];
+        a.matvec_into(&x, &mut product);
+        assert_eq!(
+            product,
+            [F::from_f64(6.0).unwrap(), F::from_f64(20.0).unwrap()]
+        );
+        let mut transpose_product = vec![F::nan(); 3];
+        a.mat_transpose_vec_into(&product, &mut transpose_product);
+        assert_eq!(
+            transpose_product,
+            [
+                F::from_f64(12.0).unwrap(),
+                F::zero(),
+                F::from_f64(100.0).unwrap()
+            ]
+        );
+        assert!(a.matrix_is_finite());
+    }
+
+    #[test]
+    fn uncompressed_products_and_finiteness_skip_padding() {
+        uncompressed_storage::<f32>();
+        uncompressed_storage::<f64>();
+    }
+
+    #[test]
+    fn unused_diagonal_entries_remain_implicit_zeros() {
+        let symbolic = SymbolicSparseColMat::new_checked(
+            1,
+            1,
+            vec![0, 1],
+            Some(vec![0]),
+            vec![0],
+        );
+        let a = SparseColMat::new(symbolic, vec![99.0_f64]);
+        assert_eq!(a.diagonal()[0], 0.0);
+        assert_eq!(a.max_diagonal(), 0.0);
+        assert!(a.matrix_is_finite());
+    }
+
+    #[test]
+    #[should_panic(expected = "diagonal entry (0, 0) missing")]
+    fn diagonal_updates_reject_unused_entries() {
+        let symbolic = SymbolicSparseColMat::new_checked(
+            1,
+            1,
+            vec![0, 1],
+            Some(vec![0]),
+            vec![0],
+        );
+        let mut a = SparseColMat::new(symbolic, vec![99.0_f64]);
+        a.add_diagonal_vector_in_place(&Col::from_fn(1, |_| 1.0));
+    }
 
     fn approx_eq(a: f64, b: f64, tol: f64) -> bool {
         (a - b).abs() < tol

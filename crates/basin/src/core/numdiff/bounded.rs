@@ -1,9 +1,6 @@
 //! Shared first-derivative probes with explicit domain bounds.
 
 use super::{FiniteDiff, Method};
-use crate::core::constraint::{
-    BoxConstraints, ConstraintJacobian, NonlinearConstraints,
-};
 use crate::core::math::{DenseMatrixFromFn, Scalar, VectorIndex, VectorLen};
 use crate::core::parallel::{MaybeSend, MaybeSync, try_map_range_with};
 use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
@@ -12,10 +9,10 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 ///
 /// Bounds constrain differentiation probes; they do not replace the wrapped
 /// problem's mathematical constraints. Pass its box bounds here when its
-/// callbacks are defined only inside that box. All problem-side constraint
-/// traits are forwarded unchanged. Non-finite bound entries mean an unbounded
-/// side, matching [`NonlinearConstraints`]. Bounds must have matching lengths
-/// and be ordered; differentiation points must be finite and inside them.
+/// callbacks are defined only inside that box. The canonical mathematical constraint
+/// set is forwarded unchanged. Negative-infinite lower and positive-infinite
+/// upper endpoints denote unbounded sides. NaN and wrong-sign infinities are
+/// invalid. Bounds must have matching lengths and be ordered; differentiation points must be finite and inside them.
 ///
 /// Defaults match [`FiniteDiff`]: central gradients, forward Jacobians, and
 /// machine-precision adaptive steps. Near a boundary, central differentiation
@@ -25,7 +22,7 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// Actual representable displacements are used in denominators.
 ///
 /// This adapter synthesizes [`Gradient`], [`Jacobian`], and
-/// [`ConstraintJacobian`], but does not advertise Hessian capabilities.
+/// [`crate::ConstraintJacobian`], but does not advertise Hessian capabilities.
 /// User errors propagate unchanged; non-finite values yield non-finite
 /// derivatives. Like `FiniteDiff`, counters charge derivative calls rather
 /// than internal probes. The optional `parallel` feature evaluates independent
@@ -50,6 +47,10 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// ```
 /// use basin::{BoundedFiniteDiff, CostFunction, Gradient};
 /// struct Square;
+/// impl basin::ProblemConstraints for Square  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Square {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -74,34 +75,49 @@ pub struct BoundedFiniteDiff<P, F: Scalar = f64> {
 }
 impl<P, F: Scalar> BoundedFiniteDiff<P, F> {
     /// Copy bounds from any supported vector backend and wrap the problem.
-    /// Panics for mismatched lengths or a finite lower bound above its upper.
+    /// Panics for invalid bounds. Use [`Self::try_new`] for typed configuration errors.
     pub fn new<V: VectorLen + VectorIndex<F>>(
         problem: P,
         lower: V,
         upper: V,
     ) -> Self {
-        assert_eq!(
+        Self::try_new(problem, lower, upper)
+            .expect("valid finite-difference bounds")
+    }
+    /// Copy and validate differentiation bounds, preserving typed configuration errors.
+    pub fn try_new<V: VectorLen + VectorIndex<F>>(
+        problem: P,
+        lower: V,
+        upper: V,
+    ) -> Result<Self, crate::ConstraintError> {
+        crate::core::constraint::model::dimension(
+            crate::ConstraintBlock::Bounds,
+            crate::ConstraintAxis::Length,
             lower.vec_len(),
             upper.vec_len(),
-            "finite-difference bound length mismatch"
-        );
-        let lower: Vec<_> = (0..lower.vec_len())
-            .map(|i| {
-                let v = lower.get_scalar(i);
-                if v.is_finite() { v } else { F::neg_infinity() }
-            })
-            .collect();
-        let upper: Vec<_> = (0..upper.vec_len())
-            .map(|i| {
-                let v = upper.get_scalar(i);
-                if v.is_finite() { v } else { F::infinity() }
-            })
-            .collect();
-        assert!(
-            lower.iter().zip(&upper).all(|(l, u)| l <= u),
-            "finite-difference lower bound exceeds upper bound"
-        );
-        Self {
+        )?;
+        let lower: Vec<_> =
+            (0..lower.vec_len()).map(|i| lower.get_scalar(i)).collect();
+        let upper: Vec<_> =
+            (0..upper.vec_len()).map(|i| upper.get_scalar(i)).collect();
+        for i in 0..lower.len() {
+            crate::core::constraint::model::validate_bound(
+                lower[i],
+                crate::BoundSide::Lower,
+                i,
+            )?;
+            crate::core::constraint::model::validate_bound(
+                upper[i],
+                crate::BoundSide::Upper,
+                i,
+            )?;
+            if lower[i] > upper[i] {
+                return Err(crate::ConstraintError::InvertedBounds {
+                    coordinate: i,
+                });
+            }
+        }
+        Ok(Self {
             problem,
             lower,
             upper,
@@ -109,7 +125,7 @@ impl<P, F: Scalar> BoundedFiniteDiff<P, F> {
             jacobian_method: Method::Forward,
             precision: F::epsilon(),
             step: None,
-        }
+        })
     }
     /// Choose the objective-gradient stencil (default: central).
     pub fn gradient_method(mut self, method: Method) -> Self {
@@ -194,14 +210,6 @@ impl<P: Residual, F: Scalar> Residual for BoundedFiniteDiff<P, F> {
     type Error = P::Error;
     fn residual(&self, x: &P::Param) -> Result<P::Output, P::Error> {
         self.problem.residual(x)
-    }
-}
-impl<P: BoxConstraints, F: Scalar> BoxConstraints for BoundedFiniteDiff<P, F> {
-    fn lower(&self) -> &P::Param {
-        self.problem.lower()
-    }
-    fn upper(&self) -> &P::Param {
-        self.problem.upper()
     }
 }
 
@@ -403,53 +411,95 @@ where
 pub(super) fn constraint_values<P, V, F>(
     p: &P,
     x: &V,
-) -> Result<Vec<F>, P::Error>
+    expected: (usize, usize),
+) -> Result<Vec<F>, crate::ConstraintSolveError<P::Error>>
 where
-    P: NonlinearConstraints<Param = V, Output = F>,
-    V: VectorLen + VectorIndex<F>,
+    P: CostFunction<Param = V, Output = F>,
+    P::Constraints: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
     F: Scalar,
 {
-    let mut out = Vec::new();
-    if p.num_nonlinear_equalities() > 0 {
-        let values = p
-            .nonlinear_equalities(x)?
-            .expect("declared nonlinear equalities must return a vector");
-        assert_eq!(
-            values.vec_len(),
-            p.num_nonlinear_equalities(),
-            "nonlinear equality length mismatch"
-        );
-        out.extend((0..values.vec_len()).map(|i| values.get_scalar(i)));
+    use crate::core::constraint::evaluation::{NonlinearSet, invalid};
+    if P::Constraints::counts(p.constraint_set()) != expected {
+        return Err(invalid(crate::ConstraintError::LayoutChanged));
     }
-    if p.num_nonlinear_constraints() > 0 {
-        let values = p.nonlinear_constraints(x)?;
-        assert_eq!(
-            values.vec_len(),
-            p.num_nonlinear_constraints(),
-            "nonlinear inequality length mismatch"
-        );
-        out.extend((0..values.vec_len()).map(|i| values.get_scalar(i)));
-    }
-    Ok(out)
+    let mut counts = crate::EvalCounts::default();
+    let (mut eq, ineq) = P::Constraints::values(p, x, &mut counts)?;
+    eq.extend(ineq);
+    Ok(eq)
 }
-impl<P, V, F> ConstraintJacobian for BoundedFiniteDiff<P, F>
+
+impl<P, F> crate::ProblemConstraints for BoundedFiniteDiff<P, F>
 where
-    P: NonlinearConstraints<Param = V, Output = F> + MaybeSync,
-    V: Clone
-        + VectorLen
-        + VectorIndex<F>
-        + DenseMatrixFromFn<F, Matrix = P::Matrix>
-        + MaybeSync,
-    F: Scalar + MaybeSync + MaybeSend,
-    P::Error: MaybeSend,
+    P: crate::ProblemConstraints,
+    F: crate::Scalar,
 {
-    fn constraint_jacobian(&self, x: &V) -> Result<P::Matrix, P::Error> {
-        let (m, cols) = columns(
-            x,
-            self.options(true),
-            Some((&self.lower, &self.upper)),
-            |x| constraint_values(&self.problem, x),
+    type Constraints = P::Constraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        self.problem.constraint_set()
+    }
+}
+
+impl<P, F> crate::NonlinearEqualityValues for BoundedFiniteDiff<P, F>
+where
+    P: crate::NonlinearEqualityValues,
+    F: crate::Scalar,
+{
+    type Param = P::Param;
+    type Values = P::Values;
+    type Error = P::Error;
+    fn nonlinear_equalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
+        self.problem.nonlinear_equalities(x)
+    }
+}
+
+impl<P, F> crate::NonlinearInequalityValues for BoundedFiniteDiff<P, F>
+where
+    P: crate::NonlinearInequalityValues,
+    F: crate::Scalar,
+{
+    type Param = P::Param;
+    type Values = P::Values;
+    type Error = P::Error;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, crate::ConstraintSolveError<Self::Error>> {
+        self.problem.nonlinear_inequalities(x)
+    }
+}
+
+impl<P, V, F> crate::ConstraintJacobian for BoundedFiniteDiff<P, F>
+where
+    P: CostFunction<Param = V, Output = F> + MaybeSync,
+    P::Constraints: crate::core::constraint::evaluation::NonlinearSet<P, V, F>,
+    V: Clone + VectorLen + VectorIndex<F> + DenseMatrixFromFn<F> + MaybeSync,
+    P::Error: MaybeSend,
+    F: Scalar + MaybeSend + MaybeSync,
+{
+    type Param = V;
+    type Jacobian = <V as DenseMatrixFromFn<F>>::Matrix;
+    type Error = P::Error;
+    fn constraint_jacobian(
+        &self,
+        x: &V,
+    ) -> Result<Self::Jacobian, crate::ConstraintSolveError<P::Error>> {
+        use crate::core::constraint::evaluation::NonlinearSet;
+        let expected = P::Constraints::counts(self.problem.constraint_set());
+        let m = expected.0.checked_add(expected.1).ok_or(
+            crate::ConstraintSolveError::InvalidConstraints(
+                crate::ConstraintError::CountOverflow,
+            ),
         )?;
+        let options = self.options(true);
+        let (_, cols) =
+            columns(x, options, Some((&self.lower, &self.upper)), |point| {
+                constraint_values(&self.problem, point, expected)
+            })?;
         Ok(V::dense_from_fn(m, x.vec_len(), |i, j| cols[j][i]))
     }
 }

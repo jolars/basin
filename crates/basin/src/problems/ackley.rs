@@ -18,7 +18,7 @@ use core::marker::PhantomData;
 use super::spec::{
     Dimensionality, HasSpec, ProblemSpec, Properties, Reference,
 };
-use crate::{BoxConstraints, CostFunction};
+use crate::CostFunction;
 
 /// First Ackley constant (overall amplitude of the funnel).
 const A: f64 = 20.0;
@@ -111,6 +111,14 @@ impl<P> HasSpec for Ackley<P> {
     const SPEC: &'static ProblemSpec = &ACKLEY_SPEC;
 }
 
+impl crate::ProblemConstraints for Ackley<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for Ackley<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -127,7 +135,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::CostFunction;
     use nalgebra::DVector;
 
-    impl CostFunction for Ackley<DVector<f64>> {
+    impl crate::ProblemConstraints for Ackley<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Ackley<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -147,7 +159,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::CostFunction;
     use ndarray::Array1;
 
-    impl CostFunction for Ackley<Array1<f64>> {
+    impl crate::ProblemConstraints for Ackley<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Ackley<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -170,7 +186,11 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitive.
-    impl CostFunction for Ackley<Col<f64>> {
+    impl crate::ProblemConstraints for Ackley<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Ackley<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -197,7 +217,7 @@ crate::backend_macros::faer_versions! {
 // Boxed (constrained) form
 
 /// Ackley function with explicit element-wise box bounds, suitable for solvers
-/// that require [`BoxConstraints`] (e.g. CMA-ES variants). Carries the bounds
+/// that require [`BoxBounds`](crate::BoxBounds) (e.g. CMA-ES variants). Carries the bounds
 /// as data on the problem and routes the cost through the same raw [`ackley`]
 /// free function as the unconstrained [`Ackley`]. The standard search domain
 /// `[−32.768, 32.768]ⁿ` is the common case; build it with
@@ -230,6 +250,17 @@ impl AckleyBoxed<Vec<f64>> {
     }
 }
 
+impl crate::ProblemConstraints for AckleyBoxed<Vec<f64>> {
+    type Constraints = crate::Constraints<crate::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for AckleyBoxed<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -239,11 +270,13 @@ impl CostFunction for AckleyBoxed<Vec<f64>> {
     }
 }
 
-impl BoxConstraints for AckleyBoxed<Vec<f64>> {
-    fn lower(&self) -> &Vec<f64> {
+impl AckleyBoxed<Vec<f64>> {
+    /// Return the lower bound vector.
+    pub fn lower(&self) -> &Vec<f64> {
         &self.lower
     }
-    fn upper(&self) -> &Vec<f64> {
+    /// Return the upper bound vector.
+    pub fn upper(&self) -> &Vec<f64> {
         &self.upper
     }
 }
@@ -252,7 +285,7 @@ impl BoxConstraints for AckleyBoxed<Vec<f64>> {
 crate::backend_macros::nalgebra_versions! {
     nalgebra_boxed_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER, ackley};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use nalgebra::DVector;
 
     impl AckleyBoxed<DVector<f64>> {
@@ -266,7 +299,11 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl CostFunction for AckleyBoxed<DVector<f64>> {
+    impl crate::ProblemConstraints for AckleyBoxed<DVector<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for AckleyBoxed<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -278,11 +315,13 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl BoxConstraints for AckleyBoxed<DVector<f64>> {
-        fn lower(&self) -> &DVector<f64> {
+    impl AckleyBoxed<DVector<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &DVector<f64> {
             &self.lower
         }
-        fn upper(&self) -> &DVector<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &DVector<f64> {
             &self.upper
         }
     }
@@ -292,7 +331,7 @@ crate::backend_macros::nalgebra_versions! {
 crate::backend_macros::ndarray_versions! {
     ndarray_boxed_impl(ndarray);
     use super::{AckleyBoxed, STANDARD_LOWER, STANDARD_UPPER, ackley};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use ndarray::Array1;
 
     impl AckleyBoxed<Array1<f64>> {
@@ -306,7 +345,11 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl CostFunction for AckleyBoxed<Array1<f64>> {
+    impl crate::ProblemConstraints for AckleyBoxed<Array1<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Array1<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for AckleyBoxed<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -318,11 +361,13 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl BoxConstraints for AckleyBoxed<Array1<f64>> {
-        fn lower(&self) -> &Array1<f64> {
+    impl AckleyBoxed<Array1<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Array1<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Array1<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Array1<f64> {
             &self.upper
         }
     }
@@ -332,7 +377,7 @@ crate::backend_macros::ndarray_versions! {
 crate::backend_macros::faer_versions! {
     faer_boxed_impl(faer, faer_traits);
     use super::{A, AckleyBoxed, B, STANDARD_LOWER, STANDARD_UPPER};
-    use crate::{BoxConstraints, CostFunction};
+    use crate::{CostFunction};
     use faer::Col;
 
     impl AckleyBoxed<Col<f64>> {
@@ -346,7 +391,11 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl CostFunction for AckleyBoxed<Col<f64>> {
+    impl crate::ProblemConstraints for AckleyBoxed<Col<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for AckleyBoxed<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -369,11 +418,13 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl BoxConstraints for AckleyBoxed<Col<f64>> {
-        fn lower(&self) -> &Col<f64> {
+    impl AckleyBoxed<Col<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Col<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Col<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Col<f64> {
             &self.upper
         }
     }
@@ -412,8 +463,8 @@ mod tests {
     #[test]
     fn boxed_form_exposes_standard_bounds() {
         let p = AckleyBoxed::<Vec<f64>>::with_standard_bounds(5);
-        let lo = <AckleyBoxed<Vec<f64>> as BoxConstraints>::lower(&p);
-        let hi = <AckleyBoxed<Vec<f64>> as BoxConstraints>::upper(&p);
+        let lo = p.lower();
+        let hi = p.upper();
         assert_eq!(lo.len(), 5);
         assert_eq!(hi.len(), 5);
         for &v in lo {

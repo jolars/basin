@@ -2,8 +2,7 @@
 
 use basin::{
     Backtracking, BarrierMethod, CostFunction, DenseMatrix, Executor, Gradient,
-    GradientDescent, InitialState, LinearInequalityConstraints,
-    MatrixFromDiagonal, Problem, Solver, State,
+    GradientDescent, InitialState, MatrixFromDiagonal, Problem, Solver, State,
 };
 use std::cell::Cell;
 
@@ -19,6 +18,22 @@ impl Inequality {
             b: vec![1.0; n],
             fail_gradient: Cell::new(false),
         }
+    }
+}
+
+impl basin::ProblemConstraints for Inequality {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::LinearBlocks<
+            basin::NoLinearBlock,
+            basin::LinearBlock<DenseMatrix, Vec<f64>>,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_linear_inequalities(basin::LinearBlock::new(&self.a, &self.b))
     }
 }
 impl CostFunction for Inequality {
@@ -41,15 +56,6 @@ impl Gradient for Inequality {
             return Err("gradient callback aborted");
         }
         Ok(x.iter().map(|x| 2.0 * (x - 2.0)).collect())
-    }
-}
-impl LinearInequalityConstraints for Inequality {
-    type Matrix = DenseMatrix;
-    fn a(&self) -> &DenseMatrix {
-        &self.a
-    }
-    fn b(&self) -> &Vec<f64> {
-        &self.b
     }
 }
 
@@ -85,7 +91,7 @@ fn failed_phase_two_work_is_charged_before_propagating_error() {
     problem.inner().fail_gradient.set(true);
     assert_eq!(
         solver.next_iter(&mut problem, state).err().unwrap(),
-        "gradient callback aborted"
+        basin::ConstraintSolveError::Evaluation("gradient callback aborted")
     );
     assert_eq!(problem.counts().cost_evals, before.cost_evals + 1);
     assert_eq!(problem.counts().gradient_evals, before.gradient_evals + 1);
@@ -194,17 +200,22 @@ impl InitialState<Vec<f64>> for AbortInner {
 impl basin::WarmStart<Vec<f64>> for AbortInner {}
 impl<P> Solver<P, basin::FirstOrderState<Vec<f64>>> for AbortInner
 where
-    P: CostFunction<Param = Vec<f64>, Output = f64, Error = &'static str>
-        + Gradient<Gradient = Vec<f64>>,
+    P: CostFunction<
+            Param = Vec<f64>,
+            Output = f64,
+            Error = basin::ConstraintSolveError<&'static str>,
+        > + Gradient<Gradient = Vec<f64>>,
 {
-    type Error = &'static str;
+    type Error = basin::ConstraintSolveError<&'static str>;
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         state: basin::FirstOrderState<Vec<f64>>,
     ) -> Result<basin::FirstOrderState<Vec<f64>>, Self::Error> {
         problem.cost_and_gradient(state.param())?;
-        Err("inner init aborted")
+        Err(basin::ConstraintSolveError::Evaluation(
+            "inner init aborted",
+        ))
     }
     fn next_iter(
         &mut self,
@@ -226,7 +237,7 @@ fn failed_phase_one_adapter_work_is_charged() {
     assert_eq!(problem.counts().total_work(), 0);
     assert_eq!(
         solver.next_iter(&mut problem, state).err().unwrap(),
-        "inner init aborted"
+        basin::ConstraintSolveError::Evaluation("inner init aborted")
     );
     assert_eq!(problem.counts().cost_evals, 1);
     assert_eq!(problem.counts().gradient_evals, 1);

@@ -19,7 +19,16 @@ macro_rules! stopping_checks {
                 target: [$scalar; 2],
             }
 
-            impl Residual for Affine {
+
+            impl basin::ProblemConstraints for Affine {
+                type Constraints = basin::NoConstraints;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new()
+                }
+            }
+impl Residual for Affine {
                 type Param = $vector;
                 type Output = $vector;
                 type Error = Infallible;
@@ -85,7 +94,16 @@ macro_rules! stopping_checks {
             #[test]
             fn progress_guard_rejects_an_invalid_retained_gradient() {
                 struct InvalidJacobian;
-                impl Residual for InvalidJacobian {
+
+                impl basin::ProblemConstraints for InvalidJacobian {
+                    type Constraints = basin::NoConstraints;
+                    fn constraint_set(
+                        &self,
+                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::Constraints::new()
+                    }
+                }
+impl Residual for InvalidJacobian {
                     type Param = $vector;
                     type Output = $vector;
                     type Error = Infallible;
@@ -217,7 +235,16 @@ macro_rules! stopping_checks {
             #[test]
             fn trust_radius_uses_shrunk_radius_and_base_after_rejection() {
                 struct Quadratic;
-                impl Residual for Quadratic {
+
+                impl basin::ProblemConstraints for Quadratic {
+                    type Constraints = basin::NoConstraints;
+                    fn constraint_set(
+                        &self,
+                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::Constraints::new()
+                    }
+                }
+impl Residual for Quadratic {
                     type Param = $vector;
                     type Output = $vector;
                     type Error = Infallible;
@@ -262,7 +289,16 @@ macro_rules! stopping_checks {
             #[test]
             fn trust_radius_uses_current_monotone_scaling() {
                 struct Quadratic;
-                impl Residual for Quadratic {
+
+                impl basin::ProblemConstraints for Quadratic {
+                    type Constraints = basin::NoConstraints;
+                    fn constraint_set(
+                        &self,
+                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::Constraints::new()
+                    }
+                }
+impl Residual for Quadratic {
                     type Param = $vector;
                     type Output = $vector;
                     type Error = Infallible;
@@ -560,7 +596,16 @@ macro_rules! stopping_checks {
 
             struct Quadratic;
 
-            impl Residual for Quadratic {
+
+            impl basin::ProblemConstraints for Quadratic {
+                type Constraints = basin::NoConstraints;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new()
+                }
+            }
+impl Residual for Quadratic {
                 type Param = $vector;
                 type Output = $vector;
                 type Error = Infallible;

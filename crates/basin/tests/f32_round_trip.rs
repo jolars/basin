@@ -78,10 +78,8 @@ use basin::core::state::{FirstOrderState, PointState, State};
 use basin::line_search::{Backtracking, HagerZhang, MoreThuente};
 use basin::solver::lbfgs::{Lbfgs, Unbounded};
 use basin::{
-    BoxConstraints, Cobyla, FoldedConstraints, Gbnm, GradientDescent,
-    MatrixFree, MoreSorensen, NonlinearConstraints,
-    NonlinearInequalityConstraints, SelectedState, Steihaug, TerminationCode,
-    TrustRegion,
+    Cobyla, Gbnm, GradientDescent, MatrixFree, MoreSorensen, SelectedState,
+    Steihaug, TerminationCode, TrustRegion,
 };
 
 /// `f(x) = ‖x − c‖²` with `c = (1, 2, 3)`. Minimum at `c`, cost 0.
@@ -89,6 +87,14 @@ struct ShiftedQuadF32 {
     c: Vec<f32>,
 }
 
+impl basin::ProblemConstraints for ShiftedQuadF32 {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for ShiftedQuadF32 {
     type Param = Vec<f32>;
     type Output = f32;
@@ -110,6 +116,17 @@ struct BoundedSphereF32 {
     upper: Vec<f32>,
 }
 
+impl basin::ProblemConstraints for BoundedSphereF32 {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f32>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for BoundedSphereF32 {
     type Param = Vec<f32>;
     type Output = f32;
@@ -120,27 +137,22 @@ impl CostFunction for BoundedSphereF32 {
     }
 }
 
-impl BoxConstraints for BoundedSphereF32 {
-    fn lower(&self) -> &Self::Param {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Self::Param {
-        &self.upper
-    }
-}
-
-impl NonlinearInequalityConstraints for BoundedSphereF32 {
-    fn num_constraints(&self) -> usize {
-        2 * self.lower.len()
-    }
-
-    fn constraints(&self, x: &Vec<f32>) -> Result<Vec<f32>, Self::Error> {
-        Ok(x.iter()
-            .zip(&self.lower)
-            .zip(&self.upper)
-            .flat_map(|((&v, &l), &u)| [l - v, v - u])
-            .collect())
+impl basin::NonlinearInequalityValues for BoundedSphereF32 {
+    type Param = Vec<f32>;
+    type Values = Vec<f32>;
+    type Error = std::convert::Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            Ok(x.iter()
+                .zip(&self.lower)
+                .zip(&self.upper)
+                .flat_map(|((&v, &l), &u)| [l - v, v - u])
+                .collect())
+        }
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -180,6 +192,36 @@ fn cobyla_f32_round_trips_full_form_constraints() {
         upper: Vec<f32>,
     }
 
+    impl basin::ProblemConstraints for MixedF32 {
+        type Constraints = basin::Constraints<
+            basin::BoxBounds<Vec<f32>>,
+            basin::LinearBlocks<
+                basin::LinearBlock<DenseMatrix<f32>, Vec<f32>>,
+                basin::LinearBlock<DenseMatrix<f32>, Vec<f32>>,
+            >,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+                .with_bounds(basin::BoxBounds::new(
+                    Some(&self.lower),
+                    Some(&self.upper),
+                ))
+                .with_linear_equalities(basin::LinearBlock::optional({
+                    Some((&self.equality, &self.equality_rhs))
+                }))
+                .with_linear_inequalities(basin::LinearBlock::optional({
+                    Some((&self.inequality, &self.inequality_rhs))
+                }))
+                .with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for MixedF32 {
         type Param = Vec<f32>;
         type Output = f32;
@@ -190,34 +232,17 @@ fn cobyla_f32_round_trips_full_form_constraints() {
         }
     }
 
-    impl NonlinearConstraints for MixedF32 {
-        type Matrix = DenseMatrix<f32>;
-
-        fn nonlinear_constraints(
+    impl basin::NonlinearInequalityValues for MixedF32 {
+        type Param = Vec<f32>;
+        type Values = Vec<f32>;
+        type Error = std::convert::Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Vec<f32>,
-        ) -> Result<Vec<f32>, Self::Error> {
-            Ok(vec![x[0] * x[0] - 1.0])
-        }
-
-        fn num_nonlinear_constraints(&self) -> usize {
-            1
-        }
-
-        fn inequalities(&self) -> Option<(&Self::Matrix, &Vec<f32>)> {
-            Some((&self.inequality, &self.inequality_rhs))
-        }
-
-        fn equalities(&self) -> Option<(&Self::Matrix, &Vec<f32>)> {
-            Some((&self.equality, &self.equality_rhs))
-        }
-
-        fn lower(&self) -> Option<&Vec<f32>> {
-            Some(&self.lower)
-        }
-
-        fn upper(&self) -> Option<&Vec<f32>> {
-            Some(&self.upper)
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(vec![x[0] * x[0] - 1.0]) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
 
@@ -246,7 +271,7 @@ fn cobyla_f32_round_trips_full_form_constraints() {
         ],
     };
     let result = Executor::from_start(
-        FoldedConstraints::new(problem),
+        problem,
         Cobyla::<_, f32>::new()
             .with_initial_radius(0.5)
             .with_final_radius(1e-4),
@@ -540,6 +565,16 @@ fn more_sorensen_f32_round_trips_state_solver_termination() {
 #[test]
 fn levenberg_marquardt_qr_f32_round_trip() {
     struct Fit;
+
+    impl basin::ProblemConstraints for Fit {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl basin::Residual for Fit {
         type Param = Vec<f32>;
         type Output = Vec<f32>;
@@ -571,6 +606,23 @@ fn levenberg_marquardt_qr_f32_round_trip() {
 #[test]
 fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
     struct Equality;
+
+    impl basin::ProblemConstraints for Equality {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NonlinearBlock,
+                basin::NoNonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_nonlinear_equalities(1)
+        }
+    }
     impl CostFunction for Equality {
         type Param = Vec<f32>;
         type Output = f32;
@@ -579,27 +631,28 @@ fn slsqp_f32_round_trips_bounded_numerical_derivatives() {
             Ok(x[0] * x[0] + x[1] * x[1])
         }
     }
-    impl NonlinearConstraints for Equality {
-        type Matrix = DenseMatrix<f32>;
-        fn num_nonlinear_constraints(&self) -> usize {
-            0
-        }
-        fn nonlinear_constraints(
-            &self,
-            _: &Vec<f32>,
-        ) -> Result<Vec<f32>, Self::Error> {
-            Ok(vec![])
-        }
-        fn num_nonlinear_equalities(&self) -> usize {
-            1
-        }
+    impl basin::NonlinearEqualityValues for Equality {
+        type Param = Vec<f32>;
+        type Values = Vec<f32>;
+        type Error = std::convert::Infallible;
         fn nonlinear_equalities(
             &self,
-            x: &Vec<f32>,
-        ) -> Result<Option<Vec<f32>>, Self::Error> {
-            Ok(Some(vec![x[0] + x[1] - 1.0]))
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(Some(vec![x[0] + x[1] - 1.0])) }
+                .map_err(basin::ConstraintSolveError::Evaluation)?
+                .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+                    basin::ConstraintError::DimensionMismatch {
+                        block: basin::ConstraintBlock::NonlinearEqualities,
+                        axis: basin::ConstraintAxis::Length,
+                        expected: 1,
+                        actual: 0,
+                    },
+                ))
         }
     }
+
     let p = basin::BoundedFiniteDiff::<_, f32>::new(
         Equality,
         vec![-2.; 2],

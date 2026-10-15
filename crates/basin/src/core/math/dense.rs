@@ -395,13 +395,24 @@ impl<F: Scalar> super::FactorizePivotedQr<Vec<F>, F> for DenseMatrix<F> {
     }
 }
 
-impl<F: Scalar> super::MatrixIndex<F> for DenseMatrix<F> {
+impl<F: Scalar> super::MatrixShape for DenseMatrix<F> {
     fn matrix_rows(&self) -> usize {
         self.nrows()
     }
     fn matrix_cols(&self) -> usize {
         self.ncols()
     }
+}
+impl<F: Scalar> super::MatrixFinite for DenseMatrix<F> {
+    fn matrix_is_finite(&self) -> bool {
+        (0..super::MatrixShape::matrix_rows(self)).all(|i| {
+            (0..super::MatrixShape::matrix_cols(self)).all(|j| {
+                super::MatrixIndex::matrix_entry(self, i, j).is_finite()
+            })
+        })
+    }
+}
+impl<F: Scalar> super::MatrixIndex<F> for DenseMatrix<F> {
     fn matrix_entry(&self, row: usize, col: usize) -> F {
         self.get(row, col)
     }
@@ -415,6 +426,41 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for DenseMatrix<F> {
                 self.data[i * self.cols + j] =
                     self.data[i * self.cols + j] * factor;
             }
+        }
+    }
+}
+
+impl<V, F> super::MatVecInto<V, F> for DenseMatrix<F>
+where
+    V: super::VectorLen + std::ops::Index<usize, Output = F>,
+    F: super::Scalar,
+{
+    fn matvec_into(&self, input: &V, output: &mut [F]) {
+        assert_eq!(input.vec_len(), super::MatrixShape::matrix_cols(self));
+        assert_eq!(output.len(), super::MatrixShape::matrix_rows(self));
+        for (i, value) in output.iter_mut().enumerate() {
+            *value = (0..super::MatrixShape::matrix_cols(self))
+                .map(|j| {
+                    super::MatrixIndex::matrix_entry(self, i, j) * input[j]
+                })
+                .sum();
+        }
+    }
+}
+impl<V, F> super::MatTransposeVecInto<V, F> for DenseMatrix<F>
+where
+    V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
+    F: super::Scalar,
+{
+    fn mat_transpose_vec_into(&self, input: &[F], output: &mut V) {
+        assert_eq!(input.len(), super::MatrixShape::matrix_rows(self));
+        assert_eq!(output.vec_len(), super::MatrixShape::matrix_cols(self));
+        for j in 0..super::MatrixShape::matrix_cols(self) {
+            output[j] = (0..super::MatrixShape::matrix_rows(self))
+                .map(|i| {
+                    super::MatrixIndex::matrix_entry(self, i, j) * input[i]
+                })
+                .sum();
         }
     }
 }

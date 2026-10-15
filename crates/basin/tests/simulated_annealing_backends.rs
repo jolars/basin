@@ -14,6 +14,16 @@ fn nalgebra_parameter_runs() {
     use crate::backend_aliases::nalgebra::DVector;
 
     struct Sphere;
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Sphere {
         type Param = DVector<f64>;
         type Output = f64;
@@ -46,6 +56,16 @@ fn ndarray_parameter_runs() {
     use crate::backend_aliases::ndarray::Array1;
 
     struct Sphere;
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Array1<f64>;
         type Output = f64;
@@ -75,6 +95,16 @@ fn faer_parameter_runs() {
     use crate::backend_aliases::faer::Col;
 
     struct Sphere;
+
+    impl basin::ProblemConstraints for Sphere {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Col<f64>;
         type Output = f64;

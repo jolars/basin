@@ -1,6 +1,6 @@
 //! Shared outer progress and solver-owned persistent local-search chains.
 use basin::{
-    BoxConstraints, CostFunction, CountsMirror, EvalCounts, Executor, MaLsChSw,
+    CostFunction, CountsMirror, EvalCounts, Executor, MaLsChSw,
     PopulationProgress, State,
 };
 use std::convert::Infallible;
@@ -16,6 +16,16 @@ impl Sphere {
         }
     }
 }
+
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(Some(&self.lo), Some(&self.hi)))
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -25,18 +35,11 @@ impl CostFunction for Sphere {
         Ok(x.iter().map(|v| v * v).sum())
     }
 }
-impl BoxConstraints for Sphere {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lo
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.hi
-    }
-}
+
 #[test]
 fn fresh_run_resets_outer_iteration_and_chain_history() {
     let prior = Executor::new(
-        Sphere::new(2),
+        basin::SamplingDomain::new(Sphere::new(2)),
         MaLsChSw::new(71)
             .with_pop_size(4)
             .with_ls_intensity(8)
@@ -46,10 +49,14 @@ fn fresh_run_resets_outer_iteration_and_chain_history() {
     .max_iter(4)
     .run_with_solver()
     .unwrap();
-    let fresh = Executor::new(Sphere::new(2), prior.solver, prior.state)
-        .max_iter(0)
-        .run_with_solver()
-        .unwrap();
+    let fresh = Executor::new(
+        basin::SamplingDomain::new(Sphere::new(2)),
+        prior.solver,
+        prior.state,
+    )
+    .max_iter(0)
+    .run_with_solver()
+    .unwrap();
     assert_eq!(fresh.iter(), 0);
     assert_eq!(fresh.counts.cost_evals, 4);
 }
@@ -98,7 +105,7 @@ macro_rules! lifecycle {
             };
             let make = || {
                 Executor::new(
-                    Sphere::new(2),
+                    basin::SamplingDomain::new(Sphere::new(2)),
                     solver(),
                     PopulationProgress::empty(),
                 )
@@ -126,7 +133,7 @@ macro_rules! lifecycle {
                     restore(checkpoint)
                 };
                 let resumed = Executor::resume_from_checkpoint(
-                    Sphere::new(2),
+                    basin::SamplingDomain::new(Sphere::new(2)),
                     checkpoint,
                 )
                 .require_evaluated_state()
@@ -143,13 +150,16 @@ macro_rules! lifecycle {
                 );
             }
             let warm = expected.state.candidates().to_vec();
-            let fresh =
-                Executor::new(Sphere::new(2), expected.solver, expected.state)
-                    .max_iter(0)
-                    .run_with_solver()
-                    .unwrap();
+            let fresh = Executor::new(
+                basin::SamplingDomain::new(Sphere::new(2)),
+                expected.solver,
+                expected.state,
+            )
+            .max_iter(0)
+            .run_with_solver()
+            .unwrap();
             let initialized = Executor::new(
-                Sphere::new(2),
+                basin::SamplingDomain::new(Sphere::new(2)),
                 solver(),
                 PopulationProgress::from_population(warm),
             )
@@ -167,7 +177,7 @@ macro_rules! lifecycle {
                 postcard::to_allocvec(&initialized.solver).unwrap()
             );
             let resized = Executor::new(
-                Sphere::new(3),
+                basin::SamplingDomain::new(Sphere::new(3)),
                 fresh.solver,
                 PopulationProgress::empty(),
             )
@@ -175,7 +185,7 @@ macro_rules! lifecycle {
             .run_with_solver()
             .unwrap();
             let initialized = Executor::new(
-                Sphere::new(3),
+                basin::SamplingDomain::new(Sphere::new(3)),
                 solver(),
                 PopulationProgress::empty(),
             )
@@ -203,7 +213,7 @@ lifecycle!(
 #[test]
 fn explicit_population_is_repaired_and_incumbent_counts_match_publication() {
     let result = Executor::new(
-        Sphere::new(2),
+        basin::SamplingDomain::new(Sphere::new(2)),
         MaLsChSw::new(71).with_pop_size(4),
         PopulationProgress::from_population(vec![
             vec![9.0, 0.0],
@@ -228,6 +238,19 @@ fn explicit_population_is_repaired_and_incumbent_counts_match_publication() {
 #[test]
 fn nonfinite_chain_without_an_incumbent_does_not_read_best_param() {
     struct Nonfinite(Sphere);
+
+    impl basin::ProblemConstraints for Nonfinite {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.0.lo),
+                Some(&self.0.hi),
+            ))
+        }
+    }
     impl CostFunction for Nonfinite {
         type Param = Vec<f64>;
         type Output = f64;
@@ -236,16 +259,9 @@ fn nonfinite_chain_without_an_incumbent_does_not_read_best_param() {
             Ok(f64::INFINITY)
         }
     }
-    impl BoxConstraints for Nonfinite {
-        fn lower(&self) -> &Vec<f64> {
-            &self.0.lo
-        }
-        fn upper(&self) -> &Vec<f64> {
-            &self.0.hi
-        }
-    }
+
     let result = Executor::new(
-        Nonfinite(Sphere::new(2)),
+        basin::SamplingDomain::new(Nonfinite(Sphere::new(2))),
         basin::MaLsChCma::<_, basin::DenseMatrix>::new(71)
             .with_pop_size(4)
             .with_nfrec(1)
@@ -276,11 +292,16 @@ fn inner_failure_preserves_every_category_and_current_population() {
         }
         fn prepare_resume(&self, _: &mut Self::State) {}
     }
-    impl basin::Solver<Sphere, basin::PointState<Vec<f64>>> for Failing {
+    impl
+        basin::Solver<
+            basin::SamplingDomain<Sphere>,
+            basin::PointState<Vec<f64>>,
+        > for Failing
+    {
         type Error = Infallible;
         fn init(
             &mut self,
-            problem: &mut basin::Problem<Sphere>,
+            problem: &mut basin::Problem<basin::SamplingDomain<Sphere>>,
             mut state: basin::PointState<Vec<f64>>,
         ) -> Result<basin::PointState<Vec<f64>>, Infallible> {
             let cost = problem.cost(state.param())?;
@@ -289,7 +310,7 @@ fn inner_failure_preserves_every_category_and_current_population() {
         }
         fn next_iter(
             &mut self,
-            problem: &mut basin::Problem<Sphere>,
+            problem: &mut basin::Problem<basin::SamplingDomain<Sphere>>,
             state: basin::PointState<Vec<f64>>,
         ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Infallible>
         {
@@ -310,11 +331,14 @@ fn inner_failure_preserves_every_category_and_current_population() {
         .with_pop_size(4)
         .with_nfrec(1)
         .with_ls_intensity(8);
-    let result =
-        Executor::new(Sphere::new(2), solver, PopulationProgress::empty())
-            .max_iter(4)
-            .run_with_solver()
-            .unwrap();
+    let result = Executor::new(
+        basin::SamplingDomain::new(Sphere::new(2)),
+        solver,
+        PopulationProgress::empty(),
+    )
+    .max_iter(4)
+    .run_with_solver()
+    .unwrap();
     coherent(&result.state, &result.solver);
     assert_eq!(result.report.code(), basin::TerminationCode::SolverFailed);
     assert_eq!(

@@ -11,6 +11,14 @@ use std::convert::Infallible;
 
 struct Sphere;
 
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -91,6 +99,19 @@ fn wrappers_and_projection_preserve_one_owner_in_both_builder_orders() {
         lower: Vec<f64>,
         upper: Vec<f64>,
     }
+
+    impl basin::ProblemConstraints for BoundedSphere {
+        type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+        }
+    }
     impl CostFunction for BoundedSphere {
         type Param = Vec<f64>;
         type Output = f64;
@@ -99,14 +120,7 @@ fn wrappers_and_projection_preserve_one_owner_in_both_builder_orders() {
             Sphere.cost(x)
         }
     }
-    impl basin::BoxConstraints for BoundedSphere {
-        fn lower(&self) -> &Vec<f64> {
-            &self.lower
-        }
-        fn upper(&self) -> &Vec<f64> {
-            &self.upper
-        }
-    }
+
     let direct = NelderMead::new()
         .with_absolute_simplex_size_tolerance(None)
         .with_absolute_simplex_cost_tolerance(None)
@@ -183,6 +197,16 @@ fn initial_spread_survives_checks_and_setters_and_resets_on_fresh_init() {
 #[test]
 fn nonfinite_initial_costs_defer_reference_until_first_finite_spread() {
     struct Domain;
+
+    impl basin::ProblemConstraints for Domain {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Domain {
         type Param = Vec<f64>;
         type Output = f64;

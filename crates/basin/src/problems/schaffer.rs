@@ -107,6 +107,14 @@ impl<P> HasSpec for SchafferN2<P> {
     const SPEC: &'static ProblemSpec = &SCHAFFER_N2_SPEC;
 }
 
+impl crate::ProblemConstraints for SchafferN2<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for SchafferN2<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -189,6 +197,14 @@ impl<P> HasSpec for SchafferN4<P> {
     const SPEC: &'static ProblemSpec = &SCHAFFER_N4_SPEC;
 }
 
+impl crate::ProblemConstraints for SchafferN4<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for SchafferN4<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -202,12 +218,15 @@ impl CostFunction for SchafferN4<Vec<f64>> {
 crate::backend_macros::nalgebra_versions! {
     nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{
-        SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4,
-    };
+        SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4};
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl CostFunction for SchafferN2<DVector<f64>> {
+    impl crate::ProblemConstraints for SchafferN2<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SchafferN2<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -231,7 +250,11 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl CostFunction for SchafferN4<DVector<f64>> {
+    impl crate::ProblemConstraints for SchafferN4<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SchafferN4<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -248,12 +271,15 @@ crate::backend_macros::nalgebra_versions! {
 crate::backend_macros::ndarray_versions! {
     ndarray_impl(ndarray);
     use super::{
-        SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4,
-    };
+        SchafferN2, SchafferN4, schaffer_n2, schaffer_n2_gradient, schaffer_n4};
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl CostFunction for SchafferN2<Array1<f64>> {
+    impl crate::ProblemConstraints for SchafferN2<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SchafferN2<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -280,7 +306,11 @@ crate::backend_macros::ndarray_versions! {
         }
     }
 
-    impl CostFunction for SchafferN4<Array1<f64>> {
+    impl crate::ProblemConstraints for SchafferN4<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SchafferN4<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -303,7 +333,11 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl CostFunction for SchafferN2<Col<f64>> {
+    impl crate::ProblemConstraints for SchafferN2<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SchafferN2<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -337,7 +371,11 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl CostFunction for SchafferN4<Col<f64>> {
+    impl crate::ProblemConstraints for SchafferN4<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SchafferN4<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;

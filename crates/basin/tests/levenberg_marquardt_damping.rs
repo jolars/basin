@@ -16,7 +16,16 @@ macro_rules! backend_checks {
             use super::*;
 
             struct Affine;
-            impl Residual for Affine {
+
+            impl basin::ProblemConstraints for Affine {
+                type Constraints = basin::NoConstraints;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new()
+                }
+            }
+impl Residual for Affine {
                 type Param = $vector;
                 type Output = $vector;
                 type Error = Infallible;
@@ -93,7 +102,16 @@ macro_rules! backend_checks {
             #[test]
             fn insensitive_columns_and_exact_rank_deficiency_remain_solvable() {
                 struct Deficient(bool);
-                impl Residual for Deficient {
+
+                impl basin::ProblemConstraints for Deficient {
+                    type Constraints = basin::NoConstraints;
+                    fn constraint_set(
+                        &self,
+                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::Constraints::new()
+                    }
+                }
+impl Residual for Deficient {
                     type Param = $vector;
                     type Output = $vector;
                     type Error = Infallible;
@@ -156,7 +174,16 @@ macro_rules! backend_checks {
             #[test]
             fn large_inactive_coordinate_does_not_overflow_the_scaled_norm() {
                 struct Insensitive;
-                impl Residual for Insensitive {
+
+                impl basin::ProblemConstraints for Insensitive {
+                    type Constraints = basin::NoConstraints;
+                    fn constraint_set(
+                        &self,
+                    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                        basin::Constraints::new()
+                    }
+                }
+impl Residual for Insensitive {
                     type Param = $vector;
                     type Output = $vector;
                     type Error = Infallible;
@@ -375,6 +402,14 @@ struct Nonlinear {
 #[derive(Debug, PartialEq)]
 struct CallbackError;
 
+impl basin::ProblemConstraints for Nonlinear {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl Residual for Nonlinear {
     type Param = Vec<f64>;
     type Output = Vec<f64>;
@@ -463,6 +498,16 @@ fn damping_configuration_survives_qr_conversion_in_either_order() {
 #[test]
 fn trust_qr_recovers_weak_linear_direction_with_relative_stopping() {
     struct NearlyCollinear;
+
+    impl basin::ProblemConstraints for NearlyCollinear {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl Residual for NearlyCollinear {
         type Param = Vec<f64>;
         type Output = Vec<f64>;

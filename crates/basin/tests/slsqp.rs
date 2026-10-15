@@ -1,13 +1,24 @@
 use basin::{
-    ConstraintJacobian, CostFunction, DenseMatrix, Executor, Gradient,
-    GradientState, NonlinearConstraints, RawEvaluationState,
-    SelectedFirstOrderState, Slsqp, State, TerminationCode,
+    CostFunction, DenseMatrix, Executor, Gradient, GradientState,
+    RawEvaluationState, SelectedFirstOrderState, Slsqp, State, TerminationCode,
 };
 use std::convert::Infallible;
 
 #[derive(Clone)]
 struct EqualityQuadratic;
 
+impl basin::ProblemConstraints for EqualityQuadratic {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_equalities(1)
+    }
+}
 impl CostFunction for EqualityQuadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -22,33 +33,45 @@ impl Gradient for EqualityQuadratic {
         Ok(vec![2.0 * (x[0] - 1.0), 2.0 * (x[1] - 2.0)])
     }
 }
-impl NonlinearConstraints for EqualityQuadratic {
-    type Matrix = DenseMatrix;
-    fn nonlinear_constraints(
-        &self,
-        _: &Vec<f64>,
-    ) -> Result<Vec<f64>, Infallible> {
-        Ok(vec![])
-    }
-    fn num_nonlinear_constraints(&self) -> usize {
-        0
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        1
-    }
+impl basin::NonlinearEqualityValues for EqualityQuadratic {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = Infallible;
     fn nonlinear_equalities(
         &self,
-        x: &Vec<f64>,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        { Ok(Some(vec![x[0] + x[1] - 1.0])) }
+            .map_err(basin::ConstraintSolveError::Evaluation)?
+            .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+                basin::ConstraintError::DimensionMismatch {
+                    block: basin::ConstraintBlock::NonlinearEqualities,
+                    axis: basin::ConstraintAxis::Length,
+                    expected: 1,
+                    actual: 0,
+                },
+            ))
+    }
+}
+impl EqualityQuadratic {
+    /// Access this problem's nonlinear equalities.
+    pub fn nonlinear_equalities(
+        &self,
+        x: &[f64],
     ) -> Result<Option<Vec<f64>>, Infallible> {
         Ok(Some(vec![x[0] + x[1] - 1.0]))
     }
 }
-impl ConstraintJacobian for EqualityQuadratic {
+impl basin::ConstraintJacobian for EqualityQuadratic {
+    type Param = Vec<f64>;
+    type Jacobian = DenseMatrix;
+    type Error = Infallible;
     fn constraint_jacobian(
         &self,
-        _: &Vec<f64>,
-    ) -> Result<DenseMatrix, Infallible> {
-        Ok(DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0]))
+        _: &Self::Param,
+    ) -> Result<Self::Jacobian, basin::ConstraintSolveError<Self::Error>> {
+        { Ok(DenseMatrix::from_row_slice(1, 2, &[1.0, 1.0])) }
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -116,6 +139,25 @@ impl<V, F: Scalar> Hs71<V, F> {
         }
     }
 }
+
+impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints for Hs71<V, F> {
+    type Constraints = basin::Constraints<
+        basin::BoxBounds<V>,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+            .with_nonlinear_equalities(1)
+            .with_nonlinear_inequalities(1)
+    }
+}
 impl<V: VectorIndex<F>, F: Scalar> CostFunction for Hs71<V, F> {
     type Param = V;
     type Output = F;
@@ -137,52 +179,83 @@ impl<V: VectorIndex<F>, F: Scalar> Gradient for Hs71<V, F> {
         ]))
     }
 }
-impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar> NonlinearConstraints
-    for Hs71<V, F>
+impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar>
+    basin::NonlinearInequalityValues for Hs71<V, F>
 {
-    type Matrix = V::Matrix;
-    fn lower(&self) -> Option<&V> {
-        Some(&self.lower)
-    }
-    fn upper(&self) -> Option<&V> {
-        Some(&self.upper)
-    }
-    fn num_nonlinear_constraints(&self) -> usize {
-        1
-    }
-    fn nonlinear_constraints(&self, x: &V) -> Result<V, Infallible> {
-        let product =
-            (0..4).map(|i| x.get_scalar(i)).fold(F::one(), |a, b| a * b);
-        Ok((self.make)(&[num::<F>(25.) - product]))
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        1
-    }
-    fn nonlinear_equalities(&self, x: &V) -> Result<Option<V>, Infallible> {
-        let squares = (0..4).map(|i| x.get_scalar(i).powi(2)).sum::<F>();
-        Ok(Some((self.make)(&[squares - num::<F>(40.)])))
+    type Param = V;
+    type Values = V;
+    type Error = Infallible;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            let product =
+                (0..4).map(|i| x.get_scalar(i)).fold(F::one(), |a, b| a * b);
+            Ok((self.make)(&[num::<F>(25.) - product]))
+        }
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
-impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar> ConstraintJacobian
-    for Hs71<V, F>
+impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar>
+    basin::NonlinearEqualityValues for Hs71<V, F>
 {
-    fn constraint_jacobian(&self, x: &V) -> Result<V::Matrix, Infallible> {
-        Ok(V::dense_from_fn(2, 4, |i, j| {
-            if i == 0 {
-                num::<F>(2.) * x.get_scalar(j)
-            } else {
-                -(0..4)
-                    .filter(|&k| k != j)
-                    .map(|k| x.get_scalar(k))
-                    .fold(F::one(), |a, b| a * b)
-            }
-        }))
+    type Param = V;
+    type Values = V;
+    type Error = Infallible;
+    fn nonlinear_equalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        {
+            let squares = (0..4).map(|i| x.get_scalar(i).powi(2)).sum::<F>();
+            Ok(Some((self.make)(&[squares - num::<F>(40.)])))
+        }
+        .map_err(basin::ConstraintSolveError::Evaluation)?
+        .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+            basin::ConstraintError::DimensionMismatch {
+                block: basin::ConstraintBlock::NonlinearEqualities,
+                axis: basin::ConstraintAxis::Length,
+                expected: 1,
+                actual: 0,
+            },
+        ))
+    }
+}
+
+impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar>
+    basin::ConstraintJacobian for Hs71<V, F>
+{
+    type Param = V;
+    type Jacobian = V::Matrix;
+    type Error = Infallible;
+    fn constraint_jacobian(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Jacobian, basin::ConstraintSolveError<Self::Error>> {
+        {
+            Ok(V::dense_from_fn(2, 4, |i, j| {
+                if i == 0 {
+                    num::<F>(2.) * x.get_scalar(j)
+                } else {
+                    -(0..4)
+                        .filter(|&k| k != j)
+                        .map(|k| x.get_scalar(k))
+                        .fold(F::one(), |a, b| a * b)
+                }
+            }))
+        }
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
 
 fn check_hs71<V, F>(make: fn(&[F]) -> V)
 where
-    V: Clone + VectorIndex<F> + VectorLen + DenseMatrixFromFn<F>,
+    V: std::ops::Index<usize, Output = F>
+        + Clone
+        + VectorIndex<F>
+        + VectorLen
+        + DenseMatrixFromFn<F>,
     V::Matrix: MatrixIndex<F>,
     F: Scalar,
 {
@@ -394,6 +467,31 @@ impl LinearQuadratic {
         }
     }
 }
+
+impl basin::ProblemConstraints for LinearQuadratic {
+    type Constraints = basin::Constraints<
+        basin::BoxBounds<Vec<f64>>,
+        basin::LinearBlocks<
+            basin::LinearBlock<DenseMatrix, Vec<f64>>,
+            basin::LinearBlock<DenseMatrix, Vec<f64>>,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_bounds(basin::BoxBounds::new(
+                Some(&self.lower),
+                Some(&self.upper),
+            ))
+            .with_linear_equalities(basin::LinearBlock::optional({
+                Some((&self.eq, &self.eq_rhs))
+            }))
+            .with_linear_inequalities(basin::LinearBlock::optional({
+                Some((&self.iq, &self.iq_rhs))
+            }))
+    }
+}
 impl CostFunction for LinearQuadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -414,38 +512,7 @@ impl Gradient for LinearQuadratic {
             .collect())
     }
 }
-impl NonlinearConstraints for LinearQuadratic {
-    type Matrix = DenseMatrix;
-    fn lower(&self) -> Option<&Vec<f64>> {
-        Some(&self.lower)
-    }
-    fn upper(&self) -> Option<&Vec<f64>> {
-        Some(&self.upper)
-    }
-    fn equalities(&self) -> Option<(&DenseMatrix, &Vec<f64>)> {
-        Some((&self.eq, &self.eq_rhs))
-    }
-    fn inequalities(&self) -> Option<(&DenseMatrix, &Vec<f64>)> {
-        Some((&self.iq, &self.iq_rhs))
-    }
-    fn num_nonlinear_constraints(&self) -> usize {
-        0
-    }
-    fn nonlinear_constraints(
-        &self,
-        _: &Vec<f64>,
-    ) -> Result<Vec<f64>, Infallible> {
-        panic!("zero nonlinear rows must not be evaluated")
-    }
-}
-impl ConstraintJacobian for LinearQuadratic {
-    fn constraint_jacobian(
-        &self,
-        _: &Vec<f64>,
-    ) -> Result<DenseMatrix, Infallible> {
-        panic!("linear derivatives are exact")
-    }
-}
+
 #[test]
 fn linear_blocks_fixed_coordinates_active_bounds_and_unconstrained() {
     for mode in 0..3 {
@@ -667,6 +734,19 @@ impl Faulty {
         self.callback == callback && (!self.after_initial || x != [3., -1.])
     }
 }
+
+impl basin::ProblemConstraints for Faulty {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NonlinearBlock, basin::NoNonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_nonlinear_equalities(1)
+    }
+}
 impl CostFunction for Faulty {
     type Param = Vec<f64>;
     type Output = f64;
@@ -693,47 +773,60 @@ impl Gradient for Faulty {
         Ok(EqualityQuadratic.gradient(x).unwrap())
     }
 }
-impl NonlinearConstraints for Faulty {
-    type Matrix = DenseMatrix;
-    fn num_nonlinear_constraints(&self) -> usize {
-        0
-    }
-    fn nonlinear_constraints(
-        &self,
-        _: &Vec<f64>,
-    ) -> Result<Vec<f64>, CallbackError> {
-        Ok(vec![])
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        1
-    }
+impl basin::NonlinearEqualityValues for Faulty {
+    type Param = Vec<f64>;
+    type Values = Vec<f64>;
+    type Error = CallbackError;
     fn nonlinear_equalities(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<Option<Vec<f64>>, CallbackError> {
-        if self.fails(2, x) {
-            if self.nonfinite {
-                return Ok(Some(vec![f64::NAN]));
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        (|| -> Result<Option<Vec<f64>>, CallbackError> {
+            if self.fails(2, x) {
+                if self.nonfinite {
+                    return Ok(Some(vec![f64::NAN]));
+                }
+                return Err(CallbackError(2));
             }
-            return Err(CallbackError(2));
-        }
-        Ok(EqualityQuadratic.nonlinear_equalities(x).unwrap())
+            Ok(EqualityQuadratic.nonlinear_equalities(x).unwrap())
+        })()
+        .map_err(basin::ConstraintSolveError::Evaluation)?
+        .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+            basin::ConstraintError::DimensionMismatch {
+                block: basin::ConstraintBlock::NonlinearEqualities,
+                axis: basin::ConstraintAxis::Length,
+                expected: 1,
+                actual: 0,
+            },
+        ))
     }
 }
-impl ConstraintJacobian for Faulty {
+
+impl basin::ConstraintJacobian for Faulty {
+    type Param = Vec<f64>;
+    type Jacobian = DenseMatrix;
+    type Error = CallbackError;
     fn constraint_jacobian(
         &self,
-        x: &Vec<f64>,
-    ) -> Result<DenseMatrix, CallbackError> {
-        if self.fails(3, x) {
-            if self.nonfinite {
-                return Ok(DenseMatrix::from_row_slice(1, 2, &[f64::NAN, 1.]));
+        x: &Self::Param,
+    ) -> Result<Self::Jacobian, basin::ConstraintSolveError<Self::Error>> {
+        (|| -> Result<DenseMatrix, CallbackError> {
+            if self.fails(3, x) {
+                if self.nonfinite {
+                    return Ok(DenseMatrix::from_row_slice(
+                        1,
+                        2,
+                        &[f64::NAN, 1.],
+                    ));
+                }
+                return Err(CallbackError(3));
             }
-            return Err(CallbackError(3));
-        }
-        Ok(EqualityQuadratic.constraint_jacobian(x).unwrap())
+            Ok(EqualityQuadratic.constraint_jacobian(x).unwrap())
+        })()
+        .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
+
 #[test]
 fn callback_errors_propagate_at_initialization_and_during_steps() {
     for callback in 0..4 {
@@ -750,7 +843,12 @@ fn callback_errors_propagate_at_initialization_and_during_steps() {
             )
             .max_iter(20)
             .run_with_solver();
-            assert_eq!(r.err().unwrap(), CallbackError(callback));
+            assert_eq!(
+                r.err().unwrap(),
+                basin::ConstraintSolveError::Evaluation(CallbackError(
+                    callback
+                ))
+            );
         }
     }
 }
@@ -810,6 +908,28 @@ fn inconsistent_linearization_uses_slack_recovery() {
         lo: Vec<f64>,
         hi: Vec<f64>,
     }
+
+    impl basin::ProblemConstraints for OutsideCircle {
+        type Constraints = basin::Constraints<
+            basin::BoxBounds<Vec<f64>>,
+            basin::NoLinearConstraints,
+            basin::NonlinearBlocks<
+                basin::NoNonlinearBlock,
+                basin::NonlinearBlock,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+                .with_bounds(basin::BoxBounds::new(
+                    Some(&self.lo),
+                    Some(&self.hi),
+                ))
+                .with_nonlinear_inequalities(1)
+        }
+    }
     impl CostFunction for OutsideCircle {
         type Param = Vec<f64>;
         type Output = f64;
@@ -818,24 +938,20 @@ fn inconsistent_linearization_uses_slack_recovery() {
             Ok(x[0] * x[0])
         }
     }
-    impl NonlinearConstraints for OutsideCircle {
-        type Matrix = DenseMatrix;
-        fn lower(&self) -> Option<&Vec<f64>> {
-            Some(&self.lo)
-        }
-        fn upper(&self) -> Option<&Vec<f64>> {
-            Some(&self.hi)
-        }
-        fn num_nonlinear_constraints(&self) -> usize {
-            1
-        }
-        fn nonlinear_constraints(
+    impl basin::NonlinearInequalityValues for OutsideCircle {
+        type Param = Vec<f64>;
+        type Values = Vec<f64>;
+        type Error = Infallible;
+        fn nonlinear_inequalities(
             &self,
-            x: &Vec<f64>,
-        ) -> Result<Vec<f64>, Infallible> {
-            Ok(vec![1. - x[0] * x[0]])
+            x: &Self::Param,
+        ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>>
+        {
+            { Ok(vec![1. - x[0] * x[0]]) }
+                .map_err(basin::ConstraintSolveError::Evaluation)
         }
     }
+
     let p = basin::BoundedFiniteDiff::new(
         OutsideCircle {
             lo: vec![0.],
@@ -864,7 +980,7 @@ fn inconsistent_linearization_uses_slack_recovery() {
 #[test]
 fn folded_constraints_include_both_signs_of_nonlinear_equalities() {
     let r = Executor::from_start(
-        basin::FoldedConstraints::new(EqualityQuadratic),
+        EqualityQuadratic,
         basin::Cobyla::new(),
         vec![3., -1.],
     )
@@ -910,6 +1026,16 @@ fn nnls_iteration_limit_reports_a_subproblem_failure() {
 #[test]
 fn nonfinite_trials_can_backtrack_to_a_finite_solution() {
     struct HalfLine;
+
+    impl basin::ProblemConstraints for HalfLine {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for HalfLine {
         type Param = Vec<f64>;
         type Output = f64;
@@ -929,26 +1055,7 @@ fn nonfinite_trials_can_backtrack_to_a_finite_solution() {
             Ok(vec![2. * (x[0] - 0.1)])
         }
     }
-    impl NonlinearConstraints for HalfLine {
-        type Matrix = DenseMatrix;
-        fn num_nonlinear_constraints(&self) -> usize {
-            0
-        }
-        fn nonlinear_constraints(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<Vec<f64>, Infallible> {
-            Ok(vec![])
-        }
-    }
-    impl ConstraintJacobian for HalfLine {
-        fn constraint_jacobian(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<DenseMatrix, Infallible> {
-            unreachable!()
-        }
-    }
+
     let r = Executor::from_start(HalfLine, Slsqp::new(), vec![1.])
         .max_iter(10)
         .run_with_solver()
@@ -962,6 +1069,16 @@ fn nonfinite_trials_can_backtrack_to_a_finite_solution() {
 #[test]
 fn unconstrained_rosenbrock_exercises_repeated_bfgs_and_backtracking() {
     struct Rosenbrock;
+
+    impl basin::ProblemConstraints for Rosenbrock {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Rosenbrock {
         type Param = Vec<f64>;
         type Output = f64;
@@ -970,18 +1087,7 @@ fn unconstrained_rosenbrock_exercises_repeated_bfgs_and_backtracking() {
             Ok(100. * (x[1] - x[0] * x[0]).powi(2) + (1. - x[0]).powi(2))
         }
     }
-    impl NonlinearConstraints for Rosenbrock {
-        type Matrix = DenseMatrix;
-        fn num_nonlinear_constraints(&self) -> usize {
-            0
-        }
-        fn nonlinear_constraints(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<Vec<f64>, Infallible> {
-            Ok(vec![])
-        }
-    }
+
     let r = Executor::from_start(
         basin::FiniteDiff::new(Rosenbrock),
         Slsqp::new().with_absolute_accuracy_tolerance(1e-10),
@@ -1019,6 +1125,16 @@ fn repeated_zero_step_bfgs_updates_exhaust_the_reset_limit() {
     // An inconsistent derivative forces line-search exhaustion. At this
     // scale its final displacement rounds to zero, making BFGS singular.
     struct FlatWithBadGradient;
+
+    impl basin::ProblemConstraints for FlatWithBadGradient {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for FlatWithBadGradient {
         type Param = Vec<f64>;
         type Output = f64;
@@ -1033,26 +1149,7 @@ fn repeated_zero_step_bfgs_updates_exhaust_the_reset_limit() {
             Ok(vec![1.])
         }
     }
-    impl NonlinearConstraints for FlatWithBadGradient {
-        type Matrix = DenseMatrix;
-        fn num_nonlinear_constraints(&self) -> usize {
-            0
-        }
-        fn nonlinear_constraints(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<Vec<f64>, Infallible> {
-            Ok(vec![])
-        }
-    }
-    impl ConstraintJacobian for FlatWithBadGradient {
-        fn constraint_jacobian(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<DenseMatrix, Infallible> {
-            unreachable!()
-        }
-    }
+
     let r = Executor::from_start(
         FlatWithBadGradient,
         Slsqp::new().with_absolute_accuracy_tolerance(None),
@@ -1073,6 +1170,16 @@ fn repeated_zero_step_bfgs_updates_exhaust_the_reset_limit() {
 #[test]
 fn overflowing_directional_model_is_a_numerical_failure() {
     struct HugeLinear;
+
+    impl basin::ProblemConstraints for HugeLinear {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for HugeLinear {
         type Param = Vec<f64>;
         type Output = f64;
@@ -1087,26 +1194,7 @@ fn overflowing_directional_model_is_a_numerical_failure() {
             Ok(vec![1e200])
         }
     }
-    impl NonlinearConstraints for HugeLinear {
-        type Matrix = DenseMatrix;
-        fn num_nonlinear_constraints(&self) -> usize {
-            0
-        }
-        fn nonlinear_constraints(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<Vec<f64>, Infallible> {
-            Ok(vec![])
-        }
-    }
-    impl ConstraintJacobian for HugeLinear {
-        fn constraint_jacobian(
-            &self,
-            _: &Vec<f64>,
-        ) -> Result<DenseMatrix, Infallible> {
-            unreachable!()
-        }
-    }
+
     let r = Executor::from_start(HugeLinear, Slsqp::new(), vec![0.])
         .max_iter(10)
         .run_with_solver()

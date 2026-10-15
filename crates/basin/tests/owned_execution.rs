@@ -16,6 +16,14 @@ struct Quadratic {
     fail_at: Option<u64>,
 }
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Quadratic {
     type Param = f64;
     type Output = f64;
@@ -500,6 +508,16 @@ impl<V, F> Sphere<V, F> {
     }
 }
 
+impl<V: basin::Dot<F>, F: basin::Scalar> basin::ProblemConstraints
+    for Sphere<V, F>
+{
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: basin::Dot<F>, F: basin::Scalar> CostFunction for Sphere<V, F> {
     type Param = V;
     type Output = F;
@@ -582,6 +600,16 @@ fn seeded_annealing_preserves_rng_neighbor_and_reannealing_history() {
     use std::convert::Infallible;
 
     struct RuggedCost;
+
+    impl basin::ProblemConstraints for RuggedCost {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for RuggedCost {
         type Param = i32;
         type Output = f64;

@@ -155,6 +155,15 @@ mod tests {
 
     struct RejectEveryTrial<F>(F);
 
+    impl<F: Scalar> crate::ProblemConstraints for RejectEveryTrial<F> {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl<F: Scalar> CostFunction for RejectEveryTrial<F> {
         type Param = Vec<F>;
         type Output = F;
@@ -215,6 +224,15 @@ mod tests {
     /// ∇f = 2(x − 3).
     struct Quadratic;
 
+    impl crate::ProblemConstraints for Quadratic {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for Quadratic {
         type Param = Vec<f64>;
         type Output = f64;

@@ -1,4 +1,4 @@
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::convergence::optional_tolerance;
 use crate::core::math::{Scalar, VectorIndex, VectorLen};
 use crate::core::parallel::{MaybeSend, MaybeSync};
@@ -96,8 +96,12 @@ use rectangle::{Rectangle, Work};
 /// # Example
 ///
 /// ```
-/// use basin::{BoxConstraints, CostFunction, Direct, Executor, PointState};
+/// use basin::{CostFunction, Direct, Executor, PointState};
 /// struct BoundedQuartic { lower: Vec<f64>, upper: Vec<f64> }
+/// impl basin::ProblemConstraints for BoundedQuartic  {
+///     type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+///     fn constraint_set(&self) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> { basin::Constraints::new().with_bounds(basin::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+/// }
 /// impl CostFunction for BoundedQuartic {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -106,10 +110,7 @@ use rectangle::{Rectangle, Work};
 ///         Ok(x.iter().map(|x| 0.5 * (x.powi(4) - 16.0*x*x + 5.0*x)).sum())
 ///     }
 /// }
-/// impl BoxConstraints for BoundedQuartic {
-///     fn lower(&self) -> &Vec<f64> { &self.lower }
-///     fn upper(&self) -> &Vec<f64> { &self.upper }
-/// }
+///
 /// let result = Executor::new(
 ///     BoundedQuartic { lower: vec![-5.0; 2], upper: vec![5.0; 2] },
 ///     Direct::new(),
@@ -241,17 +242,23 @@ impl<F: Scalar> Direct<F> {
 impl<P, V, F> Solver<P, PointState<V, F>> for Direct<F>
 where
     F: Scalar + MaybeSend,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints + MaybeSync,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V> + MaybeSync,
     P::Error: MaybeSend,
     V: Clone + VectorLen + VectorIndex<F> + MaybeSync,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_coordinate_box_problem(
+            problem.inner(),
+            state.param().vec_len(),
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         self.work = None;
         let lower = problem.inner().lower();
         let upper = problem.inner().upper();

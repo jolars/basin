@@ -44,7 +44,8 @@ fn bubbles_inner_failure() {
         ClosureInner::new(AlwaysFails, |x: &DVector<f64>, _sigma: f64| {
             PointState::new(x.clone())
         });
-    let solver = DeInject::with_inner_solver(de, inner);
+    let solver =
+        DeInject::with_inner_solver(de, basin::RelaxedInner::new(inner));
 
     let result = Executor::new(
         problem,

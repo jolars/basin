@@ -143,6 +143,10 @@ use workspace::Distribution;
 /// ```
 /// use basin::{CmaEs, CostFunction, DenseMatrix, Executor, PopulationProgress};
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -564,6 +568,7 @@ where
         + RankOneUpdate<V, F>
         + SymmetricEigen<V>
         + Clone,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -861,12 +866,23 @@ impl<V: VectorLen + Clone, M, F: Scalar> crate::core::inner::InitialState<V>
 #[cfg(test)]
 mod zero_tolerance_tests {
     use super::*;
-    use crate::{
-        BoundedCmaEs, BoxConstraints, DenseMatrix, PopulationProgress,
-    };
+    use crate::{BoundedCmaEs, DenseMatrix, PopulationProgress};
     use std::convert::Infallible;
 
     struct FlatBox<F>(Vec<F>, Vec<F>);
+
+    impl<F: Scalar> crate::ProblemConstraints for FlatBox<F> {
+        type Constraints = crate::Constraints<crate::BoxBounds<Vec<F>>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.0),
+                Some(&self.1),
+            ))
+        }
+    }
     impl<F: Scalar> CostFunction for FlatBox<F> {
         type Param = Vec<F>;
         type Output = F;
@@ -875,21 +891,15 @@ mod zero_tolerance_tests {
             Ok(F::zero())
         }
     }
-    impl<F: Scalar> BoxConstraints for FlatBox<F> {
-        fn lower(&self) -> &Vec<F> {
-            &self.0
-        }
-        fn upper(&self) -> &Vec<F> {
-            &self.1
-        }
-    }
 
     fn check<F: Scalar + Send + Sync>()
     where
         Vec<F>: SampleStandardNormal,
     {
-        let mut problem =
-            Problem::new(FlatBox(vec![-F::one()], vec![F::one()]));
+        let mut problem = Problem::new(crate::SamplingDomain::new(FlatBox(
+            vec![-F::one()],
+            vec![F::one()],
+        )));
         let mut solver: CmaEs<Vec<F>, DenseMatrix<F>, F> =
             CmaEs::new(42, F::one())
                 .with_absolute_distribution_size_tolerance(F::zero());
@@ -900,19 +910,21 @@ mod zero_tolerance_tests {
             )
             .unwrap();
         assert!(
-            <CmaEs<_, _, F> as Solver<FlatBox<F>, _>>::terminate(
+            <CmaEs<_, _, F> as Solver<crate::SamplingDomain<FlatBox<F>>, _>>::terminate(
                 &solver, &state
             )
             .is_none()
         );
         solver.work.as_mut().unwrap().sigma = F::zero();
         assert!(
-            <CmaEs<_, _, F> as Solver<FlatBox<F>, _>>::terminate(
+            <CmaEs<_, _, F> as Solver<crate::SamplingDomain<FlatBox<F>>, _>>::terminate(
                 &solver, &state
             )
             .unwrap()
             .is_converged()
         );
+        let mut problem =
+            Problem::new(FlatBox(vec![-F::one()], vec![F::one()]));
         let mut bounded: BoundedCmaEs<Vec<F>, DenseMatrix<F>, F> =
             BoundedCmaEs::new(42, F::one())
                 .with_absolute_distribution_size_tolerance(F::zero());

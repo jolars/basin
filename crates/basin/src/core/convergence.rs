@@ -5,9 +5,9 @@
 //! the same kind. No user-defined convergence policy is required.
 
 pub mod native;
+use crate::core::constraint::evaluation::BoxProblem;
 pub use native::{NativeConvergenceDiagnostics, NativeConvergenceTest};
 
-use super::constraint::BoxConstraints;
 use super::inner::{InitialState, WarmStart};
 use super::math::{
     ClampInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorIndex,
@@ -245,7 +245,7 @@ impl<P, S, F> Check<P, S> for ProjectedGradientCheck<F>
 where
     F: Scalar,
     S: GradientState<Float = F>,
-    P: BoxConstraints<Param = S::Param>,
+    P: BoxProblem<Param = S::Param>,
     S::Param: Clone + ScaledAdd<F> + ClampInPlace + NormInfinity<F>,
 {
     fn reset(&mut self) {}

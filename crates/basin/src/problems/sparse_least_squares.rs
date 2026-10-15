@@ -101,11 +101,15 @@ crate::backend_macros::nalgebra_versions! {
     nalgebra_impl(nalgebra, nalgebra_sparse, nalgebra_lapack);
     use super::{SparseLeastSquares, SparseLeastSquaresBoxed};
     use crate::core::math::{MatVec, ScaledAdd};
-    use crate::{BoxConstraints, CostFunction, Jacobian, Residual};
+    use crate::{CostFunction, Jacobian, Residual};
     use nalgebra::DVector;
     use nalgebra_sparse::CscMatrix;
 
-    impl CostFunction for SparseLeastSquares<CscMatrix<f64>, DVector<f64>> {
+    impl crate::ProblemConstraints for SparseLeastSquares<CscMatrix<f64>, DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SparseLeastSquares<CscMatrix<f64>, DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -145,7 +149,11 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl CostFunction for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>> {
+    impl crate::ProblemConstraints for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<DVector<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -183,11 +191,13 @@ crate::backend_macros::nalgebra_versions! {
         }
     }
 
-    impl BoxConstraints for SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>> {
-        fn lower(&self) -> &DVector<f64> {
+    impl SparseLeastSquaresBoxed<CscMatrix<f64>, DVector<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &DVector<f64> {
             &self.lower
         }
-        fn upper(&self) -> &DVector<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &DVector<f64> {
             &self.upper
         }
     }
@@ -198,11 +208,15 @@ crate::backend_macros::faer_versions! {
     faer_impl(faer, faer_traits);
     use super::{SparseLeastSquares, SparseLeastSquaresBoxed};
     use crate::core::math::{MatVec, ScaledAdd};
-    use crate::{BoxConstraints, CostFunction, Jacobian, Residual};
+    use crate::{CostFunction, Jacobian, Residual};
     use faer::Col;
     use faer::sparse::SparseColMat;
 
-    impl CostFunction for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>> {
+    impl crate::ProblemConstraints for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for SparseLeastSquares<SparseColMat<usize, f64>, Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -244,7 +258,11 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl CostFunction
+    impl crate::ProblemConstraints for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>  {
+    type Constraints = crate::Constraints<crate::BoxBounds<Col<f64>>>;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new().with_bounds(crate::BoxBounds::new(Some(&self.lower), Some(&self.upper))) }
+}
+impl CostFunction
         for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>
     {
         type Param = Col<f64>;
@@ -286,13 +304,13 @@ crate::backend_macros::faer_versions! {
         }
     }
 
-    impl BoxConstraints
-        for SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>
-    {
-        fn lower(&self) -> &Col<f64> {
+    impl SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>  {
+        /// Return the lower bound vector.
+        pub fn lower(&self) -> &Col<f64> {
             &self.lower
         }
-        fn upper(&self) -> &Col<f64> {
+        /// Return the upper bound vector.
+        pub fn upper(&self) -> &Col<f64> {
             &self.upper
         }
     }

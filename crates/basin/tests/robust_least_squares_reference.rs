@@ -1,9 +1,8 @@
 use basin::{
-    ArctanLoss, BoxConstraints, CauchyLoss, CostFunction, DenseMatrix,
-    Executor, GaussNewton, HuberLoss, Jacobian, LevenbergMarquardt,
-    LevenbergMarquardtQr, LmDamping, LossFunction, PointState, Residual,
-    RobustLeastSquares, SoftL1Loss, Solver, SquaredLoss, Trf,
-    TrustRegionReflective,
+    ArctanLoss, CauchyLoss, CostFunction, DenseMatrix, Executor, GaussNewton,
+    HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, LmDamping,
+    LossFunction, PointState, Residual, RobustLeastSquares, SoftL1Loss, Solver,
+    SquaredLoss, Trf, TrustRegionReflective,
 };
 
 #[derive(Clone)]
@@ -31,6 +30,18 @@ impl Fit {
                 .collect();
             (t, y)
         }
+    }
+}
+
+impl basin::ProblemConstraints for Fit {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
     }
 }
 impl CostFunction for Fit {
@@ -74,17 +85,9 @@ impl Jacobian for Fit {
         }))
     }
 }
-impl BoxConstraints for Fit {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
-    }
-}
 
-fn check<'a, S>(
-    fit: Fit,
+fn check<'a, S, P, E>(
+    fit: P,
     loss: &'a dyn LossFunction,
     scale: f64,
     start: Vec<f64>,
@@ -92,10 +95,16 @@ fn check<'a, S>(
     cost: f64,
     solver: S,
 ) where
-    S: Solver<
-            RobustLeastSquares<Fit, &'a dyn LossFunction>,
-            PointState<Vec<f64>>,
+    P: Residual<
+            Param = Vec<f64>,
+            Output = Vec<f64>,
             Error = std::convert::Infallible,
+        > + Clone,
+    E: std::fmt::Debug,
+    S: Solver<
+            RobustLeastSquares<P, &'a dyn LossFunction>,
+            PointState<Vec<f64>>,
+            Error = E,
         >,
 {
     let objective = RobustLeastSquares::new(fit, loss).with_scale(scale);
@@ -155,9 +164,9 @@ fn solvers_match_scipy_on_outlier_contaminated_fits() {
         let scale = fields[2].parse().unwrap();
         let cost = fields[5].parse().unwrap();
         macro_rules! run {
-            ($solver:expr) => {
+            ($solver:expr, $prepare:expr) => {
                 check(
-                    fit.clone(),
+                    ($prepare)(fit.clone()),
                     loss,
                     scale,
                     start.clone(),
@@ -169,7 +178,7 @@ fn solvers_match_scipy_on_outlier_contaminated_fits() {
         }
         // Full Gauss–Newton has no globalization; test its local convergence.
         check(
-            fit.clone(),
+            basin::SamplingDomain::new(fit.clone()),
             loss,
             scale,
             expected.iter().map(|x| x + 1e-4).collect(),
@@ -178,10 +187,16 @@ fn solvers_match_scipy_on_outlier_contaminated_fits() {
             GaussNewton::new(),
         );
         for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
-            run!(LevenbergMarquardt::new().with_damping(damping));
-            run!(LevenbergMarquardtQr::new().with_damping(damping));
+            run!(
+                LevenbergMarquardt::new().with_damping(damping),
+                basin::SamplingDomain::new
+            );
+            run!(
+                LevenbergMarquardtQr::new().with_damping(damping),
+                basin::SamplingDomain::new
+            );
         }
-        run!(Trf::new());
-        run!(TrustRegionReflective::new());
+        run!(Trf::new(), std::convert::identity);
+        run!(TrustRegionReflective::new(), std::convert::identity);
     }
 }

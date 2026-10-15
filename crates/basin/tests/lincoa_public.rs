@@ -9,7 +9,6 @@
 //! of the returned point, and the convergence/budget/early-stop termination
 //! paths.
 
-use basin::core::constraint::LinearConstraints;
 use basin::{
     CostFunction, DenseMatrix, Executor, Lincoa, PointState, TerminationCode,
 };
@@ -22,19 +21,28 @@ struct ConstrainedQuadratic {
     b: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for ConstrainedQuadratic {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::LinearBlocks<
+            basin::NoLinearBlock,
+            basin::LinearBlock<DenseMatrix<f64>, Vec<f64>>,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_linear_inequalities(
+            basin::LinearBlock::optional(Some((&self.a, &self.b))),
+        )
+    }
+}
 impl CostFunction for ConstrainedQuadratic {
     type Param = Vec<f64>;
     type Output = f64;
     type Error = std::convert::Infallible;
     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
         Ok((0..x.len()).map(|i| (x[i] - self.c[i]).powi(2)).sum())
-    }
-}
-
-impl LinearConstraints for ConstrainedQuadratic {
-    type Matrix = DenseMatrix<f64>;
-    fn inequalities(&self) -> Option<(&DenseMatrix<f64>, &Vec<f64>)> {
-        Some((&self.a, &self.b))
     }
 }
 
@@ -115,24 +123,23 @@ struct BoxConstrained {
     upper: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for BoxConstrained {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for BoxConstrained {
     type Param = Vec<f64>;
     type Output = f64;
     type Error = std::convert::Infallible;
     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
         Ok((0..x.len()).map(|i| (x[i] - self.c[i]).powi(2)).sum())
-    }
-}
-
-impl LinearConstraints for BoxConstrained {
-    // The matrix type is required by the trait but unused: no equality /
-    // inequality blocks, only box bounds.
-    type Matrix = DenseMatrix<f64>;
-    fn lower(&self) -> Option<&Vec<f64>> {
-        Some(&self.lower)
-    }
-    fn upper(&self) -> Option<&Vec<f64>> {
-        Some(&self.upper)
     }
 }
 
@@ -172,19 +179,28 @@ struct EqualityConstrained {
     b: Vec<f64>,
 }
 
+impl basin::ProblemConstraints for EqualityConstrained {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::LinearBlocks<
+            basin::LinearBlock<DenseMatrix<f64>, Vec<f64>>,
+            basin::NoLinearBlock,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_linear_equalities(
+            basin::LinearBlock::optional(Some((&self.a, &self.b))),
+        )
+    }
+}
 impl CostFunction for EqualityConstrained {
     type Param = Vec<f64>;
     type Output = f64;
     type Error = std::convert::Infallible;
     fn cost(&self, x: &Vec<f64>) -> Result<f64, std::convert::Infallible> {
         Ok((0..x.len()).map(|i| (x[i] - self.c[i]).powi(2)).sum())
-    }
-}
-
-impl LinearConstraints for EqualityConstrained {
-    type Matrix = DenseMatrix<f64>;
-    fn equalities(&self) -> Option<(&DenseMatrix<f64>, &Vec<f64>)> {
-        Some((&self.a, &self.b))
     }
 }
 
@@ -279,6 +295,24 @@ fn backend_generic_nalgebra() {
         a: DMatrix<f64>,
         b: DVector<f64>,
     }
+
+    impl basin::ProblemConstraints for Proj {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::LinearBlocks<
+                basin::NoLinearBlock,
+                basin::LinearBlock<DMatrix<f64>, DVector<f64>>,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_linear_inequalities(
+                basin::LinearBlock::optional(Some((&self.a, &self.b))),
+            )
+        }
+    }
     impl CostFunction for Proj {
         type Param = DVector<f64>;
         type Output = f64;
@@ -288,12 +322,6 @@ fn backend_generic_nalgebra() {
             x: &DVector<f64>,
         ) -> Result<f64, std::convert::Infallible> {
             Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
-        }
-    }
-    impl LinearConstraints for Proj {
-        type Matrix = DMatrix<f64>;
-        fn inequalities(&self) -> Option<(&DMatrix<f64>, &DVector<f64>)> {
-            Some((&self.a, &self.b))
         }
     }
 
@@ -332,6 +360,24 @@ fn backend_generic_ndarray() {
         a: Array2<f64>,
         b: Array1<f64>,
     }
+
+    impl basin::ProblemConstraints for Proj {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::LinearBlocks<
+                basin::NoLinearBlock,
+                basin::LinearBlock<Array2<f64>, Array1<f64>>,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_linear_inequalities(
+                basin::LinearBlock::optional(Some((&self.a, &self.b))),
+            )
+        }
+    }
     impl CostFunction for Proj {
         type Param = Array1<f64>;
         type Output = f64;
@@ -341,12 +387,6 @@ fn backend_generic_ndarray() {
             x: &Array1<f64>,
         ) -> Result<f64, std::convert::Infallible> {
             Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
-        }
-    }
-    impl LinearConstraints for Proj {
-        type Matrix = Array2<f64>;
-        fn inequalities(&self) -> Option<(&Array2<f64>, &Array1<f64>)> {
-            Some((&self.a, &self.b))
         }
     }
 
@@ -384,18 +424,30 @@ fn backend_generic_faer() {
         a: Mat<f64>,
         b: Col<f64>,
     }
+
+    impl basin::ProblemConstraints for Proj {
+        type Constraints = basin::Constraints<
+            basin::NoBounds,
+            basin::LinearBlocks<
+                basin::NoLinearBlock,
+                basin::LinearBlock<Mat<f64>, Col<f64>>,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new().with_linear_inequalities(
+                basin::LinearBlock::optional(Some((&self.a, &self.b))),
+            )
+        }
+    }
     impl CostFunction for Proj {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
         fn cost(&self, x: &Col<f64>) -> Result<f64, std::convert::Infallible> {
             Ok((x[0] - 2.0).powi(2) + (x[1] - 2.0).powi(2))
-        }
-    }
-    impl LinearConstraints for Proj {
-        type Matrix = Mat<f64>;
-        fn inequalities(&self) -> Option<(&Mat<f64>, &Col<f64>)> {
-            Some((&self.a, &self.b))
         }
     }
 

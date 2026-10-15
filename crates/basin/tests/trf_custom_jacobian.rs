@@ -1,9 +1,9 @@
 use std::convert::Infallible;
 
 use basin::{
-    AddDiagonalVectorInPlace, BoxConstraints, CostFunction, Executor,
-    GramMatrix, Jacobian, LinearSolveError, LinearSolveSpd, MatTransposeVec,
-    MaxDiagonal, Residual, State, TerminationCode, Trf,
+    AddDiagonalVectorInPlace, CostFunction, Executor, GramMatrix, Jacobian,
+    LinearSolveError, LinearSolveSpd, MatTransposeVec, MaxDiagonal, Residual,
+    State, TerminationCode, Trf,
 };
 
 #[derive(Clone)]
@@ -54,6 +54,17 @@ struct BoundedResidual {
     invalid_step: bool,
 }
 
+impl basin::ProblemConstraints for BoundedResidual {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for BoundedResidual {
     type Param = Vec<f64>;
     type Output = f64;
@@ -79,16 +90,6 @@ impl Jacobian for BoundedResidual {
 
     fn jacobian(&self, _x: &Vec<f64>) -> Result<ScalarMatrix, Self::Error> {
         Ok(ScalarMatrix(1.0, self.invalid_step))
-    }
-}
-
-impl BoxConstraints for BoundedResidual {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

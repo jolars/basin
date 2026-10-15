@@ -110,6 +110,16 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
         trials: Arc<Mutex<Vec<DVector<f64>>>>,
         jacobians: Arc<AtomicU64>,
     }
+
+    impl basin::ProblemConstraints for Affine {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Affine {
         type Param = DVector<f64>;
         type Output = f64;

@@ -4,8 +4,8 @@ use std::convert::Infallible;
 mod backend;
 
 use basin::{
-    BoxConstraints, CostFunction, De, DeCrossover, DeInject, DeMutation,
-    ExactCheckpoint, Executor, NelderMead, PopulationProgress, State,
+    CostFunction, De, DeCrossover, DeInject, DeMutation, ExactCheckpoint,
+    Executor, NelderMead, PopulationProgress, State,
 };
 
 #[derive(Clone)]
@@ -269,7 +269,7 @@ fn configured_de_composes_with_local_search() {
         for crossover in CROSSOVERS {
             let solver = DeInject::with_inner_solver(
                 configured(mutation, crossover, true),
-                NelderMead::adaptive(),
+                basin::RelaxedInner::new(NelderMead::adaptive()),
             )
             .with_inner_max_iter(20)
             .with_refine_every(2);
@@ -351,6 +351,17 @@ impl Quadratic {
     }
 }
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Quadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -361,15 +372,6 @@ impl CostFunction for Quadratic {
             .enumerate()
             .map(|(i, x)| (i + 1) as f64 * (x - 0.25).powi(2))
             .sum())
-    }
-}
-
-impl BoxConstraints for Quadratic {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 

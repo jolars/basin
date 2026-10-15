@@ -129,6 +129,10 @@ use crate::solver::cma_inject::MemeticInner;
 /// use basin::{CostFunction, Executor, SolisWets};
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -369,6 +373,7 @@ where
         + SampleStandardNormal
         + ScaledAdd<F>
         + ScaleInPlace<F>,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 
@@ -568,6 +573,16 @@ mod tests {
             }
         }
     }
+
+    impl crate::ProblemConstraints for AlwaysImproving {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for AlwaysImproving {
         type Param = Vec<f64>;
         type Output = f64;
@@ -582,6 +597,16 @@ mod tests {
     /// Constant cost: no candidate ever strictly improves, forcing the
     /// failure branch (both evals spent) each iteration.
     struct Constant;
+
+    impl crate::ProblemConstraints for Constant {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for Constant {
         type Param = Vec<f64>;
         type Output = f64;
@@ -593,6 +618,16 @@ mod tests {
 
     /// Sphere for real convergence-adjacent checks.
     struct Sphere;
+
+    impl crate::ProblemConstraints for Sphere {
+        type Constraints = crate::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new()
+        }
+    }
     impl CostFunction for Sphere {
         type Param = Vec<f64>;
         type Output = f64;

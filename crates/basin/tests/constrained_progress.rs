@@ -2,7 +2,7 @@
 
 use basin::{
     AugmentedLagrangianMethod, CostFunction, DenseMatrix, Executor, Gradient,
-    GradientDescent, LinearEqualityConstraints, MatrixFromDiagonal, State,
+    GradientDescent, MatrixFromDiagonal, State,
 };
 use std::convert::Infallible;
 
@@ -20,6 +20,22 @@ impl Equality {
         }
     }
 }
+
+impl basin::ProblemConstraints for Equality {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::LinearBlocks<
+            basin::LinearBlock<DenseMatrix, Vec<f64>>,
+            basin::NoLinearBlock,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_linear_equalities(basin::LinearBlock::new(&self.a, &self.b))
+    }
+}
 impl CostFunction for Equality {
     type Param = Vec<f64>;
     type Output = f64;
@@ -34,15 +50,6 @@ impl Gradient for Equality {
     type Gradient = Vec<f64>;
     fn gradient(&self, x: &Vec<f64>) -> Result<Vec<f64>, Infallible> {
         Ok(x.iter().map(|x| 2.0 * x).collect())
-    }
-}
-impl LinearEqualityConstraints for Equality {
-    type Matrix = DenseMatrix;
-    fn a(&self) -> &DenseMatrix {
-        &self.a
-    }
-    fn b(&self) -> &Vec<f64> {
-        &self.b
     }
 }
 
@@ -200,6 +207,23 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
 }
 
 struct FailingEquality(Equality);
+
+impl basin::ProblemConstraints for FailingEquality {
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::LinearBlocks<
+            basin::LinearBlock<DenseMatrix, Vec<f64>>,
+            basin::NoLinearBlock,
+        >,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_linear_equalities(
+            basin::LinearBlock::new(&self.0.a, &self.0.b),
+        )
+    }
+}
 impl CostFunction for FailingEquality {
     type Param = Vec<f64>;
     type Output = f64;
@@ -214,15 +238,6 @@ impl Gradient for FailingEquality {
         Err("gradient callback aborted")
     }
 }
-impl LinearEqualityConstraints for FailingEquality {
-    type Matrix = DenseMatrix;
-    fn a(&self) -> &DenseMatrix {
-        &self.0.a
-    }
-    fn b(&self) -> &Vec<f64> {
-        &self.0.b
-    }
-}
 
 #[test]
 fn failed_adapter_work_is_charged_before_propagating_error() {
@@ -234,7 +249,10 @@ fn failed_adapter_work_is_charged_before_propagating_error() {
         .unwrap();
     assert_eq!(problem.counts().total_work(), 1);
     let err = solver.next_iter(&mut problem, state).unwrap_err();
-    assert_eq!(err, "gradient callback aborted");
+    assert_eq!(
+        err,
+        basin::ConstraintSolveError::Evaluation("gradient callback aborted")
+    );
     assert_eq!(problem.counts().cost_evals, 2);
     assert_eq!(problem.counts().gradient_evals, 1);
     assert_eq!(problem.counts().total_work(), 3);

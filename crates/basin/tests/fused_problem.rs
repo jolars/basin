@@ -25,6 +25,15 @@ use basin::{
 // ---------------------------------------------------------------------
 
 struct Sphere;
+
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -75,6 +84,15 @@ fn gradient_descent_runs_with_no_opt_in() {
 
 struct Counted {
     fused_calls: Rc<Cell<usize>>,
+}
+
+impl basin::ProblemConstraints for Counted {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
 }
 impl CostFunction for Counted {
     type Param = Vec<f64>;
@@ -165,6 +183,16 @@ mod hessian {
     use basin::Hessian;
 
     struct SphereN;
+
+    impl basin::ProblemConstraints for SphereN {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for SphereN {
         type Param = DVector<f64>;
         type Output = f64;
@@ -209,6 +237,16 @@ mod hessian {
     /// No Newton solver ships yet; exercise the override directly.
     struct CountedTriple {
         fused_calls: Rc<Cell<usize>>,
+    }
+
+    impl basin::ProblemConstraints for CountedTriple {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
     }
     impl CostFunction for CountedTriple {
         type Param = DVector<f64>;
@@ -279,6 +317,16 @@ mod lsq {
     /// `r(x) = (x₀ − 1, x₁ − 2)`, J = I. Minimum at (1, 2).
     struct Affine {
         fused_calls: Rc<Cell<usize>>,
+    }
+
+    impl basin::ProblemConstraints for Affine {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
     }
     impl CostFunction for Affine {
         type Param = DVector<f64>;
@@ -353,6 +401,15 @@ mod lsq {
 
 /// Cost-only problem (no `Gradient` impl).
 struct CostOnly;
+
+impl basin::ProblemConstraints for CostOnly {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for CostOnly {
     type Param = Vec<f64>;
     type Output = f64;

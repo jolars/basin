@@ -3,6 +3,15 @@ use basin::{
 };
 
 struct Domain;
+
+impl basin::ProblemConstraints for Domain {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Domain {
     type Param = Vec<f64>;
     type Output = f64;
@@ -40,6 +49,16 @@ fn one_sided_second_order_and_fixed_coordinate() {
 #[test]
 fn adjacent_float_interval_uses_the_available_probe() {
     struct Identity;
+
+    impl basin::ProblemConstraints for Identity {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for Identity {
         type Param = Vec<f64>;
         type Output = f64;
@@ -66,6 +85,16 @@ fn sub_ulp_requested_step_still_uses_distinct_probes() {
 #[test]
 fn empty_parameter_vector_keeps_residual_row_count() {
     struct Constant;
+
+    impl basin::ProblemConstraints for Constant {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl Residual for Constant {
         type Param = Vec<f64>;
         type Output = Vec<f64>;
@@ -85,6 +114,23 @@ use basin::{DenseMatrixFromFn, MatrixIndex, Scalar, VectorIndex, VectorLen};
 mod backend_aliases;
 struct BackendDomain<V, F> {
     make: fn(&[F]) -> V,
+}
+
+impl<V: VectorIndex<F>, F: Scalar> basin::ProblemConstraints
+    for BackendDomain<V, F>
+{
+    type Constraints = basin::Constraints<
+        basin::NoBounds,
+        basin::NoLinearConstraints,
+        basin::NonlinearBlocks<basin::NonlinearBlock, basin::NonlinearBlock>,
+    >;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+            .with_nonlinear_equalities(1)
+            .with_nonlinear_inequalities(1)
+    }
 }
 impl<V: VectorIndex<F>, F: Scalar> CostFunction for BackendDomain<V, F> {
     type Param = V;
@@ -108,26 +154,53 @@ impl<V: VectorIndex<F>, F: Scalar> Residual for BackendDomain<V, F> {
     }
 }
 impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar>
-    basin::NonlinearConstraints for BackendDomain<V, F>
+    basin::NonlinearInequalityValues for BackendDomain<V, F>
 {
-    type Matrix = V::Matrix;
-    fn num_nonlinear_constraints(&self) -> usize {
-        1
-    }
-    fn nonlinear_constraints(&self, x: &V) -> Result<V, Self::Error> {
-        Ok((self.make)(&[self.cost(x)?]))
-    }
-    fn num_nonlinear_equalities(&self) -> usize {
-        1
-    }
-    fn nonlinear_equalities(&self, x: &V) -> Result<Option<V>, Self::Error> {
-        self.cost(x)?;
-        Ok(Some((self.make)(&[x.get_scalar(0)])))
+    type Param = V;
+    type Values = V;
+    type Error = &'static str;
+    fn nonlinear_inequalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        (|| -> Result<V, &'static str> { Ok((self.make)(&[self.cost(x)?])) })()
+            .map_err(basin::ConstraintSolveError::Evaluation)
     }
 }
+impl<V: VectorIndex<F> + DenseMatrixFromFn<F>, F: Scalar>
+    basin::NonlinearEqualityValues for BackendDomain<V, F>
+{
+    type Param = V;
+    type Values = V;
+    type Error = &'static str;
+    fn nonlinear_equalities(
+        &self,
+        x: &Self::Param,
+    ) -> Result<Self::Values, basin::ConstraintSolveError<Self::Error>> {
+        (|| -> Result<Option<V>, &'static str> {
+            self.cost(x)?;
+            Ok(Some((self.make)(&[x.get_scalar(0)])))
+        })()
+        .map_err(basin::ConstraintSolveError::Evaluation)?
+        .ok_or(basin::ConstraintSolveError::InvalidConstraints(
+            basin::ConstraintError::DimensionMismatch {
+                block: basin::ConstraintBlock::NonlinearEqualities,
+                axis: basin::ConstraintAxis::Length,
+                expected: 1,
+                actual: 0,
+            },
+        ))
+    }
+}
+
 fn check_backend<V, F>(make: fn(&[F]) -> V)
 where
-    V: Clone + VectorIndex<F> + VectorLen + DenseMatrixFromFn<F> + Sync,
+    V: Clone
+        + std::ops::Index<usize, Output = F>
+        + VectorIndex<F>
+        + VectorLen
+        + DenseMatrixFromFn<F>
+        + Sync,
     F: Scalar + Send + Sync,
     V::Matrix: MatrixIndex<F>,
 {
@@ -207,6 +280,16 @@ where
     use basin::Hessian;
     struct Smooth<V> {
         make: fn(&[f64]) -> V,
+    }
+
+    impl<V: VectorIndex> basin::ProblemConstraints for Smooth<V> {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
     }
     impl<V: VectorIndex> CostFunction for Smooth<V> {
         type Param = V;

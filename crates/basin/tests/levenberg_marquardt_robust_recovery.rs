@@ -12,6 +12,16 @@ struct LinearModel<V, M, F> {
     rank_deficient: bool,
 }
 
+impl<V: VectorIndex<F>, M, F: Scalar> basin::ProblemConstraints
+    for LinearModel<V, M, F>
+{
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: VectorIndex<F>, M, F: Scalar> Residual for LinearModel<V, M, F> {
     type Param = V;
     type Output = V;

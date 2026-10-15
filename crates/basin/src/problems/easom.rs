@@ -94,6 +94,14 @@ impl<P> HasSpec for Easom<P> {
     const SPEC: &'static ProblemSpec = &EASOM_SPEC;
 }
 
+impl crate::ProblemConstraints for Easom<Vec<f64>> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> {
+        crate::Constraints::new()
+    }
+}
 impl CostFunction for Easom<Vec<f64>> {
     type Param = Vec<f64>;
     type Output = f64;
@@ -122,7 +130,11 @@ crate::backend_macros::nalgebra_versions! {
     use crate::{CostFunction, Gradient};
     use nalgebra::DVector;
 
-    impl CostFunction for Easom<DVector<f64>> {
+    impl crate::ProblemConstraints for Easom<DVector<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Easom<DVector<f64>> {
         type Param = DVector<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -154,7 +166,11 @@ crate::backend_macros::ndarray_versions! {
     use crate::{CostFunction, Gradient};
     use ndarray::Array1;
 
-    impl CostFunction for Easom<Array1<f64>> {
+    impl crate::ProblemConstraints for Easom<Array1<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Easom<Array1<f64>> {
         type Param = Array1<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;
@@ -192,7 +208,11 @@ crate::backend_macros::faer_versions! {
     // faer's `Col` doesn't expose a `&[f64]` directly across all 0.24 APIs we
     // care about, so we evaluate elementwise here rather than routing through
     // the slice-based primitives.
-    impl CostFunction for Easom<Col<f64>> {
+    impl crate::ProblemConstraints for Easom<Col<f64>>  {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_> { crate::Constraints::new() }
+}
+impl CostFunction for Easom<Col<f64>> {
         type Param = Col<f64>;
         type Output = f64;
         type Error = std::convert::Infallible;

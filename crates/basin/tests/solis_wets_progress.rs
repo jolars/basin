@@ -1,14 +1,23 @@
 //! Solis-Wets keeps its adaptive model across exact resumes and local-search segments.
 
 use basin::{
-    BoxConstraints, CostFunction, Executor, MaLsCh, PointState, Problem,
-    ResumableInner, SolisWets, Solver, State, TerminationCode,
+    CostFunction, Executor, MaLsCh, PointState, Problem, ResumableInner,
+    SolisWets, Solver, State, TerminationCode,
 };
 use std::cell::{Cell, RefCell};
 use std::convert::Infallible;
 use std::rc::Rc;
 
 struct Sphere;
+
+impl basin::ProblemConstraints for Sphere {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Sphere {
     type Param = Vec<f64>;
     type Output = f64;
@@ -89,6 +98,15 @@ fn fresh_run_resets_progress_and_rebuilds_model_for_new_dimension() {
 }
 
 struct Rejected(f64);
+
+impl basin::ProblemConstraints for Rejected {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Rejected {
     type Param = Vec<f64>;
     type Output = f64;
@@ -162,20 +180,24 @@ struct FlatBox {
     lower: Vec<f64>,
     upper: Vec<f64>,
 }
+
+impl basin::ProblemConstraints for FlatBox {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for FlatBox {
     type Param = Vec<f64>;
     type Output = f64;
     type Error = Infallible;
     fn cost(&self, _: &Vec<f64>) -> Result<f64, Infallible> {
         Ok(1.0)
-    }
-}
-impl BoxConstraints for FlatBox {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -208,11 +230,11 @@ impl ResumableInner<Vec<f64>> for Chain {
         state.reset_progress();
     }
 }
-impl Solver<FlatBox, PointState<Vec<f64>>> for Chain {
+impl Solver<basin::SamplingDomain<FlatBox>, PointState<Vec<f64>>> for Chain {
     type Error = Infallible;
     fn init(
         &mut self,
-        _: &mut Problem<FlatBox>,
+        _: &mut Problem<basin::SamplingDomain<FlatBox>>,
         state: PointState<Vec<f64>>,
     ) -> Result<PointState<Vec<f64>>, Infallible> {
         self.init_calls.set(self.init_calls.get() + 1);
@@ -221,7 +243,7 @@ impl Solver<FlatBox, PointState<Vec<f64>>> for Chain {
     }
     fn next_iter(
         &mut self,
-        problem: &mut Problem<FlatBox>,
+        problem: &mut Problem<basin::SamplingDomain<FlatBox>>,
         state: PointState<Vec<f64>>,
     ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Infallible> {
         self.model_steps += 1;
@@ -249,10 +271,10 @@ fn local_search_segments_skip_reinitialization_and_restart_budgets() {
             .with_nfrec(1)
             .with_ls_improvement_threshold(0.0);
         let result = Executor::new(
-            FlatBox {
+            basin::SamplingDomain::new(FlatBox {
                 lower: vec![-5.0; 2],
                 upper: vec![5.0; 2],
-            },
+            }),
             solver,
             basin::PopulationProgress::empty(),
         )
@@ -278,10 +300,10 @@ fn configured_solis_wets_chain_reuses_supplied_cost() {
     .with_nfrec(1)
     .with_ls_improvement_threshold(0.0);
     let result = Executor::new(
-        FlatBox {
+        basin::SamplingDomain::new(FlatBox {
             lower: vec![-5.0; 2],
             upper: vec![5.0; 2],
-        },
+        }),
         solver,
         basin::PopulationProgress::empty(),
     )

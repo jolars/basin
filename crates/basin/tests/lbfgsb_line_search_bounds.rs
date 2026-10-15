@@ -1,10 +1,10 @@
 use std::{cell::RefCell, convert::Infallible, rc::Rc};
 
 use basin::{
-    Backtracking, BoxConstraints, Constant, CostFunction, Executor,
-    FirstOrderState, Gradient, GradientState, HagerZhang, Lbfgsb, LineSearch,
-    LineSearchBounds, LineSearchOutcome, LineSearchResult, MoreThuente,
-    Problem, State, TerminationCode, Wolfe,
+    Backtracking, Constant, CostFunction, Executor, FirstOrderState, Gradient,
+    GradientState, HagerZhang, Lbfgsb, LineSearch, LineSearchBounds,
+    LineSearchOutcome, LineSearchResult, MoreThuente, Problem, State,
+    TerminationCode, Wolfe,
 };
 
 #[derive(Clone)]
@@ -40,6 +40,17 @@ impl Quadratic {
     }
 }
 
+impl basin::ProblemConstraints for Quadratic {
+    type Constraints = basin::Constraints<basin::BoxBounds<Vec<f64>>>;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+            Some(&self.lower),
+            Some(&self.upper),
+        ))
+    }
+}
 impl CostFunction for Quadratic {
     type Param = Vec<f64>;
     type Output = f64;
@@ -65,16 +76,6 @@ impl Gradient for Quadratic {
             .zip(&self.center)
             .map(|(xi, ci)| 2.0 * self.scale * (xi - ci))
             .collect())
-    }
-}
-
-impl BoxConstraints for Quadratic {
-    fn lower(&self) -> &Vec<f64> {
-        &self.lower
-    }
-
-    fn upper(&self) -> &Vec<f64> {
-        &self.upper
     }
 }
 
@@ -391,6 +392,18 @@ macro_rules! backend_regression {
                 upper: Vector,
             }
 
+
+            impl basin::ProblemConstraints for BoundedQuadratic {
+                type Constraints = basin::Constraints<basin::BoxBounds<Vector>>;
+                fn constraint_set(
+                    &self,
+                ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+                    basin::Constraints::new().with_bounds(basin::BoxBounds::new(
+                        Some(&self.lower),
+                        Some(&self.upper),
+                    ))
+                }
+            }
             impl CostFunction for BoundedQuadratic {
                 type Param = Vector;
                 type Output = Float;
@@ -414,14 +427,7 @@ macro_rules! backend_regression {
                 }
             }
 
-            impl BoxConstraints for BoundedQuadratic {
-                fn lower(&self) -> &Vector {
-                    &self.lower
-                }
-                fn upper(&self) -> &Vector {
-                    &self.upper
-                }
-            }
+
 
             #[test]
             fn lower_and_upper_active_bounds() {

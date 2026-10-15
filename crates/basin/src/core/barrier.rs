@@ -1,6 +1,6 @@
 //! Log-barrier adapter for linear inequality constraints.
 //!
-//! [`LogBarrier`] wraps a [`LinearInequalityConstraints`] problem
+//! [`LogBarrier`] wraps a [`Constraints`](crate::Constraints) problem
 //! `min f(x) s.t. A x ≤ b` together with a fixed barrier parameter `μ > 0`
 //! and exposes the unconstrained barrier objective
 //!
@@ -15,16 +15,12 @@
 //! unconstrained solver or [`Executor`](crate::core::executor::Executor),
 //! mirroring R's `constrOptim` layering a barrier on `optim`.
 //!
-//! # Adapter asymmetry (tenet 4, load-bearing)
+//! # Constraint transformation
 //!
-//! `LogBarrier` *consumes* [`LinearInequalityConstraints`] and exposes
-//! [`CostFunction`] + [`Gradient`] **only**: it deliberately does **not**
-//! implement [`LinearInequalityConstraints`] itself. That asymmetry is what
-//! routes the wrapped problem to *unconstrained* solvers: if the barrier
-//! re-exposed the constraint trait it would route straight back into
-//! constrained solvers and the adapter model would collapse. (Contrast
-//! [`FiniteDiff`](crate::core::numdiff::FiniteDiff), which *adds* a
-//! capability and therefore *forwards* [`BoxConstraints`](crate::core::constraint::BoxConstraints).)
+//! `LogBarrier` consumes a set containing only linear inequality constraints and
+//! exposes [`NoConstraints`](crate::NoConstraints) to the inner solver. Other
+//! blocks are rejected at compile time. Derivative adapters such as
+//! [`FiniteDiff`](crate::FiniteDiff) instead preserve the full declaration.
 //!
 //! # Feasibility
 //!
@@ -41,22 +37,24 @@
 //!
 //! # Backends
 //!
-//! Requires the constraint matrix to implement
-//! [`MatVec`] (`A x`) and
-//! [`MatTransposeVec`] (`Aᵀ v`): a
+//! Requires checked matrix shape and finiteness, plus
+//! [`MatVecInto`](crate::MatVecInto) (`A x`) and
+//! [`MatTransposeVecInto`](crate::MatTransposeVecInto) (`Aᵀ v`): a
 //! strict subset of the LA tier that never includes a linear solve. That
 //! covers all four backends: `DenseMatrix`/`Vec`, nalgebra
 //! `DMatrix`/`DVector`, faer `Mat`/`Col`, and ndarray `Array2`/`Array1`
 //! (tenet 5).
 
-use crate::core::constraint::LinearInequalityConstraints;
+use crate::ConstraintSolveError;
+use crate::core::constraint::evaluation::{
+    LinearInequalityGradient, LinearInequalityProblem, invalid,
+};
 use crate::core::math::{
-    MatTransposeVec, MatVec, NegInPlace, Scalar, ScaledAdd, VectorIndex,
-    VectorLen,
+    NegInPlace, Scalar, ScaledAdd, VectorIndex, VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient};
 
-/// A [`LinearInequalityConstraints`] problem rewritten as the unconstrained
+/// A [`Constraints`](crate::Constraints) problem rewritten as the unconstrained
 /// log-barrier objective `f(x) − μ · Σ log(bᵢ − aᵢᵀ x)` at a fixed `μ`.
 ///
 /// Borrows the underlying problem (`&'a P`) so the barrier parameter can be
@@ -106,10 +104,9 @@ impl<'a, P, F: Scalar> LogBarrier<'a, P, F> {
     }
 
     /// Validate the constraint data at `x` and report strict feasibility.
-    pub(crate) fn strict_feasibility<V, M>(&self, x: &V) -> Option<bool>
+    pub(crate) fn strict_feasibility<V>(&self, x: &V) -> Option<bool>
     where
-        P: LinearInequalityConstraints<Param = V, Matrix = M>,
-        M: MatVec<V>,
+        P: LinearInequalityProblem<V, F>,
         V: ScaledAdd<F> + VectorIndex<F> + VectorLen,
     {
         strict_feasibility(self.problem, x)
@@ -118,27 +115,20 @@ impl<'a, P, F: Scalar> LogBarrier<'a, P, F> {
 
 /// Return `Some(true)` for `A x < b`, `Some(false)` for finite but non-strict
 /// data, and `None` for a non-finite or inconsistent vector shape.
-pub(crate) fn strict_feasibility<P, V, M, F>(problem: &P, x: &V) -> Option<bool>
+pub(crate) fn strict_feasibility<P, V, F>(problem: &P, x: &V) -> Option<bool>
 where
     F: Scalar,
-    P: LinearInequalityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V>,
+    P: LinearInequalityProblem<V, F>,
     V: ScaledAdd<F> + VectorIndex<F> + VectorLen,
 {
-    if !vector_is_finite(x) || !vector_is_finite(problem.b()) {
+    if !vector_is_finite(x) {
         return None;
     }
-
-    let mut residual = problem.a().matvec(x);
-    if residual.vec_len() != problem.b().vec_len() {
-        return None;
-    }
-    residual.scaled_add(-F::one(), problem.b());
+    let residual = problem.linear_residual(x).ok()?;
     if !vector_is_finite(&residual) {
         return None;
     }
-
-    Some((0..residual.vec_len()).all(|i| residual.get_scalar(i) < F::zero()))
+    Some(residual.iter().all(|&v| v < F::zero()))
 }
 
 fn vector_is_finite<V, F>(x: &V) -> bool
@@ -222,58 +212,38 @@ where
     Some(s)
 }
 
-impl<P, V, M, F> CostFunction for LogBarrier<'_, P, F>
+impl<P, V, F> CostFunction for LogBarrier<'_, P, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F>
-        + LinearInequalityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V>,
-    V: ScaledAdd<F> + NegInPlace + VectorIndex<F> + VectorLen,
+    P: CostFunction<Param = V, Output = F> + LinearInequalityProblem<V, F>,
+    V: VectorLen + VectorIndex<F>,
 {
     type Param = V;
     type Output = F;
-    // Pass through the wrapped problem's hard-abort error: barrier-internal
-    // issues (slack ≤ 0) still use the soft `+∞` reject path, so the only
-    // `Err` that can come out of this `cost` is one the user's `cost`
-    // returned.
-    type Error = <P as CostFunction>::Error;
-
+    type Error = ConstraintSolveError<P::Error>;
     fn cost(&self, x: &V) -> Result<F, Self::Error> {
-        if !vector_is_finite(x) || !vector_is_finite(self.problem.b()) {
+        let mut values = self.problem.linear_residual(x).map_err(invalid)?;
+        if !vector_is_finite(x) || !vector_is_finite(&values) {
             return Ok(F::infinity());
         }
-
-        let mut values = self.problem.a().matvec(x);
-        if values.vec_len() != self.problem.b().vec_len() {
-            return Ok(F::infinity());
-        }
-
         let phase_one_s = match self.objective {
             BarrierObjective::PhaseOne => {
-                // violations r = A x - b, replaced by slacks s - r after
-                // analytically minimizing over the auxiliary scalar s.
-                values.scaled_add(-F::one(), self.problem.b());
                 match phase_one_slacks(&mut values, self.mu) {
                     Some(s) => Some(s),
                     None => return Ok(F::infinity()),
                 }
             }
             BarrierObjective::PhaseTwo => {
-                // slack = b - A x.
                 values.neg_in_place();
-                values.scaled_add(F::one(), self.problem.b());
                 None
             }
         };
-
         let mut log_sum = F::zero();
-        for i in 0..values.vec_len() {
-            let si = values.get_scalar(i);
-            if !(si.is_finite() && si > F::zero()) {
-                // Infeasible: barrier is +∞, so the whole objective is +∞.
+        for &slack in &values {
+            if !(slack.is_finite() && slack > F::zero()) {
                 return Ok(F::infinity());
             }
-            log_sum = log_sum + si.ln();
+            log_sum = log_sum + slack.ln();
         }
         match phase_one_s {
             Some(s) => Ok(s - self.mu * log_sum),
@@ -281,49 +251,35 @@ where
         }
     }
 }
-
-impl<P, V, M, F> Gradient for LogBarrier<'_, P, F>
+impl<P, V, F> Gradient for LogBarrier<'_, P, F>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F>
-        + Gradient<Gradient = V>
-        + LinearInequalityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V> + MatTransposeVec<V>,
-    V: ScaledAdd<F> + NegInPlace + VectorIndex<F> + VectorLen,
+        + LinearInequalityGradient<V, F>
+        + Gradient<Gradient = V>,
+    V: Clone + VectorLen + VectorIndex<F> + ScaledAdd<F>,
 {
     type Gradient = V;
-
     fn gradient(&self, x: &V) -> Result<V, <Self as CostFunction>::Error> {
-        let mut values = self.problem.a().matvec(x);
-        let valid_shape = values.vec_len() == self.problem.b().vec_len();
-        let valid = valid_shape
-            && vector_is_finite(x)
-            && vector_is_finite(self.problem.b())
+        let mut values = self.problem.linear_residual(x).map_err(invalid)?;
+        let valid = vector_is_finite(x)
+            && vector_is_finite(&values)
             && match self.objective {
                 BarrierObjective::PhaseOne => {
-                    values.scaled_add(-F::one(), self.problem.b());
                     phase_one_slacks(&mut values, self.mu).is_some()
                 }
                 BarrierObjective::PhaseTwo => {
                     values.neg_in_place();
-                    values.scaled_add(F::one(), self.problem.b());
-                    (0..values.vec_len()).all(|i| {
-                        let slack = values.get_scalar(i);
-                        slack.is_finite() && slack > F::zero()
-                    })
+                    values.iter().all(|v| v.is_finite() && *v > F::zero())
                 }
             };
-
-        for i in 0..values.vec_len() {
-            let weight = if valid {
-                self.mu / values.get_scalar(i)
-            } else {
-                F::zero()
-            };
-            values.set_scalar(i, weight);
+        for value in &mut values {
+            *value = if valid { self.mu / *value } else { F::zero() };
         }
-
-        let barrier_grad = self.problem.a().mat_transpose_vec(&values);
+        let mut barrier_grad = x.clone();
+        self.problem
+            .linear_transpose(&values, &mut barrier_grad)
+            .map_err(invalid)?;
         match self.objective {
             BarrierObjective::PhaseOne => Ok(barrier_grad),
             BarrierObjective::PhaseTwo => {
@@ -355,6 +311,23 @@ mod tests {
         }
     }
 
+    impl crate::ProblemConstraints for Probe {
+        type Constraints = crate::Constraints<
+            crate::NoBounds,
+            crate::LinearBlocks<
+                crate::NoLinearBlock,
+                crate::LinearBlock<DMatrix<f64>, DVector<f64>>,
+            >,
+        >;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_linear_inequalities(
+                crate::LinearBlock::new(&self.a, &self.b),
+            )
+        }
+    }
     impl CostFunction for Probe {
         type Param = DVector<f64>;
         type Output = f64;
@@ -374,16 +347,6 @@ mod tests {
             x: &DVector<f64>,
         ) -> Result<DVector<f64>, std::convert::Infallible> {
             Ok(x.clone())
-        }
-    }
-
-    impl LinearInequalityConstraints for Probe {
-        type Matrix = DMatrix<f64>;
-        fn a(&self) -> &DMatrix<f64> {
-            &self.a
-        }
-        fn b(&self) -> &DVector<f64> {
-            &self.b
         }
     }
 
@@ -472,5 +435,12 @@ mod tests {
                 fd
             );
         }
+    }
+}
+
+impl<P, F> crate::ProblemConstraints for LogBarrier<'_, P, F> {
+    type Constraints = crate::NoConstraints;
+    fn constraint_set(&self) -> crate::NoConstraints {
+        crate::NoConstraints::EMPTY
     }
 }

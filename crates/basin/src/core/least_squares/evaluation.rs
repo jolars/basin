@@ -1,7 +1,8 @@
 //! Counted evaluation and model construction shared by the NLLS drivers.
 
 use super::{LossFunction, RobustLeastSquares};
-use crate::BoxConstraints;
+use crate::core::constraint::RelaxedProblem;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{Scalar, ScaleRowsInPlace, VectorIndex, VectorLen};
 use crate::core::problem::{Jacobian, Problem, Residual};
 use crate::core::state::PointState;
@@ -56,47 +57,58 @@ where
     }
 }
 
-impl<P, L, V, M, F> Evaluation<V, M, F> for Problem<RobustLeastSquares<P, L, F>>
-where
-    F: Scalar,
-    P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
-    L: LossFunction<F>,
-    V: Clone + VectorLen + VectorIndex<F>,
-    M: ScaleRowsInPlace<F>,
-{
-    type Error = P::Error;
-    const ROBUST: bool = true;
-    fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
-        self.counts_mut().residual_evals += 1;
-        self.inner().problem.residual(x)
-    }
-    fn jacobian(&mut self, x: &V) -> Result<M, Self::Error> {
-        self.counts_mut().jacobian_evals += 1;
-        self.inner().problem.jacobian(x)
-    }
-    fn residual_and_jacobian(&mut self, x: &V) -> Result<(V, M), Self::Error> {
-        self.counts_mut().residual_evals += 1;
-        self.counts_mut().jacobian_evals += 1;
-        self.inner().problem.residual_and_jacobian(x)
-    }
-    fn cost(&self, r: &V, _: impl FnOnce(&V) -> F) -> F {
-        self.inner().residual_cost(r)
-    }
-    fn model(&self, r: &V, mut j: M) -> Option<(Option<V>, M)> {
-        let (residual, factors) = self.inner().model_residual(r)?;
-        j.scale_rows_in_place(&factors);
-        Some((Some(residual), j))
-    }
-    fn valid_vector(&self, v: &V) -> bool {
-        (0..v.vec_len()).all(|i| v.get_scalar(i).is_finite())
-    }
+// Relaxing a box must retain the loss, scale, and raw callback accounting.
+macro_rules! robust_evaluation {
+    ($problem:ty, $($field:ident).*) => {
+        impl<P, L, V, M, F> Evaluation<V, M, F> for Problem<$problem>
+        where
+            F: Scalar,
+            P: Residual<Param = V, Output = V> + Jacobian<Jacobian = M>,
+            L: LossFunction<F>,
+            V: Clone + VectorLen + VectorIndex<F>,
+            M: ScaleRowsInPlace<F>,
+        {
+            type Error = P::Error;
+            const ROBUST: bool = true;
+            fn residual(&mut self, x: &V) -> Result<V, Self::Error> {
+                self.counts_mut().residual_evals += 1;
+                self.inner()$(.$field)*.problem.residual(x)
+            }
+            fn jacobian(&mut self, x: &V) -> Result<M, Self::Error> {
+                self.counts_mut().jacobian_evals += 1;
+                self.inner()$(.$field)*.problem.jacobian(x)
+            }
+            fn residual_and_jacobian(
+                &mut self,
+                x: &V,
+            ) -> Result<(V, M), Self::Error> {
+                self.counts_mut().residual_evals += 1;
+                self.counts_mut().jacobian_evals += 1;
+                self.inner()$(.$field)*.problem.residual_and_jacobian(x)
+            }
+            fn cost(&self, r: &V, _: impl FnOnce(&V) -> F) -> F {
+                self.inner()$(.$field)*.residual_cost(r)
+            }
+            fn model(&self, r: &V, mut j: M) -> Option<(Option<V>, M)> {
+                let (residual, factors) =
+                    self.inner()$(.$field)*.model_residual(r)?;
+                j.scale_rows_in_place(&factors);
+                Some((Some(residual), j))
+            }
+            fn valid_vector(&self, v: &V) -> bool {
+                (0..v.vec_len()).all(|i| v.get_scalar(i).is_finite())
+            }
+        }
+    };
 }
+robust_evaluation!(RobustLeastSquares<P, L, F>,);
+robust_evaluation!(RelaxedProblem<'_, RobustLeastSquares<P, L, F>>, problem);
 
 impl<P, V: Clone, M, F: Scalar> BoundedEvaluation<V, M, F> for Problem<P>
 where
     P: Residual<Param = V, Output = V>
         + Jacobian<Jacobian = M>
-        + BoxConstraints<Param = V>,
+        + BoxProblem<Param = V>,
 {
     fn lower(&self) -> &V {
         self.inner().lower()
@@ -112,7 +124,7 @@ where
     F: Scalar,
     P: Residual<Param = V, Output = V>
         + Jacobian<Jacobian = M>
-        + BoxConstraints<Param = V>,
+        + BoxProblem<Param = V>,
     L: LossFunction<F>,
     V: Clone + VectorLen + VectorIndex<F>,
     M: ScaleRowsInPlace<F>,

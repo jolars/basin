@@ -356,11 +356,14 @@ pub(crate) struct ReannealingProgress {
 /// ```
 /// use basin::core::rng::{ChaCha8Rng, RngExt};
 /// use basin::{
-///     CostFunction, Executor, SimulatedAnnealing, TemperatureSchedule,
-/// };
+///     CostFunction, Executor, SimulatedAnnealing, TemperatureSchedule};
 /// use std::convert::Infallible;
 ///
 /// struct Sphere;
+/// impl basin::ProblemConstraints for Sphere  {
+///     type Constraints = basin::NoConstraints;
+///     fn constraint_set(&self) -> basin::NoConstraints { basin::NoConstraints::EMPTY }
+/// }
 /// impl CostFunction for Sphere {
 ///     type Param = Vec<f64>;
 ///     type Output = f64;
@@ -572,6 +575,7 @@ where
     N: Neighbor<V, F, R, Error = P::Error> + Clone,
     F: Scalar,
     R: Rng + Clone,
+    P: crate::ProblemConstraints<Constraints = crate::NoConstraints>,
 {
     type Error = P::Error;
 

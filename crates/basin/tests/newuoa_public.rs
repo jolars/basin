@@ -12,6 +12,14 @@ use basin::{CostFunction, Executor, Newuoa, PointState, TerminationCode};
 /// Chained Rosenbrock (basin coefficient form), minimum 0 at the all-ones point.
 struct Rosenbrock;
 
+impl basin::ProblemConstraints for Rosenbrock {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl CostFunction for Rosenbrock {
     type Param = Vec<f64>;
     type Output = f64;
@@ -115,6 +123,16 @@ fn backend_generic_nalgebra() {
     use crate::backend_aliases::nalgebra::DVector;
 
     struct RosenbrockN;
+
+    impl basin::ProblemConstraints for RosenbrockN {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_>
+        {
+            basin::Constraints::new()
+        }
+    }
     impl CostFunction for RosenbrockN {
         type Param = DVector<f64>;
         type Output = f64;

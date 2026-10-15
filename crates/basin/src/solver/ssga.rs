@@ -1,6 +1,6 @@
 use rand_distr::uniform::SampleUniform;
 
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::{
     NormSquared, SampleUniformBox, Scalar, ScaledAdd, VectorLen,
 };
@@ -72,7 +72,7 @@ use crate::solver::cma_es::sort_population_ascending;
 /// # Contract
 ///
 /// - **Caller must:** implement [`CostFunction<Param = V, Output = F>`]
-///   *and* [`BoxConstraints<Param = V>`] on the problem. SSGA is a
+///   *and* `Constraints<BoxBounds<V>>` on the problem. SSGA is a
 ///   bounded-search method by construction.
 /// - Supply [`PopulationProgress::empty`] to sample `pop_size` members, or
 ///   [`PopulationProgress::from_population`] with exactly `pop_size` finite
@@ -110,7 +110,7 @@ use crate::solver::cma_es::sort_population_ascending;
 ///
 /// See [`RandomSearch`](crate::RandomSearch) for the population-based
 /// `Executor` pattern with `PopulationProgress::empty()`;
-/// `Ssga` likewise requires `BoxConstraints` on the problem.
+/// `Ssga` likewise requires `BoxBounds` on the problem.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Ssga<F: Scalar = f64> {
     pop_size: usize,
@@ -454,7 +454,7 @@ pub(crate) fn replace_worst_if_better<V, F: Scalar>(
 impl<P, V, F> Solver<P, PopulationProgress<V, F>> for Ssga<F>
 where
     F: Scalar + SampleUniform,
-    P: CostFunction<Param = V, Output = F> + BoxConstraints<Param = V>,
+    P: CostFunction<Param = V, Output = F> + BoxProblem<Param = V>,
     V: VectorLen
         + Clone
         + SampleUniformBox
@@ -462,14 +462,21 @@ where
         + NormSquared<F>
         + std::ops::Index<usize, Output = F>
         + std::ops::IndexMut<usize, Output = F>,
+    V: crate::VectorLen + std::ops::Index<usize, Output = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PopulationProgress<V, F>,
     ) -> Result<PopulationProgress<V, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_box_problem(
+            problem.inner(),
+            None,
+            true,
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed);

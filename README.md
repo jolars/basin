@@ -54,18 +54,23 @@ the Rust 1.87-compatible feature set separately.
 
 ## Example
 
-Implement `CostFunction` (and `Gradient`, when the solver needs derivatives),
+Declare `ProblemConstraints` and implement `CostFunction` (and `Gradient`, when
+the solver needs derivatives),
 then hand the problem, a solver, and an initial state to the `Executor`:
 
 ```rust
-use basin::{
-    FirstOrderState, CostFunction, Executor, Gradient, GradientDescent,
-};
+use basin::{CostFunction, Executor, FirstOrderState, Gradient, GradientDescent};
 use std::convert::Infallible;
 
 struct Rosenbrock;
 
 fn main() {
+    impl basin::ProblemConstraints for Rosenbrock {
+        type Constraints = basin::NoConstraints;
+        fn constraint_set(&self) -> basin::NoConstraints {
+            basin::NoConstraints::EMPTY
+        }
+    }
     impl CostFunction for Rosenbrock {
         type Param = Vec<f64>;
         type Output = f64;

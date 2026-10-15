@@ -203,7 +203,7 @@ where
 /// This is a direct root-finding API, not an optimization
 /// [`Solver`](crate::Solver). The interval belongs to the algorithm and is
 /// therefore passed to [`new`](Self::new), rather than represented as
-/// [`BoxConstraints`](crate::BoxConstraints). Clean iteration-limit exits
+/// [`BoxBounds`](crate::BoxBounds). Clean iteration-limit exits
 /// return a [`RootResult`]; invalid brackets, non-finite values, and callback
 /// failures return [`BrentRootError`].
 ///

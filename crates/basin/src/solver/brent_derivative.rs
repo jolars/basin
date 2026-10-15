@@ -1,4 +1,4 @@
-use crate::core::constraint::BoxConstraints;
+use crate::core::constraint::evaluation::BoxProblem;
 use crate::core::math::Scalar;
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -6,7 +6,7 @@ use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::Termination;
 
 /// Brent's method using first derivatives ("dbrent") for 1D minimization on a
-/// closed interval `[lower, upper]` supplied via `BoxConstraints`. Within the
+/// closed interval `[lower, upper]` supplied via `BoxBounds`. Within the
 /// bracket it uses the **sign of `f'`** to choose which half holds the minimum
 /// and **secant extrapolation on `f'`** (through the two best points) to pick
 /// the step, falling back to derivative-informed bisection when the secant
@@ -31,14 +31,14 @@ use crate::core::termination::Termination;
 ///
 /// Scalar by construction: the parameter and gradient are each a single `F`
 /// (default `f64`), so `BrentDerivative` is backend-agnostic and needs no
-/// linear-algebra backend. The problem's `BoxConstraints` carry `F`-valued
+/// linear-algebra backend. The problem's `BoxBounds` carry `F`-valued
 /// lower and upper bounds.
 ///
 /// # Examples
 ///
 /// `BrentDerivative` minimizes a 1-D function over a bracket using its
 /// derivative, so the problem implements `CostFunction`, `Gradient` (with
-/// `Gradient = F`), *and* `BoxConstraints` with scalar (`F`) bounds. See
+/// `Gradient = F`), *and* `BoxBounds` with scalar (`F`) bounds. See
 /// [`Brent`](crate::solver::Brent) for the derivative-free sibling.
 ///
 /// # References
@@ -123,15 +123,19 @@ where
     F: Scalar + crate::core::math::VectorLen,
     P: CostFunction<Param = F, Output = F>
         + Gradient<Gradient = F>
-        + BoxConstraints,
+        + BoxProblem<Param = F>,
 {
-    type Error = P::Error;
+    type Error = crate::ConstraintSolveError<P::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: FirstOrderState<F, F>,
     ) -> Result<FirstOrderState<F, F>, Self::Error> {
+        crate::core::constraint::evaluation::validate_scalar_box_problem(
+            problem.inner(),
+        )
+        .map_err(crate::core::constraint::evaluation::invalid)?;
         state.reset();
         let a = *problem.inner().lower();
         let b = *problem.inner().upper();
@@ -376,6 +380,19 @@ mod tests {
         lo: f64,
         hi: f64,
     }
+
+    impl crate::ProblemConstraints for Quadratic {
+        type Constraints = crate::Constraints<crate::BoxBounds<f64>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.lo),
+                Some(&self.hi),
+            ))
+        }
+    }
     impl CostFunction for Quadratic {
         type Param = f64;
         type Output = f64;
@@ -388,14 +405,6 @@ mod tests {
         type Gradient = f64;
         fn gradient(&self, x: &f64) -> Result<f64, Self::Error> {
             Ok(2.0 * (x - 2.0))
-        }
-    }
-    impl BoxConstraints for Quadratic {
-        fn lower(&self) -> &f64 {
-            &self.lo
-        }
-        fn upper(&self) -> &f64 {
-            &self.hi
         }
     }
 
@@ -433,6 +442,19 @@ mod tests {
         lo: f64,
         hi: f64,
     }
+
+    impl crate::ProblemConstraints for Cubic {
+        type Constraints = crate::Constraints<crate::BoxBounds<f64>>;
+        fn constraint_set(
+            &self,
+        ) -> <Self::Constraints as crate::ConstraintDescription>::Borrowed<'_>
+        {
+            crate::Constraints::new().with_bounds(crate::BoxBounds::new(
+                Some(&self.lo),
+                Some(&self.hi),
+            ))
+        }
+    }
     impl CostFunction for Cubic {
         type Param = f64;
         type Output = f64;
@@ -446,14 +468,6 @@ mod tests {
         type Gradient = f64;
         fn gradient(&self, x: &f64) -> Result<f64, Self::Error> {
             Ok(3.0 * x * x - 3.0)
-        }
-    }
-    impl BoxConstraints for Cubic {
-        fn lower(&self) -> &f64 {
-            &self.lo
-        }
-        fn upper(&self) -> &f64 {
-            &self.hi
         }
     }
 

@@ -67,6 +67,16 @@ impl<V: VectorIndex<F> + VectorLen, F: Scalar> Objective<V, F> {
     }
 }
 
+impl<V: VectorIndex<F> + VectorLen, F: Scalar> basin::ProblemConstraints
+    for Objective<V, F>
+{
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<V: VectorIndex<F> + VectorLen, F: Scalar> CostFunction
     for Objective<V, F>
 {

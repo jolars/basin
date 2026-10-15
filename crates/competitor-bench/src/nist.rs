@@ -215,6 +215,14 @@ impl<F: Scalar> Nist<F> {
     }
 }
 
+impl<F: Scalar> basin::ProblemConstraints for Nist<F> {
+    type Constraints = basin::NoConstraints;
+    fn constraint_set(
+        &self,
+    ) -> <Self::Constraints as basin::ConstraintDescription>::Borrowed<'_> {
+        basin::Constraints::new()
+    }
+}
 impl<F: Scalar> CostFunction for Nist<F> {
     type Param = DVector<F>;
     type Output = F;

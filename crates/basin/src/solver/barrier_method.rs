@@ -1,13 +1,16 @@
 //! Log-barrier (sequential unconstrained minimization) method for linear
 //! inequality constraints `A x ≤ b`.
 
+use crate::ConstraintSolveError;
 use crate::core::barrier::{LogBarrier, strict_feasibility};
-use crate::core::constraint::LinearInequalityConstraints;
+use crate::core::constraint::evaluation::{
+    LinearInequalityGradient, LinearInequalityProblem, invalid,
+};
 use crate::core::executor::run_loop_with_control;
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
-    MatTransposeVec, MatVec, NegInPlace, NormInfinity, NormSquared, Scalar,
-    ScaledAdd, VectorIndex, VectorLen,
+    NegInPlace, NormInfinity, NormSquared, Scalar, ScaledAdd, VectorIndex,
+    VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
@@ -176,7 +179,7 @@ pub struct BarrierInnerDiagnostics<F: Scalar = f64> {
 /// Supports `Vec<f32>` and `Vec<f64>` with
 /// [`DenseMatrix`](crate::core::math::DenseMatrix), nalgebra `DVector`/`DMatrix`,
 /// ndarray `Array1`/`Array2`, and faer `Col`/`Mat`, with either scalar type.
-/// The outer method needs [`MatVec`] and [`MatTransposeVec`], with no linear
+/// The outer method needs [`crate::MatVecInto`] and [`crate::MatTransposeVecInto`], with no linear
 /// solve. Its vector bounds are [`ScaledAdd`], [`NegInPlace`], [`VectorIndex`],
 /// [`VectorLen`], [`NormSquared`], [`NormInfinity`], and [`Clone`]. A custom inner solver can
 /// impose additional capabilities.
@@ -192,7 +195,7 @@ pub struct BarrierInnerDiagnostics<F: Scalar = f64> {
 /// # Examples
 ///
 /// `BarrierMethod` wraps a gradient inner solver (e.g. `BFGS` paired with
-/// `Backtracking`) to handle `LinearInequalityConstraints`. See
+/// `Backtracking`) to handle `Constraints`. See
 /// [`ProjectedGradientDescent`](crate::solver::ProjectedGradientDescent)
 /// for the simpler box-constrained pattern.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -235,13 +238,11 @@ struct StopAtStrictFeasibility<'a, So> {
     inner: &'a mut So,
 }
 
-impl<'a, 'p, P, V, M, S, So, F> Solver<LogBarrier<'p, P, F>, S>
+impl<'a, 'p, P, V, S, So, F> Solver<LogBarrier<'p, P, F>, S>
     for StopAtStrictFeasibility<'a, So>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F>
-        + LinearInequalityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V>,
+    P: LinearInequalityProblem<V, F>,
     V: ScaledAdd<F> + VectorIndex<F> + VectorLen,
     S: State<Param = V>,
     So: Solver<LogBarrier<'p, P, F>, S>,
@@ -488,13 +489,10 @@ where
     }
 }
 
-impl<P, V, M, So, F> Solver<P, PointState<V, F>> for BarrierMethod<So, F>
+impl<P, V, So, F> Solver<P, PointState<V, F>> for BarrierMethod<So, F>
 where
     F: Scalar,
-    P: CostFunction<Param = V, Output = F>
-        + Gradient<Gradient = V>
-        + LinearInequalityConstraints<Param = V, Matrix = M>,
-    M: MatVec<V> + MatTransposeVec<V>,
+    P: LinearInequalityGradient<V, F> + Gradient<Gradient = V>,
     V: ScaledAdd<F>
         + NegInPlace
         + VectorIndex<F>
@@ -506,17 +504,21 @@ where
         + for<'a> Solver<
             LogBarrier<'a, P, F>,
             So::State,
-            Error = <P as CostFunction>::Error,
+            Error = ConstraintSolveError<<P as CostFunction>::Error>,
         >,
     So::State: State<Param = V, Float = F> + CountsMirror,
 {
-    type Error = <P as CostFunction>::Error;
+    type Error = ConstraintSolveError<<P as CostFunction>::Error>;
 
     fn init(
         &mut self,
         problem: &mut Problem<P>,
         mut state: PointState<V, F>,
     ) -> Result<PointState<V, F>, Self::Error> {
+        problem
+            .inner()
+            .validate_linear(state.param().vec_len())
+            .map_err(invalid)?;
         state.reset();
         self.accepted_iterate = false;
         self.last_inner = None;
@@ -598,7 +600,7 @@ where
                 diagnostic_start.map(|start| BarrierInnerDiagnostics {
                     phase_one: true,
                     mu: self.mu,
-                    gap: F::from_usize(problem.inner().b().vec_len()).unwrap()
+                    gap: F::from_usize(problem.inner().linear_count()).unwrap()
                         * self.mu,
                     start,
                     returned: result.as_ref().ok().map(|r| {
@@ -675,7 +677,7 @@ where
             // false infeasibility certificate.
             if centered {
                 let phase_one_gap =
-                    F::from_usize(problem.inner().b().vec_len()).unwrap()
+                    F::from_usize(problem.inner().linear_count()).unwrap()
                         * self.mu;
                 if phase_one_gap <= self.phase_one_tol {
                     self.phase = BarrierPhase::Failed;
@@ -752,7 +754,7 @@ where
             diagnostic_start.map(|start| BarrierInnerDiagnostics {
                 phase_one: false,
                 mu: self.mu,
-                gap: F::from_usize(problem.inner().b().vec_len()).unwrap()
+                gap: F::from_usize(problem.inner().linear_count()).unwrap()
                     * self.mu,
                 start,
                 returned: result.as_ref().ok().map(|r| {
@@ -812,7 +814,7 @@ where
         // Continue the same subproblem after an unfinished centering solve.
         // Shrinking μ alone cannot turn that partial result into a gap bound.
         self.gap =
-            F::from_usize(problem.inner().b().vec_len()).unwrap() * self.mu;
+            F::from_usize(problem.inner().linear_count()).unwrap() * self.mu;
         if self.stationarity_satisfied() {
             self.mu = self.mu / self.reduction;
         }
