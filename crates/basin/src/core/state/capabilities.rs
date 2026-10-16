@@ -51,7 +51,9 @@ pub trait EvaluatedGradientState: EvaluatedState {
 /// Preserve every category mirrored from the authoritative [`Problem`](crate::Problem).
 /// Fresh and nested runs report per-run deltas; exact continuation reports
 /// cumulative work across the resumed run. Shared states use these same raw
-/// categories for their cost and gradient readers.
+/// categories for their cost and gradient readers. Categories follow the
+/// callback-request semantics of [`EvalCounts`]; internal adapter probes are
+/// excluded.
 ///
 /// No gradient or evaluated-record capability is required: a derivative-free
 /// outer solver can budget derivative work performed by its inner solvers.

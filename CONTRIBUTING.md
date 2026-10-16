@@ -325,9 +325,14 @@ The `v1` branch retains its existing APIs and behavior.
   guarantees compatible selection semantics.
 - **Counts:** `Problem` owns authoritative `EvalCounts`; state preserves every
   category. Category readers and budgets must agree, with explicit names for
-  aggregates. All shipped shared states report raw categories; use an explicit aggregate
-  when budgeting total work. Iterations count
-  completed steps; a clean mid-step stop updates counts without adding a step.
+  aggregates. Counts measure callback requests at the `Problem` boundary.
+  Fused requests charge each category, batches charge submitted items, and
+  failing requests retain their charges. Internal adapter probes are excluded
+  from these categories and their `total_work` sum. Keep any future opt-in
+  probe accounting separate so it does not change existing counters or budgets.
+  All shipped shared states report raw categories; use an explicit aggregate
+  when budgeting their sum. Iterations count completed steps; a clean mid-step
+  stop updates counts without adding a step.
 - **Continuation:** fresh runs reset evolving machinery and bookkeeping; point
   warm starts reevaluate their input. Model reuse requires an explicit contract.
   Exact continuation retains the solver/state/counts together and skips

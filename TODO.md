@@ -402,7 +402,21 @@ desired backend features.
   budget checks outside callbacks to avoid per-evaluation overhead. A
   separate hard-cap API is outside the planned 2.0 scope.
 
+- [x] **Retain callback-request evaluation counts for Basin 2.0.** Counters
+  measure requests at the `Problem` boundary, with each fused category and
+  submitted batch item charged even on failure. Internal adapter probes are
+  excluded from existing counters and `total_work`. Keep future opt-in probe
+  accounting separate. Document the implications for finite differences and
+  execution budgets in [evaluation counters](MIGRATING.md#evaluation-counters).
+
 ## Deferred design
+
+- [ ] **Add opt-in internal evaluation accounting when a consumer needs it.**
+  Report underlying cost and residual probes separately from existing
+  callback-request counters, including any savings from Jacobian coloring.
+  Define accounting for failed and submitted probes, parallel evaluation,
+  fused callbacks, and composed adapters without double counting. Preserve
+  the existing meanings of `EvalCounts`, `total_work`, and evaluation budgets.
 
 - [ ] **Define shared constraint-violation reporting (tenet 3).** Constrained
   MADS publishes the sum of squared positive violations in `SelectedState`,

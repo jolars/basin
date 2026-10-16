@@ -414,6 +414,19 @@ Include `..` when destructuring `EvalCounts`:
 let basin::EvalCounts { cost_evals, .. } = counts;
 ```
 
+Counters retain their existing meaning: callback requests at the `Problem`
+boundary. Fused requests charge each category they produce, batches charge
+every submitted item, and failing requests retain their charges. Internal
+adapter calls are excluded. For example, requesting only a central
+finite-difference gradient in 10 parameters makes 20 internal objective calls
+but records `gradient_evals = 1`, `cost_evals = 0`, and `total_work() = 1`.
+
+Evaluation budgets use these request counts, including
+`max_evaluations(EvaluationKind::TotalWork, n)`, and remain checked after
+initialization and between iterations. Instrument underlying callbacks
+separately to measure finite-difference probes or compare probe savings from
+different derivative implementations.
+
 ## Checkpoint files
 
 Basin 2.0 removes bincode and the readers for the two legacy checkpoint formats.

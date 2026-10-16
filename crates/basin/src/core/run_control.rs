@@ -3,6 +3,9 @@
 //! Convergence settings belong to the solver. These controls are observed
 //! after initialization and between iterations; evaluation limits are not
 //! hard caps on work performed inside an iteration.
+//! Evaluation budgets use [`EvalCounts`] callback requests at the
+//! [`Problem`](crate::Problem) boundary. Internal adapter probes are excluded,
+//! including from [`EvaluationKind::TotalWork`] budgets.
 
 use super::math::Scalar;
 use super::problem::{EvalCounts, EvaluationKind};
@@ -194,6 +197,9 @@ impl<S: State> RunControl<S> {
     /// limit permits initialization. Limits are not hard caps inside a step.
     /// Fresh and nested runs use per-run counts; exact continuation uses
     /// cumulative counts. No gradient capability is required.
+    ///
+    /// Counts follow [`EvalCounts`]: internal adapter evaluations, such as
+    /// finite-difference probes, are excluded even from `TotalWork`.
     ///
     /// Replaces the limit for `kind`. Different kinds and legacy budgets are
     /// independent; legacy budgets are checked first. Exhaustion reports

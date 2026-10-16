@@ -24,8 +24,10 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 /// This adapter synthesizes [`Gradient`], [`Jacobian`], and
 /// [`crate::ConstraintJacobian`], but does not advertise Hessian capabilities.
 /// User errors propagate unchanged; non-finite values yield non-finite
-/// derivatives. Like `FiniteDiff`, counters charge derivative calls rather
-/// than internal probes. The optional `parallel` feature evaluates independent
+/// derivatives. Counters and evaluation budgets follow [`crate::EvalCounts`]:
+/// they charge derivative requests at the [`crate::Problem`] boundary and
+/// exclude internal probes. Probe counts depend on the chosen stencils and
+/// fixed coordinates. The optional `parallel` feature evaluates independent
 /// columns concurrently without changing their arithmetic or result ordering.
 ///
 /// # Backends

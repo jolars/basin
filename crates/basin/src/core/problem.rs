@@ -548,10 +548,9 @@ pub trait Jacobian: Residual {
     /// equal what [`Residual::residual`] and [`Jacobian::jacobian`]
     /// would return separately at the same `param`.
     ///
-    /// **Eval counting.** NLLS solvers count one fused call as one
-    /// `cost_evals` *and* one `gradient_evals` increment: the same
-    /// convention solvers use for separate calls, because `½‖r‖²`
-    /// plays the role of cost and `Jᵀr` the role of gradient.
+    /// **Eval counting.** [`Problem::residual_and_jacobian`] charges one
+    /// [`EvalCounts::residual_evals`] and one [`EvalCounts::jacobian_evals`],
+    /// including when the default body makes separate callback calls.
     fn residual_and_jacobian(
         &self,
         param: &Self::Param,
@@ -781,6 +780,15 @@ pub trait HessianProduct: Gradient {
 /// "available-everywhere" view that termination criteria and
 /// [`OptimizationResult`](crate::core::executor::OptimizationResult) read.
 ///
+/// Counts record callback requests at the [`Problem`] boundary. Each attempted
+/// request charges its category before evaluation; fused requests charge each
+/// category they produce, and batches charge every submitted item even on
+/// failure. Calls made internally by a callback or derivative adapter are not
+/// counted separately. For example, a [`FiniteDiff`](crate::FiniteDiff)
+/// gradient request increments `gradient_evals` once without adding its
+/// internal objective probes to `cost_evals`. Evaluation budgets use these
+/// request counts, including when summing them with [`total_work`](Self::total_work).
+///
 /// Additional counters may be added in future releases. Construct counters
 /// with [`Default`] and assign individual fields; include `..` when
 /// destructuring:
@@ -877,9 +885,11 @@ impl EvaluationKind {
 }
 
 impl EvalCounts {
-    /// Sum across every counter. Used for state-mirror rules that fold all
-    /// problem work into a single `state.cost_evals` (derivative-free outer
-    /// states; see [`CountsMirror`](crate::core::state::CountsMirror)).
+    /// Sum all callback-request categories at the [`Problem`] boundary.
+    ///
+    /// Fused requests contribute once per category. Internal adapter calls,
+    /// including finite-difference probes, are not added separately, so this
+    /// sum does not measure all underlying function evaluations.
     pub fn total_work(&self) -> u64 {
         self.cost_evals
             + self.gradient_evals
@@ -922,12 +932,12 @@ impl EvalCounts {
 
 /// Counting wrapper that solvers receive instead of `&P` directly.
 ///
-/// Every problem-trait method on [`Problem`] bumps the relevant
-/// [`EvalCounts`] field before delegating to the inner problem, so
-/// solvers can't accidentally lose a count: forgetting to count becomes
-/// a compile error (the inner is private; the only way to evaluate the
-/// problem is through the wrapper). The
-/// [`Executor`](crate::core::executor::Executor) wraps the user's
+/// Every evaluation method on [`Problem`] charges the relevant [`EvalCounts`]
+/// category before delegating to the inner problem. Solvers must evaluate
+/// through these methods or explicitly account for adapter-problem composition
+/// as described below. Calls made internally by the wrapped callback or
+/// derivative adapter do not cross this boundary and are not counted separately.
+/// The [`Executor`](crate::core::executor::Executor) wraps the user's
 /// problem once in [`Executor::new`](crate::core::executor::Executor::new)
 /// and mirrors [`counts`](Self::counts) onto the solver `State` after
 /// every successful
@@ -959,7 +969,7 @@ impl EvalCounts {
 /// Counters bump **before** the delegated inner call. A mid-call `Err`
 /// therefore still leaves the wrapper count incremented: the wrapper is
 /// authoritative even on the hard-abort path, where the state mirror may
-/// be stale. Observers can read the true count via
+/// be stale. Observers can read the authoritative wrapper count via
 /// [`counts`](Self::counts) regardless.
 pub struct Problem<P> {
     inner: P,

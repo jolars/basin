@@ -42,12 +42,15 @@
 //! - **Evaluation counting.** One counted [`Gradient::gradient`],
 //!   [`Jacobian::jacobian`], or [`Hessian::hessian`] call performs *many*
 //!   internal cost or residual evaluations (`2n` central/`n+1` forward
-//!   gradient, `n+1`/`2n` Jacobian columns, `~2n²` Hessian). Eval counting
-//!   lives on [`Problem`](crate::Problem), which charges one derivative call
-//!   and mirrors counts onto the state. Internal probes are not reflected
-//!   in `result.cost_evals()`. Users who need
-//!   true cost-evaluation budgets should account for the `O(n)`/`O(n²)`
-//!   multiplier themselves.
+//!   gradient, `n+1`/`2n` Jacobian columns, `~2n²` Hessian). As specified by
+//!   [`EvalCounts`](crate::EvalCounts), counters record requests at the
+//!   [`Problem`](crate::Problem) boundary. A derivative request charges its
+//!   category once; its internal probes add no cost or residual counts.
+//!   Evaluation budgets, including [`EvaluationKind::TotalWork`](crate::EvaluationKind::TotalWork),
+//!   use those request counts and exclude the probes. Instrument the underlying
+//!   callbacks separately to measure their actual evaluations. A change in
+//!   stencil, fixed coordinates, or future Jacobian coloring can change probe
+//!   work without changing the reported derivative-request count.
 //! - **Domain & hard-abort.** Each probe `?`-propagates the inner
 //!   function's [`Error`](CostFunction::Error). If the inner `cost` /
 //!   `residual` returns `Err`, the derivative call returns the same `Err`:
