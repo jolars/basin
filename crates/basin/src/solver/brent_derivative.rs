@@ -130,8 +130,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<F, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: FirstOrderState<F, F>,
+    ) -> Result<FirstOrderState<F, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_scalar_box_problem(
             problem.inner(),
         )
@@ -168,17 +168,14 @@ where
             e: F::zero(),
         });
         state.replace(x, fx, dx).expect("scalar dimensions agree");
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<F, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<FirstOrderState<F, F>>,
-        Self::Error,
-    > {
+        mut state: FirstOrderState<F, F>,
+    ) -> Result<crate::SolverStep<FirstOrderState<F, F>>, Self::Error> {
         let s = self
             .inner
             .as_mut()
@@ -275,6 +272,7 @@ where
         let u = (s.x + step).max(s.a).min(s.b);
         if u == s.x {
             return Ok(crate::SolverStep::stopped(
+                state,
                 Termination::numerical_stall(
                     "BrentDerivative cannot move inside the remaining bracket.",
                 ),
@@ -327,7 +325,7 @@ where
         // bracket-collapse `terminate` only fires once the bracket has shrunk
         // below tolerance, so the two coincide at convergence.
         state.replace(u, fu, du).expect("scalar dimensions agree");
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(

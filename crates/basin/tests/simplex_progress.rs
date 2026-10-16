@@ -62,8 +62,7 @@ fn exact_continuation_retains_simplex_and_workspace() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint()
-            .unwrap();
+            .into_checkpoint();
         let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
             .require_evaluated_state()
             .max_iter(60)
@@ -230,8 +229,7 @@ fn serialized_checkpoint_keeps_workspace_while_progress_only_restarts() {
         .max_iter(17)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(Sphere, restored)
@@ -301,8 +299,8 @@ impl basin::Solver<Sphere, basin::SimplexProgress<Vec<f64>>>
     fn init(
         &mut self,
         p: &mut basin::Problem<Sphere>,
-        state: &mut basin::SimplexProgress<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Infallible> {
+        mut state: basin::SimplexProgress<Vec<f64>>,
+    ) -> Result<basin::SimplexProgress<Vec<f64>>, Infallible> {
         state.reset();
         let (vertices, _) = state.take_vertices();
         let costs = vertices
@@ -310,16 +308,14 @@ impl basin::Solver<Sphere, basin::SimplexProgress<Vec<f64>>>
             .map(|x| p.cost(x))
             .collect::<Result<Vec<_>, _>>()?;
         state.replace(vertices, costs).unwrap();
-        Ok(())
+        Ok(state)
     }
     fn next_iter(
         &mut self,
         p: &mut basin::Problem<Sphere>,
-        state: &mut basin::SimplexProgress<Vec<f64>>,
-    ) -> basin::EvaluationResult<
-        basin::SolverStep<basin::SimplexProgress<Vec<f64>>>,
-        Infallible,
-    > {
+        mut state: basin::SimplexProgress<Vec<f64>>,
+    ) -> Result<basin::SolverStep<basin::SimplexProgress<Vec<f64>>>, Infallible>
+    {
         let (mut vertices, mut costs) = state.take_vertices();
         for (v, cost) in vertices.iter_mut().zip(&mut costs) {
             for x in v.iter_mut() {
@@ -331,9 +327,12 @@ impl basin::Solver<Sphere, basin::SimplexProgress<Vec<f64>>>
         p.residual_and_jacobian(&vertices[0])?;
         p.hessian_product(&vertices[0], &vertices[0])?;
         state.replace(vertices, costs).unwrap();
-        Ok(basin::SolverStep::stopped(basin::Termination::Application(
-            basin::ApplicationStop::new("user_requested"),
-        )))
+        Ok(basin::SolverStep::stopped(
+            state,
+            basin::Termination::Application(basin::ApplicationStop::new(
+                "user_requested",
+            )),
+        ))
     }
 }
 

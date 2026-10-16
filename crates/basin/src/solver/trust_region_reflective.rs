@@ -426,27 +426,24 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_coordinate_box_problem(
             problem.inner(),
             state.param().vec_len(),
             false,
         )
         .map_err(crate::core::constraint::evaluation::invalid)?;
-        self.init_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
-        self.next_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
         self.terminate_evaluated(state)
@@ -483,27 +480,24 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_coordinate_box_problem(
             problem.inner(),
             state.param().vec_len(),
             false,
         )
         .map_err(crate::core::constraint::evaluation::invalid)?;
-        self.init_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
-        self.next_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn terminate(&self, state: &PointState<V, F>) -> Option<Termination<F>> {
         self.terminate_evaluated(state)
@@ -514,8 +508,8 @@ impl<F: Scalar> TrustRegionReflective<F> {
     fn init_evaluated<V, M, E>(
         &mut self,
         problem: &mut E,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), E::Error>
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
         M: MatrixIndex<F>,
@@ -526,6 +520,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
             trace.reset();
         }
         self.work = None;
+        let mut state = state;
         state.reset();
         let mut param = state.param().clone();
         let n = param.vec_len();
@@ -625,13 +620,13 @@ impl<F: Scalar> TrustRegionReflective<F> {
         }
         self.work = Some(work);
         state.replace(param, value);
-        Ok(())
+        Ok(state)
     }
 
     fn next_evaluated<V, M, E>(
         &mut self,
         problem: &mut E,
-        state: &mut PointState<V, F>,
+        mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error>
     where
         V: Clone + VectorLen + VectorIndex<F>,
@@ -655,7 +650,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 trace.observations[index].gradient = work.gradient.clone();
                 trace.observations[index].radius_before = Some(work.radius);
             }
-            return Ok(crate::SolverStep::from(failed()));
+            return Ok(crate::SolverStep::from((state, failed())));
         }
         let Some(model) = work.model(state.param()) else {
             if let Some(trace) = &mut self.trace {
@@ -668,7 +663,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 trace.observations[index].radius_before = Some(work.radius);
             }
             work.failed = true;
-            return Ok(crate::SolverStep::from(failed()));
+            return Ok(crate::SolverStep::from((state, failed())));
         };
         let n = work.free.len();
         let m = work.residual.len();
@@ -692,7 +687,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
                 row.radius_before = Some(work.radius);
             }
             work.failed = true;
-            return Ok(crate::SolverStep::from(failed()));
+            return Ok(crate::SolverStep::from((state, failed())));
         };
         let mut rhs = work.residual.clone();
         rhs.resize(m + n, F::zero());
@@ -798,10 +793,11 @@ impl<F: Scalar> TrustRegionReflective<F> {
                     self.trace.as_mut().unwrap().observations[index].outcome =
                         Some("unchanged_after_rejection");
                 }
-                return Ok(crate::SolverStep::from(Some(
-                    Termination::numerical_stall(
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_stall(
                         "A contracted TRF trial changes no parameter after a finite equal-cost rejection.",
-                    ),
+                    )),
                 )));
             }
             if !feasible
@@ -934,11 +930,10 @@ impl<F: Scalar> TrustRegionReflective<F> {
                         );
                     }
                 }
-                return Ok(crate::SolverStep::from(if work.failed {
-                    failed()
-                } else {
-                    None
-                }));
+                return Ok(crate::SolverStep::from((
+                    state,
+                    if work.failed { failed() } else { None },
+                )));
             }
         }
         if let Some(trace) = &mut self.trace {
@@ -947,7 +942,7 @@ impl<F: Scalar> TrustRegionReflective<F> {
             trace.observations[index].radius_after = Some(work.radius);
         }
         work.failed = true;
-        Ok(crate::SolverStep::from(failed()))
+        Ok(crate::SolverStep::from((state, failed())))
     }
 
     fn terminate_evaluated<V>(

@@ -75,24 +75,24 @@
 //!     fn init(
 //!         &mut self,
 //!         problem: &mut Problem<Quadratic>,
-//!         state: &mut FirstOrderState<Vec<f64>>,
-//!     ) -> basin::EvaluationResult<(), Infallible> {
+//!         mut state: FirstOrderState<Vec<f64>>,
+//!     ) -> Result<FirstOrderState<Vec<f64>>, Infallible> {
 //!         state.reset();
 //!         let x = state.param().clone();
 //!         let (cost, gradient) = problem.cost_and_gradient(&x)?;
 //!         state.replace(x, cost, gradient).unwrap();
-//!         Ok(())
+//!         Ok(state)
 //!     }
 //!     fn next_iter(
 //!         &mut self,
 //!         problem: &mut Problem<Quadratic>,
-//!         state: &mut FirstOrderState<Vec<f64>>,
-//!     ) -> basin::EvaluationResult<SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
+//!         mut state: FirstOrderState<Vec<f64>>,
+//!     ) -> Result<SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
 //!         let (x, _, gradient) = state.current().unwrap();
 //!         let next = x.iter().zip(gradient).map(|(x, g)| x - 0.25 * g).collect();
 //!         let (cost, gradient) = problem.cost_and_gradient(&next)?;
 //!         state.replace(next, cost, gradient).unwrap();
-//!         Ok(SolverStep::completed())
+//!         Ok(SolverStep::completed(state))
 //!     }
 //! }
 //! let result = Executor::new(
@@ -399,8 +399,8 @@ pub struct FirstOrderState<V, F: Scalar = f64> {
 }
 
 impl<V, F: Scalar> FirstOrderState<V, F> {
-    /// Reuse evaluated storage after all fallible evaluations have finished.
-    /// Restore or replace the record before publishing or evaluating again.
+    /// Move evaluated storage into solver workspace without cloning a gradient.
+    /// The solver must restore or replace the record before publishing progress.
     pub(crate) fn take_evaluation(&mut self) -> Option<(F, V)> {
         self.progress.evaluated.take()
     }

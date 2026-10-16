@@ -106,7 +106,7 @@ where
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> crate::EvaluationResult<F, Self::Error> {
+    ) -> Result<F, Self::Error> {
         let phi0 = cost;
         let phi0_prime = gradient.dot(direction);
 
@@ -184,7 +184,7 @@ where
         gradient: &V,
         direction: &V,
         bounds: LineSearchBounds<F>,
-    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error> {
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
         let max = self.alpha_max.min(bounds.max);
         if !(max.is_finite() && max > F::zero()) {
             return Ok(LineSearchResult::new(LineSearchOutcome::Failed));
@@ -213,7 +213,7 @@ impl<F: Scalar> Wolfe<F> {
         mut alpha_lo: F,
         mut phi_lo: F,
         mut alpha_hi: F,
-    ) -> crate::EvaluationResult<F, P::Error>
+    ) -> Result<F, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,

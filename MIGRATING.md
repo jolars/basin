@@ -193,7 +193,7 @@ The main replacements are:
 | --- | --- |
 | `result.reason` | `result.report.termination` |
 | `TerminationReason` | `Termination<F>` for decisions; `TerminationReport<F>` for published events |
-| `next_iter -> Result<(S, Option<TerminationReason>), E>` | `next_iter(&mut S) -> EvaluationResult<SolverStep<S>, E>` |
+| `next_iter -> Result<(S, Option<TerminationReason>), E>` | `next_iter -> Result<SolverStep<S>, E>` |
 | `terminate` / `check_convergence -> Option<TerminationReason>` | `Option<Termination<S::Float>>` |
 | `stop_when -> Option<TerminationReason>` | `Option<ApplicationStop>` |
 | `Observe::observe_final(..., &TerminationReason)` | `observe_final(..., &TerminationReport<S::Float>)` |
@@ -210,9 +210,9 @@ numeric identifiers. Simultaneous criteria or budgets project to the first
 entry. Inspect the structured report when the distinction matters.
 
 `SolverStep` separates completion from termination. Use
-`SolverStep::completed()` to continue, `stopped(decision)` to
+`SolverStep::completed(state)` to continue, `stopped(state, decision)` to
 publish a partial stopping step, or
-`completed_with_termination(decision)` when the stopping iteration
+`completed_with_termination(state, decision)` when the stopping iteration
 finished. A completed stopping step increments the iteration count, fires
 the gated iteration observer, and then fires the final observer. A partial
 stopping step fires only the final observer. A continuing partial step
@@ -1119,85 +1119,6 @@ both use postcard. Export parameters with the matching 1.x application and
 create a fresh shared state. Exact checkpoints require matching concrete types
 and Basin versions, as described under [checkpoint files](#checkpoint-files).
 
-## Hard evaluation budgets
-
-Evaluation limits on `Executor`, `RunControl`, and `InnerExecutor` are now
-hard caps. Keep using `max_cost_evals`, `max_gradient_evals`, and
-`max_evaluations`; no separate executor or setting is needed.
-
-```rust
-use basin::{Executor, EvaluationKind, State};
-
-let result = Executor::from_start(problem, solver, starting_point)
-    .max_cost_evals(100)
-    .max_evaluations(EvaluationKind::TotalWork, 500)
-    .run()?;
-
-if let Some(state) = result.initialized_state() {
-    println!("cost: {}", state.cost());
-}
-```
-
-Zero stops before initialization without invoking callbacks. A positive limit
-permits at most that many evaluations, including initialization. Fused calls
-reserve all output categories together, and cost batches reserve their complete
-request before dispatch. A request that does not fit is declined without
-charging work, so a solve can stop below its limit. Submitted work stays counted
-when a callback fails. Cost and gradient limits use their raw categories,
-independently of any state-specific count aggregate.
-
-The shared ledger includes finite-difference probes and callbacks in nested
-solves, including barrier and penalty adapters. Inner budgets add limits to
-the enclosing allowance. They cannot reset it. Synthesized derivatives charge
-both the derivative request and their internal probes. Native least-squares
-solvers charge residuals and Jacobians, so use `EvaluationKind::Residual` for
-their function allowance. Robust objectives accessed through cost and gradient
-traits also charge the underlying residual and Jacobian work. Additional work
-inside user callbacks remains opaque to Basin.
-
-Budget exhaustion returns `Ok` with `Termination::Limit`. When initialization
-cannot finish, `report.stage` is `TerminationStage::Initialization`, and
-`initialized_state()` returns `None`. The retained `state` is then a seed or
-diagnostic record; do not call unchecked cost or gradient accessors. No
-observers or checkpoints fire for incomplete initialization.
-
-When a budget interrupts an initialized transition, progress remains coherent,
-counts include submitted trials, and the completed-iteration count stays
-unchanged. `TerminationStage::Interrupted { requested }` records the declined
-request. State observers receive a final event. Solver observers receive only
-`ObserveSolver::observe_interrupted`, which has no solver argument because
-the model may be incomplete. `into_checkpoint()` now returns `Option` and
-rejects interrupted transitions and incomplete initialization. A solver may
-stop before changing its model when a known request cannot fit; that clean
-`Step { completed: false }` boundary remains checkpointable. Incumbents cover
-published candidates, not every attempted trial.
-
-Custom solvers and line searches now return `EvaluationResult<T, E>`, separating
-framework budget stops from callback errors. `Solver::Error` remains the
-original callback error type, and `Executor::run()` still returns it unchanged.
-For custom error wrappers, use `error.map_evaluation(...)` so budget control
-flow stays intact. Solver transitions borrow progress:
-
-```rust,ignore
-fn init(&mut self, problem: &mut Problem<P>, state: &mut S)
-    -> EvaluationResult<(), Self::Error>;
-fn next_iter(&mut self, problem: &mut Problem<P>, state: &mut S)
-    -> EvaluationResult<SolverStep<S>, Self::Error>;
-```
-
-Keep each accepted record intact until its replacement is fully evaluated.
-`SolverStep` contains completion and termination only; `into_parts()` returns
-that pair. No framework `Clone` bound is required for state or solver storage.
-
-Custom problem adapters forward `*_with_context` methods to their underlying
-callbacks and declare known batch work in `cost_batch_request`. Transparent
-cost adapters also forward `prepare_cost_batch` and `cost_in_batch`. Composed
-solvers create adapter wrappers with `parent.adapt(adapter)`, then call
-`parent.synchronize_counts()` after the inner work. The wrappers share counts
-and limits; manual counter roll-ups would count work twice. For a custom
-external evaluator, reserve its work through `Problem::evaluate` and the
-supplied `EvaluationContext` before dispatching it.
-
 ## Stopping conditions
 
 Replace `target_cost` with `target_objective` and `no_improvement` with
@@ -1263,8 +1184,8 @@ Execution controls run before solver convergence, including at the initialized
 iteration-zero boundary. Their fixed order is iteration budget, cost budget,
 gradient budget, raw evaluation budgets, time budget, target, improvement stall,
 acceptance stall, and custom hooks in insertion order. This replaces criterion
-registration order. Evaluation budgets also apply before callbacks during
-initialization and active iterations, so they cannot be exceeded. A partial stopping step
+registration order. Budgets are checked at boundaries; initialization and an
+in-progress iteration can exceed an evaluation limit. A partial stopping step
 updates evaluation counts without incrementing the completed-step count.
 `TerminationReport`, `StepOutcome`, and optimization results describe why
 the run stopped. A budget, target, application stop, or numerical safeguard does

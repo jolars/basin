@@ -185,11 +185,6 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
     `OptimizationResultWithSolver<S, So>` retaining the final solver as well. Also `run_loop_with_control`/`Stepper`, solver-and-state
     `Executor::resume`/`Executor::resume_from_checkpoint`, and the cooperative,
     top-level `CancellationToken`.
-  - `evaluation.rs` (+ `evaluation/`): shared evaluation contexts enforce
-    executor budgets before callbacks, including finite-difference probes,
-    fused outputs, complete batches, and nested solves. Solver transitions
-    borrow progress and preserve coherent records on exhaustion. Incomplete
-    initialization and interrupted models are explicit termination stages.
   - `checkpoint.rs`: solver-aware exact checkpoints. The executor captures the
     solver, state, and authoritative evaluation counts at coherent iteration
     boundaries; consuming `Stepper::into_checkpoint()` and completed-result
@@ -198,10 +193,10 @@ into user-provided `Problem` traits, until solver convergence, an execution limi
   - `convergence.rs`: fixed solver convergence slots and shared calculations.
     Optional checks add only the backend capabilities they need.
   - `run_control.rs`: budgets, targets, stagnation stops, and application hooks.
-    Builders provide raw `max_evaluations` budgets,
+    New capability-bound builders provide raw `max_evaluations` budgets,
     `target_objective`, `no_objective_improvement`, and opt-in
     `require_evaluated_state` publication validation. Existing builders retain
-    their names, with hard evaluation caps in 2.0. Inner-executor serialization rejects capability
+    their 1.x behavior. Inner-executor serialization rejects capability
     controls instead of discarding them; legacy budget layouts remain stable.
   - `termination.rs`: stopping reasons reported by solvers and execution controls.
   - `constraint.rs` (+ `constraint/`), `barrier.rs`, `augmented_lagrangian.rs`:
@@ -333,18 +328,6 @@ The `v1` branch retains its existing APIs and behavior.
   aggregates. All shipped shared states report raw categories; use an explicit aggregate
   when budgeting total work. Iterations count
   completed steps; a clean mid-step stop updates counts without adding a step.
-- **Hard budgets:** ordinary executor limits apply before callbacks, including
-  initialization. Fused outputs and cost batches reserve together. Nested
-  solves and adapters share the enclosing ledger; an inner limit cannot renew
-  its allowance. Solvers borrow progress and keep accepted records intact
-  until replacement evaluations finish. An interrupted step publishes coherent
-  progress and all submitted counts without incrementing the iteration count.
-  It cannot produce an exact checkpoint or expose a partial model to solver
-  observers. Initialization that cannot finish exposes no initialized state
-  and fires no observers. Original callback errors remain errors. Custom
-  adapters forward `*_with_context` hooks and declare additional batch work
-  through `cost_batch_request`; transparent cost adapters also forward
-  `prepare_cost_batch` and `cost_in_batch`. User callback bodies remain opaque.
 - **Continuation:** fresh runs reset evolving machinery and bookkeeping; point
   warm starts reevaluate their input. Model reuse requires an explicit contract.
   Exact continuation retains the solver/state/counts together and skips

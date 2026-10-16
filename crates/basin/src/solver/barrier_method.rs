@@ -252,17 +252,18 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<LogBarrier<'p, P, F>>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: S,
+    ) -> Result<S, Self::Error> {
         self.inner.init(problem, state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<LogBarrier<'p, P, F>>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<crate::SolverStep<S>, Self::Error> {
+        state: S,
+    ) -> Result<crate::SolverStep<S>, Self::Error> {
         let crate::SolverStep {
+            state,
             termination: reason,
             completed,
         } = self.inner.next_iter(problem, state)?;
@@ -273,6 +274,7 @@ where
             && problem.inner().strict_feasibility(state.param()) == Some(true)
         {
             Ok(crate::SolverStep {
+                state,
                 completed,
                 termination: Some(Termination::custom(
                     "barrier.strict_feasibility",
@@ -282,6 +284,7 @@ where
             })
         } else {
             Ok(crate::SolverStep {
+                state,
                 termination: reason,
                 completed,
             })
@@ -510,8 +513,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         problem
             .inner()
             .validate_linear(state.param().vec_len())
@@ -535,7 +538,7 @@ where
             // Keep cost-based convergence dormant until `next_iter` can
             // report the solver failure through the normal soft-stop path.
             state.replace(state.param().clone(), F::infinity());
-            return Ok(());
+            return Ok(state);
         }
 
         if self.phase == BarrierPhase::PhaseOne {
@@ -544,36 +547,35 @@ where
             // problem, so exposing its true objective or gradient could let a
             // target or stationarity test bypass Phase I entirely.
             state.replace(state.param().clone(), F::infinity());
-            return Ok(());
+            return Ok(state);
         }
 
         // A feasible start is a valid candidate for the original problem.
         let cost = problem.cost(state.param())?;
         state.replace(state.param().clone(), cost);
         self.accepted_iterate = true;
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
+        mut state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.accepted_iterate = false;
         self.stationarity_norm = F::infinity();
         if self.phase == BarrierPhase::Failed {
-            return Ok(crate::SolverStep::from(Some(
-                Termination::numerical_failure(
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
                     "The barrier method could not initialize a finite barrier model.",
-                ),
+                )),
             )));
         }
 
         if self.phase == BarrierPhase::PhaseOne {
-            let counts_before = *problem.counts();
             let mut barrier_wrapper =
-                problem.adapt(LogBarrier::phase_one(problem.inner(), self.mu));
+                Problem::new(LogBarrier::phase_one(problem.inner(), self.mu));
             let mut control = crate::core::run_control::RunControl::new()
                 .max_iter(self.inner_max_iter);
             let diagnostic_start = self.inner_diagnostics.then(|| {
@@ -592,9 +594,8 @@ where
                 &mut control,
             );
 
-            let inner_counts =
-                barrier_wrapper.counts().delta_since(&counts_before);
-            problem.synchronize_counts();
+            let inner_counts = *barrier_wrapper.counts();
+            problem.counts_mut().add(&inner_counts);
             self.last_inner =
                 diagnostic_start.map(|start| BarrierInnerDiagnostics {
                     phase_one: true,
@@ -609,10 +610,7 @@ where
                     }),
                     report: result.as_ref().ok().map(|r| r.report.clone()),
                     counts: inner_counts,
-                    hard_error: matches!(
-                        result,
-                        Err(crate::EvaluationError::Evaluation(_))
-                    ),
+                    hard_error: result.is_err(),
                 });
             let result = result?;
 
@@ -622,11 +620,12 @@ where
                 .can_continue_as_inner(crate::PartialResultPolicy::Consume)
             {
                 self.phase = BarrierPhase::Failed;
-                return Ok(crate::SolverStep::from(
+                return Ok(crate::SolverStep::from((
+                    state,
                     result.report.into_outer_termination(
                         crate::PartialResultPolicy::Consume,
                     ),
-                ));
+                )));
             }
 
             // Only the inner solver's gradient convergence can certify a
@@ -641,10 +640,11 @@ where
             let feasibility = strict_feasibility(problem.inner(), candidate);
             let Some(is_strictly_feasible) = feasibility else {
                 self.phase = BarrierPhase::Failed;
-                return Ok(crate::SolverStep::from(Some(
-                    Termination::numerical_failure(
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
                         "Phase I produced non-finite constraint slacks.",
-                    ),
+                    )),
                 )));
             };
 
@@ -653,6 +653,7 @@ where
                 if !cost.is_finite() {
                     self.phase = BarrierPhase::Failed;
                     return Ok(crate::SolverStep::stopped(
+                        state,
                         Termination::numerical_failure(
                             "Phase I returned a strict point with a non-finite original objective.",
                         ),
@@ -665,7 +666,7 @@ where
                 self.mu = self.mu0;
                 self.gap = F::infinity();
                 self.accepted_iterate = true;
-                return Ok(crate::SolverStep::from(None));
+                return Ok(crate::SolverStep::from((state, None)));
             }
 
             state.replace(candidate.clone(), F::infinity());
@@ -680,17 +681,18 @@ where
                         * self.mu;
                 if phase_one_gap <= self.phase_one_tol {
                     self.phase = BarrierPhase::Failed;
-                    return Ok(crate::SolverStep::from(Some(
-                        Termination::numerical_failure(
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
                             "A centered Phase I subproblem reached its gap threshold without strict feasibility.",
-                        ),
+                        )),
                     )));
                 }
 
                 self.mu = self.mu / self.reduction;
             }
 
-            return Ok(crate::SolverStep::from(None));
+            return Ok(crate::SolverStep::from((state, None)));
         }
 
         // Minimize the barrier objective at the current μ on a *separate*
@@ -698,9 +700,8 @@ where
         // inner state (rather than threading the outer one) keeps the
         // inner solver's iteration counter from polluting the outer's.
         // Fresh criteria each call satisfies the statelessness contract.
-        let counts_before = *problem.counts();
         let mut barrier_wrapper =
-            problem.adapt(LogBarrier::new(problem.inner(), self.mu));
+            Problem::new(LogBarrier::new(problem.inner(), self.mu));
         let mut control = crate::core::run_control::RunControl::new()
             .max_iter(self.inner_max_iter);
         let diagnostic_start = self.inner_diagnostics.then(|| {
@@ -716,8 +717,12 @@ where
             &mut control,
         );
 
-        // Keep inner diagnostics separate from the stationarity probes below.
-        let inner_counts = barrier_wrapper.counts().delta_since(&counts_before);
+        // Eval aggregation (adapter-problem composition): fold the inner
+        // wrapper's per-call counts back into the outer's wrapper. Copy out
+        // before borrowing the outer mutably so the LogBarrier's `&P` borrow
+        // (still held by `barrier_wrapper`) doesn't collide with the
+        // `counts_mut` reborrow.
+        let inner_counts = *barrier_wrapper.counts();
         let stationarity = result
             .as_ref()
             .ok()
@@ -740,12 +745,11 @@ where
                 };
                 let final_norm =
                     barrier_wrapper.gradient(r.state.param())?.norm_infinity();
-                Ok::<_, crate::EvaluationError<Self::Error>>((
-                    initial, final_norm,
-                ))
+                Ok::<_, Self::Error>((initial, final_norm))
             })
             .transpose();
-        problem.synchronize_counts();
+        let total_counts = *barrier_wrapper.counts();
+        problem.counts_mut().add(&total_counts);
         self.last_inner =
             diagnostic_start.map(|start| BarrierInnerDiagnostics {
                 phase_one: false,
@@ -760,10 +764,7 @@ where
                 }),
                 report: result.as_ref().ok().map(|r| r.report.clone()),
                 counts: inner_counts,
-                hard_error: matches!(
-                    result,
-                    Err(crate::EvaluationError::Evaluation(_))
-                ),
+                hard_error: result.is_err(),
             });
         let result = result?;
         if let Some((initial, final_norm)) = stationarity? {
@@ -778,27 +779,30 @@ where
             .can_continue_as_inner(crate::PartialResultPolicy::Consume)
         {
             self.phase = BarrierPhase::Failed;
-            return Ok(crate::SolverStep::from(
+            return Ok(crate::SolverStep::from((
+                state,
                 result.report.into_outer_termination(
                     crate::PartialResultPolicy::Consume,
                 ),
-            ));
+            )));
         }
 
         // Publish the original objective only after verifying the barrier domain.
         let candidate = result.state.param();
         if strict_feasibility(problem.inner(), candidate) != Some(true) {
             self.phase = BarrierPhase::Failed;
-            return Ok(crate::SolverStep::from(Some(
-                Termination::numerical_failure(
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
                     "The inner barrier solve returned a point outside the strict barrier domain.",
-                ),
+                )),
             )));
         }
         let cost = problem.cost(candidate)?;
         if !cost.is_finite() {
             self.phase = BarrierPhase::Failed;
             return Ok(crate::SolverStep::stopped(
+                state,
                 Termination::numerical_failure(
                     "The inner barrier solve returned a non-finite original objective.",
                 ),
@@ -814,7 +818,7 @@ where
         if self.stationarity_satisfied() {
             self.mu = self.mu / self.reduction;
         }
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {

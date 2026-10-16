@@ -340,8 +340,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             None,
@@ -359,24 +359,22 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<PopulationProgress<V, F>>,
-        Self::Error,
-    > {
+        state: PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // 1. Vanilla DE generation: mutation, repair, crossover,
         //    selection, ascending sort.
         let step = self.de.next_iter(problem, state)?;
         if step.termination.is_some() {
             return Ok(step);
         }
+        let mut state = step.state;
 
         // 2. Schedule gate. `state.iter()` is pre-increment here
         //    (executor bumps it after `next_iter` returns), so iter == 0
         //    on the first call. With `refine_every = 1` (default) this
         //    is always true.
         if state.iter() % self.refine_every != 0 {
-            return Ok(crate::SolverStep::from(None));
+            return Ok(crate::SolverStep::from((state, None)));
         }
 
         // Snapshot the box once; reused for the clip on every refined
@@ -426,11 +424,12 @@ where
                     &mut state.costs,
                 );
                 state.select_best_member();
-                return Ok(crate::SolverStep::from(
+                return Ok(crate::SolverStep::from((
+                    state,
                     inner_result.report.into_outer_termination(
                         crate::PartialResultPolicy::Consume,
                     ),
-                ));
+                )));
             }
 
             // 6. Saturating clip to the box. The inner may have stepped
@@ -465,7 +464,7 @@ where
             state.select_best_member();
         }
 
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(

@@ -312,28 +312,6 @@ where
     fn cost(&self, x: &P::Param) -> Result<F, P::Error> {
         Ok(self.residual_cost(&self.problem.residual(x)?))
     }
-    fn cost_with_context(
-        &self,
-        x: &P::Param,
-        context: &crate::EvaluationContext,
-    ) -> Result<F, crate::EvaluationError<P::Error>> {
-        context.reserve_kinds(&[
-            crate::EvaluationKind::Cost,
-            crate::EvaluationKind::Residual,
-        ])?;
-        let local = context.prepaid(crate::EvalCounts {
-            residual_evals: 1,
-            ..crate::EvalCounts::default()
-        });
-        Ok(self.residual_cost(&self.problem.residual_with_context(x, &local)?))
-    }
-    fn cost_batch_request(&self, points: u64) -> crate::EvalCounts {
-        crate::EvalCounts {
-            cost_evals: points,
-            residual_evals: points,
-            ..crate::EvalCounts::default()
-        }
-    }
 }
 
 impl<P, L, V, F> Gradient for RobustLeastSquares<P, L, F>
@@ -351,31 +329,6 @@ where
     }
     fn cost_and_gradient(&self, x: &V) -> Result<(F, V), P::Error> {
         let (r, j) = self.problem.residual_and_jacobian(x)?;
-        Ok((self.residual_cost(&r), self.gradient_from(r, j)))
-    }
-    fn gradient_with_context(
-        &self,
-        x: &V,
-        context: &crate::EvaluationContext,
-    ) -> Result<V, crate::EvaluationError<P::Error>> {
-        context.reserve_kinds(&[crate::EvaluationKind::Gradient])?;
-        let (r, j) = self
-            .problem
-            .residual_and_jacobian_with_context(x, context)?;
-        Ok(self.gradient_from(r, j))
-    }
-    fn cost_and_gradient_with_context(
-        &self,
-        x: &V,
-        context: &crate::EvaluationContext,
-    ) -> Result<(F, V), crate::EvaluationError<P::Error>> {
-        context.reserve_kinds(&[
-            crate::EvaluationKind::Cost,
-            crate::EvaluationKind::Gradient,
-        ])?;
-        let (r, j) = self
-            .problem
-            .residual_and_jacobian_with_context(x, context)?;
         Ok((self.residual_cost(&r), self.gradient_from(r, j)))
     }
 }

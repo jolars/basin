@@ -60,8 +60,7 @@ fn reference_drivers_preserve_accepted_work_and_feasibility() {
 fn reference_driver_allocations_stay_bounded() {
     // Allow a few extra workspace allocations, but reject per-iteration
     // history views and duplicate direction, gradient, and incumbent vectors.
-    // The shared budget ledger and its scope add two setup allocations.
-    for (number, ceiling) in [(1, 142), (2, 237), (3, 252)] {
+    for (number, ceiling) in [(1, 140), (2, 235), (3, 250)] {
         let problem = support::Driver::new(number);
         REQUESTS.set(0);
         let result = problem.solve();
@@ -176,7 +175,7 @@ where
 fn short_case_allocations_separate_setup_iterations_and_extraction() {
     use support::short::{Adapter, Case, Short};
     // The final owned report and retained stepper report add fixed allocations.
-    for (case, ceiling) in [(Case::Mixed, 40), (Case::Rollover, 68)] {
+    for (case, ceiling) in [(Case::Mixed, 38), (Case::Rollover, 66)] {
         let problem = Short::<Vec<f64>>::new(case);
         for adapter in
             [Adapter::Reference, Adapter::Trimmed, Adapter::RequiredStops]

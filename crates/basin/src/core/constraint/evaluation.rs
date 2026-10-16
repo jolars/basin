@@ -275,9 +275,9 @@ pub(crate) trait EqualityValues<
         view: Self::Borrowed<'_>,
         p: &P,
         x: &V,
-        context: &crate::EvaluationContext,
+        counts: &mut crate::EvalCounts,
         output: &mut [F],
-    ) -> Result<(), ConstraintSolveError<crate::EvaluationError<P::Error>>>;
+    ) -> Result<(), ConstraintSolveError<P::Error>>;
     fn count(view: Self::Borrowed<'_>) -> usize;
     fn values(
         view: Self::Borrowed<'_>,
@@ -285,17 +285,6 @@ pub(crate) trait EqualityValues<
         x: &V,
         counts: &mut crate::EvalCounts,
     ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>;
-    fn values_with_context(
-        view: Self::Borrowed<'_>,
-        p: &P,
-        x: &V,
-        context: &crate::EvaluationContext,
-    ) -> Result<
-        Vec<F>,
-        ConstraintSolveError<
-            crate::EvaluationError<<P as CostFunction>::Error>,
-        >,
-    >;
 }
 pub(crate) trait InequalityValues<
     P: CostFunction<Param = V, Output = F>,
@@ -307,9 +296,9 @@ pub(crate) trait InequalityValues<
         view: Self::Borrowed<'_>,
         p: &P,
         x: &V,
-        context: &crate::EvaluationContext,
+        counts: &mut crate::EvalCounts,
         output: &mut [F],
-    ) -> Result<(), ConstraintSolveError<crate::EvaluationError<P::Error>>>;
+    ) -> Result<(), ConstraintSolveError<P::Error>>;
     fn count(view: Self::Borrowed<'_>) -> usize;
     fn values(
         view: Self::Borrowed<'_>,
@@ -317,27 +306,14 @@ pub(crate) trait InequalityValues<
         x: &V,
         counts: &mut crate::EvalCounts,
     ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>;
-    fn values_with_context(
-        view: Self::Borrowed<'_>,
-        p: &P,
-        x: &V,
-        context: &crate::EvaluationContext,
-    ) -> Result<
-        Vec<F>,
-        ConstraintSolveError<
-            crate::EvaluationError<<P as CostFunction>::Error>,
-        >,
-    >;
 }
 macro_rules! nonlinear_values {
-    ($helper:ident,$callback:ident,$method:ident,$context_method:ident,$block:ident) => {
+    ($helper:ident,$callback:ident,$method:ident,$block:ident) => {
         impl<P, V, F> $helper<P, V, F> for NoNonlinearBlock
         where
             P: CostFunction<Param = V, Output = F>,
             F: Scalar,
         {
-            fn values_with_context(_: Self, _: &P, _: &V, _: &crate::EvaluationContext)
-            -> Result<Vec<F>, ConstraintSolveError<crate::EvaluationError<<P as CostFunction>::Error>>> { Ok(vec![]) }
             fn count(_: Self) -> usize {
                 0
             }
@@ -353,9 +329,9 @@ macro_rules! nonlinear_values {
                 _: Self,
                 _: &P,
                 _: &V,
-                _: &crate::EvaluationContext,
+                _: &mut crate::EvalCounts,
                 _: &mut [F],
-            ) -> Result<(), ConstraintSolveError<crate::EvaluationError<P::Error>>> {
+            ) -> Result<(), ConstraintSolveError<P::Error>> {
                 Ok(())
             }
         }
@@ -367,13 +343,6 @@ macro_rules! nonlinear_values {
                 VectorLen + Index<usize, Output = F>,
             F: Scalar,
         {
-            fn values_with_context(view: Self, p: &P, x: &V, context: &crate::EvaluationContext)
-            -> Result<Vec<F>, ConstraintSolveError<crate::EvaluationError<<P as CostFunction>::Error>>> {
-                if view.count == 0 { return Ok(vec![]); }
-                let values = <P as $callback>::$context_method(p, x, context)?;
-                dimension(ConstraintBlock::$block, ConstraintAxis::Length, view.count, values.vec_len()).map_err(invalid)?;
-                Ok((0..values.vec_len()).map(|i| values[i]).collect())
-            }
             fn count(view: Self) -> usize {
                 view.count
             }
@@ -402,17 +371,18 @@ macro_rules! nonlinear_values {
                 view: Self,
                 p: &P,
                 x: &V,
-                context: &crate::EvaluationContext,
+                counts: &mut crate::EvalCounts,
                 output: &mut [F],
-            ) -> Result<(), ConstraintSolveError<crate::EvaluationError<<P as CostFunction>::Error>>>
+            ) -> Result<(), ConstraintSolveError<<P as CostFunction>::Error>>
             {
                 if view.count != output.len() {
-                    return Err(invalid(ConstraintError::LayoutChanged).into());
+                    return Err(invalid(ConstraintError::LayoutChanged));
                 }
                 if view.count == 0 {
                     return Ok(());
                 }
-                let values = <P as $callback>::$context_method(p, x, context)?;
+                counts.residual_evals += 1;
+                let values = <P as $callback>::$method(p, x)?;
                 dimension(
                     ConstraintBlock::$block,
                     ConstraintAxis::Length,
@@ -432,14 +402,12 @@ nonlinear_values!(
     EqualityValues,
     NonlinearEqualityValues,
     nonlinear_equalities,
-    nonlinear_equalities_with_context,
     NonlinearEqualities
 );
 nonlinear_values!(
     InequalityValues,
     NonlinearInequalityValues,
     nonlinear_inequalities,
-    nonlinear_inequalities_with_context,
     NonlinearInequalities
 );
 
@@ -454,7 +422,7 @@ pub(crate) trait CobylaSet<P: CostFunction<Param = V, Output = F>, V, F: Scalar>
         p: &mut Problem<P>,
         x: &V,
         layout: &SetLayout,
-    ) -> crate::EvaluationResult<Vec<F>, ConstraintSolveError<P::Error>>
+    ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>
     where
         P: ProblemConstraints<Constraints = Self>;
 }
@@ -505,26 +473,26 @@ where
         p: &mut Problem<P>,
         x: &V,
         layout: &SetLayout,
-    ) -> crate::EvaluationResult<Vec<F>, ConstraintSolveError<P::Error>>
+    ) -> Result<Vec<F>, ConstraintSolveError<P::Error>>
     where
         P: ProblemConstraints<Constraints = Self>,
     {
         let now = Self::layout(p.inner().constraint_set(), x.vec_len())
             .map_err(invalid)?;
         if &now != layout {
-            return Err(invalid(ConstraintError::LayoutChanged).into());
+            return Err(invalid(ConstraintError::LayoutChanged));
         }
         if layout.folded_count().map_err(invalid)? == layout.nonlinear_ineq {
             // Reuse the inequality buffer when no other rows need folding.
-            return p.evaluate(|inner, context| {
-                NI::values_with_context(
-                    inner.constraint_set().nonlinear.inequalities,
-                    inner,
-                    x,
-                    context,
-                )
-                .map_err(crate::core::evaluation::flatten_constraint_error)
-            });
+            let mut counts = crate::EvalCounts::default();
+            let result = NI::values(
+                p.inner().constraint_set().nonlinear.inequalities,
+                p.inner(),
+                x,
+                &mut counts,
+            );
+            p.counts_mut().add(&counts);
+            return result;
         }
         let bounds = {
             let view = p.inner().constraint_set();
@@ -554,27 +522,26 @@ where
             )
             .map_err(invalid)?,
         );
-        let (ni, eq) = p.evaluate(|inner, context| {
-            let view = inner.constraint_set();
-            let ni = NI::values_with_context(
+        let mut counts = crate::EvalCounts::default();
+        let result: NonlinearResult<F, P::Error> = (|| {
+            let view = p.inner().constraint_set();
+            let ni = NI::values(
                 view.nonlinear.inequalities,
-                inner,
+                p.inner(),
                 x,
-                context,
-            )
-            .map_err(crate::core::evaluation::flatten_constraint_error)?;
-            let view = inner.constraint_set();
-            let eq = NE::values_with_context(
+                &mut counts,
+            )?;
+            let view = p.inner().constraint_set();
+            let eq = NE::values(
                 view.nonlinear.equalities,
-                inner,
+                p.inner(),
                 x,
-                context,
-            )
-            .map_err(crate::core::evaluation::flatten_constraint_error)?;
-            Ok::<_, crate::EvaluationError<ConstraintSolveError<P::Error>>>((
-                ni, eq,
-            ))
-        })?;
+                &mut counts,
+            )?;
+            Ok((ni, eq))
+        })();
+        p.counts_mut().add(&counts);
+        let (ni, eq): (Vec<F>, Vec<F>) = result?;
         out.extend(ni);
         out.extend(eq.iter().copied());
         out.extend(eq.iter().map(|&v| -v));
@@ -817,20 +784,13 @@ pub(crate) trait NonlinearSet<
     ) -> NonlinearResult<F, P::Error>
     where
         P: ProblemConstraints<Constraints = Self>;
-    fn values_with_context(
-        p: &P,
-        x: &V,
-        context: &crate::EvaluationContext,
-    ) -> NonlinearResult<F, crate::EvaluationError<<P as CostFunction>::Error>>
-    where
-        P: ProblemConstraints<Constraints = Self>;
     fn write_values(
         p: &P,
         x: &V,
-        context: &crate::EvaluationContext,
+        counts: &mut crate::EvalCounts,
         equalities: &mut [F],
         inequalities: &mut [F],
-    ) -> Result<(), ConstraintSolveError<crate::EvaluationError<P::Error>>>
+    ) -> Result<(), ConstraintSolveError<P::Error>>
     where
         P: ProblemConstraints<Constraints = Self>;
 }
@@ -868,35 +828,13 @@ where
         )?;
         Ok((eq, ni))
     }
-    fn values_with_context(
-        p: &P,
-        x: &V,
-        context: &crate::EvaluationContext,
-    ) -> NonlinearResult<F, crate::EvaluationError<<P as CostFunction>::Error>>
-    where
-        P: ProblemConstraints<Constraints = Self>,
-    {
-        let eq = NE::values_with_context(
-            p.constraint_set().nonlinear.equalities,
-            p,
-            x,
-            context,
-        )?;
-        let ni = NI::values_with_context(
-            p.constraint_set().nonlinear.inequalities,
-            p,
-            x,
-            context,
-        )?;
-        Ok((eq, ni))
-    }
     fn write_values(
         p: &P,
         x: &V,
-        context: &crate::EvaluationContext,
+        counts: &mut crate::EvalCounts,
         equalities: &mut [F],
         inequalities: &mut [F],
-    ) -> Result<(), ConstraintSolveError<crate::EvaluationError<P::Error>>>
+    ) -> Result<(), ConstraintSolveError<P::Error>>
     where
         P: ProblemConstraints<Constraints = Self>,
     {
@@ -904,14 +842,14 @@ where
             p.constraint_set().nonlinear.equalities,
             p,
             x,
-            context,
+            counts,
             equalities,
         )?;
         NI::write(
             p.constraint_set().nonlinear.inequalities,
             p,
             x,
-            context,
+            counts,
             inequalities,
         )
     }
@@ -967,11 +905,8 @@ pub(crate) trait NonlinearDerivatives<
         x: &V,
         n: usize,
         m: usize,
-        context: &crate::EvaluationContext,
-    ) -> Result<
-        Vec<Vec<F>>,
-        ConstraintSolveError<crate::EvaluationError<P::Error>>,
-    >;
+        counts: &mut crate::EvalCounts,
+    ) -> Result<Vec<Vec<F>>, ConstraintSolveError<P::Error>>;
 }
 impl<P, V, F> NonlinearDerivatives<P, V, F> for NoNonlinearConstraints
 where
@@ -983,11 +918,8 @@ where
         _: &V,
         _: usize,
         _: usize,
-        _: &crate::EvaluationContext,
-    ) -> Result<
-        Vec<Vec<F>>,
-        ConstraintSolveError<crate::EvaluationError<P::Error>>,
-    > {
+        _: &mut crate::EvalCounts,
+    ) -> Result<Vec<Vec<F>>, ConstraintSolveError<P::Error>> {
         Ok(vec![])
     }
 }
@@ -996,11 +928,8 @@ fn checked_jacobian<P, V, F>(
     x: &V,
     n: usize,
     m: usize,
-    context: &crate::EvaluationContext,
-) -> Result<
-    Vec<Vec<F>>,
-    ConstraintSolveError<crate::EvaluationError<<P as CostFunction>::Error>>,
->
+    counts: &mut crate::EvalCounts,
+) -> Result<Vec<Vec<F>>, ConstraintSolveError<<P as CostFunction>::Error>>
 where
     P: CostFunction<Param = V, Output = F>
         + ConstraintJacobian<Param = V, Error = <P as CostFunction>::Error>,
@@ -1010,9 +939,8 @@ where
     if m == 0 {
         return Ok(vec![]);
     }
-    let jac = <P as ConstraintJacobian>::constraint_jacobian_with_context(
-        p, x, context,
-    )?;
+    counts.jacobian_evals += 1;
+    let jac = <P as ConstraintJacobian>::constraint_jacobian(p, x)?;
     dimension(
         ConstraintBlock::Jacobian,
         ConstraintAxis::Rows,
@@ -1046,10 +974,10 @@ macro_rules! nonlinear_derivatives {
                 x: &V,
                 n: usize,
                 m: usize,
-                context: &crate::EvaluationContext,
-            ) -> Result<Vec<Vec<F>>, ConstraintSolveError<crate::EvaluationError<<P as CostFunction>::Error>>>
+                counts: &mut crate::EvalCounts,
+            ) -> Result<Vec<Vec<F>>, ConstraintSolveError<<P as CostFunction>::Error>>
             {
-                checked_jacobian(p, x, n, m, context)
+                checked_jacobian(p, x, n, m, counts)
             }
         }
     }
@@ -1070,11 +998,8 @@ pub(crate) trait SlsqpSet<P: CostFunction<Param = V, Output = F>, V, F: Scalar>:
         x: &V,
         n: usize,
         m: usize,
-        context: &crate::EvaluationContext,
-    ) -> Result<
-        Vec<Vec<F>>,
-        ConstraintSolveError<crate::EvaluationError<P::Error>>,
-    >;
+        counts: &mut crate::EvalCounts,
+    ) -> Result<Vec<Vec<F>>, ConstraintSolveError<P::Error>>;
 }
 impl<P, V, F, B, LE, LI, NE, NI> SlsqpSet<P, V, F>
     for Constraints<B, LinearBlocks<LE, LI>, NonlinearBlocks<NE, NI>>
@@ -1111,13 +1036,10 @@ where
         x: &V,
         n: usize,
         m: usize,
-        context: &crate::EvaluationContext,
-    ) -> Result<
-        Vec<Vec<F>>,
-        ConstraintSolveError<crate::EvaluationError<P::Error>>,
-    > {
+        counts: &mut crate::EvalCounts,
+    ) -> Result<Vec<Vec<F>>, ConstraintSolveError<P::Error>> {
         <NonlinearBlocks<NE, NI> as NonlinearDerivatives<P, V, F>>::jacobian(
-            p, x, n, m, context,
+            p, x, n, m, counts,
         )
     }
 }

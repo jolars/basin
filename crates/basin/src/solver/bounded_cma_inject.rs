@@ -247,8 +247,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             None,
@@ -264,16 +264,14 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<PopulationProgress<V, F>>,
-        Self::Error,
-    > {
+        state: PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // 1. Standard BoundedCmaEs iteration first.
         let step = self.cma.next_iter(problem, state)?;
         if step.termination.is_some() {
             return Ok(step);
         }
+        let mut state = step.state;
 
         let work = self.cma.work.as_mut().expect("CMA init precedes injection");
         let n = work.m.vec_len();
@@ -314,15 +312,16 @@ where
                 sort_bounded_population(work);
                 publish(
                     work,
-                    state,
+                    &mut state,
                     problem.inner().lower(),
                     problem.inner().upper(),
                 );
-                return Ok(crate::SolverStep::from(
+                return Ok(crate::SolverStep::from((
+                    state,
                     inner_result.report.into_outer_termination(
                         crate::PartialResultPolicy::Consume,
                     ),
-                ));
+                )));
             }
 
             // 5. Extract refined point.
@@ -387,11 +386,11 @@ where
 
         publish(
             work,
-            state,
+            &mut state,
             problem.inner().lower(),
             problem.inner().upper(),
         );
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
     fn terminate(
         &self,

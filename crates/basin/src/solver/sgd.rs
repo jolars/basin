@@ -319,8 +319,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         state.reset();
         self.working_param = Some(state.param().clone());
         // Start momentum from rest, even if this solver instance is reused
@@ -350,15 +350,14 @@ where
 
         let cost = problem.cost(state.param())?;
         state.replace(state.param().clone(), cost);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
+        mut state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let bs = self.effective_batch;
         let n = self.perm.len();
 
@@ -414,7 +413,7 @@ where
             self.iters_since_cost = 0;
         }
 
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn should_check_iterate_change(&self) -> bool {
@@ -614,11 +613,12 @@ mod tests {
 
         let run_once = |solver: &mut Sgd<Vec<f64>>| {
             let mut p = Problem::new(problem_5_centers());
-            let mut state = PointState::new(start.clone());
-            solver.init(&mut p, &mut state).unwrap();
+            let mut state =
+                solver.init(&mut p, PointState::new(start.clone())).unwrap();
             for _ in 0..15 {
-                let (_, _) =
-                    solver.next_iter(&mut p, &mut state).unwrap().into_parts();
+                let (next, _, _) =
+                    solver.next_iter(&mut p, state).unwrap().into_parts();
+                state = next;
             }
             state.param().clone()
         };
@@ -646,13 +646,14 @@ mod tests {
         };
         let mut sgd = Sgd::new(0.01, 3, 99);
         let mut p = Problem::new(problem);
-        let mut state = PointState::new(vec![0.0, 0.0]);
-        sgd.init(&mut p, &mut state).unwrap();
+        let mut state =
+            sgd.init(&mut p, PointState::new(vec![0.0, 0.0])).unwrap();
         // 3 steps: enough to trigger the reshuffle at step 3 (cursor
         // would be 6, and 6 + 3 > 7).
         for _ in 0..3 {
-            let (_, _) =
-                sgd.next_iter(&mut p, &mut state).unwrap().into_parts();
+            let (next, _, _) =
+                sgd.next_iter(&mut p, state).unwrap().into_parts();
+            state = next;
         }
         // Cursor after step 3 should be 3 (we reshuffled before step 3,
         // then advanced by batch_size).
@@ -704,16 +705,16 @@ mod tests {
         let initial_cost = problem.cost(&vec![10.0, 10.0]).unwrap();
         let mut sgd = Sgd::new(0.05, 2, 42);
         let mut p = Problem::new(problem);
-        let mut state = PointState::new(vec![10.0, 10.0]);
-        sgd.init(&mut p, &mut state).unwrap();
+        let state =
+            sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
         assert_eq!(state.cost(), initial_cost);
-        let (_, _) = sgd.next_iter(&mut p, &mut state).unwrap().into_parts();
+        let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_eq!(
             state.cost(),
             initial_cost,
             "default schedule must retain the evaluated record within an epoch",
         );
-        let (_, _) = sgd.next_iter(&mut p, &mut state).unwrap().into_parts();
+        let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_ne!(
             state.cost(),
             initial_cost,
@@ -729,9 +730,9 @@ mod tests {
         let initial_cost = problem.cost(&vec![10.0, 10.0]).unwrap();
         let mut sgd = Sgd::new(0.05, 2, 42).with_cost_eval_every(1);
         let mut p = Problem::new(problem);
-        let mut state = PointState::new(vec![10.0, 10.0]);
-        sgd.init(&mut p, &mut state).unwrap();
-        let (_, _) = sgd.next_iter(&mut p, &mut state).unwrap().into_parts();
+        let state =
+            sgd.init(&mut p, PointState::new(vec![10.0, 10.0])).unwrap();
+        let (state, _, _) = sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert_ne!(
             state.cost(),
             initial_cost,
@@ -749,10 +750,9 @@ mod tests {
         let centroid = problem.centroid();
         let mut sgd = Sgd::new(0.1, 5, 0).with_momentum(0.0);
         let mut p = Problem::new(problem);
-        let mut state = PointState::new(vec![1.0, 1.0]);
-        sgd.init(&mut p, &mut state).unwrap();
-        let (_, reason) =
-            sgd.next_iter(&mut p, &mut state).unwrap().into_parts();
+        let state = sgd.init(&mut p, PointState::new(vec![1.0, 1.0])).unwrap();
+        let (state, _, reason) =
+            sgd.next_iter(&mut p, state).unwrap().into_parts();
         assert!(reason.is_none());
         // Full batch gradient is 2·(x − centroid), so x₁ = x − α·2·(x − centroid).
         let alpha = 0.1;

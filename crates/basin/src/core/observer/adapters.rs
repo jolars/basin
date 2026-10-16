@@ -24,13 +24,6 @@ impl<S: crate::State, So, O: Observe<S>> ObserveSolver<S, So>
     ) {
         self.0.observe_final(state, reason);
     }
-    fn observe_interrupted(
-        &mut self,
-        state: &S,
-        reason: &TerminationReport<S::Float>,
-    ) {
-        self.0.observe_final(state, reason);
-    }
 }
 
 pub(crate) struct SolverCallback<C>(pub(crate) C);

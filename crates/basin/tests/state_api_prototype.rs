@@ -154,28 +154,25 @@ impl Solver<Sphere, FirstOrderState<Vec<f64>>> for ExternalDescent {
     fn init(
         &mut self,
         problem: &mut Problem<Sphere>,
-        state: &mut FirstOrderState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Infallible> {
+        mut state: FirstOrderState<Vec<f64>>,
+    ) -> Result<FirstOrderState<Vec<f64>>, Infallible> {
         let x = state.param().clone();
         let (cost, gradient) = problem.cost_and_gradient(&x)?;
         state.replace(x, cost, gradient).unwrap();
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<Sphere>,
-        state: &mut FirstOrderState<Vec<f64>>,
-    ) -> basin::EvaluationResult<
-        basin::SolverStep<FirstOrderState<Vec<f64>>>,
-        Infallible,
-    > {
+        mut state: FirstOrderState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
         let (x, _, gradient) = state.take_current().unwrap();
         let mut next = x;
         next.scaled_add(-0.1, &gradient);
         let (cost, gradient) = problem.cost_and_gradient(&next)?;
         state.replace(next, cost, gradient).unwrap();
-        Ok(basin::SolverStep::from(None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -764,11 +761,9 @@ fn a_first_order_solver_must_initialize_the_gradient() {
         fn next_iter(
             &mut self,
             _: &mut Problem<Sphere>,
-            _: &mut FirstOrderState<Vec<f64>>,
-        ) -> basin::EvaluationResult<
-            basin::SolverStep<FirstOrderState<Vec<f64>>>,
-            Infallible,
-        > {
+            _: FirstOrderState<Vec<f64>>,
+        ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible>
+        {
             unreachable!()
         }
     }
@@ -810,15 +805,15 @@ impl<P, S: Progress, So: Solver<P, S>> Solver<P, S> for HistoryStop<So> {
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        state: S,
+    ) -> Result<S, Self::Error> {
         self.solver.init(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> basin::EvaluationResult<basin::SolverStep<S>, Self::Error> {
+        state: S,
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
         self.solver.next_iter(problem, state)
     }
     fn reset_convergence(&mut self) {
@@ -871,7 +866,7 @@ fn exact_resume_preserves_convergence_history_and_fresh_run_resets_it() {
     .into_checkpoint();
     let (mut solver, state, counts) = checkpoint.into_parts();
     let mut problem = Problem::new(Sphere);
-    problem.restore_counts(counts);
+    *problem.counts_mut() = counts;
     assert!(solver.check_convergence(&problem, &state).is_none());
     assert!(solver.check_convergence(&problem, &state).is_none());
     let checkpoint = basin::ExactCheckpoint::from_parts(solver, state, counts);
@@ -973,20 +968,17 @@ impl Solver<FallibleSphere, PointState<Vec<f64>>> for EvaluationScript {
     fn init(
         &mut self,
         problem: &mut Problem<FallibleSphere>,
-        state: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        mut state: PointState<Vec<f64>>,
+    ) -> Result<PointState<Vec<f64>>, Self::Error> {
         let cost = problem.cost(state.param())?;
         state.replace(state.param().clone(), cost);
-        Ok(())
+        Ok(state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<FallibleSphere>,
-        state: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<
-        basin::SolverStep<PointState<Vec<f64>>>,
-        Self::Error,
-    > {
+        mut state: PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Self::Error> {
         let x = vec![0.5];
         let (cost, _) = problem.cost_and_gradient(&x)?;
         problem.residual_and_jacobian(&x)?;
@@ -998,11 +990,14 @@ impl Solver<FallibleSphere, PointState<Vec<f64>>> for EvaluationScript {
             // A consumed candidate must not escape through observation on Err.
             problem.cost_and_gradient(&vec![-1.0])?;
         }
-        Ok(basin::SolverStep::from(Some(basin::Termination::custom(
-            "external.SolverConverged",
-            "External solver stopping predicate: SolverConverged.",
-            vec![],
-        ))))
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::custom(
+                "external.SolverConverged",
+                "External solver stopping predicate: SolverConverged.",
+                vec![],
+            )),
+        )))
     }
 }
 
@@ -1035,10 +1030,7 @@ fn counts_keep_categories_at_clean_stops_and_hard_failures() {
         PointState::new(vec![2.0]),
     )
     .unwrap();
-    assert_eq!(
-        failed.step(),
-        Err(basin::EvaluationError::Evaluation("negative input"))
-    );
+    assert_eq!(failed.step(), Err("negative input"));
     assert!(failed.state().is_none());
     assert_eq!(failed.counts().cost_evals, 6);
     assert_eq!(failed.counts().gradient_evals, 2);
@@ -1067,17 +1059,16 @@ fn shared_inner_runs_use_deltas_without_adding_counts_twice() {
     assert_eq!(delta.gradient_evals, 3);
     assert_eq!(result.state.counts(), &delta);
 
-    // An adapter shares the enclosing ledger and contributes its work once.
-    let mut adapted_problem = shared.adapt(Sphere);
-    let adapted = basin::InnerExecutor::new(ExternalDescent)
-        .max_iter(1)
-        .run(
-            &mut adapted_problem,
-            FirstOrderState::new(result.state.param().clone()),
-        )
-        .unwrap();
-    drop(adapted_problem);
-    shared.synchronize_counts();
+    // A separately counted adapter contributes its work once at the boundary.
+    let adapted = Run::new(
+        Sphere,
+        ExternalDescent,
+        FirstOrderState::new(result.state.param().clone()),
+    )
+    .unwrap()
+    .run(1)
+    .unwrap();
+    shared.counts_mut().add(&adapted.counts);
     let mut published = adapted.state;
     published.publish(false, *shared.counts());
     assert_eq!(published.cost_evals(), 6);

@@ -281,7 +281,7 @@ fn exact_continuation_and_fresh_reuse() {
     .unwrap();
     let resumed = Executor::resume_from_checkpoint(
         Model::rosenbrock(),
-        partial.into_checkpoint().unwrap(),
+        partial.into_checkpoint(),
     )
     .max_iter(200)
     .run_with_solver()
@@ -452,7 +452,7 @@ fn cost_floor_checkpoint_preserves_the_numerical_stop() {
     let state = snapshot(&stopped.state);
     let resumed = Executor::resume_from_checkpoint(
         cost_floor_problem(2.0),
-        stopped.into_checkpoint().unwrap(),
+        stopped.into_checkpoint(),
     )
     .max_iter(200)
     .run_with_solver()

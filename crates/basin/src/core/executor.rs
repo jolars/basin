@@ -1,7 +1,6 @@
 //! Iteration driver. The high-level entry point is [`Executor`];
 //! [`Stepper`] exposes one-iteration-at-a-time control, and [`run_loop_with_control`]
 //! is the borrowed-problem variant used by composed solvers.
-//! Evaluation limits are hard caps, including initialization and nested work.
 //!
 //! # Canonical iteration ordering
 //!
@@ -24,7 +23,7 @@
 //!    3. [`Solver::check_convergence`] evaluates solver-owned convergence.
 //!       Its default delegates to the legacy [`Solver::terminate`] hook.
 //!       The first stop ends the run.
-//! 3. If nothing fired, [`Solver::next_iter`] returns a [`crate::SolverStep`]. The
+//! 3. If nothing fired, [`Solver::next_iter`] returns a [`SolverStep`]. The
 //!    executor publishes counts and coherent progress, increments the iteration
 //!    counter when `completed` is true, and updates the incumbent.
 //! 4. A step with `termination` stops with a report tagged
@@ -46,7 +45,6 @@
 //! Consume a paused stepper with [`Stepper::into_checkpoint`], or retain the
 //! final solver and raw counters with [`Executor::run_with_solver`].
 
-use crate::Scalar;
 use crate::core::checkpoint::{CheckpointSink, ExactCheckpoint};
 use crate::core::convergence::NativeConvergenceTest;
 use crate::core::observer::{
@@ -60,6 +58,7 @@ use crate::core::state::{CountsMirror, ExactResumeState, State};
 use crate::core::termination::{
     ApplicationStop, Termination, TerminationReport, TerminationStage,
 };
+use crate::{Scalar, SolverStep};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -124,19 +123,13 @@ impl CancellationToken {
 pub struct OptimizationResult<S: State> {
     /// Authoritative evaluation counts in this run's scope.
     pub counts: EvalCounts,
-    /// Retained progress, or a seed when initialization could not finish.
+    /// Final solver state at termination.
     pub state: S,
     /// Why the executor stopped.
     pub report: TerminationReport<S::Float>,
 }
 
 impl<S: State> OptimizationResult<S> {
-    /// Published progress, or `None` when initialization could not finish.
-    pub fn initialized_state(&self) -> Option<&S> {
-        (self.report.stage != TerminationStage::Initialization)
-            .then_some(&self.state)
-    }
-
     /// Final iterate.
     pub fn param(&self) -> &S::Param {
         self.state.param()
@@ -201,10 +194,9 @@ impl<S: State> OptimizationResult<S> {
 /// Custom states define their own [`CountsMirror`] mapping.
 /// [`counts`](Self::counts) always contains the authoritative per-category counters.
 pub struct OptimizationResultWithSolver<S: State, So> {
-    /// Retained progress, or a seed when initialization could not finish.
+    /// Final solver state at termination.
     pub state: S,
     /// Final solver, including its evolving machinery and convergence history.
-    /// After a budget-interrupted transition its model is diagnostic only.
     pub solver: So,
     /// Authoritative evaluation counters, including counts restored on resume.
     pub counts: EvalCounts,
@@ -213,12 +205,6 @@ pub struct OptimizationResultWithSolver<S: State, So> {
 }
 
 impl<S: State, So> OptimizationResultWithSolver<S, So> {
-    /// Published progress, or `None` when initialization could not finish.
-    pub fn initialized_state(&self) -> Option<&S> {
-        (self.report.stage != TerminationStage::Initialization)
-            .then_some(&self.state)
-    }
-
     /// Native criteria from this stopping event, without consulting retained
     /// solver history. Shared and native criteria can both appear in a report.
     pub fn native_convergence_tests(&self) -> Vec<NativeConvergenceTest> {
@@ -248,12 +234,9 @@ impl<S: State, So> OptimizationResultWithSolver<S, So> {
     /// Moves the solver and state without cloning or serialization and
     /// discards the termination reason. Pass the checkpoint to
     /// [`Executor::resume_from_checkpoint`] with the same problem and newly
-    /// configured execution policy to continue from this boundary. Returns
-    /// `None` after incomplete initialization or a budget-interrupted transition.
-    pub fn into_checkpoint(self) -> Option<ExactCheckpoint<So, S>> {
-        self.report.can_checkpoint().then(|| {
-            ExactCheckpoint::from_parts(self.solver, self.state, self.counts)
-        })
+    /// configured execution policy to continue from this boundary.
+    pub fn into_checkpoint(self) -> ExactCheckpoint<So, S> {
+        ExactCheckpoint::from_parts(self.solver, self.state, self.counts)
     }
 }
 
@@ -356,8 +339,9 @@ impl<F: Scalar> StepOutcome<F> {
 /// ```
 pub struct Stepper<P, S: State, So> {
     problem: Problem<P>,
-    // Callback errors invalidate the solver/state pair. Budget stops retain
-    // coherent progress but may invalidate the model for exact continuation.
+    // `Option<S>` because `Solver::next_iter` consumes the state by
+    // value. A hard error cannot restore that owned value, so the slot
+    // remains empty after a failed step. Successful steps restore it.
     state: Option<S>,
     solver: So,
     control: RunControl<S>,
@@ -365,7 +349,6 @@ pub struct Stepper<P, S: State, So> {
     checkpoints: Vec<(Box<dyn CheckpointSink<So, S>>, ObserverMode)>,
     cancellation_token: Option<CancellationToken>,
     finished: Option<TerminationReport<S::Float>>,
-    _evaluation_scope: crate::core::evaluation::EvaluationScope,
 }
 
 impl<P, S, So> Stepper<P, S, So>
@@ -373,18 +356,12 @@ where
     S: State + CountsMirror,
     So: Solver<P, S>,
 {
-    /// Published progress, or `None` when initialization could not finish.
-    pub fn initialized_state(&self) -> Option<&S> {
-        (self.finished.as_ref().is_none_or(|report| {
-            report.stage != TerminationStage::Initialization
-        }))
-        .then(|| self.state())
-    }
-
-    /// The retained progress or seed when initialization was interrupted.
+    /// Read-only access to the current state, between steps.
     ///
     /// # Panics
-    /// Panics after a callback error invalidated and discarded the state.
+    ///
+    /// Panics after [`step`](Self::step) returns `Err`, because the
+    /// failing solver call consumed the state.
     pub fn state(&self) -> &S {
         self.state
             .as_ref()
@@ -396,8 +373,7 @@ where
     /// [`Executor::observe_solver_with`].
     ///
     /// This borrows the solver without cloning it or performing evaluations.
-    /// After a callback error or interrupted transition its model is diagnostic
-    /// only; exact continuation
+    /// After a hard error its contents are diagnostic only; exact continuation
     /// requires a successfully published solver-and-state checkpoint.
     pub fn solver(&self) -> &So {
         &self.solver
@@ -509,14 +485,8 @@ where
                 self.finished = Some(reason.clone());
                 let state =
                     self.state.as_ref().expect("state slot is Some on Stopped");
-                if reason.can_checkpoint() {
-                    for (checkpoint, _) in &mut self.checkpoints {
-                        checkpoint.save(
-                            &self.solver,
-                            state,
-                            self.problem.counts(),
-                        );
-                    }
+                for (checkpoint, _mode) in self.checkpoints.iter_mut() {
+                    checkpoint.save(&self.solver, state, self.problem.counts());
                 }
                 if reason.stage == (TerminationStage::Step { completed: true })
                 {
@@ -530,11 +500,7 @@ where
                     }
                 }
                 for (observer, _mode) in self.observers.iter_mut() {
-                    if reason.can_checkpoint() {
-                        observer.observe_final(state, &self.solver, reason);
-                    } else {
-                        observer.observe_interrupted(state, reason);
-                    }
+                    observer.observe_final(state, &self.solver, reason);
                 }
             }
         }
@@ -583,8 +549,8 @@ where
     ///
     /// Returns `Some` after successful initialization, between completed
     /// steps, or after a clean stop (including cancellation and a mid-step
-    /// stop). Returns `None` when initialization or a transition was interrupted
-    /// by a budget, or a callback error invalidated the solver/state pair.
+    /// stop). Returns `None` after a hard [`step`](Self::step) error consumed
+    /// the state; partial solver machinery cannot form an exact checkpoint.
     ///
     /// Moves the solver and state and copies the authoritative counters
     /// without requiring `Clone` or serialization. Extraction performs no
@@ -625,13 +591,6 @@ where
     /// # }
     /// ```
     pub fn into_checkpoint(self) -> Option<ExactCheckpoint<So, S>> {
-        if self
-            .finished
-            .as_ref()
-            .is_some_and(|report| !report.can_checkpoint())
-        {
-            return None;
-        }
         Some(ExactCheckpoint::from_parts(
             self.solver,
             self.state?,
@@ -650,29 +609,23 @@ where
     }
 }
 
-/// Shared transition driver. Budget stops retain progress, refresh counts,
-/// and identify interrupted models. Callback errors discard the state slot.
-/// `baseline` makes inner accounting relative to this run's entry counts.
-fn interrupted_step<P, S: State + CountsMirror>(
-    problem: &mut Problem<P>,
-    baseline: &EvalCounts,
-    state: &mut S,
-    control: &RunControl<S>,
-    error: crate::BudgetExhausted,
-) -> StepOutcome<S::Float> {
-    problem.synchronize_counts();
-    state.mirror(&problem.counts().delta_since(baseline));
-    control.validate(state);
-    state.update_best();
-    StepOutcome::Stopped(TerminationReport {
-        termination: Termination::Limit(error.limits),
-        stage: TerminationStage::Interrupted {
-            requested: error.requested,
-        },
-        iteration: state.iter(),
-    })
-}
-
+/// Single-iteration core, shared by [`Stepper::step`] (owned) and
+/// [`run_loop_with_control`] (borrowed). Reads the current state via `state_slot`,
+/// checks termination, and either returns `Stopped` (slot left
+/// untouched) or hands the state to `solver.next_iter`, mirrors the
+/// wrapper's counter delta (relative to `baseline`) onto the state,
+/// increments the iteration counter, and puts the returned state back.
+///
+/// The `baseline` captures the wrapper count at the start of the
+/// containing run so the state mirror always reflects *per-run* work:
+/// for [`Stepper::step`]/[`Executor::run`] it is
+/// [`EvalCounts::default`] (fresh wrapper), for nested
+/// [`run_loop_with_control`] calls it is the wrapper count at run-loop entry.
+///
+/// The state slot must be `Some` on entry and is `Some` after an `Ok`
+/// return. If [`Solver::next_iter`] returns `Err`, it has consumed the
+/// previous state, so the slot remains empty and execution cannot resume
+/// from this pair. The wrapper's charged counts remain available.
 fn step_once<P, S, So>(
     problem: &mut Problem<P>,
     baseline: &EvalCounts,
@@ -684,8 +637,7 @@ where
     S: State + CountsMirror,
     So: Solver<P, S>,
 {
-    problem.synchronize_counts();
-    let state = state_slot.as_mut().expect("cannot step after a hard error");
+    let state = state_slot.as_ref().expect("cannot step after a hard error");
     if let Some(termination) = control
         .check(state, &problem.counts().delta_since(baseline))
         .or_else(|| solver.check_convergence(problem, state))
@@ -696,45 +648,24 @@ where
             iteration: state.iter(),
         }));
     }
-    let step = match solver.next_iter(problem, state) {
-        Ok(step) => {
-            // A solver may stop cleanly before changing its model. Otherwise a
-            // declined reservation must not disappear in custom error handling.
-            if step.completed
-                || !matches!(&step.termination, Some(Termination::Limit(_)))
-            {
-                if let Some(error) = problem.context().denied() {
-                    return Ok(interrupted_step(
-                        problem, baseline, state, control, error,
-                    ));
-                }
-            }
-            step
-        }
-        Err(crate::EvaluationError::Evaluation(error)) => {
-            state_slot.take();
-            return Err(error);
-        }
-        Err(crate::EvaluationError::BudgetExhausted(error)) => {
-            return Ok(interrupted_step(
-                problem, baseline, state, control, *error,
-            ));
-        }
-    };
-    problem.synchronize_counts();
-    control.validate(state);
-    state.mirror(&problem.counts().delta_since(baseline));
-    if step.completed {
-        state.increment_iter();
+    let SolverStep {
+        state: mut next,
+        completed,
+        termination,
+    } = solver.next_iter(problem, state_slot.take().unwrap())?;
+    control.validate(&next);
+    next.mirror(&problem.counts().delta_since(baseline));
+    if completed {
+        next.increment_iter();
     }
-    state.update_best();
-    Ok(match step.termination {
+    next.update_best();
+    let iteration = next.iter();
+    *state_slot = Some(next);
+    Ok(match termination {
         Some(termination) => StepOutcome::Stopped(TerminationReport {
             termination,
-            stage: TerminationStage::Step {
-                completed: step.completed,
-            },
-            iteration: state.iter(),
+            stage: TerminationStage::Step { completed },
+            iteration,
         }),
         None => StepOutcome::Continue,
     })
@@ -746,11 +677,11 @@ where
 /// reset before initialization; evaluation counts are relative to run entry.
 /// The inner state reflects only work performed in this call. Same-problem
 /// inner solves share the outer wrapper and aggregate counts automatically.
-/// For an adapter problem, create its wrapper with [`Problem::adapt`] and
-/// refresh the parent through [`Problem::synchronize_counts`] afterward.
+/// For an adapter problem, use a separate wrapper and fold its counts into
+/// the outer wrapper with [`EvalCounts::add`] and [`Problem::counts_mut`].
 ///
 /// Execution controls run before solver convergence. Step completion and
-/// termination are independent, as in [`crate::SolverStep`]. This borrowed driver
+/// termination are independent, as in [`SolverStep`]. This borrowed driver
 /// has no executor-attached cancellation token. See [`RunControl`] for check
 /// ordering and clock semantics.
 pub fn run_loop_with_control<P, S, So>(
@@ -758,7 +689,7 @@ pub fn run_loop_with_control<P, S, So>(
     state: S,
     solver: &mut So,
     control: &mut RunControl<S>,
-) -> crate::EvaluationResult<OptimizationResult<S>, So::Error>
+) -> Result<OptimizationResult<S>, So::Error>
 where
     S: State + CountsMirror,
     So: Solver<P, S>,
@@ -774,52 +705,39 @@ pub(crate) fn run_segment_with_control<P, S, So>(
     solver: &mut So,
     control: &mut RunControl<S>,
     initialized: bool,
-) -> crate::EvaluationResult<OptimizationResult<S>, So::Error>
+) -> Result<OptimizationResult<S>, So::Error>
 where
     S: State + CountsMirror,
     So: Solver<P, S>,
 {
-    problem.synchronize_counts();
-    let baseline = *problem.counts();
-    let scope = problem
-        .context()
-        .enter(control.evaluation_budget(), baseline);
     control.reset();
     solver.reset_convergence();
+    let baseline = *problem.counts();
+    // Reset best-so-far so the state always reflects per-run work,
+    // matching the snapshot discipline `state.mirror` uses for eval
+    // counters. This makes the same state safe to drive across
+    // multiple `run_loop_with_control` calls (e.g. an outer solver re-driving an
+    // inner) without best-so-far bleeding from one run into the next.
     state.reset_best();
-    if !initialized {
-        if let Some(error) = problem.context().expired() {
-            return Err(error.into());
-        }
-        solver.init(problem, &mut state)?;
-        if let Some(error) = problem.context().denied() {
-            return Err(error.into());
-        }
-    }
-    problem.synchronize_counts();
+    let mut state = if initialized {
+        state
+    } else {
+        solver.init(problem, state)?
+    };
     control.validate(&state);
+    // Mirror init's work onto the state before any termination check.
     state.mirror(&problem.counts().delta_since(&baseline));
     state.update_best();
     let mut slot = Some(state);
-    let report = loop {
-        match step_once(problem, &baseline, &mut slot, solver, control) {
-            Err(error) => {
-                return Err(crate::EvaluationError::Evaluation(error));
-            }
-            Ok(StepOutcome::Continue) => continue,
-            Ok(StepOutcome::Stopped(report)) => {
-                if let Some(error) = problem.context().denied() {
-                    if !scope.owns(&error) {
-                        return Err(error.into());
-                    }
-                }
-                break report;
-            }
+    let reason = loop {
+        match step_once(problem, &baseline, &mut slot, solver, control)? {
+            StepOutcome::Continue => continue,
+            StepOutcome::Stopped(reason) => break reason,
         }
     };
     Ok(OptimizationResult {
-        state: slot.take().expect("published progress is retained"),
-        report,
+        state: slot.take().expect("state slot is Some on stop"),
+        report: reason,
         counts: problem.counts().delta_since(&baseline),
     })
 }
@@ -1118,8 +1036,6 @@ where
     /// [`ObservationEvent`]. It has the same lifecycle and registration order
     /// as [`observe_solver_with`](Self::observe_solver_with). Handle logging
     /// errors inside the callback; cancellation can request a clean stop.
-    /// Budget-interrupted models receive no final closure callback. Use
-    /// [`ObserveSolver::observe_interrupted`] to observe their progress alone.
     ///
     /// # Example
     ///
@@ -1195,9 +1111,9 @@ where
     /// `observe_init` hooks fire in either case. Cancellation is first checked
     /// by the returned stepper's initial [`step`](Stepper::step).
     ///
-    /// Callback errors return `Err` without observer calls. A budget that
-    /// prevents initialization returns a stopped stepper with no initialized
-    /// record, observer calls, or checkpoint. Check [`Stepper::initialized_state`].
+    /// Returns `Err` when [`Solver::init`] does (e.g. the problem's
+    /// initial cost/gradient evaluation `Err`-ed). Observers do *not* fire
+    /// on that error path.
     pub fn into_stepper(self) -> Result<Stepper<P, S, So>, So::Error> {
         let Self {
             problem,
@@ -1212,52 +1128,28 @@ where
         } = self;
         let mut problem = Problem::new(problem);
         if let Some(counts) = resume_counts {
-            problem.restore_counts(counts);
+            *problem.counts_mut() = counts;
         } else {
+            // Fresh top-level wrapper: reset best-so-far so it tracks
+            // this run's iterates only, matching the `state.mirror`
+            // per-run snapshot discipline.
             state.reset_best();
         }
-        let evaluation_scope = problem
-            .context()
-            .enter(control.evaluation_budget(), EvalCounts::default());
-        let mut finished = None;
-        if skip_init {
+        let state = if skip_init {
             control.validate(&state);
+            state
         } else {
             solver.reset_convergence();
-            let result = if let Some(error) = problem.context().expired() {
-                Err(error.into())
-            } else {
-                solver.init(&mut problem, &mut state)
-            };
-            let result = result.and_then(|()| {
-                problem
-                    .context()
-                    .denied()
-                    .map_or(Ok(()), |error| Err(error.into()))
-            });
-            problem.synchronize_counts();
+            let mut state = solver.init(&mut problem, state)?;
+            control.validate(&state);
+            // Mirror init's work onto the state before any termination
+            // check. Baseline is zero: this is a fresh top-level wrapper.
             state.mirror(problem.counts());
-            match result {
-                Ok(()) => {
-                    control.validate(&state);
-                    state.update_best();
-                }
-                Err(crate::EvaluationError::Evaluation(error)) => {
-                    return Err(error);
-                }
-                Err(crate::EvaluationError::BudgetExhausted(error)) => {
-                    finished = Some(TerminationReport {
-                        termination: Termination::Limit(error.limits),
-                        stage: TerminationStage::Initialization,
-                        iteration: 0,
-                    });
-                }
-            }
-        }
-        if finished.is_none() {
-            for (observer, _) in &mut observers {
-                observer.observe_init(&state, &solver);
-            }
+            state.update_best();
+            state
+        };
+        for (observer, _mode) in observers.iter_mut() {
+            observer.observe_init(&state, &solver);
         }
         Ok(Stepper {
             problem,
@@ -1267,8 +1159,7 @@ where
             observers,
             checkpoints,
             cancellation_token,
-            finished,
-            _evaluation_scope: evaluation_scope,
+            finished: None,
         })
     }
 
@@ -1316,7 +1207,7 @@ where
     /// ).max_iter(3).run_with_solver()?;
     /// assert_eq!(result.iter(), 3);
     /// let counts = result.counts;
-    /// let checkpoint = result.into_checkpoint().unwrap();
+    /// let checkpoint = result.into_checkpoint();
     /// let continued = Executor::resume_from_checkpoint(Sphere, checkpoint)
     ///     .max_iter(10)
     ///     .run_with_solver()?;

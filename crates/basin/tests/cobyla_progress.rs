@@ -59,8 +59,8 @@ fn fresh_run_resets_iteration_history() {
 fn inequality_callbacks_are_residual_evaluations() {
     let mut problem = Problem::new(LowerBound);
     let mut solver = Cobyla::new();
-    solver
-        .init(&mut problem, &mut SelectedState::new(vec![0.0, 0.0]))
+    let _ = solver
+        .init(&mut problem, SelectedState::new(vec![0.0, 0.0]))
         .unwrap();
     assert_eq!(problem.counts().cost_evals, 3);
     assert_eq!(problem.counts().residual_evals, 3);
@@ -145,8 +145,7 @@ fn owned_checkpoints_preserve_filter_and_radius_history() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint()
-            .unwrap();
+            .into_checkpoint();
         let resumed = Executor::resume_from_checkpoint(LowerBound, checkpoint)
             .require_evaluated_state()
             .max_iter(30)
@@ -177,8 +176,7 @@ fn serialized_checkpoints_preserve_every_model_buffer() {
         .max_iter(9)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(LowerBound, restored)
@@ -305,7 +303,7 @@ fn folded_callbacks_count_each_block_including_failure_attempts() {
         let mut problem = Problem::new(FullForm { failure });
         let mut solver = Cobyla::new();
         let output =
-            solver.init(&mut problem, &mut SelectedState::new(vec![0.0; 2]));
+            solver.init(&mut problem, SelectedState::new(vec![0.0; 2]));
         match failure {
             None => {
                 assert!(output.is_ok());
@@ -315,9 +313,7 @@ fn folded_callbacks_count_each_block_including_failure_attempts() {
             Some(error) => {
                 assert_eq!(
                     output.unwrap_err(),
-                    basin::EvaluationError::Evaluation(
-                        basin::ConstraintSolveError::Evaluation(error)
-                    )
+                    basin::ConstraintSolveError::Evaluation(error)
                 );
                 assert_eq!(problem.counts().cost_evals, 1);
                 assert_eq!(
@@ -411,8 +407,7 @@ fn folded_checkpoints_preserve_constraint_counts_and_selected_records() {
         .max_iter(8)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
     let resumed = Executor::resume_from_checkpoint(problem(), checkpoint)
         .max_iter(25)
         .run_with_solver()

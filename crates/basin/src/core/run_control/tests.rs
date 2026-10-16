@@ -9,17 +9,16 @@ fn point(cost: f64) -> PointState<f64> {
 }
 
 #[test]
-fn raw_categories_read_authoritative_counts_without_legacy_folds() {
+fn raw_categories_read_the_state_without_legacy_folds() {
     let mut state = point(1.0);
-    let counts = EvalCounts {
+    state.mirror(&EvalCounts {
         cost_evals: 2,
         gradient_evals: 3,
         residual_evals: 5,
         jacobian_evals: 7,
         hessian_evals: 11,
         hessian_product_evals: 13,
-    };
-    state.mirror(&counts);
+    });
     for (kind, count) in EvaluationKind::ALL
         .into_iter()
         .zip([2, 3, 5, 7, 11, 13, 41])
@@ -29,7 +28,7 @@ fn raw_categories_read_authoritative_counts_without_legacy_folds() {
         control = control.max_evaluations(kind, count);
         assert_eq!(
             control
-                .check(&state, &counts)
+                .check(&state, &EvalCounts::default())
                 .as_ref()
                 .map(|stop| stop.code()),
             Some(crate::TerminationCode::MaxEvaluations)

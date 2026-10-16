@@ -70,7 +70,6 @@ where
     fn cost(&self, x: &V) -> Result<Self::Output, Self::Error> {
         self.problem.cost(x)
     }
-    crate::core::evaluation::forward_cost_context!();
 }
 impl<P, V> SamplingBounds for SamplingDomain<P>
 where
@@ -122,13 +121,11 @@ impl<P: CostFunction> CostFunction for RelaxedProblem<'_, P> {
     fn cost(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
         self.problem.cost(x)
     }
-    crate::core::evaluation::forward_cost_context!();
 }
 macro_rules! forward_derivatives {
     ($wrapper:ty,$($bound:tt)*)=>{
         impl<P> MiniBatchGradient for $wrapper where P:MiniBatchGradient,$($bound)* {
             type Gradient=P::Gradient;
-crate::core::evaluation::forward_mini_batch_context!();
             fn n_samples(&self)->usize{self.problem.n_samples()}
             fn batch_gradient(&self,x:&Self::Param,batch:&[usize])->Result<Self::Gradient,Self::Error>{self.problem.batch_gradient(x,batch)}
         }
@@ -136,17 +133,14 @@ crate::core::evaluation::forward_mini_batch_context!();
             type Gradient=P::Gradient;
             fn gradient(&self,x:&Self::Param)->Result<Self::Gradient,Self::Error>{self.problem.gradient(x)}
             fn cost_and_gradient(&self,x:&Self::Param)->Result<(Self::Output,Self::Gradient),Self::Error>{self.problem.cost_and_gradient(x)}
-crate::core::evaluation::forward_gradient_context!();
         }
         impl<P> Hessian for $wrapper where P:Hessian,$($bound)* {
             type Hessian=P::Hessian;
             fn hessian(&self,x:&Self::Param)->Result<Self::Hessian,Self::Error>{self.problem.hessian(x)}
             fn cost_and_gradient_and_hessian(&self,x:&Self::Param)->Result<(Self::Output,Self::Gradient,Self::Hessian),Self::Error>{self.problem.cost_and_gradient_and_hessian(x)}
-crate::core::evaluation::forward_hessian_context!();
         }
         impl<P> HessianProduct for $wrapper where P:HessianProduct,$($bound)* {
             fn hessian_product(&self,x:&Self::Param,v:&Self::Param)->Result<Self::Gradient,Self::Error>{self.problem.hessian_product(x,v)}
-crate::core::evaluation::forward_hessian_product_context!();
         }
     }
 }
@@ -157,13 +151,11 @@ macro_rules! forward_residuals {
         impl<P> Residual for $wrapper where P:Residual,$($bound)* {
             type Param=<P as Residual>::Param;type Output=P::Output;type Error=P::Error;
             fn residual(&self,x:&Self::Param)->Result<Self::Output,Self::Error>{self.problem.residual(x)}
-crate::core::evaluation::forward_residual_context!();
         }
         impl<P> Jacobian for $wrapper where P:Jacobian,$($bound)* {
             type Jacobian=P::Jacobian;
             fn jacobian(&self,x:&Self::Param)->Result<Self::Jacobian,Self::Error>{self.problem.jacobian(x)}
             fn residual_and_jacobian(&self,x:&Self::Param)->Result<(Self::Output,Self::Jacobian),Self::Error>{self.problem.residual_and_jacobian(x)}
-crate::core::evaluation::forward_jacobian_context!();
         }
     }
 }
@@ -198,31 +190,25 @@ where
     I: for<'a> Solver<RelaxedProblem<'a, P>, S, Error = P::Error>,
 {
     type Error = ConstraintSolveError<P::Error>;
-    fn init(
-        &mut self,
-        p: &mut Problem<P>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<(), Self::Error> {
-        let mut view = p.adapt(RelaxedProblem { problem: p.inner() });
+    fn init(&mut self, p: &mut Problem<P>, state: S) -> Result<S, Self::Error> {
+        let mut view = Problem::new(RelaxedProblem { problem: p.inner() });
+        *view.counts_mut() = *p.counts();
         let result = self.inner.init(&mut view, state);
-        drop(view);
-        p.synchronize_counts();
-        result.map_err(|error| {
-            error.map_evaluation(ConstraintSolveError::Evaluation)
-        })
+        let counts = *view.counts();
+        *p.counts_mut() = counts;
+        result.map_err(ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
         p: &mut Problem<P>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<SolverStep<S>, Self::Error> {
-        let mut view = p.adapt(RelaxedProblem { problem: p.inner() });
+        state: S,
+    ) -> Result<SolverStep<S>, Self::Error> {
+        let mut view = Problem::new(RelaxedProblem { problem: p.inner() });
+        *view.counts_mut() = *p.counts();
         let result = self.inner.next_iter(&mut view, state);
-        drop(view);
-        p.synchronize_counts();
-        result.map_err(|error| {
-            error.map_evaluation(ConstraintSolveError::Evaluation)
-        })
+        let counts = *view.counts();
+        *p.counts_mut() = counts;
+        result.map_err(ConstraintSolveError::Evaluation)
     }
     fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
         <I as Solver<RelaxedProblem<'_, P>, S>>::terminate(&self.inner, state)
@@ -242,7 +228,8 @@ where
         p: &Problem<P>,
         state: &S,
     ) -> Option<Termination<S::Float>> {
-        let view = p.adapt(RelaxedProblem { problem: p.inner() });
+        let mut view = Problem::new(RelaxedProblem { problem: p.inner() });
+        *view.counts_mut() = *p.counts();
         self.inner.check_convergence(&view, state)
     }
 }
@@ -340,7 +327,6 @@ where
     fn cost(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
         self.problem.cost(x)
     }
-    crate::core::evaluation::forward_cost_context!();
 }
 impl<P, C> Residual for Constrained<P, C>
 where
@@ -353,7 +339,6 @@ where
     fn residual(&self, x: &Self::Param) -> Result<Self::Output, Self::Error> {
         self.problem.residual(x)
     }
-    crate::core::evaluation::forward_residual_context!();
 }
 impl<P, C> Jacobian for Constrained<P, C>
 where
@@ -370,10 +355,9 @@ where
     ) -> Result<(Self::Output, Self::Jacobian), Self::Error> {
         self.problem.residual_and_jacobian(x)
     }
-    crate::core::evaluation::forward_jacobian_context!();
 }
 macro_rules! constrained_values {
-    ($cap:ident,$method:ident,$value:ident,$forward:ident) => {
+    ($cap:ident,$method:ident,$value:ident) => {
         impl<P, C> $cap for Constrained<P, C>
         where
             P: $cap<Constraints = NoConstraints>,
@@ -388,28 +372,12 @@ macro_rules! constrained_values {
             ) -> Result<Self::$value, ConstraintSolveError<Self::Error>> {
                 self.problem.$method(x)
             }
-            crate::core::evaluation::$forward!();
         }
     };
 }
-constrained_values!(
-    NonlinearEqualityValues,
-    nonlinear_equalities,
-    Values,
-    forward_equalities_context
-);
-constrained_values!(
-    NonlinearInequalityValues,
-    nonlinear_inequalities,
-    Values,
-    forward_inequalities_context
-);
-constrained_values!(
-    ConstraintJacobian,
-    constraint_jacobian,
-    Jacobian,
-    forward_constraint_jacobian_context
-);
+constrained_values!(NonlinearEqualityValues, nonlinear_equalities, Values);
+constrained_values!(NonlinearInequalityValues, nonlinear_inequalities, Values);
+constrained_values!(ConstraintJacobian, constraint_jacobian, Jacobian);
 
 impl<P, C> MiniBatchGradient for Constrained<P, C>
 where
@@ -427,7 +395,6 @@ where
     ) -> Result<Self::Gradient, Self::Error> {
         self.problem.batch_gradient(x, batch)
     }
-    crate::core::evaluation::forward_mini_batch_context!();
 }
 
 impl<P, C> Gradient for Constrained<P, C>
@@ -445,7 +412,6 @@ where
     ) -> Result<(Self::Output, Self::Gradient), Self::Error> {
         self.problem.cost_and_gradient(x)
     }
-    crate::core::evaluation::forward_gradient_context!();
 }
 impl<P, C> Hessian for Constrained<P, C>
 where
@@ -463,7 +429,6 @@ where
     {
         self.problem.cost_and_gradient_and_hessian(x)
     }
-    crate::core::evaluation::forward_hessian_context!();
 }
 impl<P, C> HessianProduct for Constrained<P, C>
 where
@@ -477,7 +442,6 @@ where
     ) -> Result<Self::Gradient, Self::Error> {
         self.problem.hessian_product(x, v)
     }
-    crate::core::evaluation::forward_hessian_product_context!();
 }
 impl<I: crate::NativeConvergenceDiagnostics> crate::NativeConvergenceDiagnostics
     for RelaxedInner<I>

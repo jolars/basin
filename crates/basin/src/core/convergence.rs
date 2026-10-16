@@ -646,15 +646,15 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: S,
+    ) -> Result<S, Self::Error> {
         self.solver.init(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<SolverStep<S>, Self::Error> {
+        state: S,
+    ) -> Result<SolverStep<S>, Self::Error> {
         let step = self.solver.next_iter(problem, state)?;
         // A partial step can publish new state without advancing either cache key.
         self.step.invalidate_cache();
@@ -936,24 +936,22 @@ mod tests {
         fn init(
             &mut self,
             _: &mut Problem<()>,
-            state: &mut PointState<Vec<f64>>,
-        ) -> crate::EvaluationResult<(), Self::Error> {
+            mut state: PointState<Vec<f64>>,
+        ) -> Result<PointState<Vec<f64>>, Self::Error> {
             state.replace(vec![2.0], 0.0);
-            Ok(())
+            Ok(state)
         }
 
         fn next_iter(
             &mut self,
             _: &mut Problem<()>,
-            state: &mut PointState<Vec<f64>>,
-        ) -> crate::EvaluationResult<
-            SolverStep<PointState<Vec<f64>>>,
-            Self::Error,
-        > {
+            mut state: PointState<Vec<f64>>,
+        ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
             state.replace(vec![if self.0 { 0.0 } else { 1.0 }], 0.0);
             let completed = self.0;
             self.0 = true;
             Ok(SolverStep {
+                state,
                 completed,
                 termination: None,
             })

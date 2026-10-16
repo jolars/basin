@@ -67,8 +67,7 @@ fn checkpoint_at_initialization_preserves_model_counts_and_records() {
         .max_iter(0)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
     let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
         .require_evaluated_state()
         .max_iter(1)
@@ -122,7 +121,7 @@ fn explicit_matrix_and_line_search_remain_available_without_clone() {
         .unwrap();
     assert_eq!(result.state.cost(), 0.0);
     assert!(result.solver.inverse_hessian().is_some());
-    let _checkpoint = result.into_checkpoint().unwrap();
+    let _checkpoint = result.into_checkpoint();
 }
 
 // This line search is deliberately not Clone. Fresh initialization must reset
@@ -143,7 +142,7 @@ impl basin::LineSearch<Sphere, Vec<f64>> for StatefulSearch {
         _: f64,
         _: &Vec<f64>,
         _: &Vec<f64>,
-    ) -> basin::EvaluationResult<f64, Infallible> {
+    ) -> Result<f64, Infallible> {
         self.calls += 1;
         Ok(0.1 / self.calls as f64)
     }
@@ -160,13 +159,11 @@ fn fresh_search_history_resets_but_exact_continuation_retains_it() {
     };
     let expected = make().max_iter(4).run_with_solver().unwrap();
     let first = make().max_iter(2).run_with_solver().unwrap();
-    let resumed = Executor::resume_from_checkpoint(
-        Sphere,
-        first.into_checkpoint().unwrap(),
-    )
-    .max_iter(4)
-    .run_with_solver()
-    .unwrap();
+    let resumed =
+        Executor::resume_from_checkpoint(Sphere, first.into_checkpoint())
+            .max_iter(4)
+            .run_with_solver()
+            .unwrap();
     assert_eq!(resumed.state, expected.state);
     assert_eq!(resumed.counts, expected.counts);
     let seed = resumed.state.param().clone();
@@ -201,8 +198,7 @@ fn serialized_checkpoint_preserves_model_and_trajectory() {
         .max_iter(2)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     type Checkpoint = basin::ExactCheckpoint<
         Bfgs<Vec<f64>, f64, DenseMatrix, basin::Constant>,

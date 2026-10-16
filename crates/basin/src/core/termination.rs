@@ -18,14 +18,6 @@ pub enum TerminationStage {
         /// Whether this step completed an iteration.
         completed: bool,
     },
-    /// A hard evaluation budget prevented initialization from completing.
-    Initialization,
-    /// An evaluation reservation interrupted a solver transition. Progress is
-    /// coherent, but the solver model is unavailable for exact continuation.
-    Interrupted {
-        /// The atomic request that could not fit the remaining allowance.
-        requested: crate::EvalCounts,
-    },
 }
 
 /// An owned explanation of one stopping event, independent of solver history.
@@ -51,7 +43,7 @@ pub struct TerminationReport<F: Scalar = f64> {
 pub enum Termination<F: Scalar = f64> {
     /// One or more numerical convergence predicates passed.
     Converged(Convergence<F>),
-    /// Execution budgets reached, or hard limits that declined an atomic request.
+    /// All execution budgets exhausted at the observed boundary.
     Limit(Vec<ExecutionLimit>),
     /// The eligible objective incumbent reached the requested target.
     Target {
@@ -333,10 +325,8 @@ impl<F: Scalar> ConvergenceCriterion<F> {
     }
 }
 
-/// Execution budgets that stopped a run, with their observed work.
-/// Evaluation limits are hard caps. They can stop below the threshold when
-/// the next atomic request does not fit. Interrupted transitions retain that
-/// request in [`TerminationStage::Interrupted`].
+/// Exhausted execution budgets, with observed work (which can exceed a limit
+/// when a solver step evaluates a batch before the next boundary).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ExecutionLimit {
@@ -535,14 +525,6 @@ impl<F: Scalar> Termination<F> {
 }
 
 impl<F: Scalar> TerminationReport<F> {
-    /// Whether this stop retains a complete solver model for exact continuation.
-    pub fn can_checkpoint(&self) -> bool {
-        !matches!(
-            self.stage,
-            TerminationStage::Initialization
-                | TerminationStage::Interrupted { .. }
-        )
-    }
     /// Compact compatibility code. Inspect the termination for the full report.
     pub fn code(&self) -> TerminationCode {
         self.termination.code()

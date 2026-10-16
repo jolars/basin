@@ -131,30 +131,29 @@ fn rejections_and_damping_retries_reuse_factorization() {
     let mut solver = LevenbergMarquardt::new()
         .with_pivoted_qr()
         .with_absolute_gradient_tolerance(0.);
-    let mut state = PointState::new(vec![0.1]);
-    solver.init(&mut problem, &mut state).unwrap();
-    let (_, reason) = solver
-        .next_iter(&mut problem, &mut state)
-        .unwrap()
-        .into_parts();
+    let state = solver
+        .init(&mut problem, PointState::new(vec![0.1]))
+        .unwrap();
+    let (mut state, _, reason) =
+        solver.next_iter(&mut problem, state).unwrap().into_parts();
     assert!(reason.is_none());
     assert_eq!(state.param(), &vec![0.1]);
     assert_eq!(counts.factors.get(), 1);
     assert_eq!(counts.solves.get(), 3);
     assert_eq!(counts.residuals.get(), 2);
     while state.param()[0] == 0.1 {
-        solver.next_iter(&mut problem, &mut state).unwrap();
+        state = solver.next_iter(&mut problem, state).unwrap().state;
         assert_eq!(counts.factors.get(), 1);
         assert!(counts.residuals.get() < 20);
     }
     let before = counts.residuals.get();
-    let _ = solver.next_iter(&mut problem, &mut state).unwrap();
+    let _ = solver.next_iter(&mut problem, state).unwrap();
     assert_eq!(counts.factors.get(), 2);
     assert_eq!(counts.jacobians.get(), 2);
     assert_eq!(counts.residuals.get(), before + 1);
     // Reusing the solver for a new run must discard the previous factor.
     solver
-        .init(&mut problem, &mut PointState::new(vec![2.]))
+        .init(&mut problem, PointState::new(vec![2.]))
         .unwrap();
     assert_eq!(counts.factors.get(), 3);
 }

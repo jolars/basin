@@ -86,17 +86,12 @@ fn failed_phase_two_work_is_charged_before_propagating_error() {
     let mut problem = Problem::new(Inequality::new(1));
     let mut solver = solver();
     let seed = solver.seed(&vec![0.0]);
-    let mut state = seed;
-    solver.init(&mut problem, &mut state).unwrap();
+    let state = solver.init(&mut problem, seed).unwrap();
     let before = *problem.counts();
     problem.inner().fail_gradient.set(true);
     assert_eq!(
-        solver.next_iter(&mut problem, &mut state).err().unwrap(),
-        basin::EvaluationError::Evaluation(
-            basin::ConstraintSolveError::Evaluation(
-                "gradient callback aborted"
-            )
-        )
+        solver.next_iter(&mut problem, state).err().unwrap(),
+        basin::ConstraintSolveError::Evaluation("gradient callback aborted")
     );
     assert_eq!(problem.counts().cost_evals, before.cost_evals + 1);
     assert_eq!(problem.counts().gradient_evals, before.gradient_evals + 1);
@@ -129,7 +124,7 @@ fn exact_continuation_preserves_both_phases_and_counts() {
             coherent(&partial.state);
             let resumed = Executor::resume_from_checkpoint(
                 Inequality::new(2),
-                partial.into_checkpoint().unwrap(),
+                partial.into_checkpoint(),
             )
             .require_evaluated_state()
             .max_iter(8)
@@ -161,7 +156,7 @@ fn fresh_run_resets_phase_schedule_and_accepts_a_new_dimension() {
     assert_eq!(fresh.counts.total_work(), 0);
     let restarted = Executor::resume_from_checkpoint(
         Inequality::new(3),
-        fresh.into_checkpoint().unwrap(),
+        fresh.into_checkpoint(),
     )
     .max_iter(8)
     .run_with_solver()
@@ -215,21 +210,19 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut basin::FirstOrderState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        state: basin::FirstOrderState<Vec<f64>>,
+    ) -> Result<basin::FirstOrderState<Vec<f64>>, Self::Error> {
         problem.cost_and_gradient(state.param())?;
-        Err(basin::EvaluationError::Evaluation(
-            basin::ConstraintSolveError::Evaluation("inner init aborted"),
+        Err(basin::ConstraintSolveError::Evaluation(
+            "inner init aborted",
         ))
     }
     fn next_iter(
         &mut self,
         _: &mut Problem<P>,
-        _: &mut basin::FirstOrderState<Vec<f64>>,
-    ) -> basin::EvaluationResult<
-        basin::SolverStep<basin::FirstOrderState<Vec<f64>>>,
-        Self::Error,
-    > {
+        _: basin::FirstOrderState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<basin::FirstOrderState<Vec<f64>>>, Self::Error>
+    {
         unreachable!()
     }
 }
@@ -238,14 +231,13 @@ where
 fn failed_phase_one_adapter_work_is_charged() {
     let mut problem = Problem::new(Inequality::new(1));
     let mut solver = BarrierMethod::with_inner_solver(AbortInner);
-    let mut state = basin::PointState::new(vec![3.0]);
-    solver.init(&mut problem, &mut state).unwrap();
+    let state = solver
+        .init(&mut problem, basin::PointState::new(vec![3.0]))
+        .unwrap();
     assert_eq!(problem.counts().total_work(), 0);
     assert_eq!(
-        solver.next_iter(&mut problem, &mut state).err().unwrap(),
-        basin::EvaluationError::Evaluation(
-            basin::ConstraintSolveError::Evaluation("inner init aborted")
-        )
+        solver.next_iter(&mut problem, state).err().unwrap(),
+        basin::ConstraintSolveError::Evaluation("inner init aborted")
     );
     assert_eq!(problem.counts().cost_evals, 1);
     assert_eq!(problem.counts().gradient_evals, 1);
@@ -262,8 +254,7 @@ fn serialized_barrier_checkpoint_retains_phase_and_schedule() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint()
-            .unwrap();
+            .into_checkpoint();
         let bytes = postcard::to_allocvec(&checkpoint).unwrap();
         let restored: basin::ExactCheckpoint<
             Barrier,

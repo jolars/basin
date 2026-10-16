@@ -522,15 +522,14 @@ fn reused_solver_handles_changing_dimensions_and_empty_constraint_blocks() {
             constraints: m,
             lower: bounds.then(|| vec![-3.0; n]),
         });
-        let mut state = SelectedState::new(vec![1.0; n]);
-        solver.init(&mut problem, &mut state).unwrap();
+        let mut state = solver
+            .init(&mut problem, SelectedState::new(vec![1.0; n]))
+            .unwrap();
         state.update_best();
         let snapshot = state.best_param().clone();
         let snapshot_cost = state.best_cost();
-        let (_, _) = solver
-            .next_iter(&mut problem, &mut state)
-            .unwrap()
-            .into_parts();
+        let (mut state, _, _) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
 
         assert_eq!(state.param().len(), n);
         assert_eq!(state.best_param(), &snapshot);

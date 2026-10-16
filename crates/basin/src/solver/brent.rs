@@ -113,8 +113,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<F, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PointState<F, F>,
+    ) -> Result<PointState<F, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_scalar_box_problem(
             problem.inner(),
         )
@@ -149,15 +149,14 @@ where
             e: F::zero(),
         });
         state.replace(x, fx);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<F, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<F, F>>, Self::Error>
-    {
+        mut state: PointState<F, F>,
+    ) -> Result<crate::SolverStep<PointState<F, F>>, Self::Error> {
         let s = self.inner.as_mut().expect("Brent::init must run first");
         let half = F::from_f64(0.5).unwrap();
         let two = F::from_f64(2.0).unwrap();
@@ -251,7 +250,7 @@ where
         // Brent's bracket-collapse `terminate` only fires once
         // `|u - x| < 2·tol`, so the two coincide at convergence.
         state.replace(u, fu);
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(&self, _state: &PointState<F, F>) -> Option<Termination<F>> {

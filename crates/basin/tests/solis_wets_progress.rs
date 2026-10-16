@@ -39,8 +39,7 @@ fn exact_resume_preserves_rng_bias_radius_and_streaks() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint()
-            .unwrap();
+            .into_checkpoint();
         let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
             .require_evaluated_state()
             .max_iter(35)
@@ -84,13 +83,11 @@ fn fresh_run_resets_progress_and_rebuilds_model_for_new_dimension() {
     assert_eq!(initialized.solver.bias().unwrap(), &[0.0; 3]);
     assert_eq!(initialized.solver.success_count(), 0);
     assert_eq!(initialized.solver.failure_count(), 0);
-    let resumed = Executor::resume_from_checkpoint(
-        Sphere,
-        initialized.into_checkpoint().unwrap(),
-    )
-    .max_iter(20)
-    .run_with_solver()
-    .unwrap();
+    let resumed =
+        Executor::resume_from_checkpoint(Sphere, initialized.into_checkpoint())
+            .max_iter(20)
+            .run_with_solver()
+            .unwrap();
     let rebuilt = Executor::from_start(Sphere, solver(), vec![4.0; 3])
         .max_iter(20)
         .run_with_solver()
@@ -161,8 +158,7 @@ fn serialized_checkpoint_retains_complete_model() {
         .max_iter(17)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: basin::ExactCheckpoint<
         SolisWets<Vec<f64>>,
@@ -239,24 +235,21 @@ impl Solver<basin::SamplingDomain<FlatBox>, PointState<Vec<f64>>> for Chain {
     fn init(
         &mut self,
         _: &mut Problem<basin::SamplingDomain<FlatBox>>,
-        _state: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Infallible> {
+        state: PointState<Vec<f64>>,
+    ) -> Result<PointState<Vec<f64>>, Infallible> {
         self.init_calls.set(self.init_calls.get() + 1);
         self.model_steps = 0;
-        Ok(())
+        Ok(state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<basin::SamplingDomain<FlatBox>>,
-        state: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<
-        basin::SolverStep<PointState<Vec<f64>>>,
-        Infallible,
-    > {
+        state: PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<PointState<Vec<f64>>>, Infallible> {
         self.model_steps += 1;
         self.seen.borrow_mut().push(self.model_steps);
         problem.cost(state.param())?;
-        Ok(basin::SolverStep::from(None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 

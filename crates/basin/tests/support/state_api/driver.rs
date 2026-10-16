@@ -34,7 +34,7 @@ where
         problem: P,
         solver: So,
         point: S::Param,
-    ) -> basin::EvaluationResult<Self, So::Error>
+    ) -> Result<Self, So::Error>
     where
         So: basin::InitialState<S::Param, State = S>,
     {
@@ -46,11 +46,11 @@ where
         problem: P,
         mut solver: So,
         mut state: S,
-    ) -> basin::EvaluationResult<Self, So::Error> {
+    ) -> Result<Self, So::Error> {
         let mut problem = Problem::new(problem);
         state.fresh();
         solver.reset_convergence();
-        solver.init(&mut problem, &mut state)?;
+        let mut state = solver.init(&mut problem, state)?;
         assert!(state.is_ready(), "solver published incomplete state");
         state.publish(false, *problem.counts());
         Ok(Self {
@@ -64,7 +64,7 @@ where
     pub fn resume(problem: P, checkpoint: ExactCheckpoint<So, S>) -> Self {
         let (solver, state, counts) = checkpoint.into_parts();
         let mut problem = Problem::new(problem);
-        problem.restore_counts(counts);
+        *problem.counts_mut() = counts;
         Self {
             problem,
             state: Some(state),
@@ -83,9 +83,7 @@ where
         self.problem.counts()
     }
 
-    pub fn step(
-        &mut self,
-    ) -> basin::EvaluationResult<Option<TerminationCode>, So::Error> {
+    pub fn step(&mut self) -> Result<Option<TerminationCode>, So::Error> {
         if let Some(reason) = self.stopped {
             return Ok(Some(reason));
         }
@@ -98,18 +96,14 @@ where
             self.stopped = Some(reason);
             return Ok(Some(reason));
         }
-        let state = self.state.as_mut().unwrap();
-        let step = match self.solver.next_iter(&mut self.problem, state) {
-            Ok(step) => step,
-            Err(error) => {
-                self.state.take();
-                return Err(error);
-            }
-        };
-        let (completed, reason) = step.into_parts();
+        let (mut state, completed, reason) = self
+            .solver
+            .next_iter(&mut self.problem, self.state.take().unwrap())?
+            .into_parts();
         let reason = reason.map(|termination| termination.code());
         assert!(state.is_ready(), "solver published incomplete state");
         state.publish(completed, *self.problem.counts());
+        self.state = Some(state);
         self.stopped = reason;
         Ok(reason)
     }
@@ -122,10 +116,7 @@ where
         ))
     }
 
-    pub fn run(
-        mut self,
-        max_iter: u64,
-    ) -> basin::EvaluationResult<Completed<S, So>, So::Error> {
+    pub fn run(mut self, max_iter: u64) -> Result<Completed<S, So>, So::Error> {
         let reason = loop {
             if let Some(reason) = self.stopped {
                 break reason;

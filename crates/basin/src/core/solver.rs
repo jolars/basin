@@ -13,46 +13,55 @@ use crate::core::termination::Termination;
 /// A continuing partial step publishes progress without an iteration callback.
 #[derive(Debug)]
 pub struct SolverStep<S: State> {
+    /// Coherent progress published by this step.
+    pub state: S,
     /// Whether the executor should increment the completed-iteration count.
     pub completed: bool,
-    /// A stopping decision, independent of iteration completion.
+    /// An optional stopping decision, independent of iteration completion.
     pub termination: Option<Termination<S::Float>>,
 }
 
 impl<S: State> SolverStep<S> {
     /// Publish a completed iteration and continue.
-    pub fn completed() -> Self {
+    pub fn completed(state: S) -> Self {
         Self {
+            state,
             completed: true,
             termination: None,
         }
     }
     /// Publish a partial step and its stopping explanation.
-    pub fn stopped(termination: Termination<S::Float>) -> Self {
+    pub fn stopped(state: S, termination: Termination<S::Float>) -> Self {
         Self {
+            state,
             completed: false,
             termination: Some(termination),
         }
     }
     /// Publish a completed iteration and its stopping explanation.
     pub fn completed_with_termination(
+        state: S,
         termination: Termination<S::Float>,
     ) -> Self {
         Self {
+            state,
             completed: true,
             termination: Some(termination),
         }
     }
-    /// Extract completion and the optional stopping decision.
-    pub fn into_parts(self) -> (bool, Option<Termination<S::Float>>) {
-        (self.completed, self.termination)
+    /// Extract the published state and decision. Callers driving iterations
+    /// manually must account for `completed` before consuming this value.
+    pub fn into_parts(self) -> (S, bool, Option<Termination<S::Float>>) {
+        (self.state, self.completed, self.termination)
     }
 }
 
-impl<S: State> From<Option<Termination<S::Float>>> for SolverStep<S> {
-    fn from(termination: Option<Termination<S::Float>>) -> Self {
+// Tuple conversion preserves the 1.x convention that a stopping step is partial.
+impl<S: State> From<(S, Option<Termination<S::Float>>)> for SolverStep<S> {
+    fn from((state, termination): (S, Option<Termination<S::Float>>)) -> Self {
         Self {
             completed: termination.is_none(),
+            state,
             termination,
         }
     }
@@ -142,16 +151,16 @@ pub trait Solver<P, S: State> {
     fn init(
         &mut self,
         _problem: &mut Problem<P>,
-        _state: &mut S,
-    ) -> crate::EvaluationResult<(), Self::Error> {
-        Ok(())
+        state: S,
+    ) -> Result<S, Self::Error> {
+        Ok(state)
     }
 
     /// Advance one iteration.
     ///
     /// # Contract
     ///
-    /// - **Implementor must:** publish progress whose
+    /// - **Implementor must:** return a state whose
     ///   [`State::param`], [`State::cost`], and (if `S: GradientState`)
     ///   [`GradientState::gradient`](crate::core::state::GradientState::gradient)
     ///   are mutually consistent at the new iterate. Termination
@@ -162,23 +171,28 @@ pub trait Solver<P, S: State> {
     ///   iteration counter, including when `termination` is present. A partial
     ///   stopping step publishes coherent progress without incrementing it.
     ///   Numerical failure and safeguards belong in [`Termination`].
-    /// - **Implementor may:** return a callback error to abort the run. The
-    ///   executor discards the invalidated pair and exposes diagnostic counts.
-    ///   Budget exhaustion instead returns a normal stopping result.
-    /// - **Implementor must (budget interruption):** keep accepted progress
-    ///   coherent until each replacement is completely evaluated. Propagate
-    ///   `EvaluationError::BudgetExhausted` separately from callback errors.
-    ///   The executor retains progress without cloning state and withholds
-    ///   exact checkpoints for interrupted models.
-    /// - **Implementor must (composition):** create adapter problem wrappers
-    ///   with [`Problem::adapt`], then call [`Problem::synchronize_counts`] on
-    ///   the parent after inner work. The shared ledger preserves counts and
-    ///   enclosing budgets automatically.
+    /// - **Implementor may:** return `Err` to hard-abort the run. This consumes
+    ///   the state; the executor exposes counts but promises no recoverable
+    ///   checkpoint or final observation.
+    /// - **Implementor must (composition, adapter-problem inner only):**
+    ///   when running an inner solver against an *adapter problem*
+    ///   (e.g. [`LogBarrier`](crate::core::barrier::LogBarrier),
+    ///   [`AugmentedLagrangian`](crate::core::augmented_lagrangian::AugmentedLagrangian)),
+    ///   i.e. a freshly constructed inner [`Problem`], fold the
+    ///   inner wrapper's
+    ///   [`EvalCounts`](crate::core::problem::EvalCounts) back into the
+    ///   outer's via
+    ///   [`EvalCounts::add`](crate::core::problem::EvalCounts::add) on
+    ///   [`Problem::counts_mut`]. When the inner shares the outer's
+    ///   wrapper (same problem type, passed via `&mut`), counts flow
+    ///   through automatically and no roll-up is needed. See
+    ///   `CONTRIBUTING.md` "Solver composition" for the failure-routing and
+    ///   history-reset contracts that still apply uniformly.
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<SolverStep<S>, Self::Error>;
+        state: S,
+    ) -> Result<SolverStep<S>, Self::Error>;
 
     /// Reset per-run convergence history without changing algorithm state.
     ///

@@ -381,21 +381,19 @@ impl<P: CostFunction<Param = Vec<f64>, Output = f64>>
     fn init(
         &mut self,
         problem: &mut basin::Problem<P>,
-        state: &mut basin::PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        mut state: basin::PointState<Vec<f64>>,
+    ) -> Result<basin::PointState<Vec<f64>>, Self::Error> {
         use basin::State;
         let cost = problem.cost(state.param())?;
         state.replace(state.param().clone(), cost);
-        Ok(())
+        Ok(state)
     }
     fn next_iter(
         &mut self,
         _: &mut basin::Problem<P>,
-        _: &mut basin::PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<
-        basin::SolverStep<basin::PointState<Vec<f64>>>,
-        Self::Error,
-    > {
+        _: basin::PointState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Self::Error>
+    {
         unreachable!()
     }
     fn terminate(
@@ -425,26 +423,22 @@ fn stationarity_callback_errors_are_charged_and_propagated() {
         let (error, counts) = if barrier_mode {
             let mut problem = Problem::new(probe_ineq(problem));
             let mut solver = BarrierMethod::with_inner_solver(ClaimedConverged);
-            let mut state = solver.seed(&vec![0.0]);
-            solver.init(&mut problem, &mut state).unwrap();
-            let error =
-                solver.next_iter(&mut problem, &mut state).err().unwrap();
+            let state =
+                solver.init(&mut problem, solver.seed(&vec![0.0])).unwrap();
+            let error = solver.next_iter(&mut problem, state).err().unwrap();
             (error, *problem.counts())
         } else {
             let mut problem = Problem::new(probe_eq(problem));
             let mut solver =
                 AugmentedLagrangianMethod::with_inner_solver(ClaimedConverged);
-            let mut state = solver.seed(&vec![0.0]);
-            solver.init(&mut problem, &mut state).unwrap();
-            let error =
-                solver.next_iter(&mut problem, &mut state).err().unwrap();
+            let state =
+                solver.init(&mut problem, solver.seed(&vec![0.0])).unwrap();
+            let error = solver.next_iter(&mut problem, state).err().unwrap();
             (error, *problem.counts())
         };
         assert_eq!(
             error,
-            basin::EvaluationError::Evaluation(
-                basin::ConstraintSolveError::Evaluation("stationarity aborted")
-            )
+            basin::ConstraintSolveError::Evaluation("stationarity aborted")
         );
         assert_eq!(counts.cost_evals, 2);
         assert_eq!(counts.gradient_evals, 1);

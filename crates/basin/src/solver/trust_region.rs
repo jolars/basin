@@ -634,8 +634,8 @@ fn tr_init<P, V, F>(
     radius: &mut F,
     initial_radius: F,
     problem: &mut Problem<P>,
-    state: &mut FirstOrderState<V, F>,
-) -> crate::EvaluationResult<(), P::Error>
+    mut state: FirstOrderState<V, F>,
+) -> Result<FirstOrderState<V, F>, P::Error>
 where
     F: Scalar,
     V: Clone + VectorLen,
@@ -648,7 +648,7 @@ where
     state
         .set_evaluation(cost, grad)
         .expect("gradient dimension differs from parameter");
-    Ok(())
+    Ok(state)
 }
 
 /// Shared `Solver::next_iter` body for both modes: the accept/shrink loop
@@ -665,21 +665,21 @@ fn tr_next_iter<P, V, F>(
     max_inner: u32,
     trials: &mut Option<Vec<diagnostics::Trial<F>>>,
     problem: &mut Problem<P>,
-    state: &mut FirstOrderState<V, F>,
+    mut state: FirstOrderState<V, F>,
     mut attempt: impl FnMut(
         &mut Problem<P>,
         &V,
         &V,
         F,
-    ) -> crate::EvaluationResult<Step<V, F>, P::Error>,
-) -> crate::EvaluationResult<(Option<Termination<F>>, bool), P::Error>
+    ) -> Result<Step<V, F>, P::Error>,
+) -> Result<(FirstOrderState<V, F>, Option<Termination<F>>, bool), P::Error>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     V: Clone + ScaledAdd<F> + NormSquared<F> + VectorLen,
 {
-    let (_, cost_old, g) = state
-        .current()
+    let (cost_old, g) = state
+        .take_evaluation()
         .expect("trust region requires initialized progress");
 
     let quarter = F::from_f64(0.25).unwrap();
@@ -704,7 +704,7 @@ where
                 counts_after: *problem.counts(),
             });
         }
-        let step = attempt(problem, state.param(), g, *radius)?;
+        let step = attempt(problem, state.param(), &g, *radius)?;
         if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
             record.step_norm_squared = Some(step.d.norm_squared());
             record.predicted_reduction = Some(step.predicted_reduction);
@@ -718,7 +718,11 @@ where
             if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
                 record.phase = diagnostics::Phase::InvalidModel;
             }
+            state
+                .set_evaluation(cost_old, g)
+                .expect("gradient dimension differs from parameter");
             return Ok((
+                state,
                 Some(Termination::numerical_failure(
                     "The trust-region subproblem returned a non-finite predicted reduction.",
                 )),
@@ -748,7 +752,10 @@ where
                     "trust_region: no numerical progress",
                 )
             };
-            return Ok((Some(reason), false));
+            state
+                .set_evaluation(cost_old, g)
+                .expect("gradient dimension differs from parameter");
+            return Ok((state, Some(reason), false));
         }
 
         let mut trial = state.param().clone();
@@ -808,7 +815,7 @@ where
             state
                 .replace(trial, cost_trial, g_new)
                 .expect("gradient dimension differs from parameter");
-            return Ok((None, true));
+            return Ok((state, None, true));
         }
         // Reject: radius has shrunk; retry at the same iterate.
     }
@@ -817,7 +824,10 @@ where
     // shrunken radius and the current iterate; restore the gradient so
     // the state stays consistent and let the next outer iteration retry
     // (or a termination criterion fire).
-    Ok((None, false))
+    state
+        .set_evaluation(cost_old, g)
+        .expect("gradient dimension differs from parameter");
+    Ok((state, None, false))
 }
 
 impl<P, Sub, V, M, F> Solver<P, FirstOrderState<V, F>>
@@ -840,8 +850,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
         self.rejected_step = false;
         if let Some(records) = self.trials.as_mut() {
             records.clear();
@@ -852,17 +862,14 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<FirstOrderState<V, F>>,
-        Self::Error,
-    > {
+        state: FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         // One Hessian per outer iteration, reused across all inner radius
         // reductions at zero extra derivative evaluations (the gradient is
         // likewise fixed while x is).
         let b = problem.hessian(state.param())?;
         let subproblem = &self.subproblem;
-        let (reason, accepted) = tr_next_iter(
+        let (state, reason, accepted) = tr_next_iter(
             &mut self.radius,
             self.max_radius,
             self.eta,
@@ -873,7 +880,7 @@ where
             |_, _, g, radius| Ok(subproblem.solve(g, &b, radius)),
         )?;
         self.rejected_step = !accepted;
-        Ok(crate::SolverStep::from(reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 }
 
@@ -897,8 +904,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
         self.rejected_step = false;
         if let Some(records) = self.trials.as_mut() {
             records.clear();
@@ -909,18 +916,15 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<FirstOrderState<V, F>>,
-        Self::Error,
-    > {
+        state: FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
         // No Hessian is formed: every product goes through the problem's
         // counted `hessian_product`. Unlike exact mode, an inner radius
         // reduction re-pays its CG products at the same iterate (the
         // shrunken radius truncates CG earlier, so re-attempts get
         // cheaper); `hessian_product_evals` makes that cost visible.
         let subproblem = &self.subproblem;
-        let (reason, accepted) = tr_next_iter(
+        let (state, reason, accepted) = tr_next_iter(
             &mut self.radius,
             self.max_radius,
             self.eta,
@@ -934,7 +938,7 @@ where
             },
         )?;
         self.rejected_step = !accepted;
-        Ok(crate::SolverStep::from(reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 }
 
@@ -1138,17 +1142,22 @@ mod tests {
         ] {
             let mut problem = Problem::new(Quadratic);
             let mut radius = 1.0;
-            let mut state = FirstOrderState::new(vec![1.0, 0.0]);
-            tr_init(&mut radius, 1.0, &mut problem, &mut state).unwrap();
+            let state = tr_init(
+                &mut radius,
+                1.0,
+                &mut problem,
+                FirstOrderState::new(vec![1.0, 0.0]),
+            )
+            .unwrap();
             let counts = *problem.counts();
-            let (reason, _) = tr_next_iter(
+            let (state, reason, _) = tr_next_iter(
                 &mut radius,
                 100.0,
                 0.125,
                 10,
                 &mut None,
                 &mut problem,
-                &mut state,
+                state,
                 |_, _, _, _| {
                     Ok(Step {
                         d: vec![0.0, 0.0],
@@ -1381,13 +1390,13 @@ mod tests {
 
         let mut problem = Problem::new(RosenbrockHvOnly);
         let mut solver = TrustRegion::matrix_free();
-        let mut state = FirstOrderState::new(vec![-1.2, 1.0]);
-        solver.init(&mut problem, &mut state).unwrap();
+        let mut state = solver
+            .init(&mut problem, FirstOrderState::new(vec![-1.2, 1.0]))
+            .unwrap();
         for _ in 0..3 {
-            let (_, _) = solver
-                .next_iter(&mut problem, &mut state)
-                .unwrap()
-                .into_parts();
+            let (next, _, _) =
+                solver.next_iter(&mut problem, state).unwrap().into_parts();
+            state = next;
         }
         let counts = problem.counts();
         assert!(counts.hessian_product_evals > 0);

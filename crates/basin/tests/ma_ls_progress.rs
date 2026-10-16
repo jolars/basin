@@ -117,8 +117,7 @@ macro_rules! lifecycle {
                     .max_iter(split)
                     .run_with_solver()
                     .unwrap()
-                    .into_checkpoint()
-                    .unwrap();
+                    .into_checkpoint();
                 #[cfg(feature = "serde")]
                 let checkpoint = {
                     fn restore<
@@ -303,33 +302,27 @@ fn inner_failure_preserves_every_category_and_current_population() {
         fn init(
             &mut self,
             problem: &mut basin::Problem<basin::SamplingDomain<Sphere>>,
-            state: &mut basin::PointState<Vec<f64>>,
-        ) -> basin::EvaluationResult<(), Infallible> {
+            mut state: basin::PointState<Vec<f64>>,
+        ) -> Result<basin::PointState<Vec<f64>>, Infallible> {
             let cost = problem.cost(state.param())?;
             state.replace(state.param().clone(), cost);
-            Ok(())
+            Ok(state)
         }
         fn next_iter(
             &mut self,
             problem: &mut basin::Problem<basin::SamplingDomain<Sphere>>,
-            _state: &mut basin::PointState<Vec<f64>>,
-        ) -> basin::EvaluationResult<
-            basin::SolverStep<basin::PointState<Vec<f64>>>,
-            Infallible,
-        > {
-            // Reserve work before dispatching an external evaluator.
-            problem.evaluate(|_, context| {
-                context.reserve(basin::EvalCounts {
-                    gradient_evals: 2,
-                    residual_evals: 3,
-                    jacobian_evals: 4,
-                    hessian_evals: 5,
-                    hessian_product_evals: 6,
-                    ..Default::default()
-                })?;
-                Ok::<_, basin::EvaluationError<Infallible>>(())
-            })?;
+            state: basin::PointState<Vec<f64>>,
+        ) -> Result<basin::SolverStep<basin::PointState<Vec<f64>>>, Infallible>
+        {
+            // A custom adapter can report work performed by an external evaluator.
+            let counts = problem.counts_mut();
+            counts.gradient_evals += 2;
+            counts.residual_evals += 3;
+            counts.jacobian_evals += 4;
+            counts.hessian_evals += 5;
+            counts.hessian_product_evals += 6;
             Ok(basin::SolverStep::stopped(
+                state,
                 basin::Termination::numerical_failure("scripted inner failure"),
             ))
         }

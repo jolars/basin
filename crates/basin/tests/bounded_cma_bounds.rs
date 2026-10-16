@@ -105,14 +105,9 @@ where
     ] {
         let mut problem = Problem::new(boxed(lower, upper));
         let error = make_solver()
-            .init(&mut problem, &mut PopulationProgress::from_point(vec![0.0]))
+            .init(&mut problem, PopulationProgress::from_point(vec![0.0]))
             .unwrap_err();
-        assert_eq!(
-            error,
-            basin::EvaluationError::Evaluation(
-                ConstraintSolveError::InvalidConstraints(expected)
-            )
-        );
+        assert_eq!(error, ConstraintSolveError::InvalidConstraints(expected));
         assert_eq!(problem.counts().total_work(), 0);
     }
 }

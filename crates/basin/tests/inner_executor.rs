@@ -148,21 +148,20 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut MultiStartState,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        mut state: MultiStartState,
+    ) -> Result<MultiStartState, Self::Error> {
         for (v, c) in state.iterates.iter().zip(state.costs.iter_mut()) {
             *c = problem.cost(v)?;
         }
         sort_by_cost(&mut state.iterates, &mut state.costs);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut MultiStartState,
-    ) -> basin::EvaluationResult<basin::SolverStep<MultiStartState>, Self::Error>
-    {
+        mut state: MultiStartState,
+    ) -> Result<basin::SolverStep<MultiStartState>, Self::Error> {
         let mut new_iterates: Vec<Vec<f64>> =
             Vec::with_capacity(state.iterates.len());
         let mut new_costs: Vec<f64> = Vec::with_capacity(state.iterates.len());
@@ -184,11 +183,12 @@ where
                     state.iterates.push(vec![0.0; 2]);
                     state.costs.push(f64::INFINITY);
                 }
-                return Ok(basin::SolverStep::from(
+                return Ok(basin::SolverStep::from((
+                    state,
                     result.report.into_outer_termination(
                         basin::PartialResultPolicy::Consume,
                     ),
-                ));
+                )));
             }
 
             new_costs.push(result.cost());
@@ -198,7 +198,7 @@ where
         state.iterates = new_iterates;
         state.costs = new_costs;
         sort_by_cost(&mut state.iterates, &mut state.costs);
-        Ok(basin::SolverStep::from(None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -213,12 +213,13 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
     fn next_iter(
         &mut self,
         _problem: &mut Problem<P>,
-        _state: &mut S,
-    ) -> basin::EvaluationResult<basin::SolverStep<S>, Self::Error> {
-        Ok(basin::SolverStep::from(Some(
-            basin::Termination::numerical_failure(
+        state: S,
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::numerical_failure(
                 "External solver reported a numerical failure.",
-            ),
+            )),
         )))
     }
 }

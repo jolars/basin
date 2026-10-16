@@ -68,15 +68,8 @@ macro_rules! precision {
                                 for (i, record) in records.iter().enumerate() {
                                     assert_eq!(record.sequence, i as u64);
                                     assert!(record.counts_after.unwrap().cost_evals >= record.counts_before.cost_evals);
-                                    use basin::core::inner::diagnostics::Status;
-                                    match record.status {
-                                        Status::Returned => assert!(record.report.is_some()),
-                                        Status::BudgetExhausted => {
-                                            assert_eq!(i + 1, records.len());
-                                            assert!(record.report.is_none());
-                                        }
-                                        other => panic!("unexpected diagnostic status: {other:?}"),
-                                    }
+                                    assert_eq!(record.status, basin::core::inner::diagnostics::Status::Returned);
+                                    assert!(record.report.is_some());
                                 }
                             }
                             outputs.push((result.state.param().clone(), result.state.cost(), result.report,
@@ -100,7 +93,7 @@ macro_rules! precision {
                 let calls = p.calls.clone();
                 let mut problem = Problem::new(basin::SamplingDomain::new(p));
                 let mut solver = BasinHopping::new(NelderMead::<Vec<$f>, $f>::new(), 17).with_inner_diagnostics(true);
-                assert!(solver.init(&mut problem, &mut PointState::new(vec![3.0, -2.0])).is_err());
+                assert!(solver.init(&mut problem, PointState::new(vec![3.0, -2.0])).is_err());
                 let records = solver.inner_diagnostics();
                 assert_eq!(records.len(), 1);
                 assert_eq!(records[0].status, basin::core::inner::diagnostics::Status::CallbackError);
@@ -118,7 +111,7 @@ macro_rules! precision {
                     .max_iter(1).run_with_solver().unwrap();
                 assert_eq!(result.solver.inner_diagnostics().len(), 2);
                 assert!(result.solver.inner_diagnostics().iter().all(|r| matches!(r.report.as_ref().unwrap().termination, Termination::Limit(_))));
-                let continued = Executor::resume_from_checkpoint(basin::SamplingDomain::new(objective(100)), result.into_checkpoint().unwrap())
+                let continued = Executor::resume_from_checkpoint(basin::SamplingDomain::new(objective(100)), result.into_checkpoint())
                     .max_iter(2).run_with_solver().unwrap();
                 assert_eq!(continued.solver.inner_diagnostics().len(), 3);
                 let start = continued.state.param().clone();

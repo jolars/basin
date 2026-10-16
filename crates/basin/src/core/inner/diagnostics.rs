@@ -28,8 +28,6 @@ pub enum Status {
     Returned,
     /// A typed callback error interrupted the inner without a result.
     CallbackError,
-    /// An enclosing evaluation budget interrupted the inner without a result.
-    BudgetExhausted,
 }
 
 /// Owned stopping evidence before an outer solver consumes an inner result.
@@ -59,10 +57,8 @@ pub(crate) fn run<P, S, F, E>(
     trace: &mut Option<Vec<Record<F>>>,
     problem: &mut Problem<P>,
     context: Context<F>,
-    dispatch: impl FnOnce(
-        &mut Problem<P>,
-    ) -> crate::EvaluationResult<OptimizationResult<S>, E>,
-) -> crate::EvaluationResult<OptimizationResult<S>, E>
+    dispatch: impl FnOnce(&mut Problem<P>) -> Result<OptimizationResult<S>, E>,
+) -> Result<OptimizationResult<S>, E>
 where
     F: Scalar,
     S: State<Float = F>,
@@ -86,11 +82,6 @@ where
         if let Ok(result) = &result {
             record.status = Status::Returned;
             record.report = Some(result.report.clone());
-        } else if matches!(
-            result,
-            Err(crate::EvaluationError::BudgetExhausted(_))
-        ) {
-            record.status = Status::BudgetExhausted;
         } else {
             record.status = Status::CallbackError;
         }

@@ -380,15 +380,12 @@ desired backend features.
   tests, examples, benchmarks, and the WASM visualizer explicitly enable
   `problems` wherever they use the corpus.
 
-- [x] **Make evaluation budgets hard caps by default in Basin 2.0.** Existing
-  `Executor` limits reserve work before callbacks, including initialization,
-  fused outputs, complete batches, finite-difference probes, and composed
-  solves. Borrowed solver transitions preserve coherent progress without
-  cloning state. Report incomplete initialization and interrupted transitions
-  explicitly, and withhold exact checkpoints for incomplete models. Cover
-  COBYLA's `n + 1`-point initialization and zero-to-two-evaluation steps,
-  callback errors, adapters, parallel probes, and all four dense backends.
-  See [hard evaluation budgets](MIGRATING.md#hard-evaluation-budgets).
+- [x] **Retain soft evaluation limits for Basin 2.0.** `max_cost_evals`,
+  `max_gradient_evals`, and `max_evaluations` remain checked after
+  initialization and between iterations. Initialization and an in-progress
+  iteration may exceed a threshold before the executor checks it. Keep
+  budget checks outside callbacks to avoid per-evaluation overhead. A
+  separate hard-cap API is outside the planned 2.0 scope.
 
 ## Deferred design
 

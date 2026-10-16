@@ -261,8 +261,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        state: S,
+    ) -> Result<S, Self::Error> {
         // Delegate so the inner state's cost gets populated; the outer reads it.
         self.0.init(problem, state)
     }
@@ -270,12 +270,13 @@ where
     fn next_iter(
         &mut self,
         _problem: &mut Problem<P>,
-        _state: &mut S,
-    ) -> basin::EvaluationResult<basin::SolverStep<S>, Self::Error> {
-        Ok(basin::SolverStep::from(Some(
-            basin::Termination::numerical_failure(
+        state: S,
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::numerical_failure(
                 "External solver reported a numerical failure.",
-            ),
+            )),
         )))
     }
 }

@@ -54,8 +54,7 @@ pub trait EvaluatedGradientState: EvaluatedState {
 /// categories for their cost and gradient readers.
 ///
 /// No gradient or evaluated-record capability is required: a derivative-free
-/// outer solver can inspect derivative work performed by its inner solvers.
-/// Executor evaluation budgets use the problem ledger independently of this trait.
+/// outer solver can budget derivative work performed by its inner solvers.
 pub trait RawEvaluationState: State {
     /// All six raw categories, without folding or reconstruction.
     fn raw_counts(&self) -> &EvalCounts;

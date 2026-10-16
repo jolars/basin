@@ -577,20 +577,18 @@ fn state_and_solver_may_borrow_local_data_with_mixed_observers() {
         fn init(
             &mut self,
             problem: &mut Problem<Cost<'a>>,
-            state: &mut PointState<&'a f64>,
-        ) -> basin::EvaluationResult<(), Infallible> {
+            mut state: PointState<&'a f64>,
+        ) -> Result<PointState<&'a f64>, Infallible> {
             state.replace(*state.param(), problem.cost(state.param())?);
-            Ok(())
+            Ok(state)
         }
         fn next_iter(
             &mut self,
             _: &mut Problem<Cost<'a>>,
-            _state: &mut PointState<&'a f64>,
-        ) -> basin::EvaluationResult<
-            basin::SolverStep<PointState<&'a f64>>,
-            Infallible,
-        > {
-            Ok(basin::SolverStep::completed())
+            state: PointState<&'a f64>,
+        ) -> Result<basin::SolverStep<PointState<&'a f64>>, Infallible>
+        {
+            Ok(basin::SolverStep::completed(state))
         }
     }
     struct Progress;

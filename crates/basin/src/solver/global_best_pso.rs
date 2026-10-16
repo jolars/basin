@@ -539,8 +539,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             None,
@@ -627,7 +627,7 @@ where
         state.costs = problem.cost_batch(&state.candidates)?;
         self.personal_best_positions = state.candidates.clone();
         self.personal_best_costs = state.costs.clone();
-        self.sort_particles_ascending(state);
+        self.sort_particles_ascending(&mut state);
 
         let best = state
             .costs
@@ -647,17 +647,14 @@ where
                 self.global_best_cost,
             )
             .expect("initialized swarm has matching member shapes");
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<PopulationProgress<V, F>>,
-        Self::Error,
-    > {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let lower = problem.inner().lower().clone();
         let upper = problem.inner().upper().clone();
         let global_best = self
@@ -671,8 +668,7 @@ where
             .expect("GlobalBestPso::init must seed the live RNG");
         let dimension = lower.vec_len();
 
-        let mut candidates = state.candidates.clone();
-        for (i, candidate) in candidates.iter_mut().enumerate() {
+        for i in 0..state.candidates.len() {
             // Argmin 0.11's coordinate-wise reference draws the complete
             // cognitive vector before the complete social vector. Group the
             // draws the same way, while always consuming the documented two
@@ -684,7 +680,7 @@ where
                 *draw = F::from_f64(rng.random::<f64>()).unwrap();
             }
             for j in 0..dimension {
-                let position = candidate[j];
+                let position = state.candidates[i][j];
                 let raw_velocity = self.inertia * self.velocities[i][j]
                     + self.cognitive
                         * self.cognitive_draws[j]
@@ -713,10 +709,10 @@ where
                         raw_velocity.max(-limit).min(limit)
                     }
                 };
-                candidate[j] = position + self.velocities[i][j];
+                state.candidates[i][j] = position + self.velocities[i][j];
             }
             repair_position(
-                candidate,
+                &mut state.candidates[i],
                 &mut self.velocities[i],
                 &lower,
                 &upper,
@@ -724,10 +720,7 @@ where
             );
         }
 
-        let costs = problem.cost_batch(&candidates)?;
-        state
-            .replace(candidates, costs)
-            .expect("updated swarm has matching shapes");
+        state.costs = problem.cost_batch(&state.candidates)?;
         for i in 0..state.candidates.len() {
             if strictly_better(state.costs[i], self.personal_best_costs[i]) {
                 self.personal_best_positions[i] = state.candidates[i].clone();
@@ -742,14 +735,14 @@ where
                 self.global_best_cost = self.personal_best_costs[i];
             }
         }
-        self.sort_particles_ascending(state);
+        self.sort_particles_ascending(&mut state);
         state
             .publish_representative_from(
                 self.global_best_position.as_ref().unwrap(),
                 self.global_best_cost,
             )
             .expect("updated swarm has matching member shapes");
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 
     fn terminate(

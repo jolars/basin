@@ -123,8 +123,7 @@ macro_rules! continuation {
                     .max_iter(split)
                     .run_with_solver()
                     .unwrap()
-                    .into_checkpoint()
-                    .unwrap();
+                    .into_checkpoint();
                 let resumed = Executor::resume_from_checkpoint(
                     ($prepare)(Sphere::new(2)),
                     checkpoint,
@@ -160,8 +159,7 @@ macro_rules! continuation {
                         .max_iter(7)
                         .run_with_solver()
                         .unwrap()
-                        .into_checkpoint()
-                        .unwrap(),
+                        .into_checkpoint(),
                 );
                 let resumed = Executor::resume_from_checkpoint(
                     ($prepare)(Sphere::new(2)),

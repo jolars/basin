@@ -151,9 +151,8 @@ shows how to select orthogonality and relative model-reduction tests through
 existing setters. Adding a relative check leaves any absolute check enabled
 unless you explicitly disable it with `None`.
 
-Evaluation budgets are hard caps, including initialization and work within an
-iteration. A fused evaluation or complete batch that does not fit the remaining
-allowance is declined. `result.report.termination` reports why the run
+Budgets are checked after initialization and between iterations, so evaluation
+limits can be exceeded within an iteration. `result.report.termination` reports why the run
 ended. Reaching a budget or reporting a numerical stall does not establish
 convergence or rule out an accurate solution. Inspect the returned solution
 alongside the reason. For an application condition, use `stop_when(|state| ...)`,

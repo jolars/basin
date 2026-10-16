@@ -53,21 +53,20 @@ impl Solver<Identity, PointState<f64>> for Trajectory {
     fn init(
         &mut self,
         problem: &mut Problem<Identity>,
-        state: &mut PointState<f64>,
-    ) -> basin::EvaluationResult<(), Infallible> {
+        mut state: PointState<f64>,
+    ) -> Result<PointState<f64>, Infallible> {
         self.next = 0;
         state.reset();
         let x = *state.param();
         state.replace(x, problem.cost(&x)?);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<Identity>,
-        state: &mut PointState<f64>,
-    ) -> basin::EvaluationResult<basin::SolverStep<PointState<f64>>, Infallible>
-    {
+        mut state: PointState<f64>,
+    ) -> Result<basin::SolverStep<PointState<f64>>, Infallible> {
         let x = self
             .points
             .get(self.next)
@@ -75,7 +74,7 @@ impl Solver<Identity, PointState<f64>> for Trajectory {
             .unwrap_or(*state.param());
         self.next += 1;
         state.replace(x, problem.cost(&x)?);
-        Ok(basin::SolverStep::from(None))
+        Ok(basin::SolverStep::from((state, None)))
     }
 }
 
@@ -149,27 +148,26 @@ impl Solver<(), FirstOrderState<Vec<f64>>> for Incomplete {
     fn init(
         &mut self,
         _: &mut Problem<()>,
-        state: &mut FirstOrderState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Infallible> {
+        mut state: FirstOrderState<Vec<f64>>,
+    ) -> Result<FirstOrderState<Vec<f64>>, Infallible> {
         if !self.init {
             state.replace(vec![1.0], 1.0, vec![2.0]).unwrap();
         }
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         _: &mut Problem<()>,
-        state: &mut FirstOrderState<Vec<f64>>,
-    ) -> basin::EvaluationResult<
-        basin::SolverStep<FirstOrderState<Vec<f64>>>,
-        Infallible,
-    > {
+        mut state: FirstOrderState<Vec<f64>>,
+    ) -> Result<basin::SolverStep<FirstOrderState<Vec<f64>>>, Infallible> {
         state.reset();
-        Ok(basin::SolverStep::from(self.mid_step.then_some(
-            basin::Termination::numerical_failure(
-                "External solver reported a numerical failure.",
-            ),
+        Ok(basin::SolverStep::from((
+            state,
+            self.mid_step
+                .then_some(basin::Termination::numerical_failure(
+                    "External solver reported a numerical failure.",
+                )),
         )))
     }
 }
@@ -324,8 +322,7 @@ fn checkpoint_reattachment_preserves_only_zero_delta_stall_age() {
         .max_iter(2)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
         let result = Executor::resume_from_checkpoint(Identity, checkpoint)
             .require_evaluated_state()
             .no_objective_improvement(3, delta)
@@ -342,8 +339,7 @@ fn exact_resume_budgets_cumulative_raw_work() {
             .max_iter(2)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint()
-            .unwrap();
+            .into_checkpoint();
     let result = Executor::resume_from_checkpoint(Identity, checkpoint)
         .max_evaluations(EvaluationKind::Cost, 5)
         .run_with_solver()
@@ -456,7 +452,7 @@ impl Jacobian for Quadratic {
 fn evaluate_all(
     problem: &mut Problem<Quadratic>,
     x: f64,
-) -> basin::EvaluationResult<f64, &'static str> {
+) -> Result<f64, &'static str> {
     let (cost, _, _) = problem.cost_and_gradient_and_hessian(&x)?;
     problem.residual_and_jacobian(&x)?;
     problem.cost_batch(&[x, x])?;
@@ -496,29 +492,29 @@ impl Solver<Quadratic, PointState<f64>> for WorkStep {
     fn init(
         &mut self,
         problem: &mut Problem<Quadratic>,
-        state: &mut PointState<f64>,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        mut state: PointState<f64>,
+    ) -> Result<PointState<f64>, Self::Error> {
         state.reset();
         state.replace(1.0, evaluate_all(problem, 1.0)?);
-        Ok(())
+        Ok(state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<Quadratic>,
-        state: &mut PointState<f64>,
-    ) -> basin::EvaluationResult<basin::SolverStep<PointState<f64>>, Self::Error>
-    {
+        mut state: PointState<f64>,
+    ) -> Result<basin::SolverStep<PointState<f64>>, Self::Error> {
         state.replace(0.0, evaluate_all(problem, 0.0)?);
         if matches!(self, Self::Fail) {
             problem.cost_batch(&[0.0, 999.0, 2.0])?;
         }
-        Ok(basin::SolverStep::from(
+        Ok(basin::SolverStep::from((
+            state,
             matches!(self, Self::Stop).then_some(
                 basin::Termination::Application(basin::ApplicationStop::new(
                     "user_requested",
                 )),
             ),
-        ))
+        )))
     }
 }
 
@@ -535,7 +531,7 @@ fn every_raw_budget_counts_fused_and_batch_work_without_folding() {
     ] {
         let result =
             Executor::new(Quadratic, WorkStep::Complete, PointState::new(1.0))
-                .max_evaluations(kind, 2 * work)
+                .max_evaluations(kind, work + 1)
                 .run_with_solver()
                 .unwrap();
         assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);

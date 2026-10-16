@@ -296,23 +296,22 @@ where
     }
 }
 
-type CobylaStep<V, F, E> =
-    crate::EvaluationResult<crate::SolverStep<SelectedState<V, F>>, E>;
+type CobylaStep<V, F, E> = Result<crate::SolverStep<SelectedState<V, F>>, E>;
 
 impl<V, F: Scalar> Cobyla<V, F> {
     fn init_with<P>(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut SelectedState<V, F>,
+        mut state: SelectedState<V, F>,
         m: usize,
         mut constraints: impl FnMut(
             &mut Problem<P>,
             &V,
-        ) -> crate::EvaluationResult<
+        ) -> Result<
             Vec<F>,
             ConstraintSolveError<P::Error>,
         >,
-    ) -> crate::EvaluationResult<(), ConstraintSolveError<P::Error>>
+    ) -> Result<SelectedState<V, F>, ConstraintSolveError<P::Error>>
     where
         P: CostFunction<Param = V, Output = F>,
         V: Clone
@@ -329,7 +328,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
         let x0: Vec<F> = (0..n).map(|i| state.param()[i]).collect();
 
         let (work, _, _) = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
+            let mut eval = |slice: &[F]| -> Result<
                 (F, Vec<F>),
                 ConstraintSolveError<P::Error>,
             > {
@@ -337,27 +336,27 @@ impl<V, F: Scalar> Cobyla<V, F> {
                 let f = problem.cost(&param)?;
                 let c = constraints(problem, &param)?;
                 if c.len() != m {
-                    return Err(invalid(ConstraintError::LayoutChanged).into());
+                    return Err(invalid(ConstraintError::LayoutChanged));
                 }
                 Ok((f, c))
             };
             CobylaWork::try_init(x0, m, self.rho_beg, self.rho_end, &mut eval)?
         };
 
-        publish(&work, &mut param, state);
+        publish(&work, &mut param, &mut state);
         self.evaluation_param = Some(param);
         self.work = Some(work);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter_with<P>(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut SelectedState<V, F>,
+        mut state: SelectedState<V, F>,
         mut constraints: impl FnMut(
             &mut Problem<P>,
             &V,
-        ) -> crate::EvaluationResult<
+        ) -> Result<
             Vec<F>,
             ConstraintSolveError<P::Error>,
         >,
@@ -380,7 +379,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
             .expect("Cobyla::init seeds the evaluation buffer");
 
         let transition = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
+            let mut eval = |slice: &[F]| -> Result<
                 (F, Vec<F>),
                 ConstraintSolveError<P::Error>,
             > {
@@ -388,13 +387,13 @@ impl<V, F: Scalar> Cobyla<V, F> {
                 let f = problem.cost(param)?;
                 let c = constraints(problem, param)?;
                 if c.len() != m {
-                    return Err(invalid(ConstraintError::LayoutChanged).into());
+                    return Err(invalid(ConstraintError::LayoutChanged));
                 }
                 Ok((f, c))
             };
             work.step(&mut eval)?
         };
-        publish(work, param, state);
+        publish(work, param, &mut state);
 
         let reason = match transition {
             Transition::Converged => Some(Termination::custom(
@@ -410,7 +409,7 @@ impl<V, F: Scalar> Cobyla<V, F> {
             )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok(crate::SolverStep::from(reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
     fn radius_termination(&self) -> Option<Termination<F>> {
@@ -439,8 +438,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut SelectedState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: SelectedState<V, F>,
+    ) -> Result<SelectedState<V, F>, Self::Error> {
         self.layout = None;
         let layout = P::Constraints::layout(
             problem.inner().constraint_set(),
@@ -457,11 +456,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut SelectedState<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<SelectedState<V, F>>,
-        Self::Error,
-    > {
+        state: SelectedState<V, F>,
+    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
         let layout = self
             .layout
             .take()

@@ -72,7 +72,7 @@ fn exact_continuation_creates_a_new_report_before_touching_the_solver() {
     assert!(first.report.termination.is_converged());
     let counts = first.counts;
     let resumed =
-        Executor::resume_from_checkpoint(Fit, first.into_checkpoint().unwrap())
+        Executor::resume_from_checkpoint(Fit, first.into_checkpoint())
             .max_evaluations(EvaluationKind::Residual, 1)
             .run()
             .unwrap();
@@ -151,24 +151,24 @@ impl Solver<Fit, PointState<Vec<f64>>> for LastStep {
     fn init(
         &mut self,
         p: &mut Problem<Fit>,
-        s: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        mut s: PointState<Vec<f64>>,
+    ) -> Result<PointState<Vec<f64>>, Self::Error> {
         s.replace(s.param().clone(), p.cost(s.param()).unwrap());
-        Ok(())
+        Ok(s)
     }
     fn next_iter(
         &mut self,
         p: &mut Problem<Fit>,
-        s: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<SolverStep<PointState<Vec<f64>>>, Self::Error>
-    {
+        mut s: PointState<Vec<f64>>,
+    ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
         let x = vec![1.];
         let cost = p.cost(&x).unwrap();
         if self.abort {
-            return Err(basin::EvaluationError::Evaluation("callback aborted"));
+            return Err("callback aborted");
         }
         s.replace(x, cost);
         Ok(SolverStep {
+            state: s,
             completed: self.completed,
             termination: Some(Termination::custom(
                 "example.exact",
@@ -245,7 +245,7 @@ fn all_exhausted_budgets_are_reported_before_numerical_checks() {
     )
     .max_iter(0)
     .max_evaluations(EvaluationKind::Cost, 1)
-    .max_evaluations(EvaluationKind::Gradient, 1)
+    .max_evaluations(EvaluationKind::Gradient, 0)
     .run()
     .unwrap();
     assert_eq!(
@@ -263,7 +263,7 @@ fn all_exhausted_budgets_are_reported_before_numerical_checks() {
             ExecutionLimit::Evaluations {
                 kind: EvaluationKind::Gradient,
                 observed: 1,
-                limit: 1
+                limit: 0
             },
         ])
     );
@@ -369,22 +369,22 @@ impl Solver<Fit, PointState<Vec<f64>>> for PartialThenComplete {
     fn init(
         &mut self,
         p: &mut Problem<Fit>,
-        s: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<(), Self::Error> {
+        mut s: PointState<Vec<f64>>,
+    ) -> Result<PointState<Vec<f64>>, Self::Error> {
         s.replace(s.param().clone(), p.cost(s.param())?);
-        Ok(())
+        Ok(s)
     }
     fn next_iter(
         &mut self,
         p: &mut Problem<Fit>,
-        s: &mut PointState<Vec<f64>>,
-    ) -> basin::EvaluationResult<SolverStep<PointState<Vec<f64>>>, Self::Error>
-    {
+        mut s: PointState<Vec<f64>>,
+    ) -> Result<SolverStep<PointState<Vec<f64>>>, Self::Error> {
         let x = vec![if self.0 { 1. } else { 2. }];
         s.replace(x.clone(), p.cost(&x)?);
         let completed = self.0;
         self.0 = true;
         Ok(SolverStep {
+            state: s,
             completed,
             termination: None,
         })

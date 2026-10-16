@@ -349,27 +349,24 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             Some(state.param().vec_len()),
             false,
         )
         .map_err(crate::core::constraint::evaluation::invalid)?;
-        self.init_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
-        self.next_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -407,27 +404,24 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             Some(state.param().vec_len()),
             false,
         )
         .map_err(crate::core::constraint::evaluation::invalid)?;
-        self.init_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        self.init_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<RobustLeastSquares<P, L, F>>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
-        self.next_evaluated(problem, state).map_err(|error| {
-            error.map_evaluation(crate::ConstraintSolveError::Evaluation)
-        })
+        state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
+        self.next_evaluated(problem, state)
+            .map_err(crate::ConstraintSolveError::Evaluation)
     }
 }
 
@@ -449,8 +443,8 @@ where
     fn init_evaluated<E: BoundedEvaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), E::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error> {
         state.reset();
         // Project the starting iterate strictly into (lower, upper).
         // D is undefined where v_i = 0 (a finite face), so an
@@ -479,7 +473,7 @@ where
         );
         let Some((model_r, j)) = problem.model(&r, j) else {
             self.failed = true;
-            return Ok(());
+            return Ok(state);
         };
 
         // μ₀ = τ · max diag(JᵀJ + diag(c)). The C-correction is
@@ -488,7 +482,7 @@ where
         let g = j.mat_transpose_vec(model_r.as_ref().unwrap_or(&r));
         if !problem.valid_vector(&g) {
             self.failed = true;
-            return Ok(());
+            return Ok(state);
         }
         let mut d_sq = state.param().clone();
         let mut c_diag = state.param().clone();
@@ -508,13 +502,13 @@ where
         self.r_cache = Some(r);
         self.j_cache = Some(j);
         self.model_r_cache = model_r;
-        Ok(())
+        Ok(state)
     }
 
     fn next_evaluated<E: BoundedEvaluation<V, M, F>>(
         &mut self,
         problem: &mut E,
-        state: &mut PointState<V, F>,
+        mut state: PointState<V, F>,
     ) -> NllsStep<V, F, E::Error> {
         if let Some(trace) = &mut self.trace {
             trace.clear();
@@ -530,10 +524,11 @@ where
                     "invalid_initial_model",
                 );
             }
-            return Ok(crate::SolverStep::from(Some(
-                Termination::numerical_failure(
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
                     "Legacy TRF could not initialize a finite residual model.",
-                ),
+                )),
             )));
         }
         let r = match self.r_cache.take() {
@@ -553,10 +548,11 @@ where
                             "invalid_residual_model",
                         );
                     }
-                    return Ok(crate::SolverStep::from(Some(
-                        Termination::numerical_failure(
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
                             "Legacy TRF could not construct the residual model at the current point.",
-                        ),
+                        )),
                     )));
                 };
                 model
@@ -575,10 +571,11 @@ where
                 trace.observations[index].gradient =
                     self.trace_vector.unwrap()(&g);
             }
-            return Ok(crate::SolverStep::from(Some(
-                Termination::numerical_failure(
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
                     "The legacy TRF model gradient is invalid.",
-                ),
+                )),
             )));
         }
 
@@ -631,20 +628,23 @@ where
             self.r_cache = Some(r);
             self.j_cache = Some(j);
             self.model_r_cache = model_r;
-            return Ok(crate::SolverStep::from(Some(Termination::custom(
-                "trf.legacy_scaled_gradient",
-                "The legacy bounded-LM Coleman-Li KKT gradient metric is at most the absolute tolerance.",
-                vec![
-                    crate::Measurement {
-                        name: "scaled_gradient".into(),
-                        value: g.cl_kkt_inf_norm(&d_sq),
-                    },
-                    crate::Measurement {
-                        name: "tolerance".into(),
-                        value: self.tol_grad.unwrap(),
-                    },
-                ],
-            ))));
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::custom(
+                    "trf.legacy_scaled_gradient",
+                    "The legacy bounded-LM Coleman-Li KKT gradient metric is at most the absolute tolerance.",
+                    vec![
+                        crate::Measurement {
+                            name: "scaled_gradient".into(),
+                            value: g.cl_kkt_inf_norm(&d_sq),
+                        },
+                        crate::Measurement {
+                            name: "tolerance".into(),
+                            value: self.tol_grad.unwrap(),
+                        },
+                    ],
+                )),
+            )));
         }
 
         let mut neg_g = g.clone();
@@ -676,6 +676,7 @@ where
                 self.j_cache = Some(j);
                 self.model_r_cache = model_r;
                 return Ok(crate::SolverStep::stopped(
+                    state,
                     Termination::numerical_failure($message),
                 ));
             }};
@@ -743,10 +744,11 @@ where
                         self.r_cache = Some(r);
                         self.j_cache = Some(j);
                         self.model_r_cache = model_r;
-                        return Ok(crate::SolverStep::from(Some(
-                            Termination::numerical_failure(
+                        return Ok(crate::SolverStep::from((
+                            state,
+                            Some(Termination::numerical_failure(
                                 "Legacy TRF exhausted damped linear-solve attempts or produced non-finite damping.",
-                            ),
+                            )),
                         )));
                     }
                     mu = mu * nu;
@@ -895,6 +897,6 @@ where
         }
         self.mu = Some(mu);
         self.nu = nu;
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }

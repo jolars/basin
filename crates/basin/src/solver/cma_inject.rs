@@ -98,15 +98,15 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: S,
+    ) -> Result<S, Self::Error> {
         self.inner.init(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut S,
-    ) -> crate::EvaluationResult<crate::SolverStep<S>, Self::Error> {
+        state: S,
+    ) -> Result<crate::SolverStep<S>, Self::Error> {
         self.inner.next_iter(problem, state)
     }
     fn terminate(&self, state: &S) -> Option<Termination<S::Float>> {
@@ -483,8 +483,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         if let Some(records) = &mut self.inner_diagnostics {
             records.clear();
         }
@@ -496,11 +496,8 @@ where
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<PopulationProgress<V, F>>,
-        Self::Error,
-    > {
+        state: PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         // 1. Vanilla CMA-ES iteration: update m, σ, C from the
         //    previous generation, sample λ fresh candidates sorted by
         //    cost ascending.
@@ -508,6 +505,7 @@ where
         if step.termination.is_some() {
             return Ok(step);
         }
+        let mut state = step.state;
 
         let work = self.cma.work.as_mut().expect("CMA init precedes injection");
         let n = work.m.vec_len();
@@ -553,11 +551,12 @@ where
                     &mut state.candidates,
                     &mut state.costs,
                 );
-                return Ok(crate::SolverStep::from(
+                return Ok(crate::SolverStep::from((
+                    state,
                     inner_result.report.into_outer_termination(
                         crate::PartialResultPolicy::Consume,
                     ),
-                ));
+                )));
             }
 
             // 5. Extract refined point.
@@ -600,7 +599,7 @@ where
             sort_population_ascending(&mut state.candidates, &mut state.costs);
         }
 
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
     fn terminate(
         &self,

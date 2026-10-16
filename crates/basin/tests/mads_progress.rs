@@ -101,8 +101,8 @@ fresh!(
 fn constraints_are_counted_as_residual_calls() {
     let mut problem = Problem::new(constrained(2));
     let mut solver = Mads::new().constrained();
-    solver
-        .init(&mut problem, &mut basin::SelectedState::new(vec![0.0; 2]))
+    let _ = solver
+        .init(&mut problem, basin::SelectedState::new(vec![0.0; 2]))
         .unwrap();
     assert_eq!(problem.counts().cost_evals, 1);
     assert_eq!(problem.counts().residual_evals, 1);
@@ -127,8 +127,7 @@ macro_rules! lifecycle {
                         .max_iter(split)
                         .run_with_solver()
                         .unwrap()
-                        .into_checkpoint()
-                        .unwrap();
+                        .into_checkpoint();
                     let actual = Executor::resume_from_checkpoint(
                         ($problem)(2),
                         checkpoint,
@@ -195,8 +194,7 @@ macro_rules! lifecycle {
                     .max_iter(7)
                     .run_with_solver()
                     .unwrap()
-                    .into_checkpoint()
-                    .unwrap();
+                    .into_checkpoint();
                 let bytes = postcard::to_allocvec(&checkpoint).unwrap();
                 let restored: Checkpoint =
                     postcard::from_bytes(&bytes).unwrap();

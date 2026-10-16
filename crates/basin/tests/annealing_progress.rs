@@ -128,13 +128,11 @@ fn reused_solver_resets_neighbor_rng_schedule_and_dimension() {
         initialized.state.current(),
         Some((&vec![3.0, -2.0, 1.0], 14.0))
     );
-    let restarted = Executor::resume_from_checkpoint(
-        Sphere,
-        initialized.into_checkpoint().unwrap(),
-    )
-    .max_iter(30)
-    .run_with_solver()
-    .unwrap();
+    let restarted =
+        Executor::resume_from_checkpoint(Sphere, initialized.into_checkpoint())
+            .max_iter(30)
+            .run_with_solver()
+            .unwrap();
     let rebuilt = Executor::from_start(Sphere, solver(), vec![3.0, -2.0, 1.0])
         .max_iter(30)
         .run_with_solver()
@@ -159,8 +157,7 @@ fn exact_continuation_preserves_all_proposal_and_cooling_history() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint()
-            .unwrap();
+            .into_checkpoint();
         let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
             .require_evaluated_state()
             .max_iter(30)
@@ -271,8 +268,7 @@ fn serialized_checkpoint_preserves_templates_and_live_components() {
         .max_iter(13)
         .run_with_solver()
         .unwrap()
-        .into_checkpoint()
-        .unwrap();
+        .into_checkpoint();
     let bytes = postcard::to_allocvec(&checkpoint).unwrap();
     let restored: Checkpoint = postcard::from_bytes(&bytes).unwrap();
     let resumed = Executor::resume_from_checkpoint(Sphere, restored)
@@ -391,8 +387,7 @@ fn exact_resume_preserves_cost_change_history() {
             .max_iter(split)
             .run_with_solver()
             .unwrap()
-            .into_checkpoint()
-            .unwrap();
+            .into_checkpoint();
         let resumed = Executor::resume_from_checkpoint(Sphere, checkpoint)
             .max_iter(20)
             .run_with_solver()

@@ -1,13 +1,14 @@
 //! Execution budgets and application stopping conditions.
 //!
-//! Convergence settings belong to the solver. Evaluation limits are hard caps
-//! enforced before callbacks, including initialization. Other controls are
-//! observed after initialization and between iterations.
+//! Convergence settings belong to the solver. These controls are observed
+//! after initialization and between iterations; evaluation limits are not
+//! hard caps on work performed inside an iteration.
 
 use super::math::Scalar;
 use super::problem::{EvalCounts, EvaluationKind};
 use super::state::{
-    AcceptanceState, EvaluatedState, ObjectiveIncumbentState, State,
+    AcceptanceState, EvaluatedState, GradientState, ObjectiveIncumbentState,
+    RawEvaluationState, State,
 };
 use super::termination::{ApplicationStop, ExecutionLimit, Stall, Termination};
 use web_time::{Duration, Instant};
@@ -17,8 +18,9 @@ mod tests;
 
 type Stop<S> = Box<dyn FnMut(&S) -> Option<Termination<<S as State>::Float>>>;
 
-struct RawBudgets {
+struct RawBudgets<S> {
     limits: [Option<u64>; 7],
+    counts: fn(&S) -> &EvalCounts,
 }
 
 struct ObjectiveStall<F: Scalar> {
@@ -107,7 +109,7 @@ pub(crate) struct Limits {
 pub struct RunControl<S: State> {
     pub(crate) max_iter: u64,
     pub(crate) limits: Limits,
-    raw: Option<RawBudgets>,
+    raw: Option<RawBudgets<S>>,
     validate: Option<fn(&S)>,
     start: Option<Instant>,
     target: Option<Stop<S>>,
@@ -144,15 +146,18 @@ impl<S: State> RunControl<S> {
         self
     }
 
-    /// Set a hard cost-evaluation limit, including initialization.
+    /// Set a boundary-checked cost-evaluation limit, using the state's count.
     pub fn max_cost_evals(mut self, limit: u64) -> Self {
         self.limits.cost = Some(limit);
         self
     }
 
-    /// Set a hard gradient-evaluation limit using the problem wrapper
+    /// Set a boundary-checked gradient-evaluation limit using the problem wrapper
     /// count (relative to run entry for borrowed runs).
-    pub fn max_gradient_evals(mut self, limit: u64) -> Self {
+    pub fn max_gradient_evals(mut self, limit: u64) -> Self
+    where
+        S: GradientState,
+    {
         self.limits.gradient = Some(limit);
         self
     }
@@ -183,24 +188,33 @@ impl<S: State> RunControl<S> {
         self
     }
 
-    /// Set a hard category or total-work budget, including initialization.
+    /// Set a raw category or total-work budget, requiring [`RawEvaluationState`].
     ///
-    /// Zero stops before callbacks. Fused outputs and complete batches reserve
-    /// together and can leave unused allowance. Nested runs share the enclosing
-    /// budget and add their own per-run limits. Exact continuation uses cumulative
-    /// counts. Repeated limits replace the same category's previous setting.
-    /// Cost and gradient shorthand limits are checked first, followed by raw
-    /// categories in [`EvaluationKind`] order. Exhaustion reports
-    /// [`ExecutionLimit::Evaluations`] for raw categories. No state-specific
-    /// evaluation capability is required.
+    /// Checks run after initialization and between iterations, so even a zero
+    /// limit permits initialization. Limits are not hard caps inside a step.
+    /// Fresh and nested runs use per-run counts; exact continuation uses
+    /// cumulative counts. No gradient capability is required.
+    ///
+    /// Replaces the limit for `kind`. Different kinds and legacy budgets are
+    /// independent; legacy budgets are checked first. Exhaustion reports
+    /// [`ExecutionLimit::Evaluations`] for every kind. Compare the
+    /// state's [`raw_counts`](RawEvaluationState::raw_counts) with configured
+    /// limits to identify exhausted budgets. Capability controls on an
+    /// [`InnerExecutor`](crate::InnerExecutor) cannot be serialized.
     ///
     /// ```
     /// use basin::{PointState, EvaluationKind, RunControl};
     /// let _ = RunControl::<PointState<Vec<f64>>>::new()
     ///     .max_evaluations(EvaluationKind::Cost, 10);
     /// ```
-    pub fn max_evaluations(mut self, kind: EvaluationKind, limit: u64) -> Self {
-        let raw = self.raw.get_or_insert(RawBudgets { limits: [None; 7] });
+    pub fn max_evaluations(mut self, kind: EvaluationKind, limit: u64) -> Self
+    where
+        S: RawEvaluationState,
+    {
+        let raw = self.raw.get_or_insert(RawBudgets {
+            limits: [None; 7],
+            counts: S::raw_counts,
+        });
         raw.limits[kind as usize] = Some(limit);
         self
     }
@@ -354,20 +368,6 @@ impl<S: State> RunControl<S> {
             || !self.entries.is_empty()
     }
 
-    pub(crate) fn evaluation_budget(&self) -> crate::EvaluationBudget {
-        let mut budget = crate::EvaluationBudget::new();
-        budget.cost = self.limits.cost;
-        budget.gradient = self.limits.gradient;
-        if let Some(raw) = &self.raw {
-            for kind in EvaluationKind::ALL {
-                if let Some(limit) = raw.limits[kind as usize] {
-                    budget = budget.with_limit(kind, limit);
-                }
-            }
-        }
-        budget
-    }
-
     pub(crate) fn validate(&self, state: &S) {
         if let Some(validate) = self.validate {
             validate(state);
@@ -390,10 +390,10 @@ impl<S: State> RunControl<S> {
             });
         }
         if let Some(limit) =
-            self.limits.cost.filter(|&n| counts.cost_evals >= n)
+            self.limits.cost.filter(|&n| state.cost_evals() >= n)
         {
             limits.push(ExecutionLimit::CostEvaluations {
-                observed: counts.cost_evals,
+                observed: state.cost_evals(),
                 limit,
             });
         }
@@ -406,6 +406,7 @@ impl<S: State> RunControl<S> {
             });
         }
         if let Some(raw) = &self.raw {
+            let counts = (raw.counts)(state);
             for kind in EvaluationKind::ALL {
                 let observed = kind.count(counts);
                 if let Some(limit) =
@@ -470,7 +471,7 @@ macro_rules! control_methods {
                 std::mem::take(&mut self.control).require_evaluated_state();
             self
         }
-        /// Set a hard category or total-work budget, including initialization.
+        /// Set a raw category or total-work budget at iteration boundaries.
         ///
         /// See [`RunControl::max_evaluations`](crate::RunControl::max_evaluations)
         /// for accounting, precedence, and serialization limits.
@@ -478,7 +479,10 @@ macro_rules! control_methods {
             mut self,
             kind: crate::EvaluationKind,
             limit: u64,
-        ) -> Self {
+        ) -> Self
+        where
+            S: crate::core::state::RawEvaluationState,
+        {
             self.control =
                 std::mem::take(&mut self.control).max_evaluations(kind, limit);
             self
@@ -517,14 +521,17 @@ macro_rules! control_methods {
                 .no_objective_improvement(patience, min_delta);
             self
         }
-        /// Set a hard cost-evaluation budget, including initialization.
+        /// Set a cost-evaluation budget, checked after initialization and between iterations.
         pub fn max_cost_evals(mut self, limit: u64) -> Self {
             self.control =
                 std::mem::take(&mut self.control).max_cost_evals(limit);
             self
         }
-        /// Set a hard gradient-evaluation budget, including initialization.
-        pub fn max_gradient_evals(mut self, limit: u64) -> Self {
+        /// Set a gradient-evaluation budget, checked between iterations.
+        pub fn max_gradient_evals(mut self, limit: u64) -> Self
+        where
+            S: crate::core::state::GradientState,
+        {
             self.control =
                 std::mem::take(&mut self.control).max_gradient_evals(limit);
             self

@@ -306,8 +306,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         state.reset();
         self.work = None;
         let n = state.param().vec_len();
@@ -332,12 +332,10 @@ where
         );
 
         let (work, best_x, best_f) = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
-                F,
-                ConstraintSolveError<P::Error>,
-            > {
-                Ok(problem.cost(&fill_from(&template, slice))?)
-            };
+            let mut eval =
+                |slice: &[F]| -> Result<F, ConstraintSolveError<P::Error>> {
+                    Ok(problem.cost(&fill_from(&template, slice))?)
+                };
             LincoaWork::try_init(
                 x0,
                 amat,
@@ -351,15 +349,14 @@ where
 
         state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
+        mut state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let template = state.param().clone();
         let work = self
             .work
@@ -367,12 +364,10 @@ where
             .expect("Lincoa::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
-                F,
-                ConstraintSolveError<P::Error>,
-            > {
-                Ok(problem.cost(&fill_from(&template, slice))?)
-            };
+            let mut eval =
+                |slice: &[F]| -> Result<F, ConstraintSolveError<P::Error>> {
+                    Ok(problem.cost(&fill_from(&template, slice))?)
+                };
             work.step(&mut eval)?
         };
 
@@ -393,7 +388,7 @@ where
             )),
             Transition::Continue | Transition::RhoReduced => None,
         };
-        Ok(crate::SolverStep::from(reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {

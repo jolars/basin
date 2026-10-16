@@ -398,8 +398,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         state.reset();
         self.work = None;
         self.pb_work = None;
@@ -410,10 +410,9 @@ where
         let template = state.param().clone();
 
         let (work, best_x, best_f) = {
-            let mut eval =
-                |slice: &[F]| -> crate::EvaluationResult<F, P::Error> {
-                    problem.cost(&fill_from(&template, slice))
-                };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             MadsWork::try_init(
                 x0,
                 self.poll_size_init,
@@ -424,15 +423,14 @@ where
 
         state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
+        mut state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let template = state.param().clone();
         let work = self
             .work
@@ -440,10 +438,9 @@ where
             .expect("Mads::init must run before next_iter");
 
         let out = {
-            let mut eval =
-                |slice: &[F]| -> crate::EvaluationResult<F, P::Error> {
-                    problem.cost(&fill_from(&template, slice))
-                };
+            let mut eval = |slice: &[F]| -> Result<F, P::Error> {
+                problem.cost(&fill_from(&template, slice))
+            };
             work.step(&mut eval)?
         };
 
@@ -470,7 +467,7 @@ where
             )),
             Transition::Continue => None,
         };
-        Ok(crate::SolverStep::from(reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
@@ -532,8 +529,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut SelectedState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: SelectedState<V, F>,
+    ) -> Result<SelectedState<V, F>, Self::Error> {
         state.reset();
         self.work = None;
         self.pb_work = None;
@@ -549,7 +546,7 @@ where
         let template = state.param().clone();
 
         let (work, best_x, best_f, best_h) = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
+            let mut eval = |slice: &[F]| -> Result<
                 (F, F),
                 ConstraintSolveError<<P as CostFunction>::Error>,
             > {
@@ -569,17 +566,14 @@ where
         state.replace(fill_from(&template, &best_x), best_f, best_h);
         state.select_current();
         self.pb_work = Some(work);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut SelectedState<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<SelectedState<V, F>>,
-        Self::Error,
-    > {
+        mut state: SelectedState<V, F>,
+    ) -> Result<crate::SolverStep<SelectedState<V, F>>, Self::Error> {
         let m = self
             .constraint_count
             .expect("MADS initialization declares the constraint count");
@@ -590,7 +584,7 @@ where
             .expect("Mads::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
+            let mut eval = |slice: &[F]| -> Result<
                 (F, F),
                 ConstraintSolveError<<P as CostFunction>::Error>,
             > {
@@ -626,7 +620,7 @@ where
             )),
             Transition::Continue => None,
         };
-        Ok(crate::SolverStep::from(reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
     fn terminate(
@@ -662,8 +656,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             Some(state.param().vec_len()),
@@ -695,7 +689,7 @@ where
         let template = state.param().clone();
 
         let (work, best_x, best_f) = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
+            let mut eval = |slice: &[F]| -> Result<
                 F,
                 crate::ConstraintSolveError<P::Error>,
             > {
@@ -715,15 +709,14 @@ where
 
         state.replace(fill_from(&template, &best_x), best_f);
         self.work = Some(work);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
+        mut state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         let n = state.param().vec_len();
         let lower = to_vec(problem.inner().lower(), n);
         let upper = to_vec(problem.inner().upper(), n);
@@ -734,7 +727,7 @@ where
             .expect("Mads::init must run before next_iter");
 
         let out = {
-            let mut eval = |slice: &[F]| -> crate::EvaluationResult<
+            let mut eval = |slice: &[F]| -> Result<
                 F,
                 crate::ConstraintSolveError<P::Error>,
             > {
@@ -766,7 +759,7 @@ where
             )),
             Transition::Continue => None,
         };
-        Ok(crate::SolverStep::from(reason))
+        Ok(crate::SolverStep::from((state, reason)))
     }
 
     fn terminate(&self, _state: &PointState<V, F>) -> Option<Termination<F>> {
@@ -788,10 +781,7 @@ fn checked_inequalities<P, V, F>(
     p: &mut Problem<P>,
     x: &V,
     m: usize,
-) -> crate::EvaluationResult<
-    Vec<F>,
-    ConstraintSolveError<<P as CostFunction>::Error>,
->
+) -> Result<Vec<F>, ConstraintSolveError<<P as CostFunction>::Error>>
 where
     P: CostFunction<
             Param = V,
@@ -815,17 +805,14 @@ where
         .count()
         != m
     {
-        return Err(invalid(crate::ConstraintError::LayoutChanged).into());
+        return Err(invalid(crate::ConstraintError::LayoutChanged));
     }
     if m == 0 {
         return Ok(vec![]);
     }
-    let values = p.evaluate(|inner, context| {
-        <P as NonlinearInequalityValues>::nonlinear_inequalities_with_context(
-            inner, x, context,
-        )
-        .map_err(crate::core::evaluation::flatten_constraint_error)
-    })?;
+    p.counts_mut().residual_evals += 1;
+    let values =
+        <P as NonlinearInequalityValues>::nonlinear_inequalities(p.inner(), x)?;
     crate::core::constraint::model::dimension(
         crate::ConstraintBlock::NonlinearInequalities,
         crate::ConstraintAxis::Length,

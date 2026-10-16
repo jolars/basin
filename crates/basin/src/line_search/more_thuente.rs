@@ -164,7 +164,7 @@ impl<F: Scalar> MoreThuente<F> {
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> crate::EvaluationResult<LineSearchResult<V, F>, P::Error>
+    ) -> Result<LineSearchResult<V, F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -190,7 +190,7 @@ impl<F: Scalar> MoreThuente<F> {
         gradient: &V,
         direction: &V,
         trace: &mut Trace<F>,
-    ) -> crate::EvaluationResult<LineSearchResult<V, F>, P::Error>
+    ) -> Result<LineSearchResult<V, F>, P::Error>
     where
         P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
         V: ScaledAdd<F> + Dot<F> + Clone,
@@ -463,7 +463,7 @@ where
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> crate::EvaluationResult<F, Self::Error> {
+    ) -> Result<F, Self::Error> {
         self.search(problem, param, cost, gradient, direction)
             .map(|result| match result.outcome {
                 LineSearchOutcome::Step(step) => step,
@@ -478,7 +478,7 @@ where
         cost: F,
         gradient: &V,
         direction: &V,
-    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error> {
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
         self.search(problem, param, cost, gradient, direction)
     }
 
@@ -490,7 +490,7 @@ where
         gradient: &V,
         direction: &V,
         bounds: LineSearchBounds<F>,
-    ) -> crate::EvaluationResult<LineSearchResult<V, F>, Self::Error> {
+    ) -> Result<LineSearchResult<V, F>, Self::Error> {
         let max = self.stpmax.min(bounds.max);
         if !(max.is_finite() && max > F::zero() && self.stpmin <= max) {
             return Ok(LineSearchResult::new(LineSearchOutcome::Failed));

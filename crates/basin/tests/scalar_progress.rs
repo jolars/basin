@@ -50,14 +50,12 @@ where
     assert_eq!(initial.state.counts(), &initial.counts);
     assert_eq!(initial.state.cost_evals(), initial.counts.cost_evals);
 
-    let resumed = Executor::resume_from_checkpoint(
-        Quadratic,
-        initial.into_checkpoint().unwrap(),
-    )
-    .require_evaluated_state()
-    .max_iter(4)
-    .run_with_solver()
-    .unwrap();
+    let resumed =
+        Executor::resume_from_checkpoint(Quadratic, initial.into_checkpoint())
+            .require_evaluated_state()
+            .max_iter(4)
+            .run_with_solver()
+            .unwrap();
     assert_eq!(resumed.state.iter(), 4);
     assert_eq!(resumed.state.counts(), &resumed.counts);
     let (x, cost) = resumed.state.current().unwrap();

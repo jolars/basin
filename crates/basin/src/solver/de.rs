@@ -522,8 +522,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<PopulationProgress<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             None,
@@ -557,17 +557,14 @@ where
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
         self.rng = Some(rng);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PopulationProgress<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<PopulationProgress<V, F>>,
-        Self::Error,
-    > {
+        mut state: PopulationProgress<V, F>,
+    ) -> Result<crate::SolverStep<PopulationProgress<V, F>>, Self::Error> {
         let lo = problem.inner().lower().clone();
         let hi = problem.inner().upper().clone();
         let rng = self
@@ -626,7 +623,7 @@ where
         }
         sort_population_ascending(&mut state.candidates, &mut state.costs);
         state.select_best_member();
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }
 
@@ -762,10 +759,12 @@ mod tests {
                 };
                 let mut dithered = make().with_dither(0.3, 1.7);
                 let mut fixed = make();
-                let mut actual = PopulationProgress::empty();
-                dithered.init(&mut problem, &mut actual).unwrap();
-                let mut expected = PopulationProgress::empty();
-                fixed.init(&mut problem, &mut expected).unwrap();
+                let mut actual = dithered
+                    .init(&mut problem, PopulationProgress::empty())
+                    .unwrap();
+                let mut expected = fixed
+                    .init(&mut problem, PopulationProgress::empty())
+                    .unwrap();
                 let mut scales = Vec::new();
                 for _ in 0..4 {
                     let mut rng = dithered.rng.clone().unwrap();
@@ -773,8 +772,10 @@ mod tests {
                     scales.push(scale);
                     fixed = fixed.with_f(scale);
                     fixed.rng = Some(rng);
-                    dithered.next_iter(&mut problem, &mut actual).unwrap();
-                    fixed.next_iter(&mut problem, &mut expected).unwrap();
+                    actual =
+                        dithered.next_iter(&mut problem, actual).unwrap().state;
+                    expected =
+                        fixed.next_iter(&mut problem, expected).unwrap().state;
                     assert_eq!(
                         actual.candidates, expected.candidates,
                         "{mutation:?} {crossover:?}"

@@ -182,8 +182,8 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<FirstOrderState<V, F>, Self::Error> {
         crate::core::constraint::evaluation::validate_box_problem(
             problem.inner(),
             Some(state.param().vec_len()),
@@ -202,19 +202,16 @@ where
         state
             .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut FirstOrderState<V, F>,
-    ) -> crate::EvaluationResult<
-        crate::SolverStep<FirstOrderState<V, F>>,
-        Self::Error,
-    > {
-        let (_, prev_cost, grad) = state
-            .current()
+        mut state: FirstOrderState<V, F>,
+    ) -> Result<crate::SolverStep<FirstOrderState<V, F>>, Self::Error> {
+        let (prev_cost, grad) = state
+            .take_evaluation()
             .expect("solver requires initialized progress");
         let mut direction = grad.clone();
         direction.neg_in_place();
@@ -222,25 +219,30 @@ where
             problem,
             state.param(),
             prev_cost,
-            grad,
+            &grad,
             &direction,
         )? {
             LineSearchOutcome::Step(alpha) => alpha,
             LineSearchOutcome::Failed => {
-                return Ok(crate::SolverStep::from(Some(
-                    Termination::numerical_failure(
+                state
+                    .set_evaluation(prev_cost, grad)
+                    .expect("gradient dimension differs from parameter");
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
                         "Projected gradient-descent line search failed.",
-                    ),
+                    )),
                 )));
             }
         };
-        let mut param = state.param().clone();
-        param.scaled_add(alpha, &direction);
-        param.clamp_in_place(problem.inner().lower(), problem.inner().upper());
-        let (cost, grad) = problem.cost_and_gradient(&param)?;
+        state.seed_param_mut().scaled_add(alpha, &direction);
         state
-            .replace(param, cost, grad)
+            .seed_param_mut()
+            .clamp_in_place(problem.inner().lower(), problem.inner().upper());
+        let (cost, grad) = problem.cost_and_gradient(state.param())?;
+        state
+            .set_evaluation(cost, grad)
             .expect("gradient dimension differs from parameter");
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }

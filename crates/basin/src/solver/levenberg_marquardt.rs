@@ -679,16 +679,15 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.init_model::<_, M, NormalEquations>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
+        state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.next_iter_model::<_, M, NormalEquations>(problem, state, None)
     }
 }
@@ -697,8 +696,8 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
     fn init_model<E, M, Model>(
         &mut self,
         problem: &mut E,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), E::Error>
+        mut state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, E::Error>
     where
         E: Evaluation<V, M, F>,
         M: MatTransposeVec<V>,
@@ -740,7 +739,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         );
         let Some((model_r, j)) = problem.model(&r, j) else {
             self.failed = true;
-            return Ok(());
+            return Ok(state);
         };
 
         let a = Model::prepare(&j, model_r.as_ref().unwrap_or(&r));
@@ -771,13 +770,13 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
         self.jtr_cache = Some(gradient);
         self.model_cache = Some(a);
         self.r_cache = Some(r);
-        Ok(())
+        Ok(state)
     }
 
     fn next_iter_model<E, M, Model>(
         &mut self,
         problem: &mut E,
-        state: &mut PointState<V, F>,
+        mut state: PointState<V, F>,
         rank_tolerance: Option<F>,
     ) -> LmStep<V, F, E::Error>
     where
@@ -809,10 +808,11 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                     "invalid_initial_model",
                 );
             }
-            return Ok(crate::SolverStep::from(Some(
-                Termination::numerical_failure(
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
                     "LM initialization produced an invalid residual model.",
-                ),
+                )),
             )));
         }
         let r = match self.r_cache.take() {
@@ -833,10 +833,11 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                             "invalid_residual_model",
                         );
                     }
-                    return Ok(crate::SolverStep::from(Some(
-                        Termination::numerical_failure(
+                    return Ok(crate::SolverStep::from((
+                        state,
+                        Some(Termination::numerical_failure(
                             "The least-squares objective cannot produce a valid local model.",
-                        ),
+                        )),
                     )));
                 };
                 (
@@ -859,10 +860,11 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 self.model_cache = Some(Err(error));
                 self.r_cache = Some(r);
                 self.jtr_cache = Some(g);
-                return Ok(crate::SolverStep::from(Some(
-                    Termination::numerical_failure(
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
                         "LM model factorization failed.",
-                    ),
+                    )),
                 )));
             }
         };
@@ -890,10 +892,11 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             self.model_cache = Some(Ok(a));
             self.r_cache = Some(r);
             self.jtr_cache = Some(g);
-            return Ok(crate::SolverStep::from(Some(
-                Termination::numerical_failure(
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_failure(
                     "The residual, objective, or gradient is non-finite.",
-                ),
+                )),
             )));
         }
         let diag_cur = Model::diagonal(&a);
@@ -994,7 +997,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
             self.r_cache = Some(r);
             self.model_cache = Some(Ok(a));
             self.jtr_cache = Some(g);
-            return Ok(crate::SolverStep::from(Some(termination)));
+            return Ok(crate::SolverStep::from((state, Some(termination))));
         }
 
         // Moré's monotone scaling keeps the damped Gram positive definite.
@@ -1139,10 +1142,11 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                 self.r_cache = Some(r);
                 self.model_cache = Some(Ok(a));
                 self.jtr_cache = Some(g);
-                return Ok(crate::SolverStep::from(Some(
-                    Termination::numerical_failure(
+                return Ok(crate::SolverStep::from((
+                    state,
+                    Some(Termination::numerical_failure(
                         "LM could not solve the damped model within its retry limit.",
-                    ),
+                    )),
                 )));
             }
         };
@@ -1352,6 +1356,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                         }
                         return Ok(
                             crate::SolverStep::completed_with_termination(
+                                state,
                                 Termination::numerical_failure(
                                     "The retained least-squares point has an invalid local model.",
                                 ),
@@ -1381,6 +1386,7 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                         );
                     }
                     return Ok(crate::SolverStep::completed_with_termination(
+                        state,
                         Termination::numerical_failure(
                             "The retained least-squares point has an invalid gradient or model.",
                         ),
@@ -1471,24 +1477,25 @@ impl<V, C, F: Scalar> LevenbergMarquardt<V, C, F> {
                     .push(NativeConvergenceTest::RelativeTrustRadius);
             }
             return Ok(crate::SolverStep::completed_with_termination(
+                state,
                 termination,
             ));
         }
 
         if numerical_no_progress {
-            return Ok(crate::SolverStep::from(Some(
-                Termination::numerical_stall(
+            return Ok(crate::SolverStep::from((
+                state,
+                Some(Termination::numerical_stall(
                     "A finite rejected LM trial changes no parameter in floating-point arithmetic.",
-                ),
+                )),
             )));
         }
 
-        Ok(crate::SolverStep::from(None))
+        Ok(crate::SolverStep::from((state, None)))
     }
 }
 
-type LmStep<V, F, E> =
-    crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, E>;
+type LmStep<V, F, E> = Result<crate::SolverStep<PointState<V, F>>, E>;
 
 #[derive(PartialEq)]
 enum ModelSolveError {
@@ -1863,16 +1870,15 @@ where
     fn init(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<(), Self::Error> {
+        state: PointState<V, F>,
+    ) -> Result<PointState<V, F>, Self::Error> {
         self.inner.init_model::<_, M, PivotedQr>(problem, state)
     }
     fn next_iter(
         &mut self,
         problem: &mut Problem<P>,
-        state: &mut PointState<V, F>,
-    ) -> crate::EvaluationResult<crate::SolverStep<PointState<V, F>>, Self::Error>
-    {
+        state: PointState<V, F>,
+    ) -> Result<crate::SolverStep<PointState<V, F>>, Self::Error> {
         self.inner.next_iter_model::<_, M, PivotedQr>(
             problem,
             state,

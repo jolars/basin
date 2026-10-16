@@ -252,7 +252,7 @@ impl LineSearch<Quadratic, Vec<f64>> for LegacySearch {
         _: f64,
         _: &Vec<f64>,
         _: &Vec<f64>,
-    ) -> basin::EvaluationResult<f64, Infallible> {
+    ) -> Result<f64, Infallible> {
         panic!(
             "an unsupported custom search must not probe the bounded problem"
         );
@@ -290,7 +290,7 @@ impl LineSearch<Quadratic, Vec<f64>> for InvalidSearch {
         _: f64,
         _: &Vec<f64>,
         _: &Vec<f64>,
-    ) -> basin::EvaluationResult<f64, Infallible> {
+    ) -> Result<f64, Infallible> {
         unreachable!()
     }
 
@@ -302,8 +302,7 @@ impl LineSearch<Quadratic, Vec<f64>> for InvalidSearch {
         _: &Vec<f64>,
         _: &Vec<f64>,
         _: LineSearchBounds,
-    ) -> basin::EvaluationResult<LineSearchResult<Vec<f64>, f64>, Infallible>
-    {
+    ) -> Result<LineSearchResult<Vec<f64>, f64>, Infallible> {
         Ok(self.0.clone())
     }
 }

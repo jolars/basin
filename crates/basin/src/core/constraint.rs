@@ -89,21 +89,4 @@ pub trait ConstraintJacobian: ProblemConstraints {
         &self,
         x: &Self::Param,
     ) -> Result<Self::Jacobian, ConstraintSolveError<Self::Error>>;
-    /// Evaluate through a shared hard-budget context.
-    fn constraint_jacobian_with_context(
-        &self,
-        x: &Self::Param,
-        context: &crate::EvaluationContext,
-    ) -> Result<
-        Self::Jacobian,
-        crate::ConstraintSolveError<crate::EvaluationError<Self::Error>>,
-    > {
-        context
-            .reserve_kinds(&[crate::EvaluationKind::Jacobian])
-            .map_err(|error| {
-                crate::ConstraintSolveError::Evaluation(error.into())
-            })?;
-        self.constraint_jacobian(x)
-            .map_err(crate::core::evaluation::constraint_error)
-    }
 }

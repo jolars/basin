@@ -225,7 +225,7 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
                 .unwrap();
         let resumed = Executor::resume_from_checkpoint(
             objective(),
-            partial.into_checkpoint().unwrap(),
+            partial.into_checkpoint(),
         )
         .max_iter(100)
         .run_with_solver()

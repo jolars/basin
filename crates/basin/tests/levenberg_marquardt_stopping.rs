@@ -656,15 +656,16 @@ impl Residual for Quadratic {
                         .with_absolute_gradient_tolerance(None);
                     let mut problem = Problem::new(Quadratic);
                     for _ in 0..2 {
-                        let mut initial = PointState::new(($vector_new)(&[0.1, 0.1]));
-                        solver.init(&mut problem, &mut initial).unwrap();
-                        let (_, reason) = solver.next_iter(&mut problem, &mut initial).unwrap().into_parts();
-                        let mut state = initial;
+                        let initial = solver.init(
+                            &mut problem,
+                            PointState::new(($vector_new)(&[0.1, 0.1])),
+                        ).unwrap();
+                        let (mut state, _, reason) = solver.next_iter(&mut problem, initial).unwrap().into_parts();
                         assert!(reason.is_none());
                         assert_eq!(state.param()[0], 0.1);
                         for _ in 0..20 {
                             let reason;
-                            (_, reason) = solver.next_iter(&mut problem, &mut state).unwrap().into_parts();
+                            (state, _, reason) = solver.next_iter(&mut problem, state).unwrap().into_parts();
                             assert!(reason.is_none());
                             if state.param()[0] != 0.1 {
                                 break;

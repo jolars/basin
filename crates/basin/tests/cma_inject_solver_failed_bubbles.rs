@@ -28,12 +28,13 @@ impl<P, S: State> Solver<P, S> for AlwaysFails {
     fn next_iter(
         &mut self,
         _problem: &mut Problem<P>,
-        _state: &mut S,
-    ) -> basin::EvaluationResult<basin::SolverStep<S>, Self::Error> {
-        Ok(basin::SolverStep::from(Some(
-            basin::Termination::numerical_failure(
+        state: S,
+    ) -> Result<basin::SolverStep<S>, Self::Error> {
+        Ok(basin::SolverStep::from((
+            state,
+            Some(basin::Termination::numerical_failure(
                 "External solver reported a numerical failure.",
-            ),
+            )),
         )))
     }
 }
