@@ -31,6 +31,7 @@
 //! comparable work before the timings are trusted.
 
 pub mod cobyla;
+pub mod lm_defaults;
 pub mod nist;
 pub mod slsqp;
 

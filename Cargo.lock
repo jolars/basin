@@ -321,6 +321,7 @@ dependencies = [
  "levenberg-marquardt",
  "nalgebra 0.34.2",
  "nalgebra 0.35.0",
+ "ndarray 0.17.2",
  "nlopt",
  "rayon",
  "slsqp",

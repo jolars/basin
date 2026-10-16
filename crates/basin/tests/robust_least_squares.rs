@@ -1,8 +1,8 @@
 use basin::{
     ArctanLoss, CauchyLoss, CostFunction, DenseMatrix, Executor, GaussNewton,
     Gradient, HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    LossFunction, PointState, Residual, RobustLeastSquares, SoftL1Loss,
-    SquaredLoss, TerminationCode,
+    LmDamping, LossFunction, PointState, Residual, RobustLeastSquares,
+    SoftL1Loss, SquaredLoss, TerminationCode,
 };
 
 #[derive(Clone)]
@@ -274,7 +274,8 @@ impl Residual for Domain {
         if self.hard_error {
             return Err("residual error");
         }
-        Ok(vec![if self.initial_invalid || x[0] > 0.6 {
+        // Both damping strategies must reject the first two trials to exercise model reuse.
+        Ok(vec![if self.initial_invalid || x[0] > 0.05 {
             f64::NAN
         } else {
             x[0] - 1.0
@@ -330,15 +331,20 @@ fn rejected_trials_reuse_the_model_and_gauss_newton_fails_cleanly() {
             HuberLoss,
         )
     };
-    let result =
-        Executor::from_start(objective(), LevenbergMarquardt::new(), vec![0.0])
-            .max_iter(2)
-            .run_with_solver()
-            .unwrap();
-    assert_eq!(result.param(), &vec![0.0]);
-    assert_eq!(result.cost(), 0.5);
-    assert_eq!(result.counts.residual_evals, 3);
-    assert_eq!(result.counts.jacobian_evals, 1);
+    for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+        let result = Executor::from_start(
+            objective(),
+            LevenbergMarquardt::new().with_damping(damping),
+            vec![0.0],
+        )
+        .max_iter(2)
+        .run_with_solver()
+        .unwrap();
+        assert_eq!(result.param(), &vec![0.0]);
+        assert_eq!(result.cost(), 0.5);
+        assert_eq!(result.counts.residual_evals, 3);
+        assert_eq!(result.counts.jacobian_evals, 1);
+    }
     let result =
         Executor::from_start(objective(), GaussNewton::new(), vec![0.0])
             .max_iter(2)

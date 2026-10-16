@@ -180,6 +180,7 @@ fn compare(
                     )
                 } else {
                     let mut solver = LevenbergMarquardt::new()
+                        .with_damping(LmDamping::Nielsen)
                         .with_no_progress_check(numerical_no_progress)
                         .with_absolute_gradient_tolerance(0.)
                         .with_gradient_orthogonality_tolerance(1e-12)

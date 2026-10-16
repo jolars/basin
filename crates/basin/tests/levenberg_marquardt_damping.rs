@@ -43,10 +43,10 @@ impl Residual for Affine {
             }
 
             #[test]
-            fn large_radius_takes_the_undamped_gauss_newton_step() {
+            fn default_takes_the_undamped_gauss_newton_step() {
                 let result = Executor::from_start(
                     Affine,
-                    ($solver).with_damping(LmDamping::TrustRegion),
+                    $solver,
                     ($vector_new)(&[0., 0.]),
                 )
                 .max_iter(1)
@@ -270,6 +270,16 @@ backend_checks!(
     LevenbergMarquardtQr::new()
 );
 backend_checks!(
+    vec_f32_cholesky,
+    f32,
+    1e20,
+    Vec<f32>,
+    DenseMatrix<f32>,
+    |a: &[f32]| a.to_vec(),
+    |a| DenseMatrix::from_row_slice(2, 2, a),
+    LevenbergMarquardt::<_, _, f32>::default()
+);
+backend_checks!(
     vec_f32_qr,
     f32,
     1e20,
@@ -304,6 +314,16 @@ mod nalgebra {
         DVector::from_column_slice,
         |a| DMatrix::from_row_slice(2, 2, a),
         LevenbergMarquardtQr::new()
+    );
+    backend_checks!(
+        f32_cholesky,
+        f32,
+        1e20,
+        DVector<f32>,
+        DMatrix<f32>,
+        DVector::from_column_slice,
+        |a| DMatrix::from_row_slice(2, 2, a),
+        LevenbergMarquardt::<_, _, f32>::default()
     );
     backend_checks!(
         f32_qr,
@@ -343,6 +363,16 @@ mod ndarray {
         LevenbergMarquardtQr::new()
     );
     backend_checks!(
+        f32_cholesky,
+        f32,
+        1e20,
+        Array1<f32>,
+        Array2<f32>,
+        |a: &[f32]| Array1::from_vec(a.to_vec()),
+        |a: &[f32]| Array2::from_shape_vec((2, 2), a.to_vec()).unwrap(),
+        LevenbergMarquardt::<_, _, f32>::default()
+    );
+    backend_checks!(
         f32_qr,
         f32,
         1e20,
@@ -378,6 +408,16 @@ mod faer {
         |a: &[f64]| Col::from_fn(a.len(), |i| a[i]),
         |a: &[f64]| Mat::from_fn(2, 2, |i, j| a[i * 2 + j]),
         LevenbergMarquardtQr::new()
+    );
+    backend_checks!(
+        f32_cholesky,
+        f32,
+        1e20,
+        Col<f32>,
+        Mat<f32>,
+        |a: &[f32]| Col::from_fn(a.len(), |i| a[i]),
+        |a: &[f32]| Mat::from_fn(2, 2, |i, j| a[i * 2 + j]),
+        LevenbergMarquardt::<_, _, f32>::default()
     );
     backend_checks!(
         f32_qr,
@@ -437,7 +477,8 @@ impl Jacobian for Nonlinear {
 }
 
 #[test]
-fn explicit_nielsen_preserves_default_trajectories() {
+fn explicit_trust_region_matches_default_trajectories() {
+    assert_eq!(LmDamping::default(), LmDamping::TrustRegion);
     macro_rules! check {
         ($solver:expr) => {
             for iterations in [1, 2, 5, 20] {
@@ -452,7 +493,8 @@ fn explicit_nielsen_preserves_default_trajectories() {
                     .unwrap()
                 };
                 let default = run($solver);
-                let explicit = run(($solver).with_damping(LmDamping::Nielsen));
+                let explicit =
+                    run(($solver).with_damping(LmDamping::TrustRegion));
                 assert_eq!(default.param(), explicit.param());
                 assert_eq!(default.cost(), explicit.cost());
                 assert_eq!(default.report.code(), explicit.report.code());
@@ -468,7 +510,9 @@ fn explicit_nielsen_preserves_default_trajectories() {
         };
     }
     check!(LevenbergMarquardt::new());
+    check!(LevenbergMarquardt::default());
     check!(LevenbergMarquardtQr::new());
+    check!(LevenbergMarquardtQr::default());
 }
 
 #[test]
@@ -479,20 +523,29 @@ fn damping_configuration_survives_qr_conversion_in_either_order() {
             .run()
             .unwrap()
     };
-    let before = run(LevenbergMarquardt::new()
-        .with_damping(LmDamping::TrustRegion)
-        .with_initial_step_bound(0.1)
-        .with_pivoted_qr());
-    let after = run(LevenbergMarquardt::new()
-        .with_pivoted_qr()
-        .with_damping(LmDamping::TrustRegion)
-        .with_initial_step_bound(0.1));
-    let direct = run(LevenbergMarquardtQr::new()
-        .with_damping(LmDamping::TrustRegion)
-        .with_initial_step_bound(0.1));
-    assert_eq!(before.param(), after.param());
-    assert_eq!(before.param(), direct.param());
-    assert!(before.param()[0] > 0.108 && before.param()[0] < 0.112);
+    for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+        let before = run(LevenbergMarquardt::new()
+            .with_damping(damping)
+            .with_tau(1e3)
+            .with_initial_step_bound(0.1)
+            .with_pivoted_qr());
+        let after = run(LevenbergMarquardt::new()
+            .with_pivoted_qr()
+            .with_damping(damping)
+            .with_tau(1e3)
+            .with_initial_step_bound(0.1));
+        let direct = run(LevenbergMarquardtQr::new()
+            .with_damping(damping)
+            .with_tau(1e3)
+            .with_initial_step_bound(0.1));
+        assert_eq!(before.param(), after.param());
+        assert_eq!(before.param(), direct.param());
+        if damping == LmDamping::Nielsen {
+            assert!((before.param()[0] - (0.1 + 4.95 / 1001.)).abs() < 1e-14);
+        } else {
+            assert!(before.param()[0] > 0.108 && before.param()[0] < 0.112);
+        }
+    }
 }
 
 #[test]

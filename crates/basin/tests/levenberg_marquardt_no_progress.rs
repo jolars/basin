@@ -298,6 +298,7 @@ where
 fn opt_out_survives_qr_conversion_and_convergence_builder_order() {
     let solver = || {
         LevenbergMarquardt::new()
+            .with_damping(LmDamping::Nielsen)
             .with_tau(1e20)
             .with_absolute_gradient_tolerance(None)
     };
@@ -359,6 +360,7 @@ fn rejected_zero_steps_stop_only_on_the_numerical_safeguard_or_budget() {
                 response: Ok(-1.),
             },
             LevenbergMarquardt::new()
+                .with_damping(LmDamping::Nielsen)
                 .with_tau(1e20)
                 .with_absolute_gradient_tolerance(None)
                 .with_absolute_step_tolerance(0.)

@@ -16,9 +16,8 @@ use basin::{Executor, LevenbergMarquardt, PointState, TerminationCode};
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     // LM converges on Rosenbrock-as-residuals from the classical start.
-    // It takes a few more iterations than GN's exact two-step convergence
-    // because the damping starts non-zero, but reaches the optimum cleanly
-    // and emits SolverConverged.
+    // The trust radius limits steps when the Gauss-Newton model is
+    // inaccurate, and the solver still reaches the optimum cleanly.
     let problem = RosenbrockResiduals::<Vec<f64>>::new();
     let initial = vec![-1.2, 1.0];
 
@@ -80,7 +79,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
 #[test]
 fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     // Classical start (3, −1, 0, 1), where the rank deficiency only bites
-    // at the optimum. LM with default Nielsen damping converges to the
+    // at the optimum. LM with default trust-region damping converges to the
     // origin in a comparable iteration count to GN.
     let problem = PowellSingular::<Vec<f64>>::new();
     let initial = vec![3.0, -1.0, 0.0, 1.0];

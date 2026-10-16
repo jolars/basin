@@ -1,12 +1,12 @@
 //! Fixed, source-informed stopping policies, without a tolerance sweep.
 //! Run `cargo run -p competitor-bench --release --bin verify_nlls_defaults`.
-//! The relative policies retain Nielsen damping for LM and use Basin's observed
+//! Both LM policies retain Nielsen damping, and TRF uses Basin's observed
 //! cost/step formulas for TRF; neither policy reproduces SciPy trajectories.
 
 use basin::{
     BoxBounds, Constrained, Constraints, EvaluationKind, Executor, Jacobian,
-    LevenbergMarquardt, NoConstraints, PointState, ProblemConstraints,
-    Residual, Solver, Trf, TrustRegionReflective,
+    LevenbergMarquardt, LmDamping, NoConstraints, PointState,
+    ProblemConstraints, Residual, Solver, Trf, TrustRegionReflective,
 };
 use competitor_bench::nist::{Nist, datasets};
 use std::fmt::Debug;
@@ -206,7 +206,8 @@ fn compare<P: Fixture>(fixture: P) {
     for (start, x) in fixture.starts().iter().enumerate() {
         for relative in [false, true] {
             let lm = || {
-                let solver = LevenbergMarquardt::<Vector, Matrix>::new();
+                let solver = LevenbergMarquardt::<Vector, Matrix>::new()
+                    .with_damping(LmDamping::Nielsen);
                 if relative {
                     solver
                         .with_absolute_gradient_tolerance(None)

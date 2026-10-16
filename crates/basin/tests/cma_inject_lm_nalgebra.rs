@@ -12,11 +12,12 @@
 use crate::backend_aliases::nalgebra::{DMatrix, DVector};
 use basin::problems::RosenbrockResiduals;
 use basin::{
-    CmaEs, CmaInject, Executor, LevenbergMarquardt, PopulationProgress,
+    CmaEs, CmaInject, Executor, LevenbergMarquardt, LmDamping,
+    PopulationProgress,
 };
 
 /// CMA-ES + LM on 2-D Rosenbrock-as-residuals. CMA from a wide-σ start
-/// gets near `(1, 1)`; the inner LM (Nielsen damping, default tolerances)
+/// gets near `(1, 1)`; the inner LM (default damping and tolerances)
 /// drives the iterate down to high precision via the basin's quadratic
 /// model. We assert `‖x* − (1, 1)‖_∞ ≤ 1e-6`, LM precision, not CMA
 /// precision.
@@ -156,6 +157,7 @@ fn consumes_lm_no_progress_and_accounts_for_each_fresh_inner_run() {
     let solver = CmaInject::with_inner_solver(
         CmaEs::<DVector<f64>, DMatrix<f64>>::new(11, 0.1),
         LevenbergMarquardt::new()
+            .with_damping(LmDamping::Nielsen)
             .with_tau(1e20)
             .with_absolute_gradient_tolerance(0.),
     )

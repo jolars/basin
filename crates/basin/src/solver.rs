@@ -53,7 +53,7 @@ pub mod gradient_descent;
 pub mod lbfgs;
 pub mod least_squares_diagnostics;
 /// Levenberg-Marquardt solver for nonlinear least squares with
-/// Nielsen 1999 damping update.
+/// scaled trust-region damping by default and an optional Nielsen 1999 update.
 pub mod levenberg_marquardt;
 /// Generic MA-LSCh memetic framework: SSGA + local-search chains,
 /// generic over the resumable LS operator.

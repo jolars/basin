@@ -1,6 +1,6 @@
 use basin::{
     DenseMatrix, Executor, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr,
-    PointState, Residual, TerminationCode,
+    LmDamping, PointState, Residual, TerminationCode,
 };
 
 use basin::core::problem::Problem;
@@ -125,37 +125,44 @@ impl Jacobian for CountedProblem {
 
 #[test]
 fn rejections_and_damping_retries_reuse_factorization() {
-    let counts = CountedProblem::default();
-    counts.failures.set(2);
-    let mut problem = Problem::new(counts.clone());
-    let mut solver = LevenbergMarquardt::new()
-        .with_pivoted_qr()
-        .with_absolute_gradient_tolerance(0.);
-    let state = solver
-        .init(&mut problem, PointState::new(vec![0.1]))
-        .unwrap();
-    let (mut state, _, reason) =
-        solver.next_iter(&mut problem, state).unwrap().into_parts();
-    assert!(reason.is_none());
-    assert_eq!(state.param(), &vec![0.1]);
-    assert_eq!(counts.factors.get(), 1);
-    assert_eq!(counts.solves.get(), 3);
-    assert_eq!(counts.residuals.get(), 2);
-    while state.param()[0] == 0.1 {
-        state = solver.next_iter(&mut problem, state).unwrap().state;
+    for damping in [LmDamping::Nielsen, LmDamping::TrustRegion] {
+        let counts = CountedProblem::default();
+        counts.failures.set(2);
+        let mut problem = Problem::new(counts.clone());
+        let mut solver = LevenbergMarquardt::new()
+            .with_damping(damping)
+            .with_pivoted_qr()
+            .with_absolute_gradient_tolerance(0.);
+        let state = solver
+            .init(&mut problem, PointState::new(vec![0.1]))
+            .unwrap();
+        let (mut state, _, reason) =
+            solver.next_iter(&mut problem, state).unwrap().into_parts();
+        assert!(reason.is_none());
+        assert_eq!(state.param(), &vec![0.1]);
         assert_eq!(counts.factors.get(), 1);
-        assert!(counts.residuals.get() < 20);
+        if damping == LmDamping::Nielsen {
+            assert_eq!(counts.solves.get(), 3);
+        } else {
+            assert!((3..=50).contains(&counts.solves.get()));
+        }
+        assert_eq!(counts.residuals.get(), 2);
+        while state.param()[0] == 0.1 {
+            state = solver.next_iter(&mut problem, state).unwrap().state;
+            assert_eq!(counts.factors.get(), 1);
+            assert!(counts.residuals.get() < 20);
+        }
+        let before = counts.residuals.get();
+        let _ = solver.next_iter(&mut problem, state).unwrap();
+        assert_eq!(counts.factors.get(), 2);
+        assert_eq!(counts.jacobians.get(), 2);
+        assert_eq!(counts.residuals.get(), before + 1);
+        // Reusing the solver for a new run must discard the previous factor.
+        solver
+            .init(&mut problem, PointState::new(vec![2.]))
+            .unwrap();
+        assert_eq!(counts.factors.get(), 3);
     }
-    let before = counts.residuals.get();
-    let _ = solver.next_iter(&mut problem, state).unwrap();
-    assert_eq!(counts.factors.get(), 2);
-    assert_eq!(counts.jacobians.get(), 2);
-    assert_eq!(counts.residuals.get(), before + 1);
-    // Reusing the solver for a new run must discard the previous factor.
-    solver
-        .init(&mut problem, PointState::new(vec![2.]))
-        .unwrap();
-    assert_eq!(counts.factors.get(), 3);
 }
 
 #[test]
@@ -235,6 +242,7 @@ fn actual_augmented_rank_loss_recovers_with_more_damping() {
     }
     for attempts in [1, 50] {
         let solver = LevenbergMarquardt::new()
+            .with_damping(LmDamping::Nielsen)
             .with_tau(1e-30)
             .with_max_inner_attempts(attempts)
             .with_pivoted_qr()
@@ -396,7 +404,9 @@ impl Residual for Fit {
             let tol = 10. * <$scalar>::EPSILON;
             for max_iter in [1, 20] {
                 let solver =
-                    LevenbergMarquardtQr::<_, _, $scalar>::new().with_tau(tau);
+                    LevenbergMarquardtQr::<_, _, $scalar>::new()
+                        .with_damping(LmDamping::Nielsen)
+                        .with_tau(tau);
                 let out = Executor::from_start(Fit, solver, start.clone())
                     .max_iter(max_iter)
                     .run()

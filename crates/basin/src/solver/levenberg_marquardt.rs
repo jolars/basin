@@ -44,10 +44,10 @@ use stopping::{
 #[non_exhaustive]
 pub enum LmDamping {
     /// Nielsen's smooth gain-ratio update, starting at
-    /// [`LevenbergMarquardt::with_tau`]. This is the default.
-    #[default]
+    /// [`LevenbergMarquardt::with_tau`].
     Nielsen,
     /// Select damping to fit a scaled trust radius: `sqrt(hᵀDh) ≈ δ`.
+    /// This is the default for both `f32` and `f64`.
     ///
     /// An undamped Gauss-Newton step is used when it fits. Otherwise, a
     /// safeguarded scalar search selects positive damping, reusing the linear
@@ -60,28 +60,19 @@ pub enum LmDamping {
     /// solves instead of `lmpar`'s Newton corrections, rank-deficient undamped
     /// systems are regularized rather than truncated, and Basin's acceptance
     /// and stopping tests retain their documented meanings.
+    #[default]
     TrustRegion,
 }
 
 /// Levenberg-Marquardt solver for nonlinear least-squares problems
 /// `min ½‖r(x)‖²`, with Marquardt diagonal scaling and configurable damping.
-/// The default is Nielsen's 1999 smooth μ-update; select
-/// [`LmDamping::TrustRegion`] with [`Self::with_damping`] for radius-based
-/// parameter selection.
+/// The default is scaled trust-region damping for both `f32` and `f64`.
+/// Select [`LmDamping::Nielsen`] with [`Self::with_damping`] for Nielsen's
+/// 1999 smooth μ-update.
 ///
-/// With the default strategy, each iteration solves the damped normal equations
-/// `(JᵀJ + μ·D) h = −Jᵀr` via Cholesky, then adapts the damping
-/// parameter μ from the gain ratio
-/// `ρ = (F(x) − F(x+h)) / (L(0) − L(h))` (Nielsen eq. 2.2). On a
-/// successful step (ρ > 0) μ is reduced via the smooth cubic
-/// `μ ← μ · max(1/3, 1 − (2ρ−1)³)`; on a failed step (ρ ≤ 0) μ grows
-/// geometrically `μ ← μ·ν, ν ← 2ν` with ν initialized to 2; Nielsen
-/// shows this avoids the discontinuities of the classical
-/// multiply-or-divide threshold rule and lands roughly 25 % fewer
-/// iterations on average. See Nielsen, *Damping Parameter in
-/// Marquardt's Method* (IMM-REP-1999-05) for the derivation and
-/// Madsen, Nielsen, Tingleff (2004), *Methods for Non-Linear Least
-/// Squares Problems*, §3.2.
+/// Both strategies solve the damped normal equations
+/// `(JᵀJ + μ·D) h = −Jᵀr` via Cholesky and accept steps with positive
+/// gain ratio `ρ = (F(x) − F(x+h)) / (L(0) − L(h))`.
 ///
 /// **Marquardt scaling (`μ·D`, not `μI`).** The damping matrix is the
 /// diagonal of the Gram, `D = diag(JᵀJ)` (the per-parameter curvature),
@@ -103,17 +94,10 @@ pub enum LmDamping {
 /// scale is floored to `1` at `init` (see `FloorZerosInPlace`), so a
 /// fully-insensitive parameter stays put rather than failing Cholesky.
 ///
-/// With Nielsen damping, `μ₀ = τ` is dimensionless because the
-/// per-parameter magnitude now lives in `D` (the initial per-column
-/// damping is `τ·diag(J(x₀)ᵀJ(x₀))`). τ is the *relative* trust
-/// parameter; use a smaller value (e.g. `1e-6`) when `x₀` is believed
-/// close to the optimum, larger (e.g. `1.0`) when far. Default
-/// `τ = 10⁻³` matches Nielsen's "moderate trust" recommendation.
-///
-/// **Trust-region damping.** [`Self::with_damping`] can instead select
-/// [`LmDamping::TrustRegion`]. It tries the undamped Gauss-Newton step first,
-/// then searches for damping with `sqrt(hᵀDh)` within 10% of the current
-/// radius. Rank safeguards or the inner attempt limit may yield a shorter
+/// **Trust-region damping (default).** [`LmDamping::TrustRegion`] tries the
+/// undamped Gauss-Newton step first, then searches for damping with
+/// `sqrt(hᵀDh)` within 10% of the current radius. Rank safeguards or the
+/// inner attempt limit may yield a shorter
 /// feasible regularized step. [`Self::with_initial_step_bound`] sets the initial
 /// radius factor (default `100`); `tau` has no effect on this strategy.
 /// Initialization and radius updates follow MINPACK's
@@ -125,6 +109,17 @@ pub enum LmDamping {
 /// relative step test. [`Self::with_relative_trust_radius_tolerance`] adds an
 /// optional scaled-radius check at the current iterate. This option does not
 /// reproduce MINPACK's complete algorithm or stopping behavior.
+///
+/// **Nielsen damping (opt-in).** [`LmDamping::Nielsen`] adapts μ directly
+/// from the gain ratio (Nielsen eq. 2.2). On a successful step (ρ > 0),
+/// `μ ← μ · max(1/3, 1 − (2ρ−1)³)`; on a failed step (ρ ≤ 0),
+/// `μ ← μ·ν, ν ← 2ν`, with ν initialized to 2. The initial `μ₀ = τ`
+/// is dimensionless because the per-parameter magnitude lives in `D`.
+/// [`Self::with_tau`] sets τ (default `1e-3`); use a smaller value when
+/// `x₀` is believed close to the optimum and a larger value when far.
+/// See Nielsen, *Damping Parameter in Marquardt's Method*
+/// (IMM-REP-1999-05), and Madsen, Nielsen, Tingleff (2004),
+/// *Methods for Non-Linear Least Squares Problems*, §3.2.
 ///
 /// **Linear solve.** Cholesky is the default and retains dense and sparse
 /// backend coverage. [`Self::with_pivoted_qr`] selects
@@ -372,10 +367,10 @@ impl<V, M, F: Scalar> Default for LevenbergMarquardt<V, M, F> {
 }
 
 impl<V, M> LevenbergMarquardt<V, M> {
-    /// Levenberg-Marquardt with Nielsen damping: absolute gradient tolerance
-    /// `1e-8`, orthogonality and all relative convergence tests disabled,
-    /// `tau = 1e-3`, `max_inner_attempts = 50`, and numerical no-progress
-    /// handling enabled.
+    /// Levenberg-Marquardt with trust-region damping: absolute gradient
+    /// tolerance `1e-8`, orthogonality and all relative convergence tests
+    /// disabled, initial step-bound factor `100`, `max_inner_attempts = 50`,
+    /// and numerical no-progress handling enabled.
     pub fn new() -> Self {
         Self::defaults()
     }
@@ -392,7 +387,7 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
             tol_progress_grad: None,
             numerical_no_progress: true,
             tau: F::from_f64(1e-3).unwrap(),
-            damping: LmDamping::Nielsen,
+            damping: LmDamping::default(),
             initial_step_bound: F::from_f64(100.0).unwrap(),
             radius: None,
             first_trust_step: true,
@@ -586,8 +581,9 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
 
     /// Select how damping is adapted, independently of the factorization.
     ///
-    /// Default: [`LmDamping::Nielsen`]. Both strategies preserve the same
-    /// scaling, acceptance (`gain_ratio > 0`), and shared stopping tests.
+    /// Default: [`LmDamping::TrustRegion`] for both scalar types. Both
+    /// strategies preserve the same scaling, acceptance (`gain_ratio > 0`),
+    /// and shared stopping tests.
     /// [`Self::with_relative_trust_radius_tolerance`] is active only with
     /// trust-region damping. Configure this before starting a solve.
     pub fn with_damping(mut self, damping: LmDamping) -> Self {
@@ -618,8 +614,9 @@ impl<V, M, F: Scalar> LevenbergMarquardt<V, M, F> {
     /// per-column damping of `τ·diag(J(x₀)ᵀJ(x₀))` under Marquardt
     /// scaling. Use a smaller value (e.g. `1e-6`) when `x₀` is believed
     /// close to the optimum; a larger value (e.g. `1.0`) when far from
-    /// it. Default `1e-3` (Nielsen's "moderate trust"). Has no effect on
-    /// [`LmDamping::TrustRegion`].
+    /// it. Default `1e-3` (Nielsen's "moderate trust"). Requires explicitly
+    /// selecting [`LmDamping::Nielsen`] with [`Self::with_damping`]; it has
+    /// no effect on the default [`LmDamping::TrustRegion`] strategy.
     pub fn with_tau(mut self, tau: F) -> Self {
         assert!(tau > F::zero(), "tau must be > 0");
         self.tau = tau;
@@ -1589,10 +1586,10 @@ where
 /// Construct with [`LevenbergMarquardt::with_pivoted_qr`] or [`Self::new`].
 /// This uses the same scaling, gain ratio, damping update, and stopping tests
 /// as [`LevenbergMarquardt`], solving `[J; sqrt(μD)] h ≈ [-r; 0]` without
-/// forming `JᵀJ`. Nielsen damping is the default; [`Self::with_damping`]
-/// selects the optional scaled trust-radius strategy. QR improves step accuracy
-/// near rank deficiency; neither strategy guarantees MINPACK's nonlinear
-/// convergence trajectory or evaluation counts.
+/// forming `JᵀJ`. Scaled trust-region damping is the default for both `f32`
+/// and `f64`; [`Self::with_damping`] can select [`LmDamping::Nielsen`].
+/// QR improves step accuracy near rank deficiency; neither strategy guarantees
+/// MINPACK's nonlinear convergence trajectory or evaluation counts.
 ///
 /// [`RobustLeastSquares`](crate::RobustLeastSquares) supplies robust
 /// objectives with the same model,
@@ -1629,7 +1626,7 @@ where
 /// Madsen, Nielsen & Tingleff (2004), *Methods for Non-Linear Least Squares
 /// Problems*, §3.2; MINPACK's [`qrfac`](https://netlib.org/minpack/qrfac.f)
 /// and [`qrsolv`](https://netlib.org/minpack/qrsolv.f) (Garbow, Hillstrom &
-/// Moré, 1980). Optional trust-region damping follows MINPACK's
+/// Moré, 1980). The default trust-region damping follows MINPACK's
 /// [`lmder`](https://netlib.org/minpack/lmder.f) radius updates, using bracketed
 /// parameter selection instead of [`lmpar`](https://netlib.org/minpack/lmpar.f).
 /// The rank policy differs from MINPACK's truncated solve.

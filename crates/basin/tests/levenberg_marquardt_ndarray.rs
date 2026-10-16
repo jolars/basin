@@ -14,10 +14,8 @@ use basin::{Executor, LevenbergMarquardt, PointState, TerminationCode};
 #[test]
 fn levenberg_marquardt_converges_on_rosenbrock_residuals() {
     // LM should converge on Rosenbrock-as-residuals from the classical
-    // start. Unlike GN's exact two-step convergence (the linear model
-    // is exact along y at fixed x), LM takes a few extra iterations
-    // because the damping starts non-zero, but it still reaches the
-    // optimum cleanly and emits SolverConverged.
+    // start. The trust radius limits steps when the Gauss-Newton model
+    // is inaccurate, and the solver still reaches the optimum cleanly.
     let problem = RosenbrockResiduals::<Array1<f64>>::new();
     let initial = Array1::from_vec(vec![-1.2, 1.0]);
 
@@ -80,7 +78,7 @@ fn levenberg_marquardt_recovers_on_rank_deficient_powell_singular() {
 fn levenberg_marquardt_converges_on_powell_singular_classical_start() {
     // Classical start (3, −1, 0, 1). GN converges here in 12 iterations
     // (per the S3 session notes) because the rank deficiency only
-    // bites at the optimum. LM with default Nielsen damping should
+    // bites at the optimum. LM with default trust-region damping should
     // converge in a comparable iteration count.
     let problem = PowellSingular::<Array1<f64>>::new();
     let initial = Array1::from_vec(vec![3.0, -1.0, 0.0, 1.0]);
@@ -367,8 +365,8 @@ fn levenberg_marquardt_caches_residual_and_jacobian_across_iterations() {
     // an extra time on a not-yet-counted iter and muddies the count.
     //
     // For K completed iters on Rosenbrock-as-residuals from the
-    // classical start, LM's μ-update accepts every step (no rejections),
-    // so:
+    // classical start, each iteration attempts one trial. Accepted steps
+    // refresh the model, and rejected steps reuse it, so:
     //   - residual_evals = 1 (init) + K (one trial per iter)
     //   - jacobian_evals = K (init's J carries iter 1; each subsequent
     //     iter re-evaluates J because the previous accept cleared the

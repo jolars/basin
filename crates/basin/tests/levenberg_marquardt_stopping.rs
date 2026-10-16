@@ -139,6 +139,7 @@ impl Residual for InvalidJacobian {
                 let result = Executor::from_start(
                     Affine { scale: [1., 1.], target: [2., 0.] },
                     ($solver)
+                        .with_damping(LmDamping::Nielsen)
                         .with_absolute_gradient_tolerance(None)
                         .with_tau(1e30)
                         .with_relative_step_tolerance(1.)

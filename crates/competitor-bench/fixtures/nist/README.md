@@ -72,7 +72,8 @@ tolerance grid, change damping, or compare runtime.
 
 For both LM factorizations, `relative-model` disables the absolute gradient
 check and enables gradient orthogonality and native relative model reduction
-at `1e-8`. It retains Nielsen damping and omits the scaled-radius check,
+at `1e-8`. Both LM policies explicitly retain Nielsen damping, the default
+when this stopping comparison was recorded, and omit the scaled-radius check,
 which requires trust-region damping. This isolates stopping changes without
 claiming to reproduce SciPy LM. All other LM settings remain unchanged.
 
@@ -142,3 +143,125 @@ parameter error, compared with about `0.0023` under its default. Thus neither
 policy makes scaling unnecessary. See the
 [migration guide](../../../../MIGRATING.md#lm-and-trf-stopping-defaults)
 for explicit scaling and configuration guidance.
+
+## Comparing LM damping and factorization
+
+`verify_lm_defaults` compares Nielsen and trust-region damping with both
+Cholesky and column-pivoted QR. It reuses these fixtures through thin adapters
+for Vec, nalgebra, ndarray, and faer. All 27 datasets, both starts, both scalar
+types, and all four configurations produce 1,728 accuracy rows. Each backend
+uses the same native fixture arithmetic; callback conversion and allocation
+are included in solve timings.
+
+Only damping and factorization change, and each configuration selects its
+damping policy explicitly. Other constructor settings remain fixed,
+including the absolute gradient tolerance `1e-8`, disabled optional convergence
+checks, and numerical no-progress handling. Every solve has limits of 2,000
+iterations and 20,000 evaluation-category charges. Limits are soft, and an
+evaluation category is not an elapsed-work estimate. There is no tolerance or
+initial-radius sweep.
+
+The CSV records the returned parameters, termination, authoritative counts,
+native and state RSS, and independent diagnostics. Independent diagnostics
+reevaluate the returned native parameters in `f64` against the original
+fixture, so `f32` rounding remains visible. Joint recovery requires both
+relative RSS error and maximum componentwise relative parameter error below
+`1e-3`, `1e-4`, or `1e-6`. Interpret the `f32` results at `1e-3` separately from
+the primary `f64` results at `1e-4` and the tighter `1e-6` check. Relative RSS
+error can magnify roundoff when the certified RSS is almost zero, particularly
+on Lanczos1. Recovery does not relabel a numerical stall as convergence.
+
+Run from the repository root:
+
+```sh
+mkdir -p target/lm-defaults-decision
+cargo build --locked --release -p competitor-bench --bin verify_lm_defaults
+target/release/verify_lm_defaults > target/lm-defaults-decision/results.csv
+target/release/verify_lm_defaults --trace > target/lm-defaults-decision/traces.csv
+target/release/verify_lm_defaults --reference > target/lm-defaults-decision/reference.csv
+target/release/verify_lm_defaults --timing > target/lm-defaults-decision/timings.csv
+python3 crates/competitor-bench/scripts/summarize_lm_defaults.py \
+  target/lm-defaults-decision/results.csv \
+  --timings target/lm-defaults-decision/timings.csv \
+  --output target/lm-defaults-decision/summary.json
+```
+
+Use `--backend`, `--scalar`, `--dataset`, and `--start` to narrow a run.
+`--scaling` reuses the existing Variably Dimensioned formulas at parameter
+counts 10, 30, 100, and 300, in `f64`. For these zero-RSS cases, the RSS error
+column reports absolute RSS and the parameter error compares against ones.
+
+Timing runs disable tracing and exclude fixture preparation, diagnostics,
+and CSV output. They include a fresh solver, starting-point allocation,
+initialization, the executor, all callbacks, and teardown. Each case warms up
+all configurations and records 32 paired rounds, with batches calibrated to
+at least 2 ms where the repetition cap permits. A balanced four-round order
+rotates configuration positions and predecessors. `--samples` and
+`--sample-ms` control this protocol. Run timing builds without all-feature
+unification, concurrent builds, or profiling, and record CPU affinity and
+thread settings.
+
+The summarizer retains failures in accuracy totals and performance profiles.
+It reports paired runtime ratios on jointly accurate cases separately from
+ratios across all runs. Its 95% intervals use 1,000 deterministic bootstrap
+samples: paired rounds for individual cases, and datasets with their starts
+kept together for aggregate ratios. The reference uses
+`levenberg-marquardt` 0.15 on nalgebra 0.34, its own constructor stopping
+settings, and a residual-call cap rounded down from 20,000. Its work limits
+and stopping policy differ from Basin's; it supplies context rather than a
+fifth matched configuration.
+
+The `lm_defaults` Criterion benchmark uses the same adapter and solver runner
+for longer measurements of selected cases:
+
+```sh
+cargo bench --locked -p competitor-bench --bench lm_defaults -- \
+  'lm_defaults/vec/f64/(Bennett5|MGH10)/start1'
+```
+
+Tracing runs summarize each native subproblem once; trial rows repeat those
+counts and must not be added again. Accepted and rejected trials are counted
+independently. Focused adapter and accounting checks run with
+`cargo test --locked -p competitor-bench --test lm_defaults --test nist`.
+
+### Recorded damping comparison
+
+The 2026-10-16 run used Basin library revision `ae04e00`, Rust 1.89.0,
+nalgebra 0.34.2, ndarray 0.17.2, and faer 0.24.4 on an AMD Ryzen 9 7900.
+The table gives ranges across the four backends. Each recovery denominator
+is 54 starts. Runtime ratios compare jointly recovered starts with Nielsen
+and Cholesky, using the geometric mean of paired median ratios.
+
+| Configuration | `f64` recovery at `1e-4` | `f64` recovery at `1e-6` | `f32` recovery at `1e-3` | Relative `f64` runtime |
+| --- | --- | --- | --- | --- |
+| Nielsen, Cholesky | 50/54 | 44/54 | 40–42/54 | 1.00 |
+| Nielsen, QR | 50/54 | 44/54 | 39–41/54 | 1.76–3.37 |
+| Trust region, Cholesky | 51–52/54 | 48/54 | 39–41/54 | 1.02–1.16 |
+| Trust region, QR | 51/54 | 48/54 | 41–42/54 | 1.84–3.19 |
+
+Basin 2.0 selects trust-region damping with Cholesky as one default for both
+precisions, favoring the improved `f64` recovery while accepting mixed runtime
+results and some `f32` recovery losses. Nielsen remains an explicit option.
+Trust-region damping recovered MGH10's first start after Nielsen exhausted
+the iteration budget, and improved both Lanczos2 starts and the second
+Lanczos3 start at `1e-6`. It also lost existing `f32` recoveries, including
+three starts on faer. On Vec, trust-region damping used 26% fewer Jacobian
+evaluations but 2.58 times as many model solves. Its runtime varied strongly
+by problem and start, and its aggregate runtime intervals included both a
+speedup and a slowdown.
+
+QR improved the ill-conditioned matched-step comparison against an independent
+SVD reference, supporting its use when normal-equation roundoff matters.
+Its runtime cost and lack of sparse backend coverage argue against replacing
+the general linear-solve default. At 300 parameters, trust-region damping
+with Cholesky was about 36% faster than Nielsen on Vec, nalgebra, and ndarray,
+but 32% slower on faer because of additional model solves.
+
+Timings pinned one CPU and fixed thread counts to one, but unrelated builds
+were active on other cores. Longer Criterion checks confirmed the broad
+patterns while showing variation in some absolute timings; all eight selected
+preflight runs matched the main probe's parameters and work counts exactly.
+Treat small timing differences as inconclusive. The complete local report,
+raw samples, plots, and reproduction script are retained in
+`target/lm-defaults-decision/`. The policies in the probe remain explicit,
+so changing Basin's default does not change this comparison.

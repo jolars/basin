@@ -28,9 +28,10 @@ license.workspace = true
 publish = false
 
 [dependencies]
-basin = { path = "../basin", features = ["nalgebra_v0_34", "faer", "problems"] }
+basin = { path = "../basin", features = ["nalgebra_v0_34", "ndarray_v0_17", "faer", "problems"] }
 levenberg-marquardt = "0.15"
 nalgebra = "0.34"
+ndarray = { version = "0.17", default-features = false }
 # Workspace `--all-features` enables every Basin nalgebra adapter.
 # Keep the benchmark default on 0.34 for the like-for-like LM comparison, but
 # compile its Basin side against 0.35 in the all-feature maintenance build.
@@ -87,6 +88,10 @@ criterion = { version = "0.8", default-features = false, features = [
 
 [[bench]]
 name = "compare"
+harness = false
+
+[[bench]]
+name = "lm_defaults"
 harness = false
 
 [[bench]]

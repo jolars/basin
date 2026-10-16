@@ -1296,10 +1296,40 @@ does not resolve different units across coordinates. Scale parameters or tune
 the floors for the problem. Use GBNM when a projected search needs its restart
 strategy. Basin 1.x defaults remain unchanged on `v1`.
 
+## LM damping default
+
+Basin 2.0 defaults to `LmDamping::TrustRegion` for both `f32` and `f64`,
+in both `LevenbergMarquardt` and `LevenbergMarquardtQr`. This applies to
+`new()`, `Default::default()`, and `LmDamping::default()`. Cholesky remains
+the default factorization; `with_pivoted_qr()` still selects QR explicitly.
+The initial trust-radius factor remains `100`, and the inner solve limit
+remains `50`. Stopping tolerances and numerical no-progress handling are
+unchanged. Iterates, termination reasons, and evaluation counts can change.
+
+Nielsen damping remains available. To retain the previous damping policy,
+select it explicitly:
+
+```rust
+let solver: basin::LevenbergMarquardt<Vec<f64>, basin::DenseMatrix> =
+    basin::LevenbergMarquardt::new()
+        .with_damping(basin::LmDamping::Nielsen);
+```
+
+The same setting works on the QR solver and with `f32`. `with_tau()` only
+configures Nielsen's initial damping; it does not select Nielsen and has no
+effect under the new default. Use `with_initial_step_bound()` to configure
+the initial trust radius.
+
+The [four-configuration comparison](crates/competitor-bench/fixtures/nist/README.md#recorded-damping-comparison)
+favored trust-region damping for its improved `f64` parameter and RSS recovery
+on the NIST fixtures. The choice accepts mixed runtime results and some
+`f32` recovery regressions in exchange for one default across precisions.
+Neither damping strategy uniformly outperformed the other.
+
 ## LM and TRF stopping defaults
 
-Basin 2.0 retains the existing defaults for both LM factorizations, legacy
-`Trf`, and full `TrustRegionReflective`, for both scalar types. LM enables
+Basin 2.0 retains the existing stopping defaults for both LM factorizations,
+legacy `Trf`, and full `TrustRegionReflective`, for both scalar types. LM enables
 only `with_absolute_gradient_tolerance(1e-8)`, testing `||J^T r||_infinity`.
 Both TRF implementations enable only
 `with_absolute_scaled_gradient_tolerance(1e-8)`, testing
@@ -1309,9 +1339,10 @@ parameter units; distance-to-bound scaling does not remove that dependence.
 
 The [fixed stopping-policy comparison](crates/competitor-bench/fixtures/nist/README.md#basin-20-stopping-policy-decision)
 compared published LM criteria and one curated TRF configuration against the
-current defaults, without a tolerance search or damping changes. On all 54
-NIST starts, the LM alternative reduced joint parameter/RSS recovery at
-relative error `1e-4` from 50 to 47 for each factorization. Adding observed
+then-current stopping defaults, with Nielsen damping held fixed for LM and
+without a tolerance search. On all 54 NIST starts, the LM alternative reduced
+joint parameter/RSS recovery at relative error `1e-4` from 50 to 47 for each
+factorization. Adding observed
 relative cost and step checks reduced recovery from 50 to 37 for legacy
 `Trf` and from 51 to 46 for full TRF. The alternatives used fewer evaluations
 and reported convergence more often, but did not support replacing the
@@ -1349,8 +1380,9 @@ let solver: basin::LevenbergMarquardt<Vec<f64>, basin::DenseMatrix> =
 Call `with_pivoted_qr()` on this solver to retain the same settings with QR.
 These are MINPACK-inspired gradient/model tests, not the complete SciPy LM
 policy. MINPACK's parameter test uses a scaled trust radius; Basin's
-`with_relative_trust_radius_tolerance` requires `LmDamping::TrustRegion` and
-is inactive with default Nielsen damping. A small model reduction can also
+`with_relative_trust_radius_tolerance` requires `LmDamping::TrustRegion`,
+which is now the default, but the radius test remains disabled until set.
+It is inactive with Nielsen damping. A small model reduction can also
 occur at an inaccurate, heavily damped point. Validate the returned fit
 independently before choosing relative checks for an application.
 
