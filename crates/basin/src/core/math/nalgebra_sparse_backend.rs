@@ -14,7 +14,8 @@
 // sparse `J`.
 
 use nalgebra::{
-    ClosedAddAssign, ClosedDivAssign, ClosedMulAssign, ClosedSubAssign};
+    ClosedAddAssign, ClosedDivAssign, ClosedMulAssign, ClosedSubAssign,
+};
 use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::factorization::CscCholesky;
 use nalgebra_sparse::ops::Op;
@@ -24,7 +25,8 @@ use nalgebra_sparse::{CscMatrix, SparseEntryMut};
 use super::Scalar;
 use super::linalg::{
     AddDiagonalVectorInPlace, GramMatrix, LinearSolveError, LinearSolveSpd,
-    MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal};
+    MatDiagonal, MatTransposeVec, MatVec, MaxDiagonal,
+};
 
 // Bound stack mirrors the dense nalgebra backend: matvec/gram routes go
 // through nalgebra's `Closed*Assign + Zero + One` BLAS-2 tier, the
@@ -226,25 +228,50 @@ impl<F: Scalar> super::ScaleRowsInPlace<F> for CscMatrix<F> {
     }
 }
 
-impl<F:Scalar> super::MatrixShape for CscMatrix<F> {
-    fn matrix_rows(&self)->usize{self.nrows()}
-    fn matrix_cols(&self)->usize{self.ncols()}
-}
-impl<F:Scalar> super::MatrixFinite for CscMatrix<F> {
-    fn matrix_is_finite(&self)->bool{self.values().iter().all(|v|v.is_finite())}
-}
-impl<F:Scalar,V> super::MatVecInto<V,F> for CscMatrix<F> where V:super::VectorLen+std::ops::Index<usize,Output=F> {
-    fn matvec_into(&self,x:&V,out:&mut[F]){
-        assert_eq!(x.vec_len(),self.ncols());assert_eq!(out.len(),self.nrows());out.fill(F::zero());
-        let ptr=self.col_offsets();let rows=self.row_indices();let values=self.values();
-        for j in 0..self.ncols(){for k in ptr[j]..ptr[j+1]{out[rows[k]]=out[rows[k]]+values[k]*x[j];}}
+impl<F: Scalar> super::MatrixShape for CscMatrix<F> {
+    fn matrix_rows(&self) -> usize {
+        self.nrows()
+    }
+    fn matrix_cols(&self) -> usize {
+        self.ncols()
     }
 }
-impl<F:Scalar,V> super::MatTransposeVecInto<V,F> for CscMatrix<F> where V:super::VectorLen+std::ops::IndexMut<usize,Output=F> {
-    fn mat_transpose_vec_into(&self,x:&[F],out:&mut V){
-        assert_eq!(x.len(),self.nrows());assert_eq!(out.vec_len(),self.ncols());
-        let ptr=self.col_offsets();let rows=self.row_indices();let values=self.values();
-        for j in 0..self.ncols(){out[j]=(ptr[j]..ptr[j+1]).map(|k|values[k]*x[rows[k]]).sum();}
+impl<F: Scalar> super::MatrixFinite for CscMatrix<F> {
+    fn matrix_is_finite(&self) -> bool {
+        self.values().iter().all(|v| v.is_finite())
+    }
+}
+impl<F: Scalar, V> super::MatVecInto<V, F> for CscMatrix<F>
+where
+    V: super::VectorLen + std::ops::Index<usize, Output = F>,
+{
+    fn matvec_into(&self, x: &V, out: &mut [F]) {
+        assert_eq!(x.vec_len(), self.ncols());
+        assert_eq!(out.len(), self.nrows());
+        out.fill(F::zero());
+        let ptr = self.col_offsets();
+        let rows = self.row_indices();
+        let values = self.values();
+        for j in 0..self.ncols() {
+            for k in ptr[j]..ptr[j + 1] {
+                out[rows[k]] = out[rows[k]] + values[k] * x[j];
+            }
+        }
+    }
+}
+impl<F: Scalar, V> super::MatTransposeVecInto<V, F> for CscMatrix<F>
+where
+    V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
+{
+    fn mat_transpose_vec_into(&self, x: &[F], out: &mut V) {
+        assert_eq!(x.len(), self.nrows());
+        assert_eq!(out.vec_len(), self.ncols());
+        let ptr = self.col_offsets();
+        let rows = self.row_indices();
+        let values = self.values();
+        for j in 0..self.ncols() {
+            out[j] = (ptr[j]..ptr[j + 1]).map(|k| values[k] * x[rows[k]]).sum();
+        }
     }
 }
 

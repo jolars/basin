@@ -5,9 +5,11 @@ use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
 use super::Scalar;
 use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
-    project_strictly_inside_component};
+    project_strictly_inside_component,
+};
 use super::sample::{
-    SampleStandardNormal, SampleUniformBox, assert_finite_box};
+    SampleStandardNormal, SampleUniformBox, assert_finite_box,
+};
 use super::{
     AddDiagonalVectorInPlace, ClampInPlace, ComponentDivAssign,
     ComponentMaxAssign, ComponentMulAssign, ComponentZip, Dot,
@@ -15,7 +17,8 @@ use super::{
     LinearSolveSpd, MatDiagonal, MatTransposeVec, MatVec, MatrixFromDiagonal,
     MatrixIdentity, MaxDiagonal, NegInPlace, NormInfinity, NormSquared,
     RankOneUpdate, ScaleInPlace, ScaledAdd, SymmetricEigen,
-    SymmetricEigenError, VectorIndex, VectorLen};
+    SymmetricEigenError, VectorIndex, VectorLen,
+};
 
 impl<F, S, D> ScaledAdd<F> for ArrayBase<S, D>
 where
@@ -672,9 +675,11 @@ impl<F: Scalar> super::MatrixShape for Array2<F> {
 }
 impl<F: Scalar> super::MatrixFinite for Array2<F> {
     fn matrix_is_finite(&self) -> bool {
-        (0..super::MatrixShape::matrix_rows(self)).all(|i|
-            (0..super::MatrixShape::matrix_cols(self)).all(|j|
-                super::MatrixIndex::matrix_entry(self, i, j).is_finite()))
+        (0..super::MatrixShape::matrix_rows(self)).all(|i| {
+            (0..super::MatrixShape::matrix_cols(self)).all(|j| {
+                super::MatrixIndex::matrix_entry(self, i, j).is_finite()
+            })
+        })
     }
 }
 impl<F: Scalar> super::MatrixIndex<F> for Array2<F> {
@@ -707,22 +712,36 @@ impl<F: Scalar> super::DenseBackend<F> for ndarray::Array1<F> {
 }
 
 impl<V, F> super::MatVecInto<V, F> for Array2<F>
-where V: super::VectorLen + std::ops::Index<usize, Output = F>, F: super::Scalar {
+where
+    V: super::VectorLen + std::ops::Index<usize, Output = F>,
+    F: super::Scalar,
+{
     fn matvec_into(&self, input: &V, output: &mut [F]) {
         assert_eq!(input.vec_len(), super::MatrixShape::matrix_cols(self));
         assert_eq!(output.len(), super::MatrixShape::matrix_rows(self));
         for (i, value) in output.iter_mut().enumerate() {
-            *value = (0..super::MatrixShape::matrix_cols(self)).map(|j| super::MatrixIndex::matrix_entry(self, i, j) * input[j]).sum();
+            *value = (0..super::MatrixShape::matrix_cols(self))
+                .map(|j| {
+                    super::MatrixIndex::matrix_entry(self, i, j) * input[j]
+                })
+                .sum();
         }
     }
 }
 impl<V, F> super::MatTransposeVecInto<V, F> for Array2<F>
-where V: super::VectorLen + std::ops::IndexMut<usize, Output = F>, F: super::Scalar {
+where
+    V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
+    F: super::Scalar,
+{
     fn mat_transpose_vec_into(&self, input: &[F], output: &mut V) {
         assert_eq!(input.len(), super::MatrixShape::matrix_rows(self));
         assert_eq!(output.vec_len(), super::MatrixShape::matrix_cols(self));
         for j in 0..super::MatrixShape::matrix_cols(self) {
-            output[j] = (0..super::MatrixShape::matrix_rows(self)).map(|i| super::MatrixIndex::matrix_entry(self, i, j) * input[i]).sum();
+            output[j] = (0..super::MatrixShape::matrix_rows(self))
+                .map(|i| {
+                    super::MatrixIndex::matrix_entry(self, i, j) * input[i]
+                })
+                .sum();
         }
     }
 }

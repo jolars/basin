@@ -7,18 +7,22 @@ use rand_distr::{Distribution, StandardNormal, uniform::SampleUniform};
 use super::Scalar;
 use super::cl_scaling::{
     BoxAffineScaling, cl_scaling_pair, max_feasible_step_component,
-    project_strictly_inside_component};
+    project_strictly_inside_component,
+};
 use super::linalg::{
     AddDiagonalVectorInPlace, DenseMatrixFromFn, GeneralRankOneUpdate,
     GramMatrix, LinearSolveError, LinearSolveSpd, MatDiagonal, MatTransposeVec,
     MatVec, MatrixFromDiagonal, MatrixIdentity, MaxDiagonal, RankOneUpdate,
-    SymmetricEigen, SymmetricEigenError};
+    SymmetricEigen, SymmetricEigenError,
+};
 use super::sample::{
-    SampleStandardNormal, SampleUniformBox, assert_finite_box};
+    SampleStandardNormal, SampleUniformBox, assert_finite_box,
+};
 use super::{
     ClampInPlace, ComponentDivAssign, ComponentMaxAssign, ComponentMulAssign,
     ComponentZip, Dot, FloorZerosInPlace, NegInPlace, NormInfinity,
-    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen};
+    NormSquared, ScaleInPlace, ScaledAdd, VectorIndex, VectorLen,
+};
 
 // The vector-tier ops used here (`Col::iter`, `Col::from_fn`, indexing, the
 // `faer::zip!`/`faer::unzip!` macros) don't require `faer_traits::ComplexField`,
@@ -592,7 +596,8 @@ impl<F: Scalar + faer_traits::ComplexField> super::FactorizePivotedQr<Col<F>, F>
         use faer::dyn_stack::{MemBuffer, MemStack};
         use faer::linalg::householder::{
             apply_block_householder_sequence_transpose_on_the_left_in_place_scratch,
-            apply_block_householder_sequence_transpose_on_the_left_in_place_with_conj};
+            apply_block_householder_sequence_transpose_on_the_left_in_place_with_conj,
+        };
         let (m, n) = self.shape();
         assert_eq!(b.nrows(), m, "pivoted QR right-hand side length mismatch");
         let norms = super::dense_qr::column_norms(m, n, |i, j| self[(i, j)])?;
@@ -671,9 +676,11 @@ impl<F: Scalar> super::MatrixShape for faer::Mat<F> {
 }
 impl<F: Scalar> super::MatrixFinite for faer::Mat<F> {
     fn matrix_is_finite(&self) -> bool {
-        (0..super::MatrixShape::matrix_rows(self)).all(|i|
-            (0..super::MatrixShape::matrix_cols(self)).all(|j|
-                super::MatrixIndex::matrix_entry(self, i, j).is_finite()))
+        (0..super::MatrixShape::matrix_rows(self)).all(|i| {
+            (0..super::MatrixShape::matrix_cols(self)).all(|j| {
+                super::MatrixIndex::matrix_entry(self, i, j).is_finite()
+            })
+        })
     }
 }
 impl<F: Scalar> super::MatrixIndex<F> for faer::Mat<F> {
@@ -698,22 +705,36 @@ impl<F: Scalar> super::DenseBackend<F> for faer::Col<F> {
 }
 
 impl<V, F> super::MatVecInto<V, F> for faer::Mat<F>
-where V: super::VectorLen + std::ops::Index<usize, Output = F>, F: super::Scalar {
+where
+    V: super::VectorLen + std::ops::Index<usize, Output = F>,
+    F: super::Scalar,
+{
     fn matvec_into(&self, input: &V, output: &mut [F]) {
         assert_eq!(input.vec_len(), super::MatrixShape::matrix_cols(self));
         assert_eq!(output.len(), super::MatrixShape::matrix_rows(self));
         for (i, value) in output.iter_mut().enumerate() {
-            *value = (0..super::MatrixShape::matrix_cols(self)).map(|j| super::MatrixIndex::matrix_entry(self, i, j) * input[j]).sum();
+            *value = (0..super::MatrixShape::matrix_cols(self))
+                .map(|j| {
+                    super::MatrixIndex::matrix_entry(self, i, j) * input[j]
+                })
+                .sum();
         }
     }
 }
 impl<V, F> super::MatTransposeVecInto<V, F> for faer::Mat<F>
-where V: super::VectorLen + std::ops::IndexMut<usize, Output = F>, F: super::Scalar {
+where
+    V: super::VectorLen + std::ops::IndexMut<usize, Output = F>,
+    F: super::Scalar,
+{
     fn mat_transpose_vec_into(&self, input: &[F], output: &mut V) {
         assert_eq!(input.len(), super::MatrixShape::matrix_rows(self));
         assert_eq!(output.vec_len(), super::MatrixShape::matrix_cols(self));
         for j in 0..super::MatrixShape::matrix_cols(self) {
-            output[j] = (0..super::MatrixShape::matrix_rows(self)).map(|i| super::MatrixIndex::matrix_entry(self, i, j) * input[i]).sum();
+            output[j] = (0..super::MatrixShape::matrix_rows(self))
+                .map(|i| {
+                    super::MatrixIndex::matrix_entry(self, i, j) * input[i]
+                })
+                .sum();
         }
     }
 }
