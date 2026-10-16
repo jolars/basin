@@ -193,14 +193,14 @@ impl Solver<Quadratic, OwnedState> for OwnedSolver {
 }
 
 fn counts(steps: u64) -> EvalCounts {
-    EvalCounts {
-        cost_evals: steps + 1,
-        gradient_evals: steps,
-        residual_evals: steps,
-        jacobian_evals: steps,
-        hessian_evals: steps,
-        hessian_product_evals: steps,
-    }
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = steps + 1;
+    counts.gradient_evals = steps;
+    counts.residual_evals = steps;
+    counts.jacobian_evals = steps;
+    counts.hessian_evals = steps;
+    counts.hessian_product_evals = steps;
+    counts
 }
 
 type Log = Rc<RefCell<Vec<(&'static str, u64)>>>;

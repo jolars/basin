@@ -132,14 +132,12 @@ fn shared_checks_retain_simultaneous_predicates_and_reference_values() {
             reference: Some(4.),
         }
     );
-    assert_eq!(
-        result.counts,
-        EvalCounts {
-            cost_evals: 1,
-            gradient_evals: 1,
-            ..EvalCounts::default()
-        }
-    );
+    assert_eq!(result.counts, {
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = 1;
+        counts.gradient_evals = 1;
+        counts
+    });
 }
 
 struct LastStep {

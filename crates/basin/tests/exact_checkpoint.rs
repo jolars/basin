@@ -76,10 +76,9 @@ impl CountsMirror for TestState {
 
 impl ExactResumeState for TestState {
     fn resume_counts(&self) -> EvalCounts {
-        EvalCounts {
-            cost_evals: self.cost_evals,
-            ..EvalCounts::default()
-        }
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = self.cost_evals;
+        counts
     }
 }
 
@@ -264,9 +263,10 @@ mod file {
                 iter: 300,
                 cost_evals: 400,
             },
-            EvalCounts {
-                cost_evals: 400,
-                ..EvalCounts::default()
+            {
+                let mut counts = EvalCounts::default();
+                counts.cost_evals = 400;
+                counts
             },
         );
         let mut writer = ExactCheckpointWriter::new(&path);

@@ -320,6 +320,12 @@ desired backend features.
   guide](MIGRATING.md#structured-termination-reports) for the API, binding
   code mapping, observer lifecycle, and checkpoint changes.
 
+- [x] **Make evaluation counters extensible.** Mark `EvalCounts` as
+  non-exhaustive so future releases can add categories without breaking
+  downstream code. Construct counters with `Default` and assign public fields;
+  destructuring patterns include `..`.
+  See [evaluation-counter migration](MIGRATING.md#evaluation-counters).
+
 - [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
   unversioned `nalgebra`, `ndarray`, and `faer` features and their
   LAPACK/BLAS counterparts select the newest supported releases. Retain the

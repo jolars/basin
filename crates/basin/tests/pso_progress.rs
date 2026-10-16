@@ -81,14 +81,13 @@ fn swarm_category_readers_do_not_fold_other_work_into_cost_calls() {
     .run_with_solver()
     .unwrap();
     let mut state = result.state;
-    let counts = EvalCounts {
-        cost_evals: 4,
-        gradient_evals: 5,
-        residual_evals: 6,
-        jacobian_evals: 7,
-        hessian_evals: 8,
-        hessian_product_evals: 9,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 4;
+    counts.gradient_evals = 5;
+    counts.residual_evals = 6;
+    counts.jacobian_evals = 7;
+    counts.hessian_evals = 8;
+    counts.hessian_product_evals = 9;
     state.reset_best();
     state.mirror(&counts);
     state.update_best();

@@ -97,12 +97,10 @@ fn derivative_brent_publishes_matching_scalar_gradient() {
     assert_eq!(result.state.gradient(), Some(gradient));
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.gradient_evals(), result.counts.gradient_evals);
-    assert_eq!(
-        result.counts,
-        EvalCounts {
-            cost_evals: result.counts.cost_evals,
-            gradient_evals: result.counts.cost_evals,
-            ..EvalCounts::default()
-        }
-    );
+    assert_eq!(result.counts, {
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = result.counts.cost_evals;
+        counts.gradient_evals = result.counts.cost_evals;
+        counts
+    });
 }

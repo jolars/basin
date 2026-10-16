@@ -6,14 +6,13 @@ use basin::{
 
 #[test]
 fn category_readers_do_not_fold_constraint_work() {
-    let counts = EvalCounts {
-        cost_evals: 2,
-        gradient_evals: 3,
-        residual_evals: 5,
-        jacobian_evals: 7,
-        hessian_evals: 11,
-        hessian_product_evals: 13,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 2;
+    counts.gradient_evals = 3;
+    counts.residual_evals = 5;
+    counts.jacobian_evals = 7;
+    counts.hessian_evals = 11;
+    counts.hessian_product_evals = 13;
     let mut state = SelectedFirstOrderState::<Vec<f64>>::new(vec![0.0]);
     state.mirror(&counts);
     assert_eq!(state.cost_evals(), 2);
@@ -29,13 +28,15 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
     assert!(!state.select_current());
     state.replace(vec![0.0], 0.0, vec![0.0], 1.0).unwrap();
     state.select_current();
-    state.mirror(&EvalCounts {
-        cost_evals: 1,
-        gradient_evals: 2,
-        residual_evals: 3,
-        jacobian_evals: 4,
-        hessian_evals: 5,
-        hessian_product_evals: 6,
+    state.mirror(&{
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = 1;
+        counts.gradient_evals = 2;
+        counts.residual_evals = 3;
+        counts.jacobian_evals = 4;
+        counts.hessian_evals = 5;
+        counts.hessian_product_evals = 6;
+        counts
     });
     state.update_best();
     state.replace(vec![1.0], 1.0, vec![2.0], 0.0).unwrap();
@@ -47,14 +48,13 @@ fn public_records_validate_dimensions_and_preserve_pending_selections() {
     assert_eq!(state, unchanged);
     state.replace(vec![2.0], 4.0, vec![4.0], 1.0).unwrap();
     state.increment_iter();
-    let counts = EvalCounts {
-        cost_evals: 7,
-        gradient_evals: 8,
-        residual_evals: 9,
-        jacobian_evals: 10,
-        hessian_evals: 11,
-        hessian_product_evals: 12,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 7;
+    counts.gradient_evals = 8;
+    counts.residual_evals = 9;
+    counts.jacobian_evals = 10;
+    counts.hessian_evals = 11;
+    counts.hessian_product_evals = 12;
     state.mirror(&counts);
     state.update_best();
     assert_eq!(state.best(), Some((&vec![1.0], 1.0, 0.0)));

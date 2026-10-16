@@ -108,14 +108,13 @@ fn simplex_replacements_preserve_historical_pairs_and_raw_metadata() {
     state
         .replace(vec![vec![2.0], vec![1.0]], vec![4.0, 1.0])
         .unwrap();
-    let counts = EvalCounts {
-        cost_evals: 2,
-        gradient_evals: 3,
-        residual_evals: 4,
-        jacobian_evals: 5,
-        hessian_evals: 6,
-        hessian_product_evals: 7,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 2;
+    counts.gradient_evals = 3;
+    counts.residual_evals = 4;
+    counts.jacobian_evals = 5;
+    counts.hessian_evals = 6;
+    counts.hessian_product_evals = 7;
     state.mirror(&counts);
     state.update_best();
     assert_eq!(state.current(), Some((&vec![1.0], 1.0)));
@@ -131,9 +130,10 @@ fn simplex_replacements_preserve_historical_pairs_and_raw_metadata() {
     state.replace(vertices, costs).unwrap();
     assert_eq!(state.vertices().as_ptr(), vertices_ptr);
     state.increment_iter();
-    state.mirror(&EvalCounts {
-        cost_evals: 4,
-        ..counts
+    state.mirror(&{
+        let mut counts = counts;
+        counts.cost_evals = 4;
+        counts
     });
     state.update_best();
     coherent(&state);
@@ -144,10 +144,8 @@ fn simplex_replacements_preserve_historical_pairs_and_raw_metadata() {
     state
         .replace(vec![vec![-1.0], vec![0.0]], vec![1.0, 0.0])
         .unwrap();
-    let final_counts = EvalCounts {
-        cost_evals: 6,
-        ..counts
-    };
+    let mut final_counts = counts;
+    final_counts.cost_evals = 6;
     state.mirror(&final_counts);
     // This boundary models a clean mid-step stop, with no completed iteration.
     state.update_best();
@@ -350,17 +348,16 @@ fn external_simplex_updates_preserve_all_categories_at_midstep_publication() {
     assert_eq!(result.iter(), 0);
     coherent(&result.state);
     assert_eq!(result.state.best(), Some((&vec![2.0], 4.0)));
-    assert_eq!(
-        result.counts,
-        basin::EvalCounts {
-            cost_evals: 5,
-            gradient_evals: 1,
-            residual_evals: 1,
-            jacobian_evals: 1,
-            hessian_evals: 1,
-            hessian_product_evals: 1,
-        }
-    );
+    assert_eq!(result.counts, {
+        let mut counts = basin::EvalCounts::default();
+        counts.cost_evals = 5;
+        counts.gradient_evals = 1;
+        counts.residual_evals = 1;
+        counts.jacobian_evals = 1;
+        counts.hessian_evals = 1;
+        counts.hessian_product_evals = 1;
+        counts
+    });
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.best_counts(), Some(&result.counts));
     assert_eq!(result.state.cost_evals(), 5);

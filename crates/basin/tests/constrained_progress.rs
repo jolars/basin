@@ -157,14 +157,13 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
     assert!(!state.select_current());
     state.replace(vec![0.0], 0.0, 1.0);
     assert!(state.select_current());
-    let first = EvalCounts {
-        cost_evals: 1,
-        gradient_evals: 2,
-        residual_evals: 3,
-        jacobian_evals: 4,
-        hessian_evals: 5,
-        hessian_product_evals: 6,
-    };
+    let mut first = EvalCounts::default();
+    first.cost_evals = 1;
+    first.gradient_evals = 2;
+    first.residual_evals = 3;
+    first.jacobian_evals = 4;
+    first.hessian_evals = 5;
+    first.hessian_product_evals = 6;
     state.mirror(&first);
     state.update_best();
     assert_eq!(state.best(), Some((&vec![0.0], 0.0, 1.0)));
@@ -174,10 +173,8 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
     assert!(state.select_current());
     // Later work may publish a different current point without changing that choice.
     state.replace(vec![2.0], 4.0, 1.0);
-    let second = EvalCounts {
-        cost_evals: 7,
-        ..first
-    };
+    let mut second = first;
+    second.cost_evals = 7;
     state.mirror(&second);
     state.update_best();
     assert_eq!(state.current(), Some((&vec![2.0], 4.0, 1.0)));
@@ -185,9 +182,10 @@ fn explicit_selection_stamps_once_and_keeps_its_own_record() {
     assert_eq!(state.best_counts(), Some(&second));
     state.increment_iter();
     state.replace(vec![3.0], 9.0, 2.0);
-    state.mirror(&EvalCounts {
-        cost_evals: 8,
-        ..second
+    state.mirror(&{
+        let mut counts = second;
+        counts.cost_evals = 8;
+        counts
     });
     state.update_best();
     state.update_best();

@@ -93,16 +93,18 @@ fn generic_records_distinguish_seeds_rejections_and_incumbents() {
     assert_eq!(current(&state), Some(f64::INFINITY));
     assert!(state.incumbent_record().is_none());
     state.replace(5.0, 5.0);
-    state.mirror(&EvalCounts {
-        cost_evals: 2,
-        ..EvalCounts::default()
+    state.mirror(&{
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = 2;
+        counts
     });
     state.update_best();
     state.increment_iter();
     state.replace(7.0, 7.0);
-    state.mirror(&EvalCounts {
-        cost_evals: 3,
-        ..EvalCounts::default()
+    state.mirror(&{
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = 3;
+        counts
     });
     state.update_best();
     let best = state.incumbent_record().unwrap();
@@ -472,14 +474,16 @@ fn evaluate_all(
     Ok(cost)
 }
 
-const WORK: EvalCounts = EvalCounts {
-    cost_evals: 3,
-    gradient_evals: 2,
-    residual_evals: 3,
-    jacobian_evals: 4,
-    hessian_evals: 5,
-    hessian_product_evals: 6,
-};
+fn work_counts() -> EvalCounts {
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 3;
+    counts.gradient_evals = 2;
+    counts.residual_evals = 3;
+    counts.jacobian_evals = 4;
+    counts.hessian_evals = 5;
+    counts.hessian_product_evals = 6;
+    counts
+}
 
 enum WorkStep {
     Complete,
@@ -536,8 +540,8 @@ fn every_raw_budget_counts_fused_and_batch_work_without_folding() {
                 .unwrap();
         assert_eq!(result.report.code(), TerminationCode::MaxEvaluations);
         assert_eq!(result.iter(), 1);
-        let mut expected = WORK;
-        expected.add(&WORK);
+        let mut expected = work_counts();
+        expected.add(&work_counts());
         assert_eq!(result.state.raw_counts(), &expected);
         assert_eq!(result.counts, expected);
         assert_eq!(result.state.incumbent_record().unwrap().counts, &expected);
@@ -675,13 +679,13 @@ fn external_selection_is_explicit_and_does_not_claim_objective_ordering() {
         best: None,
     };
     state.select(1, -1.0, -100.0);
-    state.mirror(&WORK);
+    state.mirror(&work_counts());
     state.update_best();
     // The feasible replacement has a higher cost and is published in the
     // same iteration, so iteration numbers cannot identify this event.
     state.select(2, 1.0, 10.0);
-    let mut later = WORK;
-    later.add(&WORK);
+    let mut later = work_counts();
+    later.add(&work_counts());
     state.mirror(&later);
     state.update_best();
     assert_eq!(*state.incumbent_record().unwrap().param, 1.0);
@@ -690,7 +694,7 @@ fn external_selection_is_explicit_and_does_not_claim_objective_ordering() {
     for _ in 0..2 {
         state.increment_iter();
         state.select(2, 1.0, 10.0);
-        later.add(&WORK);
+        later.add(&work_counts());
         state.mirror(&later);
         state.update_best();
         let best = state.incumbent_record().unwrap();

@@ -62,14 +62,13 @@ fn fresh_run_reevaluates_and_resets_distribution() {
 #[test]
 fn categories_are_raw() {
     let mut state = PopulationProgress::<Vec<f64>>::from_point(vec![0.4; 2]);
-    let counts = EvalCounts {
-        cost_evals: 2,
-        gradient_evals: 3,
-        residual_evals: 4,
-        jacobian_evals: 5,
-        hessian_evals: 6,
-        hessian_product_evals: 7,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 2;
+    counts.gradient_evals = 3;
+    counts.residual_evals = 4;
+    counts.jacobian_evals = 5;
+    counts.hessian_evals = 6;
+    counts.hessian_product_evals = 7;
     state.mirror(&counts);
     assert_eq!(state.cost_evals(), 2);
 }

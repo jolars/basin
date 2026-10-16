@@ -281,17 +281,16 @@ fn every_inner_evaluation_category_survives_outer_publication() {
     .run_with_solver()
     .unwrap();
     assert_eq!(result.state.iter(), 2);
-    assert_eq!(
-        result.counts,
-        basin::EvalCounts {
-            cost_evals: 3,
-            gradient_evals: 3,
-            residual_evals: 3,
-            jacobian_evals: 3,
-            hessian_evals: 3,
-            hessian_product_evals: 3,
-        }
-    );
+    assert_eq!(result.counts, {
+        let mut counts = basin::EvalCounts::default();
+        counts.cost_evals = 3;
+        counts.gradient_evals = 3;
+        counts.residual_evals = 3;
+        counts.jacobian_evals = 3;
+        counts.hessian_evals = 3;
+        counts.hessian_product_evals = 3;
+        counts
+    });
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.cost_evals(), 3);
     let best = result.state.best_counts().unwrap();

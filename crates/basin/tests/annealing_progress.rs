@@ -203,20 +203,20 @@ fn proposal_metadata_uses_publication_counts_and_iteration() {
     assert!(state.current().is_none());
     assert!(state.best().is_none());
     state.replace(vec![1.0], 1.0);
-    state.mirror(&EvalCounts {
-        cost_evals: 1,
-        ..EvalCounts::default()
+    state.mirror(&{
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = 1;
+        counts
     });
     state.update_best();
     state.accept_proposal(vec![0.0], 0.0);
-    let counts = EvalCounts {
-        cost_evals: 2,
-        gradient_evals: 3,
-        residual_evals: 4,
-        jacobian_evals: 5,
-        hessian_evals: 6,
-        hessian_product_evals: 7,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 2;
+    counts.gradient_evals = 3;
+    counts.residual_evals = 4;
+    counts.jacobian_evals = 5;
+    counts.hessian_evals = 6;
+    counts.hessian_product_evals = 7;
     state.increment_iter();
     state.mirror(&counts);
     state.update_best();
@@ -225,9 +225,10 @@ fn proposal_metadata_uses_publication_counts_and_iteration() {
     assert_eq!(state.incumbent_record().unwrap().iter, 1);
     state.reject_proposal();
     state.increment_iter();
-    state.mirror(&EvalCounts {
-        cost_evals: 3,
-        ..counts
+    state.mirror(&{
+        let mut counts = counts;
+        counts.cost_evals = 3;
+        counts
     });
     state.update_best();
     state.update_best();
@@ -235,10 +236,7 @@ fn proposal_metadata_uses_publication_counts_and_iteration() {
     assert_eq!(state.best_counts(), Some(&counts));
     // Mid-step publication stamps the completed boundary, without adding an iteration.
     state.accept_proposal(vec![-1.0], -1.0);
-    let counts = EvalCounts {
-        cost_evals: 4,
-        ..counts
-    };
+    counts.cost_evals = 4;
     state.mirror(&counts);
     state.update_best();
     assert_eq!(state.last_accepted_iter(), 2);

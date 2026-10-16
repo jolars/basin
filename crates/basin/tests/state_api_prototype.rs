@@ -219,46 +219,38 @@ fn first_order_update_is_atomic_on_shape_error() {
 fn best_records_survive_nonmonotone_and_equal_cost_steps() {
     let mut state = PointState::new(vec![1.0]);
     state.replace(vec![1.0], 1.0);
-    state.publish(
-        false,
-        basin::EvalCounts {
-            cost_evals: 1,
-            ..Default::default()
-        },
-    );
+    state.publish(false, {
+        let mut counts = basin::EvalCounts::default();
+        counts.cost_evals = 1;
+        counts
+    });
     assert!(state.new_best());
     for (x, cost) in [(vec![9.0], 81.0), (vec![-1.0], 1.0)] {
         state.replace(x, cost);
-        state.publish(
-            true,
-            basin::EvalCounts {
-                cost_evals: 5,
-                ..Default::default()
-            },
-        );
+        state.publish(true, {
+            let mut counts = basin::EvalCounts::default();
+            counts.cost_evals = 5;
+            counts
+        });
         assert!(!state.new_best());
         assert_eq!(state.best().unwrap().param, vec![1.0]);
         assert_eq!(state.best_iter(), 0);
         assert_eq!(state.best_cost_evals(), 1);
     }
     state.replace(vec![0.0], 0.0);
-    state.publish(
-        false,
-        basin::EvalCounts {
-            cost_evals: 8,
-            ..Default::default()
-        },
-    );
+    state.publish(false, {
+        let mut counts = basin::EvalCounts::default();
+        counts.cost_evals = 8;
+        counts
+    });
     assert_eq!(state.iter(), 2);
     assert_eq!(state.best_cost_evals(), 8);
     assert!(state.new_best());
-    state.publish(
-        false,
-        basin::EvalCounts {
-            cost_evals: 8,
-            ..Default::default()
-        },
-    );
+    state.publish(false, {
+        let mut counts = basin::EvalCounts::default();
+        counts.cost_evals = 8;
+        counts
+    });
     assert!(!state.new_best());
 }
 

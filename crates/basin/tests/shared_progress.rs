@@ -259,14 +259,14 @@ fn gradient_replacement_is_atomic_and_reset_retains_only_the_seed() {
 }
 
 fn all_counts() -> EvalCounts {
-    EvalCounts {
-        cost_evals: 2,
-        gradient_evals: 3,
-        residual_evals: 5,
-        jacobian_evals: 7,
-        hessian_evals: 11,
-        hessian_product_evals: 13,
-    }
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 2;
+    counts.gradient_evals = 3;
+    counts.residual_evals = 5;
+    counts.jacobian_evals = 7;
+    counts.hessian_evals = 11;
+    counts.hessian_product_evals = 13;
+    counts
 }
 
 #[test]
@@ -302,9 +302,10 @@ fn nonmonotone_and_equal_cost_publications_retain_matching_history() {
     for (x, cost) in [(2.0, 4.0), (-1.0, 1.0), (3.0, f64::NAN)] {
         state.replace(vec![x], cost);
         state.increment_iter();
-        state.mirror(&EvalCounts {
-            cost_evals: 100,
-            ..all_counts()
+        state.mirror(&{
+            let mut counts = all_counts();
+            counts.cost_evals = 100;
+            counts
         });
         state.update_best();
         state.update_best();
@@ -544,14 +545,13 @@ fn serde_preserves_seeds_records_and_raw_history_for_both_scalars() {
 
 #[test]
 fn segment_reset_retains_complete_records_and_clears_bookkeeping() {
-    let counts = EvalCounts {
-        cost_evals: 3,
-        gradient_evals: 5,
-        residual_evals: 7,
-        jacobian_evals: 11,
-        hessian_evals: 13,
-        hessian_product_evals: 17,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 3;
+    counts.gradient_evals = 5;
+    counts.residual_evals = 7;
+    counts.jacobian_evals = 11;
+    counts.hessian_evals = 13;
+    counts.hessian_product_evals = 17;
     let mut point = PointState::new(vec![2.0]);
     point.replace(vec![2.0], 4.0);
     point.increment_iter();

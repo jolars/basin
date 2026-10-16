@@ -63,14 +63,13 @@ fn fresh_run_resets_outer_iteration_and_chain_history() {
 #[test]
 fn all_categories_remain_separate() {
     let mut state = PopulationProgress::<Vec<f64>>::empty();
-    let counts = EvalCounts {
-        cost_evals: 2,
-        gradient_evals: 3,
-        residual_evals: 4,
-        jacobian_evals: 5,
-        hessian_evals: 6,
-        hessian_product_evals: 7,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 2;
+    counts.gradient_evals = 3;
+    counts.residual_evals = 4;
+    counts.jacobian_evals = 5;
+    counts.hessian_evals = 6;
+    counts.hessian_product_evals = 7;
     state.mirror(&counts);
     assert_eq!(state.cost_evals(), 2);
 }
@@ -341,17 +340,16 @@ fn inner_failure_preserves_every_category_and_current_population() {
     .unwrap();
     coherent(&result.state, &result.solver);
     assert_eq!(result.report.code(), basin::TerminationCode::SolverFailed);
-    assert_eq!(
-        result.counts,
-        EvalCounts {
-            cost_evals: 6,
-            gradient_evals: 2,
-            residual_evals: 3,
-            jacobian_evals: 4,
-            hessian_evals: 5,
-            hessian_product_evals: 6
-        }
-    );
+    assert_eq!(result.counts, {
+        let mut counts = EvalCounts::default();
+        counts.cost_evals = 6;
+        counts.gradient_evals = 2;
+        counts.residual_evals = 3;
+        counts.jacobian_evals = 4;
+        counts.hessian_evals = 5;
+        counts.hessian_product_evals = 6;
+        counts
+    });
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.cost_evals(), 6);
 }

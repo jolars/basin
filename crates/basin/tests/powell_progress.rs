@@ -75,14 +75,13 @@ macro_rules! lifecycle {
             #[test]
             fn cost_reader_reports_only_cost_calls() {
                 let mut state = $state::<Vec<f64>>::new(vec![2.0; 2]);
-                let counts = EvalCounts {
-                    cost_evals: 2,
-                    gradient_evals: 3,
-                    residual_evals: 5,
-                    jacobian_evals: 7,
-                    hessian_evals: 11,
-                    hessian_product_evals: 13,
-                };
+                let mut counts = EvalCounts::default();
+                counts.cost_evals = 2;
+                counts.gradient_evals = 3;
+                counts.residual_evals = 5;
+                counts.jacobian_evals = 7;
+                counts.hessian_evals = 11;
+                counts.hessian_product_evals = 13;
                 state.replace(vec![2.0; 2], 12.0);
                 state.mirror(&counts);
                 state.update_best();

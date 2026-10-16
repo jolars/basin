@@ -780,8 +780,29 @@ pub trait HessianProduct: Gradient {
 /// impl. The wrapper itself is authoritative; the state mirror is the
 /// "available-everywhere" view that termination criteria and
 /// [`OptimizationResult`](crate::core::executor::OptimizationResult) read.
+///
+/// Additional counters may be added in future releases. Construct counters
+/// with [`Default`] and assign individual fields; include `..` when
+/// destructuring:
+///
+/// ```
+/// use basin::EvalCounts;
+///
+/// let mut counts = EvalCounts::default();
+/// counts.cost_evals = 3;
+/// let EvalCounts { cost_evals, .. } = counts;
+/// assert_eq!(cost_evals, 3);
+/// ```
+///
+/// Struct literals, including struct update syntax, are unavailable outside
+/// Basin:
+///
+/// ```compile_fail,E0639
+/// let counts = basin::EvalCounts { ..Default::default() };
+/// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct EvalCounts {
     /// [`CostFunction::cost`] calls (including the cost side of fused
     /// [`Gradient::cost_and_gradient`]/[`Hessian::cost_and_gradient_and_hessian`]).

@@ -396,6 +396,24 @@ benchmarks, for example
 visualizer and competitor benchmark crate enable it explicitly in their
 dependencies.
 
+## Evaluation counters
+
+`EvalCounts` is now non-exhaustive so future releases can add evaluation
+categories. Replace struct literals, including those using
+`..EvalCounts::default()`, with default construction and field assignments:
+
+```rust
+let mut counts = basin::EvalCounts::default();
+counts.cost_evals = 3;
+counts.gradient_evals = 2;
+```
+
+Include `..` when destructuring `EvalCounts`:
+
+```rust
+let basin::EvalCounts { cost_evals, .. } = counts;
+```
+
 ## Checkpoint files
 
 Basin 2.0 removes bincode and the readers for the two legacy checkpoint formats.

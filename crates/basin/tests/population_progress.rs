@@ -147,14 +147,13 @@ fn member_order_storage_and_historical_pairs_survive_complete_replacement() {
     state
         .replace(vec![vec![2.0], vec![1.0]], vec![4.0, 1.0])
         .unwrap();
-    let counts = EvalCounts {
-        cost_evals: 2,
-        gradient_evals: 3,
-        residual_evals: 4,
-        jacobian_evals: 5,
-        hessian_evals: 6,
-        hessian_product_evals: 7,
-    };
+    let mut counts = EvalCounts::default();
+    counts.cost_evals = 2;
+    counts.gradient_evals = 3;
+    counts.residual_evals = 4;
+    counts.jacobian_evals = 5;
+    counts.hessian_evals = 6;
+    counts.hessian_product_evals = 7;
     state.mirror(&counts);
     state.update_best();
     assert_eq!(state.candidates(), &[vec![2.0], vec![1.0]]);
@@ -171,9 +170,10 @@ fn member_order_storage_and_historical_pairs_survive_complete_replacement() {
     state.replace(members, costs).unwrap();
     assert_eq!(state.candidates().as_ptr(), storage);
     state.increment_iter();
-    state.mirror(&EvalCounts {
-        cost_evals: 4,
-        ..counts
+    state.mirror(&{
+        let mut counts = counts;
+        counts.cost_evals = 4;
+        counts
     });
     state.update_best();
     coherent(&state);
@@ -182,10 +182,8 @@ fn member_order_storage_and_historical_pairs_survive_complete_replacement() {
     assert_eq!(state.incumbent_record().unwrap().iter, 0);
     assert_eq!(state.best_counts(), Some(&counts));
     state.replace(vec![vec![0.0]], vec![0.0]).unwrap();
-    let final_counts = EvalCounts {
-        cost_evals: 5,
-        ..counts
-    };
+    let mut final_counts = counts;
+    final_counts.cost_evals = 5;
     state.mirror(&final_counts);
     state.update_best();
     state.increment_iter();
@@ -481,17 +479,16 @@ fn external_solver_preserves_every_category_at_a_midstep_stop() {
     coherent(&result.state);
     assert_eq!(result.state.candidates(), &[vec![2.5], vec![2.0]]);
     assert_eq!(result.state.best(), Some((&vec![2.0], 4.0)));
-    assert_eq!(
-        result.counts,
-        basin::EvalCounts {
-            cost_evals: 5,
-            gradient_evals: 1,
-            residual_evals: 1,
-            jacobian_evals: 1,
-            hessian_evals: 1,
-            hessian_product_evals: 1,
-        }
-    );
+    assert_eq!(result.counts, {
+        let mut counts = basin::EvalCounts::default();
+        counts.cost_evals = 5;
+        counts.gradient_evals = 1;
+        counts.residual_evals = 1;
+        counts.jacobian_evals = 1;
+        counts.hessian_evals = 1;
+        counts.hessian_product_evals = 1;
+        counts
+    });
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.best_counts(), Some(&result.counts));
     assert_eq!(result.state.cost_evals(), 5);
@@ -576,17 +573,16 @@ fn partial_refinement_failure_publishes_prior_improvements_and_all_inner_work()
     coherent(&result.state);
     assert_eq!(result.state.costs(), &[0.0, 0.25, 16.0, 16.0]);
     assert_eq!(result.state.best(), Some((&vec![0.0], 0.0)));
-    assert_eq!(
-        result.counts,
-        basin::EvalCounts {
-            cost_evals: 13,
-            gradient_evals: 3,
-            residual_evals: 3,
-            jacobian_evals: 3,
-            hessian_evals: 3,
-            hessian_product_evals: 3,
-        }
-    );
+    assert_eq!(result.counts, {
+        let mut counts = basin::EvalCounts::default();
+        counts.cost_evals = 13;
+        counts.gradient_evals = 3;
+        counts.residual_evals = 3;
+        counts.jacobian_evals = 3;
+        counts.hessian_evals = 3;
+        counts.hessian_product_evals = 3;
+        counts
+    });
     assert_eq!(result.state.counts(), &result.counts);
     assert_eq!(result.state.best_counts(), Some(&result.counts));
     assert_eq!(result.state.cost_evals(), 13);
