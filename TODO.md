@@ -287,18 +287,20 @@ desired backend features.
 
 - [x] **Revisit convergence defaults for LM, L-BFGS-B, and both TRF
   implementations ([#109](https://github.com/jolars/basin/issues/109)).**
-  Validate scaled stopping criteria or concrete configuration guidance on
-  NIST cases and known premature stops. Preserve Basin 1.x defaults.
-  Nelder-Mead's new defaults and the delivered numerical safeguards do not
-  close this issue. Bounded `f64` L-BFGS now uses projected-gradient
+  Bounded `f64` L-BFGS now uses projected-gradient
   tolerance `1e-9` and signed cost-reduction tolerance `10*f64::EPSILON`,
   after a bounded NIST investigation and a fix for nonfinite selected
   evaluations. The `f32` defaults are unchanged. The [NIST
   fixtures](crates/competitor-bench/fixtures/nist/README.md) remain
   available for future solver comparisons. See the [migration
   guide](MIGRATING.md#l-bfgs-b-stopping-defaults) for the individual knobs
-  and accuracy tradeoffs. LM, both TRF implementations, and scaled-gradient
-  guidance still need decisions.
+  and accuracy tradeoffs. A fixed, source-informed comparison on both NIST
+  starts and curated scaling cases supports retaining the existing LM and
+  TRF defaults: the tested relative policies saved evaluations but reduced
+  independently verified recovery. Relative checks remain opt-in. The
+  [decision and scaling guidance](MIGRATING.md#lm-and-trf-stopping-defaults)
+  explain the formulas, evidence, and limitations; this decision does not
+  claim scale-invariant convergence.
 
 - [x] **Make structured termination reports part of ordinary results.** Ordinary
   `run()` returns an owned report, final state, and authoritative counts.

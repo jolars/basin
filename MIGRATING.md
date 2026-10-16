@@ -1296,6 +1296,75 @@ does not resolve different units across coordinates. Scale parameters or tune
 the floors for the problem. Use GBNM when a projected search needs its restart
 strategy. Basin 1.x defaults remain unchanged on `v1`.
 
+## LM and TRF stopping defaults
+
+Basin 2.0 retains the existing defaults for both LM factorizations, legacy
+`Trf`, and full `TrustRegionReflective`, for both scalar types. LM enables
+only `with_absolute_gradient_tolerance(1e-8)`, testing `||J^T r||_infinity`.
+Both TRF implementations enable only
+`with_absolute_scaled_gradient_tolerance(1e-8)`, testing
+`max_i |v_i (J^T r)_i|` with distance-to-bound scaling. Optional relative
+checks remain disabled. These absolute thresholds depend on residual and
+parameter units; distance-to-bound scaling does not remove that dependence.
+
+The [fixed stopping-policy comparison](crates/competitor-bench/fixtures/nist/README.md#basin-20-stopping-policy-decision)
+compared published LM criteria and one curated TRF configuration against the
+current defaults, without a tolerance search or damping changes. On all 54
+NIST starts, the LM alternative reduced joint parameter/RSS recovery at
+relative error `1e-4` from 50 to 47 for each factorization. Adding observed
+relative cost and step checks reduced recovery from 50 to 37 for legacy
+`Trf` and from 51 to 46 for full TRF. The alternatives used fewer evaluations
+and reported convergence more often, but did not support replacing the
+defaults. Recovery was measured independently of the stopping reason. This
+comparison used `f64` and unbounded problems on one backend; it establishes
+neither universal accuracy nor a new `f32` policy.
+
+For problems whose units make the default tests unsuitable, first choose
+parameter scales `s_j` and a common residual scale `a`. Optimize in coordinates
+`z_j = x_j / s_j`, returning `r(x) / a` and the transformed Jacobian
+`J(x) diag(s) / a`. Transform bounds to the same coordinates. Choose scales
+that make relevant parameter changes and residual magnitudes reasonably close
+to one, while preserving the intended relative residual weights. A common
+residual multiplier preserves the minimizer; independently changing residual
+weights generally changes the fitting problem. Tolerances still need to
+reflect the desired accuracy, conditioning, and derivative error.
+
+For example, `r(x) = 1e-6 * (x - 1)` has gradient `1e-12 * (x - 1)`.
+The default absolute test accepts `x = 0` immediately. Dividing this residual
+and its Jacobian by `1e-6` removes that unit effect. The retained analytic
+cases exercise this failure and a separate change of parameter units.
+
+LM also offers dimensionless gradient orthogonality and native relative
+model reduction. To evaluate those tests instead of the absolute gradient
+test for an `f64` problem:
+
+```rust
+let solver: basin::LevenbergMarquardt<Vec<f64>, basin::DenseMatrix> =
+    basin::LevenbergMarquardt::new()
+        .with_absolute_gradient_tolerance(None)
+        .with_gradient_orthogonality_tolerance(1e-8)
+        .with_relative_model_reduction_tolerance(1e-8);
+```
+
+Call `with_pivoted_qr()` on this solver to retain the same settings with QR.
+These are MINPACK-inspired gradient/model tests, not the complete SciPy LM
+policy. MINPACK's parameter test uses a scaled trust radius; Basin's
+`with_relative_trust_radius_tolerance` requires `LmDamping::TrustRegion` and
+is inactive with default Nielsen damping. A small model reduction can also
+occur at an inaccurate, heavily damped point. Validate the returned fit
+independently before choosing relative checks for an application.
+
+For TRF, `with_relative_cost_change_tolerance` and
+`with_relative_step_tolerance` inspect published iterates. SciPy's TRF cost
+test additionally requires adequate model agreement, and its parameter test
+uses a different formula on trial steps, including rejected trials. Setting
+Basin's observed tolerances to SciPy's numbers does not reproduce that policy.
+Tune the native gradient threshold to the problem's units; use observed tests
+only when their documented meaning fits the application. Keep an execution
+budget, and inspect structured termination reports: `NumericalNoProgress`
+does not certify stationarity, and neither convergence nor a small RSS alone
+guarantees parameter recovery.
+
 ## Optional least-squares trial observations
 
 `GaussNewton`, LM, pivoted-QR LM, legacy `Trf`, and `TrustRegionReflective` now offer
