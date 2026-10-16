@@ -1,12 +1,13 @@
 //! Fixed, source-informed stopping policies, without a tolerance sweep.
 //! Run `cargo run -p competitor-bench --release --bin verify_nlls_defaults`.
-//! Both LM policies retain Nielsen damping, and TRF uses Basin's observed
-//! cost/step formulas for TRF; neither policy reproduces SciPy trajectories.
+//! Both LM policies retain Nielsen damping. Bounded LM and TRF use Basin's
+//! observed cost and step formulas; neither policy reproduces SciPy trajectories.
 
 use basin::{
-    BoxBounds, Constrained, Constraints, EvaluationKind, Executor, Jacobian,
-    LevenbergMarquardt, LmDamping, NoConstraints, PointState,
-    ProblemConstraints, Residual, Solver, Trf, TrustRegionReflective,
+    BoundedLevenbergMarquardt, BoxBounds, Constrained, Constraints,
+    EvaluationKind, Executor, Jacobian, LevenbergMarquardt, LmDamping,
+    NoConstraints, PointState, ProblemConstraints, Residual, Solver,
+    TrustRegionReflective,
 };
 use competitor_bench::nist::{Nist, datasets};
 use std::fmt::Debug;
@@ -232,7 +233,7 @@ fn compare<P: Fixture>(fixture: P) {
                 start,
                 x,
             );
-            let trf_policy = if relative {
+            let bounded_policy = if relative {
                 "observed-relative"
             } else {
                 "current"
@@ -246,41 +247,41 @@ fn compare<P: Fixture>(fixture: P) {
                     )),
                 )
             };
-            let trf = Trf::<Vector, Matrix>::new();
-            let full_trf = TrustRegionReflective::new();
+            let bounded_lm = BoundedLevenbergMarquardt::<Vector, Matrix>::new();
+            let trf = TrustRegionReflective::new();
             if relative {
+                run(
+                    &fixture,
+                    boxed(),
+                    bounded_lm
+                        .with_relative_cost_change_tolerance(1e-8)
+                        .with_relative_step_tolerance(1e-8),
+                    "bounded-lm",
+                    bounded_policy,
+                    start,
+                    x,
+                );
                 run(
                     &fixture,
                     boxed(),
                     trf.with_relative_cost_change_tolerance(1e-8)
                         .with_relative_step_tolerance(1e-8),
                     "trf",
-                    trf_policy,
-                    start,
-                    x,
-                );
-                run(
-                    &fixture,
-                    boxed(),
-                    full_trf
-                        .with_relative_cost_change_tolerance(1e-8)
-                        .with_relative_step_tolerance(1e-8),
-                    "full-trf",
-                    trf_policy,
+                    bounded_policy,
                     start,
                     x,
                 );
             } else {
-                run(&fixture, boxed(), trf, "trf", trf_policy, start, x);
                 run(
                     &fixture,
                     boxed(),
-                    full_trf,
-                    "full-trf",
-                    trf_policy,
+                    bounded_lm,
+                    "bounded-lm",
+                    bounded_policy,
                     start,
                     x,
                 );
+                run(&fixture, boxed(), trf, "trf", bounded_policy, start, x);
             }
         }
     }

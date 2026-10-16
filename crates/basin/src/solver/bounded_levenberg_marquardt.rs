@@ -18,16 +18,15 @@ use super::least_squares_diagnostics::{
     LeastSquaresCheck, LeastSquaresDiagnostics, LeastSquaresObservation, Trace,
 };
 
-/// Levenberg-Marquardt with Coleman–Li box scaling (simplified TRF)
+/// Levenberg-Marquardt with Coleman–Li box scaling
 /// for nonlinear least-squares problems `min ½‖r(x)‖²` subject to
-/// `lower ≤ x ≤ upper`. The first n-D box-constrained NLLS solver in
-/// basin and the natural extension of [`LevenbergMarquardt`](super::LevenbergMarquardt)
-/// to bounded problems.
+/// `lower ≤ x ≤ upper`. Extends
+/// [`LevenbergMarquardt`](super::LevenbergMarquardt) to bounded problems.
 ///
 /// For an explicit trust-region radius, reflected steps, and rank-aware dense
 /// subproblems, use [`TrustRegionReflective`](super::TrustRegionReflective).
-/// This type retains its bounded-LM behavior and backend support through
-/// Basin 1.x.
+/// This solver uses Nielsen damping and strictly feasible steps without
+/// reflection or an explicit trust-region radius.
 ///
 /// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss.
 /// The adapter supplies the safeguarded Gauss–Newton model. Reported costs,
@@ -65,15 +64,15 @@ use super::least_squares_diagnostics::{
 /// When `lower = -∞` and `upper = +∞` element-wise, the BCL scaling
 /// reduces to `D = I`, `C = 0`, the step-back is a no-op, and the
 /// algorithm becomes exactly Levenberg-Marquardt with Nielsen's μ-update:
-/// same iterates, same convergence. `Trf` strictly subsumes
-/// [`LevenbergMarquardt`](super::LevenbergMarquardt) at the trait-bound
+/// same iterates, same convergence. `BoundedLevenbergMarquardt` strictly
+/// subsumes [`LevenbergMarquardt`](super::LevenbergMarquardt) at the trait-bound
 /// level (the reverse is a compile error: LM bounds on
 /// `Residual + Jacobian` only, not [`BoxBounds`](crate::BoxBounds)).
 ///
-/// # Simplified bounded-LM variant
+/// # Bounded-LM variant
 ///
-/// Basin's `Trf` is a deliberate simplification of the full STIR
-/// algorithm in BCL §4. It ships:
+/// Basin's `BoundedLevenbergMarquardt` is a deliberate simplification of
+/// the full STIR algorithm in BCL §4. It ships:
 ///
 /// - The Coleman-Li affine scaling matrix `D` and curvature correction
 ///   `C` (BCL eqs 2.1–2.6).
@@ -134,8 +133,8 @@ use super::least_squares_diagnostics::{
 /// replace the gradient test or establish stationarity when progress stalls.
 /// Non-finite damping or trial-model predictions stop with a numerical failure
 /// before evaluating another trial, preserving the current point and cost.
-/// Execution budgets belong on the executor. The gradient is computed inside
-/// TRF; [`PointState`] does not expose a [`GradientState`](crate::GradientState).
+/// Execution budgets belong on the executor. The solver computes the gradient
+/// internally; [`PointState`] does not expose a [`GradientState`](crate::GradientState).
 ///
 /// # Backends
 ///
@@ -150,9 +149,16 @@ use super::least_squares_diagnostics::{
 /// The sparse damping path requires the diagonal of `JᵀJ` to be in the
 /// CSC pattern (always true when `J` has no zero columns); see
 /// `AddDiagonalVectorInPlace`.
-/// All support `f32` and `f64`; use `Trf::default()` for `f32`.
+/// All support `f32` and `f64`; use `BoundedLevenbergMarquardt::default()` for `f32`.
 /// Robust objectives additionally require [`ScaleRowsInPlace`] on custom
 /// Jacobian types.
+///
+/// # References
+///
+/// - M. A. Branch, T. F. Coleman, and Y. Li (1999), "A Subspace, Interior, and
+///   Conjugate Gradient Method for Large-Scale Bound-Constrained Minimization
+///   Problems", *SIAM Journal on Scientific Computing* 21(1), 1–23.
+///   <https://doi.org/10.1137/S1064827595289108>.
 ///
 /// # State convention
 ///
@@ -172,10 +178,10 @@ use super::least_squares_diagnostics::{
 /// # Examples
 ///
 /// See [`LevenbergMarquardt`](crate::LevenbergMarquardt) for the
-/// `Residual` + `Jacobian` least-squares pattern; `Trf` additionally
-/// requires a box-only constraint declaration and is constructed
-/// with `Trf::new()`.
-pub struct Trf<V, M, F: Scalar = f64> {
+/// `Residual` + `Jacobian` least-squares pattern. `BoundedLevenbergMarquardt`
+/// additionally requires a box-only constraint declaration and is constructed
+/// with `BoundedLevenbergMarquardt::new()`.
+pub struct BoundedLevenbergMarquardt<V, M, F: Scalar = f64> {
     tol_grad: Option<F>,
     tau: F,
     rstep: F,
@@ -201,13 +207,15 @@ pub struct Trf<V, M, F: Scalar = f64> {
     trace_vector: Option<fn(&V) -> Vec<F>>,
 }
 
-impl<V, M, F: Scalar> LeastSquaresDiagnostics<F> for Trf<V, M, F> {
+impl<V, M, F: Scalar> LeastSquaresDiagnostics<F>
+    for BoundedLevenbergMarquardt<V, M, F>
+{
     fn least_squares_observations(&self) -> &[LeastSquaresObservation<F>] {
         self.trace.as_ref().map_or(&[], |trace| &trace.observations)
     }
 }
 
-impl<V, M, F: Scalar> Default for Trf<V, M, F> {
+impl<V, M, F: Scalar> Default for BoundedLevenbergMarquardt<V, M, F> {
     fn default() -> Self {
         Self {
             tol_grad: Some(F::from_f64(1e-8).unwrap()),
@@ -228,8 +236,8 @@ impl<V, M, F: Scalar> Default for Trf<V, M, F> {
     }
 }
 
-impl<V, M> Trf<V, M> {
-    /// `Trf` with the canonical defaults: `tol_grad = 1e-8`,
+impl<V, M> BoundedLevenbergMarquardt<V, M> {
+    /// `BoundedLevenbergMarquardt` with the canonical defaults: `tol_grad = 1e-8`,
     /// `tau = 1e-3`, `rstep = 1e-10`, `theta = 0.99995`,
     /// `max_inner_attempts = 50`.
     pub fn new() -> Self {
@@ -237,7 +245,7 @@ impl<V, M> Trf<V, M> {
     }
 }
 
-impl<V, M, F: Scalar> Trf<V, M, F> {
+impl<V, M, F: Scalar> BoundedLevenbergMarquardt<V, M, F> {
     /// Enable native model and trial observations (disabled by default).
     ///
     /// Recording requires indexed vectors but adds no problem evaluations.
@@ -311,7 +319,7 @@ impl<V, M, F: Scalar> Trf<V, M, F> {
     }
 }
 
-impl<V, M, F> InitialState<V> for Trf<V, M, F>
+impl<V, M, F> InitialState<V> for BoundedLevenbergMarquardt<V, M, F>
 where
     F: Scalar,
     V: Clone,
@@ -322,7 +330,8 @@ where
     }
 }
 
-impl<P, V, M, F> Solver<P, PointState<V, F>> for Trf<V, M, F>
+impl<P, V, M, F> Solver<P, PointState<V, F>>
+    for BoundedLevenbergMarquardt<V, M, F>
 where
     F: Scalar,
     P: Residual<Param = V, Output = V>
@@ -371,7 +380,7 @@ where
 }
 
 impl<P, L, V, M, F> Solver<RobustLeastSquares<P, L, F>, PointState<V, F>>
-    for Trf<V, M, F>
+    for BoundedLevenbergMarquardt<V, M, F>
 where
     F: Scalar,
     P: crate::ProblemConstraints<
@@ -425,7 +434,7 @@ where
     }
 }
 
-impl<V, M, F: Scalar> Trf<V, M, F>
+impl<V, M, F: Scalar> BoundedLevenbergMarquardt<V, M, F>
 where
     V: ScaledAdd<F>
         + NormSquared<F>
@@ -527,7 +536,7 @@ where
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::numerical_failure(
-                    "Legacy TRF could not initialize a finite residual model.",
+                    "Bounded LM could not initialize a finite residual model.",
                 )),
             )));
         }
@@ -551,7 +560,7 @@ where
                     return Ok(crate::SolverStep::from((
                         state,
                         Some(Termination::numerical_failure(
-                            "Legacy TRF could not construct the residual model at the current point.",
+                            "Bounded LM could not construct the residual model at the current point.",
                         )),
                     )));
                 };
@@ -574,7 +583,7 @@ where
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::numerical_failure(
-                    "The legacy TRF model gradient is invalid.",
+                    "The bounded LM model gradient is invalid.",
                 )),
             )));
         }
@@ -631,8 +640,8 @@ where
             return Ok(crate::SolverStep::from((
                 state,
                 Some(Termination::custom(
-                    "trf.legacy_scaled_gradient",
-                    "The legacy bounded-LM Coleman-Li KKT gradient metric is at most the absolute tolerance.",
+                    "bounded_lm.scaled_gradient",
+                    "The bounded LM Coleman-Li KKT gradient metric is at most the absolute tolerance.",
                     vec![
                         crate::Measurement {
                             name: "scaled_gradient".into(),
@@ -697,7 +706,7 @@ where
             if !mu.is_finite() || !nu.is_finite() {
                 fail_model!(
                     "nonfinite_damping",
-                    "Legacy TRF produced non-finite damping."
+                    "Bounded LM produced non-finite damping."
                 );
             }
             let mut a_damped = m.clone();
@@ -747,7 +756,7 @@ where
                         return Ok(crate::SolverStep::from((
                             state,
                             Some(Termination::numerical_failure(
-                                "Legacy TRF exhausted damped linear-solve attempts or produced non-finite damping.",
+                                "Bounded LM exhausted damped linear-solve attempts or produced non-finite damping.",
                             )),
                         )));
                     }
@@ -812,7 +821,7 @@ where
             }
             fail_model!(
                 "nonfinite_trial_model",
-                "Legacy TRF produced a non-finite trial model."
+                "Bounded LM produced a non-finite trial model."
             );
         }
 

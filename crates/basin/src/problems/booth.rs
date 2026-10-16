@@ -217,8 +217,8 @@ impl BoothBoxed<Vec<f64>> {
 // Booth factors as a 2-residual least-squares problem
 // `r = [x+2y−7, 2x+y−5]` with constant Jacobian `[[1,2],[2,1]]` and
 // `Σ rᵢ² == booth(x, y)` exactly (unscaled-sum convention shared with
-// `RosenbrockResiduals`). Used as a fixture for `Trf` (S6): the
-// constrained optimum on `[-1, 1]²` is the corner (1, 1), giving a
+// `RosenbrockResiduals`). Used as a fixture for `BoundedLevenbergMarquardt`:
+// the constrained optimum on `[-1, 1]²` is the corner (1, 1), giving a
 // load-bearing edge-active test case.
 
 /// Booth function exposed as a least-squares problem (2 residuals, 2
@@ -244,9 +244,9 @@ impl<P> HasSpec for BoothResiduals<P> {
 }
 
 /// Booth-as-residuals with explicit element-wise box bounds, suitable
-/// for [`Trf`](crate::solver::Trf). The unconstrained min `(1, 3)`
-/// lies outside tighter boxes (e.g. `[-1, 1]²`), where the constrained
-/// optimum sits at the box corner `(1, 1)`: a load-bearing edge-active
+/// for [`BoundedLevenbergMarquardt`](crate::BoundedLevenbergMarquardt).
+/// The unconstrained min `(1, 3)` lies outside tighter boxes (e.g. `[-1, 1]²`),
+/// where the constrained optimum sits at the box corner `(1, 1)`: a load-bearing edge-active
 /// test case where the unprojected `‖∇f‖_∞` is large but the BCL
 /// scaled-gradient measure `‖D · Jᵀr‖_∞` vanishes.
 pub struct BoothBoxedResiduals<P> {

@@ -71,8 +71,8 @@ impl<M, V> HasSpec for SparseLeastSquares<M, V> {
 
 /// Sparse linear least-squares problem with explicit element-wise box
 /// bounds: `min_x ½ ‖A · x − b‖²` subject to `lower ≤ x ≤ upper`.
-/// Suitable for [`Trf`](crate::solver::Trf) when bounds make the
-/// closed-form least-squares minimum infeasible.
+/// Suitable for [`BoundedLevenbergMarquardt`](crate::BoundedLevenbergMarquardt)
+/// when bounds make the closed-form least-squares minimum infeasible.
 pub struct SparseLeastSquaresBoxed<M, V> {
     /// Design matrix `A` (typically tall and sparse).
     pub a: M,

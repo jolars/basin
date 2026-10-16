@@ -22,8 +22,8 @@
 //! damping), and the load-bearing [`LinearSolveSpd`](super::LinearSolveSpd) via
 //! a pure-Rust Cholesky (`dense_chol`), so the normal-equations least-squares
 //! solvers all run on `Vec<f64>`: Gauss-Newton, Levenberg-Marquardt, and
-//! (with the diagonal-scaling op [`MaxDiagonal`](super::MaxDiagonal)) the
-//! trust-region-reflective TRF. [`FactorizePivotedQr`](super::FactorizePivotedQr)
+//! (with the diagonal-scaling op [`MaxDiagonal`](super::MaxDiagonal))
+//! [`BoundedLevenbergMarquardt`](crate::BoundedLevenbergMarquardt). [`FactorizePivotedQr`](super::FactorizePivotedQr)
 //! additionally supplies Householder QR with numerical column pivoting and
 //! reusable diagonal regularization, used by
 //! [`LevenbergMarquardtQr`](crate::LevenbergMarquardtQr). It is shared with
@@ -56,7 +56,7 @@ use super::{
 /// [`SymmetricEigen`] for CMA-ES, and the SPD-solve quartet [`GramMatrix`],
 /// `AddDiagonalVectorInPlace`, `MaxDiagonal`, and a Cholesky
 /// [`LinearSolveSpd`] for the normal-equations least-squares family
-/// (Gauss-Newton, Levenberg-Marquardt, TRF).
+/// (Gauss-Newton, Levenberg-Marquardt, and bounded LM).
 /// [`FactorizePivotedQr`](super::FactorizePivotedQr) supports the opt-in QR
 /// route with explicit numerical rank checks after regularization.
 #[derive(Clone, Debug, PartialEq)]

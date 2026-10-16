@@ -148,10 +148,14 @@ fn bounds_and_fixed_coordinates_use_the_robust_objective() {
         }
     }
     let problem = RobustLeastSquares::new(bounded(-1.0, 0.2), HuberLoss);
-    let result = Executor::from_start(problem, basin::Trf::new(), vec![0.0])
-        .max_iter(100)
-        .run()
-        .unwrap();
+    let result = Executor::from_start(
+        problem,
+        basin::BoundedLevenbergMarquardt::new(),
+        vec![0.0],
+    )
+    .max_iter(100)
+    .run()
+    .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!((result.param()[0] - 0.2).abs() < 1e-6);
 }
@@ -248,7 +252,10 @@ fn checkpoint_and_fresh_reuse_preserve_the_objective_and_counts() {
     check(GaussNewton::new, basin::SamplingDomain::new);
     check(LevenbergMarquardt::new, basin::SamplingDomain::new);
     check(LevenbergMarquardtQr::new, basin::SamplingDomain::new);
-    check(basin::Trf::new, std::convert::identity);
+    check(
+        basin::BoundedLevenbergMarquardt::new,
+        std::convert::identity,
+    );
     check(basin::TrustRegionReflective::new, std::convert::identity);
 }
 

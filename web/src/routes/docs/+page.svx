@@ -97,14 +97,15 @@ algorithm references.
 - **No derivatives, low dimension**: `NelderMead`, or Powell's model-based
   `Newuoa`/`Bobyqa` for smoother functions.
 - **Sum-of-squares residuals**: the nonlinear-least-squares family,
-  `GaussNewton`, `LevenbergMarquardt`, or `Trf` (trust-region-reflective, for
-  bound constraints).
+  `GaussNewton` or `LevenbergMarquardt`, with `BoundedLevenbergMarquardt`
+  and `TrustRegionReflective` for box bounds.
 - **Rugged or multimodal landscape**: the global and stochastic optimizers,
   `CmaEs`, the steady-state GA, or a memetic hybrid.
 - **Constraints**: box bounds, linear (in)equalities, and nonlinear constraints
   describe the *problem*, so they live problem-side. Bounded solvers (`Lbfgsb`,
-  bounded `NelderMead`, `Trf`) consume them directly; adapters (projection,
-  log-barrier, augmented Lagrangian, or `Cobyla`) wrap unconstrained solvers.
+  bounded `NelderMead`, `BoundedLevenbergMarquardt`, `TrustRegionReflective`)
+  consume them directly; adapters (projection, log-barrier, augmented Lagrangian,
+  or `Cobyla`) wrap unconstrained solvers.
 - **Scalar equation with a sign-changing interval**: `BrentRoot` combines
   bisection, secant steps, and inverse quadratic interpolation through a direct
   root-specific API.

@@ -1,8 +1,9 @@
 use basin::{
-    ArctanLoss, CauchyLoss, CostFunction, DenseMatrix, Executor, GaussNewton,
-    HuberLoss, Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, LmDamping,
-    LossFunction, PointState, Residual, RobustLeastSquares, SoftL1Loss, Solver,
-    SquaredLoss, Trf, TrustRegionReflective,
+    ArctanLoss, BoundedLevenbergMarquardt, CauchyLoss, CostFunction,
+    DenseMatrix, Executor, GaussNewton, HuberLoss, Jacobian,
+    LevenbergMarquardt, LevenbergMarquardtQr, LmDamping, LossFunction,
+    PointState, Residual, RobustLeastSquares, SoftL1Loss, Solver, SquaredLoss,
+    TrustRegionReflective,
 };
 
 #[derive(Clone)]
@@ -196,7 +197,7 @@ fn solvers_match_scipy_on_outlier_contaminated_fits() {
                 basin::SamplingDomain::new
             );
         }
-        run!(Trf::new(), std::convert::identity);
+        run!(BoundedLevenbergMarquardt::new(), std::convert::identity);
         run!(TrustRegionReflective::new(), std::convert::identity);
     }
 }

@@ -104,7 +104,7 @@
 //! | `Bfgs` | `FirstOrderState` | ✓ (`Vec`/nalgebra/ndarray/faer) |
 //! | `Lbfgs`, `Lbfgsb` | `FirstOrderState` | ✓ |
 //! | `TrustRegion` | `FirstOrderState` | ✓ |
-//! | `GaussNewton`, `LevenbergMarquardt`, `LevenbergMarquardtQr`, `Trf`, `TrustRegionReflective` | `PointState` | ✓ |
+//! | `GaussNewton`, `LevenbergMarquardt`, `LevenbergMarquardtQr`, `BoundedLevenbergMarquardt`, `TrustRegionReflective` | `PointState` | ✓ |
 //! | `NelderMead` | `SimplexProgress` | ✓ |
 //! | `Gbnm` | `PointState` | ✓ |
 //! | `Newuoa`, `Bobyqa`, `Lincoa` | `PointState` | ✓ |
@@ -424,13 +424,14 @@ pub use crate::solver::trust_region::{
 };
 pub use crate::solver::{
     AcceptanceTest, AugmentedLagrangianMethod, BarrierMethod, BasinHopping,
-    Bobyqa, BoundedCmaEs, BoundedCmaInject, Brent, BrentDerivative, CgUpdate,
-    ClosureInner, CmaEs, CmaInject, Cobyla, De, DeCrossover, DeInject,
-    DeMutation, Direct, GaussNewton, Gbnm, GlobalBestPso, GoldenSection,
-    GradientDescent, LevenbergMarquardt, LevenbergMarquardtQr, Lincoa,
-    LmDamping, MaLsCh, MaLsChCma, MaLsChSw, Mads, MemeticInner, Metropolis,
-    Neighbor, NelderMead, Newuoa, NonlinearCg, ProjectedGradientDescent,
-    PsoBoundaryHandling, PsoVelocityLimit, RandomDisplacement, RandomSearch,
-    Reannealing, Sgd, SimulatedAnnealing, Slsqp, SlsqpFailure, SolisWets, Ssga,
-    StepTaker, TemperatureSchedule, Trf, TrustRegionReflective,
+    Bobyqa, BoundedCmaEs, BoundedCmaInject, BoundedLevenbergMarquardt, Brent,
+    BrentDerivative, CgUpdate, ClosureInner, CmaEs, CmaInject, Cobyla, De,
+    DeCrossover, DeInject, DeMutation, Direct, GaussNewton, Gbnm,
+    GlobalBestPso, GoldenSection, GradientDescent, LevenbergMarquardt,
+    LevenbergMarquardtQr, Lincoa, LmDamping, MaLsCh, MaLsChCma, MaLsChSw, Mads,
+    MemeticInner, Metropolis, Neighbor, NelderMead, Newuoa, NonlinearCg,
+    ProjectedGradientDescent, PsoBoundaryHandling, PsoVelocityLimit,
+    RandomDisplacement, RandomSearch, Reannealing, Sgd, SimulatedAnnealing,
+    Slsqp, SlsqpFailure, SolisWets, Ssga, StepTaker, TemperatureSchedule,
+    TrustRegionReflective,
 };

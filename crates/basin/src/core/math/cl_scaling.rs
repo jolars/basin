@@ -1,8 +1,9 @@
 //! Vector-tier primitives for box-constrained NLLS: the Coleman-Li
 //! affine scaling vectors and friends.
 //!
-//! Three element-wise operations the [`Trf`](crate::solver::Trf) solver
-//! needs that aren't generic enough to live in `math.rs`:
+//! Element-wise operations for
+//! [`BoundedLevenbergMarquardt`](crate::BoundedLevenbergMarquardt)
+//! that aren't generic enough to live in `math.rs`:
 //!
 //! - **Coleman-Li affine scaling**: `d²` and the `C` diagonal from
 //!   Branch-Coleman-Li 1999 eqs (i)–(iv) (`source.marker.md:54-59` in
@@ -11,7 +12,7 @@
 //!   curvature correction `C = D·diag(g)·J^v·D` that's also diagonal.
 //! - **Strict-interior step-back**: largest `τ` keeping `x + τ·s` in
 //!   the box, used to cut the unconstrained Newton step back to the
-//!   feasible region. The TRF caller multiplies by `θ < 1` to keep
+//!   feasible region. The bounded LM caller multiplies by `θ < 1` to keep
 //!   iterates in the *open* box (D is undefined where `v_i = 0`).
 //! - **Scaled gradient ∞-norm**: the `‖D·g‖_∞` first-order optimality
 //!   measure, computed from `g` and `d²` without materializing `D·g`.
@@ -31,14 +32,14 @@ use super::Scalar;
 /// vector backend basin ships (`Vec<f64>`, `nalgebra::DVector<f64>`,
 /// `ndarray::Array1<f64>`, `faer::Col<f64>`).
 ///
-/// Used exclusively by the [`Trf`](crate::solver::Trf) solver today.
+/// Used exclusively by
+/// [`BoundedLevenbergMarquardt`](crate::BoundedLevenbergMarquardt) today.
 /// The trait groups three otherwise-unrelated element-wise operations
 /// because they share their caller and have no other users; splitting
 /// would just inflate the solver's `where` clause.
 ///
 /// `F` defaults to `f64`, matching the legacy scalar pin; per-backend
-/// impls are generic in `F: Scalar` so [`Trf`](crate::solver::Trf) can
-/// run with `F = f32` once the broader NLLS slice picks it up.
+/// impls are generic in `F: Scalar` so bounded LM can run with `F = f32`.
 pub trait BoxAffineScaling<F = f64>: Sized {
     /// Coleman-Li affine scaling diagonals per Branch-Coleman-Li 1999
     /// eqs (i)–(iv). `self` is the current iterate `x`. After return:
@@ -59,7 +60,7 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     ///
     /// - **Caller must:** pass `self` strictly inside `[lower, upper]`
     ///   (no equalities). Cases (i)/(ii) divide by `|x_i − bound_i|`,
-    ///   which the caller must keep strictly positive. The TRF solver
+    ///   which the caller must keep strictly positive. The bounded LM solver
     ///   enforces this with an `init`-time strict-interior projection.
     /// - **Implementor must:** match the BCL case dispatch exactly.
     ///   Tied cases (`g_i = 0` exactly) fall into case (ii) per the
@@ -90,7 +91,7 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     ///   (and `lower_i` is finite). Take the minimum over all such
     ///   limits. Components with `step_i = 0` or with the relevant
     ///   bound infinite contribute no limit.
-    /// - The TRF caller multiplies `τ` by a strict-interior factor
+    /// - The bounded LM caller multiplies `τ` by a strict-interior factor
     ///   `θ ∈ [θ_l, 1)` to keep iterates in the *open* box.
     fn max_feasible_step(&self, step: &Self, lower: &Self, upper: &Self) -> F;
 
@@ -102,7 +103,7 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     /// problem: interior *or* face-active. The unscaled `‖g‖_∞`
     /// doesn't vanish on a finite face, and the scaled `‖D·g‖_∞ =
     /// max |g_i| / √|v_i|` actually *blows up* on a face (denominator
-    /// → 0), so neither is a usable termination measure for TRF.
+    /// → 0), so neither is a usable termination measure for bounded LM.
     ///
     /// SciPy's `least_squares(method='trf')` uses the same metric (its
     /// `g_norm = max |g · v|`); see
@@ -134,7 +135,7 @@ pub trait BoxAffineScaling<F = f64>: Sized {
     /// unchanged. The strict-interior offset is
     /// `rstep · max(1, |bound|)` from the relevant finite bound.
     ///
-    /// Used at TRF `init` to bring an arbitrary starting point into
+    /// Used at bounded LM `init` to bring an arbitrary starting point into
     /// the open feasible region: the affine scaling matrix `D` is
     /// undefined where `v_i = 0` (i.e. on a finite face).
     ///

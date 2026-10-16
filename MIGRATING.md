@@ -331,7 +331,7 @@ algorithm's setting and default unless noted here.
 | --- | --- | --- |
 | `Brent`, `BrentDerivative`, `GoldenSection` | `with_tol(relative, absolute)` | `new().with_relative_position_tolerance(relative).with_absolute_position_tolerance(absolute)` |
 | `BrentRoot` | `with_tol(relative, absolute)` | `with_relative_position_tolerance(relative).with_absolute_position_tolerance(absolute)` |
-| `GaussNewton`, `Trf`, `LevenbergMarquardt`, `LevenbergMarquardtQr` | `with_tol_grad` | `with_absolute_gradient_tolerance` (`with_absolute_scaled_gradient_tolerance` for `Trf`) |
+| `GaussNewton`, `BoundedLevenbergMarquardt`, `LevenbergMarquardt`, `LevenbergMarquardtQr` | `with_tol_grad` | `with_absolute_gradient_tolerance` (`with_absolute_scaled_gradient_tolerance` for `BoundedLevenbergMarquardt`) |
 | `LevenbergMarquardt`, `LevenbergMarquardtQr` | `with_tol_grad_rel`, `with_tol_cost_rel`, `with_tol_step_rel` | `with_gradient_orthogonality_tolerance`, `with_relative_model_reduction_tolerance`, `with_relative_step_tolerance` |
 | `LevenbergMarquardtQr` | `with_rank_tolerance` | `with_relative_rank_tolerance` |
 | `Lbfgs` in bounded mode | `with_tol_pg` | `with_absolute_projected_gradient_tolerance` |
@@ -511,7 +511,7 @@ following replacements are implemented on `main`:
   | `BasicState<V, F>`                                            | `FirstOrderState<V, F>`         | `GradientDescent`, `ProjectedGradientDescent`, both `TrustRegion` modes |
   | `BasicState<V, F>`                                            | `PointState<V, F>`              | `Sgd`, `BasinHopping`, `BarrierMethod`                                  |
   | `BasicState<V, F>`                                            | `SelectedState<V, F>`           | `AugmentedLagrangianMethod`                                             |
-  | `NllsState<V, F>`                                             | `PointState<V, F>`              | `GaussNewton`, both LM variants, `Trf`, `TrustRegionReflective`         |
+  | `NllsState<V, F>`                                             | `PointState<V, F>`              | `GaussNewton`, both LM variants, `BoundedLevenbergMarquardt`, `TrustRegionReflective`         |
   | `SimulatedAnnealingState<V, N, F, R>`                         | `ProposalState<V, F>`           | `SimulatedAnnealing`                                                    |
   | `SolisWetsState<V, F>`                                        | `PointState<V, F>`              | `SolisWets`                                                             |
   | `ScalarState<F>`                                              | `PointState<F, F>`              | `Brent`, `GoldenSection`                                                |
@@ -1296,6 +1296,35 @@ does not resolve different units across coordinates. Scale parameters or tune
 the floors for the problem. Use GBNM when a projected search needs its restart
 strategy. Basin 1.x defaults remain unchanged on `v1`.
 
+## Bounded least-squares solver name
+
+`Trf<V, M, F>` is now `BoundedLevenbergMarquardt<V, M, F>`. Replace imports
+from `basin::Trf` or `basin::solver::Trf` with the new name. The defining
+module changes from `basin::solver::trf` to
+`basin::solver::bounded_levenberg_marquardt`. Basin 2.0 removes the old type
+and module names without a compatibility alias.
+
+For example, construct the renamed solver with:
+
+```rust
+use basin::{BoundedLevenbergMarquardt, DenseMatrix};
+
+let solver: BoundedLevenbergMarquardt<Vec<f64>, DenseMatrix> =
+    BoundedLevenbergMarquardt::new();
+```
+
+The generic parameters, settings, defaults, algorithm, and dense and sparse
+backend support are unchanged by this rename. The solver uses Coleman-Li
+scaling, Nielsen damping, and strictly feasible steps. Its structured
+termination report now identifies scaled-gradient convergence as
+`bounded_lm.scaled_gradient` instead of `trf.legacy_scaled_gradient`.
+
+`TrustRegionReflective` keeps its name and algorithm. It provides an explicit
+trust-region radius, reflected-step selection, and rank-aware dense
+subproblems. Use `BoundedLevenbergMarquardt` to retain the former `Trf`
+algorithm and its sparse support; choosing `TrustRegionReflective` changes
+the method.
+
 ## LM damping default
 
 Basin 2.0 defaults to `LmDamping::TrustRegion` for both `f32` and `f64`,
@@ -1329,24 +1358,24 @@ Neither damping strategy uniformly outperformed the other.
 ## LM and TRF stopping defaults
 
 Basin 2.0 retains the existing stopping defaults for both LM factorizations,
-legacy `Trf`, and full `TrustRegionReflective`, for both scalar types. LM enables
-only `with_absolute_gradient_tolerance(1e-8)`, testing `||J^T r||_infinity`.
-Both TRF implementations enable only
+`BoundedLevenbergMarquardt`, and `TrustRegionReflective`, for both scalar
+types. LM enables only `with_absolute_gradient_tolerance(1e-8)`, testing
+`||J^T r||_infinity`. Bounded LM and TRF enable only
 `with_absolute_scaled_gradient_tolerance(1e-8)`, testing
 `max_i |v_i (J^T r)_i|` with distance-to-bound scaling. Optional relative
 checks remain disabled. These absolute thresholds depend on residual and
 parameter units; distance-to-bound scaling does not remove that dependence.
 
 The [fixed stopping-policy comparison](crates/competitor-bench/fixtures/nist/README.md#basin-20-stopping-policy-decision)
-compared published LM criteria and one curated TRF configuration against the
-then-current stopping defaults, with Nielsen damping held fixed for LM and
-without a tolerance search. On all 54 NIST starts, the LM alternative reduced
-joint parameter/RSS recovery at relative error `1e-4` from 50 to 47 for each
-factorization. Adding observed
-relative cost and step checks reduced recovery from 50 to 37 for legacy
-`Trf` and from 51 to 46 for full TRF. The alternatives used fewer evaluations
-and reported convergence more often, but did not support replacing the
-defaults. Recovery was measured independently of the stopping reason. This
+compared published LM criteria and a curated configuration for bounded LM and
+TRF against the then-current stopping defaults, with Nielsen damping held
+fixed for LM and without a tolerance search. On all 54 NIST starts, the LM
+alternative reduced joint parameter/RSS recovery at relative error `1e-4`
+from 50 to 47 for each factorization. Adding observed relative cost and step
+checks reduced recovery from 50 to 37 for
+`BoundedLevenbergMarquardt` and from 51 to 46 for TRF. The alternatives used
+fewer evaluations and reported convergence more often, but did not support
+replacing the defaults. Recovery was measured independently of the stopping reason. This
 comparison used `f64` and unbounded problems on one backend; it establishes
 neither universal accuracy nor a new `f32` policy.
 
@@ -1386,7 +1415,7 @@ It is inactive with Nielsen damping. A small model reduction can also
 occur at an inaccurate, heavily damped point. Validate the returned fit
 independently before choosing relative checks for an application.
 
-For TRF, `with_relative_cost_change_tolerance` and
+For bounded LM and TRF, `with_relative_cost_change_tolerance` and
 `with_relative_step_tolerance` inspect published iterates. SciPy's TRF cost
 test additionally requires adequate model agreement, and its parameter test
 uses a different formula on trial steps, including rejected trials. Setting
@@ -1399,8 +1428,8 @@ guarantees parameter recovery.
 
 ## Optional least-squares trial observations
 
-`GaussNewton`, LM, pivoted-QR LM, legacy `Trf`, and `TrustRegionReflective` now offer
-`with_trial_diagnostics(true)`. Import
+`GaussNewton`, LM, pivoted-QR LM, `BoundedLevenbergMarquardt`, and
+`TrustRegionReflective` now offer `with_trial_diagnostics(true)`. Import
 `basin::solver::least_squares_diagnostics::LeastSquaresDiagnostics` to read
 `least_squares_observations()` from the solver between stepper calls. Recording
 is disabled by default and adds no problem evaluations. It does allocate vectors
@@ -1419,12 +1448,12 @@ checkpoint continuation preserves the sequence. Execution controls can stop
 before a new solver decision, leaving the preceding batch intact; deduplicate by
 sequence number. Read batches after every step because later native observations
 replace the preceding batch. Structural `no_free_parameters` checks have no
-tolerance. Legacy `Trf`'s opt-in builder requires `VectorLen` and
+tolerance. `BoundedLevenbergMarquardt`'s opt-in builder requires `VectorLen` and
 `VectorIndex<F>` without adding those bounds to ordinary solves.
 
-The LM and legacy `Trf` type declarations now require `F: Scalar`, consistent
-with their existing implementations. Generic wrappers naming these types must
-declare the same bound; their `F = f64` defaults remain available.
+The LM and `BoundedLevenbergMarquardt` type declarations now require
+`F: Scalar`, consistent with their existing implementations. Generic wrappers
+naming these types must declare the same bound; their `F = f64` defaults remain available.
 `GaussNewton<V, M, F = f64>` now requires `F: Scalar` on its type declaration so its
 owned observations retain native precision. Explicit `f32` type declarations
 must supply the third parameter, for example

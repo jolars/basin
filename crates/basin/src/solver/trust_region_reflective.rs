@@ -27,8 +27,8 @@ use step::{Model, interior, number, update_radius};
 /// This dense variant uses Coleman–Li scaling, an explicit trust-region
 /// radius, a rank-aware SVD subproblem solve, and selection among a truncated
 /// trust-region step, a first-boundary reflection, and a scaled-gradient step.
-/// [`Trf`](crate::Trf) retains the earlier bounded-LM algorithm, including its
-/// sparse and downstream-backend support.
+/// [`BoundedLevenbergMarquardt`](crate::BoundedLevenbergMarquardt) uses
+/// bounded LM instead, with sparse and downstream-backend support.
 ///
 /// Wrap the raw problem in [`RobustLeastSquares`] to minimize a robust loss.
 /// The adapter supplies the safeguarded Gauss–Newton model. Reported costs,
@@ -55,9 +55,10 @@ use step::{Model, interior, number, update_radius};
 /// Finite objective decreases are accepted. The ratio uses ordinary actual
 /// objective reduction and the Coleman–Li model prediction, unlike the
 /// curvature-corrected actual reduction in the original paper and Basin's
-/// legacy `Trf`. Ratios below `0.25` shrink the radius to one quarter of the
-/// scaled step norm; ratios above `0.75` double it when the step exceeds `0.95`
-/// of the old radius. The interior factor is `max(0.995, 1 - ‖v ⊙ g‖∞)`.
+/// `BoundedLevenbergMarquardt`. Ratios below `0.25` shrink the radius to one
+/// quarter of the scaled step norm; ratios above `0.75` double it when the
+/// step exceeds `0.95` of the old radius. The interior factor is
+/// `max(0.995, 1 - ‖v ⊙ g‖∞)`.
 ///
 /// # Bounds and failure behavior
 ///

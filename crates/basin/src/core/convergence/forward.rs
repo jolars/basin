@@ -272,13 +272,13 @@ impl<CG, CX, CC, CT, V, F: Scalar>
 }
 
 impl<CG, CX, CC, CT, V, M, F: Scalar>
-    ConfiguredSolver<Trf<V, M, F>, CG, CX, CC, CT>
+    ConfiguredSolver<BoundedLevenbergMarquardt<V, M, F>, CG, CX, CC, CT>
 {
-    forward_setting!(Trf, with_absolute_scaled_gradient_tolerance, value: impl Into<Option<F>>);
-    forward_setting!(Trf, with_tau, tau: F);
-    forward_setting!(Trf, with_rstep, rstep: F);
-    forward_setting!(Trf, with_theta, theta: F);
-    forward_setting!(Trf, with_max_inner_attempts, n: u32);
+    forward_setting!(BoundedLevenbergMarquardt, with_absolute_scaled_gradient_tolerance, value: impl Into<Option<F>>);
+    forward_setting!(BoundedLevenbergMarquardt, with_tau, tau: F);
+    forward_setting!(BoundedLevenbergMarquardt, with_rstep, rstep: F);
+    forward_setting!(BoundedLevenbergMarquardt, with_theta, theta: F);
+    forward_setting!(BoundedLevenbergMarquardt, with_max_inner_attempts, n: u32);
 }
 
 impl<CG, CX, CC, CT, F: Scalar>

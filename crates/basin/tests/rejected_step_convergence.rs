@@ -1,11 +1,11 @@
 //! Rejected trials must not look like converged cost or parameter changes.
 
 use basin::{
-    CostFunction, DenseMatrix, ExactCheckpoint, Executor, FirstOrderState,
-    Gradient, Hessian, HessianProduct, Jacobian, LevenbergMarquardt, LmDamping,
-    PointState, Problem, Residual, RobustLeastSquares, RunControl, Solver,
-    SquaredLoss, State, TerminationCode, Trf, TrustRegion,
-    run_loop_with_control,
+    BoundedLevenbergMarquardt, CostFunction, DenseMatrix, ExactCheckpoint,
+    Executor, FirstOrderState, Gradient, Hessian, HessianProduct, Jacobian,
+    LevenbergMarquardt, LmDamping, PointState, Problem, Residual,
+    RobustLeastSquares, RunControl, Solver, SquaredLoss, State,
+    TerminationCode, TrustRegion, run_loop_with_control,
 };
 use std::convert::Infallible;
 
@@ -186,7 +186,12 @@ macro_rules! all_change_checks {
     };
 }
 
-all_change_checks!(trf, PointState, Trf::new(), bounded_square());
+all_change_checks!(
+    bounded_lm,
+    PointState,
+    BoundedLevenbergMarquardt::new(),
+    bounded_square()
+);
 all_change_checks!(
     trust_region,
     FirstOrderState,
@@ -242,8 +247,8 @@ lm_checks!(
     RobustLeastSquares::new(SquareResidual::new(), SquaredLoss),
     LevenbergMarquardt::new().with_pivoted_qr()
 );
-rejection_checks!(robust_trf,
-RobustLeastSquares::new(bounded_square(), SquaredLoss), PointState, Trf::new(), [
+rejection_checks!(robust_bounded_lm,
+RobustLeastSquares::new(bounded_square(), SquaredLoss), PointState, BoundedLevenbergMarquardt::new(), [
     with_absolute_cost_change_tolerance => CostTolerance,
     with_relative_cost_change_tolerance => RelativeCostTolerance,
     with_absolute_step_tolerance => ParamTolerance,

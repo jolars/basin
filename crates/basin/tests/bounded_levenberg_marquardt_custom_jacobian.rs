@@ -1,9 +1,9 @@
 use std::convert::Infallible;
 
 use basin::{
-    AddDiagonalVectorInPlace, CostFunction, Executor, GramMatrix, Jacobian,
-    LinearSolveError, LinearSolveSpd, MatTransposeVec, MaxDiagonal, Residual,
-    State, TerminationCode, Trf,
+    AddDiagonalVectorInPlace, BoundedLevenbergMarquardt, CostFunction,
+    Executor, GramMatrix, Jacobian, LinearSolveError, LinearSolveSpd,
+    MatTransposeVec, MaxDiagonal, Residual, State, TerminationCode,
 };
 
 #[derive(Clone)]
@@ -94,7 +94,7 @@ impl Jacobian for BoundedResidual {
 }
 
 #[test]
-fn trf_accepts_a_downstream_jacobian_type() {
+fn bounded_lm_accepts_a_downstream_jacobian_type() {
     let problem = BoundedResidual {
         lower: vec![-10.0],
         upper: vec![10.0],
@@ -103,7 +103,7 @@ fn trf_accepts_a_downstream_jacobian_type() {
 
     let result = Executor::from_start(
         problem,
-        Trf::<Vec<f64>, ScalarMatrix>::new(),
+        BoundedLevenbergMarquardt::<Vec<f64>, ScalarMatrix>::new(),
         vec![0.0],
     )
     .max_iter(50)
@@ -123,7 +123,7 @@ fn nonfinite_trial_model_stops_before_residual_evaluation() {
     };
     let mut stepper = Executor::from_start(
         problem,
-        Trf::<Vec<f64>, ScalarMatrix>::new(),
+        BoundedLevenbergMarquardt::<Vec<f64>, ScalarMatrix>::new(),
         vec![0.0],
     )
     .into_stepper()
@@ -131,7 +131,7 @@ fn nonfinite_trial_model_stops_before_residual_evaluation() {
     let counts = *stepper.counts();
     let outcome = stepper.step().unwrap();
     let basin::StepOutcome::Stopped(report) = outcome else {
-        panic!("a non-finite prediction must stop legacy TRF");
+        panic!("a non-finite prediction must stop bounded LM");
     };
     assert_eq!(report.code(), TerminationCode::SolverFailed);
     assert_eq!(stepper.state().param(), &vec![0.0]);

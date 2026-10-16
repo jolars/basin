@@ -336,8 +336,8 @@ mod tests {
     #[should_panic(expected = "sample_uniform_box requires finite bounds")]
     fn sample_uniform_box_rejects_non_finite_bounds() {
         // A `±∞` bound (e.g. a periodic coordinate left unbounded for
-        // `Trf`/`BoundedCmaEs` and then reused for `De`) must surface a
-        // clear basin-level precondition panic naming the coordinate,
+        // `BoundedLevenbergMarquardt` or `BoundedCmaEs` and then reused for `De`)
+        // must surface a clear basin-level precondition panic naming the coordinate,
         // not `rand`'s opaque internal `NonFinite` unwrap. See issue #41.
         let lower = vec![0.0, f64::NEG_INFINITY, 0.0];
         let upper = vec![1.0, f64::INFINITY, 1.0];

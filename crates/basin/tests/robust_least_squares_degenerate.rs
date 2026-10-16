@@ -1,8 +1,8 @@
 use basin::{
-    CostFunction, DenseMatrix, Executor, GaussNewton, Gradient, HuberLoss,
-    Jacobian, LevenbergMarquardt, LevenbergMarquardtQr, PointState, Residual,
-    RobustLeastSquares, Scalar, Solver, SquaredLoss, TerminationCode, Trf,
-    TrustRegionReflective,
+    BoundedLevenbergMarquardt, CostFunction, DenseMatrix, Executor,
+    GaussNewton, Gradient, HuberLoss, Jacobian, LevenbergMarquardt,
+    LevenbergMarquardtQr, PointState, Residual, RobustLeastSquares, Scalar,
+    Solver, SquaredLoss, TerminationCode, TrustRegionReflective,
 };
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 
@@ -123,7 +123,7 @@ fn zero_residuals_and_invalid_derivatives_use_one_fused_evaluation() {
     check_initial(GaussNewton::new, basin::SamplingDomain::new);
     check_initial(LevenbergMarquardt::new, basin::SamplingDomain::new);
     check_initial(LevenbergMarquardtQr::new, basin::SamplingDomain::new);
-    check_initial(Trf::new, std::convert::identity);
+    check_initial(BoundedLevenbergMarquardt::new, std::convert::identity);
     check_initial(TrustRegionReflective::new, std::convert::identity);
 }
 
@@ -161,7 +161,10 @@ fn damping_and_dense_svd_handle_a_rank_deficient_robust_model() {
         LevenbergMarquardtQr::new(),
         basin::SamplingDomain::new,
     );
-    check_rank_deficient(Trf::new(), std::convert::identity);
+    check_rank_deficient(
+        BoundedLevenbergMarquardt::new(),
+        std::convert::identity,
+    );
     check_rank_deficient(TrustRegionReflective::new(), std::convert::identity);
 }
 

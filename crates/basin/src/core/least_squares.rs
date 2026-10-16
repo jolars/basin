@@ -112,7 +112,7 @@ impl<F: Scalar, L: LossFunction<F> + ?Sized> LossFunction<F> for &L {
 /// An explicit robust objective built from a residual problem and a loss.
 ///
 /// Supports [`crate::GaussNewton`], [`crate::LevenbergMarquardt`],
-/// [`crate::LevenbergMarquardtQr`], [`crate::Trf`], and
+/// [`crate::LevenbergMarquardtQr`], [`crate::BoundedLevenbergMarquardt`], and
 /// [`crate::TrustRegionReflective`]. Their normal algorithmic limitations
 /// remain: in particular, Gauss–Newton takes full steps, and redescending
 /// losses such as Cauchy and arctangent can have several local minima.
@@ -128,7 +128,7 @@ impl<F: Scalar, L: LossFunction<F> + ?Sized> LossFunction<F> for &L {
 ///
 /// `Vec<F>`/`DenseMatrix<F>`, nalgebra `DVector<F>`/`DMatrix<F>`, ndarray
 /// `Array1<F>`/`Array2<F>`, and faer `Col<F>`/`Mat<F>`, for `f32` and `f64`.
-/// Gauss–Newton, normal-equations LM, and legacy TRF also support nalgebra
+/// Gauss–Newton, normal-equations LM, and bounded LM also support nalgebra
 /// `CscMatrix<F>` and faer `SparseColMat<usize, F>`. Custom Jacobians need
 /// [`crate::ScaleRowsInPlace`] for these solver integrations, in addition to
 /// their existing solver capabilities. The scalar `CostFunction`/`Gradient`

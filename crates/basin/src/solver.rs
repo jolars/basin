@@ -16,6 +16,8 @@ pub mod bounded_cma_es;
 /// Hansen-2011 injection: sibling of [`cma_inject`] over the bounded
 /// outer. Inners: Nelder-Mead, Levenberg-Marquardt, L-BFGS-B.
 pub mod bounded_cma_inject;
+/// Levenberg-Marquardt with Coleman-Li box scaling.
+pub mod bounded_levenberg_marquardt;
 /// Brent's method (1D root or minimum bracketing).
 pub mod brent;
 /// Brent's method using first derivatives ("dbrent", 1D minimization).
@@ -93,8 +95,6 @@ pub mod simulated_annealing;
 pub mod solis_wets;
 /// Steady-state real-coded GA with BLX-α + NAM + BGA + replace-worst.
 pub mod ssga;
-/// Levenberg-Marquardt with box bounds (TRF, trust-region-reflective).
-pub mod trf;
 
 /// BFGS quasi-Newton solver (dense inverse-Hessian; `Vec<f64>`, nalgebra,
 /// faer).
@@ -128,6 +128,7 @@ pub use bfgs::Bfgs;
 pub use bobyqa::Bobyqa;
 pub use bounded_cma_es::BoundedCmaEs;
 pub use bounded_cma_inject::BoundedCmaInject;
+pub use bounded_levenberg_marquardt::BoundedLevenbergMarquardt;
 pub use brent::Brent;
 pub use brent_derivative::BrentDerivative;
 pub use cma_es::CmaEs;
@@ -162,7 +163,6 @@ pub use simulated_annealing::{
 };
 pub use solis_wets::SolisWets;
 pub use ssga::Ssga;
-pub use trf::Trf;
 pub use trust_region::{
     CauchyPoint, Dogleg, ExactHessian, MatrixFree, MoreSorensen, Steihaug,
     TrustRegion,

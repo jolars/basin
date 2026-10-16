@@ -472,7 +472,7 @@ fn main() {
 }
 ```
 
-Other direct consumers include projected `NelderMead`, `Trf`, `Bobyqa`, and
+Other direct consumers include projected `NelderMead`, `BoundedLevenbergMarquardt`, `Bobyqa`, and
 bounded global solvers. Linear and nonlinear constraints use their corresponding
 problem traits; barrier and augmented-Lagrangian adapters are explicit opt-ins
 when an inner solver is otherwise unconstrained.

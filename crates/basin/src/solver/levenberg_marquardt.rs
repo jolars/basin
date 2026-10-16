@@ -126,7 +126,7 @@ pub enum LmDamping {
 /// [`LevenbergMarquardtQr`], which solves the stacked least-squares system
 /// `[J; √(μD)]` without forming `JᵀJ`. QR avoids normal-equation roundoff
 /// near rank deficiency, but damping and stopping remain independent choices.
-/// TRF also uses normal equations; its availability does not imply QR support.
+/// Bounded LM also uses normal equations; its availability does not imply QR support.
 ///
 /// # Failure modes
 ///

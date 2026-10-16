@@ -46,8 +46,8 @@ pub struct LeastSquaresObservation<F: Scalar = f64> {
     /// Damping after this operation, including retry and acceptance updates.
     pub damping_after: Option<F>,
     /// Native step norm when computed, including non-finite arithmetic.
-    /// LM uses `sqrt(h^T D h)`. Legacy TRF uses its Coleman-Li weighted
-    /// norm (including the feasible fraction on trial rows). Full TRF uses
+    /// LM uses `sqrt(h^T D h)`. Bounded LM uses its Coleman-Li weighted
+    /// norm (including the feasible fraction on trial rows). TRF uses
     /// Euclidean length in scaled free-coordinate units.
     pub step_norm: Option<F>,
     /// Named native arithmetic operands. Non-finite values remain observable.
@@ -60,7 +60,7 @@ pub struct LeastSquaresObservation<F: Scalar = f64> {
     pub base_cost: F,
     /// Native objective computed from a completed trial residual.
     pub trial_cost: Option<F>,
-    /// Actual model decrease, including the legacy TRF curvature correction.
+    /// Actual model decrease, including the bounded LM curvature correction.
     pub actual_reduction: Option<F>,
     /// Native predicted model decrease.
     pub predicted_reduction: Option<F>,
@@ -74,22 +74,22 @@ pub struct LeastSquaresObservation<F: Scalar = f64> {
     pub radius_before: Option<F>,
     /// Radius after the acceptance update, if applicable.
     pub radius_after: Option<F>,
-    /// Actual native step: LM's `h`, legacy TRF's `alpha*h`, or full TRF's
+    /// Actual native step: LM's `h`, bounded LM's `alpha*h`, or TRF's
     /// rounded step in scaled free-coordinate units.
     pub step: Vec<F>,
     /// Model gradient in the same units as `step`.
     pub gradient: Vec<F>,
-    /// LM's monotone Marquardt diagonal, or legacy TRF's squared scaling.
+    /// LM's monotone Marquardt diagonal, or bounded LM's squared scaling.
     pub diagonal: Vec<F>,
-    /// Full TRF's free-coordinate scaling; empty for LM and legacy TRF.
+    /// TRF's free-coordinate scaling; empty for LM and bounded LM.
     pub coordinate_scale: Vec<F>,
-    /// Full TRF's free-coordinate indices; empty for LM and legacy TRF.
+    /// TRF's free-coordinate indices; empty for LM and bounded LM.
     pub free: Vec<usize>,
     /// Coleman-Li curvature diagonal, if applicable.
     pub curvature: Vec<F>,
     /// Number of damped model solves used to obtain this trial, or one for
     /// an individual `subproblem` event. These are overlapping views: sum only
-    /// subproblem events for total work. Full TRF counts subproblem calls,
+    /// subproblem events for total work. TRF counts subproblem calls,
     /// not iterations inside its secular search.
     pub model_solves: u32,
     /// Comparisons at this native observation stage.

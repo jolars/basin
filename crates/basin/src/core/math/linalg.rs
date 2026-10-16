@@ -1,5 +1,5 @@
 //! Dense linear-algebra ops for LA-heavy solvers (Gauss-Newton,
-//! Levenberg-Marquardt, TRF). This is the second math tier per
+//! Levenberg-Marquardt, bounded LM). This is the second math tier per
 //! `CONTRIBUTING.md` tenet 5: most of these operations are carried only by
 //! backends that can implement them honestly. All four dense backends provide
 //! pure-Rust Gram, Cholesky, symmetric eigenvalue, and pivoted-QR operations.
@@ -266,7 +266,7 @@ pub trait LinearSolveLstsq<V> {
 }
 
 /// `max_i Aᵢᵢ`, the maximum diagonal entry of a square matrix.
-/// [`Trf`](crate::Trf) uses it to size the initial damping parameter after
+/// [`BoundedLevenbergMarquardt`](crate::BoundedLevenbergMarquardt) uses it to size the initial damping parameter after
 /// applying the Coleman-Li diagonal correction:
 /// `μ₀ = τ · max diag(J(x₀)ᵀ J(x₀) + diag(c))`.
 ///
@@ -276,7 +276,7 @@ pub trait LinearSolveLstsq<V> {
 /// - **Caller must (sparse precondition):** for sparse impls, missing
 ///   diagonal entries from the CSC pattern are treated as the implicit
 ///   zero. The Gram of any `A` with no zero columns has all-positive
-///   diagonal entries, so TRF's damping path is unaffected.
+///   diagonal entries, so bounded LM's damping path is unaffected.
 /// - **Implementor must:** return `maxᵢ self[(i, i)]` as `F`. For an empty
 ///   matrix (0×0), the result is unspecified; callers should not invoke
 ///   this method on empty matrices.

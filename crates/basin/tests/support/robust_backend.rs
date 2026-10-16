@@ -193,5 +193,5 @@ where
             return;
         }
     }
-    panic!("non-finite damping did not stop legacy TRF");
+    panic!("non-finite damping did not stop bounded LM");
 }

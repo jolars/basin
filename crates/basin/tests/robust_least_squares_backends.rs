@@ -4,8 +4,8 @@ mod backend_aliases;
 mod robust_backend;
 
 use basin::{
-    GaussNewton, LevenbergMarquardt, LevenbergMarquardtQr, LmDamping, Trf,
-    TrustRegionReflective,
+    BoundedLevenbergMarquardt, GaussNewton, LevenbergMarquardt,
+    LevenbergMarquardtQr, LmDamping, TrustRegionReflective,
 };
 use robust_backend::{
     Location, check, check_cauchy_gradient, check_nonfinite_damping,
@@ -46,13 +46,13 @@ macro_rules! check_solvers {
         }
         check(
             fit.clone(),
-            Trf::<V, M, F>::default()
+            BoundedLevenbergMarquardt::<V, M, F>::default()
                 .with_absolute_scaled_gradient_tolerance(gradient),
             tolerance,
          |p| p);
-        check_nonfinite_damping(fit.clone(), Trf::<V, M, F>::default().with_tau(F::INFINITY));
+        check_nonfinite_damping(fit.clone(), BoundedLevenbergMarquardt::<V, M, F>::default().with_tau(F::INFINITY));
         // Disable convergence to exercise damping escalation after finite rejections.
-        check_nonfinite_damping(fit.clone(), Trf::<V, M, F>::default().with_absolute_scaled_gradient_tolerance(None));
+        check_nonfinite_damping(fit.clone(), BoundedLevenbergMarquardt::<V, M, F>::default().with_absolute_scaled_gradient_tolerance(None));
         $dense!(fit, tolerance, gradient);
     }};
 }

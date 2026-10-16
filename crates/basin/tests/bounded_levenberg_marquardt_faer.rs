@@ -2,20 +2,24 @@
 
 use crate::backend_aliases::faer::Col;
 use basin::problems::BoothBoxedResiduals;
-use basin::{Executor, PointState, TerminationCode, Trf};
+use basin::{BoundedLevenbergMarquardt, Executor, PointState, TerminationCode};
 
 #[test]
-fn trf_with_slack_bounds_reaches_unconstrained_min() {
+fn bounded_lm_with_slack_bounds_reaches_unconstrained_min() {
     let problem = BoothBoxedResiduals::<Col<f64>>::new(
         Col::<f64>::from_fn(2, |i| [-5.0, -5.0][i]),
         Col::<f64>::from_fn(2, |i| [5.0, 5.0][i]),
     );
     let initial = Col::<f64>::from_fn(2, |i| [0.0, 0.0][i]);
 
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
@@ -31,17 +35,21 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
 }
 
 #[test]
-fn trf_with_tight_bounds_converges_to_box_corner() {
+fn bounded_lm_with_tight_bounds_converges_to_box_corner() {
     let problem = BoothBoxedResiduals::<Col<f64>>::new(
         Col::<f64>::from_fn(2, |i| [-1.0, -1.0][i]),
         Col::<f64>::from_fn(2, |i| [1.0, 1.0][i]),
     );
     let initial = Col::<f64>::from_fn(2, |i| [0.0, 0.0][i]);
 
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
@@ -57,15 +65,18 @@ fn trf_with_tight_bounds_converges_to_box_corner() {
 }
 
 #[test]
-fn trf_init_projects_infeasible_start_strictly_inside_box() {
+fn bounded_lm_init_projects_infeasible_start_strictly_inside_box() {
     let problem = BoothBoxedResiduals::<Col<f64>>::new(
         Col::<f64>::from_fn(2, |i| [-1.0, -1.0][i]),
         Col::<f64>::from_fn(2, |i| [1.0, 1.0][i]),
     );
     let initial = Col::<f64>::from_fn(2, |i| [10.0, 10.0][i]);
 
-    let mut executor =
-        Executor::new(problem, Trf::new(), PointState::new(initial));
+    let mut executor = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    );
     executor = executor.max_iter(0);
     let result = executor.run().unwrap();
 
@@ -86,17 +97,21 @@ fn trf_init_projects_infeasible_start_strictly_inside_box() {
 }
 
 #[test]
-fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
+fn bounded_lm_emits_solver_converged_via_scaled_first_order_optimality() {
     let problem = BoothBoxedResiduals::<Col<f64>>::new(
         Col::<f64>::from_fn(2, |i| [-1.0, -1.0][i]),
         Col::<f64>::from_fn(2, |i| [1.0, 1.0][i]),
     );
     let initial = Col::<f64>::from_fn(2, |i| [0.0, 0.0][i]);
 
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }

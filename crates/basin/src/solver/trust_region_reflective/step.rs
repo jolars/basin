@@ -43,7 +43,7 @@ pub(super) fn dot<F: Scalar>(a: &[F], b: &[F]) -> F {
     a.iter().zip(b).map(|(&x, &y)| x * y).sum()
 }
 
-/// Keep the boundary repair separate from legacy Trf's projection, whose
+/// Keep the boundary repair separate from BoundedLevenbergMarquardt's projection, whose
 /// behavior is part of its Basin 1.x contract.
 pub(super) fn interior<F: Scalar>(
     mut x: F,

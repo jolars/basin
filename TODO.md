@@ -42,8 +42,9 @@ numerical work against analytic cases and reference implementations.
   reflected-step selection, a rank-aware dense SVD solve, and
   fixed-coordinate elimination. All four dense backends support `f32` and
   `f64`; active bounds and rank deficiency are covered by analytic and SciPy
-  1.16.2 comparisons. `Trf` retains its existing bounded-LM behavior through
-  Basin 1.x. The large-scale path remains a follow-up below.
+  1.16.2 comparisons. The bounded-LM solver is named
+  `BoundedLevenbergMarquardt` in Basin 2.0 and `Trf` in Basin 1.x.
+  The large-scale path remains a follow-up below.
 - [x] **Improve full TRF termination at the floating-point cost floor.** Found
   during the [Navette
   integration](https://github.com/opticsWolf/Navette/issues/2) and
@@ -267,6 +268,12 @@ desired backend features.
 
 ## Basin 2.0
 
+- [x] **Rename bounded LM to distinguish it from reflective trust regions.**
+  `BoundedLevenbergMarquardt` replaces `Trf`, including its defining module,
+  without a compatibility alias. Its algorithm, settings, and dense and sparse
+  support are preserved. `TrustRegionReflective` keeps its name. See the
+  [migration guide](MIGRATING.md#bounded-least-squares-solver-name).
+
 - [ ] **Complete the stable-release handoff before publishing 2.0.0.** Follow
   [Maintenance and releases](MAINTENANCE.md#publishing-200): disable Latest
   promotion on `v1`, finish in-flight maintenance releases, record the 1.x
@@ -285,8 +292,8 @@ desired backend features.
   See the [migration guide](MIGRATING.md#nelder-mead-convergence-defaults)
   for settings, checkpoint changes, and the limits imposed by fixed floors.
 
-- [x] **Revisit convergence defaults for LM, L-BFGS-B, and both TRF
-  implementations ([#109](https://github.com/jolars/basin/issues/109)).**
+- [x] **Revisit convergence defaults for LM, L-BFGS-B, bounded LM, and
+  TRF ([#109](https://github.com/jolars/basin/issues/109)).**
   Bounded `f64` L-BFGS now uses projected-gradient
   tolerance `1e-9` and signed cost-reduction tolerance `10*f64::EPSILON`,
   after a bounded NIST investigation and a fix for nonfinite selected
@@ -295,9 +302,9 @@ desired backend features.
   available for future solver comparisons. See the [migration
   guide](MIGRATING.md#l-bfgs-b-stopping-defaults) for the individual knobs
   and accuracy tradeoffs. A fixed, source-informed comparison on both NIST
-  starts and curated scaling cases supports retaining the existing LM and
-  TRF defaults: the tested relative policies saved evaluations but reduced
-  independently verified recovery. Relative checks remain opt-in. The
+  starts and curated scaling cases supports retaining the existing LM, bounded
+  LM, and TRF defaults: the tested relative policies saved evaluations but
+  reduced independently verified recovery. Relative checks remain opt-in. The
   [decision and scaling guidance](MIGRATING.md#lm-and-trf-stopping-defaults)
   explain the formulas, evidence, and limitations; this decision does not
   claim scale-invariant convergence.

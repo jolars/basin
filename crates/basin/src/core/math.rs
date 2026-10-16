@@ -21,9 +21,9 @@
 //!   backend too. The SPD solve [`LinearSolveSpd`] and its companion
 //!   [`GramMatrix`] (plus [`AddDiagonalVectorInPlace`]) are a third:
 //!   [`DenseMatrix`] implements them via a pure-Rust Cholesky (`dense_chol`),
-//!   so Gauss-Newton, Levenberg-Marquardt, and TRF run on the default backend.
+//!   so Gauss-Newton, Levenberg-Marquardt, and bounded LM run on the default backend.
 //!   [`AddDiagonalVectorInPlace`] and [`MaxDiagonal`] are public so downstream
-//!   Jacobian types can implement TRF's damping path. The QR least-squares
+//!   Jacobian types can implement bounded LM's damping path. The QR least-squares
 //!   solve [`LinearSolveLstsq`] remains backend-specific. The separate dense
 //!   [`FactorizePivotedQr`] capability supports regularized LM on all four
 //!   dense backends, with numerical pivoting and explicit rank-loss handling.

@@ -40,9 +40,9 @@ cargo test --locked -p competitor-bench --test nist --features basin-latest
 
 ## Basin 2.0 stopping-policy decision
 
-The 2.0 decision retains the existing LM and TRF defaults and keeps relative
-checks opt-in. The comparison uses two fixed policies per solver, all 27 NIST
-datasets and both starts, plus four affine variants isolating residual units,
+The 2.0 decision retains the existing LM, bounded LM, and TRF defaults and keeps
+relative checks opt-in. The comparison uses two fixed policies per solver,
+all 27 NIST datasets and both starts, plus four affine variants isolating residual units,
 parameter units, and an irreducible residual floor. It does not search a
 tolerance grid, change damping, or compare runtime.
 
@@ -77,7 +77,7 @@ when this stopping comparison was recorded, and omit the scaled-radius check,
 which requires trust-region damping. This isolates stopping changes without
 claiming to reproduce SciPy LM. All other LM settings remain unchanged.
 
-For both TRF implementations, `observed-relative` retains the native scaled
+For bounded LM and TRF, `observed-relative` retains the native scaled
 gradient tolerance `1e-8` and adds Basin's observed relative cost and step
 checks at `1e-8`. This is one curated Basin policy. It is not SciPy TRF:
 Basin's cost check lacks its model-agreement gate, and its step formula
@@ -95,7 +95,7 @@ cargo run --locked --release -p competitor-bench --bin verify_nlls_defaults \
 
 The recorded run used Basin library revision `315e4f7` with the retained probe,
 Rust 1.89.0, nalgebra 0.34, and `f64`, with analytic Jacobians and explicit
-infinite bounds for TRF.
+infinite bounds for bounded LM and TRF.
 Each solve has limits of 2,000 iterations and 20,000 total evaluation-category
 charges. Evaluation limits are soft. The CSV retains all 464 rows, including
 failures, termination details, authoritative evaluation counts, and independently
@@ -115,10 +115,10 @@ not elapsed time or a claim of equal work across algorithms.
 | LM | Relative model | 47/54 | 27/54 | 4,036 | 3,804 |
 | QR LM | Current | 50/54 | 44/54 | 5,067 | 4,549 |
 | QR LM | Relative model | 47/54 | 27/54 | 4,033 | 3,808 |
-| Legacy TRF | Current | 50/54 | 44/54 | 6,738 | 5,248 |
-| Legacy TRF | Observed relative | 37/54 | 17/54 | 2,914 | 2,683 |
-| Full TRF | Current | 51/54 | 48/54 | 3,581 | 2,613 |
-| Full TRF | Observed relative | 46/54 | 32/54 | 2,905 | 2,416 |
+| Bounded LM | Current | 50/54 | 44/54 | 6,738 | 5,248 |
+| Bounded LM | Observed relative | 37/54 | 17/54 | 2,914 | 2,683 |
+| TRF | Current | 51/54 | 48/54 | 3,581 | 2,613 |
+| TRF | Observed relative | 46/54 | 32/54 | 2,905 | 2,416 |
 
 The LM relative policy increased convergence reports from 21 to 52 (QR: 24 to
 51), while losing both ENSO starts and the first MGH17 start at `1e-4`.
@@ -131,15 +131,15 @@ Lanczos2, so the current absolute test is not uniformly better either.
 Many accurate default runs returned `NumericalNoProgress` or `SolverFailed`;
 the recovery totals above do not relabel them as convergence. For current
 LM/QR, the counts were respectively 32/29 numerical stalls and one iteration
-limit each. Legacy/full TRF reported 24/25 solver failures. This comparison
-does not resolve all numerical termination behavior, establish global
+limit each. Bounded LM and TRF reported 24 and 25 solver failures, respectively.
+This comparison does not resolve all numerical termination behavior, establish global
 optimality, or evaluate robust losses and finite-difference noise.
 
 All four defaults accepted the small-residual affine starting point without
 moving, demonstrating their unit dependence. LM's alternative recovered it;
-TRF's retained absolute test still stopped immediately. In the parameter-unit
-case, legacy TRF's observed-step policy stopped with about `0.43` relative
-parameter error, compared with about `0.0023` under its default. Thus neither
+the retained absolute tests for bounded LM and TRF still stopped immediately.
+In the parameter-unit case, bounded LM's observed-step policy stopped with
+about `0.43` relative parameter error, compared with about `0.0023` under its default. Thus neither
 policy makes scaling unnecessary. See the
 [migration guide](../../../../MIGRATING.md#lm-and-trf-stopping-defaults)
 for explicit scaling and configuration guidance.

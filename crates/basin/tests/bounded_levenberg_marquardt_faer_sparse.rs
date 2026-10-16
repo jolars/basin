@@ -3,7 +3,7 @@
 use crate::backend_aliases::faer::Col;
 use crate::backend_aliases::faer::sparse::{SparseColMat, Triplet};
 use basin::problems::SparseLeastSquaresBoxed;
-use basin::{Executor, PointState, TerminationCode, Trf};
+use basin::{BoundedLevenbergMarquardt, Executor, PointState, TerminationCode};
 
 type FaerSparseLeastSquaresBoxed =
     SparseLeastSquaresBoxed<SparseColMat<usize, f64>, Col<f64>>;
@@ -31,15 +31,19 @@ fn fixture(
 }
 
 #[test]
-fn trf_with_slack_bounds_reaches_unconstrained_min() {
+fn bounded_lm_with_slack_bounds_reaches_unconstrained_min() {
     let (problem, initial) = fixture(
         Col::<f64>::from_fn(3, |_| -10.0),
         Col::<f64>::from_fn(3, |_| 10.0),
     );
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
@@ -60,15 +64,19 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
 }
 
 #[test]
-fn trf_with_binding_upper_bound_converges_to_face() {
+fn bounded_lm_with_binding_upper_bound_converges_to_face() {
     let (problem, initial) = fixture(
         Col::<f64>::from_fn(3, |_| -10.0),
         Col::<f64>::from_fn(3, |i| if i == 2 { 1.5 } else { 10.0 }),
     );
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
@@ -79,15 +87,19 @@ fn trf_with_binding_upper_bound_converges_to_face() {
 }
 
 #[test]
-fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
+fn bounded_lm_emits_solver_converged_via_scaled_first_order_optimality() {
     let (problem, initial) = fixture(
         Col::<f64>::from_fn(3, |_| -10.0),
         Col::<f64>::from_fn(3, |_| 10.0),
     );
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 

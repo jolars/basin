@@ -3,7 +3,7 @@
 use crate::backend_aliases::nalgebra::DVector;
 use crate::backend_aliases::nalgebra_sparse::{CooMatrix, CscMatrix};
 use basin::problems::SparseLeastSquaresBoxed;
-use basin::{Executor, PointState, TerminationCode, Trf};
+use basin::{BoundedLevenbergMarquardt, Executor, PointState, TerminationCode};
 
 /// 6×3 design: identity stack + pairwise-sum rows. With `b = A·[1, 2, 3]`,
 /// the closed-form unconstrained least-squares minimum lands exactly at
@@ -33,16 +33,20 @@ fn fixture(
 }
 
 #[test]
-fn trf_with_slack_bounds_reaches_unconstrained_min() {
+fn bounded_lm_with_slack_bounds_reaches_unconstrained_min() {
     // Bounds wide enough to contain `x* = [1, 2, 3]` strictly.
     let (problem, initial) = fixture(
         DVector::from_vec(vec![-10.0, -10.0, -10.0]),
         DVector::from_vec(vec![10.0, 10.0, 10.0]),
     );
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     assert!(
@@ -63,7 +67,7 @@ fn trf_with_slack_bounds_reaches_unconstrained_min() {
 }
 
 #[test]
-fn trf_with_binding_upper_bound_converges_to_face() {
+fn bounded_lm_with_binding_upper_bound_converges_to_face() {
     // Upper bound on x[2] is 1.5, below the unconstrained value 3.
     // x[0] = 1 and x[1] = 2 are still interior. The constrained
     // optimum binds the upper bound on x[2].
@@ -71,10 +75,14 @@ fn trf_with_binding_upper_bound_converges_to_face() {
         DVector::from_vec(vec![-10.0, -10.0, -10.0]),
         DVector::from_vec(vec![10.0, 10.0, 1.5]),
     );
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(200)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(200)
+    .run()
+    .unwrap();
 
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
     // x[2] should be at (or just inside) the upper bound 1.5.
@@ -86,15 +94,19 @@ fn trf_with_binding_upper_bound_converges_to_face() {
 }
 
 #[test]
-fn trf_emits_solver_converged_via_scaled_first_order_optimality() {
+fn bounded_lm_emits_solver_converged_via_scaled_first_order_optimality() {
     let (problem, initial) = fixture(
         DVector::from_vec(vec![-10.0, -10.0, -10.0]),
         DVector::from_vec(vec![10.0, 10.0, 10.0]),
     );
-    let result = Executor::new(problem, Trf::new(), PointState::new(initial))
-        .max_iter(50)
-        .run()
-        .unwrap();
+    let result = Executor::new(
+        problem,
+        BoundedLevenbergMarquardt::new(),
+        PointState::new(initial),
+    )
+    .max_iter(50)
+    .run()
+    .unwrap();
     assert_eq!(result.report.code(), TerminationCode::SolverConverged);
 }
 
