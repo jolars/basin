@@ -1,5 +1,43 @@
 # Changelog
 
+## [2.0.0](https://github.com/jolars/basin/compare/v1.15.1...v2.0.0) (2026-10-16)
+
+### Breaking changes
+
+- make `EvalCounts` non-exhaustive ([`59a0306`](https://github.com/jolars/basin/commit/59a0306e2c43b72ff335c7653457cd4e8b346a54))
+- rename `Trf` to `BoundedLevenbergMarquardt` ([`75c4476`](https://github.com/jolars/basin/commit/75c4476763b963520a0cca5348286111cf93eca7))
+- default LM to trust-region damping ([`056d844`](https://github.com/jolars/basin/commit/056d84412e4214635385638eb2f720ba7b97d16a))
+- unify problem-side constraint declarations ([`6cb52d8`](https://github.com/jolars/basin/commit/6cb52d8fe37311bb2e8425215b77ed5456c4a4a3))
+- adopt tested L-BFGS-B stopping defaults ([`5172776`](https://github.com/jolars/basin/commit/51727767e19034ce0bf8ae572a6f1d76e9fe6220)), refs [#109](https://github.com/jolars/basin/issues/109)
+- enable paired Nelder-Mead convergence defaults ([`955d0dd`](https://github.com/jolars/basin/commit/955d0dda820bec5f8e5b09f1cebd92c5462ae02f)), refs [#109](https://github.com/jolars/basin/issues/109)
+- add structured termination reports ([`c7f2869`](https://github.com/jolars/basin/commit/c7f28691bd711558fe97f1f512e8814fa1fec8c5))
+- remove criterion compatibility bridges ([`a759b7c`](https://github.com/jolars/basin/commit/a759b7c835a98cfd53359acbea8bd0cabd8e32d6))
+- remove legacy inner gradient stops ([`ad3fbdc`](https://github.com/jolars/basin/commit/ad3fbdc83de030b9d545bfaa2b61dce8f03ec45b))
+- **state:** migrate solvers to shared progress ([`878a4b7`](https://github.com/jolars/basin/commit/878a4b7ed4b08dff31c041ae1e3d9526e11fa52d))
+- make the `problems` feature opt-in ([`9485f01`](https://github.com/jolars/basin/commit/9485f01e0c0dddcee0bf8656628080982e0b54b4))
+- **termination:** remove legacy criterion API ([`b9380fd`](https://github.com/jolars/basin/commit/b9380fd471f7a9cd3f946ee014f238868869ffda))
+- **checkpoint:** remove legacy checkpoint formats ([`192426d`](https://github.com/jolars/basin/commit/192426df9d0fc3a864fcc33a796051e570c044ea))
+
+### Features
+
+- default LM to trust-region damping ([`056d844`](https://github.com/jolars/basin/commit/056d84412e4214635385638eb2f720ba7b97d16a))
+- unify problem-side constraint declarations ([`6cb52d8`](https://github.com/jolars/basin/commit/6cb52d8fe37311bb2e8425215b77ed5456c4a4a3))
+- adopt tested L-BFGS-B stopping defaults ([`5172776`](https://github.com/jolars/basin/commit/51727767e19034ce0bf8ae572a6f1d76e9fe6220)), refs [#109](https://github.com/jolars/basin/issues/109)
+- enable paired Nelder-Mead convergence defaults ([`955d0dd`](https://github.com/jolars/basin/commit/955d0dda820bec5f8e5b09f1cebd92c5462ae02f)), refs [#109](https://github.com/jolars/basin/issues/109)
+- **web:** negotiate markdown for agents ([`3def87b`](https://github.com/jolars/basin/commit/3def87bba49eaad6a69e95bdc07c56bc6c8938fd))
+- add structured termination reports ([`c7f2869`](https://github.com/jolars/basin/commit/c7f28691bd711558fe97f1f512e8814fa1fec8c5))
+- make backend aliases track latest versions ([`934bd0f`](https://github.com/jolars/basin/commit/934bd0fce8f5d7b786cd8aae85bafb38fcac4760))
+- **observer:** expose solver diagnostics to observers ([`f57be9c`](https://github.com/jolars/basin/commit/f57be9ce943cebbec20e444e4787fb2c1a1ba4d7))
+- make the `problems` feature opt-in ([`9485f01`](https://github.com/jolars/basin/commit/9485f01e0c0dddcee0bf8656628080982e0b54b4))
+
+### Bug Fixes
+
+- harden convergence and expose solver diagnostics ([`39983b0`](https://github.com/jolars/basin/commit/39983b039d95a92c75f24655d975ea6359e6bba4)), refs [#109](https://github.com/jolars/basin/issues/109)
+- stop non-finite legacy TRF models (#116) ([`8d0b22a`](https://github.com/jolars/basin/commit/8d0b22afaaf80e3ffe2b421d8ed85677c093035f))
+- **web:** update vulnerable transitive dependencies ([`4e72a4a`](https://github.com/jolars/basin/commit/4e72a4a07e3ec7e0dad6c7e25319670ad2fd4f49))
+- **web:** complete SvelteKit 3 migration ([`0e08ac0`](https://github.com/jolars/basin/commit/0e08ac00248d40f402100726d3a86c46831f1452))
+- invalidate convergence caches after steps ([`5303d67`](https://github.com/jolars/basin/commit/5303d6705aada3f179b4802a75cb103f7c8b665e))
+
 ## [1.15.1](https://github.com/jolars/basin/compare/v1.15.0...v1.15.1) (2026-09-29)
 
 ### Bug Fixes
