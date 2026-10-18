@@ -257,6 +257,53 @@ exact formats are rejected. Finish those runs with the matching application
 and export parameters for a fresh
 run. State-only checkpoint files retain their format.
 
+## Extensible results and diagnostics
+
+`OptimizationResult`, `OptimizationResultWithSolver`, and `TerminationReport`
+are now non-exhaustive. Replace struct literals with their constructors:
+
+```rust
+let report = TerminationReport::new(termination, stage, iteration);
+let result = OptimizationResult::new(state, counts, report);
+```
+
+Use `OptimizationResultWithSolver::new(state, solver, counts, report)` when
+retaining the final solver.
+
+Fields remain public for reading, moving, and assignment. Destructuring must
+include `..`, even when naming every current field:
+
+```rust
+let OptimizationResult { state, counts, report, .. } = result;
+```
+
+Struct update syntax is also unavailable. To change an existing report,
+assign its public field instead of constructing `TerminationReport {
+termination, ..report }`.
+
+`ExecutionLimit`, `Stall`, and `NumericalFailure` are now non-exhaustive,
+matching the existing `Termination` policy. Matches need a fallback arm for
+future stopping categories. Existing variants remain constructible, and their
+current fields are unchanged.
+
+The following diagnostic records are also non-exhaustive. Obtain them from
+the relevant solver or derivative checker, read their public fields, and use
+`..` when destructuring:
+
+- `LeastSquaresObservation` and `LeastSquaresCheck`.
+- L-BFGS `ModelObservation`, trust-region `Trial`, and Nelder-Mead `Trial`.
+- Moré-Thuente `Bracket` and `SearchTrial`.
+- `DerivativeComparison` and `DerivativeCheckReport`.
+- `core::inner::diagnostics::{Context, Record}`.
+- `BarrierInnerDiagnostics` and `AugmentedLagrangianInnerDiagnostics`.
+- CMA `DistributionRef` and DIRECT `RectangleRef`.
+
+Their accompanying enums `ModelPhase`, `ModelFailure`, trust-region `Phase`,
+Nelder-Mead `TrialKind`, Moré-Thuente `SearchExit`, and inner diagnostic `Status`
+also require fallback match arms. Diagnostic struct literals are no longer
+supported outside Basin. These changes allow future fields and enum variants;
+they do not change current numerical behavior or serialized representations.
+
 ## Solver and line-search settings
 
 Basin 2.0 removes `BarrierMethod::new`, `AugmentedLagrangianMethod::new`,

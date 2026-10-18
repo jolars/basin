@@ -120,6 +120,8 @@ impl CancellationToken {
 /// callers don't need to import `State` for the common reads.
 /// Use [`Executor::run_with_solver`] to retain the final solver as well
 /// in an [`OptimizationResultWithSolver`].
+/// Construct results with [`Self::new`]; destructuring patterns must include `..`.
+#[non_exhaustive]
 pub struct OptimizationResult<S: State> {
     /// Authoritative evaluation counts in this run's scope.
     pub counts: EvalCounts,
@@ -130,6 +132,19 @@ pub struct OptimizationResult<S: State> {
 }
 
 impl<S: State> OptimizationResult<S> {
+    /// Construct a result from final progress, authoritative counts, and a report.
+    pub fn new(
+        state: S,
+        counts: EvalCounts,
+        report: TerminationReport<S::Float>,
+    ) -> Self {
+        Self {
+            state,
+            counts,
+            report,
+        }
+    }
+
     /// Final iterate.
     pub fn param(&self) -> &S::Param {
         self.state.param()
@@ -193,6 +208,8 @@ impl<S: State> OptimizationResult<S> {
 /// Shared states report raw cost calls through [`cost_evals`](Self::cost_evals).
 /// Custom states define their own [`CountsMirror`] mapping.
 /// [`counts`](Self::counts) always contains the authoritative per-category counters.
+/// Construct results with [`Self::new`]; destructuring patterns must include `..`.
+#[non_exhaustive]
 pub struct OptimizationResultWithSolver<S: State, So> {
     /// Final solver state at termination.
     pub state: S,
@@ -205,6 +222,21 @@ pub struct OptimizationResultWithSolver<S: State, So> {
 }
 
 impl<S: State, So> OptimizationResultWithSolver<S, So> {
+    /// Construct a result that also owns the final solver.
+    pub fn new(
+        state: S,
+        solver: So,
+        counts: EvalCounts,
+        report: TerminationReport<S::Float>,
+    ) -> Self {
+        Self {
+            state,
+            solver,
+            counts,
+            report,
+        }
+    }
+
     /// Native criteria from this stopping event, without consulting retained
     /// solver history. Shared and native criteria can both appear in a report.
     pub fn native_convergence_tests(&self) -> Vec<NativeConvergenceTest> {
@@ -222,11 +254,7 @@ impl<S: State, So> OptimizationResultWithSolver<S, So> {
     ///
     /// Drops the solver while preserving the report and authoritative counts.
     pub fn into_result(self) -> OptimizationResult<S> {
-        OptimizationResult {
-            state: self.state,
-            report: self.report,
-            counts: self.counts,
-        }
+        OptimizationResult::new(self.state, self.counts, self.report)
     }
 
     /// Consume the result into a checkpoint for exact continuation.
@@ -438,11 +466,11 @@ where
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
         {
-            StepOutcome::Stopped(TerminationReport {
-                termination: Termination::Cancelled,
-                stage: TerminationStage::Boundary,
-                iteration: self.state().iter(),
-            })
+            StepOutcome::Stopped(TerminationReport::new(
+                Termination::Cancelled,
+                TerminationStage::Boundary,
+                self.state().iter(),
+            ))
         } else {
             step_once(
                 &mut self.problem,
@@ -532,15 +560,12 @@ where
     ) -> Result<OptimizationResultWithSolver<S, So>, So::Error> {
         loop {
             if let StepOutcome::Stopped(reason) = self.step()? {
-                return Ok(OptimizationResultWithSolver {
-                    state: self
-                        .state
-                        .take()
-                        .expect("state slot is Some on stop"),
-                    solver: self.solver,
-                    counts: *self.problem.counts(),
-                    report: reason,
-                });
+                return Ok(OptimizationResultWithSolver::new(
+                    self.state.take().expect("state slot is Some on stop"),
+                    self.solver,
+                    *self.problem.counts(),
+                    reason,
+                ));
             }
         }
     }
@@ -642,11 +667,11 @@ where
         .check(state, &problem.counts().delta_since(baseline))
         .or_else(|| solver.check_convergence(problem, state))
     {
-        return Ok(StepOutcome::Stopped(TerminationReport {
+        return Ok(StepOutcome::Stopped(TerminationReport::new(
             termination,
-            stage: TerminationStage::Boundary,
-            iteration: state.iter(),
-        }));
+            TerminationStage::Boundary,
+            state.iter(),
+        )));
     }
     let SolverStep {
         state: mut next,
@@ -662,11 +687,11 @@ where
     let iteration = next.iter();
     *state_slot = Some(next);
     Ok(match termination {
-        Some(termination) => StepOutcome::Stopped(TerminationReport {
+        Some(termination) => StepOutcome::Stopped(TerminationReport::new(
             termination,
-            stage: TerminationStage::Step { completed },
+            TerminationStage::Step { completed },
             iteration,
-        }),
+        )),
         None => StepOutcome::Continue,
     })
 }
@@ -735,11 +760,11 @@ where
             StepOutcome::Stopped(reason) => break reason,
         }
     };
-    Ok(OptimizationResult {
-        state: slot.take().expect("state slot is Some on stop"),
-        report: reason,
-        counts: problem.counts().delta_since(&baseline),
-    })
+    Ok(OptimizationResult::new(
+        slot.take().expect("state slot is Some on stop"),
+        problem.counts().delta_since(&baseline),
+        reason,
+    ))
 }
 
 /// User-facing driver. Owns the problem, solver, initial state, and the

@@ -16,6 +16,7 @@ use crate::core::math::Scalar;
 /// standard deviations instead use the covariance diagonal. The two evolution
 /// paths are algorithm state and need not equal either of those scales.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct DistributionRef<'a, V, M, F: Scalar = f64> {
     /// Live distribution mean, before bounded phenotype repair.
     pub mean: &'a V,

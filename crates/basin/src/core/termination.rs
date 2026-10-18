@@ -21,8 +21,12 @@ pub enum TerminationStage {
 }
 
 /// An owned explanation of one stopping event, independent of solver history.
+///
+/// Construct reports with [`Self::new`]. Fields remain public, and destructuring
+/// patterns must include `..` so future releases can add publication context.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct TerminationReport<F: Scalar = f64> {
     /// The stopping decision and its evidence.
     pub termination: Termination<F>,
@@ -329,6 +333,7 @@ impl<F: Scalar> ConvergenceCriterion<F> {
 /// when a solver step evaluates a batch before the next boundary).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum ExecutionLimit {
     /// Completed-iteration budget.
     Iterations {
@@ -372,6 +377,7 @@ pub enum ExecutionLimit {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Progress stopped without establishing convergence.
+#[non_exhaustive]
 pub enum Stall<F: Scalar = f64> {
     /// No sufficient improvement in the objective incumbent.
     NoImprovement {
@@ -406,6 +412,7 @@ pub enum Stall<F: Scalar = f64> {
 /// consume an inner result. The inner report does not certify outer convergence.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum NumericalFailure<F: Scalar = f64> {
     /// A numerical failure detected by a solver.
     Solver {
@@ -525,6 +532,19 @@ impl<F: Scalar> Termination<F> {
 }
 
 impl<F: Scalar> TerminationReport<F> {
+    /// Construct a report for a stopping decision at a publication boundary.
+    pub fn new(
+        termination: Termination<F>,
+        stage: TerminationStage,
+        iteration: u64,
+    ) -> Self {
+        Self {
+            termination,
+            stage,
+            iteration,
+        }
+    }
+
     /// Compact compatibility code. Inspect the termination for the full report.
     pub fn code(&self) -> TerminationCode {
         self.termination.code()

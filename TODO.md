@@ -551,6 +551,13 @@ desired backend features.
   destructuring patterns include `..`.
   See [evaluation-counter migration](MIGRATING.md#evaluation-counters).
 
+- [x] **Make results and diagnostic records extensible.** Mark optimization
+  results, termination reports, diagnostic records, and their growing reason
+  and phase enums as non-exhaustive. Provide result and report constructors,
+  retain public field access, and document fallback matches and destructuring
+  with `..`. See the [migration
+  guide](MIGRATING.md#extensible-results-and-diagnostics).
+
 - [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
   unversioned `nalgebra`, `ndarray`, and `faer` features and their
   LAPACK/BLAS counterparts select the newest supported releases. Retain the

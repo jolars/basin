@@ -23,6 +23,7 @@ use crate::core::termination::Termination;
 /// retains counts and the seed but supplies no recoverable returned point.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct BarrierInnerDiagnostics<F: Scalar = f64> {
     /// Whether this attempt minimized the auxiliary Phase I objective.
     pub phase_one: bool,

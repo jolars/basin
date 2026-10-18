@@ -18,6 +18,7 @@ use crate::{ConvergenceEvidence, Scalar};
 
 /// One enabled, disabled, or unavailable native convergence comparison.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct LeastSquaresCheck<F: Scalar = f64> {
     /// Stable predicate name within the producing solver.
     pub name: &'static str,
@@ -37,6 +38,7 @@ pub struct LeastSquaresCheck<F: Scalar = f64> {
 /// Missing trial cost means the residual callback did not complete. Native
 /// steps can differ from subtraction of rounded callback coordinates.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct LeastSquaresObservation<F: Scalar = f64> {
     /// Native operation: `check`, `construction`, `subproblem`, `selection`,
     /// `damping_search`, or `trial`. Only `trial` dispatches a residual callback.

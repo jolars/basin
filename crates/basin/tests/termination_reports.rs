@@ -294,14 +294,14 @@ fn hard_abort_preserves_work_counts_without_a_report_or_checkpoint() {
 
 #[test]
 fn inner_routing_requires_explicit_partial_policy_and_retains_failures() {
-    let report = TerminationReport::<f32> {
-        termination: Termination::Limit(vec![ExecutionLimit::Iterations {
+    let report = TerminationReport::<f32>::new(
+        Termination::Limit(vec![ExecutionLimit::Iterations {
             observed: 7,
             limit: 7,
         }]),
-        stage: TerminationStage::Boundary,
-        iteration: 7,
-    };
+        TerminationStage::Boundary,
+        7,
+    );
     assert!(
         report
             .clone()
@@ -322,10 +322,8 @@ fn inner_routing_requires_explicit_partial_policy_and_retains_failures() {
         Termination::Cancelled,
         Termination::Application(ApplicationStop::new("service_shutdown")),
     ] {
-        let report = TerminationReport {
-            termination: termination.clone(),
-            ..report.clone()
-        };
+        let mut report = report.clone();
+        report.termination = termination.clone();
         assert_eq!(
             report.into_outer_termination(PartialResultPolicy::Consume),
             Some(termination)
@@ -336,17 +334,17 @@ fn inner_routing_requires_explicit_partial_policy_and_retains_failures() {
 #[cfg(feature = "serde")]
 #[test]
 fn f32_report_serialization_preserves_evidence() {
-    let report = TerminationReport::<f32> {
-        termination: Termination::upper_bound(
+    let report = TerminationReport::<f32>::new(
+        Termination::upper_bound(
             ConvergenceTest::RelativeTrialStep,
             0.125,
             0.25,
             0.5,
             Some(0.5),
         ),
-        stage: TerminationStage::Step { completed: true },
-        iteration: 1,
-    };
+        TerminationStage::Step { completed: true },
+        1,
+    );
     let bytes = postcard::to_allocvec(&report).unwrap();
     let restored: TerminationReport<f32> =
         postcard::from_bytes(&bytes).unwrap();

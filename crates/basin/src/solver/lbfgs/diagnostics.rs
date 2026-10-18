@@ -5,6 +5,7 @@ use crate::{EvalCounts, Scalar};
 
 /// Native model phase, separate from outer convergence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ModelPhase {
     /// Generalized Cauchy point construction.
     Cauchy,
@@ -22,6 +23,7 @@ pub enum ModelPhase {
 
 /// Native arithmetic failure within a model phase.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ModelFailure {
     /// The compact middle-matrix triangular solve was singular.
     SingularMiddleMatrix,
@@ -43,6 +45,7 @@ pub enum ModelFailure {
 /// `columns` blocks are live (`2*columns` for K). A failed phase may leave partial
 /// output; it does not promise a usable model or a returned recommendation.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ModelObservation<F: Scalar = f64> {
     /// Monotone sequence within one fresh initialization.
     pub sequence: u64,

@@ -121,6 +121,7 @@ impl<E: std::error::Error + 'static, F: Scalar> std::error::Error
 
 /// One scalar comparison in a gradient or Jacobian check.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct DerivativeComparison<F: Scalar = f64> {
     /// Residual row, or zero for a scalar objective.
     pub output: usize,
@@ -150,6 +151,7 @@ impl<F: Scalar> DerivativeComparison<F> {
 
 /// Per-entry diagnostics from a completed derivative check.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct DerivativeCheckReport<F: Scalar = f64> {
     /// Comparisons in coordinate-major, then output-row order. Directional
     /// checks contain one comparison per output row.

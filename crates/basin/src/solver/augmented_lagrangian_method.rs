@@ -19,6 +19,7 @@ use crate::core::termination::Termination;
 /// A hard callback error retains its seed and counts without a returned state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct AugmentedLagrangianInnerDiagnostics<V, F: Scalar = f64> {
     /// Penalty that defined the attempted subproblem.
     pub rho: F,

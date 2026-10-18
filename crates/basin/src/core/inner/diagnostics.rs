@@ -7,6 +7,7 @@ use crate::{
 /// The outer boundary that started an inner run or chain segment.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct Context<F: Scalar = f64> {
     /// Outer completed iteration count at entry.
     pub outer_iteration: u64,
@@ -21,6 +22,7 @@ pub struct Context<F: Scalar = f64> {
 /// Availability of an inner result, independently of its stopping decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Status {
     /// The inner call has started but has not returned.
     Pending,
@@ -38,6 +40,7 @@ pub enum Status {
 /// but promise no recoverable state or report.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct Record<F: Scalar = f64> {
     /// Position in this fresh outer run's diagnostic sequence.
     pub sequence: u64,

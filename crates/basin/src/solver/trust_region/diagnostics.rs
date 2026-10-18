@@ -4,6 +4,7 @@ use crate::{EvalCounts, Scalar};
 
 /// Last phase reached by a trust-region attempt, including interrupted calls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Phase {
     /// The strategy is computing its model step.
     Subproblem,
@@ -26,6 +27,7 @@ pub enum Phase {
 /// Records persist through solver-aware continuation and reset at initialization.
 /// Matrix factorization and strategy-internal residual comparisons are unavailable.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Trial<F: Scalar = f64> {
     /// Monotone sequence within this solve.
     pub sequence: u64,

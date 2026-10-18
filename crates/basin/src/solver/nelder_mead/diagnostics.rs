@@ -4,6 +4,7 @@ use crate::{EvalCounts, Scalar};
 
 /// Operation that generated a projected or unbounded trial.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TrialKind {
     /// Reflection of the worst vertex about the centroid.
     Reflection,
@@ -23,6 +24,7 @@ pub enum TrialKind {
 /// was interrupted, including reflection followed by a failed expansion.
 /// Acceptance does not promise publication or a returned checkpoint.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Trial<V, F: Scalar = f64> {
     /// Monotone ordinal within a fresh solve.
     pub sequence: u64,

@@ -4,6 +4,7 @@ use crate::{EvalCounts, Scalar};
 
 /// Reason the native search stopped. A selected step is not a Wolfe certificate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SearchExit {
     /// Both native Wolfe comparisons passed.
     Wolfe,
@@ -21,6 +22,7 @@ pub enum SearchExit {
 
 /// Native bracket state; endpoint values use the original objective.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct Bracket<F: Scalar = f64> {
     /// Best endpoint step, value, and directional derivative.
     pub best: [F; 3],
@@ -36,6 +38,7 @@ pub struct Bracket<F: Scalar = f64> {
 
 /// One attempted fused callback, with comparisons and the subsequent update.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SearchTrial<F: Scalar = f64> {
     /// Attempted native step along the caller's direction.
     pub step: F,

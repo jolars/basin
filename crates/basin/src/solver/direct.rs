@@ -148,6 +148,7 @@ pub struct Direct<F: Scalar = f64> {
 /// sweep and does not promise a coherent checkpoint. Fresh initialization resets
 /// the partition; exact solver-aware continuation retains it.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct RectangleRef<'a, F: Scalar = f64> {
     /// Original coordinate indices participating in normalized geometry.
     pub free_coordinates: &'a [usize],
