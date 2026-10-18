@@ -558,6 +558,39 @@ desired backend features.
   with `..`. See the [migration
   guide](MIGRATING.md#extensible-results-and-diagnostics).
 
+- [ ] **Decide whether solver publication types should be non-exhaustive.**
+  Review `SolverStep` and `IncumbentRef` before freezing their public fields.
+  External solver and state implementations construct these values, so provide
+  complete public constructors before restricting literals. `SolverStep` needs
+  a constructor for a continuing partial step.
+
+- [ ] **Decide whether smaller stopping records need extension points.**
+  Review `ConvergenceCriterion`, `Threshold`, and `ApplicationStop` for likely
+  future metadata. If they become non-exhaustive, preserve straightforward
+  construction, including a general `ConvergenceCriterion::new(test, evidence)`.
+
+- [ ] **Decide whether line-search configurations should be non-exhaustive.**
+  `Backtracking`, `Wolfe`, `MoreThuente`, and `HagerZhang` expose all their
+  fields, so adding controls during 2.x would break downstream literals.
+  Weigh that flexibility against literal construction. A non-exhaustive policy
+  would require users to construct with `new()` or `Default`, then assign
+  public fields or use builders.
+
+- [ ] **Decide whether state shape errors should be non-exhaustive.**
+  Review `SimplexShapeError` and `PopulationShapeError` for future validation
+  cases and consistency with constraint, derivative-checking, and
+  linear-algebra errors, which already permit new variants.
+
+- [ ] **Settle the extension policy for enum payloads.** An enum-level
+  `#[non_exhaustive]` permits new variants but does not permit adding fields to
+  existing variants. For evolving payloads, especially `ConvergenceEvidence`,
+  choose between non-exhaustive variants with public constructors and new
+  variants for richer evidence. Keep serialization compatibility a separate
+  decision. Preserve exhaustive matching for deliberately closed contracts
+  such as `BoundSide`, `ConstraintAxis`, `StepOutcome`, `TerminationStage`, and
+  `PartialResultPolicy`, and literal construction for complete mathematical
+  values such as `BinaryValue`, `Measurement`, and `LossEvaluation`.
+
 - [x] **Clean up backend compatibility aliases in Basin 2.0.0.** Make
   unversioned `nalgebra`, `ndarray`, and `faer` features and their
   LAPACK/BLAS counterparts select the newest supported releases. Retain the
