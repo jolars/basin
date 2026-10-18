@@ -85,7 +85,9 @@ numerical work against analytic cases and reference implementations.
   full TRF work with Jacobian and transpose-Jacobian products, an LSMR
   solve, and the two-dimensional subspace method. Add sparsity-pattern-based
   finite-difference coloring to reduce residual evaluations. Existing sparse
-  storage and direct solves do not provide this large-scale algorithm.
+  storage and direct solves do not provide this large-scale algorithm. The
+  [iterative-TRF API prototype](#iterative-trf-api-prototype) establishes an
+  operator-only capability path; the numerical algorithm remains deferred.
 - [x] **Expand differential evolution's core algorithms.** Added six mutation
   rules, independently selectable binomial and exponential crossover, and
   generation-wise mutation dithering. The default `DE/rand/1/bin` trajectory
@@ -202,6 +204,90 @@ Ship these in order, preserving existing public APIs and behavior:
   continuation stops on a budget or another non-native reason. Tests cover
   simultaneous tests, rejected trials, robust objectives, continuation, and
   all dense backends with both scalar types.
+
+### Iterative-TRF API prototype
+
+- [x] **Prove an operator-only reflective model and robust composition.**
+  The [executable prototype](crates/basin/src/core/least_squares/iterative_trf_api_prototype.rs)
+  is a test-only child of the robust least-squares module. No types, counters,
+  or methods from the experiment enter Basin's public API. Existing dense
+  `TrustRegionReflective` keeps its constructor, bounds, and behavior.
+
+Use separate `JacobianProduct: Residual` and
+`TransposeJacobianProduct: Residual` capabilities. Their signatures are
+`jacobian_product(&self, x: &Self::Param, v: &Self::Param) ->
+Result<Self::Output, Self::Error>` and
+`transpose_jacobian_product(&self, x: &Self::Param, v: &Self::Output) ->
+Result<Self::Param, Self::Error>`. Neither extends `Jacobian` nor introduces
+a matrix associated type. Products differentiate the raw residual at `x`;
+they are pure and linear in `v`. Residual length stays fixed during a solve.
+Parameter and residual spaces may use distinct vector types and lengths.
+Do not blanket-implement the capabilities for every `Jacobian`: an explicit
+dense-product adapter can provide that convenience without blocking custom
+analytic products on problems that also supply a dense Jacobian.
+
+The intended production entry is a separate
+`IterativeTrustRegionReflective<F = f64>` with `PointState<V, F>` and the
+existing box-problem declaration. It will require both product capabilities
+and vector operations, without `Jacobian`, `MatrixIndex`, `ScaleRowsInPlace`,
+matrix factorization, or matrix-entry access. This experiment implements its
+model preparation and operator consumption signatures, not a `Solver` impl
+or settings builders. Production LSMR tolerances, iteration limits, and
+regularization must be explicit algorithm controls. Automatic Jacobian-column
+scaling would require a separate capability or explicit user scales; it must
+not introduce a hidden matrix-entry requirement.
+
+The prototype establishes these contracts:
+
+- The model freezes the accepted parameter and robust row factors. A borrowed
+  linearization ties them to one counted objective. Repeated products and
+  trial residual evaluations retain that model; accepting another point
+  rebuilds it. Production solver-owned workspace must preserve this rule
+  across rejected trials and exact continuation.
+- Raw and `RobustLeastSquares` evaluations use separate internal capability
+  implementations, as the dense NLLS drivers do. The robust adapter continues
+  to expose its true objective rather than implementing `Residual`. The
+  prototype reuses its existing loss and scale calculations: with row factors
+  `a` and model residual `r_tilde`, the actions are `diag(a) J v` and
+  `J^T diag(a) u`. Thus their composition supplies safeguarded curvature,
+  while applying the transpose to `r_tilde` gives the robust gradient.
+  Trial reductions use the true robust cost, not the model residual norm.
+- The reflective augmented operator has actions for
+  `A = [diag(a) J diag(d); diag(sqrt(c))]` and its transpose. Its two output
+  blocks occupy residual and parameter space. Fixed coordinates use
+  `d = c = 0`. These actions provide the inputs needed by LSMR and a small
+  subspace model using vector storage, with no materialized normal matrix.
+  Tests supply the scaling diagonals; the production driver must compute
+  Coleman–Li scaling, eliminate fixed coordinates, and select feasible steps.
+- Count attempted raw residual, Jv, and transpose-Jacobian requests separately,
+  before invoking callbacks, including failures. Robust weighting adds no
+  evaluations. Do not charge matrix `jacobian_evals` for products. Internal
+  probes stay excluded under the existing wrapper-boundary contract.
+  The prototype's `OperatorCounts` pairs real `EvalCounts` with two proposed
+  fields and tests totals, deltas, and composition. Production must add those
+  fields to the non-exhaustive `EvalCounts` and integrate state mirrors,
+  budgets, checkpoint/serde storage, and inner roll-ups before shipping the
+  solver. The experiment does not prove that executor integration yet.
+- Callback errors propagate unchanged. Invalid initial residuals or loss
+  models cannot produce a linearization; non-finite trial residuals yield
+  infinite cost without replacing the model. Shape and non-finite derivative
+  guards are assertions in this model consumer. The production driver must
+  map numerical failures to its structured failure reports.
+
+Analytic checks cover rectangular nonlinear products, adjoints, augmented
+curvature, fixed coordinates, all five built-in losses at nonunit scale,
+rejected trial reuse, refreshed accepted points, and attempted-request counts.
+Tests run both precisions on every enabled dense backend version and also use
+distinct Rust types for parameter and residual space. Run
+`cargo test -p basin --lib iterative_trf_api_prototype`, optionally adding
+`--features nalgebra,ndarray,faer`.
+
+The operator design follows [SciPy 1.16.2's TRF implementation](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/trf.py)
+and [its operator and robust-scaling helpers](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_lsq/common.py).
+LSMR, the two-dimensional subspace solve, reflective step selection, sparse
+adapters, coloring, and production accounting/checkpoint integration remain
+future work. This prototype establishes the additive API path, not numerical
+convergence or performance of a large-scale solver.
 
 ### Constrained-DE API prototype
 

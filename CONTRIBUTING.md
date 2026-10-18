@@ -292,6 +292,10 @@ These shape API decisions and are non-obvious from the code alone.
    Rust, compatible with WASM, and without requiring BLAS/LAPACK or using stubs.
    Scalar algorithms do not require a linear-algebra backend. Sparse support
    is optional; document it separately and test every claimed sparse backend.
+   The [iterative-TRF API prototype](TODO.md#iterative-trf-api-prototype)
+   demonstrates separate Jacobian-product capabilities and robust model
+   composition without matrix entries. Keep that future operator path
+   independent of the existing dense TRF requirements.
 
 ## State and lifecycle contracts
 

@@ -27,6 +27,8 @@ use crate::core::problem::{CostFunction, Gradient, Jacobian, Residual};
 
 mod constraints;
 pub(crate) mod evaluation;
+#[cfg(test)]
+mod iterative_trf_api_prototype;
 mod losses;
 #[cfg(test)]
 mod tests;
