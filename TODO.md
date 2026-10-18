@@ -103,7 +103,10 @@ numerical work against analytic cases and reference implementations.
   problem-side constraint interfaces and assess Lampinen's feasibility-based
   selection. This needs population feasibility records and selection-aware
   incumbent reporting, since the preferred feasible candidate need not have
-  the lowest objective. Keep objective-based execution controls honest.
+  the lowest objective. Keep objective-based execution controls honest. The
+  [constrained-DE API prototype](#constrained-de-api-prototype) demonstrates
+  an additive state and composition path; the numerical algorithm remains
+  unimplemented.
 - [ ] **Add integer variables to differential evolution.** Define a problem-side
   domain contract, validate that each integer interval contains an integer,
   and preserve integrality through sampling, mutation repair, and local
@@ -197,6 +200,73 @@ Ship these in order, preserving existing public APIs and behavior:
   continuation stops on a budget or another non-native reason. Tests cover
   simultaneous tests, rejected trials, robust objectives, continuation, and
   all dense backends with both scalar types.
+
+### Constrained-DE API prototype
+
+- [x] **Prove selection-aware population storage and constrained injection.**
+  The [executable prototype](crates/basin/tests/constrained_de_api_prototype.rs)
+  uses the real executor, inner executor, canonical problem declarations,
+  and evaluation counters. Its support types remain test-only. Scripted
+  populations exercise selection without implementing mutation or sampling.
+
+The additive production path is a separate `ConstrainedDe<F>` constructed
+with `ConstrainedDe::new(de: De<F>)`, paired with
+`SelectedPopulationProgress<V, F>`. A sibling
+`ConstrainedDeInject::with_inner_solver(outer: ConstrainedDe<F>, inner: I)`
+can compose local refinement. These are proposed signatures, not public
+exports. Ordinary `De`, `DeInject`, and `PopulationProgress` retain their
+existing types and behavior.
+
+The prototype establishes these contracts:
+
+- Member records pair parameters with componentwise violations and an
+  optional objective. Checked replacement validates the entire population
+  before changing it and retains member order. A separate population
+  capability exposes these records without promising a cost for every
+  member. Seeds have no evaluated records.
+- Feasible members have evaluated objectives. An all-infeasible population
+  evaluates its selected representative before publication, leaving other
+  infeasible objectives optional. `State::cost()` therefore remains an
+  actual evaluated objective. A representative callback error propagates.
+  This choice requires an objective that can evaluate an infeasible
+  representative; an objective defined only on feasible points needs a
+  different, future availability contract.
+- Feasible trials beat infeasible members. Feasible pairs compare objective
+  values; infeasible pairs use componentwise non-worsening violations,
+  following [SciPy 1.16.2's Lampinen-based
+  selection](https://github.com/scipy/scipy/blob/v1.16.2/scipy/optimize/_differentialevolution.py).
+  Representatives use the lowest feasible objective or, before feasibility,
+  the smallest unscaled sum of violations. Exact ranking ties retain the
+  historical incumbent. This sum is a prototype policy, not a common
+  constraint-reporting norm.
+- Explicit selection events retain independent point, objective, and
+  violation snapshots. The executor stamps iteration and all raw counts at
+  publication, including clean mid-step stops. Republishing a selection
+  preserves its age. The state implements `IncumbentState` but neither
+  `ObjectiveIncumbentState` nor `PopulationState`; objective targets and
+  objective stalls cannot attach to it.
+- An injection inner must accept the original constrained problem. Seeds
+  follow the representative ranking. Every returned point is repaired to
+  the box and its constraints are reevaluated before applying the same trial
+  selection rule. The prototype permits infeasible local starts and partial
+  results; it does not permit a local solver to discard nonlinear blocks.
+- Nonempty nonlinear callback attempts charge `residual_evals`, including
+  failures and malformed output. Zero-count blocks skip callbacks. Objective
+  and derivative calls preserve their existing categories. Same-problem
+  inner execution shares the outer wrapper and never adds its counts twice.
+- Fresh initialization reevaluates member seeds and resets script position
+  and bookkeeping. Exact checkpoints preserve the script position, members,
+  refinement schedule, inner solver, selection metadata, and counts.
+  Tests cover both precisions on all four dense backends and serialized
+  `Vec` checkpoints.
+
+The fixture exercises finite boxes and nonlinear inequalities. Other
+constraint blocks, feasibility tolerances, production mutation and sampling,
+and nonlinear relaxation adapters remain future work. The `De` configuration
+is retained as opaque input to the wrapper; the script does not interpret
+its settings or exercise its RNG. Run the experiment with
+`cargo test -p basin --test constrained_de_api_prototype`, optionally adding
+`--features nalgebra,ndarray,faer,serde,parallel`.
 
 ### State API prototype
 
