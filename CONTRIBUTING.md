@@ -273,7 +273,13 @@ These shape API decisions and are non-obvious from the code alone.
    adapters forward the declaration; barrier and penalty adapters consume only
    their supported blocks. Sampling boxes use `SamplingBounds` on unconstrained
    problems. Bounded memetic solvers require an explicit `RelaxedInner` when
-   their local solver ignores the box. See
+   their local solver ignores the box. Future integer domains belong in the
+   same canonical declaration and must receive the same static compatibility
+   checks. Adapters that add capabilities preserve domains, and box relaxation
+   does not authorize fractional evaluations of integer coordinates. The
+   [integer-domain API prototype](TODO.md#integer-domain-api-prototype) tests
+   an additive declaration and explicit refinement with integer coordinates
+   fixed; production integer support remains deferred. See
    [constraint migration](MIGRATING.md#declaring-constraints).
 5. **Tiered backends with full solver coverage.** A small universal
    *vector tier* keeps first-order and derivative-free solvers generic over

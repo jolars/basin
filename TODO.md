@@ -110,8 +110,10 @@ numerical work against analytic cases and reference implementations.
 - [ ] **Add integer variables to differential evolution.** Define a problem-side
   domain contract, validate that each integer interval contains an integer,
   and preserve integrality through sampling, mutation repair, and local
-  refinement. Specify compatible `DeInject` inner solvers before enabling
-  mixed-integer local search.
+  refinement. The [integer-domain API prototype](#integer-domain-api-prototype)
+  establishes the declaration, rejection, and fixed-integer refinement
+  contracts. Production sampling, mutation repair, and mixed-integer injection
+  remain unimplemented.
 - [ ] **Add dedicated linear least-squares solvers.** Implement nonnegative
   least squares and general box-bounded linear least squares. Reuse suitable
   factorizations and test rank deficiency, active bounds, and optimality
@@ -267,6 +269,73 @@ is retained as opaque input to the wrapper; the script does not interpret
 its settings or exercise its RNG. Run the experiment with
 `cargo test -p basin --test constrained_de_api_prototype`, optionally adding
 `--features nalgebra,ndarray,faer,serde,parallel`.
+
+### Integer-domain API prototype
+
+- [x] **Prove an additive domain declaration and safe local refinement.**
+  The [executable prototype](crates/basin/src/core/constraint/model/integer_domain_api_prototype.rs)
+  extends the sealed canonical declaration inside a test-only child module.
+  It uses the real problem traits, adapters, executor, and inner executor.
+  No prototype types or methods enter the public API.
+
+Integrality belongs in the canonical problem-side declaration, alongside
+bounds and constraint blocks. The proposed public spelling is
+`Constraints<B, L, N, D = ContinuousDomain>`, with an explicit builder that
+changes the domain type. Existing declarations retain their continuous
+meaning. Do not add a required `Domain` associated type to every problem.
+
+The prototype wraps the existing constraint set in
+`DomainConstraints<C, D = ContinuousDomain>` rather than changing the public
+`Constraints` type. This demonstrates a separate additive implementation path
+through the sealed `ConstraintDescription` trait. It does not prove source or
+serialization compatibility for the proposed fourth parameter. Production
+integration must check generic builders, borrowed views, and serialization
+before choosing that spelling. Existing continuous declarations and DE runs
+remain unchanged in this experiment.
+
+The prototype establishes these contracts:
+
+- Bounds describe intervals; a separate coordinate mask declares integrality.
+  The mask and bounds have the parameter's length and remain fixed during a
+  solve. A borrowed declaration shares both the original bounds and mask.
+  Replacing bounds preserves the domain block. Finite-difference and
+  robust-loss adapters preserve the complete declaration and its type.
+- Unsupported solvers reject integer declarations through their existing
+  trait bounds. Compile-time checks cover continuous DE, ordinary and
+  projected Nelder-Mead, `DeInject`, and `RelaxedInner`, including relaxed
+  injection. The box-relaxation adapter is not permission to discard an
+  integer domain. Future constraint transformations must consume only blocks
+  they support and retain any unconsumed domain declaration.
+- Initialization validates finite, ordered bounds and requires
+  `ceil(lower) <= floor(upper)` for every integer coordinate. The effective
+  integer endpoints must lie in the consecutive exactly representable range:
+  `[-2^24, 2^24]` for `f32` and `[-2^53, 2^53]` for `f64`. This deliberately
+  conservative prototype policy rejects wider integer intervals, including
+  singletons outside that range. Seeds must already satisfy bounds and
+  integrality; validation never silently rounds them or evaluates the
+  objective.
+- Continuous local refinement requires an explicit adapter that fixes integer
+  coordinates at the selected member's values. The prototype eliminates
+  those coordinates and fixed continuous coordinates, runs projected
+  Nelder-Mead on the remaining box, and reconstructs the full parameter
+  before every callback. All-integer or otherwise fully fixed problems skip
+  refinement without evaluations. Rounding only the returned point is
+  insufficient because intermediate callbacks must also preserve integrality.
+- The adapter preserves original callback errors and folds its evaluation
+  counts into the outer problem exactly once, including failing attempts.
+  Refinement returns its inner termination report with the matching point
+  and cost. An iteration limit retains partial progress; production injection
+  must apply the normal explicit inner-stop policy and outer selection rule.
+
+Tests exercise both precisions on each enabled dense backend version.
+Run `cargo test -p basin --lib integer_domain_api_prototype`, optionally adding
+`--features nalgebra,ndarray,faer,parallel,serde`.
+
+Production integer-aware DE, integer sampling and mutation repair, integer
+checkpoint storage, nonlinear constrained refinement, and derivative-based
+reduced problems remain future work. An explicit continuous relaxation that
+allows fractional objective calls would require its own problem transformation
+and callback-domain contract; `RelaxedInner` does not provide that contract.
 
 ### State API prototype
 

@@ -1,5 +1,9 @@
 use crate::core::math::Scalar;
 
+#[cfg(test)]
+#[path = "model/integer_domain_api_prototype.rs"]
+mod integer_domain_api_prototype;
+
 /// The authoritative constraint declaration shared by objective and residual problems.
 ///
 /// Implement this even for an unconstrained problem, using [`NoConstraints`]
