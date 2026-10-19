@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Highlights
+
+Basin 2.0 revises the core API and removes interfaces deprecated in 1.x, and has introduced a large number of breaking changes. The [migration guide](https://basin.rs/docs/migrating-to-v2/) covers the upgrade.
+
+Your objective and residual types now need to implement `ProblemConstraints`, even for unconstrained problems. A typed constraint set replaces the old constraint traits. Solvers now keep their own models, history, and workspace, while shared progress states replace the algorithm-specific state types.
+
+Numerical tolerances now belong on the solver, and execution limits belong on the executor. `TerminationCriterion` and `terminate_on` have been removed. Results now carry a structured termination report, so result handling, observers, and custom solvers need updating. State counters also report individual evaluation categories, which may change how you set evaluation budgets.
+
+Some solver names and defaults have changed too. `Trf` is now `BoundedLevenbergMarquardt`. Nelder-Mead enables simplex convergence by default, bounded `f64` L-BFGS uses new stopping defaults, and LM uses trust-region damping.
+
+No features are enabled by default, so you need to add `problems` if you use the test functions. Backend aliases also now select the newest supported version (rather than a frozen one). If you pick `nalgebra` you now get Nalgebra 0.35, which requires Rust 1.89; the other supported features still work with Rust 1.87.
+
+Many public records and enums are now non-exhaustive to allow future additions. Use constructors or builders for records, and a fallback arm when matching enums.
+
+Saved runs also need attention. Basin 1.x exact checkpoints cannot be resumed in 2.0, and the legacy bincode readers have been removed. Export parameters from the old application and start a fresh run when upgrading.
+
 ## [1.15.1](https://github.com/jolars/basin/compare/v1.15.0...v1.15.1) (2026-09-29)
 
 ### Bug Fixes
