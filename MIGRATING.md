@@ -1066,8 +1066,10 @@ its own budgets and convergence controls. Legacy state payloads cannot preserve
 that ownership layout: export their population using Basin 1.x and start a fresh
 2.0 run, or finish exact continuation in the matching 1.x application.
 
-BFGS now has the type `Bfgs<V, F, M, L>`, with defaults for the scalar, matrix,
-and line search. `Bfgs::new()` and `Bfgs::with_line_search(search)` infer the
+BFGS now has the type `Bfgs<V, F, M, L, I>`, with defaults for the scalar,
+matrix, line search, and initial inverse-Hessian policy. Existing type
+annotations with four parameters keep using the default identity policy.
+`Bfgs::new()` and `Bfgs::with_line_search(search)` infer the
 matrix from `V: DenseBackend<F>`. Every enabled backend version has its own
 association. To override the matrix, use
 `Bfgs::<V, F, M, L>::with_matrix_and_line_search(search)`. Custom vector
@@ -1076,6 +1078,35 @@ backends implement `DenseBackend`, and the selected matrix must implement
 `Executor::from_start(problem, Bfgs::new(), x)` still infers both solver and
 state. The inverse Hessian belongs to the solver; retain it with
 `run_with_solver()` and read `result.solver.inverse_hessian()`.
+
+Use `with_initial_inverse_hessian(matrix)` for a fixed seed or
+`with_initial_inverse_hessian_initializer(|x: &V, gradient: &V| ...)` to
+construct one from the freshly evaluated starting point and gradient. These
+settings belong to the solver, not `FirstOrderState`. Fixed seeds require
+`M: Clone + MatrixIndex<F>`; closures require `M: MatrixIndex<F>` without
+cloning. Both validate dimensions, finite entries, exact symmetry, and positive
+definiteness at initialization. Validation uses pure-Rust Cholesky work and
+panics on invalid seeds. The default configuration adds none of these
+capabilities. Named `solver::bfgs::InitialInverseHessian<V, M, F>`
+implementations can use the original matrix capabilities and enforce the
+seed contract themselves.
+
+Custom seeds skip the first curvature rescaling by default, preserving their
+scaling through the usual BFGS update. The default identity seed still rescales
+to `(sᵀy / yᵀy) I` before its first accepted curvature update. A curvature
+failure leaves either model unchanged. Each fresh solve reevaluates its point,
+resets line-search history, and reconstructs the configured seed. A fixed seed
+must match the new dimension; an initializer can adapt to it. Exact continuation
+retains the learned model, rescaling flag, and initializer without calling it
+again. Replacing the seed setting on a retained solver affects its next fresh
+solve and leaves its current model intact.
+
+Owned checkpoints support closures without `Clone` or serialization. With
+`serde`, fixed seeds and serializable named initializers retain their settings
+and models. The default identity policy is a unit value and preserves BFGS's
+existing Postcard payload layout and checkpoint type identifier. Other
+initializer configurations have distinct solver types; self-describing formats
+include the initializer field. Other solvers' checkpoint layouts are unchanged.
 
 L-BFGS now has the type `Lbfgs<V, F, Mode, L>`, with `Bounded` and
 `MoreThuente<F>` defaults. `Lbfgsb<V, F, L>` aliases the bounded mode. Replace

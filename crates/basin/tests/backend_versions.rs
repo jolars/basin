@@ -1,5 +1,8 @@
 //! Backend implementations must survive Cargo feature unification.
 
+#[path = "support/bfgs_initial_inverse_hessian.rs"]
+mod bfgs_initial_inverse_hessian;
+
 #[cfg(feature = "ndarray_v0_16")]
 #[test]
 fn ndarray_0_16_norm_survives_newer_features() {
@@ -503,6 +506,7 @@ impl Quadratic  {
         .run()
         .unwrap();
         assert!(seeded.cost() < 128.0 * F::EPSILON);
+        crate::bfgs_initial_inverse_hessian::check::<V, F>(make);
         let lbfgs = Executor::new(
             boxed(problem()),
             Lbfgs::<_, F>::with_line_search(basin::MoreThuente::<F>::new())

@@ -192,7 +192,11 @@ bracketing routines.
 ## Quasi-Newton
 
 - **[`Bfgs`](https://docs.rs/basin/latest/basin/solver/bfgs/struct.Bfgs.html)**:
-  dense quasi-Newton with a full approximate Hessian (Nocedal & Wright, 2006).
+  dense quasi-Newton with a full inverse-Hessian approximation (Nocedal &
+  Wright, 2006). Supports all four dense backends with `f32` or `f64`.
+  Optional fixed initial matrices require cloning and entry access; closure
+  initializers require entry access. Named initializers enforce their own
+  seed contracts.
 - **[`Lbfgs`](https://docs.rs/basin/latest/basin/solver/lbfgs/struct.Lbfgs.html)**:
   limited-memory BFGS for larger problems (two-loop recursion, Nocedal & Wright
   Alg. 7.4). Supports all four dense backends with `f32` or `f64`; parameter

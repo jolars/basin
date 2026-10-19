@@ -96,8 +96,8 @@ pub mod solis_wets;
 /// Steady-state real-coded GA with BLX-α + NAM + BGA + replace-worst.
 pub mod ssga;
 
-/// BFGS quasi-Newton solver (dense inverse-Hessian; `Vec<f64>`, nalgebra,
-/// faer).
+/// BFGS quasi-Newton solver (dense inverse Hessian; `Vec`, nalgebra, ndarray,
+/// and faer, with `f32` or `f64`).
 pub mod bfgs;
 
 /// BOBYQA (Powell 2009): bound-constrained model-based derivative-free

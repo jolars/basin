@@ -1,13 +1,19 @@
 use crate::core::inner::{InitialState, WarmStart};
 use crate::core::math::{
     DenseBackend, Dot, GeneralRankOneUpdate, MatVec, MatrixIdentity,
-    NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd, VectorLen,
+    MatrixIndex, NegInPlace, NormSquared, Scalar, ScaleInPlace, ScaledAdd,
+    VectorLen,
 };
 use crate::core::problem::{CostFunction, Gradient, Problem};
 use crate::core::solver::Solver;
 use crate::core::state::{FirstOrderState, State};
 use crate::core::termination::Termination;
 use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
+
+mod initial_inverse_hessian;
+pub use initial_inverse_hessian::{
+    FixedInverseHessian, IdentityInverseHessian, InitialInverseHessian,
+};
 
 /// BFGS quasi-Newton solver.
 ///
@@ -17,9 +23,14 @@ use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 /// which is what guarantees `yᵀs > 0` so each update preserves positive
 /// definiteness).
 ///
-/// On the first accepted step we rescale `H ← (sᵀy / yᵀy)·I` (Nocedal &
-/// Wright (6.20)), cheap, with a large convergence improvement on poorly scaled
-/// problems.
+/// By default, each fresh solve starts with `H = I`. Immediately before the
+/// first accepted curvature update, we rescale `H ← (sᵀy / yᵀy)·I`
+/// (Nocedal & Wright (6.20)), improving convergence on poorly scaled problems.
+/// [`with_initial_inverse_hessian`](Self::with_initial_inverse_hessian) sets
+/// a fixed seed, and [`with_initial_inverse_hessian_initializer`](Self::with_initial_inverse_hessian_initializer)
+/// can construct one from the initial point and gradient. Custom seeds skip
+/// this rescaling by default so that their scaling survives the first update.
+/// Later curvature failures skip updates without replacing the model.
 ///
 /// **Curvature failure (`yᵀs ≤ ε · |y| · |s|`):** the H update is skipped
 /// for that iteration. Strong Wolfe with `c2 < 1` guarantees `yᵀs > 0` in
@@ -29,13 +40,15 @@ use crate::line_search::{LineSearch, LineSearchOutcome, Wolfe};
 ///
 /// # Backends
 ///
-/// Runs on `Vec<f64>` (via the hand-rolled
+/// Runs on `Vec<F>` (via the hand-rolled
 /// [`DenseMatrix`](crate::core::math::DenseMatrix)), nalgebra
-/// (`DVector<f64>`/`DMatrix<f64>`), ndarray (`Array1<f64>` /
-/// `Array2<f64>`), and faer (`Col<f64>`/`Mat<f64>`). The dense
+/// (`DVector<F>`/`DMatrix<F>`), ndarray (`Array1<F>`/`Array2<F>`), and
+/// faer (`Col<F>`/`Mat<F>`), for both `f32` and `f64`. The dense
 /// inverse-Hessian needs only matvec, an identity constructor, scaling, and
 /// the rank-one update `GeneralRankOneUpdate` (no factorization), so it
-/// stays backend-generic.
+/// stays backend-generic. Fixed seeds additionally require `M: Clone +
+/// MatrixIndex<F>`; closure initializers require `M: MatrixIndex<F>`, but
+/// not `Clone`. These optional requirements do not affect the default seed.
 ///
 /// # Examples
 ///
@@ -88,11 +101,13 @@ pub struct Bfgs<
     F: Scalar = f64,
     M = <V as DenseBackend<F>>::Matrix,
     S = Wolfe<F>,
+    I = IdentityInverseHessian,
 > {
     line_search: S,
     epsilon: F,
     inverse_hessian: Option<M>,
     initial_scaling_done: bool,
+    initial_inverse_hessian: I,
     param: std::marker::PhantomData<V>,
 }
 
@@ -128,14 +143,93 @@ impl<V: DenseBackend<F>, F: Scalar, M, S> Bfgs<V, F, M, S> {
             epsilon: F::from_f64(1e-10).unwrap(),
             inverse_hessian: None,
             initial_scaling_done: false,
+            initial_inverse_hessian: IdentityInverseHessian,
             param: std::marker::PhantomData,
         }
     }
+}
 
+impl<V: DenseBackend<F>, F: Scalar, M, S, I> Bfgs<V, F, M, S, I> {
     /// Current inverse-Hessian model, available after initialization.
     /// Use [`crate::Executor::run_with_solver`] to retain it after a solve.
     pub fn inverse_hessian(&self) -> Option<&M> {
         self.inverse_hessian.as_ref()
+    }
+
+    /// Use a fixed initial inverse Hessian for each fresh solve.
+    ///
+    /// Initialization checks that the seed matches the starting dimension and
+    /// is finite, exactly symmetric, and positive definite, then clones it
+    /// into the working model. Invalid seeds panic at initialization. The
+    /// check uses `O(n³)` pure-Rust Cholesky work and `O(n²)` scratch storage.
+    /// The stored seed is never updated; reuse with a different dimension
+    /// requires a new seed or a dimension-aware initializer.
+    ///
+    /// This disables first-update curvature rescaling. Existing callers using
+    /// the default identity seed retain that rescaling. Changing the seed on
+    /// an initialized solver affects its next fresh solve; exact continuation
+    /// retains the current model and rescaling flag.
+    pub fn with_initial_inverse_hessian(
+        self,
+        matrix: M,
+    ) -> Bfgs<V, F, M, S, FixedInverseHessian<M>>
+    where
+        V: VectorLen,
+        M: Clone + MatrixIndex<F>,
+    {
+        self.with_initial_inverse_hessian_initializer(FixedInverseHessian(
+            matrix,
+        ))
+    }
+
+    /// Construct the seed from the freshly evaluated point and gradient.
+    ///
+    /// Accepts an [`InitialInverseHessian`] implementation, including a
+    /// closure `Fn(&V, &V) -> M`. Called once per fresh solve, even with a
+    /// zero iteration budget, without extra objective or gradient requests.
+    /// Point warm starts reevaluate the point and reconstruct the seed; exact
+    /// continuation retains the model and does not call the initializer.
+    /// First-update rescaling is disabled unless a named implementation
+    /// explicitly enables it. Changing the initializer affects the next fresh
+    /// solve, leaving an initialized model and its rescaling flag intact.
+    ///
+    /// Closure results are checked like fixed seeds, requiring only
+    /// `M: MatrixIndex<F>` beyond the usual BFGS operations. They need not be
+    /// `Clone`. Named implementations enforce their own matrix contract and
+    /// may support custom storage or serialization. Closures support owned,
+    /// nonserialized checkpoints.
+    ///
+    /// For example, a diagonal seed based on the initial gradient bounds the
+    /// first search direction in each coordinate without changing variables:
+    ///
+    /// ```
+    /// use basin::{Bfgs, DenseMatrix};
+    /// let solver = Bfgs::<Vec<f64>>::new()
+    ///     .with_initial_inverse_hessian_initializer(
+    ///         |x: &Vec<f64>, gradient: &Vec<f64>| {
+    ///             DenseMatrix::from_fn(x.len(), x.len(), |i, j| {
+    ///                 if i == j { 0.1 / gradient[i].abs().max(1e-3) }
+    ///                 else { 0.0 }
+    ///             })
+    ///         },
+    ///     );
+    /// assert!(solver.inverse_hessian().is_none());
+    /// ```
+    pub fn with_initial_inverse_hessian_initializer<Init>(
+        self,
+        initializer: Init,
+    ) -> Bfgs<V, F, M, S, Init>
+    where
+        Init: InitialInverseHessian<V, M, F>,
+    {
+        Bfgs {
+            line_search: self.line_search,
+            epsilon: self.epsilon,
+            inverse_hessian: self.inverse_hessian,
+            initial_scaling_done: self.initial_scaling_done,
+            initial_inverse_hessian: initializer,
+            param: self.param,
+        }
     }
 
     /// Set the relative threshold for accepting a curvature update.
@@ -147,11 +241,12 @@ impl<V: DenseBackend<F>, F: Scalar, M, S> Bfgs<V, F, M, S> {
     }
 }
 
-impl<P, S, V, M, F> Solver<P, FirstOrderState<V, F>> for Bfgs<V, F, M, S>
+impl<P, S, V, M, F, I> Solver<P, FirstOrderState<V, F>> for Bfgs<V, F, M, S, I>
 where
     F: Scalar,
     P: CostFunction<Param = V, Output = F> + Gradient<Gradient = V>,
     S: LineSearch<P, V, F, Error = P::Error>,
+    I: InitialInverseHessian<V, M, F>,
     V: DenseBackend<F>
         + Clone
         + Dot<F>
@@ -175,13 +270,18 @@ where
     ) -> Result<FirstOrderState<V, F>, Self::Error> {
         state.reset();
         self.line_search.reset();
-        self.inverse_hessian = Some(M::identity(state.param().vec_len()));
-        self.initial_scaling_done = false;
+        self.inverse_hessian = None;
+        self.initial_scaling_done =
+            !self.initial_inverse_hessian.rescale_on_first_update();
         let param = state.param().clone();
         let (cost, grad) = problem.cost_and_gradient(&param)?;
         state
             .replace(param, cost, grad)
             .expect("gradient dimension differs from parameter");
+        self.inverse_hessian = Some(self.initial_inverse_hessian.initialize(
+            state.param(),
+            state.current().expect("initialized BFGS progress").2,
+        ));
         Ok(state)
     }
 
@@ -291,9 +391,9 @@ where
     }
 }
 
-/// A point warm start reevaluates the point and creates a fresh identity model.
-impl<V: DenseBackend<F> + Clone, F: Scalar, M, S> InitialState<V>
-    for Bfgs<V, F, M, S>
+/// A point warm start reevaluates the point and constructs the configured seed.
+impl<V: DenseBackend<F> + Clone, F: Scalar, M, S, I> InitialState<V>
+    for Bfgs<V, F, M, S, I>
 {
     type State = FirstOrderState<V, F>;
     fn seed(&self, x: &V) -> Self::State {
@@ -301,7 +401,7 @@ impl<V: DenseBackend<F> + Clone, F: Scalar, M, S> InitialState<V>
     }
 }
 
-impl<V: DenseBackend<F> + Clone, F: Scalar, M, S> WarmStart<V>
-    for Bfgs<V, F, M, S>
+impl<V: DenseBackend<F> + Clone, F: Scalar, M, S, I> WarmStart<V>
+    for Bfgs<V, F, M, S, I>
 {
 }

@@ -160,7 +160,7 @@ before 2.0. The Basin additions below can ship compatibly in 2.x.
   below `1.4e-7`. Stepwise and grid searches selected the same models on four
   datasets, with reproducible repeated runs. The trial checked on Rust 1.87,
   including the `parallel` and `nalgebra_v0_34` features.
-- [ ] **Add configurable initial inverse Hessians to BFGS.** Support rustima's
+- [x] **Add configurable initial inverse Hessians to BFGS.** Support rustima's
   diagonal seed based on the initial gradient without requiring coordinate
   scaling. Preserve existing callers and default behavior. Define how custom
   seeds interact with the first curvature rescaling, fresh solves, and exact

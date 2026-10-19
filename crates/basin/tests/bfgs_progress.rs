@@ -124,6 +124,39 @@ fn explicit_matrix_and_line_search_remain_available_without_clone() {
     let _checkpoint = result.into_checkpoint();
 }
 
+// Named initializers can use the original matrix contract without adding
+// entry access, cloning, or backend factorization requirements.
+struct HalfIdentity;
+
+impl basin::solver::bfgs::InitialInverseHessian<Vec<f64>, CustomMatrix>
+    for HalfIdentity
+{
+    fn initialize(&self, x: &Vec<f64>, _: &Vec<f64>) -> CustomMatrix {
+        let mut h = CustomMatrix::identity(x.len());
+        basin::ScaleInPlace::scale_in_place(&mut h, 0.5);
+        h
+    }
+}
+
+#[test]
+fn named_seed_supports_nonclone_matrix_without_entry_access() {
+    let solver =
+        Bfgs::<Vec<f64>, f64, CustomMatrix>::with_matrix_and_line_search(
+            Wolfe::new(),
+        )
+        .with_initial_inverse_hessian_initializer(HalfIdentity);
+    let result = Executor::from_start(Sphere, solver, vec![3.0, 2.0])
+        .max_iter(1)
+        .run_with_solver()
+        .unwrap();
+    assert_eq!(result.state.cost(), 0.0);
+    assert_eq!(
+        result.solver.inverse_hessian().unwrap().0,
+        DenseMatrix::from_row_slice(2, 2, &[0.5, 0.0, 0.0, 0.5]),
+    );
+    let _checkpoint = result.into_checkpoint();
+}
+
 // This line search is deliberately not Clone. Fresh initialization must reset
 // its history through the component contract; checkpoints retain it by ownership.
 struct StatefulSearch {

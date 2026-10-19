@@ -26,10 +26,43 @@ impl<CG, CX, CC, CT, So, F: Scalar>
     forward_setting!(BarrierMethod, with_inner_max_iter, inner_max_iter: u64);
 }
 
-impl<CG, CX, CC, CT, V: crate::DenseBackend<F>, M, S, F: Scalar>
-    ConfiguredSolver<Bfgs<V, F, M, S>, CG, CX, CC, CT>
+impl<CG, CX, CC, CT, V: crate::DenseBackend<F>, M, S, I, F: Scalar>
+    ConfiguredSolver<Bfgs<V, F, M, S, I>, CG, CX, CC, CT>
 {
     forward_setting!(Bfgs, with_relative_curvature_tolerance, epsilon: F);
+
+    /// Configure [`with_initial_inverse_hessian`](Bfgs::with_initial_inverse_hessian) while retaining convergence settings.
+    #[allow(clippy::type_complexity)] // Preserve the typed initializer conversion.
+    pub fn with_initial_inverse_hessian(
+        self,
+        matrix: M,
+    ) -> ConfiguredSolver<
+        Bfgs<V, F, M, S, crate::solver::bfgs::FixedInverseHessian<M>>,
+        CG,
+        CX,
+        CC,
+        CT,
+    >
+    where
+        V: crate::VectorLen,
+        M: Clone + crate::MatrixIndex<F>,
+    {
+        self.map_solver(|solver| solver.with_initial_inverse_hessian(matrix))
+    }
+
+    /// Configure [`with_initial_inverse_hessian_initializer`](Bfgs::with_initial_inverse_hessian_initializer) while retaining convergence settings.
+    #[allow(clippy::type_complexity)] // Preserve the typed initializer conversion.
+    pub fn with_initial_inverse_hessian_initializer<Init>(
+        self,
+        initializer: Init,
+    ) -> ConfiguredSolver<Bfgs<V, F, M, S, Init>, CG, CX, CC, CT>
+    where
+        Init: crate::solver::bfgs::InitialInverseHessian<V, M, F>,
+    {
+        self.map_solver(|solver| {
+            solver.with_initial_inverse_hessian_initializer(initializer)
+        })
+    }
 }
 
 impl<CG, CX, CC, CT, V, F: Scalar>
