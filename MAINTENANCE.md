@@ -2,12 +2,11 @@
 
 ## Supported release lines
 
-Basin develops 2.0 on `main` and maintains the latest 1.x release on `v1`, which
+Basin develops 2.x on `main` and maintains the latest 1.x release on `v1`, which
 starts from v1.15.1. The 1.x line receives correctness, regression, and security
-fixes throughout 2.0 development and for at least six months after the first
-stable 2.0.0 release. We will record the earliest end-of-support date here when
-2.0.0 ships and announce the end of support in the release notes. No end date is
-set while 2.0 is in development.
+fixes through at least April 19, 2027, and for at least six months after the
+first stable 2.0.0 release, whichever is later. We will announce the end of
+support in the release notes.
 
 Only the latest 1.x patch release is maintained; earlier minor releases do not
 have separate maintenance branches. Applications can use `basin = "1"` and
@@ -58,8 +57,9 @@ Merging a release PR creates its tag and GitHub Release. The existing Publish
 Crates workflow publishes the tagged crate to crates.io. The `RELEASE_TOKEN`
 must allow the tag and release events to trigger these downstream workflows.
 
-While 1.x is the stable line, its `release-latest` setting remains `true`. The
-setting controls GitHub's Latest designation; it does not turn a release into a
+The `main` branch sets `release-latest` to `true`; the `v1` branch sets it to
+`false` for the 2.0 handoff. Maintenance releases therefore leave GitHub's
+Latest designation unchanged. The setting does not turn a release into a
 prerelease or prevent crates.io publication. Publishing beta or RC versions
 needs a separate prerelease policy.
 
