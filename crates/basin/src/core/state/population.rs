@@ -64,7 +64,26 @@ pub struct PopulationProgress<V, F: Scalar = f64> {
 }
 
 /// A proposed population or representative has inconsistent dimensions or availability.
+///
+/// New variants may be added in future releases. Include a fallback arm when
+/// matching errors; existing variants remain directly constructible.
+/// Exhaustive matching outside Basin is unsupported:
+///
+/// ```compile_fail
+/// use basin::PopulationShapeError;
+///
+/// fn handle(error: PopulationShapeError) {
+///     match error {
+///         PopulationShapeError::EmptyPopulation
+///         | PopulationShapeError::EmptyParameter
+///         | PopulationShapeError::DimensionMismatch { .. }
+///         | PopulationShapeError::CostCountMismatch { .. }
+///         | PopulationShapeError::UnevaluatedPopulation => {}
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PopulationShapeError {
     /// An evaluated population requires at least one member.
     EmptyPopulation,

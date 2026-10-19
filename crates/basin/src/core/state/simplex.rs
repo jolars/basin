@@ -49,7 +49,25 @@ pub struct SimplexProgress<V, F: Scalar = f64> {
 }
 
 /// A proposed simplex has inconsistent point or cost dimensions.
+///
+/// New variants may be added in future releases. Include a fallback arm when
+/// matching errors; existing variants remain directly constructible.
+/// Exhaustive matching outside Basin is unsupported:
+///
+/// ```compile_fail
+/// use basin::SimplexShapeError;
+///
+/// fn handle(error: SimplexShapeError) {
+///     match error {
+///         SimplexShapeError::TooFewVertices { .. }
+///         | SimplexShapeError::TooManyVertices { .. }
+///         | SimplexShapeError::DimensionMismatch { .. }
+///         | SimplexShapeError::CostCountMismatch { .. } => {}
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SimplexShapeError {
     /// A simplex requires at least two vertices.
     TooFewVertices {

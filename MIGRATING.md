@@ -400,6 +400,39 @@ This change preserves current defaults, numerical behavior, and serialized
 representations; future serialization compatibility requires a separate
 decision.
 
+## Extensible state shape errors
+
+`SimplexShapeError` and `PopulationShapeError` are now non-exhaustive so future
+releases can add validation cases. Matches must include a fallback arm for
+unknown variants. Handle known cases as needed and report or propagate the
+remaining errors:
+
+```rust
+use basin::{PopulationShapeError, SimplexShapeError};
+
+let error = SimplexShapeError::CostCountMismatch { vertices: 3, costs: 2 };
+match error {
+    SimplexShapeError::CostCountMismatch { vertices, costs } => {
+        eprintln!("expected {vertices} costs, got {costs}");
+    }
+    other => eprintln!("{other}"),
+}
+
+let error = PopulationShapeError::UnevaluatedPopulation;
+match error {
+    PopulationShapeError::UnevaluatedPopulation => {
+        eprintln!("evaluate the population before publishing a representative");
+    }
+    other => eprintln!("{other}"),
+}
+```
+
+Existing variants and their fields remain directly constructible, and their
+payloads can still be destructured exhaustively. Validation and update behavior
+are unchanged, including support for lower-dimensional and collapsed simplexes
+and non-finite cost records. Adding variants does not permit rejecting inputs
+accepted by the documented state contracts.
+
 ## Solver and line-search settings
 
 Basin 2.0 removes `BarrierMethod::new`, `AugmentedLagrangianMethod::new`,

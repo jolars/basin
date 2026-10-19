@@ -580,10 +580,11 @@ desired backend features.
   guide](MIGRATING.md#extensible-line-search-configurations) for constructors,
   public field assignment, and destructuring with `..`.
 
-- [ ] **Decide whether state shape errors should be non-exhaustive.**
-  Review `SimplexShapeError` and `PopulationShapeError` for future validation
-  cases and consistency with constraint, derivative-checking, and
-  linear-algebra errors, which already permit new variants.
+- [x] **Make state shape errors extensible.** `SimplexShapeError` and
+  `PopulationShapeError` are non-exhaustive, with directly constructible
+  variants and unchanged payloads and validation contracts. Matches include a
+  fallback arm for future variants. See the [state shape error migration
+  guide](MIGRATING.md#extensible-state-shape-errors).
 
 - [ ] **Settle the extension policy for enum payloads.** An enum-level
   `#[non_exhaustive]` permits new variants but does not permit adding fields to

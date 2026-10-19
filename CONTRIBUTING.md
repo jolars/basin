@@ -330,6 +330,12 @@ mathematical comparison. Different comparison rules require distinct evidence
 representations. See the [stopping-record migration
 guide](MIGRATING.md#extensible-stopping-records).
 
+`SimplexShapeError` and `PopulationShapeError` are non-exhaustive enums with
+directly constructible variants and exhaustive payloads. New variants may
+refine diagnostics or describe new operations; they do not permit rejecting
+inputs accepted by the documented state contracts. See the
+[state shape error migration guide](MIGRATING.md#extensible-state-shape-errors).
+
 Basin 2.0 on `main` uses shared progress states with solver-owned algorithm
 machinery. The migration follows the validated
 [prototype](TODO.md#state-api-prototype) and the contracts below.
