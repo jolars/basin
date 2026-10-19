@@ -738,13 +738,14 @@ where
             if let Some(record) = trials.as_mut().and_then(|r| r.last_mut()) {
                 record.phase = diagnostics::Phase::NoProgress;
             }
-            let reason = if g.norm_squared() == F::zero() {
+            let gradient_norm = g.norm_l2();
+            let reason = if gradient_norm == F::zero() {
                 Termination::custom(
                     "trust_region.zero_gradient",
-                    "The computed squared Euclidean gradient norm is exactly zero.",
+                    "The Euclidean gradient norm is exactly zero.",
                     vec![crate::Measurement {
-                        name: "gradient_norm_squared".into(),
-                        value: g.norm_squared(),
+                        name: "gradient_norm".into(),
+                        value: gradient_norm,
                     }],
                 )
             } else {

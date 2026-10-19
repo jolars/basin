@@ -17,8 +17,8 @@ use super::problem::Problem;
 use super::solver::Solver;
 use super::state::{GradientState, SimplexState, State};
 use super::termination::{
-    ConvergenceCriterion, ConvergenceEvidence, ConvergenceTest, Termination,
-    Threshold,
+    BinaryValue, ConvergenceCriterion, ConvergenceEvidence, ConvergenceTest,
+    Termination, Threshold,
 };
 use crate::SolverStep;
 
@@ -154,7 +154,7 @@ impl<P, S: State> Check<P, S> for () {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct RelativeGradientCheck<F: Scalar> {
     tol: F,
-    initial_norm_squared: Option<F>,
+    initial_norm: Option<F>,
 }
 
 /// Fixed gradient-norm settings; constructed by solver setters.
@@ -183,7 +183,7 @@ where
 {
     fn reset(&mut self) {
         if let Some(c) = &mut self.relative {
-            c.initial_norm_squared = None;
+            c.initial_norm = None;
         }
     }
     fn check(
@@ -191,41 +191,73 @@ where
         _: &Problem<P>,
         state: &S,
     ) -> Option<Termination<S::Float>> {
-        let norm_squared = state.gradient()?.norm_squared();
-        if !norm_squared.is_finite() {
+        let norm = state.gradient()?.norm_l2();
+        if !norm.is_finite() {
             return None;
         }
-        let absolute = self
-            .absolute
-            .filter(|&tol| norm_squared <= tol * tol)
-            .map(|tol| {
-                Termination::upper_bound(
-                    ConvergenceTest::AbsoluteGradientSquared,
-                    norm_squared,
-                    tol * tol,
-                    tol,
-                    None,
-                )
-            });
+        let absolute = self.absolute.and_then(|tol| {
+            gradient_termination(
+                ConvergenceTest::AbsoluteGradientSquared,
+                norm,
+                tol,
+                None,
+            )
+        });
         let relative = self.relative.as_mut().and_then(|check| {
-            let initial =
-                *check.initial_norm_squared.get_or_insert(norm_squared);
-            let bound = check.tol * check.tol * initial;
-            (norm_squared <= bound).then(|| {
-                Termination::upper_bound(
-                    ConvergenceTest::RelativeGradientSquared,
-                    norm_squared,
-                    bound,
-                    check.tol,
-                    Some(initial),
-                )
-            })
+            let initial = *check.initial_norm.get_or_insert(norm);
+            gradient_termination(
+                ConvergenceTest::RelativeGradientSquared,
+                norm,
+                check.tol,
+                Some(initial),
+            )
         });
         absolute
             .into_iter()
             .chain(relative)
             .reduce(Termination::merge)
     }
+}
+
+fn gradient_termination<F: Scalar>(
+    test: ConvergenceTest,
+    norm: F,
+    tolerance: F,
+    initial: Option<F>,
+) -> Option<Termination<F>> {
+    let initial_norm = initial.unwrap_or_else(F::one);
+    let value_factors = [norm, norm];
+    let bound_factors = [tolerance, tolerance, initial_norm, initial_norm];
+    if !BinaryValue::product_le(&value_factors, &bound_factors) {
+        return None;
+    }
+    let value = norm * norm;
+    let reference = initial.map(|norm| norm * norm);
+    let bound = tolerance * tolerance * reference.unwrap_or_else(F::one);
+    let represents = |value: F, factors: &[F]| {
+        value.is_finite()
+            && (value != F::zero() || factors.contains(&F::zero()))
+    };
+    // Equivalent product groupings can round in opposite directions.
+    let termination = if represents(value, &value_factors)
+        && represents(bound, &bound_factors)
+        && reference.is_none_or(|value| represents(value, &[initial_norm]))
+        && value <= bound
+    {
+        Termination::upper_bound(test, value, bound, tolerance, reference)
+    } else {
+        Termination::converged(ConvergenceCriterion::new(
+            test,
+            ConvergenceEvidence::FactoredUpperBound {
+                value: BinaryValue::product(&value_factors),
+                bound: BinaryValue::product(&bound_factors),
+                tolerance,
+                reference: initial
+                    .map(|norm| BinaryValue::product(&[norm, norm])),
+            },
+        ))
+    };
+    Some(termination)
 }
 
 /// Fixed projected-gradient setting; bounds come from the current problem.
@@ -329,7 +361,7 @@ where
             let last = self.last.replace(current.clone())?;
             let mut difference = current.clone();
             difference.scaled_add(-F::one(), &last);
-            let step = difference.norm_squared().sqrt();
+            let step = difference.norm_l2();
             if !step.is_finite() {
                 return None;
             }
@@ -344,7 +376,7 @@ where
                     )
                 });
             let relative = self.relative.and_then(|tol| {
-                let norm = current.norm_squared().sqrt();
+                let norm = current.norm_l2();
                 let bound = if tol == F::zero() {
                     F::zero()
                 } else if norm.is_finite() {
@@ -354,7 +386,7 @@ where
                     let mut scaled = current.clone();
                     scaled.scaled_add(-F::one(), current);
                     scaled.scaled_add(tol, current);
-                    scaled.norm_squared().sqrt()
+                    scaled.norm_l2()
                 };
                 (step <= bound).then(|| {
                     Termination::upper_bound(
@@ -877,7 +909,7 @@ impl<So, G, X, C, T> ConfiguredSolver<So, G, X, C, T> {
         slot.relative =
             optional_tolerance(value).map(|tol| RelativeGradientCheck {
                 tol,
-                initial_norm_squared: None,
+                initial_norm: None,
             });
         ConfiguredSolver {
             solver: self.solver,

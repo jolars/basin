@@ -330,6 +330,20 @@ Final observer events borrow the report; clone it if you need to retain it.
 `StepOutcome` is now `Clone` rather than `Copy`. The numeric termination code
 preserves the 1.x identifiers but cannot represent every detail of the report.
 
+Shared gradient checks retain the `AbsoluteGradientSquared` and
+`RelativeGradientSquared` test identities. Their evidence uses
+`FactoredUpperBound` when squaring a gradient norm or tolerance would overflow
+or erase a nonzero value. Handle that variant when reading measurements.
+Relative gradient checks retain the initial unsquared norm in solver history;
+recreate serialized prerelease checkpoints rather than loading the old squared
+history into Basin 2.0.
+
+Custom backends can override `NormSquared::norm_l2` with a scaled Euclidean
+norm calculation. Its compatibility default takes the square root of
+`norm_squared`, which can lose tiny nonzero values or overflow. All built-in
+backends provide scaled implementations, and shared gradient and step checks
+use this method without requiring another vector trait.
+
 <h2 id="solver-and-line-search-settings">Update solver names and settings</h2>
 
 <h3 id="bounded-least-squares-solver-name">Rename Trf</h3>

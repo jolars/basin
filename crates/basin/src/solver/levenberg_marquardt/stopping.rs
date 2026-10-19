@@ -295,46 +295,16 @@ where
 // Compare nonnegative finite products without overflowing or rounding a tiny
 // tolerance to zero. Binary exponents remain integers until after comparison.
 fn product_le<F: Scalar>(left: &[F], right: &[F]) -> bool {
-    if left.contains(&F::zero()) {
-        return true;
-    }
-    if right.contains(&F::zero()) {
-        return false;
-    }
-    product_parts(left) <= product_parts(right)
+    crate::BinaryValue::product_le(left, right)
 }
 
-// Factors must be positive and finite; callers handle zero before decoding.
 fn product_parts<F: Scalar>(factors: &[F]) -> (i32, F) {
-    let mut fraction = F::one();
-    let mut exponent = 0_i32;
-    for factor in factors {
-        let (mantissa, power, _) = factor.integer_decode();
-        let shift = 63 - mantissa.leading_zeros();
-        fraction = fraction
-            * (F::from_u64(mantissa).unwrap()
-                / F::from_u64(1_u64 << shift).unwrap());
-        exponent += i32::from(power) + shift as i32;
-        if fraction >= F::from_f64(2.).unwrap() {
-            fraction = fraction * F::from_f64(0.5).unwrap();
-            exponent += 1;
-        }
-    }
-    (exponent, fraction)
+    let value = crate::BinaryValue::product(factors);
+    (value.exponent, value.significand)
 }
 
 fn binary_product<F: Scalar>(factors: &[F]) -> crate::BinaryValue<F> {
-    if factors.contains(&F::zero()) {
-        return crate::BinaryValue {
-            significand: F::zero(),
-            exponent: 0,
-        };
-    }
-    let (exponent, significand) = product_parts(factors);
-    crate::BinaryValue {
-        significand,
-        exponent,
-    }
+    crate::BinaryValue::product(factors)
 }
 
 pub(super) fn step_evidence<V, F>(

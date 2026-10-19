@@ -316,6 +316,49 @@ pub struct BinaryValue<F: Scalar = f64> {
     pub exponent: i32,
 }
 
+impl<F: Scalar> BinaryValue<F> {
+    // Factors must be nonnegative and finite. Decode before multiplying so
+    // intermediate products cannot overflow or erase a nonzero measurement.
+    pub(crate) fn product(factors: &[F]) -> Self {
+        if factors.contains(&F::zero()) {
+            return Self {
+                significand: F::zero(),
+                exponent: 0,
+            };
+        }
+        let mut significand = F::one();
+        let mut exponent = 0_i32;
+        for factor in factors {
+            let (mantissa, power, _) = factor.integer_decode();
+            let shift = 63 - mantissa.leading_zeros();
+            significand = significand
+                * (F::from_u64(mantissa).unwrap()
+                    / F::from_u64(1_u64 << shift).unwrap());
+            exponent += i32::from(power) + shift as i32;
+            if significand >= F::from_f64(2.).unwrap() {
+                significand = significand * F::from_f64(0.5).unwrap();
+                exponent += 1;
+            }
+        }
+        Self {
+            significand,
+            exponent,
+        }
+    }
+
+    pub(crate) fn product_le(left: &[F], right: &[F]) -> bool {
+        if left.contains(&F::zero()) {
+            return true;
+        }
+        if right.contains(&F::zero()) {
+            return false;
+        }
+        let left = Self::product(left);
+        let right = Self::product(right);
+        (left.exponent, left.significand) <= (right.exponent, right.significand)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A scalar comparison value, its tolerance settings, and the evaluated bound.

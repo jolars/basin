@@ -81,14 +81,53 @@ pub trait ScaledAdd<S = f64> {
     fn scaled_add(&mut self, scalar: S, other: &Self);
 }
 
-/// `‖x‖₂² = Σ xᵢ²`. Avoids the `sqrt` cost when the squared form is
-/// what's actually needed (most quadratic-cost convergence checks).
+/// Squared and unsquared Euclidean norms.
 ///
 /// `F` defaults to `f64` so existing `V: NormSquared` bounds keep
 /// resolving to the `f64` impl unchanged.
 pub trait NormSquared<F = f64> {
     /// Compute `Σ xᵢ²` as `F`.
     fn norm_squared(&self) -> F;
+
+    /// Compute `sqrt(Σ xᵢ²)` as `F`.
+    ///
+    /// Built-in backends scale the components before squaring, preserving
+    /// small nonzero norms and avoiding intermediate overflow. Custom backends
+    /// should override this compatibility default with a similarly scaled
+    /// calculation when squared components can overflow or underflow.
+    fn norm_l2(&self) -> F
+    where
+        F: Scalar,
+    {
+        self.norm_squared().sqrt()
+    }
+}
+
+fn norm_l2<F: Scalar>(values: impl Iterator<Item = F>) -> F {
+    let mut scale = F::zero();
+    let mut sum = F::one();
+    let mut infinite = false;
+    for value in values {
+        if value.is_nan() {
+            return F::nan();
+        }
+        let magnitude = value.abs();
+        if magnitude.is_infinite() {
+            infinite = true;
+        } else if magnitude > scale {
+            let ratio = scale / magnitude;
+            sum = F::one() + sum * ratio * ratio;
+            scale = magnitude;
+        } else if magnitude != F::zero() {
+            let ratio = magnitude / scale;
+            sum = sum + ratio * ratio;
+        }
+    }
+    if infinite {
+        F::infinity()
+    } else {
+        scale * sum.sqrt()
+    }
 }
 
 /// `‖x‖_∞ = maxᵢ |xᵢ|`. Used by first-order optimality stopping rules

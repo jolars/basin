@@ -28,6 +28,10 @@ impl<F: Scalar> NormSquared<F> for Vec<F> {
     fn norm_squared(&self) -> F {
         self.iter().map(|x| *x * *x).sum()
     }
+
+    fn norm_l2(&self) -> F {
+        super::norm_l2(self.iter().copied())
+    }
 }
 
 impl<F: Scalar> NormInfinity<F> for Vec<F> {
