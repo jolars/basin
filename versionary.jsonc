@@ -3,8 +3,8 @@
   "version": 1,
   "release-type": "rust",
   "release-branch": "versionary/release-v1",
-  // Keep 1.x as Latest until the first stable 2.0 release.
-  "release-latest": true,
+  // Maintenance releases must not replace 2.x as Latest.
+  "release-latest": false,
   "allow-stable-major": true,
   "include-commit-authors": true,
   "release-reference-comments": "best-effort"

@@ -17,3 +17,7 @@ preprocess = { command = "web/scripts/lychee-preprocess.sh" }
 # validates the identifier through its registration agency instead.
 [hosts."doi.org"]
 headers = { Accept = "application/vnd.citationstyles.csl+json" }
+# Crossref's public API allows one concurrent request, including redirects
+# from DOI content negotiation. Keep each complete request chain serial.
+concurrency = 1
+request_interval = "1s"
